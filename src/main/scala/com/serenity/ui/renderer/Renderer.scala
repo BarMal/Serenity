@@ -60,8 +60,14 @@ object Renderer:
     val buffer = pane.bufferId.flatMap(state.buffers.get)
 
     buffer match
-      case Some(buf) => renderBufferContent(pane, buf, rect, state, context)
-      case None      => renderEmptyPane(rect, context)
+      case Some(buf) if buf.content.weight == 0 && buf.isNewEmpty => 
+        renderWelcomeText(rect, context)
+      case Some(buf) if buf.content.weight == 0 => 
+        renderEmptyPane(rect, context)
+      case Some(buf) => 
+        renderBufferContent(pane, buf, rect, state, context)
+      case None => 
+        renderEmptyPane(rect, context)
 
     // Render cursors with buffer data
     buffer.foreach(buf => renderCursors(pane, rect, context, buf.content))
@@ -97,7 +103,18 @@ object Renderer:
               screenX >= 0 &&
               screenY < rect.bottom &&
               screenX < rect.right
-          then CharacterRenderer.renderStringWithTheme(context.graphics, screenX, screenY, visualLine.content, state.theme, state.syntaxHighlightingEnabled)
+          then 
+            val currentTimeMs = System.currentTimeMillis()
+            CharacterRenderer.renderStringWithAnimation(
+              context.graphics, 
+              screenX, 
+              screenY, 
+              visualLine.content, 
+              state.theme, 
+              state.animationState, 
+              currentTimeMs,
+              state.syntaxHighlightingEnabled
+            )
     }
 
   private case class VisualLine(content: String, bufferLine: Int, startColumn: Int, endColumn: Int)
@@ -154,6 +171,28 @@ object Renderer:
     if centerY < context.screen.getTerminalSize.getRows && centerX >= 0 then
       CharacterRenderer.renderString(context.graphics, centerX, centerY, message)
 
+  private def renderWelcomeText(rect: LayoutRect, context: RenderContext): Unit =
+    // Render welcome message for new empty buffers
+    val lines = List(
+      "Welcome to Serenity!",
+      "",
+      "Start typing to edit text.",
+      "",
+      "Press Ctrl+P for command palette"
+    )
+    
+    val startY = rect.y + (rect.height - lines.length) / 2
+    
+    context.graphics.setForegroundColor(TextColor.ANSI.BLACK_BRIGHT)
+    
+    lines.zipWithIndex.foreach { case (line, index) =>
+      val lineY = startY + index
+      val centerX = rect.x + (rect.width - line.length) / 2
+      
+      if lineY >= 0 && lineY < context.screen.getTerminalSize.getRows && centerX >= 0 then
+        CharacterRenderer.renderString(context.graphics, centerX, lineY, line)
+    }
+
   private def renderCursors(
     pane: EditorPane,
     rect: LayoutRect,
@@ -176,17 +215,22 @@ object Renderer:
               screenY >= 0 && screenY < context.screen.getTerminalSize.getRows &&
               screenX >= 0 && screenX < context.screen.getTerminalSize.getColumns
           then
-            // Highlight cursor position
-            context.graphics.setBackgroundColor(TextColor.ANSI.WHITE)
-            context.graphics.setForegroundColor(TextColor.ANSI.BLACK)
+            // Cursor blinking: blink every 500ms
+            val currentTime = System.currentTimeMillis()
+            val shouldShowCursor = (currentTime / 500) % 2 == 0
+            
+            if shouldShowCursor then
+              // Highlight cursor position
+              context.graphics.setBackgroundColor(TextColor.ANSI.WHITE)
+              context.graphics.setForegroundColor(TextColor.ANSI.BLACK)
 
-            // Get character at cursor position or use space
-            val cursorChar = ' ' // For now, just use space to show cursor
-            CharacterRenderer.renderChar(context.graphics, screenX, screenY, cursorChar)
+              // Get character at cursor position or use space
+              val cursorChar = ' ' // For now, just use space to show cursor
+              CharacterRenderer.renderChar(context.graphics, screenX, screenY, cursorChar)
 
-            // Reset colors
-            context.graphics.setBackgroundColor(TextColor.ANSI.BLACK)
-            context.graphics.setForegroundColor(TextColor.ANSI.WHITE)
+              // Reset colors
+              context.graphics.setBackgroundColor(TextColor.ANSI.BLACK)
+              context.graphics.setForegroundColor(TextColor.ANSI.WHITE)
         case None => // Cursor not visible, don't render
     }
 
@@ -247,17 +291,31 @@ object Renderer:
   private def renderCommandRunner(state: AppState, context: RenderContext): Unit =
     if state.commandRunner.isActive then
       val terminalSize = TerminalSize(context.screen.getTerminalSize.getColumns, context.screen.getTerminalSize.getRows)
+      val rect = context.layout.editorPanelRect
       
-      // Find cursor position from active pane
-      val cursorPosition = state.layout.activeEditorPaneId
+      // Find cursor screen position from active pane
+      val cursorScreenPosition = state.layout.activeEditorPaneId
         .flatMap(paneId => state.layout.editorPanes.get(paneId))
-        .flatMap(pane => pane.cursors.headOption)
-        .getOrElse(CursorPosition(0, 0))
+        .flatMap { pane =>
+          pane.cursors.headOption.flatMap { cursor =>
+            pane.bufferId.flatMap(state.buffers.get).map { buffer =>
+              // Calculate screen position using the same logic as cursor rendering
+              calculateCursorVisualPosition(cursor, buffer.content, rect.width, pane.viewport)
+                .map { case (visualLine, visualColumn) =>
+                  val screenY = rect.y + (visualLine - pane.viewport.topLine)
+                  val screenX = rect.x + visualColumn
+                  CursorPosition(screenY, screenX)
+                }
+                .getOrElse(CursorPosition(rect.y, rect.x)) // Fallback to pane top-left
+            }
+          }
+        }
+        .getOrElse(CursorPosition(rect.y, rect.x)) // Fallback to pane top-left
       
       CommandRunnerRenderer.render(
         context.graphics,
         state.commandRunner,
         state.theme,
         terminalSize,
-        cursorPosition
+        cursorScreenPosition
       )

@@ -19,9 +19,11 @@ trait StateManager:
   def getActivePane: IO[Option[EditorPane]]
   def awaitQuit: IO[Unit]
   def updateState(update: AppState => AppState): IO[Unit]
+//  def cleanupCompletedAnimations(): IO[Unit]
 
   // Buffer operations
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
+  def createNewEmptyBuffer(): IO[BufferId]
   def updateBuffer(bufferId: BufferId, content: String): IO[Unit]
   def closeBuffer(bufferId: BufferId): IO[Unit]
 
@@ -115,6 +117,17 @@ object StateManager:
       stateRef.modify { state =>
         val bufferId = state.nextBufferId
         val buffer   = Buffer.fromString(bufferId, content).copy(filePath = filePath)
+        val newState = state.copy(
+          buffers = state.buffers + (bufferId -> buffer),
+          nextBufferId = BufferId(bufferId.value + 1)
+        )
+        (newState, bufferId)
+      }
+
+    def createNewEmptyBuffer(): IO[BufferId] =
+      stateRef.modify { state =>
+        val bufferId = state.nextBufferId
+        val buffer   = Buffer.newEmpty(bufferId)
         val newState = state.copy(
           buffers = state.buffers + (bufferId -> buffer),
           nextBufferId = BufferId(bufferId.value + 1)
@@ -342,9 +355,15 @@ object StateManager:
           }.void
         case _ =>
           stateRef.modify { currentState =>
-            val component = getComponentForFocus(currentState.focus)
-            val result    = component.processEvent(event, currentState)
-            val newState  = applyComponentResult(result, currentState)
+            // Check for global events first (like ToggleCommandRunner)
+            val result = handleGlobalEvent(event, currentState) match
+              case Some(globalResult) => globalResult
+              case None =>
+                // Route to focused component
+                val component = getComponentForFocus(currentState.focus)
+                component.processEvent(event, currentState)
+            
+            val newState = applyComponentResult(result, currentState)
 
             // Validate the new state
             newState.validated match
@@ -355,6 +374,14 @@ object StateManager:
                 println(s"State validation failed: ${errors.mkString(", ")}")
                 (currentState, ())
           }.void
+
+    private def handleGlobalEvent(event: Event, state: AppState): Option[ComponentResult] =
+      import com.serenity.keystroke.events.*
+      event match
+        case ToggleCommandRunner =>
+          val commandRunnerComponent = new CommandRunnerComponent()
+          Some(commandRunnerComponent.processEvent(event, state))
+        case _ => None
 
     private def getComponentForFocus(focus: Focus): FocusedComponent =
       focus match

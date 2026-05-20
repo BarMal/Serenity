@@ -11,7 +11,7 @@ import com.serenity.ui.theme.{TextStyle, Theme}
 /** Renderer for the command runner overlay */
 object CommandRunnerRenderer:
 
-  /** Render the command runner overlay positioned beneath the cursor */
+  /** Render the command runner overlay centered horizontally and positioned beneath the cursor */
   def render(
     graphics: TextGraphics, 
     commandRunner: CommandRunner,
@@ -19,21 +19,25 @@ object CommandRunnerRenderer:
     terminalSize: TerminalSize,
     cursorPosition: CursorPosition
   ): Unit =
-    if !commandRunner.isActive then return
+    if commandRunner.isActive then
+      val overlayWidth = math.min(60, terminalSize.width - 4)  // Leave margins
+      val overlayHeight = math.min(8, terminalSize.height - 4) // Input + up to 5 commands + borders
+      
+      // Center horizontally on screen regardless of cursor position
+      val overlayX = (terminalSize.width - overlayWidth) / 2
+      
+      // Position overlay directly beneath cursor line
+      // cursorPosition now contains actual screen coordinates from the main renderer
+      val cursorScreenLine = cursorPosition.line
+      val preferredY = cursorScreenLine + 1 // One line below cursor
+      
+      // Check if overlay fits below cursor, otherwise position above
+      val overlayY = if preferredY + overlayHeight <= terminalSize.height then
+        preferredY
+      else
+        math.max(0, cursorScreenLine - overlayHeight)
 
-    val overlayWidth = math.min(60, terminalSize.width - 4)  // Leave margins
-    val overlayHeight = math.min(8, terminalSize.height - 4) // Input + up to 5 commands + borders
-    
-    // Position overlay beneath cursor, or above if not enough space below
-    val preferredY = cursorPosition.line + 2
-    val overlayY = if preferredY + overlayHeight <= terminalSize.height then
-      preferredY
-    else
-      math.max(0, cursorPosition.line - overlayHeight - 1)
-    
-    val overlayX = math.max(0, math.min(cursorPosition.column, terminalSize.width - overlayWidth))
-
-    renderOverlay(graphics, commandRunner, theme, overlayX, overlayY, overlayWidth, overlayHeight)
+      renderOverlay(graphics, commandRunner, theme, overlayX, overlayY, overlayWidth, overlayHeight)
 
   private def renderOverlay(
     graphics: TextGraphics,
@@ -107,6 +111,7 @@ object CommandRunnerRenderer:
   ): Unit =
     val visibleCommands = commandRunner.visibleCommands
     val selectedIndex = commandRunner.selectedIndex
+    val selectedCommand = commandRunner.selectedCommand
     
     // Draw separator line
     graphics.putString(x, y - 1, "─" * width)
@@ -115,18 +120,34 @@ object CommandRunnerRenderer:
     visibleCommands.zipWithIndex.foreach { case (command, index) =>
       if index < height then
         val lineY = y + index
-        val isSelected = index == selectedIndex
+        val isSelected = selectedCommand.contains(command) // Check if this is the selected command
         
         drawCommandItem(graphics, command, theme, x, lineY, width, isSelected)
     }
     
-    // Show "more" indicator if there are additional commands
+    // Show scroll indicators if there are commands outside the viewport
     if commandRunner.hasMoreCommands && height > 0 then
-      val moreY = y + math.min(visibleCommands.length, height - 1)
-      if moreY < y + height then
-        graphics.setForegroundColor(TextColor.ANSI.BLACK_BRIGHT)
-        graphics.putString(x, moreY + 1, s"... ${commandRunner.filteredCommands.length - visibleCommands.length} more")
-        graphics.setForegroundColor(theme.foregroundColor)
+      val totalCommands = commandRunner.filteredCommands.length
+      val visibleCount = visibleCommands.length
+      val selectedIndex = commandRunner.selectedIndex
+      val firstVisibleIndex = commandRunner.filteredCommands.indexOf(visibleCommands.head)
+      val lastVisibleIndex = firstVisibleIndex + visibleCount - 1
+      
+      graphics.setForegroundColor(TextColor.ANSI.BLACK_BRIGHT)
+      
+      // Show "more above" indicator
+      if firstVisibleIndex > 0 then
+        graphics.putString(x, y - 2, s"↑ ${firstVisibleIndex} more above")
+      
+      // Show "more below" indicator
+      if lastVisibleIndex < totalCommands - 1 then
+        val remaining = totalCommands - lastVisibleIndex - 1
+        graphics.putString(x, y + visibleCount, s"↓ ${remaining} more below")
+      
+      // Show current position
+      graphics.putString(x + width - 15, y - 2, s"${selectedIndex + 1}/${totalCommands}")
+      
+      graphics.setForegroundColor(theme.foregroundColor)
 
   private def drawCommandItem(
     graphics: TextGraphics,

@@ -10,7 +10,8 @@ case class CommandRunner(
 ):
   /** Update search term and filter commands */
   def updateSearchTerm(term: String)(using registry: CommandRegistry): CommandRunner =
-    val filtered = registry.searchCommands(term, maxResults = 10)
+    val filtered = if (term.isEmpty) registry.getAllCommands 
+                  else registry.searchCommands(term, maxResults = 50) // Allow more results for search
     copy(
       searchTerm = term,
       selectedIndex = 0,
@@ -35,7 +36,7 @@ case class CommandRunner(
       isActive = true,
       searchTerm = "",
       selectedIndex = 0,
-      filteredCommands = registry.searchCommands("", maxResults = 10)
+      filteredCommands = registry.getAllCommands
     )
 
   /** Deactivate the command runner */
@@ -48,8 +49,16 @@ case class CommandRunner(
       previousFocus = None
     )
 
-  /** Get commands to display (top 5) */
-  def visibleCommands: List[Command] = filteredCommands.take(5)
+  /** Get commands to display based on selected index and viewport */
+  def visibleCommands: List[Command] = 
+    val visibleCount = 5
+    if (filteredCommands.length <= visibleCount) filteredCommands
+    else {
+      val halfVisible = visibleCount / 2
+      val targetOffset = selectedIndex - halfVisible
+      val offset = math.max(0, math.min(targetOffset, filteredCommands.length - visibleCount))
+      filteredCommands.slice(offset, offset + visibleCount)
+    }
 
   /** Check if there are more commands beyond visible ones */
   def hasMoreCommands: Boolean = filteredCommands.length > 5

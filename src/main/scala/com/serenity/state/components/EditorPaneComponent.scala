@@ -51,17 +51,22 @@ class EditorPaneComponent(
           case InsertChar(char) =>
             val offset          = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
             val newContent      = buffer.content.insert(offset, char.toString)
-            val updatedBuffer   = buffer.copy(content = newContent, isDirty = true)
+            val updatedBuffer   = buffer.copy(content = newContent, isDirty = true, isNewEmpty = false)
             val newCursor       = cursor.copy(column = cursor.column + 1)
             val updatedViewport = adjustViewportForCursor(pane.viewport, newCursor)
             val updatedPane     = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = updatedViewport)
 
             ComponentResult.updateState { state =>
+              val updatedAnimationState = addCharacterAnimation(
+                state, char, cursor.line, cursor.column, pane.viewport
+              )
+              
               state.copy(
                 buffers = state.buffers + (buffer.id -> updatedBuffer),
                 layout = state.layout.copy(
                   editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                )
+                ),
+                animationState = updatedAnimationState
               )
             }
 
@@ -69,7 +74,7 @@ class EditorPaneComponent(
             val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
             if offset > 0 then
               val newContent    = buffer.content.delete(offset - 1, offset)
-              val updatedBuffer = buffer.copy(content = newContent, isDirty = true)
+              val updatedBuffer = buffer.copy(content = newContent, isDirty = true, isNewEmpty = false)
               val newCursor =
                 if cursor.column > 0 then cursor.copy(column = cursor.column - 1)
                 else if cursor.line > 0 then
@@ -94,7 +99,7 @@ class EditorPaneComponent(
             val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
             if offset < buffer.content.weight then
               val newContent    = buffer.content.delete(offset, offset + 1)
-              val updatedBuffer = buffer.copy(content = newContent, isDirty = true)
+              val updatedBuffer = buffer.copy(content = newContent, isDirty = true, isNewEmpty = false)
 
               ComponentResult.updateState { state =>
                 state.copy(
@@ -183,7 +188,7 @@ class EditorPaneComponent(
           case NewLine | Enter =>
             val offset          = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
             val newContent      = buffer.content.insert(offset, "\n")
-            val updatedBuffer   = buffer.copy(content = newContent, isDirty = true)
+            val updatedBuffer   = buffer.copy(content = newContent, isDirty = true, isNewEmpty = false)
             val newCursor       = cursor.copy(line = cursor.line + 1, column = 0)
             val updatedViewport = adjustViewportForCursor(pane.viewport, newCursor)
             val updatedPane     = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = updatedViewport)
@@ -227,7 +232,7 @@ class EditorPaneComponent(
           case ToggleSyntaxHighlighting =>
             // Toggle syntax highlighting for the entire application
             ComponentResult.updateState { state =>
-              state.copy(syntaxHighlightingEnabled = !state.syntaxHighlightingEnabled)
+              state.copy(config = state.config.withSyntaxHighlighting(!state.syntaxHighlightingEnabled))
             }
             
           case SaveFile =>
@@ -268,17 +273,22 @@ class EditorPaneComponent(
     event match
       case InsertChar(char) =>
         val bufferId    = currentState.nextBufferId
-        val buffer      = Buffer.fromString(bufferId, char.toString).copy(isDirty = true)
+        val buffer      = Buffer.fromString(bufferId, char.toString).copy(isDirty = true, isNewEmpty = false)
         val newCursor   = CursorPosition(0, 1)
         val updatedPane = pane.copy(bufferId = Some(bufferId), cursors = List(newCursor))
 
         ComponentResult.updateState { state =>
+          val updatedAnimationState = addCharacterAnimation(
+            state, char, 0, 0, pane.viewport
+          )
+          
           state.copy(
             buffers = state.buffers + (bufferId -> buffer),
             layout = state.layout.copy(
               editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
             ),
-            nextBufferId = BufferId(bufferId.value + 1)
+            nextBufferId = BufferId(bufferId.value + 1),
+            animationState = updatedAnimationState
           )
         }
       case _ =>
@@ -409,3 +419,28 @@ class EditorPaneComponent(
       case None =>
         println("[FILE] Pane not found")
         ComponentResult.noChange
+
+  /** Add character animation at the cursor position if animations are enabled */
+  private def addCharacterAnimation(
+    state: AppState, 
+    char: Char, 
+    cursorLine: Int, 
+    cursorColumn: Int,
+    viewport: Viewport
+  ): com.serenity.animation.AnimationState =
+    state.config.characterAnimation match
+      case Some(animConfig) =>
+        // Calculate screen position for the character
+        // For now, use simple viewport-relative positioning
+        val screenY = cursorLine - viewport.topLine
+        val screenX = cursorColumn - viewport.leftColumn
+        
+        // Only add animation if character would be visible in viewport
+        if screenY >= 0 && screenY < viewport.visibleLines && 
+           screenX >= 0 && screenX < viewport.visibleColumns then
+          val currentTimeMs = System.currentTimeMillis()
+          state.animationState.addAnimation(char, screenX, screenY, animConfig, currentTimeMs)
+        else
+          state.animationState
+      case None =>
+        state.animationState

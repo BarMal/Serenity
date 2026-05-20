@@ -24,8 +24,8 @@ object Main extends IOApp.Simple:
           themeManager = AppThemeManager.create
           defaultTheme <- themeManager.initializeWithTheme() // Uses "default-dark"
           stateManager <- StateManager.apply
-          // Create initial buffer and pane for startup  
-          bufferId    <- stateManager.createBuffer("Welcome to Serenity!\nStart typing to edit text.")
+          // Create initial empty buffer and pane for startup  
+          bufferId    <- stateManager.createNewEmptyBuffer()
           paneId      <- stateManager.createPane(Some(bufferId))
           // Apply the loaded theme to the initial state
           _           <- stateManager.updateState(_.copy(theme = defaultTheme))
@@ -34,22 +34,24 @@ object Main extends IOApp.Simple:
           // Render initial state before starting input loop
           initialState <- stateManager.getCurrentState
           _            <- IO.blocking(Renderer.render(initialState, screen))
-          // Race the main event loop with the quit signal
+          // Race the main event loop, continuous rendering, and quit signal
           _ <- (
+            // Input event processing
             inputHandler.eventStream
               .evalMap { event =>
                 for
                   _            <- stateManager.applyEvent(event)
-                  state        <- stateManager.getCurrentState
-                  _            <- IO.blocking(Renderer.render(state, screen))
                   activeBuffer <- stateManager.getActiveBuffer
+                  state        <- stateManager.getCurrentState
                   _            <- logSelectiveEvents(event, state.focus)
                 yield ()
               }
               .compile
               .drain,
+            // Continuous rendering loop for cursor blinking
+            continuousRenderingLoop(stateManager, screen),
             stateManager.awaitQuit
-          ).parMapN((_, _) => ())
+          ).parMapN((_, _, _) => ())
         yield ()
       }
     }
@@ -81,6 +83,23 @@ object Main extends IOApp.Simple:
         screen.stopScreen()
       }
     )
+
+  /** Continuous rendering loop for cursor blinking and smooth UI updates */
+  private def continuousRenderingLoop(stateManager: StateManager, screen: Screen): IO[Unit] =
+    import scala.concurrent.duration.*
+    
+    val targetFPS = 30 // 30 FPS for smooth cursor blinking
+    val frameTime = (1000.0 / targetFPS).millis
+    
+    def renderLoop: IO[Unit] =
+      for
+        state <- stateManager.getCurrentState
+        _     <- IO.blocking(Renderer.render(state, screen))
+        _     <- IO.sleep(frameTime)
+        _     <- renderLoop
+      yield ()
+    
+    renderLoop
 
   /** Log only focus changes and unregistered events */
   private def logSelectiveEvents(event: Event, currentFocus: Focus): IO[Unit] =

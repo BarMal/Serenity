@@ -21,6 +21,9 @@ class CommandRegistry(private val commands: List[Command]):
 
 object CommandRegistry:
   
+  /** Create registry with custom commands */
+  def apply(commands: List[Command]): CommandRegistry = new CommandRegistry(commands)
+  
   /** Create registry with default commands */
   def default: CommandRegistry = new CommandRegistry(defaultCommands)
   
