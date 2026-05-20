@@ -5,6 +5,8 @@ import com.serenity.keystroke.events.{InsertChar, TextEntryEvent}
 import com.serenity.keystroke.{KeyStrokeInfo, Modifier}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.googlecode.lanterna.input.KeyType
+import com.serenity.ui.layout.Layout
+import com.serenity.state.components.ComponentResult
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -12,7 +14,7 @@ class TabInsertionSpec extends AnyFlatSpec with Matchers:
 
   "TextEntryTranslator" should "convert Tab key to InsertChar with tab character" in {
     val translator = new TextEntryTranslator()
-    val tabKeyStroke = com.googlecode.lanterna.input.KeyStroke(KeyType.Tab, '\t', false, false, false)
+    val tabKeyStroke = com.googlecode.lanterna.input.KeyStroke(KeyType.Tab, false, false, false)
     
     val result = translator.translate(tabKeyStroke)
     
@@ -24,7 +26,7 @@ class TabInsertionSpec extends AnyFlatSpec with Matchers:
     val tabChar = '\t'
     
     // This tests the private isPrintableChar method indirectly
-    val tabKeyStroke = com.googlecode.lanterna.input.KeyStroke(KeyType.Character, tabChar, false, false, false)
+    val tabKeyStroke = com.googlecode.lanterna.input.KeyStroke(tabChar, false, false, false)
     val result = translator.translate(tabKeyStroke)
     
     result shouldBe InsertChar('\t')
@@ -41,7 +43,7 @@ class TabInsertionSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer.fromString(bufferId, "hello world")
     val paneId = PaneId(1)
     val cursor = CursorPosition(0, 5) // Between "hello" and " world"
-    val pane = EditorPane(Some(bufferId), List(cursor), Viewport.default)
+    val pane = EditorPane(paneId, Some(bufferId), Viewport.default, List(cursor), 0)
     val state = AppState.empty.copy(
       buffers = Map(bufferId -> buffer),
       layout = Layout.empty.copy(editorPanes = Map(paneId -> pane))

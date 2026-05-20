@@ -7,6 +7,7 @@ enum Focus:
   case PinnedPanel(position: PanelPosition)
   case PeekOverlay
   case Modal(modalType: ModalType)
+  case CommandRunner
 
 enum ModalType:
   case CommandPalette

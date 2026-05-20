@@ -8,6 +8,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.components.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.command.CommandRunner
 
 trait StateManager:
   def applyEvent(event: Event): IO[Unit]
@@ -361,6 +362,7 @@ object StateManager:
         case Focus.PinnedPanel(position) => new PinnedPanelComponent(position)
         case Focus.PeekOverlay           => new PeekOverlayComponent()
         case Focus.Modal(modalType)      => new ModalComponent(modalType)
+        case Focus.CommandRunner         => new CommandRunnerComponent()
 
     private def applyComponentResult(result: ComponentResult, state: AppState): AppState =
       result match
@@ -380,9 +382,10 @@ object StateManager:
 
     private def dismissCurrentFocus(state: AppState): AppState =
       state.focus match
-        case Focus.PeekOverlay => state.copy(peekOverlay = None)
-        case Focus.Modal(_)    => state.copy(modal = None)
-        case _                 => state // Other focus types don't have dismissible state
+        case Focus.PeekOverlay   => state.copy(peekOverlay = None)
+        case Focus.Modal(_)      => state.copy(modal = None)
+        case Focus.CommandRunner => state.copy(commandRunner = CommandRunner.empty)
+        case _                   => state // Other focus types don't have dismissible state
 
     // File operation stubs (TODO: implement)
     def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit] =

@@ -33,6 +33,7 @@ class TextEntryTranslator extends Translator[TextEntryEvent]:
   private val deletionConverter: PartialFunction[KeyStrokeInfo, TextEntryEvent] = {
     case KeyStrokeInfo(KeyType.Backspace, _, _) => DeleteBackward
     case KeyStrokeInfo(KeyType.Delete, _, _)    => DeleteForward
+    case KeyStrokeInfo(KeyType.Escape, _, _)    => Escape
   }
 
   private val hotkeyConverter: PartialFunction[KeyStrokeInfo, TextEntryEvent] = {
@@ -44,6 +45,8 @@ class TextEntryTranslator extends Translator[TextEntryEvent]:
     case KeyStrokeInfo(KeyType.Character, Some('v'), modifiers) if modifiers.contains(Modifier.Ctrl) => Paste
     case KeyStrokeInfo(KeyType.Character, Some('x'), modifiers) if modifiers.contains(Modifier.Ctrl) => Cut
     case KeyStrokeInfo(KeyType.Character, Some('h'), modifiers) if modifiers.contains(Modifier.Ctrl) => ToggleSyntaxHighlighting
+    case KeyStrokeInfo(KeyType.Character, Some('o'), modifiers) if modifiers.contains(Modifier.Ctrl) => OpenFile
+    case KeyStrokeInfo(KeyType.Character, Some('p'), modifiers) if modifiers.contains(Modifier.Ctrl) => ToggleCommandRunner
   }
 
   private def isPrintableChar(char: Char): Boolean =

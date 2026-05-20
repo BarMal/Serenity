@@ -36,6 +36,9 @@ object Renderer:
     // Render floating panels if any
     renderFloatingPanels(updatedState, context)
 
+    // Render command runner overlay if active
+    renderCommandRunner(updatedState, context)
+
     // Refresh screen
     screen.refresh()
 
@@ -240,3 +243,21 @@ object Renderer:
     for y <- rect.y until rect.bottom; x <- rect.x until rect.right do
       if y < context.screen.getTerminalSize.getRows && x < context.screen.getTerminalSize.getColumns then
         CharacterRenderer.renderChar(context.graphics, x, y, '░') // Light shade character for transparency effect
+
+  private def renderCommandRunner(state: AppState, context: RenderContext): Unit =
+    if state.commandRunner.isActive then
+      val terminalSize = TerminalSize(context.screen.getTerminalSize.getColumns, context.screen.getTerminalSize.getRows)
+      
+      // Find cursor position from active pane
+      val cursorPosition = state.layout.activeEditorPaneId
+        .flatMap(paneId => state.layout.editorPanes.get(paneId))
+        .flatMap(pane => pane.cursors.headOption)
+        .getOrElse(CursorPosition(0, 0))
+      
+      CommandRunnerRenderer.render(
+        context.graphics,
+        state.commandRunner,
+        state.theme,
+        terminalSize,
+        cursorPosition
+      )

@@ -424,7 +424,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     positions.length should be >= 4
 
     // Final position should be at start
-    val finalCursor = currentState.layout.editorPanes(paneId).cursors.head
+    val finalCursor = finalState.layout.editorPanes(paneId).cursors.head
     finalCursor.line shouldBe 0
     finalCursor.column shouldBe 0
   }

@@ -10,3 +10,6 @@ case object Copy  extends HotkeyEvent
 case object Paste extends HotkeyEvent
 case object Cut   extends HotkeyEvent
 case object ToggleSyntaxHighlighting extends HotkeyEvent
+case object OpenFile extends HotkeyEvent  
+case object SaveFile extends HotkeyEvent
+case object ToggleCommandRunner extends HotkeyEvent

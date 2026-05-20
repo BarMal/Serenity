@@ -15,8 +15,8 @@ class UnderscoreStorageSpec extends AnyFlatSpec with Matchers:
     rope.collect() shouldBe textWithUnderscores
     
     // Verify character by character
-    rope.charAt(4) shouldBe '_'  // first underscore
-    rope.charAt(9) shouldBe '_'  // second underscore
+    rope.index(4) shouldBe Some('_')  // first underscore
+    rope.index(9) shouldBe Some('_')  // second underscore
   }
 
   it should "correctly insert underscore characters" in {
@@ -27,7 +27,7 @@ class UnderscoreStorageSpec extends AnyFlatSpec with Matchers:
     
     val updatedRope = rope.insert(4, "_added")
     updatedRope.collect() shouldBe "test_added"
-    updatedRope.charAt(4) shouldBe '_'
+    updatedRope.index(4) shouldBe Some('_')
   }
 
   it should "correctly retrieve lines containing underscores" in {

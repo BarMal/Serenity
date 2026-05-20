@@ -115,7 +115,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
     
     val themeConfig = configSource.load[ThemeConfig]
     
-    themeConfig shouldBe a[Right[_, _]]
+    themeConfig shouldBe a[Right[?, ?]]
     themeConfig.toOption.get.name shouldBe "test-theme"
     themeConfig.toOption.get.colors.foreground shouldBe "white"
     themeConfig.toOption.get.syntax.keyword.foreground shouldBe "blue"
@@ -194,7 +194,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
     
     val themeEither = ConfigurableThemeManager.configToTheme(themeConfig)
     
-    themeEither shouldBe a[Right[_, _]]
+    themeEither shouldBe a[Right[?, ?]]
     val theme = themeEither.toOption.get
     
     theme.name shouldBe "test"

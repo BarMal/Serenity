@@ -2,8 +2,10 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.googlecode.lanterna.screen.VirtualScreen
+import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
 import com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal
+import com.serenity.ui.layout.Layout
+import com.serenity.state.components.ComponentResult
 import com.serenity.keystroke.events.{InsertChar, TextEntryEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.googlecode.lanterna.input.KeyType
@@ -22,12 +24,12 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
   "Integrated Text Editor Features" should "handle tab insertion, underscore rendering, and theme support together" in {
     // Test tab insertion through translator
     val translator = new TextEntryTranslator()
-    val tabKeyStroke = com.googlecode.lanterna.input.KeyStroke(KeyType.Tab, '\t', false, false, false)
+    val tabKeyStroke = com.googlecode.lanterna.input.KeyStroke(KeyType.Tab, false, false, false)
     val tabEvent = translator.translate(tabKeyStroke)
     tabEvent shouldBe InsertChar('\t')
     
     // Test underscore character handling
-    val underscoreKeyStroke = com.googlecode.lanterna.input.KeyStroke(KeyType.Character, '_', false, false, false)
+    val underscoreKeyStroke = com.googlecode.lanterna.input.KeyStroke('_', false, false, false)
     val underscoreEvent = translator.translate(underscoreKeyStroke)
     underscoreEvent shouldBe InsertChar('_')
 
@@ -36,7 +38,7 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer.fromString(bufferId, "function test_func() {\n\treturn 'hello_world';\n}")
     val paneId = PaneId(1)
     val cursor = CursorPosition(0, 0)
-    val pane = EditorPane(Some(bufferId), List(cursor), Viewport.default)
+    val pane = EditorPane(paneId, Some(bufferId), Viewport.default, List(cursor), 0)
     val state = AppState.empty.copy(
       buffers = Map(bufferId -> buffer),
       layout = Layout.empty.copy(editorPanes = Map(paneId -> pane)),
@@ -51,7 +53,7 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
     // Test rendering with all features (virtual screen test)
     val virtualTerminal = new DefaultVirtualTerminal(com.googlecode.lanterna.TerminalSize.ONE)
     virtualTerminal.setTerminalSize(com.googlecode.lanterna.TerminalSize(80, 24))
-    val screen = new VirtualScreen(virtualTerminal)
+    val screen = new TerminalScreen(virtualTerminal)
     
     // Should render without exception
     noException should be thrownBy {
@@ -83,7 +85,7 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer.fromString(bufferId, "hello")
     val paneId = PaneId(1)
     val cursor = CursorPosition(0, 5)  // At end of "hello"
-    val pane = EditorPane(Some(bufferId), List(cursor), Viewport.default)
+    val pane = EditorPane(paneId, Some(bufferId), Viewport.default, List(cursor), 0)
     val state = AppState.empty.copy(
       buffers = Map(bufferId -> buffer),
       layout = Layout.empty.copy(editorPanes = Map(paneId -> pane)),

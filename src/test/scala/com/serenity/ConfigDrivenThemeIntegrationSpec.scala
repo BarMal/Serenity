@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.{SwitchTheme, ReloadCurrentTheme}
 import com.serenity.state.components.ThemeComponent
 import com.serenity.state.models.*
+import com.serenity.state.components.ComponentResult
 import com.serenity.ui.theme.config.AppThemeManager
 import com.serenity.rope.Balance
 import org.scalatest.flatspec.AnyFlatSpec

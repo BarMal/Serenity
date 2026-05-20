@@ -2,6 +2,7 @@ package com.serenity.state.models
 
 import com.serenity.ui.layout.{Layout, PeekOverlay, TerminalSize}
 import com.serenity.ui.theme.Theme
+import com.serenity.command.CommandRunner
 
 case class AppState(
     layout: Layout,
@@ -12,6 +13,7 @@ case class AppState(
     terminalSize: Option[TerminalSize] = None,
     theme: Theme = Theme.default,
     syntaxHighlightingEnabled: Boolean = false,
+    commandRunner: CommandRunner = CommandRunner.empty,
     nextBufferId: BufferId = BufferId(0),
     nextPaneId: PaneId = PaneId(0)
 ):
@@ -30,6 +32,8 @@ case class AppState(
         errors += "Focus on PeekOverlay but no overlay exists"
       case Focus.Modal(_) if modal.isEmpty =>
         errors += "Focus on Modal but no modal exists"
+      case Focus.CommandRunner if !commandRunner.isActive =>
+        errors += "Focus on CommandRunner but runner is not active"
       case _ => // Valid focus
     // Buffer-Pane consistency
     layout.editorPanes.foreach { (paneId, pane) =>

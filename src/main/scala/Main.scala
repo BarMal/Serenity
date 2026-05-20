@@ -9,6 +9,8 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.config.AppThemeManager
+import com.serenity.keystroke.events.{Event, UnhandledEvent}
+import com.serenity.state.models.Focus
 
 given Balance = Balance.default
 
@@ -41,7 +43,7 @@ object Main extends IOApp.Simple:
                   state        <- stateManager.getCurrentState
                   _            <- IO.blocking(Renderer.render(state, screen))
                   activeBuffer <- stateManager.getActiveBuffer
-                  _            <- IO.println(s"Event: $event, Focus: ${state.focus}, Buffer: ${activeBuffer.map(_.id)}")
+                  _            <- logSelectiveEvents(event, state.focus)
                 yield ()
               }
               .compile
@@ -79,3 +81,23 @@ object Main extends IOApp.Simple:
         screen.stopScreen()
       }
     )
+
+  /** Log only focus changes and unregistered events */
+  private def logSelectiveEvents(event: Event, currentFocus: Focus): IO[Unit] =
+    event match
+      case _: UnhandledEvent[?] =>
+        IO.println(s"[UNHANDLED] $event")
+      case _ if shouldLogFocusChange(event) =>
+        IO.println(s"[FOCUS] Event: $event, Focus: $currentFocus")
+      case _ => IO.unit
+
+  private def shouldLogFocusChange(event: Event): Boolean =
+    event match
+      case com.serenity.keystroke.events.MoveUp => false
+      case com.serenity.keystroke.events.MoveDown => false  
+      case com.serenity.keystroke.events.MoveLeft => false
+      case com.serenity.keystroke.events.MoveRight => false
+      case com.serenity.keystroke.events.InsertChar(_) => false
+      case com.serenity.keystroke.events.DeleteBackward => false
+      case com.serenity.keystroke.events.DeleteForward => false
+      case _ => true // Log other events that might change focus/handlers

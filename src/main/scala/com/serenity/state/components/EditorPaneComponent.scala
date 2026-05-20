@@ -3,11 +3,14 @@ package com.serenity.state.components
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
+import com.serenity.io.FileManager
 
 class EditorPaneComponent(
     paneId: PaneId
 )(using balance: com.serenity.rope.Balance)
     extends FocusedComponent:
+    
+  private val fileManager = new FileManager()
 
   def processEvent(event: Event, currentState: AppState): ComponentResult =
     currentState.layout.editorPanes.get(paneId) match
@@ -227,8 +230,17 @@ class EditorPaneComponent(
               state.copy(syntaxHighlightingEnabled = !state.syntaxHighlightingEnabled)
             }
             
+          case SaveFile =>
+            // Save current buffer to file
+            handleSaveFile(currentState)
+            
+          case OpenFile =>
+            // Open file - for now just log
+            println("[FILE] Open file requested")
+            ComponentResult.noChange
+            
           case _: HotkeyEvent =>
-            // TODO: Implement other hotkey handling (save, quit, etc.)
+            // TODO: Implement other hotkey handling
             ComponentResult.noChange
 
           case _ =>
@@ -360,3 +372,33 @@ class EditorPaneComponent(
         val newColumn            = math.min(targetColumnInVisual, nextLineContent.length)
         cursor.copy(line = cursor.line + 1, column = newColumn)
       else cursor // Can't move down from last line
+
+  /** Handle save file operation */
+  private def handleSaveFile(currentState: AppState): ComponentResult =
+    currentState.layout.editorPanes.get(paneId) match
+      case Some(pane) =>
+        pane.bufferId.flatMap(currentState.buffers.get) match
+          case Some(buffer) if buffer.filePath.isDefined =>
+            // Save to existing file
+            try
+              import cats.effect.unsafe.implicits.global
+              val savedBuffer = fileManager.saveBuffer(buffer).unsafeRunSync()
+              ComponentResult.updateState { state =>
+                state.copy(buffers = state.buffers + (buffer.id -> savedBuffer))
+              }
+            catch
+              case ex: Exception =>
+                println(s"[FILE] Error saving file: ${ex.getMessage}")
+                ComponentResult.noChange
+                
+          case Some(buffer) =>
+            // Buffer has no file path - would need Save As dialog
+            println("[FILE] Buffer has no file path - Save As not implemented yet")
+            ComponentResult.noChange
+            
+          case None =>
+            println("[FILE] No buffer in pane")
+            ComponentResult.noChange
+      case None =>
+        println("[FILE] Pane not found")
+        ComponentResult.noChange

@@ -22,3 +22,4 @@ case object OpenGotoLine          extends TextEntryEvent
 case object FindNext              extends TextEntryEvent
 case object Enter                 extends TextEntryEvent
 case object OpenFind              extends TextEntryEvent
+case object Escape                extends TextEntryEvent

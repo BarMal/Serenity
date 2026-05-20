@@ -74,12 +74,13 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
 
   "ThemeRenderer" should "render styled text with proper Lanterna formatting" in {
     import com.googlecode.lanterna.graphics.TextGraphics
-    import com.googlecode.lanterna.screen.VirtualScreen
+    import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
+    import com.serenity.ui.layout.Layout
     import com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal
     
     val virtualTerminal = new DefaultVirtualTerminal(com.googlecode.lanterna.TerminalSize.ONE)
     virtualTerminal.setTerminalSize(com.googlecode.lanterna.TerminalSize(80, 24))
-    val screen = new VirtualScreen(virtualTerminal)
+    val screen = new TerminalScreen(virtualTerminal)
     val graphics = screen.newTextGraphics()
     
     val styledText = StyledText(

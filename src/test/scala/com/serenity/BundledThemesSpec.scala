@@ -91,7 +91,7 @@ class BundledThemesSpec extends AnyFlatSpec with Matchers:
     val config = loader.loadThemeFromString(configString).unsafeRunSync()
     val themeResult = ConfigurableThemeManager.configToTheme(config)
     
-    themeResult shouldBe a[Right[_, _]]
+    themeResult shouldBe a[Right[?, ?]]
     val theme = themeResult.toOption.get
     
     theme.name shouldBe "hex-test"
