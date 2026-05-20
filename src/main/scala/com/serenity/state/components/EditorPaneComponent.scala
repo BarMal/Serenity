@@ -288,10 +288,23 @@ class EditorPaneComponent(
 
   // Helper functions for coordinate conversion
   private def lineColumnToOffset(rope: Rope, line: Int, column: Int): Int =
-    val lines               = rope.collect().split('\n')
-    val previousLinesLength = lines.take(line).map(_.length + 1).sum // +1 for newline
-    val lineStart           = if line == 0 then 0 else previousLinesLength
-    Math.min(lineStart + column, rope.weight)
+    val content = rope.collect()
+    if content.isEmpty then math.min(column, 0)
+    else
+      var currentLine = 0
+      var offset = 0
+      var i = 0
+      
+      // Find the start of the target line
+      while i < content.length && currentLine < line do
+        if content(i) == '\n' then
+          currentLine += 1
+        i += 1
+        if currentLine <= line then offset = i
+      
+      // Add column offset within the line
+      val result = if currentLine == line then offset + column else content.length
+      math.min(result, rope.weight)
 
   private def findLineEnd(rope: Rope, line: Int): Int =
     val content = rope.collect()
@@ -302,28 +315,22 @@ class EditorPaneComponent(
     val content = rope.collect()
     if content.isEmpty then 1 else content.count(_ == '\n') + 1
 
-  // Viewport adjustment to keep cursor visible
+  // Viewport adjustment to center cursor with clamping for boundaries
   private def adjustViewportForCursor(viewport: Viewport, cursor: CursorPosition): Viewport =
-    // Functional approach: calculate all adjustments then apply them
-    val horizontalAdjustment =
-      if cursor.column < viewport.leftColumn then
-        // Cursor is to the left of visible area - scroll left
-        viewport.copy(leftColumn = cursor.column)
-      else if cursor.column >= viewport.leftColumn + viewport.visibleColumns then
-        // Cursor is to the right of visible area - scroll right
-        val newLeftColumn = cursor.column - viewport.visibleColumns + 1
-        viewport.copy(leftColumn = math.max(0, newLeftColumn))
-      else viewport
-
-    // Apply vertical scrolling to the horizontally adjusted viewport
-    if cursor.line < horizontalAdjustment.topLine then
-      // Cursor is above visible area - scroll up
-      horizontalAdjustment.copy(topLine = cursor.line)
-    else if cursor.line >= horizontalAdjustment.topLine + horizontalAdjustment.visibleLines then
-      // Cursor is below visible area - scroll down
-      val newTopLine = cursor.line - horizontalAdjustment.visibleLines + 1
-      horizontalAdjustment.copy(topLine = math.max(0, newTopLine))
-    else horizontalAdjustment
+    // Center cursor vertically in viewport
+    val halfVisibleLines = viewport.visibleLines / 2
+    val targetTopLine = cursor.line - halfVisibleLines
+    val clampedTopLine = math.max(0, targetTopLine)
+    
+    // Center cursor horizontally in viewport  
+    val halfVisibleColumns = viewport.visibleColumns / 2
+    val targetLeftColumn = cursor.column - halfVisibleColumns
+    val clampedLeftColumn = math.max(0, targetLeftColumn)
+    
+    viewport.copy(
+      topLine = clampedTopLine,
+      leftColumn = clampedLeftColumn
+    )
 
   /** Move cursor up by one visual line, handling wrapped text */
   private def moveUpVisualLine(cursor: CursorPosition, rope: Rope, panelWidth: Int): CursorPosition =
