@@ -147,7 +147,9 @@ object Renderer:
               visualLine.content,
               state.theme,
               state.screenAnimations,
-              state.syntaxHighlightingEnabled
+              state.syntaxHighlightingEnabled,
+              bufferLine = visualLine.bufferLine,
+              bufferStartColumn = visualLine.startColumn
             )
     }
 

@@ -2,15 +2,15 @@ package com.serenity.animation
 
 import com.googlecode.lanterna.TextColor
 
-/** Screen position for character animations */
-case class ScreenPosition(x: Int, y: Int)
+/** Buffer coordinate key for character animations (column, line) */
+case class CharacterKey(column: Int, line: Int)
 
-/** Manages animations for all characters on screen using render-cycle driven approach */
+/** Manages animations for all characters using buffer coordinates as keys */
 case class AnimationState(
-    animations: Map[ScreenPosition, AnimatedCharacter] = Map.empty
+    animations: Map[CharacterKey, AnimatedCharacter] = Map.empty
 ):
 
-  /** Add a new character animation at the given position */
+  /** Add a new character animation at the given buffer position (column, line) */
   def addCharacterAnimation(
     char: Char,
     x: Int,
@@ -19,20 +19,20 @@ case class AnimationState(
     foregroundColor: TextColor,
     steps: Int
   ): AnimationState =
-    val position = ScreenPosition(x, y)
+    val key = CharacterKey(x, y)
     val animatedChar = AnimatedCharacter.fromInterpolation(
       char = char,
       startColor = backgroundColor,
       endColor = foregroundColor,
       steps = steps
     )
-    copy(animations = animations + (position -> animatedChar))
+    copy(animations = animations + (key -> animatedChar))
 
-  /** Add a completed character (no animation) */
+  /** Add a completed character (no animation) at the given buffer position (column, line) */
   def addCompletedCharacter(char: Char, x: Int, y: Int, color: TextColor): AnimationState =
-    val position      = ScreenPosition(x, y)
+    val key           = CharacterKey(x, y)
     val completedChar = AnimatedCharacter.completed(char, color)
-    copy(animations = animations + (position -> completedChar))
+    copy(animations = animations + (key -> completedChar))
 
   /** Advance all animations by one step using list consumption */
   def advanceAnimations(): AnimationState =
@@ -57,13 +57,13 @@ case class AnimationState(
   def clearAll(): AnimationState =
     copy(animations = Map.empty)
 
-  /** Get the color for a character at the given position, if any */
+  /** Get the color for a character at the given buffer position (column, line), if any */
   def getCharacterColor(x: Int, y: Int): Option[TextColor] =
-    animations.get(ScreenPosition(x, y)).map(_.currentColor)
+    animations.get(CharacterKey(x, y)).map(_.currentColor)
 
-  /** Get the animated character at the given position, if any */
+  /** Get the animated character at the given buffer position (column, line), if any */
   def getCharacter(x: Int, y: Int): Option[AnimatedCharacter] =
-    animations.get(ScreenPosition(x, y))
+    animations.get(CharacterKey(x, y))
 
   /** Check if there are any active animations */
   def hasActiveAnimations: Boolean =
@@ -73,8 +73,8 @@ case class AnimationState(
   def activeAnimationCount: Int =
     animations.values.count(!_.isComplete)
 
-  /** Get all animation positions */
-  def allPositions: Set[ScreenPosition] =
+  /** Get all animation positions (as buffer coordinates) */
+  def allPositions: Set[CharacterKey] =
     animations.keySet
 
 object AnimationState:

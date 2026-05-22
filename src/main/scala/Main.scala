@@ -5,13 +5,13 @@ import cats.syntax.parallel.*
 import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
 import com.googlecode.lanterna.terminal.{DefaultTerminalFactory, Terminal}
 import com.serenity.input.{InputRouter, ScreenInputHandler}
-import com.serenity.keystroke.events.{Event, ResizeEvent, TextEntryEvent, UnhandledEvent}
+import com.serenity.keystroke.events.{Event, TextEntryEvent, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.Focus
 import com.serenity.ui.layout.TerminalSize
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.{RenderController, Renderer}
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import fs2.concurrent.SignallingRef
@@ -43,13 +43,9 @@ object Main extends IOApp.Simple:
           _            <- logger.info("Initial render completed, starting main loop")
           fastMode     <- SignallingRef.of[IO, Boolean](false)
           cursorVisible <- Ref.of[IO, Boolean](true)
-          checkResize   = IO.blocking(Option(screen.doResizeIfNecessary())).flatMap {
-                            case None => IO.unit
-                            case Some(lanternaSize) =>
-                              stateManager.applyEvent(
-                                ResizeEvent(TerminalSize(lanternaSize.getColumns, lanternaSize.getRows))
-                              )
-                          }
+          checkResize   = IO.blocking(Option(screen.doResizeIfNecessary()))
+                            .map(_.map(s => TerminalSize(s.getColumns, s.getRows)))
+                            .flatMap(RenderController.handleResize(_, stateManager, fastMode.set(true)))
           inputFunnel   = (s: Stream[IO, Event]) =>
                             s.evalMap { event =>
                               stateManager.applyEvent(event) >> fastMode.set(true)

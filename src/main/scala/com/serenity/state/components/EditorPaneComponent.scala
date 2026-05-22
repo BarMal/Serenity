@@ -89,8 +89,7 @@ class EditorPaneComponent(
                 state,
                 char,
                 cursor.line,
-                cursor.column,
-                updatedViewport
+                cursor.column
               )
 
               state.copy(
@@ -379,8 +378,7 @@ class EditorPaneComponent(
             state,
             char,
             0,
-            0,
-            pane.viewport
+            0
           )
 
           state.copy(
@@ -519,70 +517,29 @@ class EditorPaneComponent(
         println("[FILE] Pane not found")
         ComponentResult.noChange
 
-  /** Add character animation at the cursor position if animations are enabled */
+  /** Store a character animation keyed by buffer position (cursorColumn, cursorLine).
+    * The renderer converts buffer coords to screen coords at draw time, so the animation
+    * survives viewport scrolls and terminal resizes without drifting.
+    */
   private def addCharacterAnimation(
     state: AppState,
     char: Char,
     cursorLine: Int,
-    cursorColumn: Int,
-    viewport: Viewport
+    cursorColumn: Int
   ): com.serenity.animation.AnimationState =
     state.config.characterAnimation match
       case Some(animConfig) =>
-        // Calculate proper screen coordinates accounting for UI chrome and panels
-        calculateAnimationScreenPosition(
-          cursorLine,
-          cursorColumn,
-          viewport,
-          state
-        ) match
-          case Some((screenX, screenY)) =>
-            // Use new list-based animation system with proper timing
-            val durationMs = animConfig.totalDuration.toMillis.toInt
-            val animatedChar = com.serenity.animation.AnimatedCharacter.createFadeAnimation(
-              char,
-              state.theme.backgroundColor,
-              state.theme.foregroundColor,
-              durationMs,
-              16 // 16ms tick rate for 60 FPS
-            )
-
-            state.screenAnimations.copy(
-              animations = state.screenAnimations.animations +
-                (com.serenity.animation.ScreenPosition(screenX, screenY) -> animatedChar)
-            )
-          case None =>
-            state.screenAnimations
+        val durationMs   = animConfig.totalDuration.toMillis.toInt
+        val animatedChar = com.serenity.animation.AnimatedCharacter.createFadeAnimation(
+          char,
+          state.theme.backgroundColor,
+          state.theme.foregroundColor,
+          durationMs,
+          16
+        )
+        state.screenAnimations.copy(
+          animations = state.screenAnimations.animations +
+            (com.serenity.animation.CharacterKey(cursorColumn, cursorLine) -> animatedChar)
+        )
       case None =>
         state.screenAnimations
-
-  /** Calculate the actual screen coordinates for an animation, accounting for UI layout */
-  private def calculateAnimationScreenPosition(
-    cursorLine: Int,
-    cursorColumn: Int,
-    viewport: Viewport,
-    state: AppState
-  ): Option[(Int, Int)] =
-    // Use actual terminal size if available, otherwise fall back to reasonable default
-    val terminalSize = state.terminalSize.getOrElse(TerminalSize(120, 40))
-    val layout       = LayoutEngine.calculateLayout(state, terminalSize)
-    val editorRect   = layout.editorPanelRect
-
-    // Calculate visual line and column (accounting for line wrapping)
-    val panelWidth   = editorRect.width
-    val visualLine   = cursorLine
-    val visualColumn = cursorColumn
-
-    // Convert to viewport-relative coordinates
-    val viewportRelativeY = visualLine - viewport.topLine
-    val viewportRelativeX = visualColumn - viewport.leftColumn
-
-    // Check if the position is visible in the viewport
-    if viewportRelativeY >= 0 && viewportRelativeY < viewport.visibleLines &&
-        viewportRelativeX >= 0 && viewportRelativeX < viewport.visibleColumns
-    then
-      // Calculate final screen coordinates accounting for editor panel position
-      val screenY = editorRect.y + viewportRelativeY
-      val screenX = editorRect.x + viewportRelativeX
-      Some((screenX, screenY))
-    else None // Character is not visible in current viewport

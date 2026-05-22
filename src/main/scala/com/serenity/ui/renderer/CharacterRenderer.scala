@@ -111,7 +111,10 @@ object CharacterRenderer:
       graphics.setBackgroundColor(backgroundColor)
       renderChar(graphics, x, y, char)
 
-  /** Render a string with animation support */
+  /** Render a string with animation support.
+    * bufferLine and bufferStartColumn identify the buffer position of the first character,
+    * so animations keyed by buffer coordinates are applied to the correct screen cell.
+    */
   def renderStringWithAnimation(
     graphics: TextGraphics,
     x: Int,
@@ -119,12 +122,14 @@ object CharacterRenderer:
     content: String,
     theme: Theme,
     screenAnimations: AnimationState,
-    syntaxHighlightingEnabled: Boolean = true
+    syntaxHighlightingEnabled: Boolean = true,
+    bufferLine: Int = 0,
+    bufferStartColumn: Int = 0
   ): Unit =
     if syntaxHighlightingEnabled then
       val styledTexts = ThemeManager.highlightLine(content, theme)
-      renderStyledLineWithAnimation(graphics, x, y, styledTexts, theme, screenAnimations)
-    else renderStringWithAnimationPlain(graphics, x, y, content, theme, screenAnimations)
+      renderStyledLineWithAnimation(graphics, x, y, styledTexts, theme, screenAnimations, bufferLine, bufferStartColumn)
+    else renderStringWithAnimationPlain(graphics, x, y, content, theme, screenAnimations, bufferLine = bufferLine, bufferStartColumn = bufferStartColumn)
 
   /** Render a string with animation support (plain, no syntax highlighting) */
   def renderStringWithAnimationPlain(
@@ -134,22 +139,24 @@ object CharacterRenderer:
     content: String,
     theme: Theme,
     screenAnimations: AnimationState,
-    tabWidth: Int = 4
+    tabWidth: Int = 4,
+    bufferLine: Int = 0,
+    bufferStartColumn: Int = 0
   ): Unit =
     content.foldLeft(x) { (currentX, char) =>
       char match
         case '\t' =>
-          // Expand tab to spaces to reach next tab stop
           val spacesToAdd = tabWidth - (currentX % tabWidth)
           (0 until spacesToAdd).foldLeft(currentX) { (posX, _) =>
-            renderCharAtPosition(graphics, posX, y, ' ', theme, screenAnimations)
+            val bufferColumn = bufferStartColumn + (posX - x)
+            renderCharAtPosition(graphics, posX, y, ' ', theme, screenAnimations, bufferLine, bufferColumn)
             posX + 1
           }
         case c if c >= 32 && c <= 126 =>
-          renderCharAtPosition(graphics, currentX, y, c, theme, screenAnimations)
+          val bufferColumn = bufferStartColumn + (currentX - x)
+          renderCharAtPosition(graphics, currentX, y, c, theme, screenAnimations, bufferLine, bufferColumn)
           currentX + 1
         case _ =>
-          // Skip non-printable characters
           currentX
     }
 
@@ -160,7 +167,9 @@ object CharacterRenderer:
     y: Int,
     styledTexts: List[com.serenity.ui.theme.StyledText],
     theme: Theme,
-    screenAnimations: AnimationState
+    screenAnimations: AnimationState,
+    bufferLine: Int = 0,
+    bufferStartColumn: Int = 0
   ): Unit =
     styledTexts.foldLeft(x) { (currentX, styledText) =>
       val segmentTheme = theme.copy(
@@ -169,21 +178,24 @@ object CharacterRenderer:
       )
 
       styledText.content.foldLeft(currentX) { (posX, char) =>
-        renderCharAtPosition(graphics, posX, y, char, segmentTheme, screenAnimations)
+        val bufferColumn = bufferStartColumn + (posX - x)
+        renderCharAtPosition(graphics, posX, y, char, segmentTheme, screenAnimations, bufferLine, bufferColumn)
         posX + 1
       }
     }
 
-  /** Render a single character at position, checking for animations */
+  /** Render a single character at position, looking up animation by buffer coordinates */
   private def renderCharAtPosition(
     graphics: TextGraphics,
     x: Int,
     y: Int,
     char: Char,
     theme: Theme,
-    screenAnimations: AnimationState
+    screenAnimations: AnimationState,
+    bufferLine: Int,
+    bufferColumn: Int
   ): Unit =
-    screenAnimations.getCharacterColor(x, y) match
+    screenAnimations.getCharacterColor(bufferColumn, bufferLine) match
       case Some(animatedColor) =>
         graphics.setForegroundColor(animatedColor)
         graphics.setBackgroundColor(theme.backgroundColor)

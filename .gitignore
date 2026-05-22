@@ -106,5 +106,3 @@ coverage-reports/
 # Scalafix cache
 .scalafix-cache
 
-# Claude docs
-CLAUDE.md
