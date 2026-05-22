@@ -22,7 +22,7 @@ trait StateManager:
   def awaitQuit: IO[Unit]
   def updateState(update: AppState => AppState): IO[Unit]
   def advanceAnimationFrames(): IO[Unit]
-  def advanceAnimationsOnTick(): IO[Unit]
+  def advanceAnimationsOnTick(): IO[Boolean]
 
   // Buffer operations
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
@@ -120,12 +120,15 @@ object StateManager:
         _ <- stateRef.set(state.copy(screenAnimations = newAnimations))
       yield ()
 
-    def advanceAnimationsOnTick(): IO[Unit] =
-      for
-        state <- stateRef.get
-        newAnimations = state.screenAnimations.advanceAllAnimations()
-        _ <- stateRef.set(state.copy(screenAnimations = newAnimations))
-      yield ()
+    def advanceAnimationsOnTick(): IO[Boolean] =
+      stateRef.get.flatMap { state =>
+        if !state.screenAnimations.hasActiveAnimations then IO.pure(false)
+        else
+          val newAnimations = state.screenAnimations.advanceAllAnimations()
+          stateRef.set(state.copy(screenAnimations = newAnimations)).as(
+            newAnimations.hasActiveAnimations
+          )
+      }
 
     def getActiveBuffer: IO[Option[Buffer]] =
       for

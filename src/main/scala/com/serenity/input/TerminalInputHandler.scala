@@ -4,8 +4,7 @@ import cats.effect.{Concurrent, Sync}
 import com.googlecode.lanterna.input.KeyStroke
 import com.googlecode.lanterna.screen.Screen
 import com.serenity.keystroke.KeyStrokeInfo
-import com.serenity.keystroke.events.{Event, ResizeEvent}
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.keystroke.events.Event
 import fs2.Stream
 
 class ScreenInputHandler[F[_] : Sync : Concurrent, E <: Event](
@@ -23,23 +22,10 @@ class ScreenInputHandler[F[_] : Sync : Concurrent, E <: Event](
     keyStream.map(KeyStrokeInfo.fromKeyStroke)
 
   def eventStream: Stream[F, Event] =
-    keyStreamEvents.mergeHaltR(resizeStreamEvents)
+    keyStreamEvents
 
   private def keyStreamEvents: Stream[F, Event] =
     inputRouter.eventStream(keyStream)
-
-  private def resizeStreamEvents: Stream[F, Event] =
-    Stream
-      .repeatEval(checkForResize)
-      .unNone
-      .map(ResizeEvent.apply)
-
-  private def checkForResize: F[Option[TerminalSize]] =
-    Sync[F].blocking {
-      Option(screen.doResizeIfNecessary()).map { lanternaSize =>
-        TerminalSize(lanternaSize.getColumns, lanternaSize.getRows)
-      }
-    }
 
   private def readKeyStroke: F[Option[KeyStroke]] =
     Sync[F].blocking {

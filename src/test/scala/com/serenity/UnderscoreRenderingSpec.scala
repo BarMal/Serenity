@@ -73,7 +73,7 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
     )
 
     // Render the state
-    Renderer.render(state, screen)
+    Renderer.render(state, cursorVisible = true, screen)
 
     // Verify that rendering underscore characters completes without exception
     // The actual character verification would require access to screen internals

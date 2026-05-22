@@ -57,7 +57,7 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
 
     // Should render without exception
     noException should be thrownBy
-      Renderer.render(state, screen)
+      Renderer.render(state, cursorVisible = true, screen)
 
     // Verify content includes both tabs and underscores
     buffer.content.collect() should include("test_func")

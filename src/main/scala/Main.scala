@@ -1,18 +1,20 @@
 import scala.concurrent.duration.*
 
-import cats.effect.{IO, IOApp, Resource}
+import cats.effect.{IO, IOApp, Ref, Resource}
 import cats.syntax.parallel.*
 import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
 import com.googlecode.lanterna.terminal.{DefaultTerminalFactory, Terminal}
 import com.serenity.input.{InputRouter, ScreenInputHandler}
-import com.serenity.keystroke.events.{Event, TextEntryEvent, UnhandledEvent}
+import com.serenity.keystroke.events.{Event, ResizeEvent, TextEntryEvent, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.Focus
+import com.serenity.ui.layout.TerminalSize
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
+import fs2.concurrent.SignallingRef
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
@@ -27,55 +29,78 @@ object Main extends IOApp.Simple:
     terminalResource.use { terminal =>
       screenResource(terminal).use { screen =>
         for
-          _ <- logger.info("Starting Serenity text editor")
-          // Initialize theme manager and load default theme
-          themeManager = AppThemeManager.create
-          defaultTheme <- themeManager.initializeWithTheme() // Uses "default-dark"
+          _            <- logger.info("Starting Serenity text editor")
+          themeManager  = AppThemeManager.create
+          defaultTheme <- themeManager.initializeWithTheme()
           stateManager <- StateManager.apply(logger)
-          // Create initial empty buffer and pane for startup
-          bufferId <- stateManager.createNewEmptyBuffer()
-          paneId   <- stateManager.createPane(Some(bufferId))
-          // Apply the loaded theme to the initial state
-          _           <- stateManager.updateState(_.copy(theme = defaultTheme))
-          inputRouter <- InputRouter.create[IO, TextEntryEvent](new TextEntryTranslator)
-          inputHandler = new ScreenInputHandler[IO, TextEntryEvent](screen, inputRouter)
-          // Render initial state before starting input loop
+          bufferId     <- stateManager.createNewEmptyBuffer()
+          paneId       <- stateManager.createPane(Some(bufferId))
+          _            <- stateManager.updateState(_.copy(theme = defaultTheme))
+          inputRouter  <- InputRouter.create[IO, TextEntryEvent](new TextEntryTranslator)
+          inputHandler  = new ScreenInputHandler[IO, TextEntryEvent](screen, inputRouter)
           initialState <- stateManager.getCurrentState
-          _            <- IO.blocking(Renderer.render(initialState, screen))
+          _            <- IO.blocking(Renderer.render(initialState, cursorVisible = true, screen))
           _            <- logger.info("Initial render completed, starting main loop")
-          // Create animation tick stream - 16ms for smooth 60 FPS animation
-          animationTickStream = Stream
-            .fixedRate[IO](16.millis)
-            .evalMap(_ => stateManager.advanceAnimationsOnTick())
-          // Create rendering stream - 30 FPS for smooth UI updates
-          renderingStream = Stream
-            .fixedRate[IO]((1000.0 / 30).millis)
-            .evalMap(_ =>
-              for
-                state <- stateManager.getCurrentState
-                _     <- IO.blocking(Renderer.render(state, screen))
-              yield ()
-            )
-          // Race the main event loop, animation ticks, rendering, and quit signal
-          _ <- (
-            // Input event processing
-            inputHandler.eventStream
-              .evalMap { event =>
-                for
-                  _            <- stateManager.applyEvent(event)
-                  activeBuffer <- stateManager.getActiveBuffer
-                  state        <- stateManager.getCurrentState
-                  _            <- logSelectiveEvents(event, state.focus, logger)
-                yield ()
-              }
-              .compile
-              .drain,
-            // 16ms animation tick stream
-            animationTickStream.compile.drain,
-            // 30 FPS rendering stream
-            renderingStream.compile.drain,
-            stateManager.awaitQuit
-          ).parMapN((_, _, _, _) => ())
+          fastMode     <- SignallingRef.of[IO, Boolean](false)
+          cursorVisible <- Ref.of[IO, Boolean](true)
+          checkResize   = IO.blocking(Option(screen.doResizeIfNecessary())).flatMap {
+                            case None => IO.unit
+                            case Some(lanternaSize) =>
+                              stateManager.applyEvent(
+                                ResizeEvent(TerminalSize(lanternaSize.getColumns, lanternaSize.getRows))
+                              )
+                          }
+          inputFunnel   = (s: Stream[IO, Event]) =>
+                            s.evalMap { event =>
+                              stateManager.applyEvent(event) >> fastMode.set(true)
+                            }.drain
+          _ <- {
+            def idlePhase: Stream[IO, Unit] =
+              Stream
+                .fixedRate[IO](500.millis)
+                .interruptWhen(fastMode.discrete)
+                .evalMap { _ =>
+                  for
+                    _       <- checkResize
+                    visible <- cursorVisible.updateAndGet(b => !b)
+                    state   <- stateManager.getCurrentState
+                    _       <- IO.blocking(Renderer.renderCursorOnly(state, visible, screen))
+                  yield ()
+                }
+
+            def fastPhase: Stream[IO, Unit] =
+              Stream
+                .fixedRate[IO](16.millis)
+                .evalMap { _ =>
+                  for
+                    _      <- checkResize
+                    active <- stateManager.advanceAnimationsOnTick()
+                    state  <- stateManager.getCurrentState
+                    _      <- IO.blocking(Renderer.render(state, cursorVisible = true, screen))
+                  yield active
+                }
+                .takeWhile(identity)
+                .map(_ => ())
+                .onFinalize {
+                  stateManager.getCurrentState.flatMap { state =>
+                    if state.screenAnimations.hasActiveAnimations then IO.unit
+                    else fastMode.set(false)
+                  }
+                }
+
+            def renderLoop: Stream[IO, Unit] = idlePhase ++ fastPhase ++ renderLoop
+
+            (
+              inputHandler.eventStream
+                .evalTap { event =>
+                  stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger))
+                }
+                .through(inputFunnel)
+                .compile.drain,
+              renderLoop.compile.drain,
+              stateManager.awaitQuit
+            ).parMapN((_, _, _) => ())
+          }
           _ <- logger.info("Serenity editor shutdown complete")
         yield ()
       }
@@ -109,7 +134,6 @@ object Main extends IOApp.Simple:
       }
     )
 
-  /** Log only focus changes and unregistered events */
   private def logSelectiveEvents(
     event: Event,
     currentFocus: Focus,
@@ -131,4 +155,4 @@ object Main extends IOApp.Simple:
       case com.serenity.keystroke.events.InsertChar(_)  => false
       case com.serenity.keystroke.events.DeleteBackward => false
       case com.serenity.keystroke.events.DeleteForward  => false
-      case _                                            => true // Log other events that might change focus/handlers
+      case _                                            => true

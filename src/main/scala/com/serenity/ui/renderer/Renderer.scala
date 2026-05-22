@@ -9,19 +9,17 @@ import com.serenity.ui.layout.*
 case class RenderContext(
     screen: Screen,
     graphics: TextGraphics,
-    layout: CalculatedLayout
+    layout: CalculatedLayout,
+    cursorVisible: Boolean = true
 )
 
 object Renderer:
 
-  def render(state: AppState, screen: Screen): Unit =
+  def render(state: AppState, cursorVisible: Boolean, screen: Screen): Unit =
     val graphics     = screen.newTextGraphics()
     val terminalSize = TerminalSize(screen.getTerminalSize.getColumns, screen.getTerminalSize.getRows)
     val layout       = LayoutEngine.calculateLayout(state, terminalSize)
-
-    // Update viewport dimensions based on actual panel size
-    val updatedState = updateViewportDimensions(state, layout)
-    val context      = RenderContext(screen, graphics, layout)
+    val context      = RenderContext(screen, graphics, layout, cursorVisible)
 
     // Clear screen
     graphics.setBackgroundColor(TextColor.ANSI.BLACK)
@@ -31,15 +29,53 @@ object Renderer:
     renderSpacerColumns(context)
 
     // Render editor panes
-    renderEditorPanes(updatedState, context)
+    renderEditorPanes(state, context)
 
     // Render floating panels if any
-    renderFloatingPanels(updatedState, context)
+    renderFloatingPanels(state, context)
 
     // Render command runner overlay if active
-    renderCommandRunner(updatedState, context)
+    renderCommandRunner(state, context)
 
     // Refresh screen
+    screen.refresh()
+
+  def renderCursorOnly(state: AppState, cursorVisible: Boolean, screen: Screen): Unit =
+    val graphics     = screen.newTextGraphics()
+    val terminalSize = TerminalSize(screen.getTerminalSize.getColumns, screen.getTerminalSize.getRows)
+    val layout       = LayoutEngine.calculateLayout(state, terminalSize)
+    val rect         = layout.editorPanelRect
+
+    for
+      paneId <- state.layout.activeEditorPaneId
+      pane   <- state.layout.editorPanes.get(paneId)
+      cursor <- pane.cursors.headOption
+      buffer <- pane.bufferId.flatMap(state.buffers.get)
+    do
+      calculateCursorVisualPosition(cursor, buffer.content, rect.width, pane.viewport) match
+        case Some((visualLine, visualColumn)) =>
+          val screenY = rect.y + (visualLine - pane.viewport.topLine)
+          val screenX = rect.x + visualColumn
+
+          if screenY >= 0 && screenY < terminalSize.height &&
+              screenX >= 0 && screenX < terminalSize.width
+          then
+            if cursorVisible then
+              graphics.setBackgroundColor(TextColor.ANSI.WHITE)
+              graphics.setForegroundColor(TextColor.ANSI.BLACK)
+              CharacterRenderer.renderChar(graphics, screenX, screenY, ' ')
+            else
+              val charBeneath =
+                buffer.content
+                  .getLine(cursor.line)
+                  .map(line => if cursor.column < line.length then line(cursor.column) else ' ')
+                  .getOrElse(' ')
+              graphics.setBackgroundColor(state.theme.backgroundColor)
+              graphics.setForegroundColor(state.theme.foregroundColor)
+              CharacterRenderer.renderChar(graphics, screenX, screenY, charBeneath)
+
+        case None => ()
+
     screen.refresh()
 
   private def renderSpacerColumns(context: RenderContext): Unit =
@@ -214,11 +250,7 @@ object Renderer:
               screenY >= 0 && screenY < context.screen.getTerminalSize.getRows &&
               screenX >= 0 && screenX < context.screen.getTerminalSize.getColumns
           then
-            // Cursor blinking: blink every 500ms
-            val currentTime      = System.currentTimeMillis()
-            val shouldShowCursor = (currentTime / 500) % 2 == 0
-
-            if shouldShowCursor then
+            if context.cursorVisible then
               // Highlight cursor position
               context.graphics.setBackgroundColor(TextColor.ANSI.WHITE)
               context.graphics.setForegroundColor(TextColor.ANSI.BLACK)
@@ -256,19 +288,6 @@ object Renderer:
         findCursorPosition(bufferLine + 1, currentVisualLine + visualLinesInThisBuffer)
 
     findCursorPosition(0, 0)
-
-  private def updateViewportDimensions(state: AppState, layout: CalculatedLayout): AppState =
-    val panelRect = layout.editorPanelRect
-
-    // Update all editor panes to use dynamic viewport dimensions
-    val updatedPanes = state.layout.editorPanes.map {
-      case (paneId, pane) =>
-        val updatedViewport = LayoutEngine.updateViewportDimensions(pane.viewport, panelRect)
-        paneId -> pane.copy(viewport = updatedViewport)
-    }
-
-    val updatedLayout = state.layout.copy(editorPanes = updatedPanes)
-    state.copy(layout = updatedLayout)
 
   private def renderFloatingPanels(state: AppState, context: RenderContext): Unit =
     context.layout.floatingPanelRect.foreach { rect =>
