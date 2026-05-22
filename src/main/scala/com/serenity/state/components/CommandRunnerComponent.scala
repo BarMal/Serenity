@@ -1,7 +1,5 @@
 package com.serenity.state.components
 
-import cats.effect.IO
-import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
@@ -12,10 +10,8 @@ class CommandRunnerComponent(registry: CommandRegistry = CommandRegistry.default
   def processEvent(event: Event, currentState: AppState): ComponentResult =
     event match
       case ToggleCommandRunner =>
-        if currentState.commandRunner.isActive then
-          deactivateCommandRunner(currentState)
-        else
-          activateCommandRunner(currentState)
+        if currentState.commandRunner.isActive then deactivateCommandRunner(currentState)
+        else activateCommandRunner(currentState)
 
       case _ if currentState.commandRunner.isActive =>
         processCommandRunnerEvent(event, currentState)
@@ -37,7 +33,7 @@ class CommandRunnerComponent(registry: CommandRegistry = CommandRegistry.default
 
   private def deactivateCommandRunner(state: AppState): ComponentResult =
     val previousFocus = state.commandRunner.previousFocus.getOrElse(Focus.EditorPane(PaneId(0)))
-    
+
     ComponentResult.updateState { _ =>
       state.copy(
         commandRunner = CommandRunner.empty,
@@ -73,30 +69,23 @@ class CommandRunnerComponent(registry: CommandRegistry = CommandRegistry.default
 
   private def updateSearchTerm(state: AppState, newTerm: String): ComponentResult =
     given CommandRegistry = registry
-    val updatedRunner = state.commandRunner.updateSearchTerm(newTerm)
+    val updatedRunner     = state.commandRunner.updateSearchTerm(newTerm)
 
-    ComponentResult.updateState { _ =>
-      state.copy(commandRunner = updatedRunner)
-    }
+    ComponentResult.updateState(_ => state.copy(commandRunner = updatedRunner))
 
   private def moveSelection(state: AppState, delta: Int): ComponentResult =
     val updatedRunner = state.commandRunner.moveSelection(delta)
 
-    ComponentResult.updateState { _ =>
-      state.copy(commandRunner = updatedRunner)
-    }
+    ComponentResult.updateState(_ => state.copy(commandRunner = updatedRunner))
 
   private def executeSelectedCommand(state: AppState): ComponentResult =
     state.commandRunner.selectedCommand match
       case Some(command) =>
-        // Execute command asynchronously and deactivate runner
-        try
-          command.execute(state).unsafeRunSync()
-        catch
-          case ex: Exception =>
-            println(s"[CMD] Error executing command '${command.name}': ${ex.getMessage}")
-
-        deactivateCommandRunner(state)
+        // Execute command properly through StateManager and deactivate runner
+        ComponentResult.composite(
+          ComponentResult.executeCommand(command),
+          deactivateCommandRunner(state)
+        )
 
       case None =>
         // No command selected, just close runner

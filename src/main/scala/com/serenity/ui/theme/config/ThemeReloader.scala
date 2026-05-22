@@ -1,14 +1,15 @@
 package com.serenity.ui.theme.config
 
-import cats.effect.{IO, Ref}
-import com.serenity.ui.theme.Theme
 import java.nio.file.Path
 
+import cats.effect.{IO, Ref}
+import com.serenity.ui.theme.Theme
+
 class ThemeReloader(
-  private val loader: ThemeConfigLoader = new ThemeConfigLoader(),
-  private val manager: ConfigurableThemeManager = new ConfigurableThemeManager(new ThemeConfigLoader())
+    private val loader: ThemeConfigLoader = new ThemeConfigLoader(),
+    private val manager: ConfigurableThemeManager = new ConfigurableThemeManager(new ThemeConfigLoader())
 ):
-  
+
   /** Load and convert theme configuration from file (for testing) */
   def loadAndConvertTheme(path: Path): IO[ThemeConfig] =
     loader.loadThemeFromFile(path)
@@ -27,9 +28,9 @@ class ThemeReloader(
 
 /** Theme manager that maintains current theme state and supports reloading */
 class StatefulThemeManager(
-  private val reloader: ThemeReloader = new ThemeReloader()
+    private val reloader: ThemeReloader = new ThemeReloader()
 ):
-  private val currentThemeRef: Ref[IO, Option[Theme]] = Ref.unsafe(None)
+  private val currentThemeRef: Ref[IO, Option[Theme]]      = Ref.unsafe(None)
   private val currentThemeNameRef: Ref[IO, Option[String]] = Ref.unsafe(None)
 
   /** Get the currently active theme */
@@ -47,7 +48,7 @@ class StatefulThemeManager(
   def loadAndSetTheme(themeName: String): IO[Theme] =
     for
       theme <- reloader.reloadTheme(themeName)
-      _ <- setCurrentTheme(theme, themeName)
+      _     <- setCurrentTheme(theme, themeName)
     yield theme
 
   /** Reload the currently active theme (if any) */
@@ -56,11 +57,10 @@ class StatefulThemeManager(
       currentName <- currentThemeNameRef.get
       result <- currentName match
         case Some(name) =>
-          reloader.reloadTheme(name)
+          reloader
+            .reloadTheme(name)
             .flatMap(theme => setCurrentTheme(theme, name).as(Some(theme)))
-            .handleErrorWith(error => 
-              IO.println(s"Failed to reload theme '$name': ${error.getMessage}").as(None)
-            )
+            .handleErrorWith(error => IO.println(s"Failed to reload theme '$name': ${error.getMessage}").as(None))
         case None => IO.pure(None)
     yield result
 

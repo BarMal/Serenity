@@ -9,6 +9,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** TDD tests for automatic line wrapping functionality.
   *
@@ -26,7 +28,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   behavior of "Visual Line Wrapping"
 
   it should "wrap long single line text within panel width while preserving buffer content" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -60,7 +66,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle cursor navigation across wrapped visual lines" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -105,7 +115,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "adjust viewport size dynamically based on terminal size changes" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -143,7 +157,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle multiple paragraphs with wrapped lines correctly" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -188,7 +206,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "scroll viewport to keep cursor visible when navigating wrapped lines" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -226,7 +248,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "dynamically update viewport dimensions based on terminal size" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("test content").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -273,7 +299,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve exact cursor position during window resize operations" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -318,7 +348,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   behavior of "Visual Line Navigation"
 
   it should "navigate up and down through visual lines correctly" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -369,7 +403,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "navigate across multiple buffer lines with wrapped content" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()

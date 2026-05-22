@@ -3,12 +3,14 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.{Deferred, IO, Ref}
+import cats.syntax.foldable.*
+import com.serenity.command.CommandRunner
 import com.serenity.keystroke.events.{Event, Quit, ResizeEvent}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.components.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.command.CommandRunner
+import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
 trait StateManager:
   def applyEvent(event: Event): IO[Unit]
@@ -19,7 +21,8 @@ trait StateManager:
   def getActivePane: IO[Option[EditorPane]]
   def awaitQuit: IO[Unit]
   def updateState(update: AppState => AppState): IO[Unit]
-//  def cleanupCompletedAnimations(): IO[Unit]
+  def advanceAnimationFrames(): IO[Unit]
+  def advanceAnimationsOnTick(): IO[Unit]
 
   // Buffer operations
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
@@ -81,15 +84,20 @@ trait StateManager:
 
 object StateManager:
 
-  def apply(using Balance): IO[StateManager] =
+  def apply(parentLogger: Logger[IO])(using Balance, LoggerFactory[IO]): IO[StateManager] =
     for
       stateRef   <- Ref.of[IO, AppState](AppState.initial)
       quitSignal <- Deferred[IO, Unit]
-    yield new StateManagerImpl(stateRef, quitSignal)
+    yield new StateManagerImpl(
+      stateRef,
+      quitSignal,
+      LoggerFactory[IO].getLogger(using LoggerName("com.serenity.state.manager.StateManager"))
+    )
 
   private class StateManagerImpl(
       stateRef: Ref[IO, AppState],
-      quitSignal: Deferred[IO, Unit]
+      quitSignal: Deferred[IO, Unit],
+      logger: Logger[IO]
   )(using Balance)
       extends StateManager:
 
@@ -102,6 +110,20 @@ object StateManager:
 
     def updateState(update: AppState => AppState): IO[Unit] =
       stateRef.update(update)
+
+    def advanceAnimationFrames(): IO[Unit] =
+      for
+        state <- stateRef.get
+        newAnimations = state.screenAnimations.advanceAnimations()
+        _ <- stateRef.set(state.copy(screenAnimations = newAnimations))
+      yield ()
+
+    def advanceAnimationsOnTick(): IO[Unit] =
+      for
+        state <- stateRef.get
+        newAnimations = state.screenAnimations.advanceAllAnimations()
+        _ <- stateRef.set(state.copy(screenAnimations = newAnimations))
+      yield ()
 
     def getActiveBuffer: IO[Option[Buffer]] =
       for
@@ -340,40 +362,34 @@ object StateManager:
       event match
         case Quit => quitSignal.complete(()).void
         case resizeEvent: ResizeEvent =>
-          stateRef.modify { currentState =>
-            val resizeComponent = new ResizeComponent()
-            val result          = resizeComponent.processEvent(resizeEvent, currentState)
-            val newState        = applyComponentResult(result, currentState)
-
-            // Validate the new state
-            newState.validated match
-              case Right(validState) => (validState, ())
-              case Left(errors)      =>
-                // Log validation errors and return unchanged state
-                println(s"State validation failed: ${errors.mkString(", ")}")
-                (currentState, ())
-          }.void
+          for
+            currentState <- stateRef.get
+            resizeComponent = new ResizeComponent()
+            result          = resizeComponent.processEvent(resizeEvent, currentState)
+            newState       <- applyComponentResult(result, currentState)
+            validatedState <- validateAndUpdateState(newState, currentState)
+          yield ()
         case _ =>
-          stateRef.modify { currentState =>
-            // Check for global events first (like ToggleCommandRunner)
-            val result = handleGlobalEvent(event, currentState) match
+          for
+            currentState <- stateRef.get
+            result = handleGlobalEvent(event, currentState) match
               case Some(globalResult) => globalResult
-              case None =>
+              case None               =>
                 // Route to focused component
                 val component = getComponentForFocus(currentState.focus)
                 component.processEvent(event, currentState)
-            
-            val newState = applyComponentResult(result, currentState)
+            newState       <- applyComponentResult(result, currentState)
+            validatedState <- validateAndUpdateState(newState, currentState)
+          yield ()
 
-            // Validate the new state
-            newState.validated match
-              case Right(validState) => (validState, ())
-              case Left(errors)      =>
-                // Log validation errors and return unchanged state
-                // In a real implementation, you'd want proper logging here
-                println(s"State validation failed: ${errors.mkString(", ")}")
-                (currentState, ())
-          }.void
+    private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      newState.validated match
+        case Right(validState) =>
+          stateRef.set(validState)
+        case Left(errors) =>
+          // Log validation errors and keep unchanged state
+          logger.error(s"State validation failed: ${errors.mkString(", ")}") >>
+            stateRef.set(fallbackState)
 
     private def handleGlobalEvent(event: Event, state: AppState): Option[ComponentResult] =
       import com.serenity.keystroke.events.*
@@ -391,16 +407,18 @@ object StateManager:
         case Focus.Modal(modalType)      => new ModalComponent(modalType)
         case Focus.CommandRunner         => new CommandRunnerComponent()
 
-    private def applyComponentResult(result: ComponentResult, state: AppState): AppState =
+    private def applyComponentResult(result: ComponentResult, state: AppState): IO[AppState] =
       result match
-        case ComponentResult.NoChange                => state
-        case ComponentResult.StateChange(update)     => update(state)
-        case ComponentResult.FocusTransfer(newFocus) => state.copy(focus = newFocus)
+        case ComponentResult.NoChange                => IO.pure(state)
+        case ComponentResult.StateChange(update)     => IO.pure(update(state))
+        case ComponentResult.FocusTransfer(newFocus) => IO.pure(state.copy(focus = newFocus))
         case ComponentResult.Dismiss =>
           val newFocus = determineFallbackFocus(state)
-          dismissCurrentFocus(state).copy(focus = newFocus)
+          IO.pure(dismissCurrentFocus(state).copy(focus = newFocus))
+        case ComponentResult.ExecuteCommand(command) =>
+          command.execute(state).as(state)
         case ComponentResult.Composite(results) =>
-          results.foldLeft(state)((s, r) => applyComponentResult(r, s))
+          results.foldLeftM(state)((s, r) => applyComponentResult(r, s))
 
     private def determineFallbackFocus(state: AppState): Focus =
       state.layout.activeEditorPaneId match
@@ -416,16 +434,16 @@ object StateManager:
 
     // File operation stubs (TODO: implement)
     def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit] =
-      IO.println(s"TODO: setBufferFilePath($bufferId, $filePath)")
+      logger.debug(s"TODO: setBufferFilePath($bufferId, $filePath)")
 
     def saveBuffer(bufferId: BufferId): IO[Unit] =
-      IO.println(s"TODO: saveBuffer($bufferId)")
+      logger.debug(s"TODO: saveBuffer($bufferId)")
 
     def saveBufferAs(bufferId: BufferId, filePath: String): IO[Unit] =
-      IO.println(s"TODO: saveBufferAs($bufferId, $filePath)")
+      logger.debug(s"TODO: saveBufferAs($bufferId, $filePath)")
 
     def markBufferSaved(bufferId: BufferId): IO[Unit] =
-      IO.println(s"TODO: markBufferSaved($bufferId)")
+      logger.debug(s"TODO: markBufferSaved($bufferId)")
 
     def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean] =
       IO.pure(false) // TODO: implement actual logic
@@ -449,33 +467,33 @@ object StateManager:
       switchFocus(Focus.PinnedPanel(position))
 
     def loadDirectoryTree(path: String, files: List[String]): IO[Unit] =
-      IO.println(s"TODO: loadDirectoryTree($path, ${files.size} files)")
+      logger.debug(s"TODO: loadDirectoryTree($path, ${files.size} files)")
 
     def selectFileInExplorer(filePath: String): IO[Unit] =
-      IO.println(s"TODO: selectFileInExplorer($filePath)")
+      logger.debug(s"TODO: selectFileInExplorer($filePath)")
 
     def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
-      IO.println(s"TODO: resizePinnedPanel($position, $newSize)")
+      logger.debug(s"TODO: resizePinnedPanel($position, $newSize)")
 
     def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit] =
-      IO.println(s"TODO: dragFileToDirectory($sourceFile, $targetDir)")
+      logger.debug(s"TODO: dragFileToDirectory($sourceFile, $targetDir)")
 
     // Scrolling operation stubs (TODO: implement)
     def ensureCursorVisible(paneId: PaneId): IO[Unit] =
-      IO.println(s"TODO: ensureCursorVisible($paneId)")
+      logger.debug(s"TODO: ensureCursorVisible($paneId)")
 
     def smoothScrollTo(paneId: PaneId, targetLine: Int): IO[Unit] =
-      IO.println(s"TODO: smoothScrollTo($paneId, $targetLine)")
+      logger.debug(s"TODO: smoothScrollTo($paneId, $targetLine)")
 
     def progressSmoothScroll(paneId: PaneId, progress: Double): IO[Unit] =
-      IO.println(s"TODO: progressSmoothScroll($paneId, $progress)")
+      logger.debug(s"TODO: progressSmoothScroll($paneId, $progress)")
 
     def clickMinimap(paneId: PaneId, targetLine: Int): IO[Unit] =
-      IO.println(s"TODO: clickMinimap($paneId, $targetLine)")
+      logger.debug(s"TODO: clickMinimap($paneId, $targetLine)")
 
     // Session operation stubs (TODO: implement)
     def serializeSession(): IO[String] =
       IO.pure("{\"TODO\": \"implement session serialization\"}")
 
     def restoreSession(sessionData: String): IO[Unit] =
-      IO.println(s"TODO: restoreSession($sessionData)")
+      logger.debug(s"TODO: restoreSession($sessionData)")

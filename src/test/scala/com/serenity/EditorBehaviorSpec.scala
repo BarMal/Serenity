@@ -8,10 +8,13 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
-  given balance: Balance = Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
+  given balance: Balance                 = Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
+  given loggerFactory: LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   behavior of "Text Editor End-to-End Behavior"
 
@@ -431,4 +434,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     afterSaveState.buffers(bufferId).content.collect() shouldBe "Original content + mods"
 
   trait EditorFixture:
-    val stateManager: StateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager: StateManager =
+      StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO]).unsafeRunSync()

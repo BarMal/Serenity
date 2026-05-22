@@ -1,5 +1,6 @@
 package com.serenity.state.components
 
+import com.serenity.command.Command
 import com.serenity.state.models.{AppState, Focus}
 
 enum ComponentResult:
@@ -8,6 +9,7 @@ enum ComponentResult:
   case NoChange
   case Composite(results: List[ComponentResult])
   case Dismiss
+  case ExecuteCommand(command: Command)
 
 object ComponentResult:
   def updateState(f: AppState => AppState): ComponentResult = StateChange(f)
@@ -15,3 +17,4 @@ object ComponentResult:
   def dismiss: ComponentResult                              = Dismiss
   def noChange: ComponentResult                             = NoChange
   def composite(results: ComponentResult*): ComponentResult = Composite(results.toList)
+  def executeCommand(command: Command): ComponentResult     = ExecuteCommand(command)

@@ -12,6 +12,8 @@ import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
 import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Tests that demonstrate the actual rendering clipping issue. These tests show that Renderer.putString can extend
   * beyond panel boundaries.
@@ -23,7 +25,11 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
   behavior of "Renderer Panel Boundary Clipping"
 
   it should "document the viewport/panel width mismatch that is now handled by clipping" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     // Create buffer with long text
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
@@ -97,7 +103,11 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
   }
 
   private def createMockState(): AppState =
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
     val bufferId     = stateManager.createBuffer("test").unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
     val paneId       = initialState.layout.editorPanes.keys.head

@@ -11,6 +11,8 @@ import com.serenity.ui.layout.{LayoutEngine, TerminalSize as SerenityTerminalSiz
 import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** TDD tests for text rendering boundary enforcement. These tests ensure that rendered text never extends beyond panel
   * boundaries, even when the underlying buffer contains text longer than the visible area.
@@ -214,8 +216,13 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
       if y >= 0 && y < rows then buffer(y).mkString else ""
 
   trait MockRenderFixture:
-    val mockScreen                 = new MockScreen(80, 24)
-    val stateManager: StateManager = StateManager.apply.unsafeRunSync()
+    val mockScreen = new MockScreen(80, 24)
+
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager: StateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     // Initialize with empty buffer and pane
     stateManager.createBuffer("").unsafeRunSync()

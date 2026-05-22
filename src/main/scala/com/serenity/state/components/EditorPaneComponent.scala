@@ -1,15 +1,18 @@
 package com.serenity.state.components
 
+import cats.effect.IO
+import com.serenity.command.Command
+import com.serenity.io.FileManager
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
-import com.serenity.io.FileManager
+import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
 
 class EditorPaneComponent(
     paneId: PaneId
 )(using balance: com.serenity.rope.Balance)
     extends FocusedComponent:
-    
+
   private val fileManager = new FileManager()
 
   def processEvent(event: Event, currentState: AppState): ComponentResult =
@@ -58,15 +61,19 @@ class EditorPaneComponent(
 
             ComponentResult.updateState { state =>
               val updatedAnimationState = addCharacterAnimation(
-                state, char, cursor.line, cursor.column, pane.viewport
+                state,
+                char,
+                cursor.line,
+                cursor.column,
+                updatedViewport
               )
-              
+
               state.copy(
                 buffers = state.buffers + (buffer.id -> updatedBuffer),
                 layout = state.layout.copy(
                   editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
                 ),
-                animationState = updatedAnimationState
+                screenAnimations = updatedAnimationState
               )
             }
 
@@ -234,16 +241,16 @@ class EditorPaneComponent(
             ComponentResult.updateState { state =>
               state.copy(config = state.config.withSyntaxHighlighting(!state.syntaxHighlightingEnabled))
             }
-            
+
           case SaveFile =>
             // Save current buffer to file
             handleSaveFile(currentState)
-            
+
           case OpenFile =>
             // Open file - for now just log
             println("[FILE] Open file requested")
             ComponentResult.noChange
-            
+
           case _: HotkeyEvent =>
             // TODO: Implement other hotkey handling
             ComponentResult.noChange
@@ -279,16 +286,20 @@ class EditorPaneComponent(
 
         ComponentResult.updateState { state =>
           val updatedAnimationState = addCharacterAnimation(
-            state, char, 0, 0, pane.viewport
+            state,
+            char,
+            0,
+            0,
+            pane.viewport
           )
-          
+
           state.copy(
             buffers = state.buffers + (bufferId -> buffer),
             layout = state.layout.copy(
               editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
             ),
             nextBufferId = BufferId(bufferId.value + 1),
-            animationState = updatedAnimationState
+            screenAnimations = updatedAnimationState
           )
         }
       case _ =>
@@ -301,19 +312,17 @@ class EditorPaneComponent(
     val content = rope.collect()
     if content.isEmpty then math.min(column, 0)
     else
-      var currentLine = 0
-      var offset = 0
-      var i = 0
-      
-      // Find the start of the target line
-      while i < content.length && currentLine < line do
-        if content(i) == '\n' then
-          currentLine += 1
-        i += 1
-        if currentLine <= line then offset = i
-      
+      // Find the start of the target line using functional approach
+      case class LineState(currentLine: Int, offset: Int, i: Int)
+
+      val finalState = (0 until content.length).foldLeft(LineState(0, 0, 0)) { (state, i) =>
+        if state.currentLine >= line then state // Early exit if we've reached target line
+        else if content(i) == '\n' then LineState(state.currentLine + 1, i + 1, i + 1)
+        else state.copy(i = i + 1)
+      }
+
       // Add column offset within the line
-      val result = if currentLine == line then offset + column else content.length
+      val result = if finalState.currentLine == line then finalState.offset + column else content.length
       math.min(result, rope.weight)
 
   private def findLineEnd(rope: Rope, line: Int): Int =
@@ -329,14 +338,14 @@ class EditorPaneComponent(
   private def adjustViewportForCursor(viewport: Viewport, cursor: CursorPosition): Viewport =
     // Center cursor vertically in viewport
     val halfVisibleLines = viewport.visibleLines / 2
-    val targetTopLine = cursor.line - halfVisibleLines
-    val clampedTopLine = math.max(0, targetTopLine)
-    
-    // Center cursor horizontally in viewport  
+    val targetTopLine    = cursor.line - halfVisibleLines
+    val clampedTopLine   = math.max(0, targetTopLine)
+
+    // Center cursor horizontally in viewport
     val halfVisibleColumns = viewport.visibleColumns / 2
-    val targetLeftColumn = cursor.column - halfVisibleColumns
-    val clampedLeftColumn = math.max(0, targetLeftColumn)
-    
+    val targetLeftColumn   = cursor.column - halfVisibleColumns
+    val clampedLeftColumn  = math.max(0, targetLeftColumn)
+
     viewport.copy(
       topLine = clampedTopLine,
       leftColumn = clampedLeftColumn
@@ -396,23 +405,27 @@ class EditorPaneComponent(
       case Some(pane) =>
         pane.bufferId.flatMap(currentState.buffers.get) match
           case Some(buffer) if buffer.filePath.isDefined =>
-            // Save to existing file
-            try
-              import cats.effect.unsafe.implicits.global
-              val savedBuffer = fileManager.saveBuffer(buffer).unsafeRunSync()
-              ComponentResult.updateState { state =>
-                state.copy(buffers = state.buffers + (buffer.id -> savedBuffer))
-              }
-            catch
-              case ex: Exception =>
-                println(s"[FILE] Error saving file: ${ex.getMessage}")
-                ComponentResult.noChange
-                
+            // Create a command to save the file
+            val saveCommand = Command(
+              name = s"Save ${buffer.filePath.get}",
+              description = s"Save buffer ${buffer.id} to ${buffer.filePath.get}",
+              action = _ =>
+                fileManager
+                  .saveBuffer(buffer)
+                  .flatMap { savedBuffer =>
+                    IO.blocking {
+                      println(s"[FILE] Successfully saved ${buffer.filePath.get}")
+                    }
+                  }
+                  .handleError(ex => println(s"[FILE] Error saving file: ${ex.getMessage}"))
+            )
+            ComponentResult.executeCommand(saveCommand)
+
           case Some(buffer) =>
             // Buffer has no file path - would need Save As dialog
             println("[FILE] Buffer has no file path - Save As not implemented yet")
             ComponentResult.noChange
-            
+
           case None =>
             println("[FILE] No buffer in pane")
             ComponentResult.noChange
@@ -422,25 +435,68 @@ class EditorPaneComponent(
 
   /** Add character animation at the cursor position if animations are enabled */
   private def addCharacterAnimation(
-    state: AppState, 
-    char: Char, 
-    cursorLine: Int, 
+    state: AppState,
+    char: Char,
+    cursorLine: Int,
     cursorColumn: Int,
     viewport: Viewport
   ): com.serenity.animation.AnimationState =
     state.config.characterAnimation match
       case Some(animConfig) =>
-        // Calculate screen position for the character
-        // For now, use simple viewport-relative positioning
-        val screenY = cursorLine - viewport.topLine
-        val screenX = cursorColumn - viewport.leftColumn
-        
-        // Only add animation if character would be visible in viewport
-        if screenY >= 0 && screenY < viewport.visibleLines && 
-           screenX >= 0 && screenX < viewport.visibleColumns then
-          val currentTimeMs = System.currentTimeMillis()
-          state.animationState.addAnimation(char, screenX, screenY, animConfig, currentTimeMs)
-        else
-          state.animationState
+        // Calculate proper screen coordinates accounting for UI chrome and panels
+        calculateAnimationScreenPosition(
+          cursorLine,
+          cursorColumn,
+          viewport,
+          state
+        ) match
+          case Some((screenX, screenY)) =>
+            // Use new list-based animation system with proper timing
+            val durationMs = animConfig.totalDuration.toMillis.toInt
+            val animatedChar = com.serenity.animation.AnimatedCharacter.createFadeAnimation(
+              char,
+              state.theme.backgroundColor,
+              state.theme.foregroundColor,
+              durationMs,
+              16 // 16ms tick rate for 60 FPS
+            )
+
+            state.screenAnimations.copy(
+              animations = state.screenAnimations.animations +
+                (com.serenity.animation.ScreenPosition(screenX, screenY) -> animatedChar)
+            )
+          case None =>
+            state.screenAnimations
       case None =>
-        state.animationState
+        state.screenAnimations
+
+  /** Calculate the actual screen coordinates for an animation, accounting for UI layout */
+  private def calculateAnimationScreenPosition(
+    cursorLine: Int,
+    cursorColumn: Int,
+    viewport: Viewport,
+    state: AppState
+  ): Option[(Int, Int)] =
+    // Use actual terminal size if available, otherwise fall back to reasonable default
+    val terminalSize = state.terminalSize.getOrElse(TerminalSize(120, 40))
+    val layout       = LayoutEngine.calculateLayout(state, terminalSize)
+    val editorRect   = layout.editorPanelRect
+
+    // Calculate visual line and column (accounting for line wrapping)
+    val panelWidth   = editorRect.width
+    val visualLine   = cursorLine
+    val visualColumn = cursorColumn
+
+    // Convert to viewport-relative coordinates
+    val viewportRelativeY = visualLine - viewport.topLine
+    val viewportRelativeX = visualColumn - viewport.leftColumn
+
+    // Check if the position is visible in the viewport
+    if viewportRelativeY >= 0 && viewportRelativeY < viewport.visibleLines &&
+        viewportRelativeX >= 0 && viewportRelativeX < viewport.visibleColumns
+    then
+      // Calculate final screen coordinates accounting for editor panel position
+      val screenY = editorRect.y + viewportRelativeY
+      val screenX = editorRect.x + viewportRelativeX
+      Some((screenX, screenY))
+    else None // Character is not visible in current viewport

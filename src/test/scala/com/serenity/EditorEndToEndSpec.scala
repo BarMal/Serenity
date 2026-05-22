@@ -8,6 +8,8 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.LoggerFactory
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 
 /** Comprehensive end-to-end behavioral tests for the text editor. These tests capture the intended behavior and can be
   * used for TDD. Some may fail initially due to incomplete implementation.
@@ -268,7 +270,11 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
     pending // Implementation incomplete - clipboard operations not implemented
 
   trait EditorTestFixture:
-    val stateManager: StateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val stateManager: StateManager = StateManager
+      .apply(LoggerFactory[IO].getLogger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     def createBufferWithPane(content: String): Option[BufferId] =
       try

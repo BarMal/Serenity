@@ -17,7 +17,7 @@ class TextEntryTranslator extends Translator[TextEntryEvent]:
     case KeyStrokeInfo(KeyType.Character, Some(char), modifiers)
         if isAcceptableForTextEntry(modifiers) && isPrintableChar(char) =>
       InsertChar(char)
-    case KeyStrokeInfo(KeyType.Tab, _, _) => InsertChar('\t')
+    case KeyStrokeInfo(KeyType.Tab, _, _)   => InsertChar('\t')
     case KeyStrokeInfo(KeyType.Enter, _, _) => NewLine
   }
 
@@ -44,9 +44,11 @@ class TextEntryTranslator extends Translator[TextEntryEvent]:
     case KeyStrokeInfo(KeyType.Character, Some('c'), modifiers) if modifiers.contains(Modifier.Ctrl) => Copy
     case KeyStrokeInfo(KeyType.Character, Some('v'), modifiers) if modifiers.contains(Modifier.Ctrl) => Paste
     case KeyStrokeInfo(KeyType.Character, Some('x'), modifiers) if modifiers.contains(Modifier.Ctrl) => Cut
-    case KeyStrokeInfo(KeyType.Character, Some('h'), modifiers) if modifiers.contains(Modifier.Ctrl) => ToggleSyntaxHighlighting
+    case KeyStrokeInfo(KeyType.Character, Some('h'), modifiers) if modifiers.contains(Modifier.Ctrl) =>
+      ToggleSyntaxHighlighting
     case KeyStrokeInfo(KeyType.Character, Some('o'), modifiers) if modifiers.contains(Modifier.Ctrl) => OpenFile
-    case KeyStrokeInfo(KeyType.Character, Some('p'), modifiers) if modifiers.contains(Modifier.Ctrl) => ToggleCommandRunner
+    case KeyStrokeInfo(KeyType.Character, Some('p'), modifiers) if modifiers.contains(Modifier.Ctrl) =>
+      ToggleCommandRunner
   }
 
   private def isPrintableChar(char: Char): Boolean =

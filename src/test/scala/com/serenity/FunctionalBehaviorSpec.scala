@@ -8,6 +8,8 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
@@ -42,9 +44,13 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
     val state1    = stateManager.getCurrentState.unsafeRunSync()
 
     // Create second state manager with same initial state
-    val stateManager2 = StateManager.apply.unsafeRunSync()
-    val bufferId2     = stateManager2.createBuffer("Test").unsafeRunSync()
-    val state2        = stateManager2.getCurrentState.unsafeRunSync()
+//    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+//    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager2 = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
+    val bufferId2 = stateManager2.createBuffer("Test").unsafeRunSync()
+    val state2    = stateManager2.getCurrentState.unsafeRunSync()
 
     // When: Apply identical event sequences to both
     val eventSequence = List(
@@ -256,4 +262,9 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
     state2.buffers(bufferId).content should not be theSameInstanceAs(state3.buffers(bufferId).content)
 
   trait FunctionalFixture:
-    val stateManager: StateManager = StateManager.apply.unsafeRunSync()
+
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager: StateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()

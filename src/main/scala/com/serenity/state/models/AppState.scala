@@ -1,10 +1,10 @@
 package com.serenity.state.models
 
+import com.serenity.animation.AnimationState
+import com.serenity.command.CommandRunner
+import com.serenity.config.AppConfig
 import com.serenity.ui.layout.{Layout, PeekOverlay, TerminalSize}
 import com.serenity.ui.theme.Theme
-import com.serenity.command.CommandRunner
-import com.serenity.animation.AnimationState
-import com.serenity.config.AppConfig
 
 case class AppState(
     layout: Layout,
@@ -18,11 +18,11 @@ case class AppState(
     commandRunner: CommandRunner = CommandRunner.empty,
     nextBufferId: BufferId = BufferId(0),
     nextPaneId: PaneId = PaneId(0),
-    animationState: AnimationState = AnimationState.empty
+    screenAnimations: AnimationState = AnimationState.empty
 ):
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled
-  def isValid: Boolean = validationErrors.isEmpty
+  def isValid: Boolean                   = validationErrors.isEmpty
 
   def validationErrors: List[String] =
     val errors = List.newBuilder[String]

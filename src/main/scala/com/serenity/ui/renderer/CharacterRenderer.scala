@@ -1,16 +1,15 @@
 package com.serenity.ui.renderer
 
-import com.googlecode.lanterna.graphics.TextGraphics
 import com.googlecode.lanterna.TextColor
-import com.serenity.ui.theme.{Theme, ThemeManager, ThemeRenderer}
+import com.googlecode.lanterna.graphics.TextGraphics
 import com.serenity.animation.AnimationState
+import com.serenity.ui.theme.{Theme, ThemeManager, ThemeRenderer}
 
 object CharacterRenderer:
 
-  /** Render a string with proper character handling for all printable characters.
-   * This ensures that special characters like underscore render correctly
-   * even in terminals that might have font or rendering issues.
-   */
+  /** Render a string with proper character handling for all printable characters. This ensures that special characters
+    * like underscore render correctly even in terminals that might have font or rendering issues.
+    */
   def renderString(
     graphics: TextGraphics,
     x: Int,
@@ -27,24 +26,25 @@ object CharacterRenderer:
     content: String,
     tabWidth: Int = 4
   ): Unit =
-    var currentX = x
-    for char <- content do
+    content.foldLeft(x) { (currentX, char) =>
       char match
         case '\t' =>
           // Expand tab to spaces to reach next tab stop
           val spacesToAdd = tabWidth - (currentX % tabWidth)
-          val tabSpaces = " " * spacesToAdd
+          val tabSpaces   = " " * spacesToAdd
           graphics.putString(currentX, y, tabSpaces)
-          currentX += spacesToAdd
+          currentX + spacesToAdd
         case '_' =>
           // Explicitly handle underscore to ensure visibility
           graphics.putString(currentX, y, "_")
-          currentX += 1
+          currentX + 1
         case c if c >= 32 && c <= 126 =>
           graphics.putString(currentX, y, c.toString)
-          currentX += 1
+          currentX + 1
         case _ =>
           // Skip non-printable characters except tab (handled above)
+          currentX
+    }
 
   /** Render a string with theme-based syntax highlighting (if enabled) */
   def renderStringWithTheme(
@@ -58,13 +58,11 @@ object CharacterRenderer:
     if syntaxHighlightingEnabled then
       val styledSegments = ThemeManager.highlightLine(content, theme)
       ThemeRenderer.renderStyledLine(graphics, x, y, styledSegments)
-    else
-      renderStringPlain(graphics, x, y, content)
+    else renderStringPlain(graphics, x, y, content)
 
-  /** Render a single character with special handling if needed.
-   * This can be extended to handle specific characters that might not 
-   * render properly in certain terminals.
-   */
+  /** Render a single character with special handling if needed. This can be extended to handle specific characters that
+    * might not render properly in certain terminals.
+    */
   def renderChar(
     graphics: TextGraphics,
     x: Int,
@@ -73,20 +71,20 @@ object CharacterRenderer:
   ): Unit =
     // Handle special character cases - tabs should be handled in layout, not here
     val displayChar = char match
-      case '_' => '_'  // Ensure underscore is preserved
-      case '\t' => '\t' // Preserve tab character - layout should handle tab width
-      case c if c.isControl && c != '\t' => ' ' // Replace control chars (except tab) with space
-      case c => c
-    
+      case '_'                           => '_'  // Ensure underscore is preserved
+      case '\t'                          => '\t' // Preserve tab character - layout should handle tab width
+      case c if c.isControl && c != '\t' => ' '  // Replace control chars (except tab) with space
+      case c                             => c
+
     graphics.putString(x, y, displayChar.toString)
 
   /** Check if a character should be rendered visibly */
   def isVisibleChar(char: Char): Boolean =
     char match
-      case c if c >= 32 && c <= 126 => true  // Standard printable ASCII
-      case '_' => true                       // Explicitly include underscore
-      case '\t' => true                      // Tab (though converted to space)
-      case _ => false
+      case c if c >= 32 && c <= 126 => true // Standard printable ASCII
+      case '_'                      => true // Explicitly include underscore
+      case '\t'                     => true // Tab (though converted to space)
+      case _                        => false
 
   /** Render a character with opacity support (simulated through color blending) */
   def renderCharWithOpacity(
@@ -120,15 +118,13 @@ object CharacterRenderer:
     y: Int,
     content: String,
     theme: Theme,
-    animationState: AnimationState,
-    currentTimeMs: Long,
+    screenAnimations: AnimationState,
     syntaxHighlightingEnabled: Boolean = true
   ): Unit =
     if syntaxHighlightingEnabled then
       val styledTexts = ThemeManager.highlightLine(content, theme)
-      renderStyledLineWithAnimation(graphics, x, y, styledTexts, theme, animationState, currentTimeMs)
-    else
-      renderStringWithAnimationPlain(graphics, x, y, content, theme, animationState, currentTimeMs)
+      renderStyledLineWithAnimation(graphics, x, y, styledTexts, theme, screenAnimations)
+    else renderStringWithAnimationPlain(graphics, x, y, content, theme, screenAnimations)
 
   /** Render a string with animation support (plain, no syntax highlighting) */
   def renderStringWithAnimationPlain(
@@ -137,24 +133,25 @@ object CharacterRenderer:
     y: Int,
     content: String,
     theme: Theme,
-    animationState: AnimationState,
-    currentTimeMs: Long,
+    screenAnimations: AnimationState,
     tabWidth: Int = 4
   ): Unit =
-    var currentX = x
-    for char <- content do
+    content.foldLeft(x) { (currentX, char) =>
       char match
         case '\t' =>
           // Expand tab to spaces to reach next tab stop
           val spacesToAdd = tabWidth - (currentX % tabWidth)
-          for _ <- 0 until spacesToAdd do
-            renderCharAtPosition(graphics, currentX, y, ' ', theme, animationState, currentTimeMs)
-            currentX += 1
+          (0 until spacesToAdd).foldLeft(currentX) { (posX, _) =>
+            renderCharAtPosition(graphics, posX, y, ' ', theme, screenAnimations)
+            posX + 1
+          }
         case c if c >= 32 && c <= 126 =>
-          renderCharAtPosition(graphics, currentX, y, c, theme, animationState, currentTimeMs)
-          currentX += 1
+          renderCharAtPosition(graphics, currentX, y, c, theme, screenAnimations)
+          currentX + 1
         case _ =>
           // Skip non-printable characters
+          currentX
+    }
 
   /** Render styled line with animation support */
   private def renderStyledLineWithAnimation(
@@ -163,19 +160,18 @@ object CharacterRenderer:
     y: Int,
     styledTexts: List[com.serenity.ui.theme.StyledText],
     theme: Theme,
-    animationState: AnimationState,
-    currentTimeMs: Long
+    screenAnimations: AnimationState
   ): Unit =
-    var currentX = x
-    styledTexts.foreach { styledText =>
+    styledTexts.foldLeft(x) { (currentX, styledText) =>
       val segmentTheme = theme.copy(
         foregroundColor = styledText.foregroundColor,
         backgroundColor = styledText.backgroundColor
       )
-      
-      for char <- styledText.content do
-        renderCharAtPosition(graphics, currentX, y, char, segmentTheme, animationState, currentTimeMs)
-        currentX += 1
+
+      styledText.content.foldLeft(currentX) { (posX, char) =>
+        renderCharAtPosition(graphics, posX, y, char, segmentTheme, screenAnimations)
+        posX + 1
+      }
     }
 
   /** Render a single character at position, checking for animations */
@@ -185,13 +181,13 @@ object CharacterRenderer:
     y: Int,
     char: Char,
     theme: Theme,
-    animationState: AnimationState,
-    currentTimeMs: Long
+    screenAnimations: AnimationState
   ): Unit =
-    animationState.getAnimation(x, y) match
-      case Some(animation) =>
-        val opacity = animation.currentOpacity(currentTimeMs)
-        renderCharWithOpacity(graphics, x, y, char, theme.foregroundColor, theme.backgroundColor, opacity)
+    screenAnimations.getCharacterColor(x, y) match
+      case Some(animatedColor) =>
+        graphics.setForegroundColor(animatedColor)
+        graphics.setBackgroundColor(theme.backgroundColor)
+        renderChar(graphics, x, y, char)
       case None =>
         graphics.setForegroundColor(theme.foregroundColor)
         graphics.setBackgroundColor(theme.backgroundColor)
@@ -205,13 +201,13 @@ object CharacterRenderer:
     else if opacity > 0.4 then
       // Try to find a dimmer version of the foreground color
       foreground match
-        case TextColor.ANSI.WHITE => TextColor.ANSI.WHITE_BRIGHT
+        case TextColor.ANSI.WHITE        => TextColor.ANSI.WHITE_BRIGHT
         case TextColor.ANSI.WHITE_BRIGHT => TextColor.ANSI.BLACK_BRIGHT
-        case TextColor.ANSI.RED => TextColor.ANSI.RED_BRIGHT
-        case TextColor.ANSI.GREEN => TextColor.ANSI.GREEN_BRIGHT
-        case TextColor.ANSI.BLUE => TextColor.ANSI.BLUE_BRIGHT
-        case TextColor.ANSI.YELLOW => TextColor.ANSI.YELLOW_BRIGHT
-        case TextColor.ANSI.MAGENTA => TextColor.ANSI.MAGENTA_BRIGHT
-        case TextColor.ANSI.CYAN => TextColor.ANSI.CYAN_BRIGHT
-        case _ => TextColor.ANSI.BLACK_BRIGHT
+        case TextColor.ANSI.RED          => TextColor.ANSI.RED_BRIGHT
+        case TextColor.ANSI.GREEN        => TextColor.ANSI.GREEN_BRIGHT
+        case TextColor.ANSI.BLUE         => TextColor.ANSI.BLUE_BRIGHT
+        case TextColor.ANSI.YELLOW       => TextColor.ANSI.YELLOW_BRIGHT
+        case TextColor.ANSI.MAGENTA      => TextColor.ANSI.MAGENTA_BRIGHT
+        case TextColor.ANSI.CYAN         => TextColor.ANSI.CYAN_BRIGHT
+        case _                           => TextColor.ANSI.BLACK_BRIGHT
     else TextColor.ANSI.BLACK_BRIGHT

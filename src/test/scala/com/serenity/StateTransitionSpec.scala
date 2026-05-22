@@ -9,6 +9,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.{DirEntry, PanelPosition, PeekContent}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
@@ -89,9 +91,8 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     // Then: Focus should return to editor pane
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.focus match
-      case Focus.EditorPane(_) => succeed
+      case Focus.EditorPane(_) => finalState.peekOverlay shouldBe None
       case other               => fail(s"Expected EditorPane focus, got $other")
-    finalState.peekOverlay shouldBe None
 
   it should "maintain state consistency during rapid focus transitions" in new StateFixture:
     // Given: Multiple UI components
@@ -196,8 +197,6 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     val afterCreateState = stateManager.getCurrentState.unsafeRunSync()
     afterCreateState.isValid shouldBe true
 
-    // Then: All intermediate states should be valid
-    succeed
 
   it should "handle state recovery from invalid transitions gracefully" in new StateFixture:
     // Given: Valid initial state
@@ -216,8 +215,10 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     val afterInvalidClose = stateManager.getCurrentState.unsafeRunSync()
     afterInvalidClose.isValid shouldBe true
 
-    // Then: State should remain valid and consistent
-    succeed
-
   trait StateFixture:
-    val stateManager: StateManager = StateManager.apply.unsafeRunSync()
+
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager: StateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()

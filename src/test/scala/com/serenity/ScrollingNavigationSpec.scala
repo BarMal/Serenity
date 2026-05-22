@@ -8,6 +8,8 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
@@ -379,4 +381,9 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     pane2.viewport.topLine shouldBe 0
 
   trait ScrollFixture:
-    val stateManager: StateManager = StateManager.apply.unsafeRunSync()
+
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager: StateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()

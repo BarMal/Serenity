@@ -1,7 +1,7 @@
 package com.serenity.ui.theme
 
-import com.googlecode.lanterna.graphics.TextGraphics
 import com.googlecode.lanterna.SGR
+import com.googlecode.lanterna.graphics.TextGraphics
 
 object ThemeRenderer:
 
@@ -15,18 +15,16 @@ object ThemeRenderer:
     // Set colors
     graphics.setForegroundColor(styledText.foregroundColor)
     graphics.setBackgroundColor(styledText.backgroundColor)
-    
+
     // Apply text styles (SGR modifiers)
     val modifiers = buildSGRModifiers(styledText.style)
-    if modifiers.nonEmpty then
-      graphics.enableModifiers(modifiers.toSeq*)
-    
+    if modifiers.nonEmpty then graphics.enableModifiers(modifiers.toSeq*)
+
     // Render the text
     graphics.putString(x, y, styledText.content)
-    
+
     // Disable modifiers after rendering
-    if modifiers.nonEmpty then
-      graphics.disableModifiers(modifiers.toSeq*)
+    if modifiers.nonEmpty then graphics.disableModifiers(modifiers.toSeq*)
 
   /** Render a list of styled text segments on the same line */
   def renderStyledLine(
@@ -35,20 +33,18 @@ object ThemeRenderer:
     y: Int,
     styledSegments: List[StyledText]
   ): Unit =
-    var currentX = x
-    for styledText <- styledSegments do
+    styledSegments.foldLeft(x) { (currentX, styledText) =>
       renderStyledText(graphics, currentX, y, styledText)
-      currentX += styledText.content.length
+      currentX + styledText.content.length
+    }
 
   /** Convert TextStyle to Lanterna SGR modifiers */
   private def buildSGRModifiers(style: TextStyle): Set[SGR] =
-    var modifiers = Set.empty[SGR]
-    
-    if style.isBold then modifiers += SGR.BOLD
-    if style.isItalic then modifiers += SGR.ITALIC
-    if style.isUnderlined then modifiers += SGR.UNDERLINE
-    
-    modifiers
+    List(
+      if style.isBold then Some(SGR.BOLD) else None,
+      if style.isItalic then Some(SGR.ITALIC) else None,
+      if style.isUnderlined then Some(SGR.UNDERLINE) else None
+    ).flatten.toSet
 
   /** Render styled text preserving existing background */
   def renderStyledTextPreserveBackground(
@@ -59,23 +55,19 @@ object ThemeRenderer:
     preserveBackground: Boolean = true
   ): Unit =
     val originalBackground = graphics.getBackgroundColor
-    
+
     // Set colors
     graphics.setForegroundColor(styledText.foregroundColor)
-    if !preserveBackground then
-      graphics.setBackgroundColor(styledText.backgroundColor)
-    
+    if !preserveBackground then graphics.setBackgroundColor(styledText.backgroundColor)
+
     // Apply text styles
     val modifiers = buildSGRModifiers(styledText.style)
-    if modifiers.nonEmpty then
-      graphics.enableModifiers(modifiers.toSeq*)
-    
+    if modifiers.nonEmpty then graphics.enableModifiers(modifiers.toSeq*)
+
     // Render the text
     graphics.putString(x, y, styledText.content)
-    
+
     // Restore and cleanup
-    if modifiers.nonEmpty then
-      graphics.disableModifiers(modifiers.toSeq*)
-    
-    if !preserveBackground then
-      graphics.setBackgroundColor(originalBackground)
+    if modifiers.nonEmpty then graphics.disableModifiers(modifiers.toSeq*)
+
+    if !preserveBackground then graphics.setBackgroundColor(originalBackground)

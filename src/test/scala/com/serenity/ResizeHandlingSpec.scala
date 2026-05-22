@@ -8,6 +8,8 @@ import com.serenity.state.manager.StateManager
 import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
@@ -25,9 +27,13 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "trigger layout recalculation when applied to state manager" in {
     // Create state manager with initial buffer and pane
-    val stateManager = StateManager.apply.unsafeRunSync()
-    val bufferId     = stateManager.createBuffer("Initial content").unsafeRunSync()
-    val paneId       = stateManager.createPane(Some(bufferId)).unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
+    val bufferId = stateManager.createBuffer("Initial content").unsafeRunSync()
+    val paneId   = stateManager.createPane(Some(bufferId)).unsafeRunSync()
 
     // Get initial state and verify initial layout
     val initialState  = stateManager.getCurrentState.unsafeRunSync()
@@ -57,7 +63,11 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle text wrapping recalculation on resize" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     // Create a long line of text that will wrap differently at different widths
     val longText =
@@ -92,7 +102,11 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "detect resize from terminal input" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     // Initial state - has default viewport dimensions
     val initialState = stateManager.getCurrentState.unsafeRunSync()
@@ -123,7 +137,11 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "recalculate text wrapping when terminal width changes" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     // Create buffer with text that will wrap at narrow width
     val longLine =

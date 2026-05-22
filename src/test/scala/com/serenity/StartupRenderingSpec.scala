@@ -8,6 +8,8 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Test startup rendering issues - specifically that initial buffer state should be renderable without requiring input
   * events
@@ -19,7 +21,11 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
   behavior of "Startup State Rendering"
 
   it should "have buffer content available immediately after setup" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     // Create buffer with initial content
     val bufferId = stateManager.createBuffer("Welcome to Serenity!").unsafeRunSync()
@@ -42,7 +48,11 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "have proper cursor position in initial state" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("Hello").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -62,7 +72,11 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
   behavior of "Text Overflow Prevention"
 
   it should "properly track cursor position when text extends beyond typical panel width" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -87,7 +101,11 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle viewport scrolling when cursor extends beyond visible area" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -119,7 +137,11 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve buffer content integrity regardless of viewport scrolling" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()

@@ -1,7 +1,8 @@
 package com.serenity.io
 
-import cats.effect.IO
 import java.nio.file.{Files, Path, Paths}
+
+import cats.effect.IO
 
 object FileUtils:
 
@@ -15,16 +16,13 @@ object FileUtils:
 
   /** Check if file is writable (exists and writable, or parent directory writable for new files) */
   def isWritableFile(path: Path): Boolean =
-    if Files.exists(path) then
-      Files.isWritable(path)
-    else
-      Option(path.getParent).exists(Files.isWritable)
+    if Files.exists(path) then Files.isWritable(path)
+    else Option(path.getParent).exists(Files.isWritable)
 
   /** Read file content as string */
   def readFileContent(path: Path): IO[String] =
     IO.blocking {
-      if !isReadableFile(path) then
-        throw new RuntimeException(s"File not readable: $path")
+      if !isReadableFile(path) then throw new RuntimeException(s"File not readable: $path")
       Files.readString(path)
     }
 
@@ -45,13 +43,10 @@ object FileUtils:
   /** List files in directory */
   def listFiles(directory: Path): IO[List[Path]] =
     IO.blocking {
-      if !Files.exists(directory) || !Files.isDirectory(directory) then
-        List.empty
+      if !Files.exists(directory) || !Files.isDirectory(directory) then List.empty
       else
         import scala.jdk.CollectionConverters.*
-        Files.list(directory)
-          .toList.asScala.toList
-          .sorted
+        Files.list(directory).toList.asScala.toList.sorted
     }
 
   /** Get current working directory */
@@ -62,16 +57,14 @@ object FileUtils:
   def resolvePath(pathString: String): IO[Path] =
     for
       currentDir <- getCurrentDirectory
-      path = if pathString.startsWith("/") || pathString.contains(":") then
-        Paths.get(pathString)  // Absolute path
-      else
-        currentDir.resolve(pathString)  // Relative path
+      path =
+        if pathString.startsWith("/") || pathString.contains(":") then Paths.get(pathString) // Absolute path
+        else currentDir.resolve(pathString)                                                  // Relative path
     yield path.normalize()
 
   /** Check if file has been modified since last read */
   def getLastModified(path: Path): IO[Long] =
     IO.blocking {
-      if Files.exists(path) then
-        Files.getLastModifiedTime(path).toMillis
+      if Files.exists(path) then Files.getLastModifiedTime(path).toMillis
       else 0L
     }

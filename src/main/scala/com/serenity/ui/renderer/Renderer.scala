@@ -60,13 +60,13 @@ object Renderer:
     val buffer = pane.bufferId.flatMap(state.buffers.get)
 
     buffer match
-      case Some(buf) if buf.content.weight == 0 && buf.isNewEmpty => 
+      case Some(buf) if buf.content.weight == 0 && buf.isNewEmpty =>
         renderWelcomeText(rect, context)
-      case Some(buf) if buf.content.weight == 0 => 
+      case Some(buf) if buf.content.weight == 0 =>
         renderEmptyPane(rect, context)
-      case Some(buf) => 
+      case Some(buf) =>
         renderBufferContent(pane, buf, rect, state, context)
-      case None => 
+      case None =>
         renderEmptyPane(rect, context)
 
     // Render cursors with buffer data
@@ -103,16 +103,14 @@ object Renderer:
               screenX >= 0 &&
               screenY < rect.bottom &&
               screenX < rect.right
-          then 
-            val currentTimeMs = System.currentTimeMillis()
+          then
             CharacterRenderer.renderStringWithAnimation(
-              context.graphics, 
-              screenX, 
-              screenY, 
-              visualLine.content, 
-              state.theme, 
-              state.animationState, 
-              currentTimeMs,
+              context.graphics,
+              screenX,
+              screenY,
+              visualLine.content,
+              state.theme,
+              state.screenAnimations,
               state.syntaxHighlightingEnabled
             )
     }
@@ -180,17 +178,18 @@ object Renderer:
       "",
       "Press Ctrl+P for command palette"
     )
-    
+
     val startY = rect.y + (rect.height - lines.length) / 2
-    
+
     context.graphics.setForegroundColor(TextColor.ANSI.BLACK_BRIGHT)
-    
-    lines.zipWithIndex.foreach { case (line, index) =>
-      val lineY = startY + index
-      val centerX = rect.x + (rect.width - line.length) / 2
-      
-      if lineY >= 0 && lineY < context.screen.getTerminalSize.getRows && centerX >= 0 then
-        CharacterRenderer.renderString(context.graphics, centerX, lineY, line)
+
+    lines.zipWithIndex.foreach {
+      case (line, index) =>
+        val lineY   = startY + index
+        val centerX = rect.x + (rect.width - line.length) / 2
+
+        if lineY >= 0 && lineY < context.screen.getTerminalSize.getRows && centerX >= 0 then
+          CharacterRenderer.renderString(context.graphics, centerX, lineY, line)
     }
 
   private def renderCursors(
@@ -216,9 +215,9 @@ object Renderer:
               screenX >= 0 && screenX < context.screen.getTerminalSize.getColumns
           then
             // Cursor blinking: blink every 500ms
-            val currentTime = System.currentTimeMillis()
+            val currentTime      = System.currentTimeMillis()
             val shouldShowCursor = (currentTime / 500) % 2 == 0
-            
+
             if shouldShowCursor then
               // Highlight cursor position
               context.graphics.setBackgroundColor(TextColor.ANSI.WHITE)
@@ -291,8 +290,8 @@ object Renderer:
   private def renderCommandRunner(state: AppState, context: RenderContext): Unit =
     if state.commandRunner.isActive then
       val terminalSize = TerminalSize(context.screen.getTerminalSize.getColumns, context.screen.getTerminalSize.getRows)
-      val rect = context.layout.editorPanelRect
-      
+      val rect         = context.layout.editorPanelRect
+
       // Find cursor screen position from active pane
       val cursorScreenPosition = state.layout.activeEditorPaneId
         .flatMap(paneId => state.layout.editorPanes.get(paneId))
@@ -301,17 +300,18 @@ object Renderer:
             pane.bufferId.flatMap(state.buffers.get).map { buffer =>
               // Calculate screen position using the same logic as cursor rendering
               calculateCursorVisualPosition(cursor, buffer.content, rect.width, pane.viewport)
-                .map { case (visualLine, visualColumn) =>
-                  val screenY = rect.y + (visualLine - pane.viewport.topLine)
-                  val screenX = rect.x + visualColumn
-                  CursorPosition(screenY, screenX)
+                .map {
+                  case (visualLine, visualColumn) =>
+                    val screenY = rect.y + (visualLine - pane.viewport.topLine)
+                    val screenX = rect.x + visualColumn
+                    CursorPosition(screenY, screenX)
                 }
                 .getOrElse(CursorPosition(rect.y, rect.x)) // Fallback to pane top-left
             }
           }
         }
         .getOrElse(CursorPosition(rect.y, rect.x)) // Fallback to pane top-left
-      
+
       CommandRunnerRenderer.render(
         context.graphics,
         state.commandRunner,

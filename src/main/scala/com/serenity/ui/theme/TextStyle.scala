@@ -7,6 +7,7 @@ case class TextStyle(
     isItalic: Boolean = false,
     isUnderlined: Boolean = false
 ):
+
   /** Combine this style with another, with the other style taking precedence for conflicting attributes */
   def combine(other: TextStyle): TextStyle =
     TextStyle(
@@ -16,9 +17,9 @@ case class TextStyle(
     )
 
 object TextStyle:
-  def normal: TextStyle = TextStyle()
-  def bold: TextStyle = TextStyle(isBold = true)
-  def italic: TextStyle = TextStyle(isItalic = true)
+  def normal: TextStyle     = TextStyle()
+  def bold: TextStyle       = TextStyle(isBold = true)
+  def italic: TextStyle     = TextStyle(isItalic = true)
   def underlined: TextStyle = TextStyle(isUnderlined = true)
   def boldItalic: TextStyle = TextStyle(isBold = true, isItalic = true)
 
