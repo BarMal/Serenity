@@ -29,6 +29,7 @@ object ConfigurableThemeManager:
     syntax: SyntaxColors,
     defaultBackground: TextColor
   ): Either[String, Map[SyntaxElement, ThemeColor]] =
+    val defaultFg = SyntaxElementConfig("white", None, StyleConfig())
     val conversions = List(
       (SyntaxElement.Keyword, syntax.keyword),
       (SyntaxElement.String, syntax.string),
@@ -36,11 +37,11 @@ object ConfigurableThemeManager:
       (SyntaxElement.Number, syntax.number),
       (SyntaxElement.Operator, syntax.operator),
       (SyntaxElement.Identifier, syntax.identifier),
-      (SyntaxElement.Type, syntax.typ),
-      (SyntaxElement.Delimiter, syntax.delimiter),
-      (SyntaxElement.Whitespace, syntax.whitespace),
-      (SyntaxElement.Error, syntax.error),
-      (SyntaxElement.Normal, syntax.normal)
+      (SyntaxElement.Type, syntax.typ.getOrElse(SyntaxElementConfig("magenta", None, StyleConfig(bold = true)))),
+      (SyntaxElement.Delimiter, syntax.delimiter.getOrElse(defaultFg)),
+      (SyntaxElement.Whitespace, syntax.whitespace.getOrElse(SyntaxElementConfig("black", None, StyleConfig()))),
+      (SyntaxElement.Error, syntax.error.getOrElse(SyntaxElementConfig("red", None, StyleConfig(underline = true)))),
+      (SyntaxElement.Normal, syntax.normal.getOrElse(defaultFg))
     )
 
     val results = conversions.map {
@@ -62,9 +63,9 @@ object ConfigurableThemeManager:
   ): Either[String, ThemeColor] =
     for
       foreground <- ColorParser.parseColor(config.foreground)
-      background <-
-        if config.background == "default" then Right(defaultBackground)
-        else ColorParser.parseColor(config.background)
+      background <- config.background match
+        case None | Some("default") => Right(defaultBackground)
+        case Some(colorStr)         => ColorParser.parseColor(colorStr)
     yield ThemeColor(
       foreground = foreground,
       background = background,

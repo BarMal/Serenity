@@ -6,12 +6,19 @@ import com.serenity.config.AppConfig
 import com.serenity.ui.layout.{Layout, PeekOverlay, TerminalSize}
 import com.serenity.ui.theme.Theme
 
+case class FindState(
+    query: String,
+    resultLines: List[Int],
+    currentIndex: Int
+)
+
 case class AppState(
     layout: Layout,
     buffers: Map[BufferId, Buffer],
     focus: Focus,
     peekOverlay: Option[PeekOverlay] = None,
     modal: Option[Modal] = None,
+    findState: Option[FindState] = None,
     terminalSize: Option[TerminalSize] = None,
     theme: Theme = Theme.default,
     config: AppConfig = AppConfig.default,

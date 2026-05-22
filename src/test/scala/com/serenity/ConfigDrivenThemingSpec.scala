@@ -114,7 +114,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
       }
     """)
 
-    val themeConfig = configSource.load[ThemeConfig]
+    val themeConfig = configSource.at("theme").load[ThemeConfig]
 
     themeConfig shouldBe a[Right[?, ?]]
     themeConfig.toOption.get.name shouldBe "test-theme"
@@ -186,12 +186,12 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
         cursor = "yellow"
       ),
       syntax = SyntaxColors(
-        keyword = SyntaxElementConfig("blue", "black", StyleConfig(bold = true, italic = false, underline = false)),
-        string = SyntaxElementConfig("green", "black", StyleConfig(bold = false, italic = false, underline = false)),
-        comment = SyntaxElementConfig("gray", "black", StyleConfig(bold = false, italic = true, underline = false)),
-        number = SyntaxElementConfig("cyan", "black", StyleConfig(bold = false, italic = false, underline = false)),
-        operator = SyntaxElementConfig("yellow", "black", StyleConfig(bold = false, italic = false, underline = false)),
-        identifier = SyntaxElementConfig("white", "black", StyleConfig(bold = false, italic = false, underline = false))
+        keyword = SyntaxElementConfig("blue", Some("black"), StyleConfig(bold = true, italic = false, underline = false)),
+        string = SyntaxElementConfig("green", Some("black"), StyleConfig(bold = false, italic = false, underline = false)),
+        comment = SyntaxElementConfig("gray", Some("black"), StyleConfig(bold = false, italic = true, underline = false)),
+        number = SyntaxElementConfig("cyan", Some("black"), StyleConfig(bold = false, italic = false, underline = false)),
+        operator = SyntaxElementConfig("yellow", Some("black"), StyleConfig(bold = false, italic = false, underline = false)),
+        identifier = SyntaxElementConfig("white", Some("black"), StyleConfig(bold = false, italic = false, underline = false))
       )
     )
 

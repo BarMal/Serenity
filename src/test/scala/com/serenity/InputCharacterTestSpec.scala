@@ -129,9 +129,9 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
     finalContent.shouldBe(phrase)
 
   it should "process programming syntax correctly" in new InputFixture:
-    val code     = """def hello(): String = {
+    val code = """def hello(): String = {
   "Hello, World!"
-}"""
+}""".replace("\r\n", "\n")
     val bufferId = setupBuffer("")
 
     // Process each character and newlines

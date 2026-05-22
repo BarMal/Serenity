@@ -40,7 +40,7 @@ class RopeIntegrationSpec extends AnyFlatSpec with Matchers:
     val text = """Short line
 This is a much longer line with lots of content
 Another short
-Final line with medium length content here"""
+Final line with medium length content here""".replace("\r\n", "\n")
     val rope = Rope(text)
 
     // When: Split at various positions (simulating cursor operations)

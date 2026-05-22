@@ -12,7 +12,7 @@ class ThemeConfigLoader:
     IO.blocking {
       if !Files.exists(path) then throw new RuntimeException(s"Theme file not found: $path")
 
-      val configSource = ConfigSource.file(path)
+      val configSource = ConfigSource.file(path).at("theme")
       configSource.load[ThemeConfig] match
         case Right(config)  => config
         case Left(failures) => throw new RuntimeException(s"Failed to load theme config: ${failures.prettyPrint()}")
@@ -21,7 +21,7 @@ class ThemeConfigLoader:
   /** Load theme configuration from classpath resource */
   def loadThemeFromResource(resourcePath: String): IO[ThemeConfig] =
     IO.blocking {
-      val configSource = ConfigSource.resources(resourcePath)
+      val configSource = ConfigSource.resources(resourcePath).at("theme")
       configSource.load[ThemeConfig] match
         case Right(config) => config
         case Left(failures) =>
@@ -31,7 +31,7 @@ class ThemeConfigLoader:
   /** Load theme configuration from string (useful for testing) */
   def loadThemeFromString(configString: String): IO[ThemeConfig] =
     IO.blocking {
-      val configSource = ConfigSource.string(configString)
+      val configSource = ConfigSource.string(configString).at("theme")
       configSource.load[ThemeConfig] match
         case Right(config)  => config
         case Left(failures) => throw new RuntimeException(s"Failed to parse theme config: ${failures.prettyPrint()}")

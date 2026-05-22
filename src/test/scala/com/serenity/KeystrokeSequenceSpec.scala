@@ -66,7 +66,7 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val buffer     = finalState.buffers(bufferId)
     val expected   = """def hello(): String =
-  "Hello""""
+  "Hello"""".replace("\r\n", "\n")
     buffer.content.collect() shouldBe expected
 
     // Cursor should be at end
@@ -154,7 +154,7 @@ Line 4"""
     val expected   = """Line 1
 Line 2!
 * Line 3
-Final line"""
+Final line""".replace("\r\n", "\n")
     buffer.content.collect() shouldBe expected
 
   it should "handle word-level operations and boundary navigation" in new KeystrokeFixture:
@@ -289,7 +289,7 @@ Final line"""
     val buffer     = finalState.buffers(bufferId)
     val expected   = """The Single line
 Second line
-Third"""
+Third""".replace("\r\n", "\n")
     buffer.content.collect() shouldBe expected
 
   it should "handle edge case navigation at document boundaries" in new KeystrokeFixture:
@@ -403,7 +403,7 @@ Third"""
     val buffer   = finalState.buffers(bufferId)
     val expected = """* Initial state
 Line 2 (middle)
-Line 3"""
+Line 3""".replace("\r\n", "\n")
     buffer.content.collect() shouldBe expected
 
   trait KeystrokeFixture:

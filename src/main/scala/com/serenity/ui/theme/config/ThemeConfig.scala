@@ -25,17 +25,17 @@ case class SyntaxColors(
     number: SyntaxElementConfig,
     operator: SyntaxElementConfig,
     identifier: SyntaxElementConfig,
-    typ: SyntaxElementConfig = SyntaxElementConfig("magenta", "black", StyleConfig(bold = true)),
-    delimiter: SyntaxElementConfig = SyntaxElementConfig("white", "black", StyleConfig()),
-    whitespace: SyntaxElementConfig = SyntaxElementConfig("black", "black", StyleConfig()),
-    error: SyntaxElementConfig = SyntaxElementConfig("red", "black", StyleConfig(underline = true)),
-    normal: SyntaxElementConfig = SyntaxElementConfig("white", "black", StyleConfig())
+    typ: Option[SyntaxElementConfig] = None,
+    delimiter: Option[SyntaxElementConfig] = None,
+    whitespace: Option[SyntaxElementConfig] = None,
+    error: Option[SyntaxElementConfig] = None,
+    normal: Option[SyntaxElementConfig] = None
 ) derives ConfigReader
 
 /** Configuration for a specific syntax element (color + style) */
 case class SyntaxElementConfig(
     foreground: String,
-    background: String = "black",
+    background: Option[String] = None,
     style: StyleConfig = StyleConfig()
 ) derives ConfigReader
 

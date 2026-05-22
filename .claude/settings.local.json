@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd C:\\\\Users\\\\barna\\\\.Git\\\\Serenity; \\(Get-Content \"src\\\\test\\\\scala\\\\com\\\\serenity\\\\KeystrokeSequenceSpec.scala\" -Raw\\).Substring\\(2600, 200\\) | ForEach-Object { [System.Text.Encoding]::UTF8.GetBytes\\($_\\) | ForEach-Object { \"{0:X2}\" -f $_ } } | Select-Object -First 50 | Join-String -Separator \" \")",
+      "PowerShell(cd C:\\\\Users\\\\barna\\\\.Git\\\\Serenity; $content = Get-Content \"src\\\\test\\\\scala\\\\com\\\\serenity\\\\KeystrokeSequenceSpec.scala\" -Raw; $hascrLf = $content.Contains\\(\"`r`n\"\\); $hasLf = $content.Contains\\(\"`n\"\\); Write-Output \"CRLF: $hascrLf, LF only: $hasLf\")"
+    ]
+  }
+}

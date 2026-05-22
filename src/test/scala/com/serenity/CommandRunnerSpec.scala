@@ -107,7 +107,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       Command("cmd2", "Command 2", _ => IO.unit),
       Command("cmd3", "Command 3", _ => IO.unit)
     )
-    val runner = CommandRunner.withCommands(commands).activate(CommandRegistry.default)
+    val runner = CommandRunner.withCommands(commands).activate(CommandRegistry(commands))
 
     val movedDown = runner.moveSelection(1)
     movedDown.selectedIndex shouldBe 1

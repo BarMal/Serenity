@@ -20,6 +20,12 @@ enum Modal:
       input: String
   )
 
+  case Find(
+      query: String,
+      resultLines: List[Int],
+      currentIndex: Int
+  )
+
 case class Command(
     name: String,
     description: String,

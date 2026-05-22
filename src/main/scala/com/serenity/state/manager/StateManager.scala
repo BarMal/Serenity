@@ -36,6 +36,8 @@ trait StateManager:
   def closePane(paneId: PaneId): IO[Unit]
   def setBufferForPane(paneId: PaneId, bufferId: BufferId): IO[Unit]
   def setCursorPosition(paneId: PaneId, line: Int, column: Int): IO[Unit]
+  def setViewport(paneId: PaneId, viewport: Viewport): IO[Unit]
+  def setPaneProperties(paneId: PaneId, update: EditorPane => EditorPane): IO[Unit]
 
   // Peek operations
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
@@ -257,6 +259,30 @@ object StateManager:
           case None => state // Pane doesn't exist, no change
       }
 
+    def setViewport(paneId: PaneId, viewport: Viewport): IO[Unit] =
+      stateRef.update { state =>
+        state.layout.editorPanes.get(paneId) match
+          case Some(pane) =>
+            state.copy(
+              layout = state.layout.copy(
+                editorPanes = state.layout.editorPanes + (paneId -> pane.copy(viewport = viewport))
+              )
+            )
+          case None => state
+      }
+
+    def setPaneProperties(paneId: PaneId, update: EditorPane => EditorPane): IO[Unit] =
+      stateRef.update { state =>
+        state.layout.editorPanes.get(paneId) match
+          case Some(pane) =>
+            state.copy(
+              layout = state.layout.copy(
+                editorPanes = state.layout.editorPanes + (paneId -> update(pane))
+              )
+            )
+          case None => state
+      }
+
     def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =
       stateRef.update { state =>
         state.copy(
@@ -340,7 +366,8 @@ object StateManager:
           focus = Focus.Modal(modal match
             case Modal.CommandRunner(_, _, _) => ModalType.CommandPalette
             case Modal.FileSearch(_, _, _)    => ModalType.FileSearch
-            case Modal.GotoLine(_)            => ModalType.GotoLine)
+            case Modal.GotoLine(_)            => ModalType.GotoLine
+            case Modal.Find(_, _, _)          => ModalType.Find)
         )
       }
 
@@ -478,18 +505,85 @@ object StateManager:
     def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit] =
       logger.debug(s"TODO: dragFileToDirectory($sourceFile, $targetDir)")
 
-    // Scrolling operation stubs (TODO: implement)
     def ensureCursorVisible(paneId: PaneId): IO[Unit] =
-      logger.debug(s"TODO: ensureCursorVisible($paneId)")
+      stateRef.update { state =>
+        state.layout.editorPanes.get(paneId) match
+          case Some(pane) =>
+            val cursor   = pane.cursors.headOption.getOrElse(CursorPosition(0, 0))
+            val viewport = pane.viewport
+            val newLeftColumn =
+              if cursor.column < viewport.leftColumn then cursor.column
+              else if cursor.column >= viewport.leftColumn + viewport.visibleColumns then
+                cursor.column - viewport.visibleColumns + 1
+              else viewport.leftColumn
+            val newTopLine =
+              if cursor.line < viewport.topLine then cursor.line
+              else if cursor.line >= viewport.topLine + viewport.visibleLines then
+                cursor.line - viewport.visibleLines + 1
+              else viewport.topLine
+            val newViewport = viewport.copy(
+              topLine = math.max(0, newTopLine),
+              leftColumn = math.max(0, newLeftColumn)
+            )
+            val updatedPane = pane.copy(viewport = newViewport)
+            state.copy(layout = state.layout.copy(
+              editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
+            ))
+          case None => state
+      }
 
     def smoothScrollTo(paneId: PaneId, targetLine: Int): IO[Unit] =
-      logger.debug(s"TODO: smoothScrollTo($paneId, $targetLine)")
+      stateRef.update { state =>
+        state.layout.editorPanes.get(paneId) match
+          case Some(pane) =>
+            val updatedPane = pane.copy(
+              smoothScrolling = Some(SmoothScrollState(targetTopLine = targetLine, progress = 0.0))
+            )
+            state.copy(layout = state.layout.copy(
+              editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
+            ))
+          case None => state
+      }
 
     def progressSmoothScroll(paneId: PaneId, progress: Double): IO[Unit] =
-      logger.debug(s"TODO: progressSmoothScroll($paneId, $progress)")
+      stateRef.update { state =>
+        state.layout.editorPanes.get(paneId) match
+          case Some(pane) =>
+            pane.smoothScrolling match
+              case Some(SmoothScrollState(targetTopLine, _)) =>
+                val currentTopLine = pane.viewport.topLine
+                val (newTopLine, newSmoothing) =
+                  if progress >= 1.0 then
+                    (targetTopLine, None)
+                  else
+                    val interpolated = math.round(currentTopLine + progress * (targetTopLine - currentTopLine)).toInt
+                    (interpolated, Some(SmoothScrollState(targetTopLine, progress)))
+                val updatedPane = pane.copy(
+                  viewport = pane.viewport.copy(topLine = newTopLine),
+                  smoothScrolling = newSmoothing
+                )
+                state.copy(layout = state.layout.copy(
+                  editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
+                ))
+              case None => state
+          case None => state
+      }
 
     def clickMinimap(paneId: PaneId, targetLine: Int): IO[Unit] =
-      logger.debug(s"TODO: clickMinimap($paneId, $targetLine)")
+      stateRef.update { state =>
+        state.layout.editorPanes.get(paneId) match
+          case Some(pane) =>
+            val halfVisible = pane.viewport.visibleLines / 2
+            val newTopLine  = math.max(0, targetLine - halfVisible)
+            val updatedPane = pane.copy(
+              cursors = List(CursorPosition(targetLine, 0)),
+              viewport = pane.viewport.copy(topLine = newTopLine)
+            )
+            state.copy(layout = state.layout.copy(
+              editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
+            ))
+          case None => state
+      }
 
     // Session operation stubs (TODO: implement)
     def serializeSession(): IO[String] =

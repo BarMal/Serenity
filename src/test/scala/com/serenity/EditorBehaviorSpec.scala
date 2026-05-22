@@ -127,18 +127,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     val paneId   = state.layout.editorPanes.keys.head
 
     // Place cursor at end of "Hello"
-    val updatedPane = state.layout
-      .editorPanes(paneId)
-      .copy(
-        bufferId = Some(bufferId),
-        cursors = List(CursorPosition(0, 5))
-      )
-    val updatedLayout = state.layout.copy(
-      editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-    )
-    stateManager.getCurrentState
-      .flatMap(currentState => IO.pure(currentState.copy(layout = updatedLayout)))
-      .unsafeRunSync()
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.setCursorPosition(paneId, 0, 5).unsafeRunSync()
 
     // When: Delete forward (delete space), then insert comma and space
     stateManager.applyEvent(DeleteForward).unsafeRunSync()
@@ -180,7 +170,9 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     // Associate buffer with pane
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
-    // When: Perform rapid keystroke sequence: type, move, delete, type more
+    // When: Perform rapid keystroke sequence: type ABC, move left twice, delete B, insert X, move right, insert Y
+    // Trace: ABC → MoveLeft×2 → cursor before B → DeleteForward (B) → AC → InsertChar(X) → AXC
+    //        → MoveRight → cursor past C → InsertChar(Y) → AXCY
     val keySequence = List(
       InsertChar('A'),
       InsertChar('B'),
@@ -195,13 +187,13 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     keySequence.foreach(event => stateManager.applyEvent(event).unsafeRunSync())
 
-    // Then: Final text should be "AXYC" with cursor after Y
+    // Then: Final text should be "AXCY" with cursor after Y
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val buffer     = finalState.buffers(bufferId)
-    buffer.content.collect() shouldBe "AXYC"
+    buffer.content.collect() shouldBe "AXCY"
 
     val pane = finalState.layout.editorPanes(paneId)
-    pane.cursors.head.column shouldBe 3
+    pane.cursors.head.column shouldBe 4
 
   it should "validate state consistency after complex operations" in new EditorFixture:
     // Given: Multiple buffers and operations
@@ -213,18 +205,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager.switchToPane(pane2).unsafeRunSync()
 
     // Edit in second buffer
-    val state = stateManager.getCurrentState.unsafeRunSync()
-    val updatedPane2 = state.layout
-      .editorPanes(pane2)
-      .copy(
-        cursors = List(CursorPosition(0, 8))
-      )
-    val updatedLayout = state.layout.copy(
-      editorPanes = state.layout.editorPanes + (pane2 -> updatedPane2)
-    )
-    stateManager.getCurrentState
-      .flatMap(currentState => IO.pure(currentState.copy(layout = updatedLayout)))
-      .unsafeRunSync()
+    stateManager.setCursorPosition(pane2, 0, 8).unsafeRunSync()
 
     stateManager.applyEvent(InsertChar('!')).unsafeRunSync()
 
@@ -241,18 +222,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     val paneId   = state.layout.editorPanes.keys.head
 
     // Position cursor at end of first line
-    val updatedPane = state.layout
-      .editorPanes(paneId)
-      .copy(
-        bufferId = Some(bufferId),
-        cursors = List(CursorPosition(0, 5))
-      )
-    val updatedLayout = state.layout.copy(
-      editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-    )
-    stateManager.getCurrentState
-      .flatMap(currentState => IO.pure(currentState.copy(layout = updatedLayout)))
-      .unsafeRunSync()
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.setCursorPosition(paneId, 0, 5).unsafeRunSync()
 
     // When: Move right (should go to next line)
     stateManager.applyEvent(MoveRight).unsafeRunSync()
@@ -311,18 +282,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     //   cursors = List(CursorPosition(0, 6)),
     //   selection = Some(Selection(CursorPosition(0, 6), CursorPosition(0, 11)))
     // )
-    val updatedPane = state.layout
-      .editorPanes(paneId)
-      .copy(
-        bufferId = Some(bufferId),
-        cursors = List(CursorPosition(0, 6))
-      )
-    val updatedLayout = state.layout.copy(
-      editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-    )
-    stateManager.getCurrentState
-      .flatMap(currentState => IO.pure(currentState.copy(layout = updatedLayout)))
-      .unsafeRunSync()
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.setCursorPosition(paneId, 0, 6).unsafeRunSync()
 
     // When: Type new text (should replace selection when implemented)
     "Universe".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
@@ -342,18 +303,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.layout.editorPanes.keys.head
 
-    val updatedPane = state.layout
-      .editorPanes(paneId)
-      .copy(
-        bufferId = Some(bufferId),
-        cursors = List(CursorPosition(0, 7))
-      )
-    val updatedLayout = state.layout.copy(
-      editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-    )
-    stateManager.getCurrentState
-      .flatMap(currentState => IO.pure(currentState.copy(layout = updatedLayout)))
-      .unsafeRunSync()
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.setCursorPosition(paneId, 0, 7).unsafeRunSync()
 
     // When: Make edits
     stateManager.applyEvent(InsertChar(' ')).unsafeRunSync()
@@ -401,18 +352,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
     val paneId = state.layout.editorPanes.keys.head
-    val updatedPane = state.layout
-      .editorPanes(paneId)
-      .copy(
-        bufferId = Some(bufferId),
-        cursors = List(CursorPosition(0, 16))
-      )
-    val updatedLayout = state.layout.copy(
-      editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-    )
-    stateManager.getCurrentState
-      .flatMap(currentState => IO.pure(currentState.copy(layout = updatedLayout)))
-      .unsafeRunSync()
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.setCursorPosition(paneId, 0, 16).unsafeRunSync()
 
     stateManager.applyEvent(InsertChar(' ')).unsafeRunSync()
     stateManager.applyEvent(InsertChar('+')).unsafeRunSync()

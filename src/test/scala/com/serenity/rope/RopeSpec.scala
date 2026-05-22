@@ -101,11 +101,12 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     val search0: String = "Lorem"
     rope.search(search0) shouldBe Some(0)
 
+    val normalized      = lorem0.replace("\r\n", "\n")
     val search1: String = "laborum"
-    rope.search(search1) shouldBe Some(lorem0.indexOf(search1))
+    rope.search(search1) shouldBe Some(normalized.indexOf(search1))
 
     val search2: String = "in culpa qui officia"
-    rope.search(search2) shouldBe Some(lorem0.indexOf(search2))
+    rope.search(search2) shouldBe Some(normalized.indexOf(search2))
 
     val search3: String = "Doesn't exist in the body"
     rope.search(search3) shouldBe None

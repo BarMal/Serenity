@@ -14,4 +14,5 @@ enum ModalType:
   case FileSearch
   case QuickOpen
   case GotoLine
+  case Find
   case Custom(name: String)

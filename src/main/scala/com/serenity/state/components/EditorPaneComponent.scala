@@ -1,7 +1,6 @@
 package com.serenity.state.components
 
-import cats.effect.IO
-import com.serenity.command.Command
+import cats.effect.unsafe.implicits.global
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Rope
@@ -26,6 +25,32 @@ class EditorPaneComponent(
     currentState: AppState
   ): ComponentResult =
     event match
+      case ScrollDown(lines) =>
+        val totalLines  = pane.bufferId.flatMap(currentState.buffers.get).map(b => countLines(b.content)).getOrElse(Int.MaxValue)
+        val maxTopLine  = math.max(0, totalLines - pane.viewport.visibleLines)
+        val newTopLine  = math.min(pane.viewport.topLine + lines, maxTopLine)
+        val newViewport = pane.viewport.copy(topLine = newTopLine)
+        val updatedPane = pane.copy(viewport = newViewport)
+        ComponentResult.updateState { state =>
+          val syncUpdated = state.layout.editorPanes.map {
+            case (id, p) if id != paneId && p.syncedScrolling =>
+              id -> p.copy(viewport = p.viewport.copy(topLine = newTopLine))
+            case entry => entry
+          }
+          state.copy(layout = state.layout.copy(editorPanes = syncUpdated + (paneId -> updatedPane)))
+        }
+      case ScrollUp(lines) =>
+        val newTopLine  = math.max(0, pane.viewport.topLine - lines)
+        val newViewport = pane.viewport.copy(topLine = newTopLine)
+        val updatedPane = pane.copy(viewport = newViewport)
+        ComponentResult.updateState { state =>
+          val syncUpdated = state.layout.editorPanes.map {
+            case (id, p) if id != paneId && p.syncedScrolling =>
+              id -> p.copy(viewport = p.viewport.copy(topLine = newTopLine))
+            case entry => entry
+          }
+          state.copy(layout = state.layout.copy(editorPanes = syncUpdated + (paneId -> updatedPane)))
+        }
       case textEvent: TextEntryEvent => processTextEvent(textEvent, pane, currentState)
       case _                         => ComponentResult.noChange
 
@@ -236,6 +261,71 @@ class EditorPaneComponent(
               )
             }
 
+          case PageDown =>
+            val totalLines  = countLines(buffer.content)
+            val visLines    = pane.viewport.visibleLines
+            val newTopLine  = math.min(pane.viewport.topLine + visLines, math.max(0, totalLines - visLines))
+            val newCursorLine = math.min(cursor.line + visLines, totalLines - 1)
+            val newCursor   = cursor.copy(line = newCursorLine, column = 0)
+            val newViewport = pane.viewport.copy(topLine = newTopLine)
+            val updatedPane = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = newViewport)
+            ComponentResult.updateState { state =>
+              state.copy(layout = state.layout.copy(
+                editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
+              ))
+            }
+
+          case MoveToEndOfFile =>
+            val totalLines  = countLines(buffer.content)
+            val lastLine    = totalLines - 1
+            val lastLineEnd = findLineEnd(buffer.content, lastLine)
+            val newCursor   = CursorPosition(lastLine, lastLineEnd)
+            val newTopLine  = math.max(0, lastLine - pane.viewport.visibleLines + 1)
+            val newViewport = pane.viewport.copy(topLine = newTopLine)
+            val updatedPane = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = newViewport)
+            ComponentResult.updateState { state =>
+              state.copy(layout = state.layout.copy(
+                editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
+              ))
+            }
+
+          case OpenGotoLine =>
+            ComponentResult.updateState { state =>
+              state.copy(
+                modal = Some(Modal.GotoLine("")),
+                focus = Focus.Modal(ModalType.GotoLine)
+              )
+            }
+
+          case OpenFind =>
+            ComponentResult.updateState { state =>
+              state.copy(
+                modal = Some(Modal.Find("", Nil, 0)),
+                focus = Focus.Modal(ModalType.Find)
+              )
+            }
+
+          case FindNext =>
+            currentState.findState match
+              case Some(FindState(query, resultLines, currentIndex)) if resultLines.nonEmpty =>
+                val nextIndex   = (currentIndex + 1) % resultLines.size
+                val targetLine  = resultLines(nextIndex)
+                val halfVisible = pane.viewport.visibleLines / 2
+                val newTopLine  = math.max(0, targetLine - halfVisible)
+                val updatedPane = pane.copy(
+                  cursors = List(CursorPosition(targetLine, 0)),
+                  viewport = pane.viewport.copy(topLine = newTopLine)
+                )
+                ComponentResult.updateState { state =>
+                  state.copy(
+                    findState = Some(FindState(query, resultLines, nextIndex)),
+                    layout = state.layout.copy(
+                      editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
+                    )
+                  )
+                }
+              case _ => ComponentResult.noChange
+
           case ToggleSyntaxHighlighting =>
             // Toggle syntax highlighting for the entire application
             ComponentResult.updateState { state =>
@@ -405,24 +495,20 @@ class EditorPaneComponent(
       case Some(pane) =>
         pane.bufferId.flatMap(currentState.buffers.get) match
           case Some(buffer) if buffer.filePath.isDefined =>
-            // Create a command to save the file
-            val saveCommand = Command(
-              name = s"Save ${buffer.filePath.get}",
-              description = s"Save buffer ${buffer.id} to ${buffer.filePath.get}",
-              action = _ =>
-                fileManager
-                  .saveBuffer(buffer)
-                  .flatMap { savedBuffer =>
-                    IO.blocking {
-                      println(s"[FILE] Successfully saved ${buffer.filePath.get}")
-                    }
-                  }
-                  .handleError(ex => println(s"[FILE] Error saving file: ${ex.getMessage}"))
-            )
-            ComponentResult.executeCommand(saveCommand)
+            fileManager
+              .saveBuffer(buffer)
+              .map { savedBuffer =>
+                ComponentResult.updateState { state =>
+                  state.copy(buffers = state.buffers + (buffer.id -> savedBuffer))
+                }
+              }
+              .handleError { ex =>
+                println(s"[FILE] Error saving file: ${ex.getMessage}")
+                ComponentResult.noChange
+              }
+              .unsafeRunSync()
 
           case Some(buffer) =>
-            // Buffer has no file path - would need Save As dialog
             println("[FILE] Buffer has no file path - Save As not implemented yet")
             ComponentResult.noChange
 

@@ -58,7 +58,7 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
 
     // After enough frames, animations should complete but characters persist
     var currentFrame = frame2
-    (1 to 10).foreach { _ => currentFrame = currentFrame.advanceAnimations() }
+    (1 to animConfig.steps).foreach { _ => currentFrame = currentFrame.advanceAnimations() }
 
     currentFrame.activeAnimationCount shouldEqual 0 // All completed (not actively animating)
 

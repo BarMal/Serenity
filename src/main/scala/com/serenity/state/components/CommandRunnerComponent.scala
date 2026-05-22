@@ -1,5 +1,6 @@
 package com.serenity.state.components
 
+import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
@@ -81,12 +82,11 @@ class CommandRunnerComponent(registry: CommandRegistry = CommandRegistry.default
   private def executeSelectedCommand(state: AppState): ComponentResult =
     state.commandRunner.selectedCommand match
       case Some(command) =>
-        // Execute command properly through StateManager and deactivate runner
-        ComponentResult.composite(
-          ComponentResult.executeCommand(command),
-          deactivateCommandRunner(state)
-        )
+        val previousFocus = state.commandRunner.previousFocus.getOrElse(Focus.EditorPane(PaneId(0)))
+        ComponentResult.updateState { s =>
+          command.action(s).unsafeRunSync()
+          s.copy(commandRunner = CommandRunner.empty, focus = previousFocus)
+        }
 
       case None =>
-        // No command selected, just close runner
         deactivateCommandRunner(state)
