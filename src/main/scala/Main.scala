@@ -51,7 +51,11 @@ object Main extends IOApp.Simple:
             .map(_.map(s => TerminalSize(s.getColumns, s.getRows)))
             .flatMap(RenderController.handleResize(_, stateManager, fastMode.set(true)))
           inputFunnel = (s: Stream[IO, Event]) =>
-            s.evalMap(event => stateManager.applyEvent(event) >> fastMode.set(true)).drain
+            s.evalMap(event => 
+              checkResize >> 
+              stateManager.applyEvent(event) >> 
+              fastMode.set(true)
+            ).drain
           _ <-
             def idlePhase: Stream[IO, Unit] =
               Stream
@@ -136,8 +140,11 @@ object Main extends IOApp.Simple:
     logger: org.typelevel.log4cats.Logger[IO]
   ): IO[Unit] =
     event match
-      case _: UnhandledEvent[?] =>
+      case unhandled: UnhandledEvent[?] if !isSystemEvent(unhandled) =>
         logger.warn(s"[UNHANDLED] $event")
+      case _: UnhandledEvent[?] =>
+        // System events (EOF, etc.) are logged at debug level to avoid flooding
+        logger.debug(s"[SYSTEM] $event")
       case _ if shouldLogFocusChange(event) =>
         logger.debug(s"[FOCUS] Event: $event, Focus: $currentFocus")
       case _ => IO.unit
@@ -152,3 +159,17 @@ object Main extends IOApp.Simple:
       case com.serenity.keystroke.events.DeleteBackward => false
       case com.serenity.keystroke.events.DeleteForward  => false
       case _                                            => true
+
+  private def isSystemEvent(event: UnhandledEvent[?]): Boolean =
+    import com.googlecode.lanterna.input.KeyType
+    event.keyStroke.getKeyType match
+      case KeyType.EOF => false // EOF is now handled as Quit event, not a system event
+      case KeyType.Unknown => true
+      case KeyType.Character => 
+        // Check for control characters that indicate system/terminal events
+        Option(event.keyStroke.getCharacter).exists { char =>
+          char == '\u0000' || // Null character
+          char == '\u0004' || // End of transmission (Ctrl+D)
+          char == '\u001A'    // Substitute character (Ctrl+Z on some systems)
+        }
+      case _ => false

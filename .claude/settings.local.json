@@ -95,7 +95,27 @@
       "Bash(sbt \"testOnly *ScrollingNavigationSpec* -- -z \"\"handle viewport synchronization across split panes\"\"\")",
       "Bash(sbt \"testOnly *StateTransitionSpec*\")",
       "Bash(timeout 10s sbt test)",
-      "Bash(sbt \"set Test / logLevel := Level.Info\" test)"
+      "Bash(sbt \"set Test / logLevel := Level.Info\" test)",
+      "Bash(sbt \"testOnly *CommandRunnerCursorBugSpec*\")",
+      "Bash(sbt \"testOnly *RenderCursorOnlySpec*\")",
+      "Bash(sbt \"testOnly *ResizeAndEOFFixSpec*\")",
+      "Bash(sbt \"testOnly *ResizeResponsivenessSpec*\")",
+      "Bash(sbt \"testOnly *ResizeAndEOFFixSpec* *ResizeResponsivenessSpec* *RenderController*\")",
+      "Bash(sbt \"testOnly *ResizeAndEOFFixSpec* -- -z \"\"EOF event handling\"\"\")",
+      "Bash(sbt \"testOnly *TextEntryTranslator* *Quit*\")",
+      "Bash(sbt \"testOnly *InputCharacter* *TabInsertion*\")",
+      "Bash(sbt \"testOnly *EOFGracefulShutdownIntegrationSpec*\")",
+      "Bash(sbt \"testOnly *KeystrokeSequenceSpec* -- -z \"\"handle typical programming workflow\"\"\")",
+      "Bash(sbt \"testOnly *KeystrokeSequenceSpec* -- -z \"\"handle rapid insertion\"\"\")",
+      "Bash(sbt \"testOnly *RendererBoundarySpec* -- -z \"\"never render characters beyond\"\"\")",
+      "Bash(sbt \"testOnly *StateTransitionSpec* -- -z \"\"transition focus between editor panes correctly\"\"\")",
+      "Bash(sbt \"testOnly *LineWrappingSpec* -- -z \"\"wrap long single line text\"\"\")",
+      "Bash(sbt \"testOnly *KeystrokeSequenceSpec* -- -z \"\"handle line manipulation operations\"\"\")",
+      "Bash(sbt \"testOnly *KeystrokeSequenceSpec* -- -z \"\"handle state consistency\"\"\")",
+      "Bash(sbt \"testOnly *GutterAndLineNumbersSpec*\")",
+      "Bash(sbt \"testOnly *GutterAndLineNumbersSpec* -- -z \"\"position gutter correctly\"\"\")",
+      "Bash(sbt \"testOnly *GutterLayoutDebugSpec*\")",
+      "Bash(rm /home/barney/.Git/Serenity/src/test/scala/com/serenity/GutterLayoutDebugSpec.scala)"
     ]
   }
 }

@@ -41,6 +41,7 @@ class TextEntryTranslator extends Translator[TextEntryEvent]:
   private val hotkeyConverter: PartialFunction[KeyStrokeInfo, TextEntryEvent] = {
     case KeyStrokeInfo(KeyType.Character, Some('s'), modifiers) if modifiers.contains(Modifier.Ctrl) => Save
     case KeyStrokeInfo(KeyType.Character, Some('q'), modifiers) if modifiers.contains(Modifier.Ctrl) => Quit
+    case KeyStrokeInfo(KeyType.EOF, _, _) => Quit  // EOF should trigger graceful shutdown
     case KeyStrokeInfo(KeyType.Character, Some('z'), modifiers) if modifiers.contains(Modifier.Ctrl) => Undo
     case KeyStrokeInfo(KeyType.Character, Some('y'), modifiers) if modifiers.contains(Modifier.Ctrl) => Redo
     case KeyStrokeInfo(KeyType.Character, Some('c'), modifiers) if modifiers.contains(Modifier.Ctrl) => Copy

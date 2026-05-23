@@ -8,7 +8,9 @@ case class AppConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
     syntaxHighlightingEnabled: Boolean = false,
     fontConfig: FontConfig = FontConfig(),
-    minimumPaneWidth: Int = 50
+    minimumPaneWidth: Int = 50,
+    showLineNumbers: Boolean = true,
+    showGutter: Boolean = true
 ):
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
@@ -29,6 +31,14 @@ case class AppConfig(
   /** Create a new config with minimum pane width setting */
   def withMinimumPaneWidth(width: Int): AppConfig =
     copy(minimumPaneWidth = math.max(1, width))
+
+  /** Create a new config with line numbers toggled */
+  def withLineNumbers(enabled: Boolean): AppConfig =
+    copy(showLineNumbers = enabled)
+
+  /** Create a new config with gutter toggled */
+  def withGutter(enabled: Boolean): AppConfig =
+    copy(showGutter = enabled)
 
 object AppConfig:
 

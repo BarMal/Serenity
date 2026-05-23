@@ -14,7 +14,9 @@ case class CalculatedLayout(
     editorPanelRect: LayoutRect,
     leftSpacerRect: LayoutRect,
     rightSpacerRect: LayoutRect,
-    floatingPanelRect: Option[LayoutRect] = None
+    floatingPanelRect: Option[LayoutRect] = None,
+    lineNumberRect: Option[LayoutRect] = None,
+    gutterRect: Option[LayoutRect] = None
 )
 
 object LayoutEngine:
@@ -27,35 +29,89 @@ object LayoutEngine:
     terminalSize: TerminalSize,
     spacerPercentage: Double = DefaultSpacerPercentage
   ): CalculatedLayout =
+    calculateLayoutWithUI(state, terminalSize, spacerPercentage)
 
-    val spacerWidth  = (terminalSize.width * spacerPercentage).toInt
-    val editorWidth  = terminalSize.width - (2 * spacerWidth)
-    val editorHeight = terminalSize.height
+  def calculateLayoutWithUI(
+    state: AppState,
+    terminalSize: TerminalSize,
+    spacerPercentage: Double = DefaultSpacerPercentage
+  ): CalculatedLayout =
 
-    val leftSpacerRect  = LayoutRect(0, 0, spacerWidth, editorHeight)
-    val editorPanelRect = LayoutRect(spacerWidth, 0, editorWidth, editorHeight)
-    val rightSpacerRect = LayoutRect(spacerWidth + editorWidth, 0, spacerWidth, editorHeight)
+    val spacerWidth = (terminalSize.width * spacerPercentage).toInt
+    
+    // Calculate space needed for UI elements
+    val lineNumberWidth = if state.config.showLineNumbers then
+      calculateLineNumberWidth(state) 
+    else 0
+    
+    val gutterHeight = if state.config.showGutter then 1 else 0
+    
+    // Adjust editor area to accommodate UI elements
+    val availableWidth = terminalSize.width - (2 * spacerWidth) - lineNumberWidth
+    val availableHeight = terminalSize.height - gutterHeight
+    
+    val leftSpacerRect = LayoutRect(0, 0, spacerWidth, terminalSize.height)
+    val lineNumberRect = if state.config.showLineNumbers then
+      Some(LayoutRect(spacerWidth, 1, lineNumberWidth, availableHeight))
+    else None
+    
+    val editorPanelRect = LayoutRect(
+      x = spacerWidth + lineNumberWidth, 
+      y = 0, 
+      width = availableWidth, 
+      height = availableHeight
+    )
+    val rightSpacerRect = LayoutRect(spacerWidth + lineNumberWidth + availableWidth, 0, spacerWidth, terminalSize.height)
+    
+    val gutterRect = if state.config.showGutter then
+      Some(LayoutRect(0, terminalSize.height - 1, terminalSize.width, 1))
+    else None
+
+    val floatingPanelWidth  = Math.round(availableWidth * 0.8).toInt
+    val floatingPanelHeight = Math.round(availableHeight * 0.3).toInt
 
     // Calculate floating panel position if needed
-    val floatingPanelRect = calculateFloatingPanel(state, editorPanelRect)
+    val floatingPanelRect = None
+    // calculateFloatingPanel(state, editorPanelRect, floatingPanelWidth, floatingPanelHeight)
 
     CalculatedLayout(
       editorPanelRect = editorPanelRect,
       leftSpacerRect = leftSpacerRect,
       rightSpacerRect = rightSpacerRect,
-      floatingPanelRect = floatingPanelRect
+      floatingPanelRect = floatingPanelRect,
+      lineNumberRect = lineNumberRect,
+      gutterRect = gutterRect
     )
+
+  private def calculateLineNumberWidth(state: AppState): Int =
+    // Find the maximum line count across all buffers to determine width needed
+    val maxLines = if state.buffers.isEmpty then 10 
+    else state.buffers.values.map(_.content.lineCount).max
+    
+    math.max(3, maxLines.toString.length + 1) // +1 for spacing, minimum 3 chars
 
   private def calculateFloatingPanel(
     state: AppState,
-    editorRect: LayoutRect
+    editorRect: LayoutRect,
+    preferredWidth: Int,
+    preferredHeight: Int
   ): Option[LayoutRect] =
+    for
+      bufferId       <- state.focusedBufferId
+      currentBuffer  <- state.buffers.get(bufferId)
+      cursorPosition <- currentBuffer.cursors.reverse.headOption // get the latest cursor, so likely the current cursor
+    yield LayoutRect(
+      cursorPosition.column - (preferredWidth / 2),
+      cursorPosition.line + 1,
+      preferredWidth,
+      preferredHeight
+    )
+
     // For now, return None - we'll implement this when we have command runner/modal support
     // When implemented, this should:
     // 1. Get current cursor position from focused editor pane
     // 2. Calculate panel position beneath cursor
     // 3. Ensure panel fits within editor bounds
-    None
 
   def calculateViewportForCursor(
     cursor: CursorPosition,

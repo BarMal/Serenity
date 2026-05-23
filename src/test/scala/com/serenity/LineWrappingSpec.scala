@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import cats.syntax.traverse.*
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -29,40 +30,43 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
   it should "wrap long single line text within panel width while preserving buffer content" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager
-      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
-      .unsafeRunSync()
+    
+    val program = for
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(logger)
+      
+      bufferId <- stateManager.createBuffer("")
+      state <- stateManager.getCurrentState
+      paneId = state.layout.editorPanes.keys.head
+      _ <- stateManager.setBufferForPane(paneId, bufferId)
 
-    val bufferId = stateManager.createBuffer("").unsafeRunSync()
-    val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
-    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+      // Get panel width for wrapping calculations
+      currentState <- stateManager.getCurrentState
+      layout = LayoutEngine.calculateLayout(currentState, TerminalSize(80, 24))
+      panelWidth = layout.editorPanelRect.width
 
-    // Get panel width for wrapping calculations
-    val currentState = stateManager.getCurrentState.unsafeRunSync()
-    val layout       = LayoutEngine.calculateLayout(currentState, TerminalSize(80, 24))
-    val panelWidth   = layout.editorPanelRect.width
+      // Create text longer than panel width but shorter than 2 lines
+      longText = "The quick brown fox jumps over the lazy dog and continues running through the forest."
+      insertEvents = longText.map(char => InsertChar(char)).toList
+      _ <- insertEvents.traverse(event => stateManager.applyEvent(event))
 
-    // Create text longer than panel width but shorter than 2 lines
-    val longText = "The quick brown fox jumps over the lazy dog and continues running through the forest."
-    longText.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+      finalState <- stateManager.getCurrentState
+      buffer = finalState.buffers(bufferId)
+      pane = finalState.layout.editorPanes(paneId)
+    yield
+      // Buffer content should be exactly the original text (no artificial line breaks)
+      buffer.content.collect() shouldBe longText
+      buffer.content.lineCount shouldBe 1
 
-    val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers(bufferId)
-    val pane       = finalState.layout.editorPanes(paneId)
+      // Text should require wrapping
+      longText.length should be > panelWidth
 
-    // Buffer content should be exactly the original text (no artificial line breaks)
-    buffer.content.collect() shouldBe longText
-    buffer.content.lineCount shouldBe 1
+      // Visual representation should calculate wrapped lines
+      val visualLines = calculateVisualLines(longText, panelWidth)
+      visualLines.length should be > 1
+      visualLines.map(_.length).foreach(_ should be <= panelWidth)
 
-    // Text should require wrapping
-    longText.length should be > panelWidth
-
-    // Visual representation should calculate wrapped lines
-    val visualLines = calculateVisualLines(longText, panelWidth)
-    visualLines.length should be > 1
-    visualLines.map(_.length).foreach(_ should be <= panelWidth)
+    program.unsafeRunSync()
   }
 
   it should "handle cursor navigation across wrapped visual lines" in {

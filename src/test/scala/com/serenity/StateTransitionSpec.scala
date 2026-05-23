@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import cats.syntax.traverse.*
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -18,81 +19,111 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
   behavior of "State Machine Transitions"
 
-  it should "transition focus between editor panes correctly" in new StateFixture:
-    // Given: Multiple panes
-    val buffer1 = stateManager.createBuffer("First buffer").unsafeRunSync()
-    val buffer2 = stateManager.createBuffer("Second buffer").unsafeRunSync()
-    val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
+  it should "transition focus between editor panes correctly" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    
+    val program = for
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(logger)
+      
+      // Given: Multiple panes
+      buffer1 <- stateManager.createBuffer("First buffer")
+      buffer2 <- stateManager.createBuffer("Second buffer")
+      pane2 <- stateManager.createPane(Some(buffer2))
 
-    // When: Switch focus between panes
-    stateManager.switchToPane(pane2).unsafeRunSync()
+      // When: Switch focus between panes
+      _ <- stateManager.switchToPane(pane2)
 
-    // Then: Focus should be on second pane
-    val state1 = stateManager.getCurrentState.unsafeRunSync()
-    state1.focus shouldBe Focus.EditorPane(pane2)
-    state1.layout.activeEditorPaneId shouldBe Some(pane2)
+      // Then: Focus should be on second pane
+      state1 <- stateManager.getCurrentState
+      _ = state1.focus shouldBe Focus.EditorPane(pane2)
+      _ = state1.layout.activeEditorPaneId shouldBe Some(pane2)
 
-    // When: Switch back to first pane
-    val firstPaneId = state1.layout.editorPanes.keys.find(_ != pane2).get
-    stateManager.switchToPane(firstPaneId).unsafeRunSync()
+      // When: Switch back to first pane
+      firstPaneId = state1.layout.editorPanes.keys.find(_ != pane2).get
+      _ <- stateManager.switchToPane(firstPaneId)
 
-    // Then: Focus should return to first pane
-    val state2 = stateManager.getCurrentState.unsafeRunSync()
-    state2.focus shouldBe Focus.EditorPane(firstPaneId)
-    state2.layout.activeEditorPaneId shouldBe Some(firstPaneId)
+      // Then: Focus should return to first pane
+      state2 <- stateManager.getCurrentState
+    yield
+      state2.focus shouldBe Focus.EditorPane(firstPaneId)
+      state2.layout.activeEditorPaneId shouldBe Some(firstPaneId)
 
-  it should "handle modal state transitions" in new StateFixture:
-    // Given: Initial state with active pane
-    val bufferId     = stateManager.createBuffer("Some content").unsafeRunSync()
-    val initialState = stateManager.getCurrentState.unsafeRunSync()
-    val paneId       = initialState.layout.editorPanes.keys.head
+    program.unsafeRunSync()
+  }
 
-    // When: Show modal
-    val modal = Modal.CommandRunner("test", List.empty, 0)
-    stateManager.showModal(modal).unsafeRunSync()
+  it should "handle modal state transitions" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    
+    val program = for
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(logger)
+      
+      // Given: Initial state with active pane
+      bufferId <- stateManager.createBuffer("Some content")
+      initialState <- stateManager.getCurrentState
+      paneId = initialState.layout.editorPanes.keys.head
 
-    // Then: Focus should be on modal
-    val modalState = stateManager.getCurrentState.unsafeRunSync()
-    modalState.focus shouldBe Focus.Modal(ModalType.CommandPalette)
-    modalState.modal shouldBe Some(modal)
+      // When: Show modal
+      modal = Modal.CommandRunner("test", List.empty, 0)
+      _ <- stateManager.showModal(modal)
 
-    // When: Dismiss modal
-    stateManager.dismissModal().unsafeRunSync()
+      // Then: Focus should be on modal
+      modalState <- stateManager.getCurrentState
+      _ = modalState.focus shouldBe Focus.Modal(ModalType.CommandPalette)
+      _ = modalState.modal shouldBe Some(modal)
 
-    // Then: Focus should return to pane
-    val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.focus shouldBe Focus.EditorPane(paneId)
-    finalState.modal shouldBe None
+      // When: Dismiss modal
+      _ <- stateManager.dismissModal()
 
-  it should "handle peek overlay state transitions" in new StateFixture:
-    // Given: Active pane with cursor position
-    val bufferId = stateManager.createBuffer("Content").unsafeRunSync()
-    val cursor   = CursorPosition(0, 3)
-    val content = PeekContent.DirectoryListing(
-      java.nio.file.Paths.get("/test"),
-      List(
-        DirEntry(java.nio.file.Paths.get("/test/file1.txt"), "file1.txt", false),
-        DirEntry(java.nio.file.Paths.get("/test/file2.txt"), "file2.txt", false)
+      // Then: Focus should return to pane
+      finalState <- stateManager.getCurrentState
+    yield
+      finalState.focus shouldBe Focus.EditorPane(paneId)
+      finalState.modal shouldBe None
+
+    program.unsafeRunSync()
+  }
+
+  it should "handle peek overlay state transitions" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    
+    val program = for
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(logger)
+      
+      // Given: Active pane with cursor position
+      bufferId <- stateManager.createBuffer("Content")
+      cursor = CursorPosition(0, 3)
+      content = PeekContent.DirectoryListing(
+        java.nio.file.Paths.get("/test"),
+        List(
+          DirEntry(java.nio.file.Paths.get("/test/file1.txt"), "file1.txt", false),
+          DirEntry(java.nio.file.Paths.get("/test/file2.txt"), "file2.txt", false)
+        )
       )
-    )
 
-    // When: Show peek overlay
-    stateManager.showPeek(content, cursor).unsafeRunSync()
+      // When: Show peek overlay
+      _ <- stateManager.showPeek(content, cursor)
 
-    // Then: Focus should be on peek overlay
-    val peekState = stateManager.getCurrentState.unsafeRunSync()
-    peekState.focus shouldBe Focus.PeekOverlay
-    peekState.peekOverlay shouldBe defined
-    peekState.peekOverlay.get.position shouldBe cursor
+      // Then: Focus should be on peek overlay
+      peekState <- stateManager.getCurrentState
+      _ = peekState.focus shouldBe Focus.PeekOverlay
+      _ = peekState.peekOverlay shouldBe defined
+      _ = peekState.peekOverlay.get.position shouldBe cursor
 
-    // When: Dismiss peek overlay
-    stateManager.dismissPeek().unsafeRunSync()
+      // When: Dismiss peek overlay
+      _ <- stateManager.dismissPeek()
 
-    // Then: Focus should return to editor pane
-    val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.focus match
-      case Focus.EditorPane(_) => finalState.peekOverlay shouldBe None
-      case other               => fail(s"Expected EditorPane focus, got $other")
+      // Then: Focus should return to editor pane
+      finalState <- stateManager.getCurrentState
+    yield
+      finalState.focus match
+        case Focus.EditorPane(_) => finalState.peekOverlay shouldBe None
+        case other               => fail(s"Expected EditorPane focus, got $other")
+
+    program.unsafeRunSync()
+  }
 
   it should "maintain state consistency during rapid focus transitions" in new StateFixture:
     // Given: Multiple UI components
