@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.state.models.{AppState, CursorPosition, Viewport}
+import com.serenity.state.models.*
 
 case class TerminalSize(width: Int, height: Int)
 
@@ -76,3 +76,98 @@ object LayoutEngine:
       visibleLines = panelRect.height,
       visibleColumns = panelRect.width
     )
+
+  /** Calculate individual pane layouts within the editor area */
+  def calculatePaneLayouts(state: AppState, calculatedLayout: CalculatedLayout): Map[PaneId, LayoutRect] =
+    calculatePaneLayoutsWithMinWidth(state, calculatedLayout, state.config.minimumPaneWidth)
+
+  /** Calculate individual pane layouts with minimum width constraint */
+  def calculatePaneLayoutsWithMinWidth(
+    state: AppState,
+    calculatedLayout: CalculatedLayout,
+    minWidth: Int
+  ): Map[PaneId, LayoutRect] =
+    val editorRect = calculatedLayout.editorPanelRect
+    val paneIds    = state.layout.editorPanes.keys.toList.sortBy(_.value)
+    val paneCount  = paneIds.size
+
+    if paneCount == 0 then Map.empty
+    else if paneCount == 1 then
+      // Single pane uses full editor area
+      val paneId = paneIds.head
+      Map(paneId -> editorRect)
+    else
+      // Multiple panes: split horizontally with minimum width constraints
+      val maxVisiblePanes  = math.max(1, editorRect.width / minWidth)
+      val visiblePaneCount = math.min(paneCount, maxVisiblePanes)
+      val paneWidth        = math.max(minWidth, editorRect.width / visiblePaneCount)
+
+      // Find focused pane to ensure it's visible
+      val focusedPaneId = state.focus match
+        case Focus.EditorPane(paneId) if state.layout.editorPanes.contains(paneId) => Some(paneId)
+        case _                                                                     => None
+
+      // Calculate which panes should be visible
+      val (visibleStartIndex, visiblePaneIds) = calculateVisiblePaneWindow(
+        paneIds,
+        focusedPaneId,
+        visiblePaneCount
+      )
+
+      // Create layouts for all panes
+      val allPaneLayouts = for ((paneId, globalIndex) <- paneIds.zipWithIndex) yield
+        val visibleIndex = globalIndex - visibleStartIndex
+        val isVisible    = visibleIndex >= 0 && visibleIndex < visiblePaneCount
+
+        val paneRect =
+          if isVisible then
+            // Visible pane: positioned within editor area
+            LayoutRect(
+              x = editorRect.x + (visibleIndex * paneWidth),
+              y = editorRect.y,
+              width = paneWidth,
+              height = editorRect.height
+            )
+          else
+            // Hidden pane: positioned off-screen
+            val offScreenX =
+              if visibleIndex < 0 then editorRect.x - 100 // Off-screen to the left
+              else editorRect.x + editorRect.width + 100  // Off-screen to the right
+
+            LayoutRect(
+              x = offScreenX,
+              y = editorRect.y,
+              width = paneWidth,
+              height = editorRect.height
+            )
+
+        paneId -> paneRect
+
+      allPaneLayouts.toMap
+
+  /** Calculate which panes should be visible based on focus and capacity */
+  private def calculateVisiblePaneWindow(
+    allPaneIds: List[PaneId],
+    focusedPaneId: Option[PaneId],
+    maxVisible: Int
+  ): (Int, List[PaneId]) =
+    if allPaneIds.size <= maxVisible then
+      // All panes fit
+      (0, allPaneIds)
+    else
+      // Find focused pane index
+      val focusedIndex = focusedPaneId.flatMap(id => allPaneIds.zipWithIndex.find(_._1 == id).map(_._2))
+
+      val startIndex = focusedIndex match
+        case Some(index) =>
+          // Center the window around the focused pane, but stay within bounds
+          val idealStart = index - maxVisible / 2
+          val maxStart   = allPaneIds.size - maxVisible
+          math.max(0, math.min(idealStart, maxStart))
+        case None =>
+          // No focused pane, show first N panes
+          0
+
+      val endIndex     = startIndex + maxVisible
+      val visiblePanes = allPaneIds.slice(startIndex, endIndex)
+      (startIndex, visiblePanes)

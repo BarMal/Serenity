@@ -61,10 +61,11 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val pane       = finalState.layout.editorPanes(paneId)
+    val buffer     = finalState.buffers(bufferId)
 
     // Should have cursor at start of buffer
-    pane.cursors.size shouldBe 1
-    val cursor = pane.cursors.head
+    buffer.cursors.size shouldBe 1
+    val cursor = buffer.cursors.head
     cursor.line shouldBe 0
     cursor.column shouldBe 0
   }
@@ -89,14 +90,14 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val pane       = finalState.layout.editorPanes(paneId)
-    val cursor     = pane.cursors.head
+    val buffer     = finalState.buffers(bufferId)
+    val cursor     = buffer.cursors.head
 
     // Cursor should be at end of text
     cursor.column shouldBe 100
     cursor.line shouldBe 0
 
     // Buffer should contain full text
-    val buffer = finalState.buffers.values.head
     buffer.content.collect() shouldBe longText
   }
 
@@ -120,8 +121,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val pane       = finalState.layout.editorPanes(paneId)
-    val cursor     = pane.cursors.head
-    val viewport   = pane.viewport
+    val buffer     = finalState.buffers(bufferId)
+    val cursor     = buffer.cursors.head
+    val viewport   = buffer.viewport
 
     // Cursor should be at end of text
     cursor.column shouldBe longText.length
@@ -155,7 +157,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     testText.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers.values.head
+    val buffer     = finalState.buffers(bufferId)
 
     // Buffer content should be completely intact
     buffer.content.collect() shouldBe testText

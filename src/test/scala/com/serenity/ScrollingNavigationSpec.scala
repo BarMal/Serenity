@@ -34,7 +34,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Viewport should move down
     val afterPageDownState = stateManager.getCurrentState.unsafeRunSync()
     val pane1              = afterPageDownState.layout.editorPanes(paneId)
-    pane1.viewport.topLine should be > 0
+    val buffer1            = pane1.bufferId.flatMap(afterPageDownState.buffers.get).get
+    buffer1.viewport.topLine should be > 0
 
     // When: Scroll down more with Ctrl+End (go to end of file)
     stateManager.applyEvent(MoveToEndOfFile).unsafeRunSync()
@@ -42,8 +43,9 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Should be at end of file
     val afterEndState = stateManager.getCurrentState.unsafeRunSync()
     val pane2         = afterEndState.layout.editorPanes(paneId)
-    pane2.cursors.head.line shouldBe 999            // Last line (0-indexed)
-    pane2.viewport.topLine should be >= (1000 - 25) // Viewport shows last lines
+    val buffer2       = pane2.bufferId.flatMap(afterEndState.buffers.get).get
+    buffer2.cursors.head.line shouldBe 999            // Last line (0-indexed)
+    buffer2.viewport.topLine should be >= (1000 - 25) // Viewport shows last lines
 
   it should "handle horizontal scrolling in wide lines" in new ScrollFixture:
     // Given: File with very long lines
@@ -66,7 +68,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Viewport should scroll horizontally
     val afterScrollState = stateManager.getCurrentState.unsafeRunSync()
     val pane             = afterScrollState.layout.editorPanes(paneId)
-    pane.viewport.leftColumn should be >= (150 - 80) // Cursor should be visible
+    val buffer           = pane.bufferId.flatMap(afterScrollState.buffers.get).get
+    buffer.viewport.leftColumn should be >= (150 - 80) // Cursor should be visible
 
   it should "handle mouse wheel scrolling" in new ScrollFixture:
     // Given: File with content
@@ -85,7 +88,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Viewport should scroll down 3 lines
     val afterScrollDownState = stateManager.getCurrentState.unsafeRunSync()
     val pane1                = afterScrollDownState.layout.editorPanes(paneId)
-    pane1.viewport.topLine shouldBe 3
+    val buffer1              = pane1.bufferId.flatMap(afterScrollDownState.buffers.get).get
+    buffer1.viewport.topLine shouldBe 3
 
     // When: Mouse wheel scroll up (2 lines)
     stateManager.applyEvent(ScrollUp(2)).unsafeRunSync()
@@ -93,7 +97,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Viewport should scroll up
     val afterScrollUpState = stateManager.getCurrentState.unsafeRunSync()
     val pane2              = afterScrollUpState.layout.editorPanes(paneId)
-    pane2.viewport.topLine shouldBe 1
+    val buffer2            = pane2.bufferId.flatMap(afterScrollUpState.buffers.get).get
+    buffer2.viewport.topLine shouldBe 1
 
   it should "handle smooth scrolling animations" in new ScrollFixture:
     // Given: File with content
@@ -120,8 +125,9 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Should be partially scrolled
     val halfwayState = stateManager.getCurrentState.unsafeRunSync()
     val pane2        = halfwayState.layout.editorPanes(paneId)
-    pane2.viewport.topLine should be > 0
-    pane2.viewport.topLine should be < 30
+    val buffer2      = pane2.bufferId.flatMap(halfwayState.buffers.get).get
+    buffer2.viewport.topLine should be > 0
+    buffer2.viewport.topLine should be < 30
 
     // When: Complete smooth scroll
     stateManager.progressSmoothScroll(paneId, 1.0).unsafeRunSync()
@@ -129,7 +135,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Should reach target
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val pane3      = finalState.layout.editorPanes(paneId)
-    pane3.viewport.topLine shouldBe 30
+    val buffer3    = pane3.bufferId.flatMap(finalState.buffers.get).get
+    buffer3.viewport.topLine shouldBe 30
     pane3.smoothScrolling shouldBe None
 
   it should "handle goto line functionality" in new ScrollFixture:
@@ -159,9 +166,10 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val afterGotoState = stateManager.getCurrentState.unsafeRunSync()
     afterGotoState.modal shouldBe None
     val pane = afterGotoState.layout.editorPanes(paneId)
-    pane.cursors.head.line shouldBe 249           // 0-indexed, so line 250 = index 249
-    pane.viewport.topLine should be >= (249 - 12) // Center line in viewport
-    pane.viewport.topLine should be <= 249
+    val buffer = pane.bufferId.flatMap(afterGotoState.buffers.get).get
+    buffer.cursors.head.line shouldBe 249           // 0-indexed, so line 250 = index 249
+    buffer.viewport.topLine should be >= (249 - 12) // Center line in viewport
+    buffer.viewport.topLine should be <= 249
 
   it should "handle find and scroll to search results" in new ScrollFixture:
     // Given: File with searchable content
@@ -189,9 +197,10 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Should scroll to first occurrence (line 50)
     val afterFindState = stateManager.getCurrentState.unsafeRunSync()
     val pane1          = afterFindState.layout.editorPanes(paneId)
-    pane1.cursors.head.line shouldBe 49           // Line 50 (0-indexed)
-    pane1.viewport.topLine should be >= (49 - 12) // Should be visible
-    pane1.viewport.topLine should be <= 49
+    val buffer1        = pane1.bufferId.flatMap(afterFindState.buffers.get).get
+    buffer1.cursors.head.line shouldBe 49           // Line 50 (0-indexed)
+    buffer1.viewport.topLine should be >= (49 - 12) // Should be visible
+    buffer1.viewport.topLine should be <= 49
 
     // When: Find next (F3)
     stateManager.applyEvent(FindNext).unsafeRunSync()
@@ -199,7 +208,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Should scroll to next occurrence (line 100)
     val afterNextState = stateManager.getCurrentState.unsafeRunSync()
     val pane2          = afterNextState.layout.editorPanes(paneId)
-    pane2.cursors.head.line shouldBe 99 // Line 100 (0-indexed)
+    val buffer2        = pane2.bufferId.flatMap(afterNextState.buffers.get).get
+    buffer2.cursors.head.line shouldBe 99 // Line 100 (0-indexed)
 
     // When: Find next again
     stateManager.applyEvent(FindNext).unsafeRunSync()
@@ -207,7 +217,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Should scroll to line 150
     val afterNext2State = stateManager.getCurrentState.unsafeRunSync()
     val pane3           = afterNext2State.layout.editorPanes(paneId)
-    pane3.cursors.head.line shouldBe 149 // Line 150 (0-indexed)
+    val buffer3         = pane3.bufferId.flatMap(afterNext2State.buffers.get).get
+    buffer3.cursors.head.line shouldBe 149 // Line 150 (0-indexed)
 
   it should "handle viewport synchronization across split panes" in new ScrollFixture:
     // Given: Same file in multiple panes
@@ -217,12 +228,16 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val state = stateManager.getCurrentState.unsafeRunSync()
     val pane1 = state.layout.editorPanes.keys.head
 
+    // Associate the buffer with the first pane
+    stateManager.setBufferForPane(pane1, bufferId).unsafeRunSync()
+
     // Create split pane with same buffer
     val pane2 = stateManager.splitPaneHorizontal(pane1, Some(bufferId)).unsafeRunSync()
 
     val defaultViewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80)
     stateManager.setViewport(pane1, defaultViewport).unsafeRunSync()
-    stateManager.setPaneProperties(pane2, _.copy(viewport = defaultViewport, syncedScrolling = true)).unsafeRunSync()
+    stateManager.setViewport(pane2, defaultViewport).unsafeRunSync()  // ← Set buffer viewport correctly
+    stateManager.setPaneProperties(pane2, _.copy(syncedScrolling = true)).unsafeRunSync()  // ← Only set syncedScrolling
 
     // When: Scroll in first pane
     stateManager.switchToPane(pane1).unsafeRunSync()
@@ -232,9 +247,11 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val afterScrollState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane1       = afterScrollState.layout.editorPanes(pane1)
     val finalPane2       = afterScrollState.layout.editorPanes(pane2)
+    val finalBuffer1     = finalPane1.bufferId.flatMap(afterScrollState.buffers.get).get
+    val finalBuffer2     = finalPane2.bufferId.flatMap(afterScrollState.buffers.get).get
 
-    finalPane1.viewport.topLine shouldBe 10
-    if finalPane2.syncedScrolling then finalPane2.viewport.topLine shouldBe 10
+    finalBuffer1.viewport.topLine shouldBe 10
+    if finalPane2.syncedScrolling then finalBuffer2.viewport.topLine shouldBe 10
 
   it should "handle minimap scrolling and navigation" in new ScrollFixture:
     // Given: Large file with minimap enabled
@@ -257,8 +274,9 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Should scroll to clicked location
     val afterClickState = stateManager.getCurrentState.unsafeRunSync()
     val pane            = afterClickState.layout.editorPanes(paneId)
-    pane.viewport.topLine should be >= (targetLine - 12)
-    pane.viewport.topLine should be <= (targetLine + 12)
+    val buffer          = pane.bufferId.flatMap(afterClickState.buffers.get).get
+    buffer.viewport.topLine should be >= (targetLine - 12)
+    buffer.viewport.topLine should be <= (targetLine + 12)
 
   it should "handle edge cases with scrolling bounds" in new ScrollFixture:
     // Given: Small file
@@ -277,7 +295,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Should clamp to file bounds
     val afterScrollState = stateManager.getCurrentState.unsafeRunSync()
     val pane             = afterScrollState.layout.editorPanes(paneId)
-    pane.viewport.topLine shouldBe 0 // Can't scroll down in small file
+    val buffer           = pane.bufferId.flatMap(afterScrollState.buffers.get).get
+    buffer.viewport.topLine shouldBe 0 // Can't scroll down in small file
 
     // When: Try to scroll up beyond beginning
     stateManager.applyEvent(ScrollUp(100)).unsafeRunSync()
@@ -285,7 +304,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Should stay at beginning
     val afterScrollUpState = stateManager.getCurrentState.unsafeRunSync()
     val pane2              = afterScrollUpState.layout.editorPanes(paneId)
-    pane2.viewport.topLine shouldBe 0
+    val buffer2            = pane2.bufferId.flatMap(afterScrollUpState.buffers.get).get
+    buffer2.viewport.topLine shouldBe 0
 
   trait ScrollFixture:
 

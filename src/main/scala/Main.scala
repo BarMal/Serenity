@@ -1,17 +1,20 @@
 import scala.concurrent.duration.*
 
-import cats.effect.{IO, IOApp, Ref, Resource}
+import cats.effect.*
 import cats.syntax.parallel.*
 import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
-import com.googlecode.lanterna.terminal.{DefaultTerminalFactory, Terminal}
+import com.googlecode.lanterna.terminal.Terminal
+import com.serenity.config.AppConfig
 import com.serenity.input.{InputRouter, ScreenInputHandler}
 import com.serenity.keystroke.events.{Event, TextEntryEvent, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.Focus
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TerminalSize
 import com.serenity.ui.renderer.{RenderController, Renderer}
+import com.serenity.ui.terminal.TerminalFactory
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import fs2.concurrent.SignallingRef
@@ -25,32 +28,31 @@ object Main extends IOApp.Simple:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   def run: IO[Unit] =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Main"))
-    terminalResource.use { terminal =>
+    given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
+    val appConfig                                   = AppConfig.default
+    terminalResource(appConfig.fontConfig).use { terminal =>
       screenResource(terminal).use { screen =>
         for
-          _            <- logger.info("Starting Serenity text editor")
-          themeManager  = AppThemeManager.create
+          _ <- logger.info("Starting Serenity text editor")
+          themeManager = AppThemeManager.create
           defaultTheme <- themeManager.initializeWithTheme()
           stateManager <- StateManager.apply(logger)
-          bufferId     <- stateManager.createNewEmptyBuffer()
-          paneId       <- stateManager.createPane(Some(bufferId))
-          _            <- stateManager.updateState(_.copy(theme = defaultTheme))
-          inputRouter  <- InputRouter.create[IO, TextEntryEvent](new TextEntryTranslator)
-          inputHandler  = new ScreenInputHandler[IO, TextEntryEvent](screen, inputRouter)
-          initialState <- stateManager.getCurrentState
-          _            <- IO.blocking(Renderer.render(initialState, cursorVisible = true, screen))
-          _            <- logger.info("Initial render completed, starting main loop")
-          fastMode     <- SignallingRef.of[IO, Boolean](false)
+          // Note: StateManager.apply now creates initial state with 1 pane and 1 buffer automatically
+          _           <- stateManager.updateState(_.copy(theme = defaultTheme))
+          inputRouter <- InputRouter.create[IO, TextEntryEvent](new TextEntryTranslator)
+          inputHandler = new ScreenInputHandler[IO, TextEntryEvent](screen, inputRouter)
+          initialState  <- stateManager.getCurrentState
+          _             <- IO.blocking(Renderer.render(initialState, cursorVisible = true, screen))
+          _             <- logger.info("Initial render completed, starting main loop")
+          fastMode      <- SignallingRef.of[IO, Boolean](false)
           cursorVisible <- Ref.of[IO, Boolean](true)
-          checkResize   = IO.blocking(Option(screen.doResizeIfNecessary()))
-                            .map(_.map(s => TerminalSize(s.getColumns, s.getRows)))
-                            .flatMap(RenderController.handleResize(_, stateManager, fastMode.set(true)))
-          inputFunnel   = (s: Stream[IO, Event]) =>
-                            s.evalMap { event =>
-                              stateManager.applyEvent(event) >> fastMode.set(true)
-                            }.drain
-          _ <- {
+          checkResize = IO
+            .blocking(Option(screen.doResizeIfNecessary()))
+            .map(_.map(s => TerminalSize(s.getColumns, s.getRows)))
+            .flatMap(RenderController.handleResize(_, stateManager, fastMode.set(true)))
+          inputFunnel = (s: Stream[IO, Event]) =>
+            s.evalMap(event => stateManager.applyEvent(event) >> fastMode.set(true)).drain
+          _ <-
             def idlePhase: Stream[IO, Unit] =
               Stream
                 .fixedRate[IO](500.millis)
@@ -88,28 +90,26 @@ object Main extends IOApp.Simple:
 
             (
               inputHandler.eventStream
-                .evalTap { event =>
-                  stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger))
-                }
+                .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
                 .through(inputFunnel)
-                .compile.drain,
+                .compile
+                .drain,
               renderLoop.compile.drain,
               stateManager.awaitQuit
             ).parMapN((_, _, _) => ())
-          }
           _ <- logger.info("Serenity editor shutdown complete")
         yield ()
       }
     }
 
-  private def terminalResource: Resource[IO, Terminal] =
+  private def terminalResource(
+    fontConfig: FontLoader.FontConfig
+  )(using logger: org.typelevel.log4cats.Logger[IO]): Resource[IO, Terminal] =
     Resource.make(
-      IO.blocking {
-        val factory  = new DefaultTerminalFactory()
-        val terminal = factory.createTerminal()
-        terminal.enterPrivateMode()
-        terminal
-      }
+      for
+        terminal <- TerminalFactory.createTerminal(fontConfig)
+        _        <- IO.blocking(terminal.enterPrivateMode())
+      yield terminal
     )(terminal =>
       IO.blocking {
         terminal.exitPrivateMode()

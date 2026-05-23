@@ -63,4 +63,4 @@ object AnimatedCharacter:
 
   /** Create character with single color (immediately completed) */
   def apply(char: Char, color: TextColor): AnimatedCharacter =
-    AnimatedCharacter(char, List.empty)
+    AnimatedCharacter(char, List(color))

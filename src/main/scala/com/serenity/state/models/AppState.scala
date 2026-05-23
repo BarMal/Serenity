@@ -15,6 +15,7 @@ case class FindState(
 case class AppState(
     layout: Layout,
     buffers: Map[BufferId, Buffer],
+    bufferOrder: List[BufferId] = List.empty, // Tracks buffer creation and navigation order
     focus: Focus,
     peekOverlay: Option[PeekOverlay] = None,
     modal: Option[Modal] = None,
@@ -30,6 +31,33 @@ case class AppState(
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled
   def isValid: Boolean                   = validationErrors.isEmpty
+
+  /** Get the currently focused buffer ID, if any */
+  def focusedBufferId: Option[BufferId] =
+    focus match
+      case Focus.EditorPane(paneId) =>
+        layout.editorPanes.get(paneId).flatMap(_.bufferId)
+      case _ => None
+
+  /** Get the next buffer ID in navigation order */
+  def nextBufferInOrder(currentBufferId: BufferId): Option[BufferId] =
+    if bufferOrder.isEmpty then None
+    else
+      val currentIndex = bufferOrder.indexOf(currentBufferId)
+      if currentIndex == -1 then bufferOrder.headOption
+      else
+        val nextIndex = (currentIndex + 1) % bufferOrder.size
+        Some(bufferOrder(nextIndex))
+
+  /** Get the previous buffer ID in navigation order */
+  def previousBufferInOrder(currentBufferId: BufferId): Option[BufferId] =
+    if bufferOrder.isEmpty then None
+    else
+      val currentIndex = bufferOrder.indexOf(currentBufferId)
+      if currentIndex == -1 then bufferOrder.headOption
+      else
+        val prevIndex = (currentIndex - 1 + bufferOrder.size) % bufferOrder.size
+        Some(bufferOrder(prevIndex))
 
   def validationErrors: List[String] =
     val errors = List.newBuilder[String]
@@ -61,11 +89,20 @@ case class AppState(
 
 object AppState:
 
-  def initial: AppState =
+  def initial(using com.serenity.rope.Balance): AppState =
+    val initialBufferId = BufferId(0)
+    val initialBuffer   = Buffer.newEmpty(initialBufferId)
+    val initialPane     = EditorPane.withBuffer(PaneId(0), initialBufferId)
+    val layout = Layout(
+      editorPanes = Map(PaneId(0) -> initialPane),
+      activeEditorPaneId = Some(PaneId(0))
+    )
     AppState(
-      layout = Layout.initial,
-      buffers = Map.empty,
+      layout = layout,
+      buffers = Map(initialBufferId -> initialBuffer),
+      bufferOrder = List(initialBufferId),
       focus = Focus.EditorPane(PaneId(0)),
+      nextBufferId = BufferId(1),
       nextPaneId = PaneId(1)
     )
 

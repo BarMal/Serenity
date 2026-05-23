@@ -73,8 +73,10 @@ class RgbInterpolatorSpec extends AnyFlatSpec with Matchers:
     interpolated should have length 6
     interpolated.head shouldEqual startColor
     interpolated.last shouldEqual endColor
-    // Should contain intermediate ANSI colors like BLACK_BRIGHT
-    interpolated should contain(TextColor.ANSI.BLACK_BRIGHT)
+    // Should contain smooth RGB gradients between black and white
+    val middle = interpolated(3).asInstanceOf[TextColor.RGB]
+    middle.getRed should be >= 100
+    middle.getRed should be <= 155
   }
 
   it should "handle same color interpolation" in {

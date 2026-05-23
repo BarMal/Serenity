@@ -13,3 +13,7 @@ case object ToggleSyntaxHighlighting extends HotkeyEvent
 case object OpenFile                 extends HotkeyEvent
 case object SaveFile                 extends HotkeyEvent
 case object ToggleCommandRunner      extends HotkeyEvent
+case object NewTab                   extends HotkeyEvent // Ctrl+T
+case object CloseTab                 extends HotkeyEvent // Ctrl+W
+case object NextTab                  extends HotkeyEvent // Ctrl+Tab
+case object PreviousTab              extends HotkeyEvent // Ctrl+Shift+Tab

@@ -7,9 +7,9 @@ import com.serenity.ui.layout.TerminalSize
 
 object RenderController:
 
-  /** Apply a detected terminal resize to state and invoke onResized.
-    * Separating the Lanterna Screen query from this method makes the logic unit-testable:
-    * callers pass the already-extracted Option[TerminalSize] rather than the Screen itself.
+  /** Apply a detected terminal resize to state and invoke onResized. Separating the Lanterna Screen query from this
+    * method makes the logic unit-testable: callers pass the already-extracted Option[TerminalSize] rather than the
+    * Screen itself.
     */
   def handleResize(
     newSize: Option[TerminalSize],

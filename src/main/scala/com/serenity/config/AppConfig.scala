@@ -1,11 +1,14 @@
 package com.serenity.config
 
 import com.serenity.animation.AnimationConfig
+import com.serenity.ui.fonts.FontLoader.FontConfig
 
 /** Global application configuration */
 case class AppConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
-    syntaxHighlightingEnabled: Boolean = false
+    syntaxHighlightingEnabled: Boolean = false,
+    fontConfig: FontConfig = FontConfig(),
+    minimumPaneWidth: Int = 50
 ):
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
@@ -19,11 +22,19 @@ case class AppConfig(
   def withSyntaxHighlighting(enabled: Boolean): AppConfig =
     copy(syntaxHighlightingEnabled = enabled)
 
+  /** Create a new config with font configuration */
+  def withFontConfig(config: FontConfig): AppConfig =
+    copy(fontConfig = config)
+
+  /** Create a new config with minimum pane width setting */
+  def withMinimumPaneWidth(width: Int): AppConfig =
+    copy(minimumPaneWidth = math.max(1, width))
+
 object AppConfig:
 
-  /** Default configuration with no animations and syntax highlighting disabled */
+  /** Default configuration with smooth animations and syntax highlighting disabled */
   val default: AppConfig = AppConfig(
-    characterAnimation = AnimationConfig.quick, // TEMPORARILY ENABLED FOR TESTING
+    characterAnimation = AnimationConfig.smooth,
     syntaxHighlightingEnabled = false
   )
 

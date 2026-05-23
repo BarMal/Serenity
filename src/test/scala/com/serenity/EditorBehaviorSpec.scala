@@ -21,7 +21,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
   it should "start with an empty initial state" in new EditorFixture:
     val state = stateManager.getCurrentState.unsafeRunSync()
 
-    state.buffers shouldBe empty
+    state.buffers should have size 1 // Initial empty buffer
     state.layout.editorPanes should have size 1
     state.focus shouldBe Focus.EditorPane(PaneId(0))
     state.modal shouldBe None
@@ -45,8 +45,9 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     buffer.content.collect() shouldBe "Hello"
 
     val pane = finalState.layout.editorPanes(paneId)
-    pane.cursors.head.column shouldBe 5
-    pane.cursors.head.line shouldBe 0
+    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    paneBuffer.cursors.head.column shouldBe 5
+    paneBuffer.cursors.head.line shouldBe 0
 
   it should "handle backspace behavior correctly" in new EditorFixture:
     // Given: A buffer with text "Hello World"
@@ -67,7 +68,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     buffer.content.collect() shouldBe "Hello Worl"
 
     val pane = finalState.layout.editorPanes(paneId)
-    pane.cursors.head.column shouldBe 10 // Cursor moves back
+    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    paneBuffer.cursors.head.column shouldBe 10 // Cursor moves back
 
   it should "handle multiline text creation with newlines" in new EditorFixture:
     // Given: Empty buffer
@@ -89,8 +91,9 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     buffer.content.collect() shouldBe "Line 1\nLine 2"
 
     val pane = finalState.layout.editorPanes(paneId)
-    pane.cursors.head.line shouldBe 1
-    pane.cursors.head.column shouldBe 6
+    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    paneBuffer.cursors.head.line shouldBe 1
+    paneBuffer.cursors.head.column shouldBe 6
 
   it should "handle cursor movement across lines correctly" in new EditorFixture:
     // Given: Buffer with multiline text
@@ -109,8 +112,9 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     // Then: Cursor should be on third line
     val afterDownState = stateManager.getCurrentState.unsafeRunSync()
     val afterDownPane  = afterDownState.layout.editorPanes(paneId)
-    afterDownPane.cursors.head.line shouldBe 2
-    afterDownPane.cursors.head.column shouldBe 0
+    val afterDownBuffer = afterDownPane.bufferId.flatMap(afterDownState.buffers.get).get
+    afterDownBuffer.cursors.head.line shouldBe 2
+    afterDownBuffer.cursors.head.column shouldBe 0
 
     // When: Move to end of line
     stateManager.applyEvent(MoveToEnd).unsafeRunSync()
@@ -118,7 +122,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     // Then: Cursor should be at end of "Third"
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val pane       = finalState.layout.editorPanes(paneId)
-    pane.cursors.head.column shouldBe 5
+    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    paneBuffer.cursors.head.column shouldBe 5
 
   it should "handle complex keystroke sequences for word manipulation" in new EditorFixture:
     // Given: Buffer with text
@@ -193,7 +198,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     buffer.content.collect() shouldBe "AXCY"
 
     val pane = finalState.layout.editorPanes(paneId)
-    pane.cursors.head.column shouldBe 4
+    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    paneBuffer.cursors.head.column shouldBe 4
 
   it should "validate state consistency after complex operations" in new EditorFixture:
     // Given: Multiple buffers and operations
@@ -212,7 +218,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     // Then: State should be valid
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.isValid shouldBe true
-    finalState.buffers should have size 2
+    finalState.buffers should have size 3 // Initial buffer + 2 created buffers
     finalState.buffers(buffer2).content.collect() shouldBe "Buffer 2!"
 
   it should "handle edge cases with cursor at line boundaries" in new EditorFixture:
@@ -231,8 +237,9 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     // Then: Should be on empty line
     val afterMoveState = stateManager.getCurrentState.unsafeRunSync()
     val afterMovePane  = afterMoveState.layout.editorPanes(paneId)
-    afterMovePane.cursors.head.line shouldBe 1
-    afterMovePane.cursors.head.column shouldBe 0
+    val afterMoveBuffer = afterMovePane.bufferId.flatMap(afterMoveState.buffers.get).get
+    afterMoveBuffer.cursors.head.line shouldBe 1
+    afterMoveBuffer.cursors.head.column shouldBe 0
 
     // When: Move right again (should go to Line3)
     stateManager.applyEvent(MoveRight).unsafeRunSync()
@@ -240,13 +247,14 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     // Then: Should be at start of Line3
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val pane       = finalState.layout.editorPanes(paneId)
-    pane.cursors.head.line shouldBe 2
-    pane.cursors.head.column shouldBe 0
+    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    paneBuffer.cursors.head.line shouldBe 2
+    paneBuffer.cursors.head.column shouldBe 0
 
   it should "handle writing to a completely blank buffer" in new EditorFixture:
     // Given: Editor starts with no buffers at all
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    initialState.buffers shouldBe empty
+    initialState.buffers should have size 1 // Initial empty buffer
 
     // When: Create a blank buffer and start typing
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
@@ -266,8 +274,9 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     buffer.isDirty shouldBe true
 
     val pane = finalState.layout.editorPanes(paneId)
-    pane.cursors.head.line shouldBe 0
-    pane.cursors.head.column shouldBe "Writing into empty space!".length
+    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    paneBuffer.cursors.head.line shouldBe 0
+    paneBuffer.cursors.head.column shouldBe "Writing into empty space!".length
 
   it should "handle overwriting selection with new text" in new EditorFixture:
     // TODO: Implement Selection data type and selection handling

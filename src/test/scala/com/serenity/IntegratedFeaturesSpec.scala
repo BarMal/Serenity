@@ -35,10 +35,10 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
 
     // Create state with theme
     val bufferId = BufferId(1)
-    val buffer   = Buffer.fromString(bufferId, "function test_func() {\n\treturn 'hello_world';\n}")
-    val paneId   = PaneId(1)
     val cursor   = CursorPosition(0, 0)
-    val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List(cursor), 0)
+    val buffer   = Buffer.fromString(bufferId, "function test_func() {\n\treturn 'hello_world';\n}").copy(cursors = List(cursor))
+    val paneId   = PaneId(1)
+    val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
       buffers = Map(bufferId -> buffer),
       layout = Layout.empty.copy(editorPanes = Map(paneId -> pane)),
@@ -81,10 +81,10 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
     import com.serenity.state.components.EditorPaneComponent
 
     val bufferId = BufferId(1)
-    val buffer   = Buffer.fromString(bufferId, "hello")
-    val paneId   = PaneId(1)
     val cursor   = CursorPosition(0, 5) // At end of "hello"
-    val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List(cursor), 0)
+    val buffer   = Buffer.fromString(bufferId, "hello").copy(cursors = List(cursor))
+    val paneId   = PaneId(1)
+    val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
       buffers = Map(bufferId -> buffer),
       layout = Layout.empty.copy(editorPanes = Map(paneId -> pane)),

@@ -43,9 +43,9 @@ class EmptyBufferDisplaySpec extends AnyFunSpec with Matchers:
 
     it("should transition from welcome text to content when typing"):
       val bufferId      = BufferId(1)
-      val initialBuffer = Buffer.newEmpty(bufferId)
+      val initialBuffer = Buffer.newEmpty(bufferId).copy(cursors = List(CursorPosition(0, 0)))
       val paneId        = PaneId(1)
-      val pane          = EditorPane(paneId, Some(bufferId), Viewport.default, List(CursorPosition(0, 0)), 0)
+      val pane          = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
 
       val initialState = AppState(
         buffers = Map(bufferId -> initialBuffer),
@@ -74,9 +74,9 @@ class EmptyBufferDisplaySpec extends AnyFunSpec with Matchers:
 
     it("should transition from welcome text to ~Empty~ when deleting all content"):
       val bufferId          = BufferId(1)
-      val bufferWithContent = Buffer.fromString(bufferId, "h").copy(isNewEmpty = false)
+      val bufferWithContent = Buffer.fromString(bufferId, "h").copy(isNewEmpty = false, cursors = List(CursorPosition(0, 1)))
       val paneId            = PaneId(1)
-      val pane              = EditorPane(paneId, Some(bufferId), Viewport.default, List(CursorPosition(0, 1)), 0)
+      val pane              = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
 
       val initialState = AppState(
         buffers = Map(bufferId -> bufferWithContent),

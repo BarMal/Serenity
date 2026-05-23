@@ -19,10 +19,10 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
     given Balance = Balance.default
 
     val bufferId = BufferId(1)
-    val buffer   = Buffer.fromString(bufferId, "hello world")
-    val paneId   = PaneId(1)
     val cursor   = CursorPosition(0, 5) // Between "hello" and " world"
-    val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List(cursor), 0)
+    val buffer   = Buffer.fromString(bufferId, "hello world").copy(cursors = List(cursor))
+    val paneId   = PaneId(1)
+    val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
       buffers = Map(bufferId -> buffer),
       layout = Layout.empty.copy(editorPanes = Map(paneId -> pane))
@@ -41,8 +41,7 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
         val updatedBuffer = newState.buffers(bufferId)
         updatedBuffer.content.collect() shouldBe "hello_ world"
 
-        val updatedPane = newState.layout.editorPanes(paneId)
-        val newCursor   = updatedPane.cursors.head
+        val newCursor = updatedBuffer.cursors.head
         newCursor.column shouldBe 6 // Moved one position after underscore
       case _ => fail("Expected StateChange result")
   }
@@ -63,10 +62,10 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
 
     // Create buffer with underscores
     val bufferId = BufferId(1)
-    val buffer   = Buffer.fromString(bufferId, "test_with_underscores")
-    val paneId   = PaneId(1)
     val cursor   = CursorPosition(0, 0)
-    val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List(cursor), 0)
+    val buffer   = Buffer.fromString(bufferId, "test_with_underscores").copy(cursors = List(cursor))
+    val paneId   = PaneId(1)
+    val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
       buffers = Map(bufferId -> buffer),
       layout = Layout.empty.copy(editorPanes = Map(paneId -> pane))

@@ -42,8 +42,9 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.layout.editorPanes(paneId)
-    val cursor     = finalPane.cursors.head
-    val viewport   = finalPane.viewport
+    val buffer     = finalPane.bufferId.flatMap(finalState.buffers.get).get
+    val cursor     = buffer.cursors.head
+    val viewport   = buffer.viewport
 
     // Cursor should be at end of text
     cursor.column shouldBe longText.length
@@ -77,8 +78,9 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.layout.editorPanes(paneId)
-    val cursor     = finalPane.cursors.head
-    val viewport   = finalPane.viewport
+    val buffer     = finalPane.bufferId.flatMap(finalState.buffers.get).get
+    val cursor     = buffer.cursors.head
+    val viewport   = buffer.viewport
 
     // Cursor should be at column 0
     cursor.column shouldBe 0
@@ -114,8 +116,9 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.layout.editorPanes(paneId)
-    val cursor     = finalPane.cursors.head
-    val viewport   = finalPane.viewport
+    val buffer     = finalPane.bufferId.flatMap(finalState.buffers.get).get
+    val cursor     = buffer.cursors.head
+    val viewport   = buffer.viewport
 
     // Cursor should be beyond the original visible area
     cursor.line should be >= visibleLines

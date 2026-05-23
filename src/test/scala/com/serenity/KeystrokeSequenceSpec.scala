@@ -71,8 +71,9 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
 
     // Cursor should be at end
     val pane = getCurrentPane(finalState)
-    pane.cursors.head.line shouldBe 1
-    pane.cursors.head.column shouldBe 9 // After 2 spaces + "Hello"
+    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    paneBuffer.cursors.head.line shouldBe 1
+    paneBuffer.cursors.head.column shouldBe 9 // After 2 spaces + "Hello"
 
   it should "handle text editing workflow: writing and correcting mistakes" in new KeystrokeFixture:
     // Given: Buffer with some text
@@ -328,8 +329,9 @@ Third""".replace("\r\n", "\n")
 
     // Cursor should be at end
     val pane = getCurrentPane(finalState)
-    pane.cursors.head.line shouldBe 1
-    pane.cursors.head.column shouldBe 3
+    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    paneBuffer.cursors.head.line shouldBe 1
+    paneBuffer.cursors.head.column shouldBe 3
 
   it should "handle backspace at line boundaries" in new KeystrokeFixture:
     // Given: Multiline text

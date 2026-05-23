@@ -185,12 +185,15 @@ let anotherOldName = oldName * 2;"""
   it should "integrate rope operations with editor component processing" in new RopeIntegrationFixture:
     // Given: Editor state with buffer
     val initialText = "Hello world"
-    val buffer      = Buffer(BufferId(1), Rope(initialText), isDirty = false, filePath = None)
+    val buffer      = Buffer(BufferId(1), Rope(initialText), isDirty = false, filePath = None).copy(
+      cursors = List(CursorPosition(0, 6)), // Position at "world"
+      viewport = Viewport(0, 0, 80, 24)
+    )
     val pane = EditorPane(
       id = PaneId(1),
       bufferId = Some(BufferId(1)),
-      cursors = List(CursorPosition(0, 6)), // Position at "world"
-      viewport = Viewport(0, 0, 80, 24),
+      cursors = List.empty,
+      viewport = Viewport.default,
       centerLine = 0
     )
     val appState = createTestAppState(Map(BufferId(1) -> buffer), Map(PaneId(1) -> pane))
@@ -230,8 +233,7 @@ let anotherOldName = oldName * 2;"""
     finalBuffer.isDirty shouldBe true
 
     // Cursor should be at end
-    val finalPane = currentState.layout.editorPanes(PaneId(1))
-    finalPane.cursors.head.column shouldBe 23
+    finalBuffer.cursors.head.column shouldBe 23
 
   it should "handle rope operations at chunk boundaries" in new RopeIntegrationFixture:
     // Given: Text that will span multiple rope chunks (leafChunkSize = 30)

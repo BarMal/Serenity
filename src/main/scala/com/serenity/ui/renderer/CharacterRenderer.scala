@@ -111,9 +111,8 @@ object CharacterRenderer:
       graphics.setBackgroundColor(backgroundColor)
       renderChar(graphics, x, y, char)
 
-  /** Render a string with animation support.
-    * bufferLine and bufferStartColumn identify the buffer position of the first character,
-    * so animations keyed by buffer coordinates are applied to the correct screen cell.
+  /** Render a string with animation support. bufferLine and bufferStartColumn identify the buffer position of the first
+    * character, so animations keyed by buffer coordinates are applied to the correct screen cell.
     */
   def renderStringWithAnimation(
     graphics: TextGraphics,
@@ -129,7 +128,17 @@ object CharacterRenderer:
     if syntaxHighlightingEnabled then
       val styledTexts = ThemeManager.highlightLine(content, theme)
       renderStyledLineWithAnimation(graphics, x, y, styledTexts, theme, screenAnimations, bufferLine, bufferStartColumn)
-    else renderStringWithAnimationPlain(graphics, x, y, content, theme, screenAnimations, bufferLine = bufferLine, bufferStartColumn = bufferStartColumn)
+    else
+      renderStringWithAnimationPlain(
+        graphics,
+        x,
+        y,
+        content,
+        theme,
+        screenAnimations,
+        bufferLine = bufferLine,
+        bufferStartColumn = bufferStartColumn
+      )
 
   /** Render a string with animation support (plain, no syntax highlighting) */
   def renderStringWithAnimationPlain(

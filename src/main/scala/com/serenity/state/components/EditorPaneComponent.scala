@@ -5,7 +5,6 @@ import com.serenity.io.FileManager
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
 
 class EditorPaneComponent(
     paneId: PaneId
@@ -26,31 +25,23 @@ class EditorPaneComponent(
   ): ComponentResult =
     event match
       case ScrollDown(lines) =>
-        val totalLines  = pane.bufferId.flatMap(currentState.buffers.get).map(b => countLines(b.content)).getOrElse(Int.MaxValue)
-        val maxTopLine  = math.max(0, totalLines - pane.viewport.visibleLines)
-        val newTopLine  = math.min(pane.viewport.topLine + lines, maxTopLine)
-        val newViewport = pane.viewport.copy(topLine = newTopLine)
-        val updatedPane = pane.copy(viewport = newViewport)
-        ComponentResult.updateState { state =>
-          val syncUpdated = state.layout.editorPanes.map {
-            case (id, p) if id != paneId && p.syncedScrolling =>
-              id -> p.copy(viewport = p.viewport.copy(topLine = newTopLine))
-            case entry => entry
-          }
-          state.copy(layout = state.layout.copy(editorPanes = syncUpdated + (paneId -> updatedPane)))
-        }
+        pane.bufferId.flatMap(currentState.buffers.get) match
+          case Some(buffer) =>
+            val totalLines    = countLines(buffer.content)
+            val maxTopLine    = math.max(0, totalLines - buffer.viewport.visibleLines)
+            val newTopLine    = math.min(buffer.viewport.topLine + lines, maxTopLine)
+            val newViewport   = buffer.viewport.copy(topLine = newTopLine)
+            val updatedBuffer = buffer.copy(viewport = newViewport)
+            ComponentResult.updateState(state => state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer)))
+          case None => ComponentResult.noChange
       case ScrollUp(lines) =>
-        val newTopLine  = math.max(0, pane.viewport.topLine - lines)
-        val newViewport = pane.viewport.copy(topLine = newTopLine)
-        val updatedPane = pane.copy(viewport = newViewport)
-        ComponentResult.updateState { state =>
-          val syncUpdated = state.layout.editorPanes.map {
-            case (id, p) if id != paneId && p.syncedScrolling =>
-              id -> p.copy(viewport = p.viewport.copy(topLine = newTopLine))
-            case entry => entry
-          }
-          state.copy(layout = state.layout.copy(editorPanes = syncUpdated + (paneId -> updatedPane)))
-        }
+        pane.bufferId.flatMap(currentState.buffers.get) match
+          case Some(buffer) =>
+            val newTopLine    = math.max(0, buffer.viewport.topLine - lines)
+            val newViewport   = buffer.viewport.copy(topLine = newTopLine)
+            val updatedBuffer = buffer.copy(viewport = newViewport)
+            ComponentResult.updateState(state => state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer)))
+          case None => ComponentResult.noChange
       case textEvent: TextEntryEvent => processTextEvent(textEvent, pane, currentState)
       case _                         => ComponentResult.noChange
 
@@ -72,40 +63,60 @@ class EditorPaneComponent(
     pane: EditorPane,
     currentState: AppState
   ): ComponentResult =
-    // Get the primary cursor (first in the list)
-    pane.cursors.headOption match
+    // Get the primary cursor from the buffer (first in the list)
+    buffer.cursors.headOption match
       case Some(cursor) =>
         event match
           case InsertChar(char) =>
             val offset          = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
             val newContent      = buffer.content.insert(offset, char.toString)
-            val updatedBuffer   = buffer.copy(content = newContent, isDirty = true, isNewEmpty = false)
             val newCursor       = cursor.copy(column = cursor.column + 1)
-            val updatedViewport = adjustViewportForCursor(pane.viewport, newCursor)
-            val updatedPane     = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = updatedViewport)
+            val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
+            val updatedBuffer = buffer.copy(
+              content = newContent,
+              isDirty = true,
+              isNewEmpty = false,
+              cursors = newCursor :: buffer.cursors.tail,
+              viewport = updatedViewport
+            )
+            val updatedPane = pane
 
             ComponentResult.updateState { state =>
-              val updatedAnimationState = addCharacterAnimation(
+              val updatedBufferWithAnimation = addCharacterAnimationToBuffer(
+                updatedBuffer,
                 state,
                 char,
                 cursor.line,
                 cursor.column
               )
 
+              // Also add animation to screen animations for global access
+              val screenAnimationsUpdate = state.config.characterAnimation match
+                case Some(animConfig) =>
+                  val durationMs = animConfig.totalDuration.toMillis.toInt
+                  val animatedChar = com.serenity.animation.AnimatedCharacter.createFadeAnimation(
+                    char,
+                    state.theme.backgroundColor,
+                    state.theme.foregroundColor,
+                    durationMs,
+                    16
+                  )
+                  state.screenAnimations.copy(
+                    animations = state.screenAnimations.animations +
+                      (com.serenity.animation.CharacterKey(cursor.column, cursor.line) -> animatedChar)
+                  )
+                case None => state.screenAnimations
+
               state.copy(
-                buffers = state.buffers + (buffer.id -> updatedBuffer),
-                layout = state.layout.copy(
-                  editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                ),
-                screenAnimations = updatedAnimationState
+                buffers = state.buffers + (buffer.id -> updatedBufferWithAnimation),
+                screenAnimations = screenAnimationsUpdate
               )
             }
 
           case DeleteBackward =>
             val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
             if offset > 0 then
-              val newContent    = buffer.content.delete(offset - 1, offset)
-              val updatedBuffer = buffer.copy(content = newContent, isDirty = true, isNewEmpty = false)
+              val newContent = buffer.content.delete(offset - 1, offset)
               val newCursor =
                 if cursor.column > 0 then cursor.copy(column = cursor.column - 1)
                 else if cursor.line > 0 then
@@ -113,15 +124,18 @@ class EditorPaneComponent(
                   val prevLineEnd = findLineEnd(buffer.content, cursor.line - 1)
                   cursor.copy(line = cursor.line - 1, column = prevLineEnd)
                 else cursor
-              val updatedViewport = adjustViewportForCursor(pane.viewport, newCursor)
-              val updatedPane     = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = updatedViewport)
+              val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
+              val updatedBuffer = buffer.copy(
+                content = newContent,
+                isDirty = true,
+                isNewEmpty = false,
+                cursors = newCursor :: buffer.cursors.tail,
+                viewport = updatedViewport
+              )
 
               ComponentResult.updateState { state =>
                 state.copy(
-                  buffers = state.buffers + (buffer.id -> updatedBuffer),
-                  layout = state.layout.copy(
-                    editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                  )
+                  buffers = state.buffers + (buffer.id -> updatedBuffer)
                 )
               }
             else ComponentResult.noChange
@@ -147,14 +161,15 @@ class EditorPaneComponent(
                 val prevLineEnd = findLineEnd(buffer.content, cursor.line - 1)
                 cursor.copy(line = cursor.line - 1, column = prevLineEnd)
               else cursor
-            val updatedViewport = adjustViewportForCursor(pane.viewport, newCursor)
-            val updatedPane     = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = updatedViewport)
+            val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
+            val updatedBuffer = buffer.copy(
+              cursors = newCursor :: buffer.cursors.tail,
+              viewport = updatedViewport
+            )
 
             ComponentResult.updateState { state =>
               state.copy(
-                layout = state.layout.copy(
-                  editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                )
+                buffers = state.buffers + (buffer.id -> updatedBuffer)
               )
             }
 
@@ -167,126 +182,127 @@ class EditorPaneComponent(
                 val totalLines = countLines(buffer.content)
                 if cursor.line < totalLines - 1 then cursor.copy(line = cursor.line + 1, column = 0)
                 else cursor
-            val updatedViewport = adjustViewportForCursor(pane.viewport, newCursor)
-            val updatedPane     = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = updatedViewport)
+            val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
+            val updatedBuffer = buffer.copy(
+              cursors = newCursor :: buffer.cursors.tail,
+              viewport = updatedViewport
+            )
 
             ComponentResult.updateState { state =>
               state.copy(
-                layout = state.layout.copy(
-                  editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                )
+                buffers = state.buffers + (buffer.id -> updatedBuffer)
               )
             }
 
           case MoveUp =>
             // Use visual line navigation for wrapped text
             // Calculate actual panel width from current terminal size
-            val terminalSize = com.serenity.ui.layout.TerminalSize(80, 24) // TODO: get actual terminal size
+            val terminalSize = currentState.terminalSize.getOrElse(com.serenity.ui.layout.TerminalSize(80, 24))
             val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, terminalSize)
             val panelWidth   = layout.editorPanelRect.width
 
             val newCursor       = moveUpVisualLine(cursor, buffer.content, panelWidth)
-            val updatedViewport = adjustViewportForCursor(pane.viewport, newCursor)
-            val updatedPane     = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = updatedViewport)
+            val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
+            val updatedBuffer = buffer.copy(
+              cursors = newCursor :: buffer.cursors.tail,
+              viewport = updatedViewport
+            )
 
             ComponentResult.updateState { state =>
               state.copy(
-                layout = state.layout.copy(
-                  editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                )
+                buffers = state.buffers + (buffer.id -> updatedBuffer)
               )
             }
 
           case MoveDown =>
             // Use visual line navigation for wrapped text
             // Calculate actual panel width from current terminal size
-            val terminalSize = com.serenity.ui.layout.TerminalSize(80, 24) // TODO: get actual terminal size
+            val terminalSize = currentState.terminalSize.getOrElse(com.serenity.ui.layout.TerminalSize(80, 24))
             val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, terminalSize)
             val panelWidth   = layout.editorPanelRect.width
 
             val newCursor       = moveDownVisualLine(cursor, buffer.content, panelWidth)
-            val updatedViewport = adjustViewportForCursor(pane.viewport, newCursor)
-            val updatedPane     = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = updatedViewport)
+            val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
+            val updatedBuffer = buffer.copy(
+              cursors = newCursor :: buffer.cursors.tail,
+              viewport = updatedViewport
+            )
 
             ComponentResult.updateState { state =>
               state.copy(
-                layout = state.layout.copy(
-                  editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                )
+                buffers = state.buffers + (buffer.id -> updatedBuffer)
               )
             }
 
           case NewLine | Enter =>
             val offset          = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
             val newContent      = buffer.content.insert(offset, "\n")
-            val updatedBuffer   = buffer.copy(content = newContent, isDirty = true, isNewEmpty = false)
             val newCursor       = cursor.copy(line = cursor.line + 1, column = 0)
-            val updatedViewport = adjustViewportForCursor(pane.viewport, newCursor)
-            val updatedPane     = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = updatedViewport)
+            val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
+            val updatedBuffer = buffer.copy(
+              content = newContent,
+              isDirty = true,
+              isNewEmpty = false,
+              cursors = newCursor :: buffer.cursors.tail,
+              viewport = updatedViewport
+            )
 
-            ComponentResult.updateState { state =>
-              state.copy(
-                buffers = state.buffers + (buffer.id -> updatedBuffer),
-                layout = state.layout.copy(
-                  editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                )
-              )
-            }
+            ComponentResult.updateState(state => state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveToStart =>
             val newCursor       = cursor.copy(column = 0)
-            val updatedViewport = adjustViewportForCursor(pane.viewport, newCursor)
-            val updatedPane     = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = updatedViewport)
+            val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
+            val updatedBuffer = buffer.copy(
+              cursors = newCursor :: buffer.cursors.tail,
+              viewport = updatedViewport
+            )
 
             ComponentResult.updateState { state =>
               state.copy(
-                layout = state.layout.copy(
-                  editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                )
+                buffers = state.buffers + (buffer.id -> updatedBuffer)
               )
             }
 
           case MoveToEnd =>
             val lineEnd         = findLineEnd(buffer.content, cursor.line)
             val newCursor       = cursor.copy(column = lineEnd)
-            val updatedViewport = adjustViewportForCursor(pane.viewport, newCursor)
-            val updatedPane     = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = updatedViewport)
+            val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
+            val updatedBuffer = buffer.copy(
+              cursors = newCursor :: buffer.cursors.tail,
+              viewport = updatedViewport
+            )
 
             ComponentResult.updateState { state =>
               state.copy(
-                layout = state.layout.copy(
-                  editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                )
+                buffers = state.buffers + (buffer.id -> updatedBuffer)
               )
             }
 
           case PageDown =>
-            val totalLines  = countLines(buffer.content)
-            val visLines    = pane.viewport.visibleLines
-            val newTopLine  = math.min(pane.viewport.topLine + visLines, math.max(0, totalLines - visLines))
+            val totalLines    = countLines(buffer.content)
+            val visLines      = buffer.viewport.visibleLines
+            val newTopLine    = math.min(buffer.viewport.topLine + visLines, math.max(0, totalLines - visLines))
             val newCursorLine = math.min(cursor.line + visLines, totalLines - 1)
-            val newCursor   = cursor.copy(line = newCursorLine, column = 0)
-            val newViewport = pane.viewport.copy(topLine = newTopLine)
-            val updatedPane = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = newViewport)
-            ComponentResult.updateState { state =>
-              state.copy(layout = state.layout.copy(
-                editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-              ))
-            }
+            val newCursor     = cursor.copy(line = newCursorLine, column = 0)
+            val newViewport   = buffer.viewport.copy(topLine = newTopLine)
+            val updatedBuffer = buffer.copy(
+              cursors = newCursor :: buffer.cursors.tail,
+              viewport = newViewport
+            )
+            ComponentResult.updateState(state => state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveToEndOfFile =>
             val totalLines  = countLines(buffer.content)
             val lastLine    = totalLines - 1
             val lastLineEnd = findLineEnd(buffer.content, lastLine)
             val newCursor   = CursorPosition(lastLine, lastLineEnd)
-            val newTopLine  = math.max(0, lastLine - pane.viewport.visibleLines + 1)
-            val newViewport = pane.viewport.copy(topLine = newTopLine)
-            val updatedPane = pane.copy(cursors = newCursor :: pane.cursors.tail, viewport = newViewport)
-            ComponentResult.updateState { state =>
-              state.copy(layout = state.layout.copy(
-                editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-              ))
-            }
+            val newTopLine  = math.max(0, lastLine - buffer.viewport.visibleLines + 1)
+            val newViewport = buffer.viewport.copy(topLine = newTopLine)
+            val updatedBuffer = buffer.copy(
+              cursors = newCursor :: buffer.cursors.tail,
+              viewport = newViewport
+            )
+            ComponentResult.updateState(state => state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer)))
 
           case OpenGotoLine =>
             ComponentResult.updateState { state =>
@@ -309,18 +325,16 @@ class EditorPaneComponent(
               case Some(FindState(query, resultLines, currentIndex)) if resultLines.nonEmpty =>
                 val nextIndex   = (currentIndex + 1) % resultLines.size
                 val targetLine  = resultLines(nextIndex)
-                val halfVisible = pane.viewport.visibleLines / 2
+                val halfVisible = buffer.viewport.visibleLines / 2
                 val newTopLine  = math.max(0, targetLine - halfVisible)
-                val updatedPane = pane.copy(
+                val updatedBuffer = buffer.copy(
                   cursors = List(CursorPosition(targetLine, 0)),
-                  viewport = pane.viewport.copy(topLine = newTopLine)
+                  viewport = buffer.viewport.copy(topLine = newTopLine)
                 )
                 ComponentResult.updateState { state =>
                   state.copy(
                     findState = Some(FindState(query, resultLines, nextIndex)),
-                    layout = state.layout.copy(
-                      editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                    )
+                    buffers = state.buffers + (buffer.id -> updatedBuffer)
                   )
                 }
               case _ => ComponentResult.noChange
@@ -339,6 +353,22 @@ class EditorPaneComponent(
             // Open file - for now just log
             println("[FILE] Open file requested")
             ComponentResult.noChange
+
+          case NewTab =>
+            // Create new pane with empty buffer
+            handleNewTab(currentState)
+
+          case CloseTab =>
+            // Close current pane/tab
+            handleCloseTab(currentState)
+
+          case NextTab =>
+            // Switch to next tab
+            handleNextTab(currentState)
+
+          case PreviousTab =>
+            // Switch to previous tab
+            handlePreviousTab(currentState)
 
           case _: HotkeyEvent =>
             // TODO: Implement other hotkey handling
@@ -374,7 +404,8 @@ class EditorPaneComponent(
         val updatedPane = pane.copy(bufferId = Some(bufferId), cursors = List(newCursor))
 
         ComponentResult.updateState { state =>
-          val updatedAnimationState = addCharacterAnimation(
+          val bufferWithAnimation = addCharacterAnimationToBuffer(
+            buffer,
             state,
             char,
             0,
@@ -382,12 +413,11 @@ class EditorPaneComponent(
           )
 
           state.copy(
-            buffers = state.buffers + (bufferId -> buffer),
+            buffers = state.buffers + (bufferId -> bufferWithAnimation),
             layout = state.layout.copy(
               editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
             ),
-            nextBufferId = BufferId(bufferId.value + 1),
-            screenAnimations = updatedAnimationState
+            nextBufferId = BufferId(bufferId.value + 1)
           )
         }
       case _ =>
@@ -496,9 +526,7 @@ class EditorPaneComponent(
             fileManager
               .saveBuffer(buffer)
               .map { savedBuffer =>
-                ComponentResult.updateState { state =>
-                  state.copy(buffers = state.buffers + (buffer.id -> savedBuffer))
-                }
+                ComponentResult.updateState(state => state.copy(buffers = state.buffers + (buffer.id -> savedBuffer)))
               }
               .handleError { ex =>
                 println(s"[FILE] Error saving file: ${ex.getMessage}")
@@ -517,19 +545,92 @@ class EditorPaneComponent(
         println("[FILE] Pane not found")
         ComponentResult.noChange
 
-  /** Store a character animation keyed by buffer position (cursorColumn, cursorLine).
-    * The renderer converts buffer coords to screen coords at draw time, so the animation
-    * survives viewport scrolls and terminal resizes without drifting.
+  /** Handle creating a new tab/pane with empty buffer */
+  private def handleNewTab(currentState: AppState): ComponentResult =
+    // For now, this is a placeholder that indicates the event was received
+    // Full implementation would require StateManager-level coordination
+    println("[TAB] NewTab event received - implementation requires StateManager integration")
+    ComponentResult.noChange
+
+  /** Handle closing the current tab/pane */
+  private def handleCloseTab(currentState: AppState): ComponentResult =
+    currentState.layout.editorPanes.get(paneId) match
+      case Some(pane) =>
+        pane.bufferId match
+          case Some(bufferId) =>
+            val buffer = currentState.buffers.get(bufferId)
+            buffer match
+              case Some(buf) if buf.isDirty =>
+                // TODO: Show unsaved changes dialog - for now just close anyway
+                println("[TAB] Warning: Closing tab with unsaved changes")
+                closeCurrentTabAndBuffer(currentState, bufferId)
+              case _ =>
+                closeCurrentTabAndBuffer(currentState, bufferId)
+          case None =>
+            // Pane has no buffer, just close the pane
+            ComponentResult.updateState { state =>
+              val updatedPanes = state.layout.editorPanes - paneId
+              val newFocus =
+                if updatedPanes.nonEmpty then Focus.EditorPane(updatedPanes.keys.head)
+                else state.focus
+              state.copy(
+                layout = state.layout.copy(editorPanes = updatedPanes),
+                focus = newFocus
+              )
+            }
+      case None =>
+        ComponentResult.noChange
+
+  /** Handle switching to next tab */
+  private def handleNextTab(currentState: AppState): ComponentResult =
+    val paneIds = currentState.layout.editorPanes.keys.toList.sortBy(_.value)
+    if paneIds.size <= 1 then ComponentResult.noChange
+    else
+      val currentIndex = paneIds.indexOf(paneId)
+      val nextIndex    = (currentIndex + 1) % paneIds.size
+      val nextPaneId   = paneIds(nextIndex)
+      ComponentResult.updateState(state => state.copy(focus = Focus.EditorPane(nextPaneId)))
+
+  /** Handle switching to previous tab */
+  private def handlePreviousTab(currentState: AppState): ComponentResult =
+    val paneIds = currentState.layout.editorPanes.keys.toList.sortBy(_.value)
+    if paneIds.size <= 1 then ComponentResult.noChange
+    else
+      val currentIndex = paneIds.indexOf(paneId)
+      val prevIndex    = (currentIndex - 1 + paneIds.size) % paneIds.size
+      val prevPaneId   = paneIds(prevIndex)
+      ComponentResult.updateState(state => state.copy(focus = Focus.EditorPane(prevPaneId)))
+
+  /** Helper method to close current tab and its buffer */
+  private def closeCurrentTabAndBuffer(currentState: AppState, bufferId: BufferId): ComponentResult =
+    // For now, just handle the pane removal - buffer cleanup requires StateManager integration
+    ComponentResult.updateState { state =>
+      val updatedPanes   = state.layout.editorPanes - paneId
+      val updatedBuffers = state.buffers - bufferId
+      val newFocus =
+        if updatedPanes.nonEmpty then Focus.EditorPane(updatedPanes.keys.head)
+        else state.focus
+      state.copy(
+        layout = state.layout.copy(editorPanes = updatedPanes),
+        buffers = updatedBuffers,
+        focus = newFocus
+      )
+    }
+
+  /** Store a character animation keyed by buffer position (cursorColumn, cursorLine). The renderer converts buffer
+    * coords to screen coords at draw time, so the animation survives viewport scrolls and terminal resizes without
+    * drifting.
     */
-  private def addCharacterAnimation(
+  private def addCharacterAnimationToBuffer(
+    buffer: Buffer,
     state: AppState,
     char: Char,
     cursorLine: Int,
     cursorColumn: Int
-  ): com.serenity.animation.AnimationState =
+  ): Buffer =
     state.config.characterAnimation match
       case Some(animConfig) =>
-        val durationMs   = animConfig.totalDuration.toMillis.toInt
+        val durationMs = animConfig.totalDuration.toMillis.toInt
         val animatedChar = com.serenity.animation.AnimatedCharacter.createFadeAnimation(
           char,
           state.theme.backgroundColor,
@@ -537,9 +638,10 @@ class EditorPaneComponent(
           durationMs,
           16
         )
-        state.screenAnimations.copy(
-          animations = state.screenAnimations.animations +
+        val updatedAnimations = buffer.animations.copy(
+          animations = buffer.animations.animations +
             (com.serenity.animation.CharacterKey(cursorColumn, cursorLine) -> animatedChar)
         )
+        buffer.copy(animations = updatedAnimations)
       case None =>
-        state.screenAnimations
+        buffer

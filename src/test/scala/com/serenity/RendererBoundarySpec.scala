@@ -109,7 +109,8 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
     // Verify viewport has scrolled (cursor should be beyond initial visible area)
     val finalPane = finalState.layout.editorPanes(paneId)
-    val viewport  = finalPane.viewport
+    val buffer    = finalState.buffers(bufferId)  // ← Get the correct buffer by ID
+    val viewport  = buffer.viewport
     viewport.leftColumn should be > 0
 
     // Verify rendered content is still within panel boundaries
@@ -150,7 +151,8 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
     // Verify viewport has scrolled to show the end
     val finalPane = finalState.layout.editorPanes(paneId)
-    val viewport  = finalPane.viewport
+    val buffer    = finalState.buffers(bufferId)  // ← Get the correct buffer by ID
+    val viewport  = buffer.viewport
     viewport.topLine should be > 0
 
   it should "correctly handle cursor rendering at panel edges" in new MockRenderFixture:

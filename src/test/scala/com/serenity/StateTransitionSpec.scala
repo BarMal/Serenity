@@ -132,11 +132,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     val paneId       = initialState.layout.editorPanes.keys.head
 
     // Associate buffer with pane
-    val updatedPane = initialState.layout.editorPanes(paneId).copy(bufferId = Some(bufferId))
-    val updatedLayout = initialState.layout.copy(
-      editorPanes = initialState.layout.editorPanes + (paneId -> updatedPane)
-    )
-    val newState = initialState.copy(layout = updatedLayout)
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     // Verify buffer exists and is associated
     val stateWithBuffer = stateManager.getCurrentState.unsafeRunSync()

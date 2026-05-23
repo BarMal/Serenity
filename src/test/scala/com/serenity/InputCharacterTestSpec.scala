@@ -246,7 +246,8 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
         // Check cursor position after each character
         val state = stateManager.getCurrentState.unsafeRunSync()
         val pane  = getCurrentPane(state)
-        pane.cursors.head.column.shouldBe(index + 1)
+        val buffer = pane.bufferId.flatMap(state.buffers.get).get
+        buffer.cursors.head.column.shouldBe(index + 1)
     }
 
   trait InputFixture:

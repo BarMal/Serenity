@@ -28,11 +28,28 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
   it should "return true while animations are still in flight" in {
     val sm = makeStateManager()
     sm.updateState { state =>
-      state.copy(screenAnimations =
-        state.screenAnimations.addCharacterAnimation(
+      val bufferWithAnimation = state.buffers.values.headOption.map { buffer =>
+        val animations = buffer.animations.addCharacterAnimation(
           'a', 0, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 5
         )
-      )
+        buffer.copy(animations = animations)
+      }.getOrElse {
+        // Create a buffer with animation if none exists
+        val buffer = com.serenity.state.models.Buffer.newEmpty(state.nextBufferId).copy(
+          animations = com.serenity.animation.AnimationState.empty.addCharacterAnimation(
+            'a', 0, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 5
+          )
+        )
+        buffer
+      }
+      val (bufferId, updatedBuffer) = 
+        if state.buffers.nonEmpty then
+          val (id, _) = state.buffers.head
+          (id, bufferWithAnimation)
+        else
+          (state.nextBufferId, bufferWithAnimation)
+          
+      state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
     }.unsafeRunSync()
 
     val result = sm.advanceAnimationsOnTick().unsafeRunSync()
@@ -42,11 +59,28 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
   it should "return false when the final animation step completes" in {
     val sm = makeStateManager()
     sm.updateState { state =>
-      state.copy(screenAnimations =
-        state.screenAnimations.addCharacterAnimation(
+      val bufferWithAnimation = state.buffers.values.headOption.map { buffer =>
+        val animations = buffer.animations.addCharacterAnimation(
           'a', 0, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 1
         )
-      )
+        buffer.copy(animations = animations)
+      }.getOrElse {
+        // Create a buffer with animation if none exists
+        val buffer = com.serenity.state.models.Buffer.newEmpty(state.nextBufferId).copy(
+          animations = com.serenity.animation.AnimationState.empty.addCharacterAnimation(
+            'a', 0, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 1
+          )
+        )
+        buffer
+      }
+      val (bufferId, updatedBuffer) = 
+        if state.buffers.nonEmpty then
+          val (id, _) = state.buffers.head
+          (id, bufferWithAnimation)
+        else
+          (state.nextBufferId, bufferWithAnimation)
+          
+      state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
     }.unsafeRunSync()
 
     val result = sm.advanceAnimationsOnTick().unsafeRunSync()
@@ -55,8 +89,8 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
 
   it should "not modify animation state when called with no active animations" in {
     val sm          = makeStateManager()
-    val animsBefore = sm.getCurrentState.unsafeRunSync().screenAnimations.animations
+    val bufferAnimsBefore = sm.getCurrentState.unsafeRunSync().buffers.view.mapValues(_.animations.animations).toMap
     sm.advanceAnimationsOnTick().unsafeRunSync()
-    val animsAfter = sm.getCurrentState.unsafeRunSync().screenAnimations.animations
-    animsAfter shouldBe animsBefore
+    val bufferAnimsAfter = sm.getCurrentState.unsafeRunSync().buffers.view.mapValues(_.animations.animations).toMap
+    bufferAnimsAfter shouldBe bufferAnimsBefore
   }

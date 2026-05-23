@@ -22,9 +22,9 @@ class SimplifiedEditorSpec extends AnyFlatSpec with Matchers:
     val buffer1 = stateManager.createBuffer("First buffer").unsafeRunSync()
     val buffer2 = stateManager.createBuffer("Second buffer").unsafeRunSync()
 
-    // Then: Buffers should exist in state
+    // Then: Buffers should exist in state (plus initial empty buffer)
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.buffers should have size 2
+    state.buffers should have size 3
     state.buffers should contain key buffer1
     state.buffers should contain key buffer2
     state.buffers(buffer1).content.collect() shouldBe "First buffer"

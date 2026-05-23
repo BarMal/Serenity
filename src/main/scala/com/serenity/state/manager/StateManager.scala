@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.foldable.*
-import com.serenity.command.CommandRunner
+import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.keystroke.events.{Event, Quit, ResizeEvent}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.components.*
@@ -21,6 +21,7 @@ trait StateManager:
   def getActivePane: IO[Option[EditorPane]]
   def awaitQuit: IO[Unit]
   def updateState(update: AppState => AppState): IO[Unit]
+  def handleTerminalResize(newSize: TerminalSize): IO[Unit]
   def advanceAnimationFrames(): IO[Unit]
   def advanceAnimationsOnTick(): IO[Boolean]
 
@@ -116,18 +117,27 @@ object StateManager:
     def advanceAnimationFrames(): IO[Unit] =
       for
         state <- stateRef.get
-        newAnimations = state.screenAnimations.advanceAnimations()
-        _ <- stateRef.set(state.copy(screenAnimations = newAnimations))
+        updatedBuffers = state.buffers.view.mapValues { buffer =>
+          buffer.copy(animations = buffer.animations.advanceAnimations())
+        }.toMap
+        _ <- stateRef.set(state.copy(buffers = updatedBuffers))
       yield ()
 
     def advanceAnimationsOnTick(): IO[Boolean] =
       stateRef.get.flatMap { state =>
-        if !state.screenAnimations.hasActiveAnimations then IO.pure(false)
+        // Check if any buffer has active animations
+        val hasAnyAnimations = state.buffers.values.exists(_.animations.hasActiveAnimations)
+        if !hasAnyAnimations then IO.pure(false)
         else
-          val newAnimations = state.screenAnimations.advanceAllAnimations()
-          stateRef.set(state.copy(screenAnimations = newAnimations)).as(
-            newAnimations.hasActiveAnimations
-          )
+          // Advance animations for all buffers
+          val updatedBuffers = state.buffers.view.mapValues { buffer =>
+            buffer.copy(animations = buffer.animations.advanceAllAnimations())
+          }.toMap
+
+          val newState           = state.copy(buffers = updatedBuffers)
+          val stillHasAnimations = newState.buffers.values.exists(_.animations.hasActiveAnimations)
+
+          stateRef.set(newState).as(stillHasAnimations)
       }
 
     def getActiveBuffer: IO[Option[Buffer]] =
@@ -222,16 +232,17 @@ object StateManager:
           if state.layout.activeEditorPaneId.contains(paneId) then updatedPanes.keys.headOption
           else state.layout.activeEditorPaneId
 
-        val newFocus = newActivePaneId match
-          case Some(id) => Focus.EditorPane(id)
-          case None     => state.focus
+        val (newFocus, newCommandRunner) = newActivePaneId match
+          case Some(id) => (Focus.EditorPane(id), state.commandRunner)
+          case None     => (Focus.CommandRunner, CommandRunner.empty.activate(CommandRegistry.default))
 
         state.copy(
           layout = state.layout.copy(
             editorPanes = updatedPanes,
             activeEditorPaneId = newActivePaneId
           ),
-          focus = newFocus
+          focus = newFocus,
+          commandRunner = newCommandRunner
         )
       }
 
@@ -252,13 +263,12 @@ object StateManager:
       stateRef.update { state =>
         state.layout.editorPanes.get(paneId) match
           case Some(pane) =>
-            val newCursor   = CursorPosition(line, column)
-            val updatedPane = pane.copy(cursors = List(newCursor))
-            state.copy(
-              layout = state.layout.copy(
-                editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-              )
-            )
+            pane.bufferId.flatMap(state.buffers.get) match
+              case Some(buffer) =>
+                val newCursor     = CursorPosition(line, column)
+                val updatedBuffer = buffer.copy(cursors = List(newCursor))
+                state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
+              case None => state // No buffer assigned to pane
           case None => state // Pane doesn't exist, no change
       }
 
@@ -266,11 +276,11 @@ object StateManager:
       stateRef.update { state =>
         state.layout.editorPanes.get(paneId) match
           case Some(pane) =>
-            state.copy(
-              layout = state.layout.copy(
-                editorPanes = state.layout.editorPanes + (paneId -> pane.copy(viewport = viewport))
-              )
-            )
+            pane.bufferId.flatMap(state.buffers.get) match
+              case Some(buffer) =>
+                val updatedBuffer = buffer.copy(viewport = viewport)
+                state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
+              case None => state // No buffer assigned to pane
           case None => state
       }
 
@@ -427,6 +437,14 @@ object StateManager:
         case ToggleCommandRunner =>
           val commandRunnerComponent = new CommandRunnerComponent()
           Some(commandRunnerComponent.processEvent(event, state))
+        case NewTab =>
+          Some(handleNewTabGlobally(state))
+        case CloseTab =>
+          Some(handleCloseTabGlobally(state))
+        case NextTab =>
+          Some(handleNextTabGlobally(state))
+        case PreviousTab =>
+          Some(handlePreviousTabGlobally(state))
         case _ => None
 
     private def getComponentForFocus(focus: Focus): FocusedComponent =
@@ -446,7 +464,7 @@ object StateManager:
           val newFocus = determineFallbackFocus(state)
           IO.pure(dismissCurrentFocus(state).copy(focus = newFocus))
         case ComponentResult.ExecuteCommand(command) =>
-          command.execute(state).as(state)
+          command.execute(state) *> stateRef.get
         case ComponentResult.Composite(results) =>
           results.foldLeftM(state)((s, r) => applyComponentResult(r, s))
 
@@ -512,26 +530,27 @@ object StateManager:
       stateRef.update { state =>
         state.layout.editorPanes.get(paneId) match
           case Some(pane) =>
-            val cursor   = pane.cursors.headOption.getOrElse(CursorPosition(0, 0))
-            val viewport = pane.viewport
-            val newLeftColumn =
-              if cursor.column < viewport.leftColumn then cursor.column
-              else if cursor.column >= viewport.leftColumn + viewport.visibleColumns then
-                cursor.column - viewport.visibleColumns + 1
-              else viewport.leftColumn
-            val newTopLine =
-              if cursor.line < viewport.topLine then cursor.line
-              else if cursor.line >= viewport.topLine + viewport.visibleLines then
-                cursor.line - viewport.visibleLines + 1
-              else viewport.topLine
-            val newViewport = viewport.copy(
-              topLine = math.max(0, newTopLine),
-              leftColumn = math.max(0, newLeftColumn)
-            )
-            val updatedPane = pane.copy(viewport = newViewport)
-            state.copy(layout = state.layout.copy(
-              editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-            ))
+            pane.bufferId.flatMap(state.buffers.get) match
+              case Some(buffer) =>
+                val cursor   = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+                val viewport = buffer.viewport
+                val newLeftColumn =
+                  if cursor.column < viewport.leftColumn then cursor.column
+                  else if cursor.column >= viewport.leftColumn + viewport.visibleColumns then
+                    cursor.column - viewport.visibleColumns + 1
+                  else viewport.leftColumn
+                val newTopLine =
+                  if cursor.line < viewport.topLine then cursor.line
+                  else if cursor.line >= viewport.topLine + viewport.visibleLines then
+                    cursor.line - viewport.visibleLines + 1
+                  else viewport.topLine
+                val newViewport = viewport.copy(
+                  topLine = math.max(0, newTopLine),
+                  leftColumn = math.max(0, newLeftColumn)
+                )
+                val updatedBuffer = buffer.copy(viewport = newViewport)
+                state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
+              case None => state // No buffer assigned to pane
           case None => state
       }
 
@@ -542,9 +561,11 @@ object StateManager:
             val updatedPane = pane.copy(
               smoothScrolling = Some(SmoothScrollState(targetTopLine = targetLine, progress = 0.0))
             )
-            state.copy(layout = state.layout.copy(
-              editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-            ))
+            state.copy(layout =
+              state.layout.copy(
+                editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
+              )
+            )
           case None => state
       }
 
@@ -552,23 +573,32 @@ object StateManager:
       stateRef.update { state =>
         state.layout.editorPanes.get(paneId) match
           case Some(pane) =>
-            pane.smoothScrolling match
-              case Some(SmoothScrollState(targetTopLine, _)) =>
-                val currentTopLine = pane.viewport.topLine
-                val (newTopLine, newSmoothing) =
-                  if progress >= 1.0 then
-                    (targetTopLine, None)
-                  else
-                    val interpolated = math.round(currentTopLine + progress * (targetTopLine - currentTopLine)).toInt
-                    (interpolated, Some(SmoothScrollState(targetTopLine, progress)))
-                val updatedPane = pane.copy(
-                  viewport = pane.viewport.copy(topLine = newTopLine),
-                  smoothScrolling = newSmoothing
-                )
-                state.copy(layout = state.layout.copy(
-                  editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                ))
-              case None => state
+            pane.bufferId.flatMap(state.buffers.get) match
+              case Some(buffer) =>
+                pane.smoothScrolling match
+                  case Some(SmoothScrollState(targetTopLine, _)) =>
+                    val currentTopLine = buffer.viewport.topLine // ← Read from BUFFER viewport
+                    val (newTopLine, newSmoothing) =
+                      if progress >= 1.0 then (targetTopLine, None)
+                      else
+                        val interpolated =
+                          math.round(currentTopLine + progress * (targetTopLine - currentTopLine)).toInt
+                        (interpolated, Some(SmoothScrollState(targetTopLine, progress)))
+
+                    // Update BUFFER viewport
+                    val updatedBuffer = buffer.copy(viewport = buffer.viewport.copy(topLine = newTopLine))
+
+                    // Update PANE smoothScrolling state
+                    val updatedPane = pane.copy(smoothScrolling = newSmoothing)
+
+                    state.copy(
+                      buffers = state.buffers + (buffer.id -> updatedBuffer),
+                      layout = state.layout.copy(
+                        editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
+                      )
+                    )
+                  case None => state
+              case None => state // No buffer assigned to pane
           case None => state
       }
 
@@ -576,16 +606,247 @@ object StateManager:
       stateRef.update { state =>
         state.layout.editorPanes.get(paneId) match
           case Some(pane) =>
-            val halfVisible = pane.viewport.visibleLines / 2
-            val newTopLine  = math.max(0, targetLine - halfVisible)
-            val updatedPane = pane.copy(
-              cursors = List(CursorPosition(targetLine, 0)),
-              viewport = pane.viewport.copy(topLine = newTopLine)
-            )
-            state.copy(layout = state.layout.copy(
-              editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-            ))
+            pane.bufferId.flatMap(state.buffers.get) match
+              case Some(buffer) =>
+                val halfVisible = buffer.viewport.visibleLines / 2 // ← Read from BUFFER viewport
+                val newTopLine  = math.max(0, targetLine - halfVisible)
+                val updatedBuffer = buffer.copy(
+                  cursors = List(CursorPosition(targetLine, 0)),        // ← Update BUFFER cursors
+                  viewport = buffer.viewport.copy(topLine = newTopLine) // ← Update BUFFER viewport
+                )
+                state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
+              case None => state // No buffer assigned to pane
           case None => state
+      }
+
+    // Global tab management event handlers
+    private def handleNewTabGlobally(state: AppState): ComponentResult =
+      // Create a command that creates a new buffer and manages pane assignment
+      val command = com.serenity.command.Command(
+        "NewTab",
+        "Create new buffer and assign to pane based on layout",
+        _ =>
+          for
+            newBufferId <- createNewEmptyBuffer()
+            _           <- insertBufferInOrder(newBufferId)
+            _           <- assignBuffersToPanes(Some(newBufferId))
+            _           <- focusBuffer(newBufferId)
+          yield ()
+      )
+      ComponentResult.executeCommand(command)
+
+    private def handleCloseTabGlobally(state: AppState): ComponentResult =
+      state.focus match
+        case Focus.EditorPane(paneId) =>
+          state.layout.editorPanes.get(paneId) match
+            case Some(pane) =>
+              pane.bufferId match
+                case Some(bufferId) =>
+                  val buffer = state.buffers.get(bufferId)
+                  buffer match
+                    case Some(buf) if buf.isDirty =>
+                      println("[TAB] Warning: Closing tab with unsaved changes")
+                      createCloseTabAndBufferCommand(paneId, bufferId)
+                    case _ =>
+                      createCloseTabAndBufferCommand(paneId, bufferId)
+                case None =>
+                  createCloseTabOnlyCommand(paneId)
+            case None =>
+              ComponentResult.noChange
+        case _ =>
+          ComponentResult.noChange
+
+    private def createCloseTabAndBufferCommand(paneId: PaneId, bufferId: BufferId): ComponentResult =
+      val command = com.serenity.command.Command(
+        "CloseTabAndBuffer",
+        "Close tab and its buffer",
+        _ =>
+          for
+            _ <- closeBuffer(bufferId)
+            _ <- closePane(paneId)
+          yield ()
+      )
+      ComponentResult.executeCommand(command)
+
+    private def createCloseTabOnlyCommand(paneId: PaneId): ComponentResult =
+      val command = com.serenity.command.Command(
+        "CloseTabOnly",
+        "Close tab only",
+        _ =>
+          for _ <- closePane(paneId)
+          yield ()
+      )
+      ComponentResult.executeCommand(command)
+
+    private def handleNextTabGlobally(state: AppState): ComponentResult =
+      if state.bufferOrder.isEmpty then ComponentResult.noChange
+      else
+        state.focusedBufferId match
+          case Some(currentBufferId) =>
+            state.nextBufferInOrder(currentBufferId) match
+              case Some(nextBufferId) =>
+                val command = com.serenity.command.Command(
+                  "NextTab",
+                  "Navigate to next buffer",
+                  _ =>
+                    for
+                      _ <- assignBuffersToPanes(Some(nextBufferId))
+                      _ <- focusBuffer(nextBufferId)
+                    yield ()
+                )
+                ComponentResult.executeCommand(command)
+              case None =>
+                ComponentResult.noChange
+          case None =>
+            // No current focus, focus first buffer
+            val firstBufferId = state.bufferOrder.head
+            val command = com.serenity.command.Command(
+              "NextTab",
+              "Focus first buffer",
+              _ => focusBuffer(firstBufferId)
+            )
+            ComponentResult.executeCommand(command)
+
+    private def handlePreviousTabGlobally(state: AppState): ComponentResult =
+      if state.bufferOrder.isEmpty then ComponentResult.noChange
+      else
+        state.focusedBufferId match
+          case Some(currentBufferId) =>
+            state.previousBufferInOrder(currentBufferId) match
+              case Some(prevBufferId) =>
+                val command = com.serenity.command.Command(
+                  "PreviousTab",
+                  "Navigate to previous buffer",
+                  _ =>
+                    for
+                      _ <- assignBuffersToPanes(Some(prevBufferId))
+                      _ <- focusBuffer(prevBufferId)
+                    yield ()
+                )
+                ComponentResult.executeCommand(command)
+              case None =>
+                ComponentResult.noChange
+          case None =>
+            // No current focus, focus first buffer
+            val firstBufferId = state.bufferOrder.head
+            val command = com.serenity.command.Command(
+              "PreviousTab",
+              "Focus first buffer",
+              _ => focusBuffer(firstBufferId)
+            )
+            ComponentResult.executeCommand(command)
+
+    // Buffer management methods for new tab behavior
+    private def insertBufferInOrder(newBufferId: BufferId): IO[Unit] =
+      stateRef.update { state =>
+        state.focusedBufferId match
+          case Some(currentBufferId) =>
+            // Insert after the currently focused buffer
+            val currentIndex = state.bufferOrder.indexOf(currentBufferId)
+            if currentIndex == -1 then
+              // Current buffer not in order, append to end
+              state.copy(bufferOrder = state.bufferOrder :+ newBufferId)
+            else
+              // Insert after current position
+              val (before, after) = state.bufferOrder.splitAt(currentIndex + 1)
+              state.copy(bufferOrder = before ++ List(newBufferId) ++ after)
+          case None =>
+            // No current focus, append to end
+            state.copy(bufferOrder = state.bufferOrder :+ newBufferId)
+      }
+
+    private def assignBuffersToPanes(focusedBufferId: Option[BufferId] = None): IO[Unit] =
+      for
+        state <- stateRef.get
+        terminalSize = state.terminalSize.getOrElse(TerminalSize(80, 24))
+        layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(state, terminalSize)
+        // Calculate how many panes CAN fit based on minimum width
+        maxPossiblePanes    = math.max(1, layout.editorPanelRect.width / state.config.minimumPaneWidth)
+        targetFocusedBuffer = focusedBufferId.orElse(state.focusedBufferId)
+        _ <- updatePaneAssignments(state, maxPossiblePanes, targetFocusedBuffer)
+      yield ()
+
+    private def updatePaneAssignments(
+      state: AppState,
+      maxVisiblePanes: Int,
+      targetFocusedBuffer: Option[BufferId]
+    ): IO[Unit] =
+      stateRef.update { currentState =>
+        // Find the focused buffer and determine which buffers should be visible
+        targetFocusedBuffer match
+          case Some(focusedBufferId) =>
+            val focusedIndex = currentState.bufferOrder.indexOf(focusedBufferId)
+            val startIndex =
+              if focusedIndex == -1 then 0
+              else
+                // Center the focused buffer in the visible range
+                math.max(0, focusedIndex - maxVisiblePanes / 2)
+            val visibleBuffers = currentState.bufferOrder.slice(startIndex, startIndex + maxVisiblePanes)
+
+            // Ensure we have enough panes for visible buffers
+            val neededPanes  = visibleBuffers.size
+            val currentPanes = currentState.layout.editorPanes
+            val paneIds      = currentPanes.keys.toList.sortBy(_.value)
+
+            // Create additional panes if needed
+            val updatedLayout = if paneIds.size < neededPanes then
+              val additionalPanes = (paneIds.size until neededPanes).map { i =>
+                val paneId = PaneId(currentState.nextPaneId.value + i - paneIds.size)
+                paneId -> EditorPane.empty(paneId)
+              }.toMap
+              val newNextPaneId = PaneId(
+                math.max(currentState.nextPaneId.value, currentState.nextPaneId.value + neededPanes - paneIds.size)
+              )
+              currentState.copy(
+                layout = currentState.layout.copy(
+                  editorPanes = currentPanes ++ additionalPanes
+                ),
+                nextPaneId = newNextPaneId
+              )
+            else currentState
+
+            // Assign buffers to panes
+            val finalPanes      = updatedLayout.layout.editorPanes.keys.toList.sortBy(_.value)
+            val paneAssignments = finalPanes.take(visibleBuffers.size).zip(visibleBuffers).toMap
+
+            val assignedPanes = finalPanes.map { paneId =>
+              paneAssignments.get(paneId) match
+                case Some(bufferId) =>
+                  paneId -> EditorPane.withBuffer(paneId, bufferId)
+                case None =>
+                  paneId -> EditorPane.empty(paneId)
+            }.toMap
+
+            val finalState = updatedLayout.copy(
+              layout = updatedLayout.layout.copy(editorPanes = assignedPanes)
+            )
+
+            // Restore focus to the target buffer if it's visible in a pane
+            val paneWithFocusedBuffer = assignedPanes.find(_._2.bufferId.contains(focusedBufferId))
+            paneWithFocusedBuffer match
+              case Some((paneId, _)) =>
+                finalState.copy(
+                  layout = finalState.layout.copy(activeEditorPaneId = Some(paneId)),
+                  focus = Focus.EditorPane(paneId)
+                )
+              case None =>
+                finalState
+          case None =>
+            currentState
+      }
+
+    private def focusBuffer(bufferId: BufferId): IO[Unit] =
+      stateRef.update { state =>
+        // Find a pane that shows this buffer
+        val paneWithBuffer = state.layout.editorPanes.find(_._2.bufferId.contains(bufferId))
+        paneWithBuffer match
+          case Some((paneId, _)) =>
+            state.copy(
+              focus = Focus.EditorPane(paneId),
+              layout = state.layout.copy(activeEditorPaneId = Some(paneId))
+            )
+          case None =>
+            state
       }
 
     // Session operation stubs (TODO: implement)
@@ -594,3 +855,10 @@ object StateManager:
 
     def restoreSession(sessionData: String): IO[Unit] =
       logger.debug(s"TODO: restoreSession($sessionData)")
+
+    def handleTerminalResize(newSize: TerminalSize): IO[Unit] =
+      for
+        _ <- logger.debug(s"Handling terminal resize to ${newSize.width}x${newSize.height}")
+        _ <- stateRef.update(_.copy(terminalSize = Some(newSize)))
+        _ <- assignBuffersToPanes()
+      yield ()

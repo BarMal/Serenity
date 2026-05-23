@@ -10,14 +10,10 @@ object RgbInterpolator:
     else if steps == 1 then List(endColor)
     else if startColor == endColor then List.fill(steps)(startColor)
     else
-      // Handle ANSI to ANSI interpolation specially
-      (startColor, endColor) match
-        case (ansi1, ansi2) if isAnsiColor(ansi1) && isAnsiColor(ansi2) =>
-          interpolateAnsiColors(ansi1, ansi2, steps)
-        case _ =>
-          val startRgb = toRgb(startColor)
-          val endRgb   = toRgb(endColor)
-          interpolateRgb(startRgb, endRgb, steps, startColor, endColor)
+      // Convert all colors to RGB for consistent interpolation
+      val startRgb = toRgb(startColor)
+      val endRgb   = toRgb(endColor)
+      interpolateRgb(startRgb, endRgb, steps, startColor, endColor)
 
   /** Interpolate between RGB colors, preserving original start/end if they weren't RGB */
   private def interpolateRgb(
@@ -74,44 +70,3 @@ object RgbInterpolator:
 
       case TextColor.ANSI.DEFAULT => new TextColor.RGB(192, 192, 192) // Default to light gray
       case _                      => new TextColor.RGB(192, 192, 192) // Fallback to light gray
-
-  /** Check if a color is an ANSI color */
-  private def isAnsiColor(color: TextColor): Boolean =
-    color match
-      case _: TextColor.RGB => false
-      case _                => true
-
-  /** Interpolate between ANSI colors using predefined intermediate colors */
-  private def interpolateAnsiColors(startColor: TextColor, endColor: TextColor, steps: Int): List[TextColor] =
-    (startColor, endColor) match
-      case (TextColor.ANSI.BLACK, TextColor.ANSI.WHITE) =>
-        steps match
-          case 2 => List(startColor, endColor)
-          case 3 => List(startColor, TextColor.ANSI.BLACK_BRIGHT, endColor)
-          case 4 => List(startColor, TextColor.ANSI.BLACK_BRIGHT, TextColor.ANSI.WHITE_BRIGHT, endColor)
-          case 5 =>
-            List(
-              startColor,
-              TextColor.ANSI.BLACK_BRIGHT,
-              TextColor.ANSI.BLACK_BRIGHT,
-              TextColor.ANSI.WHITE_BRIGHT,
-              endColor
-            )
-          case 6 =>
-            List(
-              startColor,
-              TextColor.ANSI.BLACK_BRIGHT,
-              TextColor.ANSI.BLACK_BRIGHT,
-              TextColor.ANSI.WHITE_BRIGHT,
-              TextColor.ANSI.WHITE_BRIGHT,
-              endColor
-            )
-          case _ =>
-            List(startColor, TextColor.ANSI.BLACK_BRIGHT, TextColor.ANSI.WHITE_BRIGHT, endColor) ++ List.fill(
-              steps - 4
-            )(endColor)
-      case _ =>
-        // For other ANSI color combinations, fall back to RGB interpolation
-        val startRgb = toRgb(startColor)
-        val endRgb   = toRgb(endColor)
-        interpolateRgb(startRgb, endRgb, steps, startColor, endColor)

@@ -3,7 +3,7 @@ package com.serenity.state.components
 import com.googlecode.lanterna.input.KeyType
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.*
-import com.serenity.state.models.{AppState, CursorPosition, FindState, Focus, Modal, ModalType, PaneId}
+import com.serenity.state.models.*
 
 class ModalComponent(
     modalType: ModalType
@@ -80,19 +80,21 @@ class ModalComponent(
                     case Some(paneId) =>
                       state.layout.editorPanes.get(paneId) match
                         case Some(pane) =>
-                          val halfVisible = pane.viewport.visibleLines / 2
-                          val newTopLine  = math.max(0, targetLine - halfVisible)
-                          val updatedPane = pane.copy(
-                            cursors = List(CursorPosition(targetLine, 0)),
-                            viewport = pane.viewport.copy(topLine = newTopLine)
-                          )
-                          state.copy(
-                            modal = None,
-                            focus = Focus.EditorPane(paneId),
-                            layout = state.layout.copy(
-                              editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                            )
-                          )
+                          pane.bufferId.flatMap(state.buffers.get) match
+                            case Some(buffer) =>
+                              val halfVisible = buffer.viewport.visibleLines / 2 // ← Read from BUFFER viewport
+                              val newTopLine  = math.max(0, targetLine - halfVisible)
+                              val updatedBuffer = buffer.copy(
+                                cursors = List(CursorPosition(targetLine, 0)),        // ← Update BUFFER cursors
+                                viewport = buffer.viewport.copy(topLine = newTopLine) // ← Update BUFFER viewport
+                              )
+                              state.copy(
+                                modal = None,
+                                focus = Focus.EditorPane(paneId),
+                                buffers = state.buffers + (buffer.id -> updatedBuffer)
+                              )
+                            case None =>
+                              state.copy(modal = None, focus = Focus.EditorPane(paneId)) // No buffer assigned
                         case None => state.copy(modal = None, focus = Focus.EditorPane(PaneId(0)))
                     case None => state.copy(modal = None, focus = Focus.EditorPane(PaneId(0)))
                 }
@@ -140,20 +142,21 @@ class ModalComponent(
                   case Some(paneId) =>
                     state.layout.editorPanes.get(paneId) match
                       case Some(pane) =>
-                        val halfVisible = pane.viewport.visibleLines / 2
-                        val newTopLine  = math.max(0, firstLine - halfVisible)
-                        val updatedPane = pane.copy(
-                          cursors = List(CursorPosition(firstLine, 0)),
-                          viewport = pane.viewport.copy(topLine = newTopLine)
-                        )
-                        state.copy(
-                          modal = None,
-                          findState = Some(findState),
-                          focus = Focus.EditorPane(paneId),
-                          layout = state.layout.copy(
-                            editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
-                          )
-                        )
+                        pane.bufferId.flatMap(state.buffers.get) match
+                          case Some(buffer) =>
+                            val halfVisible = buffer.viewport.visibleLines / 2 // ← Read from BUFFER viewport
+                            val newTopLine  = math.max(0, firstLine - halfVisible)
+                            val updatedBuffer = buffer.copy(
+                              cursors = List(CursorPosition(firstLine, 0)),         // ← Update BUFFER cursors
+                              viewport = buffer.viewport.copy(topLine = newTopLine) // ← Update BUFFER viewport
+                            )
+                            state.copy(
+                              modal = None,
+                              findState = Some(findState),
+                              focus = Focus.EditorPane(paneId),
+                              buffers = state.buffers + (buffer.id -> updatedBuffer)
+                            )
+                          case None => state.copy(modal = None, findState = Some(findState)) // No buffer assigned
                       case None => state.copy(modal = None)
                   case None => state.copy(modal = None)
               }

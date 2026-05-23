@@ -44,18 +44,22 @@ object Renderer:
     val graphics     = screen.newTextGraphics()
     val terminalSize = TerminalSize(screen.getTerminalSize.getColumns, screen.getTerminalSize.getRows)
     val layout       = LayoutEngine.calculateLayout(state, terminalSize)
-    val rect         = layout.editorPanelRect
+    val paneLayouts  = LayoutEngine.calculatePaneLayouts(state, layout)
 
     for
       paneId <- state.layout.activeEditorPaneId
       pane   <- state.layout.editorPanes.get(paneId)
-      cursor <- pane.cursors.headOption
+      rect   <- paneLayouts.get(paneId)
       buffer <- pane.bufferId.flatMap(state.buffers.get)
+      cursor <- buffer.cursors.headOption
     do
-      calculateCursorVisualPosition(cursor, buffer.content, rect.width, pane.viewport) match
+      // Adjust for header: content area starts 1 line below the header
+      val contentRect = LayoutRect(rect.x, rect.y + 1, rect.width, math.max(1, rect.height - 1))
+
+      calculateCursorVisualPosition(cursor, buffer.content, contentRect.width, buffer.viewport) match
         case Some((visualLine, visualColumn)) =>
-          val screenY = rect.y + (visualLine - pane.viewport.topLine)
-          val screenX = rect.x + visualColumn
+          val screenY = contentRect.y + (visualLine - buffer.viewport.topLine)
+          val screenX = contentRect.x + visualColumn
 
           if screenY >= 0 && screenY < terminalSize.height &&
               screenX >= 0 && screenX < terminalSize.width
@@ -84,29 +88,93 @@ object Renderer:
     ()
 
   private def renderEditorPanes(state: AppState, context: RenderContext): Unit =
-    state.layout.editorPanes.foreach((paneId, pane) => renderEditorPane(pane, state, context))
+    // Calculate individual pane layouts to prevent overlap
+    val terminalSize = TerminalSize(context.screen.getTerminalSize.getColumns, context.screen.getTerminalSize.getRows)
+    val paneLayouts  = LayoutEngine.calculatePaneLayouts(state, context.layout)
+
+    // Render each pane to its own rectangle
+    state.layout.editorPanes.foreach { (paneId, pane) =>
+      paneLayouts.get(paneId) match
+        case Some(paneRect) => renderEditorPane(pane, paneRect, state, context)
+        case None           => // Pane not in layout (shouldn't happen)
+    }
 
   private def renderEditorPane(
     pane: EditorPane,
+    rect: LayoutRect,
     state: AppState,
     context: RenderContext
   ): Unit =
-    val rect = context.layout.editorPanelRect
 
     val buffer = pane.bufferId.flatMap(state.buffers.get)
 
+    // Render buffer header (1 line at top)
+    renderBufferHeader(pane, buffer, rect, state, context)
+
+    // Adjust content area to account for header
+    val contentRect = LayoutRect(rect.x, rect.y + 1, rect.width, math.max(1, rect.height - 1))
+
     buffer match
       case Some(buf) if buf.content.weight == 0 && buf.isNewEmpty =>
-        renderWelcomeText(rect, context)
+        renderWelcomeText(contentRect, context)
       case Some(buf) if buf.content.weight == 0 =>
-        renderEmptyPane(rect, context)
+        renderEmptyPane(contentRect, context)
       case Some(buf) =>
-        renderBufferContent(pane, buf, rect, state, context)
+        renderBufferContent(pane, buf, contentRect, state, context)
       case None =>
-        renderEmptyPane(rect, context)
+        renderEmptyPane(contentRect, context)
 
-    // Render cursors with buffer data
-    buffer.foreach(buf => renderCursors(pane, rect, context, buf.content))
+    // Render cursors with buffer data (adjusted for header)
+    buffer.foreach(buf => renderCursors(buf, contentRect, context))
+
+  private def renderBufferHeader(
+    pane: EditorPane,
+    buffer: Option[Buffer],
+    rect: LayoutRect,
+    state: AppState,
+    context: RenderContext
+  ): Unit =
+    val graphics = context.graphics
+    val isActive = state.layout.activeEditorPaneId.contains(pane.id)
+
+    // Set header colors
+    if isActive then
+      graphics.setBackgroundColor(TextColor.ANSI.CYAN)
+      graphics.setForegroundColor(TextColor.ANSI.BLACK)
+    else
+      graphics.setBackgroundColor(TextColor.ANSI.BLACK_BRIGHT)
+      graphics.setForegroundColor(TextColor.ANSI.WHITE)
+
+    // Generate buffer title
+    val bufferTitle = buffer match
+      case Some(buf) =>
+        buf.filePath match
+          case Some(path) =>
+            val filename = path.getFileName.toString
+            if buf.isDirty then s"$filename - unsaved" else filename
+          case None =>
+            if buf.isDirty then s"Buffer ${buf.id.value} - unsaved" else s"Buffer ${buf.id.value}"
+      case None =>
+        "No Buffer"
+
+    // Truncate title if too long, leaving space for padding
+    val maxTitleWidth = math.max(1, rect.width - 2) // Leave space for padding
+    val displayTitle =
+      if bufferTitle.length > maxTitleWidth then bufferTitle.take(maxTitleWidth - 3) + "..."
+      else bufferTitle
+
+    // Clear the header line
+    val headerLine = " " * rect.width
+    graphics.putString(rect.x, rect.y, headerLine)
+
+    // Center the title in the header
+    val paddingLeft = (rect.width - displayTitle.length) / 2
+    val centeredX   = rect.x + paddingLeft
+    graphics.putString(centeredX, rect.y, displayTitle)
+
+    // Reset colors
+    graphics.setBackgroundColor(TextColor.ANSI.BLACK)
+    graphics.setForegroundColor(TextColor.ANSI.WHITE)
 
   private def renderBufferContent(
     pane: EditorPane,
@@ -115,7 +183,7 @@ object Renderer:
     state: AppState,
     context: RenderContext
   ): Unit =
-    val viewport   = pane.viewport
+    val viewport   = buffer.viewport
     val rope       = buffer.content
     val panelWidth = rect.width
 
@@ -146,7 +214,7 @@ object Renderer:
               screenY,
               visualLine.content,
               state.theme,
-              state.screenAnimations,
+              buffer.animations,
               state.syntaxHighlightingEnabled,
               bufferLine = visualLine.bufferLine,
               bufferStartColumn = visualLine.startColumn
@@ -231,17 +299,16 @@ object Renderer:
     }
 
   private def renderCursors(
-    pane: EditorPane,
+    buffer: Buffer,
     rect: LayoutRect,
-    context: RenderContext,
-    rope: com.serenity.rope.Rope
+    context: RenderContext
   ): Unit =
-    val viewport   = pane.viewport
+    val viewport   = buffer.viewport
     val panelWidth = rect.width
 
-    pane.cursors.foreach { cursor =>
+    buffer.cursors.foreach { cursor =>
       // Calculate visual line position for cursor
-      calculateCursorVisualPosition(cursor, rope, panelWidth, viewport) match
+      calculateCursorVisualPosition(cursor, buffer.content, panelWidth, viewport) match
         case Some((visualLine, visualColumn)) =>
           val screenY = rect.y + (visualLine - viewport.topLine)
           val screenX = rect.x + visualColumn
