@@ -51,10 +51,10 @@ object Main extends IOApp.Simple:
             .map(_.map(s => TerminalSize(s.getColumns, s.getRows)))
             .flatMap(RenderController.handleResize(_, stateManager, fastMode.set(true)))
           inputFunnel = (s: Stream[IO, Event]) =>
-            s.evalMap(event => 
-              checkResize >> 
-              stateManager.applyEvent(event) >> 
-              fastMode.set(true)
+            s.evalMap(event =>
+              checkResize >>
+                stateManager.applyEvent(event) >>
+                fastMode.set(true)
             ).drain
           _ <-
             def idlePhase: Stream[IO, Unit] =
@@ -163,9 +163,9 @@ object Main extends IOApp.Simple:
   private def isSystemEvent(event: UnhandledEvent[?]): Boolean =
     import com.googlecode.lanterna.input.KeyType
     event.keyStroke.getKeyType match
-      case KeyType.EOF => false // EOF is now handled as Quit event, not a system event
-      case KeyType.Unknown => true
-      case KeyType.Character => 
+      case KeyType.EOF       => false // EOF is now handled as Quit event, not a system event
+      case KeyType.Unknown   => true
+      case KeyType.Character =>
         // Check for control characters that indicate system/terminal events
         Option(event.keyStroke.getCharacter).exists { char =>
           char == '\u0000' || // Null character

@@ -435,7 +435,8 @@ object StateManager:
       import com.serenity.keystroke.events.*
       event match
         case ToggleCommandRunner =>
-          val commandRunnerComponent = new CommandRunnerComponent()
+          val registry               = CommandRegistry.withToggleUIStateful(this)
+          val commandRunnerComponent = new CommandRunnerComponent(registry, Some(this))
           Some(commandRunnerComponent.processEvent(event, state))
         case NewTab =>
           Some(handleNewTabGlobally(state))
@@ -453,7 +454,9 @@ object StateManager:
         case Focus.PinnedPanel(position) => new PinnedPanelComponent(position)
         case Focus.PeekOverlay           => new PeekOverlayComponent()
         case Focus.Modal(modalType)      => new ModalComponent(modalType)
-        case Focus.CommandRunner         => new CommandRunnerComponent()
+        case Focus.CommandRunner =>
+          val registry = CommandRegistry.withToggleUIStateful(this)
+          new CommandRunnerComponent(registry, Some(this))
 
     private def applyComponentResult(result: ComponentResult, state: AppState): IO[AppState] =
       result match
@@ -464,7 +467,12 @@ object StateManager:
           val newFocus = determineFallbackFocus(state)
           IO.pure(dismissCurrentFocus(state).copy(focus = newFocus))
         case ComponentResult.ExecuteCommand(command) =>
-          command.execute(state) *> stateRef.get
+          // Execute command and return updated state from stateRef
+          // This handles both regular commands and stateful commands that use updateState
+          for
+            _            <- command.execute(state)
+            updatedState <- stateRef.get
+          yield updatedState
         case ComponentResult.Composite(results) =>
           results.foldLeftM(state)((s, r) => applyComponentResult(r, s))
 

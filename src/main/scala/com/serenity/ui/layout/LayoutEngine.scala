@@ -19,6 +19,14 @@ case class CalculatedLayout(
     gutterRect: Option[LayoutRect] = None
 )
 
+object LayoutManager:
+
+  def calculateLayout(
+    state: AppState,
+    terminalSize: TerminalSize,
+    
+  ): Unit = ()
+
 object LayoutEngine:
 
   // Default spacer width as percentage of terminal width (15% each side = 30% total)
@@ -38,34 +46,35 @@ object LayoutEngine:
   ): CalculatedLayout =
 
     val spacerWidth = (terminalSize.width * spacerPercentage).toInt
-    
+
     // Calculate space needed for UI elements
-    val lineNumberWidth = if state.config.showLineNumbers then
-      calculateLineNumberWidth(state) 
-    else 0
-    
+    val lineNumberWidth =
+      if state.config.showLineNumbers then calculateLineNumberWidth(state)
+      else 0
+
     val gutterHeight = if state.config.showGutter then 1 else 0
-    
+
     // Adjust editor area to accommodate UI elements
-    val availableWidth = terminalSize.width - (2 * spacerWidth) - lineNumberWidth
+    val availableWidth  = terminalSize.width - (2 * spacerWidth) - lineNumberWidth
     val availableHeight = terminalSize.height - gutterHeight
-    
+
     val leftSpacerRect = LayoutRect(0, 0, spacerWidth, terminalSize.height)
-    val lineNumberRect = if state.config.showLineNumbers then
-      Some(LayoutRect(spacerWidth, 1, lineNumberWidth, availableHeight))
-    else None
-    
+    val lineNumberRect =
+      if state.config.showLineNumbers then Some(LayoutRect(spacerWidth, 1, lineNumberWidth, availableHeight))
+      else None
+
     val editorPanelRect = LayoutRect(
-      x = spacerWidth + lineNumberWidth, 
-      y = 0, 
-      width = availableWidth, 
+      x = spacerWidth + lineNumberWidth,
+      y = 0,
+      width = availableWidth,
       height = availableHeight
     )
-    val rightSpacerRect = LayoutRect(spacerWidth + lineNumberWidth + availableWidth, 0, spacerWidth, terminalSize.height)
-    
-    val gutterRect = if state.config.showGutter then
-      Some(LayoutRect(0, terminalSize.height - 1, terminalSize.width, 1))
-    else None
+    val rightSpacerRect =
+      LayoutRect(spacerWidth + lineNumberWidth + availableWidth, 0, spacerWidth, terminalSize.height)
+
+    val gutterRect =
+      if state.config.showGutter then Some(LayoutRect(0, terminalSize.height - 1, terminalSize.width, 1))
+      else None
 
     val floatingPanelWidth  = Math.round(availableWidth * 0.8).toInt
     val floatingPanelHeight = Math.round(availableHeight * 0.3).toInt
@@ -85,9 +94,10 @@ object LayoutEngine:
 
   private def calculateLineNumberWidth(state: AppState): Int =
     // Find the maximum line count across all buffers to determine width needed
-    val maxLines = if state.buffers.isEmpty then 10 
-    else state.buffers.values.map(_.content.lineCount).max
-    
+    val maxLines =
+      if state.buffers.isEmpty then 10
+      else state.buffers.values.map(_.content.lineCount).max
+
     math.max(3, maxLines.toString.length + 1) // +1 for spacing, minimum 3 chars
 
   private def calculateFloatingPanel(

@@ -39,7 +39,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val initialState  = stateManager.getCurrentState.unsafeRunSync()
     val initialLayout = LayoutEngine.calculateLayout(initialState, TerminalSize(80, 24))
 
-    initialLayout.editorPanelRect.width shouldBe 56 // 80 - 2*12 (15% spacers)
+    initialLayout.editorPanelRect.width shouldBe 56 // 80 - 2*12 - 3 (15% spacers)
     initialLayout.editorPanelRect.height shouldBe 24
 
     // Apply resize event

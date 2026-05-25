@@ -1,12 +1,15 @@
 package com.serenity.state.components
 
-import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.keystroke.events.*
+import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 
 /** Component that handles command runner overlay functionality */
-class CommandRunnerComponent(registry: CommandRegistry = CommandRegistry.default) extends FocusedComponent:
+class CommandRunnerComponent(
+    registry: CommandRegistry = CommandRegistry.default,
+    stateManager: Option[StateManager] = None
+) extends FocusedComponent:
 
   def processEvent(event: Event, currentState: AppState): ComponentResult =
     event match
@@ -83,10 +86,12 @@ class CommandRunnerComponent(registry: CommandRegistry = CommandRegistry.default
     state.commandRunner.selectedCommand match
       case Some(command) =>
         val previousFocus = state.commandRunner.previousFocus.getOrElse(Focus.EditorPane(PaneId(0)))
-        ComponentResult.updateState { s =>
-          command.action(s).unsafeRunSync()
-          s.copy(commandRunner = CommandRunner.empty, focus = previousFocus)
-        }
+        val deactivateResult =
+          ComponentResult.updateState(s => s.copy(commandRunner = CommandRunner.empty, focus = previousFocus))
+        ComponentResult.composite(
+          ComponentResult.executeCommand(command),
+          deactivateResult
+        )
 
       case None =>
         deactivateCommandRunner(state)

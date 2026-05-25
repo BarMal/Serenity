@@ -15,61 +15,74 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
   given balance: Balance = Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
 
+  private def makeStateManager(): StateManager =
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    StateManager.apply(logger)(using balance, LoggerFactory[IO]).unsafeRunSync()
+
   behavior of "Scrolling and Navigation in Editor Panes"
 
-  it should "handle vertical scrolling in large files" in new ScrollFixture:
-    // Given: Large file with many lines
-    val largeContent = (1 to 1000).map(i => s"Line $i with some content").mkString("\n")
-    val bufferId     = stateManager.createBuffer(largeContent).unsafeRunSync()
+  it should "handle vertical scrolling in large files" in {
+    val program = for
+      sm = makeStateManager()
+      // Given: Large file with many lines
+      largeContent = (1 to 1000).map(i => s"Line $i with some content").mkString("\n")
+      bufferId <- sm.createBuffer(largeContent)
+      state    <- sm.getCurrentState
+      paneId = state.layout.editorPanes.keys.head
+      _ <- sm.setBufferForPane(paneId, bufferId)
+      _ <- sm.setCursorPosition(paneId, 0, 0)
+      _ <- sm.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
+      
+      // When: Scroll down with Page Down
+      _ <- sm.applyEvent(PageDown)
+      afterPageDownState <- sm.getCurrentState
+      
+      // When: Scroll down more with Ctrl+End (go to end of file)
+      _ <- sm.applyEvent(MoveToEndOfFile)
+      afterEndState <- sm.getCurrentState
+    yield
+      // Then: Viewport should move down after PageDown
+      val pane1 = afterPageDownState.layout.editorPanes(paneId)
+      val buffer1 = pane1.bufferId.flatMap(afterPageDownState.buffers.get).get
+      buffer1.viewport.topLine should be > 0
+      
+      // Then: Should be at end of file after MoveToEndOfFile
+      val pane2 = afterEndState.layout.editorPanes(paneId)
+      val buffer2 = pane2.bufferId.flatMap(afterEndState.buffers.get).get
+      buffer2.cursors.head.line shouldBe 999            // Last line (0-indexed)
+      buffer2.viewport.topLine should be >= (1000 - 25) // Viewport shows last lines
 
-    val state  = stateManager.getCurrentState.unsafeRunSync()
-    val paneId = state.layout.editorPanes.keys.head
-    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
-    stateManager.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80)).unsafeRunSync()
+    program.unsafeRunSync()
+  }
 
-    // When: Scroll down with Page Down
-    stateManager.applyEvent(PageDown).unsafeRunSync()
+  it should "handle horizontal scrolling in wide lines" in {
+    val program = for
+      sm = makeStateManager()
+      // Given: File with very long lines
+      wideContent = List(
+        "A" * 200, // 200 character line
+        "B" * 150,
+        "C" * 300
+      ).mkString("\n")
+      bufferId <- sm.createBuffer(wideContent)
+      state    <- sm.getCurrentState
+      paneId = state.layout.editorPanes.keys.head
+      _ <- sm.setBufferForPane(paneId, bufferId)
+      _ <- sm.setCursorPosition(paneId, 0, 150)
+      _ <- sm.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
+      
+      // When: Scroll horizontally to bring cursor into view
+      _ <- sm.ensureCursorVisible(paneId)
+      afterScrollState <- sm.getCurrentState
+    yield
+      // Then: Viewport should scroll horizontally
+      val pane = afterScrollState.layout.editorPanes(paneId)
+      val buffer = pane.bufferId.flatMap(afterScrollState.buffers.get).get
+      buffer.viewport.leftColumn should be >= (150 - 80) // Cursor should be visible
 
-    // Then: Viewport should move down
-    val afterPageDownState = stateManager.getCurrentState.unsafeRunSync()
-    val pane1              = afterPageDownState.layout.editorPanes(paneId)
-    val buffer1            = pane1.bufferId.flatMap(afterPageDownState.buffers.get).get
-    buffer1.viewport.topLine should be > 0
-
-    // When: Scroll down more with Ctrl+End (go to end of file)
-    stateManager.applyEvent(MoveToEndOfFile).unsafeRunSync()
-
-    // Then: Should be at end of file
-    val afterEndState = stateManager.getCurrentState.unsafeRunSync()
-    val pane2         = afterEndState.layout.editorPanes(paneId)
-    val buffer2       = pane2.bufferId.flatMap(afterEndState.buffers.get).get
-    buffer2.cursors.head.line shouldBe 999            // Last line (0-indexed)
-    buffer2.viewport.topLine should be >= (1000 - 25) // Viewport shows last lines
-
-  it should "handle horizontal scrolling in wide lines" in new ScrollFixture:
-    // Given: File with very long lines
-    val wideContent = List(
-      "A" * 200, // 200 character line
-      "B" * 150,
-      "C" * 300
-    ).mkString("\n")
-    val bufferId = stateManager.createBuffer(wideContent).unsafeRunSync()
-
-    val state  = stateManager.getCurrentState.unsafeRunSync()
-    val paneId = state.layout.editorPanes.keys.head
-    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.setCursorPosition(paneId, 0, 150).unsafeRunSync()
-    stateManager.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80)).unsafeRunSync()
-
-    // When: Scroll horizontally to bring cursor into view
-    stateManager.ensureCursorVisible(paneId).unsafeRunSync()
-
-    // Then: Viewport should scroll horizontally
-    val afterScrollState = stateManager.getCurrentState.unsafeRunSync()
-    val pane             = afterScrollState.layout.editorPanes(paneId)
-    val buffer           = pane.bufferId.flatMap(afterScrollState.buffers.get).get
-    buffer.viewport.leftColumn should be >= (150 - 80) // Cursor should be visible
+    program.unsafeRunSync()
+  }
 
   it should "handle mouse wheel scrolling" in new ScrollFixture:
     // Given: File with content

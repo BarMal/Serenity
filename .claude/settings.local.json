@@ -115,7 +115,19 @@
       "Bash(sbt \"testOnly *GutterAndLineNumbersSpec*\")",
       "Bash(sbt \"testOnly *GutterAndLineNumbersSpec* -- -z \"\"position gutter correctly\"\"\")",
       "Bash(sbt \"testOnly *GutterLayoutDebugSpec*\")",
-      "Bash(rm /home/barney/.Git/Serenity/src/test/scala/com/serenity/GutterLayoutDebugSpec.scala)"
+      "Bash(rm /home/barney/.Git/Serenity/src/test/scala/com/serenity/GutterLayoutDebugSpec.scala)",
+      "Bash(sbt \"testOnly *ToggleUICommandsSpec*\")",
+      "Bash(scala-cli debug_commands.scala)",
+      "Bash(sbt \"runMain debug_commands\")",
+      "Bash(sbt \"runMain debugCommands\")",
+      "Bash(sbt \"testOnly *ToggleUICommandsSpec* -- -z \"\"should toggle line numbers from enabled to disabled\" \")",
+      "Bash(sbt \"testOnly *ToggleUICommandsSpec* -- -z \"\"should toggle line numbers from enabled to disabled\"\"\")",
+      "Bash(rm /home/barney/.Git/Serenity/debug_commands.scala)",
+      "Bash(sbt \"testOnly *ToggleUICommandsSpec* *GutterAndLineNumbersSpec*\")",
+      "Bash(sbt \"testOnly *ScrollingNavigationSpec* -- -z \"\"handle vertical scrolling in large files\"\"\")",
+      "Bash(sbt \"testOnly *ScrollingNavigationSpec* -- -z \"\"handle horizontal scrolling in wide lines\"\"\")",
+      "Bash(sbt Test/compile)",
+      "Bash(sbt \"scalafix RemoveUnused\")"
     ]
   }
 }

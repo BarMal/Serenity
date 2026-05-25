@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import cats.effect.IO
+import com.serenity.state.manager.StateManager
 
 /** Registry of all available commands */
 class CommandRegistry(private val commands: List[Command]):
@@ -25,6 +26,55 @@ object CommandRegistry:
 
   /** Create registry with default commands */
   def default: CommandRegistry = new CommandRegistry(defaultCommands)
+
+  /** Create registry with default commands plus UI toggle commands */
+  def withToggleUI: CommandRegistry = new CommandRegistry(defaultCommands ++ toggleUICommands)
+
+  /** Create registry with StateManager reference for commands that need state updates */
+  def withToggleUIStateful(stateManager: StateManager): CommandRegistry =
+    new CommandRegistry(defaultCommands ++ createToggleUICommands(stateManager))
+
+  /** UI toggle commands - these need access to StateManager for actual functionality */
+  private def toggleUICommands: List[Command] = List(
+    Command(
+      "toggle-line-numbers",
+      "Toggle line numbers display on/off",
+      state => IO.println("[CMD] Toggle line numbers executed - state update needed")
+    ),
+    Command(
+      "toggle-gutter",
+      "Toggle status gutter display on/off",
+      state => IO.println("[CMD] Toggle gutter executed - state update needed")
+    )
+  )
+
+  /** Create toggle UI commands with actual StateManager integration */
+  private def createToggleUICommands(stateManager: StateManager): List[Command] = List(
+    Command(
+      "toggle-line-numbers",
+      "Toggle line numbers display on/off",
+      state =>
+        stateManager.updateState(s =>
+          s.copy(config =
+            s.config.copy(
+              showLineNumbers = !s.config.showLineNumbers
+            )
+          )
+        )
+    ),
+    Command(
+      "toggle-gutter",
+      "Toggle status gutter display on/off",
+      state =>
+        stateManager.updateState(s =>
+          s.copy(config =
+            s.config.copy(
+              showGutter = !s.config.showGutter
+            )
+          )
+        )
+    )
+  )
 
   /** Default set of editor commands */
   private def defaultCommands: List[Command] = List(

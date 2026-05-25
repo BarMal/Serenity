@@ -490,23 +490,22 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
   // Helper functions for testing visual line wrapping logic
   private def calculateVisualLines(text: String, panelWidth: Int): List[String] =
-    if text.isEmpty || panelWidth <= 0 then return List("")
+    if text.isEmpty || panelWidth <= 0 then List("")
+    else
+      def wrapLine(remaining: String, acc: List[String]): List[String] =
+        if remaining.length <= panelWidth then acc :+ remaining
+        else
+          val chunk = remaining.substring(0, panelWidth)
+          val rest  = remaining.substring(panelWidth)
+          wrapLine(rest, acc :+ chunk)
 
-    def wrapLine(remaining: String, acc: List[String]): List[String] =
-      if remaining.length <= panelWidth then acc :+ remaining
-      else
-        val chunk = remaining.substring(0, panelWidth)
-        val rest  = remaining.substring(panelWidth)
-        wrapLine(rest, acc :+ chunk)
-
-    wrapLine(text, List.empty)
+      wrapLine(text, List.empty)
 
   case class VisualLinePosition(visualLine: Int, visualColumn: Int)
 
   private def calculateVisualLinePosition(bufferColumn: Int, panelWidth: Int): VisualLinePosition =
-    if panelWidth <= 0 then return VisualLinePosition(0, 0)
-
-    val visualLine   = bufferColumn / panelWidth
-    val visualColumn = bufferColumn % panelWidth
-
-    VisualLinePosition(visualLine, visualColumn)
+    if panelWidth <= 0 then VisualLinePosition(0, 0)
+    else
+      val visualLine   = bufferColumn / panelWidth
+      val visualColumn = bufferColumn % panelWidth
+      VisualLinePosition(visualLine, visualColumn)

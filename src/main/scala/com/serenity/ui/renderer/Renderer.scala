@@ -405,85 +405,83 @@ object Renderer:
       )
 
   private def renderLineNumbers(state: AppState, context: RenderContext): Unit =
-    if !state.config.showLineNumbers then return
-    
-    context.layout.lineNumberRect foreach { lineRect =>
-      val graphics = context.graphics
-      
-      // Set line number colors
-      graphics.setBackgroundColor(TextColor.ANSI.BLACK)
-      graphics.setForegroundColor(TextColor.ANSI.WHITE_BRIGHT)
-      
-      // Clear the line number area
-      graphics.fillRectangle(
-        com.googlecode.lanterna.TerminalPosition(lineRect.x, lineRect.y),
-        com.googlecode.lanterna.TerminalSize(lineRect.width, lineRect.height),
-        ' '
-      )
-      
-      // Render line numbers for visible lines in each pane
-      state.layout.editorPanes.foreach { (paneId, pane) =>
-        pane.bufferId.flatMap(state.buffers.get).foreach { buffer =>
-          val viewport = buffer.viewport
-          val startLine = viewport.topLine
-          val visibleLines = math.min(viewport.visibleLines, lineRect.height)
-          
-          for i <- 0 until visibleLines do
-            val bufferLineIndex = startLine + i
-            val displayLineNumber = bufferLineIndex + 1 // Convert to 1-indexed
-            val screenY = lineRect.y + i
-            
-            if bufferLineIndex < buffer.content.lineCount then
-              val lineNumberText = displayLineNumber.toString.padTo(lineRect.width - 1, ' ') + " "
-              graphics.putString(lineRect.x, screenY, lineNumberText)
+    if state.config.showLineNumbers then
+      context.layout.lineNumberRect foreach { lineRect =>
+        val graphics = context.graphics
+
+        // Set line number colors
+        graphics.setBackgroundColor(TextColor.ANSI.BLACK)
+        graphics.setForegroundColor(TextColor.ANSI.WHITE_BRIGHT)
+
+        // Clear the line number area
+        graphics.fillRectangle(
+          com.googlecode.lanterna.TerminalPosition(lineRect.x, lineRect.y),
+          com.googlecode.lanterna.TerminalSize(lineRect.width, lineRect.height),
+          ' '
+        )
+
+        // Render line numbers for visible lines in each pane
+        state.layout.editorPanes.foreach { (paneId, pane) =>
+          pane.bufferId.flatMap(state.buffers.get).foreach { buffer =>
+            val viewport     = buffer.viewport
+            val startLine    = viewport.topLine
+            val visibleLines = math.min(viewport.visibleLines, lineRect.height)
+
+            for i <- 0 until visibleLines do
+              val bufferLineIndex   = startLine + i
+              val displayLineNumber = bufferLineIndex + 1 // Convert to 1-indexed
+              val screenY           = lineRect.y + i
+
+              if bufferLineIndex < buffer.content.lineCount then
+                val lineNumberText = displayLineNumber.toString.padTo(lineRect.width - 1, ' ') + " "
+                graphics.putString(lineRect.x, screenY, lineNumberText)
+          }
         }
       }
-    }
 
   private def renderGutter(state: AppState, context: RenderContext): Unit =
-    if !state.config.showGutter then return
-    
-    context.layout.gutterRect foreach { gutterRect =>
-      val graphics = context.graphics
-      
-      // Set gutter colors - black background with bright text for contrast
-      graphics.setBackgroundColor(TextColor.ANSI.BLACK)
-      graphics.setForegroundColor(TextColor.ANSI.WHITE_BRIGHT)
-      
-      // Clear the gutter area
-      graphics.fillRectangle(
-        com.googlecode.lanterna.TerminalPosition(gutterRect.x, gutterRect.y),
-        com.googlecode.lanterna.TerminalSize(gutterRect.width, gutterRect.height),
-        ' '
-      )
-      
-      // Build gutter content
-      val gutterContent = buildGutterContent(state)
-      
-      // Truncate content to fit gutter width
-      val displayContent = if gutterContent.length > gutterRect.width then
-        gutterContent.take(gutterRect.width - 3) + "..."
-      else
-        gutterContent.padTo(gutterRect.width, ' ')
-      
-      graphics.putString(gutterRect.x, gutterRect.y, displayContent)
-    }
-    
+    if state.config.showGutter then
+      context.layout.gutterRect foreach { gutterRect =>
+        val graphics = context.graphics
+
+        // Set gutter colors - black background with bright text for contrast
+        graphics.setBackgroundColor(TextColor.ANSI.BLACK)
+        graphics.setForegroundColor(TextColor.ANSI.WHITE_BRIGHT)
+
+        // Clear the gutter area
+        graphics.fillRectangle(
+          com.googlecode.lanterna.TerminalPosition(gutterRect.x, gutterRect.y),
+          com.googlecode.lanterna.TerminalSize(gutterRect.width, gutterRect.height),
+          ' '
+        )
+
+        // Build gutter content
+        val gutterContent = buildGutterContent(state)
+
+        // Truncate content to fit gutter width
+        val displayContent =
+          if gutterContent.length > gutterRect.width then gutterContent.take(gutterRect.width - 3) + "..."
+          else gutterContent.padTo(gutterRect.width, ' ')
+
+        graphics.putString(gutterRect.x, gutterRect.y, displayContent)
+      }
+
   private def buildGutterContent(state: AppState): String =
     // Get cursor position and file path from focused pane
     state.focus match
       case Focus.EditorPane(paneId) =>
-        state.layout.editorPanes.get(paneId)
+        state.layout.editorPanes
+          .get(paneId)
           .flatMap(_.bufferId)
           .flatMap(state.buffers.get) match
-            case Some(buffer) =>
-              val cursor = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
-              val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"
-              
-              val filePath = buffer.filePath match
-                case Some(path) => s" │ ${path.getFileName}"
-                case None => " │ Not saved to file yet"
-              
-              s" $position$filePath " // Add padding spaces for better visual separation
-            case None => " No active buffer "
+          case Some(buffer) =>
+            val cursor   = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+            val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"
+
+            val filePath = buffer.filePath match
+              case Some(path) => s" │ ${path.getFileName}"
+              case None       => " │ Not saved to file yet"
+
+            s" $position$filePath " // Add padding spaces for better visual separation
+          case None => " No active buffer "
       case _ => " No active editor pane "
