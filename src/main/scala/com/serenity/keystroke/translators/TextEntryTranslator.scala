@@ -1,71 +1,13 @@
 package com.serenity.keystroke.translators
 
-import com.googlecode.lanterna.input.KeyType
-import com.serenity.keystroke.events.*
-import com.serenity.keystroke.{KeyStrokeInfo, Modifier}
+import com.serenity.keystroke.KeyStrokeInfo
+import com.serenity.keystroke.events.TextEntryEvent
 
 class TextEntryTranslator extends Translator[TextEntryEvent]:
 
   override def converters: List[PartialFunction[KeyStrokeInfo, TextEntryEvent]] = List(
-    hotkeyConverter, // Process hotkeys first (including Ctrl+Shift+Tab)
-    characterConverter,
-    navigationConverter,
-    deletionConverter
+    TextHotkeyConverters.hotkeyConverter,
+    TextCharacterConverters.characterConverter,
+    TextNavigationConverters.navigationConverter,
+    TextDeletionConverters.deletionConverter
   )
-
-  private val characterConverter: PartialFunction[KeyStrokeInfo, TextEntryEvent] = {
-    case KeyStrokeInfo(KeyType.Character, Some(char), modifiers)
-        if isAcceptableForTextEntry(modifiers) && isPrintableChar(char) =>
-      InsertChar(char)
-    case KeyStrokeInfo(KeyType.Tab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) => InsertChar('\t')
-    case KeyStrokeInfo(KeyType.ReverseTab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
-      DeleteBackward // ReverseTab (Shift+Tab) removes previous char only when Ctrl not pressed
-    case KeyStrokeInfo(KeyType.Enter, _, _) => NewLine
-  }
-
-  private val navigationConverter: PartialFunction[KeyStrokeInfo, TextEntryEvent] = {
-    case KeyStrokeInfo(KeyType.ArrowLeft, _, _)  => MoveLeft
-    case KeyStrokeInfo(KeyType.ArrowRight, _, _) => MoveRight
-    case KeyStrokeInfo(KeyType.ArrowUp, _, _)    => MoveUp
-    case KeyStrokeInfo(KeyType.ArrowDown, _, _)  => MoveDown
-    case KeyStrokeInfo(KeyType.Home, _, _)       => MoveToStart
-    case KeyStrokeInfo(KeyType.End, _, _)        => MoveToEnd
-  }
-
-  private val deletionConverter: PartialFunction[KeyStrokeInfo, TextEntryEvent] = {
-    case KeyStrokeInfo(KeyType.Backspace, _, _) => DeleteBackward
-    case KeyStrokeInfo(KeyType.Delete, _, _)    => DeleteForward
-    case KeyStrokeInfo(KeyType.Escape, _, _)    => Escape
-  }
-
-  private val hotkeyConverter: PartialFunction[KeyStrokeInfo, TextEntryEvent] = {
-    case KeyStrokeInfo(KeyType.Character, Some('s'), modifiers) if modifiers.contains(Modifier.Ctrl) => Save
-    case KeyStrokeInfo(KeyType.Character, Some('q'), modifiers) if modifiers.contains(Modifier.Ctrl) => Quit
-    case KeyStrokeInfo(KeyType.EOF, _, _) => Quit // EOF should trigger graceful shutdown
-    case KeyStrokeInfo(KeyType.Character, Some('z'), modifiers) if modifiers.contains(Modifier.Ctrl) => Undo
-    case KeyStrokeInfo(KeyType.Character, Some('y'), modifiers) if modifiers.contains(Modifier.Ctrl) => Redo
-    case KeyStrokeInfo(KeyType.Character, Some('c'), modifiers) if modifiers.contains(Modifier.Ctrl) => Copy
-    case KeyStrokeInfo(KeyType.Character, Some('v'), modifiers) if modifiers.contains(Modifier.Ctrl) => Paste
-    case KeyStrokeInfo(KeyType.Character, Some('x'), modifiers) if modifiers.contains(Modifier.Ctrl) => Cut
-    case KeyStrokeInfo(KeyType.Character, Some('h'), modifiers) if modifiers.contains(Modifier.Ctrl) =>
-      ToggleSyntaxHighlighting
-    case KeyStrokeInfo(KeyType.Character, Some('o'), modifiers) if modifiers.contains(Modifier.Ctrl) => OpenFile
-    case KeyStrokeInfo(KeyType.Character, Some('p'), modifiers) if modifiers.contains(Modifier.Ctrl) =>
-      ToggleCommandRunner
-    case KeyStrokeInfo(KeyType.Character, Some('t'), modifiers) if modifiers.contains(Modifier.Ctrl) => NewTab
-    case KeyStrokeInfo(KeyType.Character, Some('w'), modifiers) if modifiers.contains(Modifier.Ctrl) => CloseTab
-    case KeyStrokeInfo(KeyType.Tab, _, modifiers)
-        if modifiers.contains(Modifier.Ctrl) && modifiers.contains(Modifier.Shift) =>
-      PreviousTab
-    case KeyStrokeInfo(KeyType.ReverseTab, _, modifiers) if modifiers.contains(Modifier.Ctrl) =>
-      PreviousTab
-    case KeyStrokeInfo(KeyType.Tab, _, modifiers) if modifiers.contains(Modifier.Ctrl) => NextTab
-  }
-
-  private def isPrintableChar(char: Char): Boolean =
-    (char >= 32 && char <= 126) || char == '\t'
-
-  private def isAcceptableForTextEntry(modifiers: Set[Modifier]): Boolean =
-    // Accept no modifiers (lowercase letters, digits, most punctuation)
-    // Accept only Shift modifier (uppercase letters, shifted symbols)
-    modifiers.isEmpty || modifiers == Set(Modifier.Shift)

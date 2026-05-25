@@ -1,6 +1,5 @@
 package com.serenity.command
 
-import cats.effect.IO
 import com.serenity.state.manager.StateManager
 
 /** Registry of all available commands */
@@ -30,132 +29,104 @@ object CommandRegistry:
   /** Create registry with default commands plus UI toggle commands */
   def withToggleUI: CommandRegistry = new CommandRegistry(defaultCommands ++ toggleUICommands)
 
-  /** Create registry with StateManager reference for commands that need state updates */
+  /** Compatibility alias during the reducer migration. */
   def withToggleUIStateful(stateManager: StateManager): CommandRegistry =
-    new CommandRegistry(defaultCommands ++ createToggleUICommands(stateManager))
+    withToggleUI
 
-  /** UI toggle commands - these need access to StateManager for actual functionality */
+  /** Pure typed UI toggle commands. */
   private def toggleUICommands: List[Command] = List(
-    Command(
+    Command.typed(
       "toggle-line-numbers",
       "Toggle line numbers display on/off",
-      state => IO.println("[CMD] Toggle line numbers executed - state update needed")
+      CommandIntent.ToggleLineNumbers
     ),
-    Command(
+    Command.typed(
       "toggle-gutter",
       "Toggle status gutter display on/off",
-      state => IO.println("[CMD] Toggle gutter executed - state update needed")
-    )
-  )
-
-  /** Create toggle UI commands with actual StateManager integration */
-  private def createToggleUICommands(stateManager: StateManager): List[Command] = List(
-    Command(
-      "toggle-line-numbers",
-      "Toggle line numbers display on/off",
-      state =>
-        stateManager.updateState(s =>
-          s.copy(config =
-            s.config.copy(
-              showLineNumbers = !s.config.showLineNumbers
-            )
-          )
-        )
-    ),
-    Command(
-      "toggle-gutter",
-      "Toggle status gutter display on/off",
-      state =>
-        stateManager.updateState(s =>
-          s.copy(config =
-            s.config.copy(
-              showGutter = !s.config.showGutter
-            )
-          )
-        )
+      CommandIntent.ToggleGutter
     )
   )
 
   /** Default set of editor commands */
   private def defaultCommands: List[Command] = List(
-    Command(
+    Command.typed(
       "save",
       "Save current file",
-      state => IO.println("[CMD] Save executed")
+      CommandIntent.SaveCurrentFile
     ),
-    Command(
+    Command.typed(
       "save-as",
       "Save file with new name",
-      state => IO.println("[CMD] Save As executed")
+      CommandIntent.SaveCurrentFileAs
     ),
-    Command(
+    Command.typed(
       "open",
       "Open file",
-      state => IO.println("[CMD] Open executed")
+      CommandIntent.OpenFile
     ),
-    Command(
+    Command.typed(
       "quit",
       "Quit application",
-      state => IO.println("[CMD] Quit executed")
+      CommandIntent.QuitApp
     ),
-    Command(
+    Command.typed(
       "new",
       "Create new file",
-      state => IO.println("[CMD] New file executed")
+      CommandIntent.NewFile
     ),
-    Command(
+    Command.typed(
       "close",
       "Close current file",
-      state => IO.println("[CMD] Close file executed")
+      CommandIntent.CloseCurrentFile
     ),
-    Command(
+    Command.typed(
       "find",
       "Find text in file",
-      state => IO.println("[CMD] Find executed")
+      CommandIntent.FindInCurrentFile
     ),
-    Command(
+    Command.typed(
       "replace",
       "Find and replace text",
-      state => IO.println("[CMD] Replace executed")
+      CommandIntent.ReplaceInCurrentFile
     ),
-    Command(
+    Command.typed(
       "goto-line",
       "Go to specific line number",
-      state => IO.println("[CMD] Go to line executed")
+      CommandIntent.OpenGotoLine
     ),
-    Command(
+    Command.typed(
       "toggle-theme",
       "Switch between light and dark theme",
-      state => IO.println("[CMD] Toggle theme executed")
+      CommandIntent.ToggleTheme
     ),
-    Command(
+    Command.typed(
       "reload-theme",
       "Reload theme configuration",
-      state => IO.println("[CMD] Reload theme executed")
+      CommandIntent.ReloadTheme
     ),
-    Command(
+    Command.typed(
       "format",
       "Format current file",
-      state => IO.println("[CMD] Format executed")
+      CommandIntent.FormatCurrentFile
     ),
-    Command(
+    Command.typed(
       "animation-none",
       "Disable character animations",
-      state => IO.println("[CMD] Animation disabled")
+      CommandIntent.SetAnimationMode(AnimationMode.None)
     ),
-    Command(
+    Command.typed(
       "animation-quick",
       "Enable quick character animations",
-      state => IO.println("[CMD] Quick animations enabled")
+      CommandIntent.SetAnimationMode(AnimationMode.Quick)
     ),
-    Command(
+    Command.typed(
       "animation-smooth",
       "Enable smooth character animations",
-      state => IO.println("[CMD] Smooth animations enabled")
+      CommandIntent.SetAnimationMode(AnimationMode.Smooth)
     ),
-    Command(
+    Command.typed(
       "animation-subtle",
       "Enable subtle character animations",
-      state => IO.println("[CMD] Subtle animations enabled")
+      CommandIntent.SetAnimationMode(AnimationMode.Subtle)
     )
   )

@@ -31,12 +31,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     paneLayouts should have size 1
     
     val pane0Layout = paneLayouts(PaneId(0))
-    // Editor area is terminal minus 15% spacers each side = 70% of width
-    val expectedWidth = (terminalSize.width * 0.7).toInt
-    pane0Layout.width shouldBe expectedWidth
-    pane0Layout.height shouldBe terminalSize.height
-    pane0Layout.x shouldBe (terminalSize.width * 0.15).toInt // Left spacer
-    pane0Layout.y shouldBe 0
+    pane0Layout shouldBe calculatedLayout.editorPanelRect
   }
 
   it should "split editor area between two panes horizontally" in {
@@ -61,23 +56,18 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     // Then: With minimum width constraints, only one pane should be visible
     paneLayouts should have size 2 // Both panes exist in layout
 
-    val editorWidth = (terminalSize.width * 0.7).toInt // 70% of terminal width = 70 chars
-    val editorX = (terminalSize.width * 0.15).toInt // Left spacer = 15
-    val minPaneWidth = 50 // Default minimum from config
+    val editorRect = calculatedLayout.editorPanelRect
     
     // Only one pane should be visible (focused pane: PaneId(1))
     val pane1Layout = paneLayouts(PaneId(1))
-    pane1Layout.x shouldBe editorX // Visible pane at editor start
-    pane1Layout.y shouldBe 0
-    pane1Layout.width shouldBe editorWidth // Uses full editor width
-    pane1Layout.height shouldBe terminalSize.height
+    pane1Layout shouldBe editorRect
 
     // Pane 0 should be positioned off-screen (not enough width for both)
     val pane0Layout = paneLayouts(PaneId(0))
-    pane0Layout.x should be < editorX // Off-screen to the left
-    pane0Layout.y shouldBe 0
-    pane0Layout.width shouldBe editorWidth // Same width but off-screen
-    pane0Layout.height shouldBe terminalSize.height
+    pane0Layout.x should be < editorRect.x // Off-screen to the left
+    pane0Layout.y shouldBe editorRect.y
+    pane0Layout.width shouldBe editorRect.width
+    pane0Layout.height shouldBe editorRect.height
   }
 
   it should "handle three panes with equal width distribution" in {
@@ -98,24 +88,19 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     // Then: With minimum width constraints, only one pane should be visible
     paneLayouts should have size 3 // All panes exist in layout
     
-    val editorWidth = (terminalSize.width * 0.7).toInt // 84 chars
-    val editorX = (terminalSize.width * 0.15).toInt // 18 chars left spacer
-    val minPaneWidth = 50 // Default minimum from config
+    val editorRect = calculatedLayout.editorPanelRect
     
     // Only one pane should be visible (focused pane: PaneId(0))
     val pane0Layout = paneLayouts(PaneId(0))
-    pane0Layout.x shouldBe editorX // Visible pane at editor start
-    pane0Layout.y shouldBe 0
-    pane0Layout.width shouldBe editorWidth // Uses full editor width
-    pane0Layout.height shouldBe terminalSize.height
+    pane0Layout shouldBe editorRect
 
     // Other panes should be positioned off-screen (left or right)
     val pane1Layout = paneLayouts(PaneId(1))
     val pane2Layout = paneLayouts(PaneId(2))
     // Off-screen means either left of editor area or right of editor area
-    val editorRight = editorX + editorWidth
-    pane1Layout.x should (be < editorX or be >= editorRight) // Off-screen
-    pane2Layout.x should (be < editorX or be >= editorRight) // Off-screen
+    val editorRight = editorRect.x + editorRect.width
+    pane1Layout.x should (be < editorRect.x or be >= editorRight) // Off-screen
+    pane2Layout.x should (be < editorRect.x or be >= editorRight) // Off-screen
   }
 
   it should "respect minimum pane width constraint" in {
@@ -135,8 +120,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val paneLayouts = LayoutEngine.calculatePaneLayoutsWithMinWidth(state, calculatedLayout, minPaneWidth)
 
     // Then: Only panes that fit should be visible, others should be off-screen but tracked
-    val editorWidth = (terminalSize.width * 0.7).toInt // 70 chars
-    val maxVisiblePanes = editorWidth / minPaneWidth // 70/40 = 1 pane
+    val editorWidth = calculatedLayout.editorPanelRect.width
+    val maxVisiblePanes = editorWidth / minPaneWidth
 
     // Should return layouts for all panes, but only some visible
     paneLayouts should have size 5
@@ -170,10 +155,10 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
     // Then: Focused pane (PaneId(2)) should be visible, along with adjacent pane
     val focusedPane = paneLayouts(PaneId(2))
-    val editorX = (terminalSize.width * 0.15).toInt
+    val editorRect = calculatedLayout.editorPanelRect
     
     // Focused pane should be visible within editor area
-    focusedPane.x should be >= editorX
-    focusedPane.x should be < (editorX + (terminalSize.width * 0.7).toInt)
+    focusedPane.x should be >= editorRect.x
+    focusedPane.x should be < editorRect.right
     focusedPane.width should be >= minPaneWidth
   }

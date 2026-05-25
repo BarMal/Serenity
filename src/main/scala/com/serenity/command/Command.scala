@@ -3,14 +3,60 @@ package com.serenity.command
 import cats.effect.IO
 import com.serenity.state.models.AppState
 
+enum AnimationMode:
+  case None
+  case Quick
+  case Smooth
+  case Subtle
+
+enum CommandIntent:
+  case SaveCurrentFile
+  case SaveCurrentFileAs
+  case OpenFile
+  case QuitApp
+  case NewFile
+  case CloseCurrentFile
+  case FindInCurrentFile
+  case ReplaceInCurrentFile
+  case OpenGotoLine
+  case ToggleTheme
+  case ReloadTheme
+  case FormatCurrentFile
+  case SetAnimationMode(mode: AnimationMode)
+  case ToggleLineNumbers
+  case ToggleGutter
+  case Custom(run: AppState => IO[Unit])
+
 /** A command that can be executed in the command runner */
-case class Command(
+case class Command private (
+    name: String,
+    description: String,
+    intent: CommandIntent
+):
+  /** Execute this command directly when it carries a custom effect. */
+  def execute(state: AppState): IO[Unit] =
+    intent match
+      case CommandIntent.Custom(run) => run(state)
+      case _                         => IO.unit
+
+  /** Compatibility accessor while callers move off raw command closures. */
+  def action: AppState => IO[Unit] =
+    execute
+
+object Command:
+  def apply(
     name: String,
     description: String,
     action: AppState => IO[Unit]
-):
-  /** Execute this command with the given state */
-  def execute(state: AppState): IO[Unit] = action(state)
+  ): Command =
+    Command(name, description, CommandIntent.Custom(action))
+
+  def typed(
+    name: String,
+    description: String,
+    intent: CommandIntent
+  ): Command =
+    Command(name, description, intent)
 
 /** Search result for a command with relevance scoring */
 case class CommandSearchResult(
@@ -41,13 +87,8 @@ class CommandSearcher(commands: List[Command]):
     val nameLower = command.name.toLowerCase
     val descLower = command.description.toLowerCase
 
-    // Exact match in name gets highest score
     if nameLower == term then 100.0
-    // Name starts with term gets high score
     else if nameLower.startsWith(term) then 80.0
-    // Name contains term gets medium score
     else if nameLower.contains(term) then 60.0
-    // Description contains term gets lower score
     else if descLower.contains(term) then 40.0
-    // No match
     else 0.0

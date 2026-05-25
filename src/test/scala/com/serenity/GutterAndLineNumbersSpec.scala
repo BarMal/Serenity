@@ -77,7 +77,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     yield
       // Then: Gutter should show file path
       val gutterInfo = calculateGutterInfo(bufferWithPath, pane, bufferWithPath.filePath)
-      gutterInfo.filePath shouldBe "/path/to/myfile.txt"
+      gutterInfo.filePath shouldBe "myfile.txt"
       
     program.unsafeRunSync()
   }
@@ -207,7 +207,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}" // 1-indexed for display
     
     val path = filePath match
-      case Some(path) => path.toString
+      case Some(path) => path.getFileName.toString
       case None => "Not saved to file yet"
     
     GutterInfo(position, path)

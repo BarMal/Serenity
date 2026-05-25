@@ -5,18 +5,23 @@ import java.nio.file.{Files, Path}
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.io.{FileBrowser, FileManager, FileType, FileUtils}
-import com.serenity.keystroke.events.{OpenFile, SaveFile}
+import com.serenity.keystroke.events.SaveFile
 import com.serenity.rope.Balance
-import com.serenity.state.components.ComponentResult
-import com.serenity.state.components.EditorPaneComponent
+import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.Layout
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
+  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+  private def createStateManager(): StateManager =
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("FileHandlingSpec"))
+    StateManager.apply(logger).unsafeRunSync()
 
   "FileType detection" should "work correctly for common extensions" in {
     val scalaPath   = java.nio.file.Paths.get("test.scala")
@@ -67,7 +72,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     // Should contain at least some entries (directories or files)
   }
 
-  "EditorPaneComponent" should "handle save file events" in {
+  "StateManager" should "handle save file events through the active editor pane" in {
     // Create a temporary file with content
     val tempFile       = Files.createTempFile("test", ".scala")
     val initialContent = "val x = 42"
@@ -85,22 +90,27 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
         isDirty = true
       )
 
-      val paneId = PaneId(1)
-      val cursor = CursorPosition(0, 0)
-      val pane   = EditorPane(paneId, Some(modifiedBuffer.id), Viewport.default, List(cursor), 0)
-      val state = AppState.empty.copy(
-        buffers = Map(modifiedBuffer.id -> modifiedBuffer),
-        layout = Layout.empty.copy(editorPanes = Map(paneId -> pane))
-      )
+      val stateManager = createStateManager()
+      stateManager.updateState { state =>
+        state.copy(
+          buffers = state.buffers + (modifiedBuffer.id -> modifiedBuffer),
+          layout = state.layout.copy(
+            editorPanes = state.layout.editorPanes.updated(
+              PaneId(0),
+              state.layout.editorPanes(PaneId(0)).copy(bufferId = Some(modifiedBuffer.id))
+            )
+          ),
+          focus = Focus.EditorPane(PaneId(0))
+        )
+      }.unsafeRunSync()
 
-      val component = new EditorPaneComponent(paneId)
-      val result    = component.processEvent(SaveFile, state)
-
-      result should not be ComponentResult.noChange
+      stateManager.applyEvent(SaveFile).unsafeRunSync()
 
       // Verify file was saved
       val savedContent = Files.readString(tempFile)
       savedContent shouldBe "val x = 43"
+      val updatedState = stateManager.getCurrentState.unsafeRunSync()
+      updatedState.buffers(modifiedBuffer.id).isDirty shouldBe false
 
     finally Files.deleteIfExists(tempFile)
   }

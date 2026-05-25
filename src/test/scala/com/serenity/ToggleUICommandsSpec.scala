@@ -2,7 +2,8 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.CommandRegistry
+import com.serenity.command.{CommandIntent, CommandRegistry}
+import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -22,215 +23,135 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
+  private def createStateManager(): StateManager =
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("ToggleUICommandsSpec"))
+    StateManager.apply(logger).unsafeRunSync()
+
+  private def executeCommandThroughRunner(
+    stateManager: StateManager,
+    searchTerm: String,
+    expectedCommandName: String
+  ): Unit =
+    val beforeOpen = stateManager.getCurrentState.unsafeRunSync()
+    if !beforeOpen.commandRunner.isActive then
+      stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.getCurrentState.unsafeRunSync().commandRunner.selectedCommand.map(_.name) shouldBe Some(expectedCommandName)
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
   behavior of "Toggle Line Numbers Command"
 
   it should "be found in command registry by search terms" in {
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
-    val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
-      registry = CommandRegistry.withToggleUIStateful(stateManager)
-      
-      // When: Search for line number related terms
-      lineResults = registry.searchCommands("line")
-      numberResults = registry.searchCommands("numbers")
-      toggleResults = registry.searchCommands("toggle")
-      
-    yield
-      // Then: Toggle line numbers command should be found
-      lineResults.map(_.name) should contain("toggle-line-numbers")
-      numberResults.map(_.name) should contain("toggle-line-numbers")
-      toggleResults.map(_.name) should contain("toggle-line-numbers")
-      
-    program.unsafeRunSync()
+    val registry = CommandRegistry.withToggleUI
+
+    val lineResults   = registry.searchCommands("line")
+    val numberResults = registry.searchCommands("numbers")
+    val toggleResults = registry.searchCommands("toggle")
+    val command       = registry.findCommand("toggle-line-numbers").get
+
+    lineResults.map(_.name) should contain("toggle-line-numbers")
+    numberResults.map(_.name) should contain("toggle-line-numbers")
+    toggleResults.map(_.name) should contain("toggle-line-numbers")
+    command.intent shouldBe CommandIntent.ToggleLineNumbers
   }
 
   it should "toggle line numbers from enabled to disabled" in {
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
-    val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
-      registry = CommandRegistry.withToggleUIStateful(stateManager)
-      
-      // Given: Line numbers are enabled by default
-      initialState <- stateManager.getCurrentState
-      _ = initialState.config.showLineNumbers shouldBe true
-      
-      // When: Execute toggle line numbers command
-      toggleCommand = registry.findCommand("toggle-line-numbers").get
-      _ <- toggleCommand.execute(initialState) // This should update the state through stateManager
-      
-      // Then: Line numbers should be disabled
-      finalState <- stateManager.getCurrentState
-      
-    yield
-      finalState.config.showLineNumbers shouldBe false
-      
-    program.unsafeRunSync()
+    val stateManager = createStateManager()
+
+    val initialState = stateManager.getCurrentState.unsafeRunSync()
+    initialState.config.showLineNumbers shouldBe true
+
+    executeCommandThroughRunner(stateManager, "toggle-line-numbers", "toggle-line-numbers")
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.config.showLineNumbers shouldBe false
   }
 
   it should "toggle line numbers from disabled to enabled" in {
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
-    val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
-      registry = CommandRegistry.withToggleUIStateful(stateManager)
-      
-      // Given: Line numbers are disabled
-      _ <- stateManager.updateState(s => s.copy(config = s.config.copy(showLineNumbers = false)))
-      initialState <- stateManager.getCurrentState
-      _ = initialState.config.showLineNumbers shouldBe false
-      
-      // When: Execute toggle line numbers command
-      toggleCommand = registry.findCommand("toggle-line-numbers").get
-      _ <- toggleCommand.execute(initialState)
-      
-      // Then: Line numbers should be enabled
-      finalState <- stateManager.getCurrentState
-      
-    yield
-      finalState.config.showLineNumbers shouldBe true
-      
-    program.unsafeRunSync()
+    val stateManager = createStateManager()
+
+    stateManager.updateState(s => s.copy(config = s.config.copy(showLineNumbers = false))).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().config.showLineNumbers shouldBe false
+
+    executeCommandThroughRunner(stateManager, "toggle-line-numbers", "toggle-line-numbers")
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.config.showLineNumbers shouldBe true
   }
 
   behavior of "Toggle Gutter Command"
 
   it should "be found in command registry by search terms" in {
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
-    val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
-      registry = CommandRegistry.withToggleUIStateful(stateManager)
-      
-      // When: Search for gutter related terms
-      gutterResults = registry.searchCommands("gutter")
-      statusResults = registry.searchCommands("status")
-      toggleResults = registry.searchCommands("toggle")
-      
-    yield
-      // Then: Toggle gutter command should be found
-      gutterResults.map(_.name) should contain("toggle-gutter")
-      statusResults.map(_.name) should contain("toggle-gutter") 
-      toggleResults.map(_.name) should contain("toggle-gutter")
-      
-    program.unsafeRunSync()
+    val registry = CommandRegistry.withToggleUI
+
+    val gutterResults = registry.searchCommands("gutter")
+    val statusResults = registry.searchCommands("status")
+    val toggleResults = registry.searchCommands("toggle")
+    val command       = registry.findCommand("toggle-gutter").get
+
+    gutterResults.map(_.name) should contain("toggle-gutter")
+    statusResults.map(_.name) should contain("toggle-gutter")
+    toggleResults.map(_.name) should contain("toggle-gutter")
+    command.intent shouldBe CommandIntent.ToggleGutter
   }
 
   it should "toggle gutter from enabled to disabled" in {
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
-    val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
-      registry = CommandRegistry.withToggleUIStateful(stateManager)
-      
-      // Given: Gutter is enabled by default
-      initialState <- stateManager.getCurrentState
-      _ = initialState.config.showGutter shouldBe true
-      
-      // When: Execute toggle gutter command
-      toggleCommand = registry.findCommand("toggle-gutter").get
-      _ <- toggleCommand.execute(initialState)
-      
-      // Then: Gutter should be disabled
-      finalState <- stateManager.getCurrentState
-      
-    yield
-      finalState.config.showGutter shouldBe false
-      
-    program.unsafeRunSync()
+    val stateManager = createStateManager()
+
+    stateManager.getCurrentState.unsafeRunSync().config.showGutter shouldBe true
+
+    executeCommandThroughRunner(stateManager, "toggle-gutter", "toggle-gutter")
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.config.showGutter shouldBe false
   }
 
   it should "toggle gutter from disabled to enabled" in {
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
-    val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
-      registry = CommandRegistry.withToggleUIStateful(stateManager)
-      
-      // Given: Gutter is disabled
-      _ <- stateManager.updateState(s => s.copy(config = s.config.copy(showGutter = false)))
-      initialState <- stateManager.getCurrentState
-      _ = initialState.config.showGutter shouldBe false
-      
-      // When: Execute toggle gutter command  
-      toggleCommand = registry.findCommand("toggle-gutter").get
-      _ <- toggleCommand.execute(initialState)
-      
-      // Then: Gutter should be enabled
-      finalState <- stateManager.getCurrentState
-      
-    yield
-      finalState.config.showGutter shouldBe true
-      
-    program.unsafeRunSync()
+    val stateManager = createStateManager()
+
+    stateManager.updateState(s => s.copy(config = s.config.copy(showGutter = false))).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().config.showGutter shouldBe false
+
+    executeCommandThroughRunner(stateManager, "toggle-gutter", "toggle-gutter")
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.config.showGutter shouldBe true
   }
 
   behavior of "Combined Toggle UI Command Integration"
 
   it should "allow toggling both line numbers and gutter independently" in {
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
-    val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
-      registry = CommandRegistry.withToggleUIStateful(stateManager)
-      
-      // Given: Both enabled by default
-      initialState <- stateManager.getCurrentState
-      _ = initialState.config.showLineNumbers shouldBe true
-      _ = initialState.config.showGutter shouldBe true
-      
-      // When: Toggle line numbers off, leave gutter on
-      lineToggleCommand = registry.findCommand("toggle-line-numbers").get
-      _ <- lineToggleCommand.execute(initialState)
-      
-      // Then: Line numbers disabled, gutter still enabled
-      midState <- stateManager.getCurrentState
-      _ = midState.config.showLineNumbers shouldBe false
-      _ = midState.config.showGutter shouldBe true
-      
-      // When: Toggle gutter off too
-      gutterToggleCommand = registry.findCommand("toggle-gutter").get
-      _ <- gutterToggleCommand.execute(midState)
-      
-      // Then: Both disabled
-      finalState <- stateManager.getCurrentState
-      
-    yield
-      finalState.config.showLineNumbers shouldBe false
-      finalState.config.showGutter shouldBe false
-      
-    program.unsafeRunSync()
+    val stateManager = createStateManager()
+
+    val initialState = stateManager.getCurrentState.unsafeRunSync()
+    initialState.config.showLineNumbers shouldBe true
+    initialState.config.showGutter shouldBe true
+
+    executeCommandThroughRunner(stateManager, "toggle-line-numbers", "toggle-line-numbers")
+
+    val midState = stateManager.getCurrentState.unsafeRunSync()
+    midState.config.showLineNumbers shouldBe false
+    midState.config.showGutter shouldBe true
+    midState.commandRunner.isActive shouldBe false
+
+    executeCommandThroughRunner(stateManager, "toggle-gutter", "toggle-gutter")
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.config.showLineNumbers shouldBe false
+    finalState.config.showGutter shouldBe false
   }
 
   it should "have descriptive command names and descriptions" in {
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
-    val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
-      registry = CommandRegistry.withToggleUIStateful(stateManager)
-      
-      // When: Find commands
-      lineCommand = registry.findCommand("toggle-line-numbers").get
-      gutterCommand = registry.findCommand("toggle-gutter").get
-      
-    yield
-      // Then: Commands should have clear names and descriptions
-      lineCommand.name shouldBe "toggle-line-numbers"
-      lineCommand.description should include("line numbers")
-      lineCommand.description.toLowerCase should include("toggle")
-      
-      gutterCommand.name shouldBe "toggle-gutter"
-      gutterCommand.description should include("gutter")
-      gutterCommand.description.toLowerCase should include("toggle")
-      
-    program.unsafeRunSync()
+    val registry       = CommandRegistry.withToggleUI
+    val lineCommand    = registry.findCommand("toggle-line-numbers").get
+    val gutterCommand  = registry.findCommand("toggle-gutter").get
+
+    lineCommand.name shouldBe "toggle-line-numbers"
+    lineCommand.description should include("line numbers")
+    lineCommand.description.toLowerCase should include("toggle")
+
+    gutterCommand.name shouldBe "toggle-gutter"
+    gutterCommand.description should include("gutter")
+    gutterCommand.description.toLowerCase should include("toggle")
   }

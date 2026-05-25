@@ -290,7 +290,10 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     untitledBuffers should have size 2 // Initial buffer + created untitled buffer
     
     // File buffers should have their paths preserved
-    fileBuffers.map(_._1.get.toString) should contain allOf("/tmp/file1.txt", "/tmp/file2.txt")
+    fileBuffers.map(_._1.get) should contain allOf(
+      java.nio.file.Paths.get("/tmp/file1.txt"),
+      java.nio.file.Paths.get("/tmp/file2.txt")
+    )
     
     // Content should be preserved
     sessionData.map(_._2) should contain allOf("File 1 content", "File 2 content", "Untitled buffer")

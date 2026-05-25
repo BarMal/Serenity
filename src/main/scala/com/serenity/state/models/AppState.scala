@@ -1,6 +1,5 @@
 package com.serenity.state.models
 
-import com.serenity.animation.AnimationState
 import com.serenity.command.CommandRunner
 import com.serenity.config.AppConfig
 import com.serenity.ui.layout.{Layout, PeekOverlay, TerminalSize}
@@ -25,8 +24,7 @@ case class AppState(
     config: AppConfig = AppConfig.default,
     commandRunner: CommandRunner = CommandRunner.empty,
     nextBufferId: BufferId = BufferId(0),
-    nextPaneId: PaneId = PaneId(0),
-    screenAnimations: AnimationState = AnimationState.empty
+    nextPaneId: PaneId = PaneId(0)
 ):
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled

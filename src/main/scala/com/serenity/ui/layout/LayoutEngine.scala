@@ -15,6 +15,8 @@ case class CalculatedLayout(
     leftSpacerRect: LayoutRect,
     rightSpacerRect: LayoutRect,
     floatingPanelRect: Option[LayoutRect] = None,
+    aboveCursorOverlayRect: Option[LayoutRect] = None,
+    belowCursorOverlayRect: Option[LayoutRect] = None,
     lineNumberRect: Option[LayoutRect] = None,
     gutterRect: Option[LayoutRect] = None
 )
@@ -23,8 +25,7 @@ object LayoutManager:
 
   def calculateLayout(
     state: AppState,
-    terminalSize: TerminalSize,
-    
+    terminalSize: TerminalSize
   ): Unit = ()
 
 object LayoutEngine:
@@ -76,20 +77,22 @@ object LayoutEngine:
       if state.config.showGutter then Some(LayoutRect(0, terminalSize.height - 1, terminalSize.width, 1))
       else None
 
-    val floatingPanelWidth  = Math.round(availableWidth * 0.8).toInt
-    val floatingPanelHeight = Math.round(availableHeight * 0.3).toInt
-
-    // Calculate floating panel position if needed
-    val floatingPanelRect = None
-    // calculateFloatingPanel(state, editorPanelRect, floatingPanelWidth, floatingPanelHeight)
-
-    CalculatedLayout(
+    val baseLayout = CalculatedLayout(
       editorPanelRect = editorPanelRect,
       leftSpacerRect = leftSpacerRect,
       rightSpacerRect = rightSpacerRect,
-      floatingPanelRect = floatingPanelRect,
       lineNumberRect = lineNumberRect,
       gutterRect = gutterRect
+    )
+
+    val paneLayouts = calculatePaneLayouts(state, baseLayout)
+
+    val aboveCursorOverlayRect = calculatePeekOverlayRect(state, paneLayouts, OverlayPlacement.Above)
+    val belowCursorOverlayRect = calculateCommandRunnerRect(state, paneLayouts)
+
+    baseLayout.copy(
+      aboveCursorOverlayRect = aboveCursorOverlayRect,
+      belowCursorOverlayRect = belowCursorOverlayRect
     )
 
   private def calculateLineNumberWidth(state: AppState): Int =
@@ -100,28 +103,106 @@ object LayoutEngine:
 
     math.max(3, maxLines.toString.length + 1) // +1 for spacing, minimum 3 chars
 
-  private def calculateFloatingPanel(
+  private enum OverlayPlacement:
+    case Above, Below
+
+  private def calculatePeekOverlayRect(
     state: AppState,
-    editorRect: LayoutRect,
-    preferredWidth: Int,
-    preferredHeight: Int
+    paneLayouts: Map[PaneId, LayoutRect],
+    placement: OverlayPlacement
   ): Option[LayoutRect] =
     for
-      bufferId       <- state.focusedBufferId
-      currentBuffer  <- state.buffers.get(bufferId)
-      cursorPosition <- currentBuffer.cursors.reverse.headOption // get the latest cursor, so likely the current cursor
-    yield LayoutRect(
-      cursorPosition.column - (preferredWidth / 2),
-      cursorPosition.line + 1,
-      preferredWidth,
-      preferredHeight
-    )
+      overlay <- state.peekOverlay
+      paneId  <- state.layout.activeEditorPaneId
+      pane    <- state.layout.editorPanes.get(paneId)
+      paneRect <- paneLayouts.get(paneId)
+      bufferId <- pane.bufferId
+      buffer  <- state.buffers.get(bufferId)
+      screenPosition <- CursorLayout.calculateScreenPosition(
+        overlay.position,
+        buffer.content,
+        paneRect,
+        buffer.viewport
+      )
+    yield
+      val contentRect     = CursorLayout.contentRectForPane(paneRect)
+      val preferredWidth  = calculatePeekOverlayWidth(overlay.content, contentRect.width)
+      val preferredHeight = calculatePeekOverlayHeight(overlay.content, contentRect.height)
+      val overlayX = math.max(
+        contentRect.x,
+        math.min(screenPosition.x - (preferredWidth / 2), contentRect.right - preferredWidth)
+      )
+      val overlayY = placement match
+        case OverlayPlacement.Above =>
+          math.max(contentRect.y, screenPosition.y - preferredHeight)
+        case OverlayPlacement.Below =>
+          math.min(math.max(contentRect.y, screenPosition.y + 1), contentRect.bottom - preferredHeight)
 
-    // For now, return None - we'll implement this when we have command runner/modal support
-    // When implemented, this should:
-    // 1. Get current cursor position from focused editor pane
-    // 2. Calculate panel position beneath cursor
-    // 3. Ensure panel fits within editor bounds
+      LayoutRect(
+        x = overlayX,
+        y = overlayY,
+        width = preferredWidth,
+        height = preferredHeight
+      )
+
+  private def calculateCommandRunnerRect(
+    state: AppState,
+    paneLayouts: Map[PaneId, LayoutRect]
+  ): Option[LayoutRect] =
+    if !state.commandRunner.isActive then None
+    else
+      for
+        paneId   <- state.layout.activeEditorPaneId
+        pane     <- state.layout.editorPanes.get(paneId)
+        paneRect <- paneLayouts.get(paneId)
+        bufferId <- pane.bufferId
+        buffer   <- state.buffers.get(bufferId)
+        cursor   <- buffer.cursors.headOption
+        screenPosition <- CursorLayout.calculateScreenPosition(cursor, buffer.content, paneRect, buffer.viewport)
+      yield
+        val contentRect     = CursorLayout.contentRectForPane(paneRect)
+        val preferredWidth  = math.min(60, math.max(24, contentRect.width - 2))
+        val preferredHeight = math.min(8, math.max(4, contentRect.height - 1))
+        val overlayX = math.max(
+          contentRect.x,
+          math.min(screenPosition.x - (preferredWidth / 2), contentRect.right - preferredWidth)
+        )
+        val preferredBelowY = screenPosition.y + 1
+        val overlayY =
+          if preferredBelowY + preferredHeight <= contentRect.bottom then preferredBelowY
+          else math.max(contentRect.y, screenPosition.y - preferredHeight)
+
+        LayoutRect(
+          x = overlayX,
+          y = overlayY,
+          width = preferredWidth,
+          height = preferredHeight
+        )
+
+  private def calculatePeekOverlayWidth(content: PeekContent, maxWidth: Int): Int =
+    val preferredWidth = content match
+      case PeekContent.QuickInfo(text) =>
+        text.linesIterator.map(_.length).maxOption.getOrElse(0) + 4
+      case PeekContent.FilePreview(path, content) =>
+        math.max(path.getFileName.toString.length + 4, content.linesIterator.take(4).map(_.length).maxOption.getOrElse(0) + 4)
+      case PeekContent.SymbolDefinition(symbol, _) =>
+        symbol.length + 12
+      case PeekContent.DirectoryListing(path, entries) =>
+        math.max(
+          path.getFileName.toString.length + 12,
+          entries.take(4).map(_.name.length).maxOption.getOrElse(0) + 4
+        )
+
+    math.max(16, math.min(maxWidth, preferredWidth))
+
+  private def calculatePeekOverlayHeight(content: PeekContent, maxHeight: Int): Int =
+    val preferredHeight = content match
+      case PeekContent.QuickInfo(text)           => math.max(3, text.linesIterator.size + 2)
+      case PeekContent.FilePreview(_, content)   => math.max(4, math.min(6, content.linesIterator.take(4).size + 2))
+      case PeekContent.SymbolDefinition(_, _)    => 4
+      case PeekContent.DirectoryListing(_, entries) => math.max(4, math.min(6, entries.take(4).size + 2))
+
+    math.max(3, math.min(maxHeight, preferredHeight))
 
   def calculateViewportForCursor(
     cursor: CursorPosition,

@@ -1,97 +1,25 @@
 package com.serenity.state.components
 
-import com.serenity.command.{CommandRegistry, CommandRunner}
+import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.events.*
-import com.serenity.state.manager.StateManager
-import com.serenity.state.models.*
+import com.serenity.state.models.AppState
+import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
 
 /** Component that handles command runner overlay functionality */
 class CommandRunnerComponent(
-    registry: CommandRegistry = CommandRegistry.default,
-    stateManager: Option[StateManager] = None
+    registry: CommandRegistry = CommandRegistry.default
 ) extends FocusedComponent:
 
   def processEvent(event: Event, currentState: AppState): ComponentResult =
-    event match
-      case ToggleCommandRunner =>
-        if currentState.commandRunner.isActive then deactivateCommandRunner(currentState)
-        else activateCommandRunner(currentState)
-
-      case _ if currentState.commandRunner.isActive =>
-        processCommandRunnerEvent(event, currentState)
-
-      case _ =>
-        ComponentResult.noChange
-
-  private def activateCommandRunner(state: AppState): ComponentResult =
-    val activatedRunner = CommandRunner.empty
-      .activate(registry)
-      .withPreviousFocus(state.focus)
-
-    ComponentResult.updateState { _ =>
-      state.copy(
-        commandRunner = activatedRunner,
-        focus = Focus.CommandRunner
-      )
-    }
-
-  private def deactivateCommandRunner(state: AppState): ComponentResult =
-    val previousFocus = state.commandRunner.previousFocus.getOrElse(Focus.EditorPane(PaneId(0)))
-
-    ComponentResult.updateState { _ =>
-      state.copy(
-        commandRunner = CommandRunner.empty,
-        focus = previousFocus
-      )
-    }
-
-  private def processCommandRunnerEvent(event: Event, state: AppState): ComponentResult =
-    event match
-      case Escape =>
-        deactivateCommandRunner(state)
-
-      case Enter =>
-        executeSelectedCommand(state)
-
-      case InsertChar(char) =>
-        updateSearchTerm(state, state.commandRunner.searchTerm + char)
-
-      case DeleteBackward =>
-        if state.commandRunner.searchTerm.nonEmpty then
-          val newTerm = state.commandRunner.searchTerm.dropRight(1)
-          updateSearchTerm(state, newTerm)
-        else ComponentResult.noChange
-
-      case MoveUp =>
-        moveSelection(state, -1)
-
-      case MoveDown =>
-        moveSelection(state, 1)
-
-      case _ =>
-        ComponentResult.noChange
-
-  private def updateSearchTerm(state: AppState, newTerm: String): ComponentResult =
-    given CommandRegistry = registry
-    val updatedRunner     = state.commandRunner.updateSearchTerm(newTerm)
-
-    ComponentResult.updateState(_ => state.copy(commandRunner = updatedRunner))
-
-  private def moveSelection(state: AppState, delta: Int): ComponentResult =
-    val updatedRunner = state.commandRunner.moveSelection(delta)
-
-    ComponentResult.updateState(_ => state.copy(commandRunner = updatedRunner))
-
-  private def executeSelectedCommand(state: AppState): ComponentResult =
-    state.commandRunner.selectedCommand match
-      case Some(command) =>
-        val previousFocus = state.commandRunner.previousFocus.getOrElse(Focus.EditorPane(PaneId(0)))
-        val deactivateResult =
-          ComponentResult.updateState(s => s.copy(commandRunner = CommandRunner.empty, focus = previousFocus))
+    val result = CommandRunnerReducer.reduce(event, currentState, registry)
+    result.effects match
+      case List(AppEffect.ExecuteCommand(command)) =>
         ComponentResult.composite(
-          ComponentResult.executeCommand(command),
-          deactivateResult
+          ComponentResult.updateState(_ => result.state),
+          ComponentResult.executeCommand(command)
         )
-
-      case None =>
-        deactivateCommandRunner(state)
+      case Nil =>
+        if result.state == currentState then ComponentResult.noChange
+        else ComponentResult.updateState(_ => result.state)
+      case _ =>
+        ComponentResult.updateState(_ => result.state)

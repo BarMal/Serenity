@@ -85,7 +85,7 @@ object Main extends IOApp.Simple:
                 .map(_ => ())
                 .onFinalize {
                   stateManager.getCurrentState.flatMap { state =>
-                    if state.screenAnimations.hasActiveAnimations then IO.unit
+                    if state.buffers.values.exists(_.animations.hasActiveAnimations) then IO.unit
                     else fastMode.set(false)
                   }
                 }

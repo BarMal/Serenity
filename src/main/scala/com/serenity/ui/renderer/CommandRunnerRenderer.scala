@@ -37,6 +37,15 @@ object CommandRunnerRenderer:
 
       renderOverlay(graphics, commandRunner, theme, overlayX, overlayY, overlayWidth, overlayHeight)
 
+  def renderInRect(
+    graphics: TextGraphics,
+    commandRunner: CommandRunner,
+    theme: Theme,
+    rect: com.serenity.ui.layout.LayoutRect
+  ): Unit =
+    if commandRunner.isActive then
+      renderOverlay(graphics, commandRunner, theme, rect.x, rect.y, rect.width, rect.height)
+
   private def renderOverlay(
     graphics: TextGraphics,
     commandRunner: CommandRunner,

@@ -4,11 +4,14 @@ import java.nio.file.Path
 
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.foldable.*
+import com.serenity.animation.AnimationConfig
 import com.serenity.command.{CommandRegistry, CommandRunner}
-import com.serenity.keystroke.events.{Event, Quit, ResizeEvent}
+import com.serenity.io.FileManager
+import com.serenity.keystroke.events.{Event, FileEvent, GlobalAppEvent, SystemEvent}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.components.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.{AppEffect, AppEventReducer, CommandRunnerReducer, FileEventReducer, ModalStateReducer, PanelStateReducer, PeekStateReducer, ReducerResult, SystemEventReducer}
 import com.serenity.ui.layout.*
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
@@ -103,6 +106,7 @@ object StateManager:
       logger: Logger[IO]
   )(using Balance)
       extends StateManager:
+    private val fileManager = new FileManager()
 
     def getCurrentState: IO[AppState] = stateRef.get
 
@@ -297,130 +301,50 @@ object StateManager:
       }
 
     def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =
-      stateRef.update { state =>
-        state.copy(
-          peekOverlay = Some(PeekOverlay(content, at)),
-          focus = Focus.PeekOverlay
-        )
-      }
+      stateRef.get.flatMap(state => validateAndUpdateState(PeekStateReducer.show(content, at, state).state, state))
 
     def dismissPeek(): IO[Unit] =
-      stateRef.update { state =>
-        val newFocus = state.layout.activeEditorPaneId match
-          case Some(paneId) => Focus.EditorPane(paneId)
-          case None         => state.focus
-
-        state.copy(
-          peekOverlay = None,
-          focus = newFocus
-        )
-      }
+      stateRef.get.flatMap(state => validateAndUpdateState(PeekStateReducer.dismiss(state).state, state))
 
     def peekToPin(position: PanelPosition): IO[Unit] =
-      stateRef.update { state =>
-        state.peekOverlay match
-          case Some(overlay) =>
-            val panelContent = overlay.content match
-              case PeekContent.DirectoryListing(path, entries) =>
-                Some(
-                  PanelContent.DirectoryTree(
-                    com.serenity.ui.layout.DirectoryTreeData(path),
-                    Some(path)
-                  )
-                )
-              case _ => None
-
-            panelContent match
-              case Some(content) =>
-                val panel    = PinnedPanel(position, content, 30)
-                val newFocus = Focus.PinnedPanel(position)
-                state.copy(
-                  layout = state.layout.copy(
-                    pinnedPanels = state.layout.pinnedPanels + (position -> panel)
-                  ),
-                  peekOverlay = None,
-                  focus = newFocus
-                )
-              case None => state.copy(peekOverlay = None)
-          case None => state
-      }
+      stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.pinPeekOverlay(position, state).state, state))
 
     def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
-      stateRef.update { state =>
-        val panel = PinnedPanel(position, content, size)
-        state.copy(
-          layout = state.layout.copy(
-            pinnedPanels = state.layout.pinnedPanels + (position -> panel)
-          )
-        )
-      }
+      stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.pin(content, position, size, state).state, state))
 
     def unpinPanel(position: PanelPosition): IO[Unit] =
-      stateRef.update { state =>
-        val newFocus =
-          if state.focus == Focus.PinnedPanel(position) then
-            state.layout.activeEditorPaneId match
-              case Some(paneId) => Focus.EditorPane(paneId)
-              case None         => state.focus
-          else state.focus
-
-        state.copy(
-          layout = state.layout.copy(
-            pinnedPanels = state.layout.pinnedPanels - position
-          ),
-          focus = newFocus
-        )
-      }
+      stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.unpin(position, state).state, state))
 
     def showModal(modal: Modal): IO[Unit] =
-      stateRef.update { state =>
-        state.copy(
-          modal = Some(modal),
-          focus = Focus.Modal(modal match
-            case Modal.CommandRunner(_, _, _) => ModalType.CommandPalette
-            case Modal.FileSearch(_, _, _)    => ModalType.FileSearch
-            case Modal.GotoLine(_)            => ModalType.GotoLine
-            case Modal.Find(_, _, _)          => ModalType.Find)
-        )
-      }
+      stateRef.get.flatMap(state => validateAndUpdateState(ModalStateReducer.show(modal, state).state, state))
 
     def dismissModal(): IO[Unit] =
-      stateRef.update { state =>
-        val newFocus = state.layout.activeEditorPaneId match
-          case Some(paneId) => Focus.EditorPane(paneId)
-          case None         => state.focus
-
-        state.copy(
-          modal = None,
-          focus = newFocus
-        )
-      }
+      stateRef.get.flatMap(state => validateAndUpdateState(ModalStateReducer.dismiss(state).state, state))
 
     def awaitQuit: IO[Unit] = quitSignal.get
 
     def applyEvent(event: Event): IO[Unit] =
-      event match
-        case Quit => quitSignal.complete(()).void
-        case resizeEvent: ResizeEvent =>
-          for
-            currentState <- stateRef.get
-            resizeComponent = new ResizeComponent()
-            result          = resizeComponent.processEvent(resizeEvent, currentState)
-            newState       <- applyComponentResult(result, currentState)
-            validatedState <- validateAndUpdateState(newState, currentState)
-          yield ()
-        case _ =>
-          for
-            currentState <- stateRef.get
-            result = handleGlobalEvent(event, currentState) match
-              case Some(globalResult) => globalResult
-              case None               =>
-                // Route to focused component
-                val component = getComponentForFocus(currentState.focus)
-                component.processEvent(event, currentState)
-            newState       <- applyComponentResult(result, currentState)
-            validatedState <- validateAndUpdateState(newState, currentState)
-          yield ()
+      for
+        currentState <- stateRef.get
+        _ <- event match
+          case systemEvent: SystemEvent =>
+            applyReducerResult(SystemEventReducer.reduce(systemEvent, currentState), currentState)
+          case appEvent: GlobalAppEvent =>
+            val registry = CommandRegistry.withToggleUI
+            applyReducerResult(AppEventReducer.reduce(appEvent, currentState, registry), currentState)
+          case fileEvent: FileEvent =>
+            applyReducerResult(FileEventReducer.reduce(fileEvent, currentState), currentState)
+          case _ if currentState.focus == Focus.CommandRunner =>
+            val registry = CommandRegistry.withToggleUI
+            applyReducerResult(CommandRunnerReducer.reduce(event, currentState, registry), currentState)
+          case _ =>
+            val component = getComponentForFocus(currentState.focus)
+            val result    = component.processEvent(event, currentState)
+            for
+              newState <- applyComponentResult(result, currentState)
+              _        <- validateAndUpdateState(newState, currentState)
+            yield ()
+      yield ()
 
     private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       newState.validated match
@@ -431,23 +355,6 @@ object StateManager:
           logger.error(s"State validation failed: ${errors.mkString(", ")}") >>
             stateRef.set(fallbackState)
 
-    private def handleGlobalEvent(event: Event, state: AppState): Option[ComponentResult] =
-      import com.serenity.keystroke.events.*
-      event match
-        case ToggleCommandRunner =>
-          val registry               = CommandRegistry.withToggleUIStateful(this)
-          val commandRunnerComponent = new CommandRunnerComponent(registry, Some(this))
-          Some(commandRunnerComponent.processEvent(event, state))
-        case NewTab =>
-          Some(handleNewTabGlobally(state))
-        case CloseTab =>
-          Some(handleCloseTabGlobally(state))
-        case NextTab =>
-          Some(handleNextTabGlobally(state))
-        case PreviousTab =>
-          Some(handlePreviousTabGlobally(state))
-        case _ => None
-
     private def getComponentForFocus(focus: Focus): FocusedComponent =
       focus match
         case Focus.EditorPane(paneId)    => new EditorPaneComponent(paneId)
@@ -455,8 +362,27 @@ object StateManager:
         case Focus.PeekOverlay           => new PeekOverlayComponent()
         case Focus.Modal(modalType)      => new ModalComponent(modalType)
         case Focus.CommandRunner =>
-          val registry = CommandRegistry.withToggleUIStateful(this)
-          new CommandRunnerComponent(registry, Some(this))
+          val registry = CommandRegistry.withToggleUI
+          new CommandRunnerComponent(registry)
+
+    private def applyReducerResult(result: ReducerResult, fallbackState: AppState): IO[Unit] =
+      for
+        _ <- validateAndUpdateState(result.state, fallbackState)
+        _ <- result.effects.traverse_(interpretEffect)
+      yield ()
+
+    private def interpretEffect(effect: AppEffect): IO[Unit] =
+      effect match
+        case AppEffect.CompleteQuit =>
+          quitSignal.complete(()).attempt.void
+        case AppEffect.ExecuteCommand(command) =>
+          stateRef.get.flatMap(state => interpretCommand(command, state))
+        case AppEffect.SaveBuffer(bufferId) =>
+          saveBufferEffect(bufferId)
+        case AppEffect.SaveBufferAs(bufferId, path) =>
+          saveBufferAsEffect(bufferId, path)
+        case AppEffect.RequestOpenFile =>
+          logger.debug("[FILE] Open file requested")
 
     private def applyComponentResult(result: ComponentResult, state: AppState): IO[AppState] =
       result match
@@ -467,10 +393,8 @@ object StateManager:
           val newFocus = determineFallbackFocus(state)
           IO.pure(dismissCurrentFocus(state).copy(focus = newFocus))
         case ComponentResult.ExecuteCommand(command) =>
-          // Execute command and return updated state from stateRef
-          // This handles both regular commands and stateful commands that use updateState
           for
-            _            <- command.execute(state)
+            _            <- interpretCommand(command, state)
             updatedState <- stateRef.get
           yield updatedState
         case ComponentResult.Composite(results) =>
@@ -488,21 +412,86 @@ object StateManager:
         case Focus.CommandRunner => state.copy(commandRunner = CommandRunner.empty)
         case _                   => state // Other focus types don't have dismissible state
 
-    // File operation stubs (TODO: implement)
+    private def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =
+      import com.serenity.command.{AnimationMode, CommandIntent}
+
+      command.intent match
+        case CommandIntent.Custom(run) =>
+          run(state)
+        case CommandIntent.ToggleLineNumbers =>
+          updateState(s => s.copy(config = s.config.copy(showLineNumbers = !s.config.showLineNumbers)))
+        case CommandIntent.ToggleGutter =>
+          updateState(s => s.copy(config = s.config.copy(showGutter = !s.config.showGutter)))
+        case CommandIntent.SaveCurrentFile =>
+          state.focusedBufferId match
+            case Some(bufferId) => saveBufferEffect(bufferId)
+            case None           => logger.debug("[CMD] No focused buffer to save")
+        case CommandIntent.SaveCurrentFileAs =>
+          logger.debug("[CMD] Save As command requested")
+        case CommandIntent.OpenFile =>
+          logger.debug("[CMD] Open command requested")
+        case CommandIntent.QuitApp =>
+          quitSignal.complete(()).attempt.void
+        case CommandIntent.NewFile =>
+          logger.debug("[CMD] New file command requested")
+        case CommandIntent.CloseCurrentFile =>
+          logger.debug("[CMD] Close file command requested")
+        case CommandIntent.FindInCurrentFile =>
+          logger.debug("[CMD] Find command requested")
+        case CommandIntent.ReplaceInCurrentFile =>
+          logger.debug("[CMD] Replace command requested")
+        case CommandIntent.OpenGotoLine =>
+          logger.debug("[CMD] Go to line command requested")
+        case CommandIntent.ToggleTheme =>
+          logger.debug("[CMD] Toggle theme command requested")
+        case CommandIntent.ReloadTheme =>
+          logger.debug("[CMD] Reload theme command requested")
+        case CommandIntent.FormatCurrentFile =>
+          logger.debug("[CMD] Format command requested")
+        case CommandIntent.SetAnimationMode(mode) =>
+          updateState { s =>
+            mode match
+              case AnimationMode.None =>
+                s.copy(config = s.config.withoutCharacterAnimation)
+              case AnimationMode.Quick =>
+                s.copy(config = s.config.copy(characterAnimation = AnimationConfig.quick))
+              case AnimationMode.Smooth =>
+                s.copy(config = s.config.copy(characterAnimation = AnimationConfig.smooth))
+              case AnimationMode.Subtle =>
+                s.copy(config = s.config.copy(characterAnimation = AnimationConfig.subtle))
+          }
+
+    // File operations
     def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit] =
-      logger.debug(s"TODO: setBufferFilePath($bufferId, $filePath)")
+      stateRef.update { state =>
+        state.buffers.get(bufferId) match
+          case Some(buffer) =>
+            state.copy(buffers = state.buffers + (bufferId -> buffer.copy(filePath = Some(Path.of(filePath)))))
+          case None =>
+            state
+      }
 
     def saveBuffer(bufferId: BufferId): IO[Unit] =
-      logger.debug(s"TODO: saveBuffer($bufferId)")
+      saveBufferEffect(bufferId)
 
     def saveBufferAs(bufferId: BufferId, filePath: String): IO[Unit] =
-      logger.debug(s"TODO: saveBufferAs($bufferId, $filePath)")
+      saveBufferAsEffect(bufferId, Path.of(filePath))
 
     def markBufferSaved(bufferId: BufferId): IO[Unit] =
-      logger.debug(s"TODO: markBufferSaved($bufferId)")
+      stateRef.update { state =>
+        state.buffers.get(bufferId) match
+          case Some(buffer) =>
+            state.copy(buffers = state.buffers + (bufferId -> buffer.copy(isDirty = false)))
+          case None =>
+            state
+      }
 
     def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean] =
-      IO.pure(false) // TODO: implement actual logic
+      stateRef.get.map { state =>
+        bufferId match
+          case Some(id) => state.buffers.get(id).exists(_.isDirty)
+          case None     => state.buffers.values.exists(_.isDirty)
+      }
 
     def forceCloseBuffer(bufferId: BufferId): IO[Unit] =
       closeBuffer(bufferId) // Reuse existing implementation for now
@@ -520,7 +509,7 @@ object StateManager:
 
     // Panel operation stubs (TODO: implement)
     def switchToPinnedPanel(position: PanelPosition): IO[Unit] =
-      switchFocus(Focus.PinnedPanel(position))
+      stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.focus(position, state).state, state))
 
     def loadDirectoryTree(path: String, files: List[String]): IO[Unit] =
       logger.debug(s"TODO: loadDirectoryTree($path, ${files.size} files)")
@@ -627,236 +616,6 @@ object StateManager:
           case None => state
       }
 
-    // Global tab management event handlers
-    private def handleNewTabGlobally(state: AppState): ComponentResult =
-      // Create a command that creates a new buffer and manages pane assignment
-      val command = com.serenity.command.Command(
-        "NewTab",
-        "Create new buffer and assign to pane based on layout",
-        _ =>
-          for
-            newBufferId <- createNewEmptyBuffer()
-            _           <- insertBufferInOrder(newBufferId)
-            _           <- assignBuffersToPanes(Some(newBufferId))
-            _           <- focusBuffer(newBufferId)
-          yield ()
-      )
-      ComponentResult.executeCommand(command)
-
-    private def handleCloseTabGlobally(state: AppState): ComponentResult =
-      state.focus match
-        case Focus.EditorPane(paneId) =>
-          state.layout.editorPanes.get(paneId) match
-            case Some(pane) =>
-              pane.bufferId match
-                case Some(bufferId) =>
-                  val buffer = state.buffers.get(bufferId)
-                  buffer match
-                    case Some(buf) if buf.isDirty =>
-                      println("[TAB] Warning: Closing tab with unsaved changes")
-                      createCloseTabAndBufferCommand(paneId, bufferId)
-                    case _ =>
-                      createCloseTabAndBufferCommand(paneId, bufferId)
-                case None =>
-                  createCloseTabOnlyCommand(paneId)
-            case None =>
-              ComponentResult.noChange
-        case _ =>
-          ComponentResult.noChange
-
-    private def createCloseTabAndBufferCommand(paneId: PaneId, bufferId: BufferId): ComponentResult =
-      val command = com.serenity.command.Command(
-        "CloseTabAndBuffer",
-        "Close tab and its buffer",
-        _ =>
-          for
-            _ <- closeBuffer(bufferId)
-            _ <- closePane(paneId)
-          yield ()
-      )
-      ComponentResult.executeCommand(command)
-
-    private def createCloseTabOnlyCommand(paneId: PaneId): ComponentResult =
-      val command = com.serenity.command.Command(
-        "CloseTabOnly",
-        "Close tab only",
-        _ =>
-          for _ <- closePane(paneId)
-          yield ()
-      )
-      ComponentResult.executeCommand(command)
-
-    private def handleNextTabGlobally(state: AppState): ComponentResult =
-      if state.bufferOrder.isEmpty then ComponentResult.noChange
-      else
-        state.focusedBufferId match
-          case Some(currentBufferId) =>
-            state.nextBufferInOrder(currentBufferId) match
-              case Some(nextBufferId) =>
-                val command = com.serenity.command.Command(
-                  "NextTab",
-                  "Navigate to next buffer",
-                  _ =>
-                    for
-                      _ <- assignBuffersToPanes(Some(nextBufferId))
-                      _ <- focusBuffer(nextBufferId)
-                    yield ()
-                )
-                ComponentResult.executeCommand(command)
-              case None =>
-                ComponentResult.noChange
-          case None =>
-            // No current focus, focus first buffer
-            val firstBufferId = state.bufferOrder.head
-            val command = com.serenity.command.Command(
-              "NextTab",
-              "Focus first buffer",
-              _ => focusBuffer(firstBufferId)
-            )
-            ComponentResult.executeCommand(command)
-
-    private def handlePreviousTabGlobally(state: AppState): ComponentResult =
-      if state.bufferOrder.isEmpty then ComponentResult.noChange
-      else
-        state.focusedBufferId match
-          case Some(currentBufferId) =>
-            state.previousBufferInOrder(currentBufferId) match
-              case Some(prevBufferId) =>
-                val command = com.serenity.command.Command(
-                  "PreviousTab",
-                  "Navigate to previous buffer",
-                  _ =>
-                    for
-                      _ <- assignBuffersToPanes(Some(prevBufferId))
-                      _ <- focusBuffer(prevBufferId)
-                    yield ()
-                )
-                ComponentResult.executeCommand(command)
-              case None =>
-                ComponentResult.noChange
-          case None =>
-            // No current focus, focus first buffer
-            val firstBufferId = state.bufferOrder.head
-            val command = com.serenity.command.Command(
-              "PreviousTab",
-              "Focus first buffer",
-              _ => focusBuffer(firstBufferId)
-            )
-            ComponentResult.executeCommand(command)
-
-    // Buffer management methods for new tab behavior
-    private def insertBufferInOrder(newBufferId: BufferId): IO[Unit] =
-      stateRef.update { state =>
-        state.focusedBufferId match
-          case Some(currentBufferId) =>
-            // Insert after the currently focused buffer
-            val currentIndex = state.bufferOrder.indexOf(currentBufferId)
-            if currentIndex == -1 then
-              // Current buffer not in order, append to end
-              state.copy(bufferOrder = state.bufferOrder :+ newBufferId)
-            else
-              // Insert after current position
-              val (before, after) = state.bufferOrder.splitAt(currentIndex + 1)
-              state.copy(bufferOrder = before ++ List(newBufferId) ++ after)
-          case None =>
-            // No current focus, append to end
-            state.copy(bufferOrder = state.bufferOrder :+ newBufferId)
-      }
-
-    private def assignBuffersToPanes(focusedBufferId: Option[BufferId] = None): IO[Unit] =
-      for
-        state <- stateRef.get
-        terminalSize = state.terminalSize.getOrElse(TerminalSize(80, 24))
-        layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(state, terminalSize)
-        // Calculate how many panes CAN fit based on minimum width
-        maxPossiblePanes    = math.max(1, layout.editorPanelRect.width / state.config.minimumPaneWidth)
-        targetFocusedBuffer = focusedBufferId.orElse(state.focusedBufferId)
-        _ <- updatePaneAssignments(state, maxPossiblePanes, targetFocusedBuffer)
-      yield ()
-
-    private def updatePaneAssignments(
-      state: AppState,
-      maxVisiblePanes: Int,
-      targetFocusedBuffer: Option[BufferId]
-    ): IO[Unit] =
-      stateRef.update { currentState =>
-        // Find the focused buffer and determine which buffers should be visible
-        targetFocusedBuffer match
-          case Some(focusedBufferId) =>
-            val focusedIndex = currentState.bufferOrder.indexOf(focusedBufferId)
-            val startIndex =
-              if focusedIndex == -1 then 0
-              else
-                // Center the focused buffer in the visible range
-                math.max(0, focusedIndex - maxVisiblePanes / 2)
-            val visibleBuffers = currentState.bufferOrder.slice(startIndex, startIndex + maxVisiblePanes)
-
-            // Ensure we have enough panes for visible buffers
-            val neededPanes  = visibleBuffers.size
-            val currentPanes = currentState.layout.editorPanes
-            val paneIds      = currentPanes.keys.toList.sortBy(_.value)
-
-            // Create additional panes if needed
-            val updatedLayout = if paneIds.size < neededPanes then
-              val additionalPanes = (paneIds.size until neededPanes).map { i =>
-                val paneId = PaneId(currentState.nextPaneId.value + i - paneIds.size)
-                paneId -> EditorPane.empty(paneId)
-              }.toMap
-              val newNextPaneId = PaneId(
-                math.max(currentState.nextPaneId.value, currentState.nextPaneId.value + neededPanes - paneIds.size)
-              )
-              currentState.copy(
-                layout = currentState.layout.copy(
-                  editorPanes = currentPanes ++ additionalPanes
-                ),
-                nextPaneId = newNextPaneId
-              )
-            else currentState
-
-            // Assign buffers to panes
-            val finalPanes      = updatedLayout.layout.editorPanes.keys.toList.sortBy(_.value)
-            val paneAssignments = finalPanes.take(visibleBuffers.size).zip(visibleBuffers).toMap
-
-            val assignedPanes = finalPanes.map { paneId =>
-              paneAssignments.get(paneId) match
-                case Some(bufferId) =>
-                  paneId -> EditorPane.withBuffer(paneId, bufferId)
-                case None =>
-                  paneId -> EditorPane.empty(paneId)
-            }.toMap
-
-            val finalState = updatedLayout.copy(
-              layout = updatedLayout.layout.copy(editorPanes = assignedPanes)
-            )
-
-            // Restore focus to the target buffer if it's visible in a pane
-            val paneWithFocusedBuffer = assignedPanes.find(_._2.bufferId.contains(focusedBufferId))
-            paneWithFocusedBuffer match
-              case Some((paneId, _)) =>
-                finalState.copy(
-                  layout = finalState.layout.copy(activeEditorPaneId = Some(paneId)),
-                  focus = Focus.EditorPane(paneId)
-                )
-              case None =>
-                finalState
-          case None =>
-            currentState
-      }
-
-    private def focusBuffer(bufferId: BufferId): IO[Unit] =
-      stateRef.update { state =>
-        // Find a pane that shows this buffer
-        val paneWithBuffer = state.layout.editorPanes.find(_._2.bufferId.contains(bufferId))
-        paneWithBuffer match
-          case Some((paneId, _)) =>
-            state.copy(
-              focus = Focus.EditorPane(paneId),
-              layout = state.layout.copy(activeEditorPaneId = Some(paneId))
-            )
-          case None =>
-            state
-      }
-
     // Session operation stubs (TODO: implement)
     def serializeSession(): IO[String] =
       IO.pure("{\"TODO\": \"implement session serialization\"}")
@@ -867,6 +626,38 @@ object StateManager:
     def handleTerminalResize(newSize: TerminalSize): IO[Unit] =
       for
         _ <- logger.debug(s"Handling terminal resize to ${newSize.width}x${newSize.height}")
-        _ <- stateRef.update(_.copy(terminalSize = Some(newSize)))
-        _ <- assignBuffersToPanes()
+        currentState <- stateRef.get
+        resizedState = SystemEventReducer.reduce(com.serenity.keystroke.events.ResizeEvent(newSize), currentState).state
+        rebalancedState = AppEventReducer.rebalancePanes(resizedState, resizedState.focusedBufferId)
+        _ <- validateAndUpdateState(rebalancedState, currentState)
       yield ()
+
+    private def saveBufferEffect(bufferId: BufferId): IO[Unit] =
+      stateRef.get.flatMap { state =>
+        state.buffers.get(bufferId) match
+          case Some(buffer) if buffer.filePath.isDefined =>
+            fileManager
+              .saveBuffer(buffer)
+              .flatMap(savedBuffer =>
+                stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> savedBuffer)))
+              )
+              .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId"))
+          case Some(_) =>
+            logger.debug(s"[FILE] Buffer $bufferId has no file path; Save As required")
+          case None =>
+            logger.debug(s"[FILE] Buffer $bufferId not found for save")
+      }
+
+    private def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
+      stateRef.get.flatMap { state =>
+        state.buffers.get(bufferId) match
+          case Some(buffer) =>
+            fileManager
+              .saveBuffer(buffer, path)
+              .flatMap(savedBuffer =>
+                stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> savedBuffer)))
+              )
+              .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId as $path"))
+          case None =>
+            logger.debug(s"[FILE] Buffer $bufferId not found for save as")
+      }

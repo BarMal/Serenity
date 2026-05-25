@@ -369,6 +369,11 @@ object Renderer:
     findCursorPosition(0, 0)
 
   private def renderFloatingPanels(state: AppState, context: RenderContext): Unit =
+    val overlays = OverlayViewModel.fromState(state, context.layout)
+
+    overlays.aboveCursor.foreach(overlay => TextOverlayRenderer.render(context.graphics, overlay, state.theme))
+    overlays.belowCursor.foreach(overlay => TextOverlayRenderer.render(context.graphics, overlay, state.theme))
+
     context.layout.floatingPanelRect.foreach { rect =>
       // For now, just render a placeholder
       // In the future, this will render command runners, modals, etc. with transparency
@@ -389,20 +394,27 @@ object Renderer:
     if state.commandRunner.isActive then
       val terminalSize = TerminalSize(context.screen.getTerminalSize.getColumns, context.screen.getTerminalSize.getRows)
 
-      // Position command runner consistently at top-center, not following cursor
-      // This provides a predictable, accessible location for the command palette
-      val consistentPosition = CursorPosition(
-        line = 2,  // A few lines from top to avoid interfering with potential title bars
-        column = 0 // CommandRunnerRenderer will center it horizontally
-      )
+      context.layout.belowCursorOverlayRect match
+        case Some(rect) =>
+          CommandRunnerRenderer.renderInRect(
+            context.graphics,
+            state.commandRunner,
+            state.theme,
+            rect
+          )
+        case None =>
+          val consistentPosition = CursorPosition(
+            line = 2,
+            column = 0
+          )
 
-      CommandRunnerRenderer.render(
-        context.graphics,
-        state.commandRunner,
-        state.theme,
-        terminalSize,
-        consistentPosition
-      )
+          CommandRunnerRenderer.render(
+            context.graphics,
+            state.commandRunner,
+            state.theme,
+            terminalSize,
+            consistentPosition
+          )
 
   private def renderLineNumbers(state: AppState, context: RenderContext): Unit =
     if state.config.showLineNumbers then

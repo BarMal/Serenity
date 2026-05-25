@@ -1,6 +1,7 @@
 package com.serenity
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandRegistry, CommandRunner}
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.{CommandRunnerComponent, ComponentResult}
@@ -173,10 +174,10 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 
       val result = component.processEvent(Enter, initialState)
       result match
-        case ComponentResult.StateChange(update) =>
+        case ComponentResult.Composite(List(ComponentResult.StateChange(update), ComponentResult.ExecuteCommand(command))) =>
           val newState = update(initialState)
+          command.execute(newState).unsafeRunSync()
 
-          // Should execute command and close runner
           executionCalled shouldEqual true
           newState.commandRunner.isActive shouldEqual false
           newState.focus shouldEqual Focus.EditorPane(PaneId(1))
