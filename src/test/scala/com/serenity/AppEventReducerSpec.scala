@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, Focus, PaneId}
+import com.serenity.state.models.{AppState, Focus, PaneId, SurfaceContent}
 import com.serenity.state.reducers.{AppEffect, AppEventReducer}
 import com.serenity.ui.layout.TerminalSize
 import org.scalatest.flatspec.AnyFlatSpec
@@ -28,15 +28,21 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     val initialState = AppState.initial.copy(focus = Focus.EditorPane(PaneId(0)))
 
     val opened = AppEventReducer.reduce(ToggleCommandRunner, initialState, registry)
+    val openedRunner = opened.state.commandRunnerSurface.flatMap {
+      _.content match
+        case SurfaceContent.CommandPalette(runner) => Some(runner)
+        case _                                     => None
+    }
 
-    opened.state.focus shouldBe Focus.CommandRunner
-    opened.state.commandRunner.isActive shouldBe true
-    opened.state.commandRunner.previousFocus shouldBe Some(Focus.EditorPane(PaneId(0)))
+    openedRunner shouldBe defined
+    opened.state.focus shouldBe Focus.Surface(opened.state.commandRunnerSurface.get.id)
+    openedRunner.get.isActive shouldBe true
+    openedRunner.get.previousFocus shouldBe Some(Focus.EditorPane(PaneId(0)))
 
     val closed = AppEventReducer.reduce(ToggleCommandRunner, opened.state, registry)
 
     closed.state.focus shouldBe Focus.EditorPane(PaneId(0))
-    closed.state.commandRunner.isActive shouldBe false
+    closed.state.commandRunnerSurface shouldBe None
     closed.effects shouldBe Nil
   }
 

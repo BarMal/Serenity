@@ -1,5 +1,6 @@
 package com.serenity.command
 
+import com.serenity.command.CommandSurfaceItem.CommandItem
 import com.serenity.state.manager.StateManager
 
 /** Registry of all available commands */
@@ -13,6 +14,38 @@ class CommandRegistry(private val commands: List[Command]):
   /** Search commands by term */
   def searchCommands(term: String, maxResults: Int = 5): List[Command] =
     searcher.search(term, maxResults)
+
+  def commandsForCategory(category: CommandCategory): List[Command] =
+    category match
+      case CommandCategory.All => commands
+      case _                   => commands.filter(_.category == category)
+
+  def surfaceItemsForCategory(
+    category: CommandCategory,
+    optionSelections: Map[String, Int] = Map.empty
+  ): List[CommandSurfaceItem] =
+    val commandItems =
+      commandsForCategory(category)
+        .map(CommandItem(_))
+
+    val optionItems =
+      if category == CommandCategory.Settings then List(CommandRunner.animationOptionItem(optionSelections))
+      else Nil
+
+    optionItems ++ commandItems
+
+  def searchSurfaceItems(
+    term: String,
+    optionSelections: Map[String, Int] = Map.empty,
+    maxResults: Int = 50
+  ): List[CommandSurfaceItem] =
+    val commandItems = searchCommands(term, maxResults).map(CommandItem(_))
+    val optionItems = List(CommandRunner.animationOptionItem(optionSelections)).filter { item =>
+      val lowerTerm = term.toLowerCase
+      lowerTerm.isEmpty || item.searchText.toLowerCase.contains(lowerTerm)
+    }
+
+    (optionItems ++ commandItems).take(maxResults)
 
   /** Find a command by exact name */
   def findCommand(name: String): Option[Command] =
@@ -38,12 +71,14 @@ object CommandRegistry:
     Command.typed(
       "toggle-line-numbers",
       "Toggle line numbers display on/off",
-      CommandIntent.ToggleLineNumbers
+      CommandIntent.ToggleLineNumbers,
+      CommandCategory.View
     ),
     Command.typed(
       "toggle-gutter",
       "Toggle status gutter display on/off",
-      CommandIntent.ToggleGutter
+      CommandIntent.ToggleGutter,
+      CommandCategory.View
     )
   )
 
@@ -52,81 +87,85 @@ object CommandRegistry:
     Command.typed(
       "save",
       "Save current file",
-      CommandIntent.SaveCurrentFile
+      CommandIntent.SaveCurrentFile,
+      CommandCategory.File
     ),
     Command.typed(
       "save-as",
       "Save file with new name",
-      CommandIntent.SaveCurrentFileAs
+      CommandIntent.SaveCurrentFileAs,
+      CommandCategory.File
     ),
     Command.typed(
       "open",
       "Open file",
-      CommandIntent.OpenFile
+      CommandIntent.OpenFile,
+      CommandCategory.File
     ),
     Command.typed(
       "quit",
       "Quit application",
-      CommandIntent.QuitApp
+      CommandIntent.QuitApp,
+      CommandCategory.File
     ),
     Command.typed(
       "new",
       "Create new file",
-      CommandIntent.NewFile
+      CommandIntent.NewFile,
+      CommandCategory.File
     ),
     Command.typed(
       "close",
       "Close current file",
-      CommandIntent.CloseCurrentFile
+      CommandIntent.CloseCurrentFile,
+      CommandCategory.File
+    ),
+    Command.typed(
+      "close-all",
+      "Close all files",
+      CommandIntent.CloseAll,
+      CommandCategory.File
+    ),
+    Command.typed(
+      "close-others",
+      "Close all files except the current one",
+      CommandIntent.CloseOthers,
+      CommandCategory.File
     ),
     Command.typed(
       "find",
       "Find text in file",
-      CommandIntent.FindInCurrentFile
+      CommandIntent.FindInCurrentFile,
+      CommandCategory.Edit
     ),
     Command.typed(
       "replace",
       "Find and replace text",
-      CommandIntent.ReplaceInCurrentFile
+      CommandIntent.ReplaceInCurrentFile,
+      CommandCategory.Edit
     ),
     Command.typed(
       "goto-line",
       "Go to specific line number",
-      CommandIntent.OpenGotoLine
+      CommandIntent.OpenGotoLine,
+      CommandCategory.Edit
     ),
     Command.typed(
       "toggle-theme",
       "Switch between light and dark theme",
-      CommandIntent.ToggleTheme
+      CommandIntent.ToggleTheme,
+      CommandCategory.Settings
     ),
     Command.typed(
       "reload-theme",
       "Reload theme configuration",
-      CommandIntent.ReloadTheme
+      CommandIntent.ReloadTheme,
+      CommandCategory.Settings
     ),
     Command.typed(
       "format",
       "Format current file",
-      CommandIntent.FormatCurrentFile
-    ),
-    Command.typed(
-      "animation-none",
-      "Disable character animations",
-      CommandIntent.SetAnimationMode(AnimationMode.None)
-    ),
-    Command.typed(
-      "animation-quick",
-      "Enable quick character animations",
-      CommandIntent.SetAnimationMode(AnimationMode.Quick)
-    ),
-    Command.typed(
-      "animation-smooth",
-      "Enable smooth character animations",
-      CommandIntent.SetAnimationMode(AnimationMode.Smooth)
-    ),
-    Command.typed(
-      "animation-subtle",
-      "Enable subtle character animations",
-      CommandIntent.SetAnimationMode(AnimationMode.Subtle)
+      CommandIntent.FormatCurrentFile,
+      CommandCategory.Edit
     )
   )

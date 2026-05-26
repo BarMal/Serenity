@@ -24,7 +24,7 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
     val ctrlReverseTab = translator.translate(new KeyStroke(KeyType.ReverseTab, true, false, false))
 
     ctrlTab shouldBe NextTab
-    plainTab shouldBe InsertChar('\t')
+    plainTab shouldBe TabKey
     ctrlReverseTab shouldBe PreviousTab
   }
 

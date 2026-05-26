@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.googlecode.lanterna.input.KeyType
 import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
 import com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal
-import com.serenity.keystroke.events.{InsertChar, TextEntryEvent}
+import com.serenity.keystroke.events.{InsertChar, TabKey, TextEntryEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.components.ComponentResult
@@ -26,7 +26,7 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
     val translator   = new TextEntryTranslator()
     val tabKeyStroke = com.googlecode.lanterna.input.KeyStroke(KeyType.Tab, false, false, false)
     val tabEvent     = translator.translate(tabKeyStroke)
-    tabEvent shouldBe InsertChar('\t')
+    tabEvent shouldBe TabKey
 
     // Test underscore character handling
     val underscoreKeyStroke = com.googlecode.lanterna.input.KeyStroke('_', false, false, false)

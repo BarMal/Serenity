@@ -1,0 +1,230 @@
+package com.serenity
+
+import java.nio.file.Paths
+
+import cats.effect.IO
+import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner}
+import com.googlecode.lanterna.TextColor
+import com.serenity.state.models.{BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState, FileWorkflowField, FileWorkflowMode, FileWorkflowState, FileWorkflowSuggestion, Modal, ReplaceWorkflowField, ReplaceWorkflowState, SurfaceContent}
+import com.serenity.ui.layout.{DirEntry, LayoutRect}
+import com.serenity.ui.renderer.{OverlayRowLayout, OverlayTone, SurfaceContentResolver, SurfaceRenderMode}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
+
+  private val root = Paths.get("/repo")
+  private val entries = List(
+    DirEntry(root.resolve("src"), "src", isDirectory = true),
+    DirEntry(root.resolve("test"), "test", isDirectory = true),
+    DirEntry(root.resolve("build.sbt"), "build.sbt", isDirectory = false)
+  )
+
+  "SurfaceContentResolver" should "shape the same directory content differently when floating versus pinned" in {
+    val content = SurfaceContent.DirectoryListing(root, entries, Some(root.resolve("src")))
+
+    val floating = SurfaceContentResolver.resolve(
+      content,
+      LayoutRect(0, 0, 24, 20),
+      SurfaceRenderMode.Floating
+    )
+    val pinned = SurfaceContentResolver.resolve(
+      content,
+      LayoutRect(0, 0, 24, 20),
+      SurfaceRenderMode.Pinned
+    )
+
+    floating.title shouldBe None
+    floating.rows.map(_.plainText) shouldBe List("Directory: repo", "src", "test", "build.sbt")
+
+    pinned.title shouldBe Some("repo")
+    pinned.rows.map(_.plainText) shouldBe List("Selected: src", "src", "test", "build.sbt")
+  }
+
+  it should "resolve command palettes into search chrome, highlighted rows, and scroll metadata once typing begins" in {
+    val commands = List(
+      Command("open", "Open file", _ => IO.unit),
+      Command("close", "Close current file", _ => IO.unit),
+      Command("save", "Save current file", _ => IO.unit),
+      Command("format", "Format current file", _ => IO.unit),
+      Command("find", "Find text in file", _ => IO.unit),
+      Command("replace", "Find and replace text", _ => IO.unit)
+    )
+    val registry = CommandRegistry(commands)
+    val runner = CommandRunner.empty.activate(registry).updateSearchTerm("open")(using registry)
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 40, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    floating.title shouldBe None
+    floating.header.map(_.plainText) shouldBe Some("search: open")
+    floating.header.flatMap(_.cursorColumn) shouldBe Some("search: open".length)
+    floating.rows.exists(_.selected) shouldBe true
+    floating.rows.map(_.plainText).head should include("[Edit]")
+    floating.rows should have size 1
+    floating.rows.exists(_.plainText.contains("open")) shouldBe true
+    floating.rows.exists(_.plainText.contains("Open file")) shouldBe true
+    floating.footer.map(_.plainText) shouldBe Some("1/1")
+  }
+
+  it should "resolve browse mode into distributed category tabs and split option rows without bracket markers" in {
+    val registry = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry)
+      .withActiveCategory(CommandCategory.Settings)
+      .withSelectedItem("animation-mode")
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 60, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    val header = floating.header.getOrElse(fail("Expected category header"))
+    header.layout shouldBe OverlayRowLayout.Distributed
+    header.segments.map(_.text) shouldBe List("All", "File", "View", "Edit", "Settings")
+    header.segments.count(_.selected) shouldBe 1
+    header.segments.find(_.selected).map(_.text) shouldBe Some("Settings")
+
+    val optionRow = floating.rows.headOption.getOrElse(fail("Expected animation option row"))
+    optionRow.layout shouldBe OverlayRowLayout.Split
+    optionRow.plainText shouldBe "Animation: Mode Full"
+    optionRow.plainText should not include "["
+    optionRow.segments should have size 3
+    optionRow.segments.head.text shouldBe "Animation"
+    optionRow.segments(1).text shouldBe "Mode"
+    optionRow.segments(1).tone shouldBe OverlayTone.Muted
+    optionRow.segments.last.text shouldBe "Full"
+    optionRow.segments.last.selected shouldBe true
+  }
+
+  it should "return no floating rows for inactive command palettes" in {
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(CommandRunner.empty),
+      LayoutRect(0, 0, 40, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.header shouldBe None
+    resolved.rows shouldBe Nil
+    resolved.footer shouldBe None
+  }
+
+  it should "resolve file workflow modals into field rows, suggestion rows, and a directory confirmation footer" in {
+    val workflow = FileWorkflowState(
+      mode = FileWorkflowMode.SaveAs,
+      filename = "notes.scala",
+      path = "/tmp/project/new/nested",
+      activeField = FileWorkflowField.Path,
+      suggestions = List(
+        FileWorkflowSuggestion("/tmp/project", isDirectory = true),
+        FileWorkflowSuggestion("/tmp/project/new", isDirectory = true)
+      ),
+      selectedSuggestionIndex = 1,
+      missingPathSegments = List("new", "nested"),
+      confirmCreateDirectories = true
+    )
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)),
+      LayoutRect(0, 0, 60, 12),
+      SurfaceRenderMode.Floating
+    )
+
+    floating.header.map(_.plainText) shouldBe Some("save-as")
+    floating.rows should have size 4
+
+    val filenameRow = floating.rows.head
+    filenameRow.layout shouldBe OverlayRowLayout.Split
+    filenameRow.segments.head.text shouldBe "Filename"
+    filenameRow.segments.last.text shouldBe "notes.scala"
+
+    val pathRow = floating.rows(1)
+    pathRow.layout shouldBe OverlayRowLayout.Split
+    pathRow.selected shouldBe true
+    pathRow.segments.head.text shouldBe "Path"
+    pathRow.segments.exists(_.foregroundColor.contains(TextColor.ANSI.RED)) shouldBe true
+
+    val suggestionRows = floating.rows.drop(2)
+    suggestionRows.map(_.plainText) shouldBe List("/tmp/project/", "/tmp/project/new/")
+    suggestionRows.count(_.selected) shouldBe 1
+    suggestionRows.find(_.selected).map(_.plainText) shouldBe Some("/tmp/project/new/")
+
+    floating.footer.map(_.plainText) shouldBe Some("Create directories: new / nested")
+  }
+
+  it should "render file workflow status messages as a visible footer when present" in {
+    val workflow = FileWorkflowState(
+      mode = FileWorkflowMode.Open,
+      filename = "missing.scala",
+      path = "/tmp/project",
+      statusMessage = Some("File not found: /tmp/project/missing.scala")
+    )
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)),
+      LayoutRect(0, 0, 60, 12),
+      SurfaceRenderMode.Floating
+    )
+
+    floating.footer.map(_.plainText) shouldBe Some("File not found: /tmp/project/missing.scala")
+  }
+
+  it should "render close workflow modals with the active choice highlighted" in {
+    val workflow = CloseWorkflowState(
+      scope = CloseScope.Current,
+      currentBufferId = BufferId(7),
+      currentBufferLabel = "notes.scala",
+      selectedChoice = CloseWorkflowChoice.Discard
+    )
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)),
+      LayoutRect(0, 0, 60, 12),
+      SurfaceRenderMode.Floating
+    )
+
+    floating.header.map(_.plainText) shouldBe Some("unsaved changes")
+    floating.rows.map(_.plainText) should contain("notes.scala")
+    val choiceRow = floating.rows.last
+    choiceRow.layout shouldBe OverlayRowLayout.Distributed
+    choiceRow.segments.map(_.text) shouldBe List("Save", "Discard", "Cancel")
+    choiceRow.segments.find(_.selected).map(_.text) shouldBe Some("Discard")
+  }
+
+  it should "render replace workflow modals with separate find and replace rows" in {
+    val workflow = ReplaceWorkflowState(
+      findText = "needle",
+      replacementText = "thread",
+      activeField = ReplaceWorkflowField.ReplaceWith,
+      statusMessage = Some("3 matches will be replaced")
+    )
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)),
+      LayoutRect(0, 0, 60, 12),
+      SurfaceRenderMode.Floating
+    )
+
+    floating.header.map(_.plainText) shouldBe Some("replace")
+    floating.rows should have size 2
+
+    val findRow = floating.rows.head
+    findRow.layout shouldBe OverlayRowLayout.Split
+    findRow.segments.head.text shouldBe "Find"
+    findRow.segments.last.text shouldBe "needle"
+    findRow.selected shouldBe false
+
+    val replaceRow = floating.rows(1)
+    replaceRow.layout shouldBe OverlayRowLayout.Split
+    replaceRow.segments.head.text shouldBe "Replace"
+    replaceRow.segments.last.text shouldBe "thread"
+    replaceRow.selected shouldBe true
+
+    floating.footer.map(_.plainText) shouldBe Some("3 matches will be replaced")
+  }
+end SurfaceContentResolverSpec

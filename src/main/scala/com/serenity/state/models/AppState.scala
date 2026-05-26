@@ -1,8 +1,7 @@
 package com.serenity.state.models
 
-import com.serenity.command.CommandRunner
 import com.serenity.config.AppConfig
-import com.serenity.ui.layout.{Layout, PeekOverlay, TerminalSize}
+import com.serenity.ui.layout.{Layout, TerminalSize}
 import com.serenity.ui.theme.Theme
 
 case class FindState(
@@ -16,19 +15,66 @@ case class AppState(
     buffers: Map[BufferId, Buffer],
     bufferOrder: List[BufferId] = List.empty, // Tracks buffer creation and navigation order
     focus: Focus,
-    peekOverlay: Option[PeekOverlay] = None,
-    modal: Option[Modal] = None,
+    uiSurfaces: List[UiSurface] = List.empty,
+    actionStack: List[AppAction] = Nil,
     findState: Option[FindState] = None,
     terminalSize: Option[TerminalSize] = None,
     theme: Theme = Theme.default,
     config: AppConfig = AppConfig.default,
-    commandRunner: CommandRunner = CommandRunner.empty,
     nextBufferId: BufferId = BufferId(0),
-    nextPaneId: PaneId = PaneId(0)
+    nextPaneId: PaneId = PaneId(0),
+    nextSurfaceId: Int = 0
 ):
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled
   def isValid: Boolean                   = validationErrors.isEmpty
+
+  /** Cursor position for the currently active editor pane, if any. */
+  def activeCursorPosition: Option[CursorPosition] =
+    layout.activeEditorPaneId
+      .flatMap(layout.editorPanes.get)
+      .flatMap(_.bufferId)
+      .flatMap(buffers.get)
+      .flatMap(_.cursors.headOption)
+
+  def floatingSurfaces: List[UiSurface] =
+    uiSurfaces.filter {
+      _.presentation match
+        case SurfacePresentation.Floating(_, _) => true
+        case _                                  => false
+    }
+
+  def pinnedSurfaces: List[UiSurface] =
+    uiSurfaces.filter {
+      _.presentation match
+        case SurfacePresentation.Pinned(_, _) => true
+        case _                                => false
+    }
+
+  def surfaceById(surfaceId: SurfaceId): Option[UiSurface] =
+    uiSurfaces.find(_.id == surfaceId)
+
+  def activeSurface: Option[UiSurface] =
+    focus match
+      case Focus.Surface(surfaceId) => surfaceById(surfaceId)
+      case _                        => None
+
+  def commandRunnerSurface: Option[UiSurface] =
+    uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.CommandPalette])
+
+  def modalSurface: Option[UiSurface] =
+    uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.ModalWorkflow])
+
+  def peekSurface: Option[UiSurface] =
+    uiSurfaces.find {
+      _.presentation match
+        case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) => true
+        case _                                                             => false
+    }
+
+  def allocateSurfaceId: (AppState, SurfaceId) =
+    val surfaceId = SurfaceId(s"surface-$nextSurfaceId")
+    (copy(nextSurfaceId = nextSurfaceId + 1), surfaceId)
 
   /** Get the currently focused buffer ID, if any */
   def focusedBufferId: Option[BufferId] =
@@ -64,14 +110,8 @@ case class AppState(
     focus match
       case Focus.EditorPane(paneId) if !layout.editorPanes.contains(paneId) =>
         errors += s"Focus points to non-existent pane: $paneId"
-      case Focus.PinnedPanel(pos) if !layout.pinnedPanels.contains(pos) =>
-        errors += s"Focus points to non-existent panel: $pos"
-      case Focus.PeekOverlay if peekOverlay.isEmpty =>
-        errors += "Focus on PeekOverlay but no overlay exists"
-      case Focus.Modal(_) if modal.isEmpty =>
-        errors += "Focus on Modal but no modal exists"
-      case Focus.CommandRunner if !commandRunner.isActive =>
-        errors += "Focus on CommandRunner but runner is not active"
+      case Focus.Surface(surfaceId) if !uiSurfaces.exists(_.id == surfaceId) =>
+        errors += s"Focus points to non-existent surface: $surfaceId"
       case _ => // Valid focus
     // Buffer-Pane consistency
     layout.editorPanes.foreach { (paneId, pane) =>
@@ -101,7 +141,8 @@ object AppState:
       bufferOrder = List(initialBufferId),
       focus = Focus.EditorPane(PaneId(0)),
       nextBufferId = BufferId(1),
-      nextPaneId = PaneId(1)
+      nextPaneId = PaneId(1),
+      nextSurfaceId = 0
     )
 
   def empty: AppState =
@@ -110,3 +151,6 @@ object AppState:
       buffers = Map.empty,
       focus = Focus.EditorPane(PaneId(0))
     )
+
+enum AppAction:
+  case CloseWorkflow(workflow: CloseWorkflowState)

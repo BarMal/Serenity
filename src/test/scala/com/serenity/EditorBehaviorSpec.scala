@@ -24,8 +24,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     state.buffers should have size 1 // Initial empty buffer
     state.layout.editorPanes should have size 1
     state.focus shouldBe Focus.EditorPane(PaneId(0))
-    state.modal shouldBe None
-    state.peekOverlay shouldBe None
+    state.uiSurfaces shouldBe Nil
 
   it should "create a buffer and handle basic text insertion" in new EditorFixture:
     // Given: Create a buffer and associate it with the default pane

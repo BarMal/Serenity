@@ -1,9 +1,9 @@
 package com.serenity
 
-import com.serenity.command.CommandRunner
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Layout, LayoutEngine, PeekContent, PeekOverlay, TerminalSize}
+import com.serenity.command.CommandRunner
+import com.serenity.ui.layout.{Layout, LayoutEngine, PeekContent, TerminalSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -33,10 +33,12 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
   "LayoutEngine.calculateLayout" should "place a peek overlay above the anchored cursor when space is available" in {
     val state = baseState().copy(
-      peekOverlay = Some(
-        PeekOverlay(
-          PeekContent.QuickInfo("map(value: A => B): List[B]"),
-          CursorPosition(6, 18)
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("peek"),
+          SurfaceContent.QuickInfo("map(value: A => B): List[B]"),
+          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.AboveCursor),
+          dismissOnMove = true
         )
       )
     )
@@ -59,10 +61,12 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
   it should "clamp an above-cursor peek overlay into the active pane when the cursor is near the top" in {
     val state = baseState(cursor = CursorPosition(0, 5)).copy(
-      peekOverlay = Some(
-        PeekOverlay(
-          PeekContent.QuickInfo("near-top"),
-          CursorPosition(0, 5)
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("peek-top"),
+          SurfaceContent.QuickInfo("near-top"),
+          SurfacePresentation.Floating(Some(CursorPosition(0, 5)), SurfacePlacement.AboveCursor),
+          dismissOnMove = true
         )
       )
     )
@@ -81,12 +85,19 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
   it should "place an active command runner below the anchored cursor when space is available" in {
     val state = baseState().copy(
-      focus = Focus.CommandRunner,
-      commandRunner = CommandRunner(
-        isActive = true,
-        searchTerm = "",
-        selectedIndex = 0,
-        filteredCommands = List.empty
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(
+            CommandRunner(
+              isActive = true,
+              searchTerm = "",
+              selectedIndex = 0,
+              filteredCommands = List.empty
+            )
+          ),
+          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+        )
       )
     )
 

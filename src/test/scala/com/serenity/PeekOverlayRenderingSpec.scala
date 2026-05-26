@@ -5,7 +5,7 @@ import com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal
 import com.googlecode.lanterna.{TerminalPosition, TerminalSize as LanternaSize}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Layout, LayoutEngine, PeekContent, PeekOverlay, TerminalSize}
+import com.serenity.ui.layout.{Layout, LayoutEngine, TerminalSize}
 import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -37,8 +37,15 @@ class PeekOverlayRenderingSpec extends AnyFlatSpec with Matchers:
         editorPanes = Map(paneId -> pane),
         activeEditorPaneId = Some(paneId)
       ),
-      focus = Focus.PeekOverlay,
-      peekOverlay = Some(PeekOverlay(PeekContent.QuickInfo(text), CursorPosition(4, 12)))
+      focus = Focus.Surface(SurfaceId("peek")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("peek"),
+          SurfaceContent.QuickInfo(text),
+          SurfacePresentation.Floating(Some(CursorPosition(4, 12)), SurfacePlacement.AboveCursor),
+          dismissOnMove = true
+        )
+      )
     )
 
   "Renderer.render" should "paint quick-info peek content inside the above-cursor overlay rect" in {

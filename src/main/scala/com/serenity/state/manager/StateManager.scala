@@ -1,18 +1,19 @@
 package com.serenity.state.manager
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.foldable.*
 import com.serenity.animation.AnimationConfig
-import com.serenity.command.{CommandRegistry, CommandRunner}
-import com.serenity.io.FileManager
+import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner, CommandSurfaceItem}
+import com.serenity.io.{FileManager, FileUtils}
 import com.serenity.keystroke.events.{Event, FileEvent, GlobalAppEvent, SystemEvent}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.components.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer, CommandRunnerReducer, FileEventReducer, ModalStateReducer, PanelStateReducer, PeekStateReducer, ReducerResult, SystemEventReducer}
 import com.serenity.ui.layout.*
+import com.serenity.ui.theme.config.AppThemeManager
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
 trait StateManager:
@@ -100,6 +101,26 @@ object StateManager:
       LoggerFactory[IO].getLogger(using LoggerName("com.serenity.state.manager.StateManager"))
     )
 
+  def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
+    val modePart =
+      if runner.searchTerm.isEmpty then s"mode=browse category=${runner.activeCategory}"
+      else s"mode=search query=${runner.searchTerm} category=${runner.activeCategory}"
+    val selectedPart =
+      runner.selectedItem match
+        case Some(CommandSurfaceItem.CommandItem(command)) => s"selected=command:${command.name}"
+        case Some(option: CommandSurfaceItem.OptionItem)   => s"selected=option:${option.id}"
+        case None                                          => "selected=none"
+
+    s"event=$event $modePart $selectedPart"
+
+  def describeCommandExecution(command: Command): String =
+    val intentName =
+      command.intent match
+        case CommandIntent.Custom(_) => "Custom"
+        case other                   => other.toString
+
+    s"command=${command.name} category=${command.category} intent=$intentName"
+
   private class StateManagerImpl(
       stateRef: Ref[IO, AppState],
       quitSignal: Deferred[IO, Unit],
@@ -107,6 +128,7 @@ object StateManager:
   )(using Balance)
       extends StateManager:
     private val fileManager = new FileManager()
+    private val themeManager = AppThemeManager.create
 
     def getCurrentState: IO[AppState] = stateRef.get
 
@@ -236,18 +258,15 @@ object StateManager:
           if state.layout.activeEditorPaneId.contains(paneId) then updatedPanes.keys.headOption
           else state.layout.activeEditorPaneId
 
-        val (newFocus, newCommandRunner) = newActivePaneId match
-          case Some(id) => (Focus.EditorPane(id), state.commandRunner)
-          case None     => (Focus.CommandRunner, CommandRunner.empty.activate(CommandRegistry.default))
-
-        state.copy(
+        val updatedState = state.copy(
           layout = state.layout.copy(
             editorPanes = updatedPanes,
             activeEditorPaneId = newActivePaneId
-          ),
-          focus = newFocus,
-          commandRunner = newCommandRunner
+          )
         )
+        newActivePaneId match
+          case Some(id) => updatedState.copy(focus = Focus.EditorPane(id))
+          case None     => ensureCommandRunnerSurface(updatedState)
       }
 
     def setBufferForPane(paneId: PaneId, bufferId: BufferId): IO[Unit] =
@@ -329,16 +348,23 @@ object StateManager:
         _ <- event match
           case systemEvent: SystemEvent =>
             applyReducerResult(SystemEventReducer.reduce(systemEvent, currentState), currentState)
+          case com.serenity.keystroke.events.CloseTab =>
+            beginCloseAction(CloseScope.Current, currentState)
+          case com.serenity.keystroke.events.Quit =>
+            beginCloseAction(CloseScope.Quit, currentState)
           case appEvent: GlobalAppEvent =>
             val registry = CommandRegistry.withToggleUI
             applyReducerResult(AppEventReducer.reduce(appEvent, currentState, registry), currentState)
           case fileEvent: FileEvent =>
             applyReducerResult(FileEventReducer.reduce(fileEvent, currentState), currentState)
-          case _ if currentState.focus == Focus.CommandRunner =>
+          case _ if focusedCommandRunner(currentState).isDefined =>
             val registry = CommandRegistry.withToggleUI
+            val runner   = focusedCommandRunner(currentState).get
+            val _        = ()
+            logger.info(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}") >>
             applyReducerResult(CommandRunnerReducer.reduce(event, currentState, registry), currentState)
           case _ =>
-            val component = getComponentForFocus(currentState.focus)
+            val component = getComponentForFocus(currentState.focus, currentState)
             val result    = component.processEvent(event, currentState)
             for
               newState <- applyComponentResult(result, currentState)
@@ -349,21 +375,39 @@ object StateManager:
     private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       newState.validated match
         case Right(validState) =>
-          stateRef.set(validState)
+          val modalTransitionLog =
+            (fallbackState.modalSurface, validState.modalSurface) match
+              case (before, after) if before != after =>
+                logger.info(
+                  s"[STATE MODAL] before=${before.map(_.id).getOrElse("none")} " +
+                    s"after=${after.map(_.id).getOrElse("none")} focus=${validState.focus}"
+                )
+              case _ =>
+                IO.unit
+          modalTransitionLog >> stateRef.set(validState)
         case Left(errors) =>
           // Log validation errors and keep unchanged state
           logger.error(s"State validation failed: ${errors.mkString(", ")}") >>
             stateRef.set(fallbackState)
 
-    private def getComponentForFocus(focus: Focus): FocusedComponent =
+    private def getComponentForFocus(focus: Focus, state: AppState): FocusedComponent =
       focus match
-        case Focus.EditorPane(paneId)    => new EditorPaneComponent(paneId)
-        case Focus.PinnedPanel(position) => new PinnedPanelComponent(position)
-        case Focus.PeekOverlay           => new PeekOverlayComponent()
-        case Focus.Modal(modalType)      => new ModalComponent(modalType)
-        case Focus.CommandRunner =>
-          val registry = CommandRegistry.withToggleUI
-          new CommandRunnerComponent(registry)
+        case Focus.EditorPane(paneId) => new EditorPaneComponent(paneId)
+        case Focus.Surface(surfaceId) =>
+          state.surfaceById(surfaceId) match
+            case Some(surface) =>
+              surface.content match
+                case SurfaceContent.CommandPalette(_) =>
+                  val registry = CommandRegistry.withToggleUI
+                  new CommandRunnerComponent(registry)
+                case SurfaceContent.ModalWorkflow(modal) =>
+                  new ModalComponent(modalType(modal))
+                case _ =>
+                  surface.presentation match
+                    case SurfacePresentation.Pinned(position, _) => new PinnedPanelComponent(position)
+                    case SurfacePresentation.Floating(_, _)      => new PeekOverlayComponent()
+            case None =>
+              new PeekOverlayComponent()
 
     private def applyReducerResult(result: ReducerResult, fallbackState: AppState): IO[Unit] =
       for
@@ -376,18 +420,29 @@ object StateManager:
         case AppEffect.CompleteQuit =>
           quitSignal.complete(()).attempt.void
         case AppEffect.ExecuteCommand(command) =>
-          stateRef.get.flatMap(state => interpretCommand(command, state))
+          logger.info(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
+            stateRef.get.flatMap(state => interpretCommand(command, state))
         case AppEffect.SaveBuffer(bufferId) =>
           saveBufferEffect(bufferId)
         case AppEffect.SaveBufferAs(bufferId, path) =>
           saveBufferAsEffect(bufferId, path)
         case AppEffect.RequestOpenFile =>
           logger.debug("[FILE] Open file requested")
+        case AppEffect.RefreshFileWorkflow(surfaceId) =>
+          refreshFileWorkflowEffect(surfaceId)
+        case AppEffect.SubmitFileWorkflow(surfaceId) =>
+          submitFileWorkflowEffect(surfaceId)
+        case AppEffect.SubmitReplaceWorkflow(surfaceId) =>
+          submitReplaceWorkflowEffect(surfaceId)
+        case AppEffect.SubmitCloseWorkflow(surfaceId) =>
+          submitCloseWorkflowEffect(surfaceId)
 
     private def applyComponentResult(result: ComponentResult, state: AppState): IO[AppState] =
       result match
         case ComponentResult.NoChange                => IO.pure(state)
         case ComponentResult.StateChange(update)     => IO.pure(update(state))
+        case ComponentResult.ReducerUpdate(result)   =>
+          applyReducerResult(result, state) >> stateRef.get
         case ComponentResult.FocusTransfer(newFocus) => IO.pure(state.copy(focus = newFocus))
         case ComponentResult.Dismiss =>
           val newFocus = determineFallbackFocus(state)
@@ -407,10 +462,41 @@ object StateManager:
 
     private def dismissCurrentFocus(state: AppState): AppState =
       state.focus match
-        case Focus.PeekOverlay   => state.copy(peekOverlay = None)
-        case Focus.Modal(_)      => state.copy(modal = None)
-        case Focus.CommandRunner => state.copy(commandRunner = CommandRunner.empty)
-        case _                   => state // Other focus types don't have dismissible state
+        case Focus.Surface(surfaceId) =>
+          state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surfaceId))
+        case _ =>
+          state
+
+    private def focusedCommandRunner(state: AppState): Option[CommandRunner] =
+      state.activeSurface.flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(runner) => Some(runner)
+          case _                                     => None
+      }
+
+    private def ensureCommandRunnerSurface(state: AppState): AppState =
+      val registry = CommandRegistry.default
+      val runner = CommandRunner.empty.activate(registry).withPreviousFocus(Focus.EditorPane(PaneId(0)))
+      val (stateWithId, surfaceId) =
+        state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
+      val surface = UiSurface(
+        id = surfaceId,
+        content = SurfaceContent.CommandPalette(runner),
+        presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+      )
+      stateWithId.copy(
+        uiSurfaces = stateWithId.uiSurfaces.filterNot(_.id == surfaceId) :+ surface,
+        focus = Focus.Surface(surfaceId)
+      )
+
+    private def modalType(modal: Modal): ModalType =
+      modal match
+        case Modal.GotoLine(_)      => ModalType.GotoLine
+        case Modal.Find(_, _, _)    => ModalType.Find
+        case Modal.FileWorkflow(_)  => ModalType.FileWorkflow
+        case Modal.ReplaceWorkflow(_) => ModalType.ReplaceWorkflow
+        case Modal.CloseWorkflow(_) => ModalType.CloseWorkflow
+        case Modal.Custom(name, _)  => ModalType.Custom(name)
 
     private def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =
       import com.serenity.command.{AnimationMode, CommandIntent}
@@ -427,25 +513,30 @@ object StateManager:
             case Some(bufferId) => saveBufferEffect(bufferId)
             case None           => logger.debug("[CMD] No focused buffer to save")
         case CommandIntent.SaveCurrentFileAs =>
-          logger.debug("[CMD] Save As command requested")
+          openFileWorkflowModal(FileWorkflowMode.SaveAs, state)
         case CommandIntent.OpenFile =>
-          logger.debug("[CMD] Open command requested")
+          openFileWorkflowModal(FileWorkflowMode.Open, state)
         case CommandIntent.QuitApp =>
-          quitSignal.complete(()).attempt.void
+          beginCloseAction(CloseScope.Quit, state)
+        case CommandIntent.CloseAll =>
+          beginCloseAction(CloseScope.All, state)
+        case CommandIntent.CloseOthers =>
+          beginCloseAction(CloseScope.Others, state)
         case CommandIntent.NewFile =>
-          logger.debug("[CMD] New file command requested")
+          val registry = CommandRegistry.withToggleUI
+          updateState(current => AppEventReducer.reduce(com.serenity.keystroke.events.NewTab, current, registry).state)
         case CommandIntent.CloseCurrentFile =>
-          logger.debug("[CMD] Close file command requested")
+          beginCloseAction(CloseScope.Current, state)
         case CommandIntent.FindInCurrentFile =>
-          logger.debug("[CMD] Find command requested")
+          updateState(current => ModalStateReducer.show(Modal.Find("", Nil, 0), current).state)
         case CommandIntent.ReplaceInCurrentFile =>
-          logger.debug("[CMD] Replace command requested")
+          updateState(current => ModalStateReducer.show(Modal.ReplaceWorkflow(ReplaceWorkflowState()), current).state)
         case CommandIntent.OpenGotoLine =>
-          logger.debug("[CMD] Go to line command requested")
+          updateState(current => ModalStateReducer.show(Modal.GotoLine(""), current).state)
         case CommandIntent.ToggleTheme =>
-          logger.debug("[CMD] Toggle theme command requested")
+          toggleThemeEffect(state)
         case CommandIntent.ReloadTheme =>
-          logger.debug("[CMD] Reload theme command requested")
+          reloadThemeEffect(state)
         case CommandIntent.FormatCurrentFile =>
           logger.debug("[CMD] Format command requested")
         case CommandIntent.SetAnimationMode(mode) =>
@@ -640,10 +731,11 @@ object StateManager:
               .saveBuffer(buffer)
               .flatMap(savedBuffer =>
                 stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> savedBuffer)))
-              )
-              .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId"))
+                )
+                .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId"))
           case Some(_) =>
-            logger.debug(s"[FILE] Buffer $bufferId has no file path; Save As required")
+            logger.debug(s"[FILE] Buffer $bufferId has no file path; opening Save As workflow") >>
+              openFileWorkflowModal(FileWorkflowMode.SaveAs, state, Some(bufferId))
           case None =>
             logger.debug(s"[FILE] Buffer $bufferId not found for save")
       }
@@ -661,3 +753,444 @@ object StateManager:
           case None =>
             logger.debug(s"[FILE] Buffer $bufferId not found for save as")
       }
+
+    private def toggleThemeEffect(state: AppState): IO[Unit] =
+      val targetThemeName =
+        state.theme.name match
+          case "light"         => "dark"
+          case "dark"          => "light"
+          case "default-light" => "default-dark"
+          case "default-dark"  => "default-light"
+          case name if name.toLowerCase.contains("light") => "default-dark"
+          case _                                          => "default-light"
+
+      themeManager
+        .loadTheme(targetThemeName)
+        .flatMap(theme => updateState(_.copy(theme = theme)))
+        .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to toggle theme to $targetThemeName"))
+
+    private def reloadThemeEffect(state: AppState): IO[Unit] =
+      themeManager
+        .loadTheme(state.theme.name)
+        .flatMap(theme => updateState(_.copy(theme = theme)))
+        .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to reload theme ${state.theme.name}"))
+
+    private def openFileWorkflowModal(
+        mode: FileWorkflowMode,
+        state: AppState,
+        bufferIdOverride: Option[BufferId] = None
+    ): IO[Unit] =
+      val targetBufferId = bufferIdOverride.orElse(state.focusedBufferId)
+      val focusedPath = targetBufferId.flatMap(id => state.buffers.get(id)).flatMap(_.filePath)
+      val filename = mode match
+        case FileWorkflowMode.SaveAs => focusedPath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("")
+        case FileWorkflowMode.Open   => ""
+
+        val pathIO =
+          mode match
+            case FileWorkflowMode.SaveAs =>
+              focusedPath
+                .flatMap(path => Option(path.getParent))
+                .map(IO.pure)
+                .getOrElse(com.serenity.io.FileUtils.getCurrentDirectory)
+            case FileWorkflowMode.Open =>
+              com.serenity.io.FileUtils.getCurrentDirectory
+
+        pathIO.flatMap { basePath =>
+          val workflow = FileWorkflowState(
+            mode = mode,
+            filename = filename,
+            path = basePath.toString
+          )
+          val predictedState = ModalStateReducer.show(Modal.FileWorkflow(workflow), state).state
+          logger.info(
+            s"[FILE-WORKFLOW OPENED] mode=$mode filename=${workflow.filename} path=${workflow.path} " +
+              s"surfaceId=${predictedState.modalSurface.map(_.id).getOrElse("none")} focus=${predictedState.focus}"
+          ) >>
+            updateState(current => ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state)
+        }
+
+    private def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
+      val targetBufferIds = closeTargets(scope, state)
+      val dirtyBufferIds = targetBufferIds.filter(bufferId => state.buffers.get(bufferId).exists(_.isDirty))
+      val cleanBufferIds =
+        if scope == CloseScope.Quit then Nil
+        else targetBufferIds.filterNot(dirtyBufferIds.contains)
+      val stateAfterClean = cleanBufferIds.foldLeft(state)(closeBufferUsingExistingFlow)
+
+      dirtyBufferIds match
+        case Nil =>
+          val finalState = clearCloseActions(stateAfterClean)
+          stateRef.set(finalState) >>
+            Option.when(scope == CloseScope.Quit)(quitSignal.complete(()).attempt.void).getOrElse(IO.unit)
+        case currentBufferId :: remaining =>
+          promptCloseWorkflow(stateAfterClean, CloseWorkflowState(
+            scope = scope,
+            currentBufferId = currentBufferId,
+            currentBufferLabel = closeBufferLabel(stateAfterClean, currentBufferId),
+            remainingBufferIds = remaining
+          ))
+
+    private def closeTargets(scope: CloseScope, state: AppState): List[BufferId] =
+      scope match
+        case CloseScope.Current => state.focusedBufferId.toList
+        case CloseScope.All     => state.bufferOrder
+        case CloseScope.Others  => state.focusedBufferId.toList match
+            case focused :: Nil => state.bufferOrder.filterNot(_ == focused)
+            case Nil            => state.bufferOrder
+        case CloseScope.Quit    => state.bufferOrder
+
+    private def promptCloseWorkflow(state: AppState, workflow: CloseWorkflowState): IO[Unit] =
+      val focusedState = focusBufferForWorkflow(state, workflow.currentBufferId)
+      val modalState = ModalStateReducer.show(Modal.CloseWorkflow(workflow), withCloseAction(focusedState, workflow)).state
+      stateRef.set(modalState)
+
+    private def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+      stateRef.get.flatMap { state =>
+        closeWorkflowSurface(state, surfaceId) match
+          case Some((_, workflow)) =>
+            workflow.selectedChoice match
+              case CloseWorkflowChoice.Cancel =>
+                dismissSurfaceAndFocusEditor(surfaceId) >>
+                  stateRef.update(clearCloseActions)
+              case CloseWorkflowChoice.Discard =>
+                val dismissedState = clearCloseActions(dismissModalSurface(state))
+                val nextState =
+                  if workflow.scope == CloseScope.Quit then dismissedState
+                  else closeBufferUsingExistingFlow(dismissedState, workflow.currentBufferId)
+                stateRef.set(nextState) >> continueCloseWorkflow(workflow, nextState)
+              case CloseWorkflowChoice.Save =>
+                state.buffers.get(workflow.currentBufferId) match
+                  case Some(buffer) if buffer.filePath.isDefined =>
+                    saveBufferEffect(workflow.currentBufferId) >>
+                      stateRef.get.flatMap { savedState =>
+                        val dismissedState = clearCloseActions(dismissModalSurface(savedState))
+                        val nextState =
+                          if workflow.scope == CloseScope.Quit then dismissedState
+                          else closeBufferUsingExistingFlow(dismissedState, workflow.currentBufferId)
+                        stateRef.set(nextState) >> continueCloseWorkflow(workflow, nextState)
+                      }
+                  case Some(_) =>
+                    val dismissedState = withCloseAction(dismissModalSurface(state), workflow)
+                    stateRef.set(dismissedState) >>
+                      openFileWorkflowModal(FileWorkflowMode.SaveAs, dismissedState, Some(workflow.currentBufferId))
+                  case None =>
+                    stateRef.set(clearCloseActions(dismissModalSurface(state)))
+          case None =>
+            IO.unit
+      }
+
+    private def continueCloseWorkflow(workflow: CloseWorkflowState, state: AppState): IO[Unit] =
+      workflow.remainingBufferIds match
+        case nextBufferId :: remaining =>
+          promptCloseWorkflow(
+            state,
+            CloseWorkflowState(
+              scope = workflow.scope,
+              currentBufferId = nextBufferId,
+              currentBufferLabel = closeBufferLabel(state, nextBufferId),
+              remainingBufferIds = remaining
+            )
+          )
+        case Nil =>
+          stateRef.set(clearCloseActions(state)) >>
+            Option.when(workflow.scope == CloseScope.Quit)(quitSignal.complete(()).attempt.void).getOrElse(IO.unit)
+
+    private def focusBufferForWorkflow(state: AppState, bufferId: BufferId): AppState =
+      AppEventReducer.rebalancePanes(state, Some(bufferId))
+
+    private def closeBufferUsingExistingFlow(state: AppState, bufferId: BufferId): AppState =
+      val registry = CommandRegistry.withToggleUI
+      val focusedState = focusBufferForWorkflow(state, bufferId)
+      AppEventReducer.reduce(com.serenity.keystroke.events.CloseTab, focusedState, registry).state
+
+    private def closeBufferLabel(state: AppState, bufferId: BufferId): String =
+      state.buffers.get(bufferId)
+        .flatMap(_.filePath.flatMap(path => Option(path.getFileName).map(_.toString)))
+        .getOrElse(s"Buffer ${bufferId.value} - unsaved")
+
+    private def withCloseAction(state: AppState, workflow: CloseWorkflowState): AppState =
+      state.copy(actionStack = AppAction.CloseWorkflow(workflow) :: clearCloseActions(state).actionStack)
+
+    private def clearCloseActions(state: AppState): AppState =
+      state.copy(actionStack = state.actionStack.filter {
+        case AppAction.CloseWorkflow(_) => false
+        case _                          => true
+      })
+
+    private def dismissModalSurface(state: AppState): AppState =
+      state.copy(uiSurfaces = state.uiSurfaces.filterNot {
+        case UiSurface(_, SurfaceContent.ModalWorkflow(_), _, _) => true
+        case _                                                   => false
+      })
+
+    private def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+      stateRef.get.flatMap { state =>
+        fileWorkflowSurface(state, surfaceId) match
+          case Some((_, workflow)) =>
+            refreshWorkflowState(workflow).flatMap { refreshed =>
+              updateFileWorkflowSurface(surfaceId, refreshed)
+            }
+          case None =>
+            IO.unit
+      }
+
+    private def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+      stateRef.get.flatMap { state =>
+        fileWorkflowSurface(state, surfaceId) match
+          case Some((_, workflow)) =>
+            workflow.mode match
+              case FileWorkflowMode.Open =>
+                completeOpenWorkflow(surfaceId, workflow)
+              case FileWorkflowMode.SaveAs =>
+                completeSaveAsWorkflow(surfaceId, workflow, state)
+          case None =>
+            IO.unit
+      }
+
+    private def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+      stateRef.get.flatMap { state =>
+        replaceWorkflowSurface(state, surfaceId) match
+          case Some((_, workflow)) =>
+            activeEditorBufferId(state) match
+              case None =>
+                updateReplaceWorkflowSurface(
+                  surfaceId,
+                  workflow.copy(statusMessage = Some("No active buffer"))
+                )
+              case Some(bufferId) if workflow.findText.isEmpty =>
+                updateReplaceWorkflowSurface(
+                  surfaceId,
+                  workflow.copy(statusMessage = Some("Enter text to find"))
+                )
+              case Some(bufferId) =>
+                state.buffers.get(bufferId) match
+                  case Some(buffer) =>
+                    val matches = buffer.content.searchAll(workflow.findText)
+                    if matches.isEmpty then
+                      updateReplaceWorkflowSurface(
+                        surfaceId,
+                        workflow.copy(statusMessage = Some("No matches found"))
+                      )
+                    else
+                      val updatedBuffer = buffer.copy(
+                        content = buffer.content.replaceAll(workflow.findText, workflow.replacementText),
+                        isDirty = true
+                      )
+                      stateRef.update { current =>
+                        val updatedState = current.copy(
+                          buffers = current.buffers + (bufferId -> updatedBuffer),
+                          uiSurfaces = current.uiSurfaces.filterNot(_.id == surfaceId)
+                        )
+                        current.layout.activeEditorPaneId match
+                          case Some(paneId) => updatedState.copy(focus = Focus.EditorPane(paneId))
+                          case None         => updatedState
+                      }
+                  case None =>
+                    updateReplaceWorkflowSurface(
+                      surfaceId,
+                      workflow.copy(statusMessage = Some("No active buffer"))
+                    )
+                
+          case None =>
+            IO.unit
+      }
+
+    private def refreshWorkflowState(workflow: FileWorkflowState): IO[FileWorkflowState] =
+      for
+        directoryPath <- workflowDirectoryPath(workflow)
+        suggestions <- workflow.activeField match
+          case FileWorkflowField.Path => pathSuggestions(workflow.path)
+          case FileWorkflowField.Filename if workflow.mode == FileWorkflowMode.Open => filenameSuggestions(workflow)
+          case FileWorkflowField.Filename => IO.pure(Nil)
+        missingSegments <- missingDirectorySegments(directoryPath)
+      yield workflow.copy(
+        suggestions = suggestions,
+        selectedSuggestionIndex = if suggestions.isEmpty then 0 else math.min(workflow.selectedSuggestionIndex, suggestions.length - 1),
+        missingPathSegments = missingSegments,
+        confirmCreateDirectories = false,
+        statusMessage = None
+      )
+
+    private def pathSuggestions(pathInput: String): IO[List[FileWorkflowSuggestion]] =
+      for
+        currentDirectory <- FileUtils.getCurrentDirectory
+        basePathInput = if pathInput.trim.isEmpty then currentDirectory.toString else pathInput
+        resolvedPath <- FileUtils.resolvePath(basePathInput)
+        isDirectoryPath <- IO.blocking(Files.exists(resolvedPath) && Files.isDirectory(resolvedPath))
+        endsWithSeparator = pathInput.endsWith("/") || pathInput.endsWith("\\")
+        baseDirectory = if endsWithSeparator || isDirectoryPath then resolvedPath else Option(resolvedPath.getParent).getOrElse(currentDirectory)
+        prefix = if endsWithSeparator || isDirectoryPath then "" else Option(resolvedPath.getFileName).map(_.toString).getOrElse("")
+        entries <- fileManager.getFileBrowser.listDirectory(baseDirectory)
+      yield entries
+        .filter(_.isDirectory)
+        .filter(entry => prefix.isEmpty || entry.name.toLowerCase.startsWith(prefix.toLowerCase))
+        .map(entry => FileWorkflowSuggestion(entry.path.toString, isDirectory = true))
+
+    private def filenameSuggestions(workflow: FileWorkflowState): IO[List[FileWorkflowSuggestion]] =
+      for
+        directoryPath <- workflowDirectoryPath(workflow)
+        entries <- fileManager.getFileBrowser.listDirectory(directoryPath)
+      yield entries
+        .filterNot(_.isDirectory)
+        .filter(entry => workflow.filename.trim.isEmpty || entry.name.toLowerCase.startsWith(workflow.filename.toLowerCase))
+        .filter(entry => FileUtils.isReadableFile(entry.path))
+        .map(entry => FileWorkflowSuggestion(entry.name, isDirectory = false))
+
+    private def workflowDirectoryPath(workflow: FileWorkflowState): IO[Path] =
+      if workflow.filename.trim.nonEmpty then
+        FileUtils.resolvePath(workflow.path)
+      else
+        FileUtils.resolvePath(workflow.path).map(path => Option(path.getParent).getOrElse(path))
+
+    private def workflowTargetPath(workflow: FileWorkflowState): IO[Path] =
+      if workflow.filename.trim.nonEmpty then
+        FileUtils.resolvePath(workflow.path).map(_.resolve(workflow.filename.trim).normalize())
+      else
+        FileUtils.resolvePath(workflow.path)
+
+    private def missingDirectorySegments(directoryPath: Path): IO[List[String]] =
+      IO.blocking {
+        val normalized = directoryPath.normalize()
+        val segmentNames = (0 until normalized.getNameCount).toList.map(index => normalized.getName(index).toString)
+        val initialPath =
+          Option(normalized.getRoot).getOrElse(Paths.get(""))
+
+        segmentNames.foldLeft((initialPath, false, List.empty[String])) { case ((currentPath, alreadyMissing, missing), segment) =>
+          val nextPath =
+            if currentPath.toString.isEmpty then Paths.get(segment)
+            else currentPath.resolve(segment)
+          val nextMissing =
+            if alreadyMissing || !Files.exists(nextPath) then missing :+ segment
+            else missing
+          val nextAlreadyMissing = alreadyMissing || !Files.exists(nextPath)
+          (nextPath, nextAlreadyMissing, nextMissing)
+        }._3
+      }
+
+    private def completeOpenWorkflow(surfaceId: SurfaceId, workflow: FileWorkflowState): IO[Unit] =
+      workflowTargetPath(workflow).flatMap { targetPath =>
+        if !FileUtils.isReadableFile(targetPath) then
+          updateFileWorkflowSurface(
+            surfaceId,
+            workflow.copy(statusMessage = Some(s"File not found: $targetPath"))
+          ) >>
+            logger.debug(s"[FILE-WORKFLOW] Open target is not readable: $targetPath")
+        else
+          fileManager
+            .loadFile(targetPath)
+            .flatMap { loadedBuffer =>
+              stateRef.modify { state =>
+                val newBufferId = state.nextBufferId
+                val bufferToInsert = loadedBuffer.copy(id = newBufferId)
+                val updatedState = state.copy(
+                  buffers = state.buffers + (newBufferId -> bufferToInsert),
+                  bufferOrder = insertBufferInOrder(state, newBufferId),
+                  nextBufferId = BufferId(newBufferId.value + 1),
+                  uiSurfaces = state.uiSurfaces.filterNot(_.id == surfaceId)
+                )
+                val rebalanced = AppEventReducer.rebalancePanes(updatedState, Some(newBufferId))
+                val focused = focusBuffer(rebalanced, newBufferId)
+                (focused, ())
+              }
+            }
+            .handleErrorWith(ex => logger.error(ex)(s"[FILE-WORKFLOW] Failed to open $targetPath"))
+      }
+
+    private def completeSaveAsWorkflow(surfaceId: SurfaceId, workflow: FileWorkflowState, state: AppState): IO[Unit] =
+      activeEditorBufferId(state) match
+        case Some(bufferId) =>
+          if workflow.missingPathSegments.nonEmpty && !workflow.confirmCreateDirectories then
+            updateFileWorkflowSurface(surfaceId, workflow.copy(confirmCreateDirectories = true))
+          else
+            workflowTargetPath(workflow).flatMap { targetPath =>
+              saveBufferAsEffect(bufferId, targetPath) >>
+                stateRef.get.flatMap { savedState =>
+                  savedState.actionStack.collectFirst { case AppAction.CloseWorkflow(closeWorkflow) => closeWorkflow } match
+                    case Some(closeWorkflow) if closeWorkflow.currentBufferId == bufferId =>
+                      val dismissedState = dismissModalSurface(savedState)
+                      val nextState =
+                        if closeWorkflow.scope == CloseScope.Quit then dismissedState
+                        else closeBufferUsingExistingFlow(dismissedState, bufferId)
+                      stateRef.set(nextState) >> continueCloseWorkflow(closeWorkflow, nextState)
+                    case _ =>
+                      dismissSurfaceAndFocusEditor(surfaceId)
+                }
+            }
+        case None =>
+          logger.debug("[FILE-WORKFLOW] No focused buffer available for save-as")
+
+    private def activeEditorBufferId(state: AppState): Option[BufferId] =
+      state.layout.activeEditorPaneId
+        .flatMap(state.layout.editorPanes.get)
+        .flatMap(_.bufferId)
+
+    private def updateFileWorkflowSurface(surfaceId: SurfaceId, workflow: FileWorkflowState): IO[Unit] =
+      stateRef.update { state =>
+        state.surfaceById(surfaceId) match
+          case Some(surface) =>
+            val updatedSurface = surface.copy(content = SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)))
+            state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surfaceId) :+ updatedSurface)
+          case None =>
+            state
+      }
+
+    private def updateReplaceWorkflowSurface(surfaceId: SurfaceId, workflow: ReplaceWorkflowState): IO[Unit] =
+      stateRef.update { state =>
+        state.surfaceById(surfaceId) match
+          case Some(surface) =>
+            val updatedSurface = surface.copy(content = SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)))
+            state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surfaceId) :+ updatedSurface)
+          case None =>
+            state
+      }
+
+    private def dismissSurfaceAndFocusEditor(surfaceId: SurfaceId): IO[Unit] =
+      stateRef.update { state =>
+        val baseState = state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surfaceId))
+        state.layout.activeEditorPaneId match
+          case Some(paneId) => baseState.copy(focus = Focus.EditorPane(paneId))
+          case None         => baseState
+      }
+
+    private def fileWorkflowSurface(state: AppState, surfaceId: SurfaceId): Option[(UiSurface, FileWorkflowState)] =
+      state.surfaceById(surfaceId).flatMap { surface =>
+        surface.content match
+          case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some((surface, workflow))
+          case _                                                          => None
+      }
+
+    private def replaceWorkflowSurface(state: AppState, surfaceId: SurfaceId): Option[(UiSurface, ReplaceWorkflowState)] =
+      state.surfaceById(surfaceId).flatMap { surface =>
+        surface.content match
+          case SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)) => Some((surface, workflow))
+          case _                                                             => None
+      }
+
+    private def closeWorkflowSurface(state: AppState, surfaceId: SurfaceId): Option[(UiSurface, CloseWorkflowState)] =
+      state.surfaceById(surfaceId).flatMap { surface =>
+        surface.content match
+          case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some((surface, workflow))
+          case _                                                           => None
+      }
+
+    private def insertBufferInOrder(state: AppState, newBufferId: BufferId): List[BufferId] =
+      state.focusedBufferId match
+        case Some(currentBufferId) =>
+          val currentIndex = state.bufferOrder.indexOf(currentBufferId)
+          if currentIndex == -1 then state.bufferOrder :+ newBufferId
+          else
+            val (before, after) = state.bufferOrder.splitAt(currentIndex + 1)
+            before ++ List(newBufferId) ++ after
+        case None =>
+          state.bufferOrder :+ newBufferId
+
+    private def focusBuffer(state: AppState, bufferId: BufferId): AppState =
+      state.layout.editorPanes.find(_._2.bufferId.contains(bufferId)) match
+        case Some((paneId, _)) =>
+          state.copy(
+            focus = Focus.EditorPane(paneId),
+            layout = state.layout.copy(activeEditorPaneId = Some(paneId))
+          )
+        case None =>
+          state

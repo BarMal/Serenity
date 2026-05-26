@@ -32,24 +32,35 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
 
   "ModalStateReducer" should "show and dismiss modals while preserving editor focus fallback" in {
     val shown = ModalStateReducer.show(Modal.GotoLine("12"), baseState)
+    val modalSurface = shown.state.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("12")))
 
-    shown.state.modal shouldBe Some(Modal.GotoLine("12"))
-    shown.state.focus shouldBe Focus.Modal(ModalType.GotoLine)
+    modalSurface shouldBe defined
+    shown.state.focus shouldBe Focus.Surface(modalSurface.get.id)
 
     val dismissed = ModalStateReducer.dismiss(shown.state)
-    dismissed.state.modal shouldBe None
+    dismissed.state.uiSurfaces.exists(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("12"))) shouldBe false
     dismissed.state.focus shouldBe Focus.EditorPane(paneId)
+  }
+
+  it should "track custom modal names through focus typing" in {
+    val shown = ModalStateReducer.show(Modal.Custom("signature-help", "map("), baseState)
+    val modalSurface = shown.state.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(Modal.Custom("signature-help", "map(")))
+
+    modalSurface shouldBe defined
+    shown.state.focus shouldBe Focus.Surface(modalSurface.get.id)
   }
 
   "PeekStateReducer" should "show and dismiss peek overlays while preserving editor focus fallback" in {
     val overlay = PeekContent.QuickInfo("signature")
     val shown   = PeekStateReducer.show(overlay, CursorPosition(3, 4), baseState)
+    val peekSurface = shown.state.uiSurfaces.find(_.content == SurfaceContent.QuickInfo("signature"))
 
-    shown.state.peekOverlay shouldBe Some(PeekOverlay(overlay, CursorPosition(3, 4)))
-    shown.state.focus shouldBe Focus.PeekOverlay
+    peekSurface shouldBe defined
+    shown.state.focus shouldBe Focus.Surface(peekSurface.get.id)
+    peekSurface.get.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(3, 4)), SurfacePlacement.AboveCursor)
 
     val dismissed = PeekStateReducer.dismiss(shown.state)
-    dismissed.state.peekOverlay shouldBe None
+    dismissed.state.uiSurfaces.exists(_.content == SurfaceContent.QuickInfo("signature")) shouldBe false
     dismissed.state.focus shouldBe Focus.EditorPane(paneId)
   }
 
@@ -57,35 +68,90 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     val content = PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/tmp")), None)
 
     val pinned = PanelStateReducer.pin(content, PanelPosition.Left, 24, baseState)
-    pinned.state.layout.pinnedPanels(PanelPosition.Left) shouldBe PinnedPanel(PanelPosition.Left, content, 24)
+    val pinnedSurface = pinned.state.uiSurfaces.find(_.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 24))
+    pinnedSurface shouldBe defined
+    pinnedSurface.get.content shouldBe SurfaceContent.DirectoryListing(Paths.get("/tmp"), List.empty, None)
 
     val focused = PanelStateReducer.focus(PanelPosition.Left, pinned.state)
-    focused.state.focus shouldBe Focus.PinnedPanel(PanelPosition.Left)
+    focused.state.focus shouldBe Focus.Surface(pinnedSurface.get.id)
 
     val unpinned = PanelStateReducer.unpin(PanelPosition.Left, focused.state)
-    unpinned.state.layout.pinnedPanels.contains(PanelPosition.Left) shouldBe false
+    unpinned.state.uiSurfaces.exists(_.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 24)) shouldBe false
     unpinned.state.focus shouldBe Focus.EditorPane(paneId)
   }
 
   it should "pin a directory listing from a peek overlay" in {
+    val surface = UiSurface(
+      SurfaceId("peek-directory"),
+      SurfaceContent.DirectoryListing(
+        Paths.get("/repo"),
+        List(DirEntry(Paths.get("/repo/src"), "src", true)),
+        None
+      ),
+      SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.AboveCursor),
+      dismissOnMove = true
+    )
     val peekState = baseState.copy(
-      focus = Focus.PeekOverlay,
-      peekOverlay = Some(
-        PeekOverlay(
-          PeekContent.DirectoryListing(
-            Paths.get("/repo"),
-            List(DirEntry(Paths.get("/repo/src"), "src", true))
-          ),
-          CursorPosition(0, 0)
-        )
-      )
+      focus = Focus.Surface(surface.id),
+      uiSurfaces = List(surface)
     )
 
     val pinned = PanelStateReducer.pinPeekOverlay(PanelPosition.Right, peekState)
 
-    pinned.state.focus shouldBe Focus.PinnedPanel(PanelPosition.Right)
-    pinned.state.peekOverlay shouldBe None
-    pinned.state.layout.pinnedPanels(PanelPosition.Right).content shouldBe
-      PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), Some(Paths.get("/repo")))
+    val pinnedSurface = pinned.state.uiSurfaces.find(_.presentation == SurfacePresentation.Pinned(PanelPosition.Right, 30))
+    pinnedSurface shouldBe defined
+    pinned.state.focus shouldBe Focus.Surface(pinnedSurface.get.id)
+    pinnedSurface.get.id shouldBe surface.id
+    pinnedSurface.get.content shouldBe
+      SurfaceContent.DirectoryListing(Paths.get("/repo"), List(DirEntry(Paths.get("/repo/src"), "src", true)), Some(Paths.get("/repo")))
   }
 
+  it should "pin the active floating surface when it is pinnable" in {
+    val surface = UiSurface(
+      SurfaceId("active-directory"),
+      SurfaceContent.DirectoryListing(
+        Paths.get("/repo"),
+        List(DirEntry(Paths.get("/repo/src"), "src", true)),
+        None
+      ),
+      SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.AboveCursor),
+      dismissOnMove = true
+    )
+    val floatingState = baseState.copy(
+      focus = Focus.Surface(surface.id),
+      uiSurfaces = List(surface)
+    )
+
+    val pinned = PanelStateReducer.pinActiveFloatingSurface(PanelPosition.Left, floatingState)
+
+    val pinnedSurface = pinned.state.uiSurfaces.find(_.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 30))
+    pinnedSurface shouldBe defined
+    pinned.state.focus shouldBe Focus.Surface(pinnedSurface.get.id)
+    pinnedSurface.get.id shouldBe surface.id
+    pinnedSurface.get.content shouldBe
+      SurfaceContent.DirectoryListing(Paths.get("/repo"), List(DirEntry(Paths.get("/repo/src"), "src", true)), Some(Paths.get("/repo")))
+  }
+
+  it should "leave unsupported floating surfaces unpinned" in {
+    val surface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(
+        com.serenity.command.CommandRunner(
+          isActive = true,
+          searchTerm = "open",
+          selectedIndex = 0,
+          filteredCommands = List.empty
+        )
+      ),
+      SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.BelowCursor)
+    )
+    val unsupported = baseState.copy(
+      focus = Focus.Surface(surface.id),
+      uiSurfaces = List(surface)
+    )
+
+    val result = PanelStateReducer.pinActiveFloatingSurface(PanelPosition.Bottom, unsupported)
+
+    result.state.uiSurfaces shouldBe List(surface)
+    result.state.focus shouldBe Focus.Surface(surface.id)
+  }

@@ -12,42 +12,18 @@ class ModalComponent(
 
   def processEvent(event: Event, currentState: AppState): ComponentResult =
     modalType match
-      case ModalType.CommandPalette =>
-        processCommandPaletteEvent(event, currentState)
-      case ModalType.FileSearch =>
-        processFileSearchEvent(event, currentState)
-      case ModalType.QuickOpen =>
-        processQuickOpenEvent(event, currentState)
       case ModalType.GotoLine =>
-        ComponentResult.updateState(_ => ModalEventReducer.reduce(ModalType.GotoLine, event, currentState).state)
+        ComponentResult.reducerResult(ModalEventReducer.reduce(ModalType.GotoLine, event, currentState))
       case ModalType.Find =>
-        ComponentResult.updateState(_ => ModalEventReducer.reduce(ModalType.Find, event, currentState).state)
+        ComponentResult.reducerResult(ModalEventReducer.reduce(ModalType.Find, event, currentState))
+      case ModalType.FileWorkflow =>
+        ComponentResult.reducerResult(ModalEventReducer.reduce(ModalType.FileWorkflow, event, currentState))
+      case ModalType.ReplaceWorkflow =>
+        ComponentResult.reducerResult(ModalEventReducer.reduce(ModalType.ReplaceWorkflow, event, currentState))
+      case ModalType.CloseWorkflow =>
+        ComponentResult.reducerResult(ModalEventReducer.reduce(ModalType.CloseWorkflow, event, currentState))
       case ModalType.Custom(name) =>
         processCustomModalEvent(name, event, currentState)
-
-  private def processCommandPaletteEvent(event: Event, currentState: AppState): ComponentResult =
-    event match
-      case textEvent: TextEntryEvent => processModalTextEvent(textEvent)
-      case UnhandledEvent(keyStroke, _) =>
-        val keyInfo = KeyStrokeInfo.fromKeyStroke(keyStroke)
-        processModalKeyStroke(keyInfo)
-      case _ => ComponentResult.noChange
-
-  private def processFileSearchEvent(event: Event, currentState: AppState): ComponentResult =
-    event match
-      case textEvent: TextEntryEvent => processModalTextEvent(textEvent)
-      case UnhandledEvent(keyStroke, _) =>
-        val keyInfo = KeyStrokeInfo.fromKeyStroke(keyStroke)
-        processModalKeyStroke(keyInfo)
-      case _ => ComponentResult.noChange
-
-  private def processQuickOpenEvent(event: Event, currentState: AppState): ComponentResult =
-    event match
-      case textEvent: TextEntryEvent => processModalTextEvent(textEvent)
-      case UnhandledEvent(keyStroke, _) =>
-        val keyInfo = KeyStrokeInfo.fromKeyStroke(keyStroke)
-        processModalKeyStroke(keyInfo)
-      case _ => ComponentResult.noChange
 
   private def processCustomModalEvent(name: String, event: Event, currentState: AppState): ComponentResult =
     event match
@@ -73,4 +49,3 @@ class ModalComponent(
       case KeyType.Escape => ComponentResult.dismiss
       case KeyType.Enter  => ComponentResult.dismiss
       case _              => ComponentResult.noChange
-

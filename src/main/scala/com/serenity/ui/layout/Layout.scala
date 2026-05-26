@@ -4,8 +4,7 @@ import com.serenity.state.models.{EditorPane, PaneId}
 
 case class Layout(
     editorPanes: Map[PaneId, EditorPane],
-    activeEditorPaneId: Option[PaneId],
-    pinnedPanels: Map[PanelPosition, PinnedPanel] = Map.empty
+    activeEditorPaneId: Option[PaneId]
 )
 
 object Layout:

@@ -1,11 +1,15 @@
 package com.serenity.ui.renderer
 
-import com.serenity.state.models.AppState
-import com.serenity.ui.layout.{CalculatedLayout, PeekContent, LayoutRect}
+import com.serenity.state.models.{AppState, SurfacePlacement, SurfacePresentation}
+import com.serenity.ui.layout.{CalculatedLayout, LayoutRect}
+import org.slf4j.LoggerFactory
 
 case class TextOverlayView(
     rect: LayoutRect,
-    lines: List[String]
+    title: Option[String] = None,
+    header: Option[OverlayRow] = None,
+    rows: List[OverlayRow] = Nil,
+    footer: Option[OverlayRow] = None
 )
 
 case class OverlayViews(
@@ -14,32 +18,59 @@ case class OverlayViews(
 )
 
 object OverlayViewModel:
+  private val logger = LoggerFactory.getLogger("com.serenity.ui.renderer.OverlayViewModel")
 
   def fromState(state: AppState, layout: CalculatedLayout): OverlayViews =
-    val aboveCursor =
-      for
-        overlay <- state.peekOverlay
-        rect    <- layout.aboveCursorOverlayRect
-      yield TextOverlayView(rect, peekContentLines(overlay.content))
+    val aboveCursor = preferredFloatingSurface(state, SurfacePlacement.AboveCursor)
+      .flatMap(surface =>
+        layout.aboveCursorOverlayRect.flatMap(rect => contentView(surface.content, rect).map(content => TextOverlayView(
+          rect = rect,
+          title = content.title,
+          header = content.header,
+          rows = content.rows,
+          footer = content.footer
+        )))
+      )
+
+    val belowCursor = preferredFloatingSurface(state, SurfacePlacement.BelowCursor)
+      .flatMap(surface =>
+        layout.belowCursorOverlayRect.flatMap(rect => contentView(surface.content, rect).map(content => TextOverlayView(
+          rect = rect,
+          title = content.title,
+          header = content.header,
+          rows = content.rows,
+          footer = content.footer
+        )))
+      )
 
     OverlayViews(
       aboveCursor = aboveCursor,
-      belowCursor = None
+      belowCursor = belowCursor
     )
 
-  private def peekContentLines(content: PeekContent): List[String] =
-    content match
-      case PeekContent.QuickInfo(text) =>
-        text.linesIterator.toList match
-          case Nil   => List("")
-          case lines => lines
-      case PeekContent.FilePreview(path, content) =>
-        (s"Preview: ${path.getFileName}" :: content.linesIterator.take(4).toList).take(5)
-      case PeekContent.SymbolDefinition(symbol, location) =>
-        List(
-          s"Symbol: $symbol",
-          s"Line ${location.line + 1}, Col ${location.column + 1}"
-        )
-      case PeekContent.DirectoryListing(path, entries) =>
-        val header = s"Directory: ${path.getFileName}"
-        header :: entries.take(4).map(_.name)
+  private def preferredFloatingSurface(state: AppState, placement: SurfacePlacement): Option[com.serenity.state.models.UiSurface] =
+    val matchingSurfaces = state.uiSurfaces.filter {
+      case com.serenity.state.models.UiSurface(_, _, SurfacePresentation.Floating(_, currentPlacement), _) =>
+        currentPlacement == placement
+      case _ =>
+        false
+    }
+
+    val selectedSurface = state.focus match
+      case com.serenity.state.models.Focus.Surface(surfaceId) =>
+        matchingSurfaces.find(_.id == surfaceId).orElse(matchingSurfaces.headOption)
+      case _ =>
+        matchingSurfaces.headOption
+
+    selectedSurface.foreach { surface =>
+      logger.info(
+        s"[OVERLAY SELECTED] placement=$placement focus=${state.focus} surfaceId=${surface.id} " +
+          s"content=${surface.content.getClass.getSimpleName}"
+      )
+    }
+
+    selectedSurface
+
+  private def contentView(content: com.serenity.state.models.SurfaceContent, rect: LayoutRect): Option[ResolvedSurfaceContent] =
+    val resolved = SurfaceContentResolver.resolve(content, rect, SurfaceRenderMode.Floating)
+    Option.when(resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty)(resolved)

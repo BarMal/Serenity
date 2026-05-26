@@ -1,7 +1,7 @@
 package com.serenity.keystroke.translators
 
 import com.googlecode.lanterna.input.KeyType
-import com.serenity.keystroke.events.{DeleteBackward, InsertChar, NewLine, TextEntryEvent}
+import com.serenity.keystroke.events.{InsertChar, NewLine, ReverseTabKey, TabKey, TextEntryEvent}
 import com.serenity.keystroke.{KeyStrokeInfo, Modifier}
 
 object TextCharacterConverters:
@@ -11,9 +11,9 @@ object TextCharacterConverters:
         if isAcceptableForTextEntry(modifiers) && isPrintableChar(char) =>
       InsertChar(char)
     case KeyStrokeInfo(KeyType.Tab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
-      InsertChar('\t')
+      TabKey
     case KeyStrokeInfo(KeyType.ReverseTab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
-      DeleteBackward
+      ReverseTabKey
     case KeyStrokeInfo(KeyType.Enter, _, _) =>
       NewLine
   }

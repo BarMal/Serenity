@@ -40,21 +40,28 @@ object AppEventReducer:
     assignBuffersToPanes(state, focusedBufferId)
 
   private def toggleCommandRunner(state: AppState, registry: CommandRegistry): AppState =
-    if state.commandRunner.isActive then
-      val previousFocus = state.commandRunner.previousFocus.getOrElse(Focus.EditorPane(PaneId(0)))
-      state.copy(
-        commandRunner = CommandRunner.empty,
-        focus = previousFocus
-      )
-    else
-      val activatedRunner = CommandRunner.empty
-        .activate(registry)
-        .withPreviousFocus(state.focus)
-
-      state.copy(
-        commandRunner = activatedRunner,
-        focus = Focus.CommandRunner
-      )
+    state.commandRunnerSurface.flatMap(asCommandRunner) match
+      case Some((surface, runner)) if runner.isActive =>
+        val previousFocus = runner.previousFocus.getOrElse(Focus.EditorPane(PaneId(0)))
+        state.copy(
+          uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id),
+          focus = previousFocus
+        )
+      case _ =>
+        val activatedRunner = CommandRunner.empty
+          .activate(registry)
+          .withPreviousFocus(state.focus)
+        val (stateWithId, surfaceId) =
+          state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
+        val surface = UiSurface(
+          id = surfaceId,
+          content = SurfaceContent.CommandPalette(activatedRunner),
+          presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+        )
+        stateWithId.copy(
+          uiSurfaces = upsertSurface(stateWithId.uiSurfaces, surface),
+          focus = Focus.Surface(surfaceId)
+        )
 
   private def createNewEmptyBuffer(state: AppState)(using com.serenity.rope.Balance): (AppState, BufferId) =
     val bufferId = state.nextBufferId
@@ -184,18 +191,15 @@ object AppEventReducer:
       if state.layout.activeEditorPaneId.contains(paneId) then updatedPanes.keys.headOption
       else state.layout.activeEditorPaneId
 
-    val (newFocus, newCommandRunner) = newActivePaneId match
-      case Some(id) => (Focus.EditorPane(id), state.commandRunner)
-      case None     => (Focus.CommandRunner, CommandRunner.empty.activate(CommandRegistry.default))
-
-    state.copy(
+    val baseState = state.copy(
       layout = state.layout.copy(
         editorPanes = updatedPanes,
         activeEditorPaneId = newActivePaneId
-      ),
-      focus = newFocus,
-      commandRunner = newCommandRunner
+      )
     )
+    newActivePaneId match
+      case Some(id) => baseState.copy(focus = Focus.EditorPane(id))
+      case None     => toggleCommandRunner(baseState.copy(focus = Focus.EditorPane(PaneId(0))), CommandRegistry.default)
 
   private def navigateBuffer(
     state: AppState,
@@ -214,3 +218,11 @@ object AppEventReducer:
           state.bufferOrder.headOption match
             case Some(firstBufferId) => focusBuffer(state, firstBufferId)
             case None                => state
+
+  private def asCommandRunner(surface: UiSurface): Option[(UiSurface, CommandRunner)] =
+    surface.content match
+      case SurfaceContent.CommandPalette(runner) => Some((surface, runner))
+      case _                                     => None
+
+  private def upsertSurface(surfaces: List[UiSurface], surface: UiSurface): List[UiSurface] =
+    surfaces.filterNot(_.id == surface.id) :+ surface

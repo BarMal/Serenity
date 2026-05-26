@@ -55,7 +55,7 @@ class TabKeyboardShortcutsSpec extends AnyFlatSpec with Matchers:
     val keyStrokeWithoutCtrl = new KeyStroke(KeyType.Tab, false, false, false)
     val eventWithoutCtrl = translator.translate(keyStrokeWithoutCtrl)
     
-    eventWithoutCtrl.shouldBe(InsertChar('\t'))
+    eventWithoutCtrl.shouldBe(TabKey)
   }
 
   it should "handle case sensitivity correctly" in {
@@ -84,7 +84,7 @@ class TabKeyboardShortcutsSpec extends AnyFlatSpec with Matchers:
     val plainW = new KeyStroke('w', false, false, false)
     translator.translate(plainW).shouldBe(InsertChar('w'))
     
-    // Plain Tab without Ctrl should be tab insertion
+    // Plain Tab without Ctrl should be the dedicated tab event
     val plainTab = new KeyStroke(KeyType.Tab, false, false, false)
-    translator.translate(plainTab).shouldBe(InsertChar('\t'))
+    translator.translate(plainTab).shouldBe(TabKey)
   }

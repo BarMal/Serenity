@@ -3,7 +3,7 @@ package com.serenity.state.reducers
 import java.nio.file.Path
 
 import com.serenity.command.Command
-import com.serenity.state.models.{AppState, BufferId}
+import com.serenity.state.models.{AppState, BufferId, SurfaceId}
 
 enum AppEffect:
   case CompleteQuit
@@ -11,6 +11,10 @@ enum AppEffect:
   case SaveBuffer(bufferId: BufferId)
   case SaveBufferAs(bufferId: BufferId, path: Path)
   case RequestOpenFile
+  case RefreshFileWorkflow(surfaceId: SurfaceId)
+  case SubmitFileWorkflow(surfaceId: SurfaceId)
+  case SubmitReplaceWorkflow(surfaceId: SurfaceId)
+  case SubmitCloseWorkflow(surfaceId: SurfaceId)
 
 case class ReducerResult(
     state: AppState,

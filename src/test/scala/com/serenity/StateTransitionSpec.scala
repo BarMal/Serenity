@@ -7,7 +7,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{DirEntry, PanelPosition, PeekContent}
+import com.serenity.ui.layout.{DirEntry, PeekContent}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -65,13 +65,14 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       paneId = initialState.layout.editorPanes.keys.head
 
       // When: Show modal
-      modal = Modal.CommandRunner("test", List.empty, 0)
+      modal = Modal.Custom("test-modal", "test")
       _ <- stateManager.showModal(modal)
 
-      // Then: Focus should be on modal
+      // Then: Focus should be on the modal surface
       modalState <- stateManager.getCurrentState
-      _ = modalState.focus shouldBe Focus.Modal(ModalType.CommandPalette)
-      _ = modalState.modal shouldBe Some(modal)
+      modalSurface = modalState.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(modal))
+      _ = modalSurface shouldBe defined
+      _ = modalState.focus shouldBe Focus.Surface(modalSurface.get.id)
 
       // When: Dismiss modal
       _ <- stateManager.dismissModal()
@@ -80,7 +81,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       finalState <- stateManager.getCurrentState
     yield
       finalState.focus shouldBe Focus.EditorPane(paneId)
-      finalState.modal shouldBe None
+      finalState.uiSurfaces.exists(_.content == SurfaceContent.ModalWorkflow(modal)) shouldBe false
 
     program.unsafeRunSync()
   }
@@ -106,11 +107,19 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       // When: Show peek overlay
       _ <- stateManager.showPeek(content, cursor)
 
-      // Then: Focus should be on peek overlay
+      // Then: Focus should be on the peek surface
       peekState <- stateManager.getCurrentState
-      _ = peekState.focus shouldBe Focus.PeekOverlay
-      _ = peekState.peekOverlay shouldBe defined
-      _ = peekState.peekOverlay.get.position shouldBe cursor
+      peekSurface = peekState.uiSurfaces.find(_.content == SurfaceContent.DirectoryListing(
+        java.nio.file.Paths.get("/test"),
+        List(
+          DirEntry(java.nio.file.Paths.get("/test/file1.txt"), "file1.txt", false),
+          DirEntry(java.nio.file.Paths.get("/test/file2.txt"), "file2.txt", false)
+        ),
+        None
+      ))
+      _ = peekSurface shouldBe defined
+      _ = peekState.focus shouldBe Focus.Surface(peekSurface.get.id)
+      _ = peekSurface.get.presentation shouldBe SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
 
       // When: Dismiss peek overlay
       _ <- stateManager.dismissPeek()
@@ -119,7 +128,17 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       finalState <- stateManager.getCurrentState
     yield
       finalState.focus match
-        case Focus.EditorPane(_) => finalState.peekOverlay shouldBe None
+        case Focus.EditorPane(_) =>
+          finalState.uiSurfaces.exists {
+            _.content == SurfaceContent.DirectoryListing(
+              java.nio.file.Paths.get("/test"),
+              List(
+                DirEntry(java.nio.file.Paths.get("/test/file1.txt"), "file1.txt", false),
+                DirEntry(java.nio.file.Paths.get("/test/file2.txt"), "file2.txt", false)
+              ),
+              None
+            )
+          } shouldBe false
         case other               => fail(s"Expected EditorPane focus, got $other")
 
     program.unsafeRunSync()
@@ -132,7 +151,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     val pane1   = stateManager.getCurrentState.unsafeRunSync().layout.editorPanes.keys.head
     val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
-    val modal = Modal.FileSearch("*.scala", List.empty, 0)
+    val modal = Modal.Custom("search-panel", "*.scala")
     val peekContent = PeekContent.DirectoryListing(
       java.nio.file.Paths.get("/src"),
       List(
@@ -153,8 +172,17 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.isValid shouldBe true
     finalState.focus shouldBe Focus.EditorPane(pane1)
-    finalState.modal shouldBe None
-    finalState.peekOverlay shouldBe None
+    finalState.uiSurfaces.exists(_.content == SurfaceContent.ModalWorkflow(modal)) shouldBe false
+    finalState.uiSurfaces.exists {
+      _.content == SurfaceContent.DirectoryListing(
+        java.nio.file.Paths.get("/src"),
+        List(
+          DirEntry(java.nio.file.Paths.get("/src/main"), "main", true),
+          DirEntry(java.nio.file.Paths.get("/src/test"), "test", true)
+        ),
+        None
+      )
+    } shouldBe false
 
   it should "handle buffer lifecycle correctly" in new StateFixture:
     // Given: Create buffer and associate with pane

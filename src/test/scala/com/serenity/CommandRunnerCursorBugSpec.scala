@@ -21,6 +21,9 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
+  private def activeCommandRunner(state: AppState): Option[UiSurface] =
+    state.commandRunnerSurface
+
   "renderCursorOnly behavior with Command Runner" should "not render editor cursor when command runner is focused" in {
     val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val test = for
@@ -46,8 +49,8 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
       // even when focus is on command runner
       
       // Verify command runner is active and focused
-      commandRunnerActiveState.focus shouldBe Focus.CommandRunner
-      commandRunnerActiveState.commandRunner.isActive shouldBe true
+      activeCommandRunner(commandRunnerActiveState) shouldBe defined
+      commandRunnerActiveState.focus shouldBe Focus.Surface(activeCommandRunner(commandRunnerActiveState).get.id)
       
       // The current implementation will still find an activeEditorPaneId and render cursor
       // This is the bug we need to fix

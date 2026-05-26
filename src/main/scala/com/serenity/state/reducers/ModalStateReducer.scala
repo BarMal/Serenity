@@ -1,34 +1,37 @@
 package com.serenity.state.reducers
 
-import com.serenity.state.models.{AppState, Focus, Modal, ModalType, PaneId}
+import com.serenity.state.models.{AppState, Focus, Modal, PaneId, SurfaceContent, SurfacePlacement, SurfacePresentation, UiSurface}
 
 object ModalStateReducer:
 
   def show(modal: Modal, state: AppState): ReducerResult =
+    val (stateWithId, surfaceId) = state.allocateSurfaceId
+    val surface = UiSurface(
+      id = surfaceId,
+      content = SurfaceContent.ModalWorkflow(modal),
+      presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+    )
     ReducerResult.noEffects(
-      state.copy(
-        modal = Some(modal),
-        focus = Focus.Modal(modalType(modal))
+      stateWithId.copy(
+        uiSurfaces = stateWithId.uiSurfaces.filterNot(isModalSurface) :+ surface,
+        focus = Focus.Surface(surfaceId)
       )
     )
 
   def dismiss(state: AppState): ReducerResult =
     ReducerResult.noEffects(
       state.copy(
-        modal = None,
+        uiSurfaces = state.uiSurfaces.filterNot(isModalSurface),
         focus = fallbackEditorFocus(state)
       )
     )
 
-  private def modalType(modal: Modal): ModalType =
-    modal match
-      case Modal.CommandRunner(_, _, _) => ModalType.CommandPalette
-      case Modal.FileSearch(_, _, _)    => ModalType.FileSearch
-      case Modal.GotoLine(_)            => ModalType.GotoLine
-      case Modal.Find(_, _, _)          => ModalType.Find
+  private def isModalSurface(surface: UiSurface): Boolean =
+    surface.content match
+      case SurfaceContent.ModalWorkflow(_) => true
+      case _                               => false
 
   private def fallbackEditorFocus(state: AppState): Focus =
     state.layout.activeEditorPaneId match
       case Some(paneId) => Focus.EditorPane(paneId)
       case None         => Focus.EditorPane(PaneId(0))
-

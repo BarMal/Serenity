@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandRegistry, CommandRunner, CommandSearcher}
+import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner, CommandSearcher, CommandSurfaceItem}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.CommandRunnerComponent
@@ -14,6 +14,18 @@ import org.scalatest.matchers.should.Matchers
 class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
+
+  private def stateWithRunner(runner: CommandRunner): AppState =
+    AppState.empty.copy(
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
 
   "CommandRegistry" should "register and find commands" in {
     val registry = CommandRegistry.default
@@ -81,6 +93,17 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     results.length shouldBe 5
   }
 
+  it should "browse commands by category when search is empty" in {
+    val registry = CommandRegistry.default
+
+    val fileCommands = registry.commandsForCategory(CommandCategory.File)
+    val settingsCommands = registry.commandsForCategory(CommandCategory.Settings)
+
+    fileCommands should not be empty
+    fileCommands.map(_.category).distinct shouldBe List(CommandCategory.File)
+    settingsCommands.exists(_.name == "toggle-theme") shouldBe true
+  }
+
   "CommandRunner state" should "initialize with empty search and no selection" in {
     val runner = CommandRunner.empty
 
@@ -99,6 +122,41 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     updated.searchTerm shouldBe "save"
     updated.filteredCommands should not be empty
     updated.filteredCommands.exists(_.name.contains("save")) shouldBe true
+  }
+
+  it should "browse the active category when search is empty and switch to global search once typing begins" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry)
+      .withActiveCategory(CommandCategory.File)
+
+    runner.activeCategory shouldBe CommandCategory.File
+    runner.visibleItems should not be empty
+    runner.visibleItems.collect { case CommandSurfaceItem.CommandItem(command) => command.category }.distinct shouldBe List(CommandCategory.File)
+
+    val searched = runner.updateSearchTerm("theme")
+    searched.searchTerm shouldBe "theme"
+    searched.visibleItems.exists {
+      case CommandSurfaceItem.CommandItem(command) => command.name == "toggle-theme"
+      case _                                       => false
+    } shouldBe true
+  }
+
+  it should "surface animation mode as an inline option row in settings browsing" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry)
+      .withActiveCategory(CommandCategory.Settings)
+
+    val animationItem = runner.visibleItems.collectFirst {
+      case option: CommandSurfaceItem.OptionItem if option.id == "animation-mode" => option
+    }.getOrElse(fail("Expected animation mode option item"))
+
+    animationItem.label shouldBe "Animation"
+    animationItem.options.map(_.label) shouldBe List("None", "Subtle", "Full")
+    animationItem.selectedOption shouldBe "Full"
   }
 
   it should "handle selection navigation" in {
@@ -132,9 +190,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "handle search input" in {
     val component = new CommandRunnerComponent()
-    val activeState = AppState.empty.copy(
-      commandRunner = CommandRunner.empty.activate(CommandRegistry.default)
-    )
+    val activeState = stateWithRunner(CommandRunner.empty.activate(CommandRegistry.default))
 
     val result = component.processEvent(InsertChar('s'), activeState)
 
@@ -144,9 +200,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "handle escape to close runner" in {
     val component = new CommandRunnerComponent()
-    val activeState = AppState.empty.copy(
-      commandRunner = CommandRunner.empty.activate(CommandRegistry.default)
-    )
+    val activeState = stateWithRunner(CommandRunner.empty.activate(CommandRegistry.default))
 
     val result = component.processEvent(com.serenity.keystroke.events.Escape, activeState)
 
@@ -171,7 +225,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .withCommands(List(testCommand))
       .activate(registry)
       .updateSearchTerm("test")
-    val activeState = AppState.empty.copy(commandRunner = runner)
+    val activeState = stateWithRunner(runner)
 
     val result = component.processEvent(Enter, activeState)
 

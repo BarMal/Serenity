@@ -9,11 +9,20 @@ enum AnimationMode:
   case Smooth
   case Subtle
 
+enum CommandCategory:
+  case All
+  case File
+  case View
+  case Edit
+  case Settings
+
 enum CommandIntent:
   case SaveCurrentFile
   case SaveCurrentFileAs
   case OpenFile
   case QuitApp
+  case CloseAll
+  case CloseOthers
   case NewFile
   case CloseCurrentFile
   case FindInCurrentFile
@@ -31,7 +40,8 @@ enum CommandIntent:
 case class Command private (
     name: String,
     description: String,
-    intent: CommandIntent
+    intent: CommandIntent,
+    category: CommandCategory = CommandCategory.Edit
 ):
   /** Execute this command directly when it carries a custom effect. */
   def execute(state: AppState): IO[Unit] =
@@ -49,14 +59,55 @@ object Command:
     description: String,
     action: AppState => IO[Unit]
   ): Command =
-    Command(name, description, CommandIntent.Custom(action))
+    Command(name, description, CommandIntent.Custom(action), CommandCategory.Edit)
 
   def typed(
     name: String,
     description: String,
-    intent: CommandIntent
+    intent: CommandIntent,
+    category: CommandCategory = CommandCategory.Edit
   ): Command =
-    Command(name, description, intent)
+    Command(name, description, intent, category)
+
+case class CommandOption(
+    label: String,
+    intent: CommandIntent
+)
+
+sealed trait CommandSurfaceItem:
+  def id: String
+  def category: CommandCategory
+  def searchText: String
+
+object CommandSurfaceItem:
+  case class CommandItem(command: Command) extends CommandSurfaceItem:
+    override def id: String = command.name
+    override def category: CommandCategory = command.category
+    override def searchText: String = s"${command.name} ${command.description}"
+
+  case class OptionItem(
+      id: String,
+      label: String,
+      options: List[CommandOption],
+      selectedIndex: Int,
+      category: CommandCategory,
+      hint: Option[String] = None
+  ) extends CommandSurfaceItem:
+    override def searchText: String =
+      s"$label ${options.map(_.label).mkString(" ")}"
+
+    def selectedOption: String =
+      options.lift(selectedIndex).map(_.label).getOrElse("")
+
+    def selectedIntent: Option[CommandIntent] =
+      options.lift(selectedIndex).map(_.intent)
+
+    def moveSelection(delta: Int): OptionItem =
+      if options.isEmpty then this
+      else
+        val rawIndex     = (selectedIndex + delta) % options.length
+        val wrappedIndex = if rawIndex < 0 then options.length + rawIndex else rawIndex
+        copy(selectedIndex = wrappedIndex)
 
 /** Search result for a command with relevance scoring */
 case class CommandSearchResult(

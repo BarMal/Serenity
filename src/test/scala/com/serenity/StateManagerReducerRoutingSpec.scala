@@ -7,7 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.{Quit, SaveFile, ToggleCommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{CursorPosition, Focus, Modal, ModalType}
+import com.serenity.state.models.{CursorPosition, Focus, Modal, SurfaceContent, UiSurface}
 import com.serenity.ui.layout.PeekContent
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -28,15 +28,21 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val openedState = stateManager.getCurrentState.unsafeRunSync()
+    val commandSurface = openedState.uiSurfaces.collectFirst {
+      case surface @ UiSurface(_, SurfaceContent.CommandPalette(_), _, _) => surface
+    }
 
-    openedState.focus shouldBe Focus.CommandRunner
-    openedState.commandRunner.isActive shouldBe true
+    commandSurface shouldBe defined
+    openedState.focus shouldBe Focus.Surface(commandSurface.get.id)
+    commandSurface.get.content match
+      case SurfaceContent.CommandPalette(runner) => runner.isActive shouldBe true
+      case other                                 => fail(s"Expected command palette, got $other")
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val closedState = stateManager.getCurrentState.unsafeRunSync()
 
     closedState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
-    closedState.commandRunner.isActive shouldBe false
+    closedState.commandRunnerSurface shouldBe None
   }
 
   it should "complete the quit signal through the application event path" in {
@@ -88,21 +94,23 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
 
     stateManager.showModal(Modal.GotoLine("7")).unsafeRunSync()
     val modalState = stateManager.getCurrentState.unsafeRunSync()
-    modalState.focus shouldBe Focus.Modal(ModalType.GotoLine)
-    modalState.modal shouldBe Some(Modal.GotoLine("7"))
+    val modalSurface = modalState.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("7")))
+    modalSurface shouldBe defined
+    modalState.focus shouldBe Focus.Surface(modalSurface.get.id)
 
     stateManager.dismissModal().unsafeRunSync()
     val afterDismiss = stateManager.getCurrentState.unsafeRunSync()
     afterDismiss.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
-    afterDismiss.modal shouldBe None
+    afterDismiss.uiSurfaces.exists(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("7"))) shouldBe false
 
     stateManager.showPeek(PeekContent.QuickInfo("hint"), CursorPosition(1, 2)).unsafeRunSync()
     val peekState = stateManager.getCurrentState.unsafeRunSync()
-    peekState.focus shouldBe Focus.PeekOverlay
-    peekState.peekOverlay.map(_.position) shouldBe Some(CursorPosition(1, 2))
+    val peekSurface = peekState.uiSurfaces.find(_.content == SurfaceContent.QuickInfo("hint"))
+    peekSurface shouldBe defined
+    peekState.focus shouldBe Focus.Surface(peekSurface.get.id)
 
     stateManager.dismissPeek().unsafeRunSync()
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
-    finalState.peekOverlay shouldBe None
+    finalState.uiSurfaces.exists(_.content == SurfaceContent.QuickInfo("hint")) shouldBe false
   }

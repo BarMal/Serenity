@@ -2,6 +2,7 @@ package com.serenity
 
 import java.nio.file.Paths
 
+import com.serenity.command.CommandRunner
 import com.serenity.keystroke.events.{OpenFile, SaveFile}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -46,7 +47,15 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(2), "val y = 99")
       .copy(filePath = Some(Paths.get("target.scala")), isDirty = true)
-    val state = stateWithPaneBuffer(buffer, paneId = paneId, focus = Focus.CommandRunner)
+    val state = stateWithPaneBuffer(buffer, paneId = paneId, focus = Focus.Surface(SurfaceId("command-runner"))).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(CommandRunner.empty.activate(com.serenity.command.CommandRegistry.default)),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
 
     val result = FileEventReducer.reduceForPane(SaveFile, paneId, state)
 
@@ -70,4 +79,3 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
     result.state shouldBe AppState.empty
     result.effects shouldBe List(AppEffect.RequestOpenFile)
   }
-

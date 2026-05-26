@@ -5,6 +5,7 @@ import com.googlecode.lanterna.graphics.TextGraphics
 import com.googlecode.lanterna.screen.Screen
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import org.slf4j.LoggerFactory
 
 case class RenderContext(
     screen: Screen,
@@ -14,6 +15,7 @@ case class RenderContext(
 )
 
 object Renderer:
+  private val logger = LoggerFactory.getLogger("com.serenity.ui.renderer.Renderer")
 
   def render(state: AppState, cursorVisible: Boolean, screen: Screen): Unit =
     val graphics     = screen.newTextGraphics()
@@ -31,15 +33,13 @@ object Renderer:
     // Render UI elements
     renderLineNumbers(state, context)
     renderGutter(state, context)
+    renderPinnedPanels(state, context)
 
     // Render editor panes
     renderEditorPanes(state, context)
 
     // Render floating panels if any
     renderFloatingPanels(state, context)
-
-    // Render command runner overlay if active
-    renderCommandRunner(state, context)
 
     // Refresh screen
     screen.refresh()
@@ -99,7 +99,6 @@ object Renderer:
 
   private def renderEditorPanes(state: AppState, context: RenderContext): Unit =
     // Calculate individual pane layouts to prevent overlap
-    val terminalSize = TerminalSize(context.screen.getTerminalSize.getColumns, context.screen.getTerminalSize.getRows)
     val paneLayouts  = LayoutEngine.calculatePaneLayouts(state, context.layout)
 
     // Render each pane to its own rectangle
@@ -371,14 +370,25 @@ object Renderer:
   private def renderFloatingPanels(state: AppState, context: RenderContext): Unit =
     val overlays = OverlayViewModel.fromState(state, context.layout)
 
-    overlays.aboveCursor.foreach(overlay => TextOverlayRenderer.render(context.graphics, overlay, state.theme))
-    overlays.belowCursor.foreach(overlay => TextOverlayRenderer.render(context.graphics, overlay, state.theme))
+    overlays.aboveCursor.foreach { overlay =>
+      logger.info(s"[OVERLAY RENDERED] placement=AboveCursor rect=${overlay.rect} title=${overlay.title.getOrElse("")}")
+      TextOverlayRenderer.render(context.graphics, overlay, state.theme, context.cursorVisible)
+    }
+    overlays.belowCursor.foreach { overlay =>
+      logger.info(s"[OVERLAY RENDERED] placement=BelowCursor rect=${overlay.rect} title=${overlay.title.getOrElse("")}")
+      TextOverlayRenderer.render(context.graphics, overlay, state.theme, context.cursorVisible)
+    }
 
     context.layout.floatingPanelRect.foreach { rect =>
       // For now, just render a placeholder
       // In the future, this will render command runners, modals, etc. with transparency
       renderFloatingPanelPlaceholder(rect, context)
     }
+
+  private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =
+    PinnedPanelViewModel
+      .fromLayout(context.layout, state.uiSurfaces)
+      .foreach(panel => PinnedPanelRenderer.render(context.graphics, panel, state.theme))
 
   private def renderFloatingPanelPlaceholder(rect: LayoutRect, context: RenderContext): Unit =
     // Placeholder implementation - will be enhanced with actual panel content
@@ -389,32 +399,6 @@ object Renderer:
     for y <- rect.y until rect.bottom; x <- rect.x until rect.right do
       if y < context.screen.getTerminalSize.getRows && x < context.screen.getTerminalSize.getColumns then
         CharacterRenderer.renderChar(context.graphics, x, y, '░') // Light shade character for transparency effect
-
-  private def renderCommandRunner(state: AppState, context: RenderContext): Unit =
-    if state.commandRunner.isActive then
-      val terminalSize = TerminalSize(context.screen.getTerminalSize.getColumns, context.screen.getTerminalSize.getRows)
-
-      context.layout.belowCursorOverlayRect match
-        case Some(rect) =>
-          CommandRunnerRenderer.renderInRect(
-            context.graphics,
-            state.commandRunner,
-            state.theme,
-            rect
-          )
-        case None =>
-          val consistentPosition = CursorPosition(
-            line = 2,
-            column = 0
-          )
-
-          CommandRunnerRenderer.render(
-            context.graphics,
-            state.commandRunner,
-            state.theme,
-            terminalSize,
-            consistentPosition
-          )
 
   private def renderLineNumbers(state: AppState, context: RenderContext): Unit =
     if state.config.showLineNumbers then

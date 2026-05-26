@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.keystroke.events.{InsertChar, OpenGotoLine, ScrollDown}
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, Focus, Modal, ModalType, PaneId}
+import com.serenity.state.models.{AppState, Focus, Modal, PaneId, SurfaceContent}
 import com.serenity.state.reducers.EditorEventReducer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -48,7 +48,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val paneId       = PaneId(0)
 
     val updatedState = EditorEventReducer.reduce(OpenGotoLine, paneId, initialState).state
+    val modalSurface = updatedState.modalSurface
 
-    updatedState.modal shouldBe Some(Modal.GotoLine(""))
-    updatedState.focus shouldBe Focus.Modal(ModalType.GotoLine)
+    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.GotoLine("")))
+    updatedState.focus shouldBe Focus.Surface(modalSurface.get.id)
   }

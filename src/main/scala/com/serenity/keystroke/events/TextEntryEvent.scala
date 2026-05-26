@@ -33,3 +33,5 @@ case object FindNext              extends TextEntryEvent
 case object Enter                 extends TextEntryEvent
 case object OpenFind              extends ModalRequestEvent
 case object Escape                extends TextEntryEvent
+case object TabKey                extends TextEntryEvent
+case object ReverseTabKey         extends TextEntryEvent

@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandIntent, CommandRegistry}
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
+import com.serenity.state.models.SurfaceContent
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -34,10 +35,19 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     expectedCommandName: String
   ): Unit =
     val beforeOpen = stateManager.getCurrentState.unsafeRunSync()
-    if !beforeOpen.commandRunner.isActive then
+    if beforeOpen.commandRunnerSurface.flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(runner) => Some(runner.isActive)
+          case _                                     => None
+      }.getOrElse(false) == false
+    then
       stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.getCurrentState.unsafeRunSync().commandRunner.selectedCommand.map(_.name) shouldBe Some(expectedCommandName)
+    stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface.flatMap {
+      _.content match
+        case SurfaceContent.CommandPalette(runner) => runner.selectedCommand.map(_.name)
+        case _                                     => None
+    } shouldBe Some(expectedCommandName)
     stateManager.applyEvent(Enter).unsafeRunSync()
 
   behavior of "Toggle Line Numbers Command"
@@ -133,7 +143,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     val midState = stateManager.getCurrentState.unsafeRunSync()
     midState.config.showLineNumbers shouldBe false
     midState.config.showGutter shouldBe true
-    midState.commandRunner.isActive shouldBe false
+    midState.commandRunnerSurface shouldBe None
 
     executeCommandThroughRunner(stateManager, "toggle-gutter", "toggle-gutter")
 

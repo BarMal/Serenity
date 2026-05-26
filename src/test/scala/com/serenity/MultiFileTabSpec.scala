@@ -110,18 +110,15 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     buffer.filePath.shouldBe(Some(java.nio.file.Paths.get("/tmp/test.txt")))
     
     // When: Ctrl+W attempts to close tab with unsaved changes
-    // Implementation should detect dirty buffer and show warning
-    // For now, it should proceed with closure (with warning message)
     stateManager.applyEvent(CloseTab).unsafeRunSync()
     val stateAfterClose = stateManager.getCurrentState.unsafeRunSync()
     
-    // Then: Tab should be closed, but in a real implementation this would:
-    // - Show a dialog asking "Save changes to /tmp/test.txt?"
-    // - Provide options: Save, Don't Save, Cancel
-    // - If Save is chosen, show path entry field defaulting to current filePath
-    // - If Cancel is chosen, keep the tab open
-    stateAfterClose.layout.editorPanes.should(have).size(0)
-    stateAfterClose.buffers.should(not).contain(key(bufferId))
+    // Then: A close workflow should intercept the hotkey and keep the buffer open
+    stateAfterClose.buffers should contain key(bufferId)
+    stateAfterClose.modalSurface.flatMap(_.content match
+      case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow.currentBufferId)
+      case _                                                           => None
+    ) shouldBe Some(bufferId)
 
   it should "maintain tab order when adding and removing tabs" in new MultiFileFixture:
     // Given: Create multiple buffers in sequence

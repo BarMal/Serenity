@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import com.googlecode.lanterna.input.KeyType
-import com.serenity.keystroke.events.{InsertChar, TextEntryEvent}
+import com.serenity.keystroke.events.{InsertChar, TabKey, TextEntryEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.keystroke.{KeyStrokeInfo, Modifier}
 import com.serenity.state.components.ComponentResult
@@ -12,13 +12,13 @@ import org.scalatest.matchers.should.Matchers
 
 class TabInsertionSpec extends AnyFlatSpec with Matchers:
 
-  "TextEntryTranslator" should "convert Tab key to InsertChar with tab character" in {
+  "TextEntryTranslator" should "convert Tab key to a dedicated tab event" in {
     val translator   = new TextEntryTranslator()
     val tabKeyStroke = com.googlecode.lanterna.input.KeyStroke(KeyType.Tab, false, false, false)
 
     val result = translator.translate(tabKeyStroke)
 
-    result shouldBe InsertChar('\t')
+    result shouldBe TabKey
   }
 
   it should "allow tab characters in printable character validation" in {
@@ -50,7 +50,7 @@ class TabInsertionSpec extends AnyFlatSpec with Matchers:
     )
 
     val component = new EditorPaneComponent(paneId)
-    val tabEvent  = InsertChar('\t')
+    val tabEvent  = TabKey
 
     val result = component.processEvent(tabEvent, state)
 

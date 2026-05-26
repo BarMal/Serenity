@@ -88,6 +88,12 @@ object EditorEventReducer:
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
+          case TabKey =>
+            reduceTextEventForBuffer(InsertChar('\t'), buffer, paneId, currentState)
+
+          case ReverseTabKey =>
+            reduceTextEventForBuffer(DeleteBackward, buffer, paneId, currentState)
+
           case DeleteBackward =>
             val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
             if offset > 0 then
@@ -230,20 +236,10 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case OpenGotoLine =>
-            ReducerResult.noEffects(
-              currentState.copy(
-                modal = Some(Modal.GotoLine("")),
-                focus = Focus.Modal(ModalType.GotoLine)
-              )
-            )
+            ModalStateReducer.show(Modal.GotoLine(""), currentState)
 
           case OpenFind =>
-            ReducerResult.noEffects(
-              currentState.copy(
-                modal = Some(Modal.Find("", Nil, 0)),
-                focus = Focus.Modal(ModalType.Find)
-              )
-            )
+            ModalStateReducer.show(Modal.Find("", Nil, 0), currentState)
 
           case FindNext =>
             currentState.findState match
@@ -307,6 +303,9 @@ object EditorEventReducer:
             nextBufferId = BufferId(bufferId.value + 1)
           )
         )
+
+      case TabKey =>
+        handleEventWithoutBuffer(InsertChar('\t'), paneId, pane, currentState)
 
       case _ =>
         ReducerResult.noEffects(currentState)
@@ -408,4 +407,3 @@ object EditorEventReducer:
         buffer.copy(animations = updatedAnimations)
       case None =>
         buffer
-

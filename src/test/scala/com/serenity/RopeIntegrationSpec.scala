@@ -273,7 +273,6 @@ let anotherOldName = oldName * 2;"""
 
       val layout = Layout(
         editorPanes = panes,
-        pinnedPanels = Map.empty,
         activeEditorPaneId = panes.keys.headOption
       )
 
@@ -281,8 +280,7 @@ let anotherOldName = oldName * 2;"""
         layout = layout,
         buffers = buffers,
         focus = Focus.EditorPane(panes.keys.head),
-        peekOverlay = None,
-        modal = None,
+        uiSurfaces = Nil,
         nextBufferId = BufferId(buffers.size + 1),
         nextPaneId = PaneId(panes.size + 1)
       )

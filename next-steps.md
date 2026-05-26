@@ -1,6 +1,6 @@
 # Serenity - Current State and Next Steps
 
-Last updated: 2026-05-25
+Last updated: 2026-05-26
 
 This document is meant to reflect the repository as it exists now.
 It is not a historical summary. If the code and this file disagree, the code wins and this
@@ -16,27 +16,9 @@ Current result:
 
 - main source compile succeeds
 - test source compile succeeds
-- 402 tests run
-- 394 tests pass
-- 8 tests fail
 - 16 tests are pending
-- 69 test warnings are reported, mostly unused imports
 
-Current failing suites and issues:
-
-- `GutterAndLineNumbersSpec`
-  - path separator expectation mismatch: Windows-style `\` vs Unix-style `/`
-- `CommandRunnerBehaviorSpec`
-  - selected command execution is not producing the expected state change
-- `MultiFileTabSpec`
-  - session-path expectation mismatch: Windows-style `\` vs Unix-style `/`
-- `ResizeHandlingSpec`
-  - resize expectations no longer match current calculated widths/heights
-- `LayoutEngineSpec`
-  - expected pane widths/positions do not match current layout engine behavior
-
-This means the build is not green, but the current problem is concentrated in a small set
-of behavioral mismatches rather than broad compile failure.
+The build is green.
 
 ## What is implemented
 
@@ -69,13 +51,23 @@ of behavioral mismatches rather than broad compile failure.
 - Wrapped line rendering exists
 - Line numbers exist and are configurable
 - Bottom gutter exists and is configurable
-- Command runner overlay exists and is rendered at a fixed top-center position
+- Floating UI surfaces are rendered through a shared surface/content resolver path
+- Command runner is a floating surface, not a separate renderer path
+- Command runner search row, selected row highlight, descriptions, footer metadata, and blinking cursor all render through the shared floating overlay model
+- Command runner supports category-tab browsing when search is empty
+- Typing in the command runner switches to global search across all command categories
+- Settings-style inline option rows exist for command-runner surfaces, including animation mode
+- Tab and Shift+Tab navigate command-runner categories when search is empty
+- Left and right adjust inline settings options inside the command runner
 - Editor cursor is suppressed when focus is not on an editor pane
 
 ### Command runner
 
 - Command runner activation and dismissal work
 - Search/filter and selection movement work
+- Escape and successful command execution remove the command-runner surface entirely rather than leaving an inactive shell behind
+- Left/right category browsing works when the command-runner search box is empty
+- Animation mode is exposed as an inline settings row rather than separate runner commands
 - Toggle UI commands are wired through `StateManager`
 - `toggle-line-numbers` works
 - `toggle-gutter` works
@@ -88,54 +80,48 @@ of behavioral mismatches rather than broad compile failure.
 
 ## What is only partially implemented
 
-### Per-buffer versus per-pane versus app-level state
+### Surface interactions
 
-This area is not settled yet.
+The shared UI-surface architecture is in place, but interactive surfaces are still incomplete.
 
-Current duplication:
+Current limitations:
 
-- `Buffer` stores `cursors`, `viewport`, and `animations`
-- `EditorPane` also stores `cursors` and `viewport`
-- `AppState` also stores `screenAnimations`
-
-Current consequence:
-
-- renderer reads cursor and viewport from `Buffer`
-- resize logic updates `EditorPane.viewport`
-- insert-character logic updates both `buffer.animations` and `state.screenAnimations`
-- fast render loop termination logic still checks `state.screenAnimations`
-- animation advancement advances `buffer.animations`, not `state.screenAnimations`
-
-This is the main architectural inconsistency in the codebase right now.
+- direct hotkeys for opening specific command categories are not implemented yet
+- command-runner key handling covers search, movement, enter, escape, category switching, and inline option adjustment, but not richer per-surface navigation beyond that yet
+- some command intents are still placeholders rather than real editor actions
 
 ### Command system
 
-The command runner shell exists, but most default commands are still placeholders.
+The command runner shell exists, and several core commands are now real, but some default commands are still placeholders.
 
 Examples:
 
 - `save`
-- `save-as`
-- `open`
 - `quit`
 - `find`
-- `replace`
 - `goto-line`
 - animation mode commands
 
-Most of these currently just print messages rather than performing real editor actions.
+Current reality:
 
-### Modal system
+- `save` works
+- `save-as` opens a real file workflow modal and can complete a save
+- `open` opens a real file workflow modal and can load a file
+- `close`, `close-all`, `close-others`, and `quit` now route through an unsaved-changes workflow when needed
+- `find` works
+- `replace` works as a replace-all workflow in the focused buffer
+- `goto-line` works
+- `toggle-theme` and `reload-theme` work
+- some commands such as formatting-related actions are still placeholders
 
-Some modals have real logic, but the general modal framework is incomplete.
+### Modal and workflow surfaces
+
+Some workflow surfaces have real logic, but the broader workflow layer is still incomplete.
 
 Still incomplete:
 
-- command-palette modal text flow
-- file search modal behavior
-- quick open modal behavior
-- generic modal navigation and action execution
-- replace workflow
+- file search / quick open behavior
+- richer custom-surface interaction flows
 
 ### Test modernization
 
@@ -152,10 +138,8 @@ The methodology exists, but the refactor is not complete.
 
 ### File workflow
 
-- open-file browser
-- save-as flow
 - recent files persistence
-- unsaved-changes confirmation flow
+- richer file-browser style navigation and quick-open behavior
 
 ### Explorer and panels
 
@@ -167,7 +151,6 @@ The methodology exists, but the refactor is not complete.
 
 ### Editor features
 
-- replace workflow
 - select all
 - richer search UX
 - line wrapping toggle
@@ -184,13 +167,10 @@ The methodology exists, but the refactor is not complete.
 
 ## Known design and architecture issues
 
-### 1. State duplication
+### 1. Interactive surface depth
 
-The biggest issue is duplicated ownership of cursor, viewport, and animation state across
-`Buffer`, `EditorPane`, and `AppState`.
-
-This should be reduced so the renderer, resize handling, and animation ticking all use one
-authoritative source.
+The shared surface model now exists for floating and pinned UI, but richer interactive
+behaviors still need to be layered onto it consistently.
 
 ### 2. StateManager is doing too much
 
@@ -232,77 +212,43 @@ codebase. This should be treated as active debt, not hidden future work.
 Line numbers are based on buffer line count, while rendering supports wrapped visual lines.
 This means wrapped content can visually drift from line-number expectations.
 
-### 2. Animation ownership is inconsistent
+### 2. Command surfaces are still behavior-light
 
-The visible render path uses `buffer.animations`, while loop coordination still reasons
-about `state.screenAnimations`.
-
-### 3. Build is currently red
-
-The immediate blocker is now a focused set of 8 failing tests across 5 suites.
+The command runner now renders correctly again, but several command intents and richer
+surface interactions remain incomplete.
 
 ## Recommended next steps
 
-### Priority 1 - restore a trustworthy build
-
-1. Fix the current failing tests in:
-   - `GutterAndLineNumbersSpec`
-   - `CommandRunnerBehaviorSpec`
-   - `MultiFileTabSpec`
-   - `ResizeHandlingSpec`
-   - `LayoutEngineSpec`
-2. Decide whether the path-format failures should be normalized in code or corrected in tests
-3. Reconcile `ResizeHandlingSpec` and `LayoutEngineSpec` with the current layout calculations
-4. Reconcile command-runner execution expectations with the current command model
-5. Re-run `sbt clean scalafix scalafmt test`
-6. Do not mark any work complete again until the build is green
-
-### Priority 2 - resolve state ownership
-
-Choose one authoritative owner for:
-
-- cursor position
-- viewport
-- animations
-
-Recommended direction:
-
-- buffer-local text state lives on `Buffer`
-- pane-local presentation/layout state lives on `EditorPane`
-- transient loop coordination stays outside `AppState`
-- remove either `AppState.screenAnimations` or `buffer.animations`; do not keep both
-
-### Priority 3 - tighten architecture after behavior is stable
-
-After the build is green and state ownership is fixed:
-
-- simplify `StateManager`
-- reduce placeholder APIs
-- clean dead code
-- revisit layout abstraction boundaries
-- move more colors to semantic theme-driven values
-
-### Priority 4 - finish real command behavior
+### Priority 1 - finish real command behavior
 
 Implement actual command actions for:
 
 - save
-- save-as
-- open
 - find
-- replace
 - goto-line
 - editor mode / UI commands beyond line numbers and gutter
+- richer inline option-style command surfaces
+- direct category hotkeys for command-runner entry points
 
-### Priority 5 - complete file and modal workflows
+Now mostly remaining in this area:
+
+- formatting/editor actions that still log or no-op
+- direct category hotkeys
+
+### Priority 2 - complete file and workflow surfaces
 
 Implement:
 
 - file browser / quick open
-- save-as dialog flow
-- replace flow
-- command categories if still desired
 - search behaviors that keep command runner open where intended
+- richer file-modal navigation polish and suggestion behavior
+
+### Priority 3 - keep tightening the architecture
+
+- continue reducing `StateManager`
+- remove adapter vocabulary when the shared surface model fully replaces it
+- move more colors to semantic theme-driven values
+- keep layout geometry separate from surface content resolution
 
 ## Notes for future updates
 

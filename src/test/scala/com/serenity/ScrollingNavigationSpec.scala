@@ -168,8 +168,9 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Modal should be open
     val modalState = stateManager.getCurrentState.unsafeRunSync()
-    modalState.modal shouldBe Some(Modal.GotoLine(""))
-    modalState.focus shouldBe Focus.Modal(ModalType.GotoLine)
+    val modalSurface = modalState.modalSurface
+    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.GotoLine("")))
+    modalState.focus shouldBe Focus.Surface(modalSurface.get.id)
 
     // When: Type line number
     "250".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
@@ -177,7 +178,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Should jump to line 250
     val afterGotoState = stateManager.getCurrentState.unsafeRunSync()
-    afterGotoState.modal shouldBe None
+    afterGotoState.modalSurface shouldBe None
     val pane = afterGotoState.layout.editorPanes(paneId)
     val buffer = pane.bufferId.flatMap(afterGotoState.buffers.get).get
     buffer.cursors.head.line shouldBe 249           // 0-indexed, so line 250 = index 249
