@@ -219,6 +219,7 @@ object LayoutEngine:
 
   private def calculateFloatingSurfaceHeight(content: SurfaceContent, maxHeight: Int): Int =
     val preferredHeight = content match
+      case SurfaceContent.StartPage(_)                 => maxHeight
       case SurfaceContent.QuickInfo(text)              => math.max(3, text.linesIterator.size + 2)
       case SurfaceContent.FilePreview(_, content)      => math.max(4, math.min(6, content.linesIterator.take(4).size + 2))
       case SurfaceContent.SymbolDefinition(_, _)       => 4

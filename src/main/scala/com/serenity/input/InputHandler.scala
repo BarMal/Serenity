@@ -1,7 +1,7 @@
 package com.serenity.input
 
 import cats.effect.Sync
-import com.googlecode.lanterna.input.KeyStroke
+import com.googlecode.lanterna.input.{KeyStroke, KeyType}
 import com.googlecode.lanterna.terminal.Terminal
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.Event
@@ -18,10 +18,17 @@ class InputHandlerImpl[F[_] : Sync, E <: Event](
 ) extends InputHandler[F]:
 
   def keyStream: Stream[F, KeyStroke] =
-    Stream
-      .repeatEval(readKeyStroke)
-      .unNone
-      .filter(isValidKeyStroke)
+    keyStreamUntilClosed
+
+  private def keyStreamUntilClosed: Stream[F, KeyStroke] =
+    Stream.eval(readKeyStroke).flatMap {
+      case Some(keyStroke) if isValidKeyStroke(keyStroke) =>
+        Stream.emit(keyStroke) ++ keyStreamUntilClosed
+      case Some(_) =>
+        keyStreamUntilClosed
+      case None =>
+        Stream.emit(new KeyStroke(KeyType.EOF))
+    }
 
   def keyStrokeInfoStream: Stream[F, KeyStrokeInfo] =
     keyStream.map(KeyStrokeInfo.fromKeyStroke)

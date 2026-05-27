@@ -1,9 +1,8 @@
-import scala.concurrent.duration.*
-
 import cats.effect.*
 import cats.syntax.parallel.*
 import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
 import com.googlecode.lanterna.terminal.Terminal
+import com.serenity.app.AppStartup
 import com.serenity.config.AppConfig
 import com.serenity.input.{FocusedInputTranslator, InputRouter, ScreenInputHandler}
 import com.serenity.keystroke.events.{Event, UnhandledEvent}
@@ -21,6 +20,8 @@ import fs2.concurrent.SignallingRef
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
+import scala.concurrent.duration.*
+
 given Balance = Balance.default
 
 object Main extends IOApp.Simple:
@@ -37,11 +38,17 @@ object Main extends IOApp.Simple:
           themeManager = AppThemeManager.create
           defaultTheme <- themeManager.initializeWithTheme()
           stateManager <- StateManager.apply(logger)
-          // Note: StateManager.apply now creates initial state with 1 pane and 1 buffer automatically
-          _           <- stateManager.updateState(_.copy(theme = defaultTheme))
+          initialTerminalSize <- IO.blocking {
+            val size = screen.getTerminalSize
+            TerminalSize(size.getColumns, size.getRows)
+          }
+          initialState <- AppStartup.initializeState(
+            stateManager,
+            defaultTheme,
+            initialTerminalSize
+          )
           inputRouter <- InputRouter.create[IO, Event](new TextEntryTranslator)
           inputHandler = new ScreenInputHandler[IO, Event](screen, inputRouter)
-          initialState  <- stateManager.getCurrentState
           _             <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
           _             <- IO.blocking(Renderer.render(initialState, cursorVisible = true, screen))
           _             <- logger.info("Initial render completed, starting main loop")

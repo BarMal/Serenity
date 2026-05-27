@@ -159,3 +159,65 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
       rect.width should be >= defaultMinPaneWidth
     }
   }
+
+  it should "expand from one visible pane to multiple panes after widening a terminal that was narrow during tab creation" in new PaneConstraintFixture {
+    val narrowTerminal = TerminalSize(80, 24)
+    val wideTerminal   = TerminalSize(200, 24)
+
+    stateManager.updateState(_.copy(terminalSize = Some(narrowTerminal))).unsafeRunSync()
+    stateManager.applyEvent(NewTab).unsafeRunSync()
+
+    val narrowState = stateManager.getCurrentState.unsafeRunSync()
+    narrowState.buffers should have size 2
+    narrowState.layout.editorPanes should have size 1
+
+    stateManager.handleTerminalResize(wideTerminal).unsafeRunSync()
+
+    val widenedState = stateManager.getCurrentState.unsafeRunSync()
+    widenedState.layout.editorPanes.size should be >= 2
+
+    val visibleBufferIds =
+      widenedState.layout.editorPanes.values.flatMap(_.bufferId).toSet
+    visibleBufferIds should contain allElementsOf widenedState.bufferOrder.toSet
+  }
+
+  it should "shrink visible panes under narrow widths and restore them when widened again" in new PaneConstraintFixture {
+    val wideTerminal   = TerminalSize(200, 24)
+    val narrowTerminal = TerminalSize(80, 24)
+
+    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.applyEvent(NewTab).unsafeRunSync()
+
+    val wideState = stateManager.getCurrentState.unsafeRunSync()
+    wideState.layout.editorPanes.size should be >= 2
+
+    val wideLayout = LayoutEngine.calculateLayout(wideState, wideTerminal)
+    val visibleWidePanes =
+      LayoutEngine
+        .calculatePaneLayouts(wideState, wideLayout)
+        .values
+        .count(rect => rect.x >= wideLayout.editorPanelRect.x && rect.right <= wideLayout.editorPanelRect.right)
+    visibleWidePanes.should(be >= 2)
+
+    stateManager.handleTerminalResize(narrowTerminal).unsafeRunSync()
+
+    val narrowState = stateManager.getCurrentState.unsafeRunSync()
+    val narrowLayout = LayoutEngine.calculateLayout(narrowState, narrowTerminal)
+    val visibleNarrowPanes =
+      LayoutEngine
+        .calculatePaneLayouts(narrowState, narrowLayout)
+        .values
+        .count(rect => rect.x >= narrowLayout.editorPanelRect.x && rect.right <= narrowLayout.editorPanelRect.right)
+    visibleNarrowPanes.shouldBe(1)
+
+    stateManager.handleTerminalResize(wideTerminal).unsafeRunSync()
+
+    val restoredState = stateManager.getCurrentState.unsafeRunSync()
+    val restoredLayout = LayoutEngine.calculateLayout(restoredState, wideTerminal)
+    val restoredVisiblePanes =
+      LayoutEngine
+        .calculatePaneLayouts(restoredState, restoredLayout)
+        .values
+        .count(rect => rect.x >= restoredLayout.editorPanelRect.x && rect.right <= restoredLayout.editorPanelRect.right)
+    restoredVisiblePanes.should(be >= 2)
+  }

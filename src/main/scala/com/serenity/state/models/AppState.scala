@@ -62,6 +62,9 @@ case class AppState(
   def commandRunnerSurface: Option[UiSurface] =
     uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.CommandPalette])
 
+  def startPageSurface: Option[UiSurface] =
+    uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.StartPage])
+
   def modalSurface: Option[UiSurface] =
     uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.ModalWorkflow])
 

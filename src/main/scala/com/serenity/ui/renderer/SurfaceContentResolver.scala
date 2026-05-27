@@ -53,6 +53,8 @@ object SurfaceContentResolver:
     mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
     content match
+      case SurfaceContent.StartPage(_) =>
+        ResolvedSurfaceContent()
       case SurfaceContent.QuickInfo(text) =>
         ResolvedSurfaceContent(
           title = None,

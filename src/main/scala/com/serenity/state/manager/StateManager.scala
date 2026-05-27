@@ -412,6 +412,8 @@ object StateManager:
                     case SurfaceContent.CommandPalette(_) =>
                       val registry = CommandRegistry.withToggleUI
                       Some(new CommandRunnerComponent(registry))
+                    case SurfaceContent.StartPage(_) =>
+                      Some(new StartupPageComponent())
                     case SurfaceContent.ModalWorkflow(modal) =>
                       Some(new ModalComponent(modalType(modal)))
                     case _ =>
@@ -427,7 +429,10 @@ object StateManager:
             case Some(surface) =>
               surface.presentation match
                 case SurfacePresentation.Pinned(position, _) => new PinnedPanelComponent(position)
-                case SurfacePresentation.Floating(_, _)      => new PeekOverlayComponent()
+                case SurfacePresentation.Floating(_, _) =>
+                  surface.content match
+                    case SurfaceContent.StartPage(_) => new StartupPageComponent()
+                    case _                           => new PeekOverlayComponent()
             case None =>
               new PeekOverlayComponent()
 

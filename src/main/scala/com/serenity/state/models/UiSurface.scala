@@ -7,6 +7,17 @@ import com.serenity.ui.layout.*
 
 case class SurfaceId(value: String)
 
+case class StartupPage(
+    title: String,
+    options: List[String],
+    statusMessage: Option[String] = None
+):
+  def renderLines: List[String] =
+    val baseLines = List(title, "") ++ options
+    statusMessage match
+      case Some(message) => baseLines ++ List("", message)
+      case None          => baseLines
+
 enum SurfacePlacement:
   case AboveCursor
   case BelowCursor
@@ -16,6 +27,7 @@ enum SurfacePresentation:
   case Pinned(position: PanelPosition, size: Int)
 
 enum SurfaceContent:
+  case StartPage(page: StartupPage)
   case QuickInfo(text: String)
   case FilePreview(path: Path, content: String)
   case SymbolDefinition(symbol: String, location: Location)

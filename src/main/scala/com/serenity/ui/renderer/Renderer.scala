@@ -21,17 +21,26 @@ object Renderer:
     val graphics     = screen.newTextGraphics()
     val terminalSize = TerminalSize(screen.getTerminalSize.getColumns, screen.getTerminalSize.getRows)
     val layout       = LayoutEngine.calculateLayout(state, terminalSize)
-    val context      = RenderContext(screen, graphics, layout, cursorVisible)
 
+    screen.setCursorPosition(null)
     graphics.setBackgroundColor(state.theme.background)
     graphics.fillRectangle(com.googlecode.lanterna.TerminalPosition.TOP_LEFT_CORNER, screen.getTerminalSize, ' ')
 
-    renderSpacerColumns(context)
-    renderLineNumbers(state, context)
-    renderGutter(state, context)
-    renderPinnedPanels(state, context)
-    renderEditorPanes(state, context)
-    renderFloatingPanels(state, context)
+    state.startPageSurface.flatMap {
+      _.content match
+        case SurfaceContent.StartPage(page) => Some(page)
+        case _                              => None
+    } match
+      case Some(page) =>
+        renderStartPage(page, graphics, terminalSize, state.theme)
+      case None =>
+        val context = RenderContext(screen, graphics, layout, cursorVisible)
+        renderSpacerColumns(context)
+        renderLineNumbers(state, context)
+        renderGutter(state, context)
+        renderPinnedPanels(state, context)
+        renderEditorPanes(state, context)
+        renderFloatingPanels(state, context)
 
     screen.refresh()
 
@@ -41,6 +50,7 @@ object Renderer:
     val layout       = LayoutEngine.calculateLayout(state, terminalSize)
     val paneLayouts  = LayoutEngine.calculatePaneLayouts(state, layout)
 
+    screen.setCursorPosition(null)
     state.focus match
       case Focus.EditorPane(focusedPaneId) =>
         for
@@ -266,6 +276,26 @@ object Renderer:
 
         if lineY >= 0 && lineY < context.screen.getTerminalSize.getRows && centerX >= 0 then
           CharacterRenderer.renderString(context.graphics, centerX, lineY, line)
+    }
+
+  private def renderStartPage(
+    page: StartupPage,
+    graphics: TextGraphics,
+    terminalSize: TerminalSize,
+    theme: Theme
+  ): Unit =
+    val lines  = page.renderLines
+    val startY = (terminalSize.height - lines.size) / 2
+
+    graphics.setForegroundColor(theme.placeholder)
+    graphics.setBackgroundColor(theme.background)
+
+    lines.zipWithIndex.foreach { case (line, index) =>
+      val y = startY + index
+      val x = math.max(0, (terminalSize.width - line.length) / 2)
+
+      if y >= 0 && y < terminalSize.height then
+        CharacterRenderer.renderString(graphics, x, y, line)
     }
 
   private def renderCursors(

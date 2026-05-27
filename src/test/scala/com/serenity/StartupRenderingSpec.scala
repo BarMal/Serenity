@@ -3,10 +3,16 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.traverse.*
+import com.googlecode.lanterna.screen.TerminalScreen
+import com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal
+import com.googlecode.lanterna.{TerminalSize as LanternaSize}
+import com.serenity.app.AppStartup
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -19,7 +25,43 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
 
+  private def makeTestScreen(width: Int, height: Int): TerminalScreen =
+    val terminal = new DefaultVirtualTerminal(new LanternaSize(width, height))
+    val screen   = new TerminalScreen(terminal)
+    screen.startScreen()
+    screen
+
   behavior of "Startup State Rendering"
+
+  it should "render the dedicated start page vertically centered in the viewport" in {
+    val screen = makeTestScreen(100, 30)
+    val state = AppStartup.startPageState(
+      com.serenity.ui.theme.Theme.dark,
+      TerminalSize(100, 30)
+    )
+
+    Renderer.render(state, cursorVisible = true, screen)
+
+    val renderedLines =
+      (0 until 30).flatMap { y =>
+        val line =
+          (0 until 100)
+            .map(x => screen.getBackCharacter(x, y).getCharacter)
+            .mkString
+            .trim
+        Option.when(line.nonEmpty)((y, line))
+      }
+
+    val fullExpectedLines = AppStartup.defaultStartPage.renderLines
+    val expectedLines = fullExpectedLines.filter(_.nonEmpty)
+    renderedLines.map(_._2) should contain allElementsOf expectedLines
+
+    val expectedStartY = (30 - fullExpectedLines.size) / 2
+    renderedLines.head._1.shouldBe(expectedStartY)
+    renderedLines.last._1.shouldBe(expectedStartY + fullExpectedLines.size - 1)
+
+    screen.stopScreen()
+  }
 
   it should "have buffer content available immediately after setup" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]

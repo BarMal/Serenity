@@ -90,6 +90,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     testScreen.getBackCharacter(0, 0).getBackgroundColor shouldBe state.theme.background
     testScreen.getBackCharacter(overlay.x + 1, overlay.y + 1).getBackgroundColor shouldBe state.theme.panel.background
     testScreen.getBackCharacter(overlay.x + 1, overlay.y + 2).getBackgroundColor shouldBe state.theme.highlighted.background
+    testScreen.getCursorPosition shouldBe null
 
     val cursorX = overlay.x + 1 + "search: op".length
     testScreen.getBackCharacter(cursorX, overlay.y + 1).getBackgroundColor shouldBe state.theme.cursorColor

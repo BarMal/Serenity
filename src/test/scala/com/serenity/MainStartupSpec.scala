@@ -1,6 +1,9 @@
 package com.serenity
 
 import com.serenity.state.manager.StateManager
+import com.serenity.app.AppStartup
+import com.serenity.state.models.{Focus, SurfaceContent}
+import com.serenity.ui.layout.TerminalSize
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -13,41 +16,59 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
 
   behavior of "Main Application Startup"
 
-  it should "simulate the Main.scala startup sequence with exactly 1 pane" in {
+  it should "initialize startup state with the current terminal size and a focused start page" in {
     given com.serenity.rope.Balance = com.serenity.rope.Balance.default
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
-    // Given: Simulate Main.scala startup sequence
+
     val logger = LoggerFactory[IO].getLogger(using LoggerName("Main"))
-    
-    // When: Follow the same steps as Main.scala (after fix)
+    val initialTerminalSize = TerminalSize(200, 40)
+
     val result = for {
-      // This follows the exact sequence in Main.scala run method
       themeManager <- IO.pure(AppThemeManager.create)
       defaultTheme <- themeManager.initializeWithTheme()
       stateManager <- StateManager.apply(logger)
-      // Note: No longer creating extra buffer and pane here
-      _            <- stateManager.updateState(_.copy(theme = defaultTheme))
-      finalState   <- stateManager.getCurrentState
-    } yield (stateManager, finalState)
-    
-    val (stateManager, finalState) = result.unsafeRunSync()
-    
-    // Then: Should have exactly 1 pane and 1 buffer
-    finalState.layout.editorPanes.should(have).size(1)
-    finalState.buffers.should(have).size(1)
-    
-    // And the pane should have a buffer
-    val paneId = finalState.layout.editorPanes.keys.head
-    val pane = finalState.layout.editorPanes(paneId)
-    pane.bufferId.shouldBe(defined)
-    
-    val bufferId = pane.bufferId.get
-    finalState.buffers.should(contain).key(bufferId)
-    
-    // And focus should be correct
-    finalState.focus.shouldBe(com.serenity.state.models.Focus.EditorPane(paneId))
-    finalState.layout.activeEditorPaneId.shouldBe(Some(paneId))
-    
-    println(s"Final startup state: ${finalState.layout.editorPanes.size} panes, ${finalState.buffers.size} buffers")
+      finalState <- AppStartup.initializeState(
+        stateManager,
+        defaultTheme,
+        initialTerminalSize
+      )
+    } yield finalState
+
+    val finalState = result.unsafeRunSync()
+
+    finalState.terminalSize.shouldBe(Some(initialTerminalSize))
+    finalState.theme.should(not.be(com.serenity.ui.theme.Theme.default))
+    finalState.buffers.shouldBe(Map.empty)
+    finalState.layout.editorPanes.shouldBe(Map.empty)
+    finalState.startPageSurface.shouldBe(defined)
+    finalState.focus.shouldBe(Focus.Surface(finalState.startPageSurface.get.id))
+  }
+
+  it should "render the expected startup choices on the dedicated start page" in {
+    given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Main"))
+    val wideTerminalSize = TerminalSize(200, 40)
+
+    val result = for {
+      themeManager <- IO.pure(AppThemeManager.create)
+      defaultTheme <- themeManager.initializeWithTheme()
+      stateManager <- StateManager.apply(logger)
+      finalState <- AppStartup.initializeState(
+        stateManager,
+        defaultTheme,
+        wideTerminalSize
+      )
+    } yield finalState
+
+    val finalState = result.unsafeRunSync()
+
+    finalState.startPageSurface.map(_.content).shouldBe(
+      Some(
+        SurfaceContent.StartPage(
+          AppStartup.defaultStartPage
+        )
+      )
+    )
   }
