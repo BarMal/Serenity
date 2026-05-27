@@ -9,6 +9,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Tests to verify that the Renderer fixes properly clip text at panel boundaries. These should pass after implementing
   * the clipping logic in Renderer.scala.
@@ -20,7 +22,11 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
   behavior of "Fixed Renderer Panel Boundary Clipping"
 
   it should "now have matching visibleColumns and panel width after viewport adjustment" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -33,7 +39,8 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
 
     // The fix should ensure that content is clipped to panel width regardless of viewport.visibleColumns
     val pane     = finalState.layout.editorPanes(paneId)
-    val viewport = pane.viewport
+    val buffer   = finalState.buffers(bufferId)
+    val viewport = buffer.viewport
 
     info(s"Viewport visible columns: ${viewport.visibleColumns}")
     info(s"Panel actual width: ${panelRect.width}")
@@ -51,7 +58,11 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle content longer than panel width without visual overflow" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -74,7 +85,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
 
     // Viewport should scroll to keep cursor visible
     val finalPane = finalState.layout.editorPanes(paneId)
-    val cursor    = finalPane.cursors.head
+    val cursor    = buffer.cursors.head
     cursor.column shouldBe longText.length
 
     // With the fix, the Renderer will clip content to panelRect.width
@@ -82,14 +93,18 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     info(s"Text length: ${longText.length}")
     info(s"Panel width: ${panelRect.width}")
     info(s"Cursor column: ${cursor.column}")
-    info(s"Viewport left: ${finalPane.viewport.leftColumn}")
+    info(s"Viewport left: ${buffer.viewport.leftColumn}")
 
     // Test passes because the clipping logic prevents visual overflow
     longText.length should be > panelRect.width
   }
 
   it should "correctly position viewport for very long text" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -106,8 +121,9 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.layout.editorPanes(paneId)
-    val cursor     = finalPane.cursors.head
-    val viewport   = finalPane.viewport
+    val buffer     = finalState.buffers(bufferId)
+    val cursor     = buffer.cursors.head
+    val viewport   = buffer.viewport
 
     // Cursor should be at end
     cursor.column shouldBe veryLongText.length
@@ -117,7 +133,6 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     cursor.column should be < (viewport.leftColumn + viewport.visibleColumns)
 
     // Buffer content should be intact
-    val buffer = finalState.buffers.values.head
     buffer.content.collect() shouldBe veryLongText
 
     info(s"Very long text length: ${veryLongText.length}")
@@ -129,7 +144,11 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "properly handle multi-line text with horizontal scrolling" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -148,8 +167,8 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.layout.editorPanes(paneId)
-    val cursor     = finalPane.cursors.head
-    val buffer     = finalState.buffers.values.head
+    val buffer     = finalState.buffers(bufferId)
+    val cursor     = buffer.cursors.head
 
     // Should be on last line
     cursor.line shouldBe 4

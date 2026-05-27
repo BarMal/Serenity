@@ -1,69 +1,121 @@
-import cats.effect.{IO, IOApp, Resource}
+import scala.concurrent.duration.*
+
+import cats.effect.*
 import cats.syntax.parallel.*
 import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
-import com.googlecode.lanterna.terminal.{DefaultTerminalFactory, Terminal}
-import com.serenity.input.{InputRouter, ScreenInputHandler}
-import com.serenity.keystroke.events.TextEntryEvent
+import com.googlecode.lanterna.terminal.Terminal
+import com.serenity.config.AppConfig
+import com.serenity.input.{FocusedInputTranslator, InputRouter, ScreenInputHandler}
+import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.ui.renderer.Renderer
-import com.serenity.ui.theme.config.AppThemeManager
-import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.state.models.Focus
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.renderer.{RenderController, Renderer}
+import com.serenity.ui.terminal.TerminalFactory
+import com.serenity.ui.theme.config.AppThemeManager
+import fs2.Stream
+import fs2.concurrent.SignallingRef
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 given Balance = Balance.default
 
 object Main extends IOApp.Simple:
 
+  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
   def run: IO[Unit] =
-    terminalResource.use { terminal =>
+    given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
+    val appConfig                                   = AppConfig.default
+    terminalResource(appConfig.fontConfig).use { terminal =>
       screenResource(terminal).use { screen =>
         for
-          // Initialize theme manager and load default theme
+          _ <- logger.info("Starting Serenity text editor")
           themeManager = AppThemeManager.create
-          defaultTheme <- themeManager.initializeWithTheme() // Uses "default-dark"
-          stateManager <- StateManager.apply
-          // Create initial empty buffer and pane for startup  
-          bufferId    <- stateManager.createNewEmptyBuffer()
-          paneId      <- stateManager.createPane(Some(bufferId))
-          // Apply the loaded theme to the initial state
+          defaultTheme <- themeManager.initializeWithTheme()
+          stateManager <- StateManager.apply(logger)
+          // Note: StateManager.apply now creates initial state with 1 pane and 1 buffer automatically
           _           <- stateManager.updateState(_.copy(theme = defaultTheme))
-          inputRouter <- InputRouter.create[IO, TextEntryEvent](new TextEntryTranslator)
-          inputHandler = new ScreenInputHandler[IO, TextEntryEvent](screen, inputRouter)
-          // Render initial state before starting input loop
-          initialState <- stateManager.getCurrentState
-          _            <- IO.blocking(Renderer.render(initialState, screen))
-          // Race the main event loop, continuous rendering, and quit signal
-          _ <- (
-            // Input event processing
-            inputHandler.eventStream
-              .evalMap { event =>
-                for
-                  _            <- stateManager.applyEvent(event)
-                  activeBuffer <- stateManager.getActiveBuffer
-                  state        <- stateManager.getCurrentState
-                  _            <- logSelectiveEvents(event, state.focus)
-                yield ()
-              }
-              .compile
-              .drain,
-            // Continuous rendering loop for cursor blinking
-            continuousRenderingLoop(stateManager, screen),
-            stateManager.awaitQuit
-          ).parMapN((_, _, _) => ())
+          inputRouter <- InputRouter.create[IO, Event](new TextEntryTranslator)
+          inputHandler = new ScreenInputHandler[IO, Event](screen, inputRouter)
+          initialState  <- stateManager.getCurrentState
+          _             <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
+          _             <- IO.blocking(Renderer.render(initialState, cursorVisible = true, screen))
+          _             <- logger.info("Initial render completed, starting main loop")
+          fastMode      <- SignallingRef.of[IO, Boolean](false)
+          cursorVisible <- Ref.of[IO, Boolean](true)
+          checkResize = IO
+            .blocking(Option(screen.doResizeIfNecessary()))
+            .map(_.map(s => TerminalSize(s.getColumns, s.getRows)))
+            .flatMap(RenderController.handleResize(_, stateManager, fastMode.set(true)))
+          inputFunnel = (s: Stream[IO, Event]) =>
+            s.evalMap(event =>
+              checkResize >>
+                stateManager.applyEvent(event) >>
+                stateManager.getCurrentState.flatMap(state => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))) >>
+                fastMode.set(true)
+            ).drain
+          _ <-
+            def idlePhase: Stream[IO, Unit] =
+              Stream
+                .fixedRate[IO](500.millis)
+                .interruptWhen(fastMode.discrete)
+                .evalMap { _ =>
+                  for
+                    _       <- checkResize
+                    visible <- cursorVisible.updateAndGet(b => !b)
+                    state   <- stateManager.getCurrentState
+                    _       <- IO.blocking(Renderer.renderCursorOnly(state, visible, screen))
+                  yield ()
+                }
+
+            def fastPhase: Stream[IO, Unit] =
+              Stream
+                .fixedRate[IO](16.millis)
+                .evalMap { _ =>
+                  for
+                    _      <- checkResize
+                    active <- stateManager.advanceAnimationsOnTick()
+                    state  <- stateManager.getCurrentState
+                    _      <- IO.blocking(Renderer.render(state, cursorVisible = true, screen))
+                  yield active
+                }
+                .takeWhile(identity)
+                .map(_ => ())
+                .onFinalize {
+                  stateManager.getCurrentState.flatMap { state =>
+                    if state.buffers.values.exists(_.animations.hasActiveAnimations) then IO.unit
+                    else fastMode.set(false)
+                  }
+                }
+
+            def renderLoop: Stream[IO, Unit] = idlePhase ++ fastPhase ++ renderLoop
+
+            (
+              inputHandler.eventStream
+                .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
+                .through(inputFunnel)
+                .compile
+                .drain,
+              renderLoop.compile.drain,
+              stateManager.awaitQuit
+            ).parMapN((_, _, _) => ())
+          _ <- logger.info("Serenity editor shutdown complete")
         yield ()
       }
     }
 
-  private def terminalResource: Resource[IO, Terminal] =
+  private def terminalResource(
+    fontConfig: FontLoader.FontConfig
+  )(using logger: org.typelevel.log4cats.Logger[IO]): Resource[IO, Terminal] =
     Resource.make(
-      IO.blocking {
-        val factory  = new DefaultTerminalFactory()
-        val terminal = factory.createTerminal()
-        terminal.enterPrivateMode()
-        terminal
-      }
+      for
+        terminal <- TerminalFactory.createTerminal(fontConfig)
+        _        <- IO.blocking(terminal.enterPrivateMode())
+      yield terminal
     )(terminal =>
       IO.blocking {
         terminal.exitPrivateMode()
@@ -84,39 +136,42 @@ object Main extends IOApp.Simple:
       }
     )
 
-  /** Continuous rendering loop for cursor blinking and smooth UI updates */
-  private def continuousRenderingLoop(stateManager: StateManager, screen: Screen): IO[Unit] =
-    import scala.concurrent.duration.*
-    
-    val targetFPS = 30 // 30 FPS for smooth cursor blinking
-    val frameTime = (1000.0 / targetFPS).millis
-    
-    def renderLoop: IO[Unit] =
-      for
-        state <- stateManager.getCurrentState
-        _     <- IO.blocking(Renderer.render(state, screen))
-        _     <- IO.sleep(frameTime)
-        _     <- renderLoop
-      yield ()
-    
-    renderLoop
-
-  /** Log only focus changes and unregistered events */
-  private def logSelectiveEvents(event: Event, currentFocus: Focus): IO[Unit] =
+  private def logSelectiveEvents(
+    event: Event,
+    currentFocus: Focus,
+    logger: org.typelevel.log4cats.Logger[IO]
+  ): IO[Unit] =
     event match
+      case unhandled: UnhandledEvent[?] if !isSystemEvent(unhandled) =>
+        logger.warn(s"[UNHANDLED] $event")
       case _: UnhandledEvent[?] =>
-        IO.println(s"[UNHANDLED] $event")
+        // System events (EOF, etc.) are logged at debug level to avoid flooding
+        logger.debug(s"[SYSTEM] $event")
       case _ if shouldLogFocusChange(event) =>
-        IO.println(s"[FOCUS] Event: $event, Focus: $currentFocus")
+        logger.debug(s"[FOCUS] Event: $event, Focus: $currentFocus")
       case _ => IO.unit
 
   private def shouldLogFocusChange(event: Event): Boolean =
     event match
-      case com.serenity.keystroke.events.MoveUp => false
-      case com.serenity.keystroke.events.MoveDown => false  
-      case com.serenity.keystroke.events.MoveLeft => false
-      case com.serenity.keystroke.events.MoveRight => false
-      case com.serenity.keystroke.events.InsertChar(_) => false
+      case com.serenity.keystroke.events.MoveUp         => false
+      case com.serenity.keystroke.events.MoveDown       => false
+      case com.serenity.keystroke.events.MoveLeft       => false
+      case com.serenity.keystroke.events.MoveRight      => false
+      case com.serenity.keystroke.events.InsertChar(_)  => false
       case com.serenity.keystroke.events.DeleteBackward => false
-      case com.serenity.keystroke.events.DeleteForward => false
-      case _ => true // Log other events that might change focus/handlers
+      case com.serenity.keystroke.events.DeleteForward  => false
+      case _                                            => true
+
+  private def isSystemEvent(event: UnhandledEvent[?]): Boolean =
+    import com.googlecode.lanterna.input.KeyType
+    event.keyStroke.getKeyType match
+      case KeyType.EOF       => false // EOF is now handled as Quit event, not a system event
+      case KeyType.Unknown   => true
+      case KeyType.Character =>
+        // Check for control characters that indicate system/terminal events
+        Option(event.keyStroke.getCharacter).exists { char =>
+          char == '\u0000' || // Null character
+          char == '\u0004' || // End of transmission (Ctrl+D)
+          char == '\u001A'    // Substitute character (Ctrl+Z on some systems)
+        }
+      case _ => false

@@ -6,14 +6,15 @@ import com.serenity.ui.theme.Theme
 
 /** Application-level theme manager that integrates with AppState */
 class AppThemeManager:
-  
-  private val themeManager = new StatefulThemeManager()
+
+  private val themeManager        = new StatefulThemeManager()
   private val configurableManager = new ConfigurableThemeManager(new ThemeConfigLoader())
 
   /** Initialize the application with a default theme */
-  def initializeWithTheme(themeName: String = "default-dark"): IO[Theme] =
-    themeManager.loadAndSetTheme(themeName)
-      .handleErrorWith(_ => 
+  def initializeWithTheme(themeName: String = "dark"): IO[Theme] =
+    themeManager
+      .loadAndSetTheme(themeName)
+      .handleErrorWith(_ =>
         // Fallback to internal default if theme loading fails
         val defaultTheme = com.serenity.ui.theme.DefaultThemes.default
         themeManager.setCurrentTheme(defaultTheme, defaultTheme.name).as(defaultTheme)
@@ -32,8 +33,7 @@ class AppThemeManager:
 
   /** Reload the current theme (useful for config file changes) */
   def reloadCurrentTheme: IO[Option[(Theme, AppState => AppState)]] =
-    for
-      reloadedTheme <- themeManager.reloadCurrentTheme
+    for reloadedTheme <- themeManager.reloadCurrentTheme
     yield reloadedTheme.map { theme =>
       val stateUpdate = (state: AppState) => state.copy(theme = theme)
       (theme, stateUpdate)

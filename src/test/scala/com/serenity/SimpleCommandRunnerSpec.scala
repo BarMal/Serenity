@@ -1,8 +1,8 @@
 package com.serenity
 
+import cats.effect.IO
 import com.serenity.command.*
 import com.serenity.state.models.*
-import cats.effect.IO
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -20,7 +20,7 @@ class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
       com.serenity.command.Command("open", "Open file", (_: AppState) => IO.unit)
     )
     val searcher = new CommandSearcher(commands)
-    
+
     val results = searcher.search("save")
     results.length shouldBe 1
     results.head.name shouldBe "save"
@@ -35,19 +35,19 @@ class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "activate with commands" in {
     val registry = CommandRegistry.default
-    val runner = CommandRunner.empty.activate(registry)
-    
+    val runner   = CommandRunner.empty.activate(registry)
+
     runner.isActive shouldBe true
     runner.filteredCommands should not be empty
   }
 
   it should "update search term" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    
-    val runner = CommandRunner.empty.activate(registry)
+
+    val runner  = CommandRunner.empty.activate(registry)
     val updated = runner.updateSearchTerm("save")
-    
+
     updated.searchTerm shouldBe "save"
     updated.filteredCommands.exists(_.name.contains("save")) shouldBe true
   }
@@ -59,10 +59,10 @@ class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
       com.serenity.command.Command("cmd3", "Command 3", (_: AppState) => IO.unit)
     )
     val runner = CommandRunner.withCommands(commands)
-    
+
     val moved = runner.moveSelection(1)
     moved.selectedIndex shouldBe 1
-    
+
     val wrapped = moved.moveSelection(3) // Should wrap around
     wrapped.selectedIndex shouldBe 1 // (1 + 3) % 3 = 1
   }
@@ -70,7 +70,7 @@ class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
   "CommandRegistry" should "provide default commands" in {
     val registry = CommandRegistry.default
     val commands = registry.getAllCommands
-    
+
     commands should not be empty
     commands.exists(_.name == "save") shouldBe true
     commands.exists(_.name == "open") shouldBe true

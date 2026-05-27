@@ -6,4 +6,4 @@ import com.serenity.keystroke.translators.Translator
 case class UnhandledEvent[T <: Translator[?]](
     keyStroke: KeyStroke,
     handler: T
-) extends Event
+) extends SystemEvent

@@ -1,76 +1,159 @@
 package com.serenity.ui.renderer
 
-import com.googlecode.lanterna.TextColor
 import com.googlecode.lanterna.graphics.TextGraphics
 import com.googlecode.lanterna.screen.Screen
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.theme.Theme
+import org.slf4j.LoggerFactory
 
 case class RenderContext(
     screen: Screen,
     graphics: TextGraphics,
-    layout: CalculatedLayout
+    layout: CalculatedLayout,
+    cursorVisible: Boolean = true
 )
 
 object Renderer:
+  private val logger = LoggerFactory.getLogger("com.serenity.ui.renderer.Renderer")
 
-  def render(state: AppState, screen: Screen): Unit =
+  def render(state: AppState, cursorVisible: Boolean, screen: Screen): Unit =
     val graphics     = screen.newTextGraphics()
     val terminalSize = TerminalSize(screen.getTerminalSize.getColumns, screen.getTerminalSize.getRows)
     val layout       = LayoutEngine.calculateLayout(state, terminalSize)
+    val context      = RenderContext(screen, graphics, layout, cursorVisible)
 
-    // Update viewport dimensions based on actual panel size
-    val updatedState = updateViewportDimensions(state, layout)
-    val context      = RenderContext(screen, graphics, layout)
-
-    // Clear screen
-    graphics.setBackgroundColor(TextColor.ANSI.BLACK)
+    graphics.setBackgroundColor(state.theme.background)
     graphics.fillRectangle(com.googlecode.lanterna.TerminalPosition.TOP_LEFT_CORNER, screen.getTerminalSize, ' ')
 
-    // Render spacer columns (empty padding)
     renderSpacerColumns(context)
+    renderLineNumbers(state, context)
+    renderGutter(state, context)
+    renderPinnedPanels(state, context)
+    renderEditorPanes(state, context)
+    renderFloatingPanels(state, context)
 
-    // Render editor panes
-    renderEditorPanes(updatedState, context)
-
-    // Render floating panels if any
-    renderFloatingPanels(updatedState, context)
-
-    // Render command runner overlay if active
-    renderCommandRunner(updatedState, context)
-
-    // Refresh screen
     screen.refresh()
 
-  private def renderSpacerColumns(context: RenderContext): Unit =
-    // Spacer columns are intentionally empty for padding
-    // Could add subtle visual indicators here if needed (like subtle borders)
-    ()
+  def renderCursorOnly(state: AppState, cursorVisible: Boolean, screen: Screen): Unit =
+    val graphics     = screen.newTextGraphics()
+    val terminalSize = TerminalSize(screen.getTerminalSize.getColumns, screen.getTerminalSize.getRows)
+    val layout       = LayoutEngine.calculateLayout(state, terminalSize)
+    val paneLayouts  = LayoutEngine.calculatePaneLayouts(state, layout)
+
+    state.focus match
+      case Focus.EditorPane(focusedPaneId) =>
+        for
+          paneId <- state.layout.activeEditorPaneId if paneId == focusedPaneId
+          pane   <- state.layout.editorPanes.get(paneId)
+          rect   <- paneLayouts.get(paneId)
+          buffer <- pane.bufferId.flatMap(state.buffers.get)
+          cursor <- buffer.cursors.headOption
+        do
+          val contentRect = LayoutRect(rect.x, rect.y + 1, rect.width, math.max(1, rect.height - 1))
+
+          calculateCursorVisualPosition(cursor, buffer.content, contentRect.width, buffer.viewport) match
+            case Some((visualLine, visualColumn)) =>
+              val screenY = contentRect.y + (visualLine - buffer.viewport.topLine)
+              val screenX = contentRect.x + visualColumn
+
+              if screenY >= 0 && screenY < terminalSize.height &&
+                  screenX >= 0 && screenX < terminalSize.width
+              then
+                if cursorVisible then
+                  graphics.setBackgroundColor(state.theme.cursor)
+                  graphics.setForegroundColor(state.theme.background)
+                  CharacterRenderer.renderChar(graphics, screenX, screenY, ' ')
+                else
+                  val charBeneath =
+                    buffer.content
+                      .getLine(cursor.line)
+                      .map(line => if cursor.column < line.length then line(cursor.column) else ' ')
+                      .getOrElse(' ')
+                  graphics.setBackgroundColor(state.theme.background)
+                  graphics.setForegroundColor(state.theme.foreground)
+                  CharacterRenderer.renderChar(graphics, screenX, screenY, charBeneath)
+            case None => ()
+      case _ => ()
+
+    screen.refresh()
+
+  private def renderSpacerColumns(context: RenderContext): Unit = ()
 
   private def renderEditorPanes(state: AppState, context: RenderContext): Unit =
-    state.layout.editorPanes.foreach((paneId, pane) => renderEditorPane(pane, state, context))
+    val paneLayouts = LayoutEngine.calculatePaneLayouts(state, context.layout)
+
+    state.layout.editorPanes.foreach { (paneId, pane) =>
+      paneLayouts.get(paneId) match
+        case Some(paneRect) => renderEditorPane(pane, paneRect, state, context)
+        case None           => ()
+    }
 
   private def renderEditorPane(
     pane: EditorPane,
+    rect: LayoutRect,
     state: AppState,
     context: RenderContext
   ): Unit =
-    val rect = context.layout.editorPanelRect
-
     val buffer = pane.bufferId.flatMap(state.buffers.get)
 
-    buffer match
-      case Some(buf) if buf.content.weight == 0 && buf.isNewEmpty => 
-        renderWelcomeText(rect, context)
-      case Some(buf) if buf.content.weight == 0 => 
-        renderEmptyPane(rect, context)
-      case Some(buf) => 
-        renderBufferContent(pane, buf, rect, state, context)
-      case None => 
-        renderEmptyPane(rect, context)
+    renderBufferHeader(pane, buffer, rect, state, context)
 
-    // Render cursors with buffer data
-    buffer.foreach(buf => renderCursors(pane, rect, context, buf.content))
+    val contentRect = LayoutRect(rect.x, rect.y + 1, rect.width, math.max(1, rect.height - 1))
+
+    buffer match
+      case Some(buf) if buf.content.weight == 0 && buf.isNewEmpty =>
+        renderWelcomeText(contentRect, state.theme, context)
+      case Some(buf) if buf.content.weight == 0 =>
+        renderEmptyPane(contentRect, state.theme, context)
+      case Some(buf) =>
+        renderBufferContent(pane, buf, contentRect, state, context)
+      case None =>
+        renderEmptyPane(contentRect, state.theme, context)
+
+    buffer.foreach(buf => renderCursors(buf, contentRect, state.theme, context))
+
+  private def renderBufferHeader(
+    pane: EditorPane,
+    buffer: Option[Buffer],
+    rect: LayoutRect,
+    state: AppState,
+    context: RenderContext
+  ): Unit =
+    val graphics = context.graphics
+    val isActive = state.layout.activeEditorPaneId.contains(pane.id)
+
+    if isActive then
+      graphics.setBackgroundColor(state.theme.highlighted.background)
+      graphics.setForegroundColor(state.theme.highlighted.foreground)
+    else
+      graphics.setBackgroundColor(state.theme.panel.background)
+      graphics.setForegroundColor(state.theme.panel.foreground)
+
+    val bufferTitle = buffer match
+      case Some(buf) =>
+        buf.filePath match
+          case Some(path) =>
+            val filename = path.getFileName.toString
+            if buf.isDirty then s"$filename - unsaved" else filename
+          case None =>
+            if buf.isDirty then s"Buffer ${buf.id.value} - unsaved" else s"Buffer ${buf.id.value}"
+      case None =>
+        "No Buffer"
+
+    val maxTitleWidth = math.max(1, rect.width - 2)
+    val displayTitle =
+      if bufferTitle.length > maxTitleWidth then bufferTitle.take(maxTitleWidth - 3) + "..."
+      else bufferTitle
+
+    graphics.putString(rect.x, rect.y, " " * rect.width)
+
+    val paddingLeft = (rect.width - displayTitle.length) / 2
+    val centeredX   = rect.x + paddingLeft
+    graphics.putString(centeredX, rect.y, displayTitle)
+
+    graphics.setBackgroundColor(state.theme.background)
+    graphics.setForegroundColor(state.theme.foreground)
 
   private def renderBufferContent(
     pane: EditorPane,
@@ -79,41 +162,36 @@ object Renderer:
     state: AppState,
     context: RenderContext
   ): Unit =
-    val viewport   = pane.viewport
+    val viewport   = buffer.viewport
     val rope       = buffer.content
     val panelWidth = rect.width
-
-    // Calculate all visual lines that should be displayed
     val visualLines = calculateVisualLinesInViewport(rope, viewport, panelWidth)
 
-    // Render each visual line
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
         if screenLineIndex < rect.height then
           val screenY = rect.y + screenLineIndex
           val screenX = rect.x
 
-          // Render the visual line content
-          context.graphics.setForegroundColor(TextColor.ANSI.WHITE)
+          context.graphics.setForegroundColor(state.theme.foreground)
 
-          // Ensure we don't render outside terminal bounds AND panel bounds
           if screenY < context.screen.getTerminalSize.getRows &&
               screenY >= 0 &&
               screenX < context.screen.getTerminalSize.getColumns &&
               screenX >= 0 &&
               screenY < rect.bottom &&
               screenX < rect.right
-          then 
-            val currentTimeMs = System.currentTimeMillis()
+          then
             CharacterRenderer.renderStringWithAnimation(
-              context.graphics, 
-              screenX, 
-              screenY, 
-              visualLine.content, 
-              state.theme, 
-              state.animationState, 
-              currentTimeMs,
-              state.syntaxHighlightingEnabled
+              context.graphics,
+              screenX,
+              screenY,
+              visualLine.content,
+              state.theme,
+              buffer.animations,
+              state.syntaxHighlightingEnabled,
+              bufferLine = visualLine.bufferLine,
+              bufferStartColumn = visualLine.startColumn
             )
     }
 
@@ -124,14 +202,12 @@ object Renderer:
     viewport: Viewport,
     panelWidth: Int
   ): List[VisualLine] =
-
     def processBufferLines(bufferLine: Int, currentVisualLine: Int): List[VisualLine] =
       if bufferLine >= rope.lineCount || currentVisualLine >= (viewport.topLine + viewport.visibleLines) then List.empty
       else
         val lineContent     = rope.getLine(bufferLine).getOrElse("")
         val wrappedSegments = wrapLineToSegments(lineContent, panelWidth)
 
-        // Process segments for this buffer line
         val (segmentsInViewport, nextVisualLine) =
           wrappedSegments.foldLeft((List.empty[VisualLine], currentVisualLine)) {
             case ((acc, visualLine), (content, startCol, endCol)) =>
@@ -161,18 +237,16 @@ object Renderer:
 
       buildSegments(lineContent, 0)
 
-  private def renderEmptyPane(rect: LayoutRect, context: RenderContext): Unit =
-    // Render empty pane indicator
+  private def renderEmptyPane(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
     val message = "~ Empty ~"
     val centerX = rect.x + (rect.width - message.length) / 2
     val centerY = rect.y + rect.height / 2
 
-    context.graphics.setForegroundColor(TextColor.ANSI.BLACK_BRIGHT)
+    context.graphics.setForegroundColor(theme.muted)
     if centerY < context.screen.getTerminalSize.getRows && centerX >= 0 then
       CharacterRenderer.renderString(context.graphics, centerX, centerY, message)
 
-  private def renderWelcomeText(rect: LayoutRect, context: RenderContext): Unit =
-    // Render welcome message for new empty buffers
+  private def renderWelcomeText(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
     val lines = List(
       "Welcome to Serenity!",
       "",
@@ -180,58 +254,46 @@ object Renderer:
       "",
       "Press Ctrl+P for command palette"
     )
-    
+
     val startY = rect.y + (rect.height - lines.length) / 2
-    
-    context.graphics.setForegroundColor(TextColor.ANSI.BLACK_BRIGHT)
-    
-    lines.zipWithIndex.foreach { case (line, index) =>
-      val lineY = startY + index
-      val centerX = rect.x + (rect.width - line.length) / 2
-      
-      if lineY >= 0 && lineY < context.screen.getTerminalSize.getRows && centerX >= 0 then
-        CharacterRenderer.renderString(context.graphics, centerX, lineY, line)
+
+    context.graphics.setForegroundColor(theme.placeholder)
+
+    lines.zipWithIndex.foreach {
+      case (line, index) =>
+        val lineY   = startY + index
+        val centerX = rect.x + (rect.width - line.length) / 2
+
+        if lineY >= 0 && lineY < context.screen.getTerminalSize.getRows && centerX >= 0 then
+          CharacterRenderer.renderString(context.graphics, centerX, lineY, line)
     }
 
   private def renderCursors(
-    pane: EditorPane,
+    buffer: Buffer,
     rect: LayoutRect,
-    context: RenderContext,
-    rope: com.serenity.rope.Rope
+    theme: Theme,
+    context: RenderContext
   ): Unit =
-    val viewport   = pane.viewport
+    val viewport   = buffer.viewport
     val panelWidth = rect.width
 
-    pane.cursors.foreach { cursor =>
-      // Calculate visual line position for cursor
-      calculateCursorVisualPosition(cursor, rope, panelWidth, viewport) match
+    buffer.cursors.foreach { cursor =>
+      calculateCursorVisualPosition(cursor, buffer.content, panelWidth, viewport) match
         case Some((visualLine, visualColumn)) =>
           val screenY = rect.y + (visualLine - viewport.topLine)
           val screenX = rect.x + visualColumn
 
-          // Only render cursor if it's visible in the viewport AND within panel bounds
           if screenY >= rect.y && screenY < rect.bottom &&
               screenX >= rect.x && screenX < rect.right &&
               screenY >= 0 && screenY < context.screen.getTerminalSize.getRows &&
               screenX >= 0 && screenX < context.screen.getTerminalSize.getColumns
-          then
-            // Cursor blinking: blink every 500ms
-            val currentTime = System.currentTimeMillis()
-            val shouldShowCursor = (currentTime / 500) % 2 == 0
-            
-            if shouldShowCursor then
-              // Highlight cursor position
-              context.graphics.setBackgroundColor(TextColor.ANSI.WHITE)
-              context.graphics.setForegroundColor(TextColor.ANSI.BLACK)
-
-              // Get character at cursor position or use space
-              val cursorChar = ' ' // For now, just use space to show cursor
-              CharacterRenderer.renderChar(context.graphics, screenX, screenY, cursorChar)
-
-              // Reset colors
-              context.graphics.setBackgroundColor(TextColor.ANSI.BLACK)
-              context.graphics.setForegroundColor(TextColor.ANSI.WHITE)
-        case None => // Cursor not visible, don't render
+          then if context.cursorVisible then
+            context.graphics.setBackgroundColor(theme.cursor)
+            context.graphics.setForegroundColor(theme.background)
+            CharacterRenderer.renderChar(context.graphics, screenX, screenY, ' ')
+            context.graphics.setBackgroundColor(theme.background)
+            context.graphics.setForegroundColor(theme.foreground)
+        case None => ()
     }
 
   private def calculateCursorVisualPosition(
@@ -240,82 +302,118 @@ object Renderer:
     panelWidth: Int,
     viewport: Viewport
   ): Option[(Int, Int)] =
-
     def findCursorPosition(bufferLine: Int, currentVisualLine: Int): Option[(Int, Int)] =
       if bufferLine >= rope.lineCount then None
       else if bufferLine == cursor.line then
-        // Found the buffer line containing the cursor
-        val lineContent        = rope.getLine(bufferLine).getOrElse("")
-        val visualLineInBuffer = cursor.column / panelWidth // Which visual line within this buffer line
-        val visualColumnInLine = cursor.column % panelWidth // Column within that visual line
+        val visualLineInBuffer = cursor.column / panelWidth
+        val visualColumnInLine = cursor.column % panelWidth
         val totalVisualLine    = currentVisualLine + visualLineInBuffer
         Some((totalVisualLine, visualColumnInLine))
       else
-        // Count visual lines for this buffer line and continue
         val lineContent             = rope.getLine(bufferLine).getOrElse("")
         val visualLinesInThisBuffer = math.max(1, (lineContent.length + panelWidth - 1) / panelWidth)
         findCursorPosition(bufferLine + 1, currentVisualLine + visualLinesInThisBuffer)
 
     findCursorPosition(0, 0)
 
-  private def updateViewportDimensions(state: AppState, layout: CalculatedLayout): AppState =
-    val panelRect = layout.editorPanelRect
-
-    // Update all editor panes to use dynamic viewport dimensions
-    val updatedPanes = state.layout.editorPanes.map {
-      case (paneId, pane) =>
-        val updatedViewport = LayoutEngine.updateViewportDimensions(pane.viewport, panelRect)
-        paneId -> pane.copy(viewport = updatedViewport)
-    }
-
-    val updatedLayout = state.layout.copy(editorPanes = updatedPanes)
-    state.copy(layout = updatedLayout)
-
   private def renderFloatingPanels(state: AppState, context: RenderContext): Unit =
-    context.layout.floatingPanelRect.foreach { rect =>
-      // For now, just render a placeholder
-      // In the future, this will render command runners, modals, etc. with transparency
-      renderFloatingPanelPlaceholder(rect, context)
+    val overlays = OverlayViewModel.fromState(state, context.layout)
+
+    overlays.aboveCursor.foreach { overlay =>
+      logger.info(s"[OVERLAY RENDERED] placement=AboveCursor rect=${overlay.rect} title=${overlay.title.getOrElse("")}")
+      TextOverlayRenderer.render(context.graphics, overlay, state.theme, context.cursorVisible)
+    }
+    overlays.belowCursor.foreach { overlay =>
+      logger.info(s"[OVERLAY RENDERED] placement=BelowCursor rect=${overlay.rect} title=${overlay.title.getOrElse("")}")
+      TextOverlayRenderer.render(context.graphics, overlay, state.theme, context.cursorVisible)
     }
 
-  private def renderFloatingPanelPlaceholder(rect: LayoutRect, context: RenderContext): Unit =
-    // Placeholder implementation - will be enhanced with actual panel content
-    context.graphics.setBackgroundColor(TextColor.ANSI.BLACK_BRIGHT)
-    context.graphics.setForegroundColor(TextColor.ANSI.WHITE)
+    context.layout.floatingPanelRect.foreach { rect =>
+      renderFloatingPanelPlaceholder(rect, state.theme, context)
+    }
 
-    // Fill panel background with semi-transparent effect (simulated)
+  private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =
+    PinnedPanelViewModel
+      .fromLayout(context.layout, state.uiSurfaces)
+      .foreach(panel => PinnedPanelRenderer.render(context.graphics, panel, state.theme))
+
+  private def renderFloatingPanelPlaceholder(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
+    context.graphics.setBackgroundColor(theme.panel.background)
+    context.graphics.setForegroundColor(theme.border)
+
     for y <- rect.y until rect.bottom; x <- rect.x until rect.right do
       if y < context.screen.getTerminalSize.getRows && x < context.screen.getTerminalSize.getColumns then
-        CharacterRenderer.renderChar(context.graphics, x, y, '░') // Light shade character for transparency effect
+        CharacterRenderer.renderChar(context.graphics, x, y, '.')
 
-  private def renderCommandRunner(state: AppState, context: RenderContext): Unit =
-    if state.commandRunner.isActive then
-      val terminalSize = TerminalSize(context.screen.getTerminalSize.getColumns, context.screen.getTerminalSize.getRows)
-      val rect = context.layout.editorPanelRect
-      
-      // Find cursor screen position from active pane
-      val cursorScreenPosition = state.layout.activeEditorPaneId
-        .flatMap(paneId => state.layout.editorPanes.get(paneId))
-        .flatMap { pane =>
-          pane.cursors.headOption.flatMap { cursor =>
-            pane.bufferId.flatMap(state.buffers.get).map { buffer =>
-              // Calculate screen position using the same logic as cursor rendering
-              calculateCursorVisualPosition(cursor, buffer.content, rect.width, pane.viewport)
-                .map { case (visualLine, visualColumn) =>
-                  val screenY = rect.y + (visualLine - pane.viewport.topLine)
-                  val screenX = rect.x + visualColumn
-                  CursorPosition(screenY, screenX)
-                }
-                .getOrElse(CursorPosition(rect.y, rect.x)) // Fallback to pane top-left
-            }
+  private def renderLineNumbers(state: AppState, context: RenderContext): Unit =
+    if state.config.showLineNumbers then
+      context.layout.lineNumberRect foreach { lineRect =>
+        val graphics = context.graphics
+
+        graphics.setBackgroundColor(state.theme.panel.background)
+        graphics.setForegroundColor(state.theme.muted)
+
+        graphics.fillRectangle(
+          com.googlecode.lanterna.TerminalPosition(lineRect.x, lineRect.y),
+          com.googlecode.lanterna.TerminalSize(lineRect.width, lineRect.height),
+          ' '
+        )
+
+        state.layout.editorPanes.foreach { (_, pane) =>
+          pane.bufferId.flatMap(state.buffers.get).foreach { buffer =>
+            val viewport     = buffer.viewport
+            val startLine    = viewport.topLine
+            val visibleLines = math.min(viewport.visibleLines, lineRect.height)
+
+            for i <- 0 until visibleLines do
+              val bufferLineIndex   = startLine + i
+              val displayLineNumber = bufferLineIndex + 1
+              val screenY           = lineRect.y + i
+
+              if bufferLineIndex < buffer.content.lineCount then
+                val lineNumberText = displayLineNumber.toString.padTo(lineRect.width - 1, ' ') + " "
+                graphics.putString(lineRect.x, screenY, lineNumberText)
           }
         }
-        .getOrElse(CursorPosition(rect.y, rect.x)) // Fallback to pane top-left
-      
-      CommandRunnerRenderer.render(
-        context.graphics,
-        state.commandRunner,
-        state.theme,
-        terminalSize,
-        cursorScreenPosition
-      )
+      }
+
+  private def renderGutter(state: AppState, context: RenderContext): Unit =
+    if state.config.showGutter then
+      context.layout.gutterRect foreach { gutterRect =>
+        val graphics = context.graphics
+
+        graphics.setBackgroundColor(state.theme.panel.background)
+        graphics.setForegroundColor(state.theme.panel.foreground)
+
+        graphics.fillRectangle(
+          com.googlecode.lanterna.TerminalPosition(gutterRect.x, gutterRect.y),
+          com.googlecode.lanterna.TerminalSize(gutterRect.width, gutterRect.height),
+          ' '
+        )
+
+        val gutterContent = buildGutterContent(state)
+        val displayContent =
+          if gutterContent.length > gutterRect.width then gutterContent.take(gutterRect.width - 3) + "..."
+          else gutterContent.padTo(gutterRect.width, ' ')
+
+        graphics.putString(gutterRect.x, gutterRect.y, displayContent)
+      }
+
+  private def buildGutterContent(state: AppState): String =
+    state.focus match
+      case Focus.EditorPane(paneId) =>
+        state.layout.editorPanes
+          .get(paneId)
+          .flatMap(_.bufferId)
+          .flatMap(state.buffers.get) match
+          case Some(buffer) =>
+            val cursor   = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+            val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"
+
+            val filePath = buffer.filePath match
+              case Some(path) => s" | ${path.getFileName}"
+              case None       => " | Not saved to file yet"
+
+            s" $position$filePath "
+          case None => " No active buffer "
+      case _ => " No active editor pane "

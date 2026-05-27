@@ -18,9 +18,10 @@ object ThemeRegistry:
   /** Get theme names grouped by source */
   def getThemesBySource: IO[ThemesBySource] =
     for
-      userThemes <- new ThemeConfigLoader().listAvailableThemes(new ThemeConfigLoader().getUserThemesDirectory)
+      userThemes <- new ThemeConfigLoader()
+        .listAvailableThemes(new ThemeConfigLoader().getUserThemesDirectory)
         .map(_.map(_.getFileName.toString.stripSuffix(".conf")))
-      bundledThemes <- new ThemeConfigLoader().listBundledThemes  
+      bundledThemes <- new ThemeConfigLoader().listBundledThemes
       internalThemes = com.serenity.ui.theme.DefaultThemes.allInternal.keys.toList
     yield ThemesBySource(
       internal = internalThemes.sorted,
@@ -32,21 +33,21 @@ object ThemeRegistry:
   def printAvailableThemes: IO[Unit] =
     for
       themes <- getThemesBySource
-      _ <- IO.println("Available themes:")
-      _ <- if themes.internal.nonEmpty then
-        IO.println(s"  Internal: ${themes.internal.mkString(", ")}")
-      else IO.unit
-      _ <- if themes.user.nonEmpty then
-        IO.println(s"  User: ${themes.user.mkString(", ")}")
-      else IO.unit
-      _ <- if themes.bundled.nonEmpty then
-        IO.println(s"  Bundled: ${themes.bundled.mkString(", ")}")
-      else IO.unit
+      _      <- IO.println("Available themes:")
+      _ <-
+        if themes.internal.nonEmpty then IO.println(s"  Internal: ${themes.internal.mkString(", ")}")
+        else IO.unit
+      _ <-
+        if themes.user.nonEmpty then IO.println(s"  User: ${themes.user.mkString(", ")}")
+        else IO.unit
+      _ <-
+        if themes.bundled.nonEmpty then IO.println(s"  Bundled: ${themes.bundled.mkString(", ")}")
+        else IO.unit
     yield ()
 
 case class ThemesBySource(
-  internal: List[String],
-  user: List[String], 
-  bundled: List[String]
+    internal: List[String],
+    user: List[String],
+    bundled: List[String]
 ):
   def all: List[String] = (internal ++ user ++ bundled).distinct.sorted

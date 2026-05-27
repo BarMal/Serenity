@@ -8,6 +8,8 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class SimplifiedEditorSpec extends AnyFlatSpec with Matchers:
 
@@ -20,9 +22,9 @@ class SimplifiedEditorSpec extends AnyFlatSpec with Matchers:
     val buffer1 = stateManager.createBuffer("First buffer").unsafeRunSync()
     val buffer2 = stateManager.createBuffer("Second buffer").unsafeRunSync()
 
-    // Then: Buffers should exist in state
+    // Then: Buffers should exist in state (plus initial empty buffer)
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.buffers should have size 2
+    state.buffers should have size 3
     state.buffers should contain key buffer1
     state.buffers should contain key buffer2
     state.buffers(buffer1).content.collect() shouldBe "First buffer"
@@ -128,4 +130,8 @@ class SimplifiedEditorSpec extends AnyFlatSpec with Matchers:
     quitFuture.cancel.unsafeRunSync() // Clean up the test
 
   trait EditorFixture:
-    val stateManager: StateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager: StateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()

@@ -11,6 +11,8 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Comprehensive character input testing to identify and fix character input bugs. Tests all printable ASCII
   * characters, full alphabet, punctuation, and complete phrases.
@@ -127,9 +129,9 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
     finalContent.shouldBe(phrase)
 
   it should "process programming syntax correctly" in new InputFixture:
-    val code     = """def hello(): String = {
+    val code = """def hello(): String = {
   "Hello, World!"
-}"""
+}""".replace("\r\n", "\n")
     val bufferId = setupBuffer("")
 
     // Process each character and newlines
@@ -244,12 +246,18 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
         // Check cursor position after each character
         val state = stateManager.getCurrentState.unsafeRunSync()
         val pane  = getCurrentPane(state)
-        pane.cursors.head.column.shouldBe(index + 1)
+        val buffer = pane.bufferId.flatMap(state.buffers.get).get
+        buffer.cursors.head.column.shouldBe(index + 1)
     }
 
   trait InputFixture:
     val translator: TextEntryTranslator = new TextEntryTranslator()
-    val stateManager: StateManager      = StateManager.apply.unsafeRunSync()
+
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager: StateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     def setupBuffer(content: String): BufferId =
       val bufferId = stateManager.createBuffer(content).unsafeRunSync()

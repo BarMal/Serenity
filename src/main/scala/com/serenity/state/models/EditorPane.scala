@@ -1,6 +1,11 @@
 package com.serenity.state.models
 
+import cats.Order
+
 case class PaneId(value: Int)
+
+object PaneId:
+  given Order[PaneId] = Order.by(_.value)
 
 case class SmoothScrollState(
     targetTopLine: Int,

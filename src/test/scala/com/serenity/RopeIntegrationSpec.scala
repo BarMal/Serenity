@@ -3,9 +3,9 @@ package com.serenity
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
+import com.serenity.state.components.ComponentResult
 import com.serenity.state.components.EditorPaneComponent
 import com.serenity.state.models.*
-import com.serenity.state.components.ComponentResult
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -40,7 +40,7 @@ class RopeIntegrationSpec extends AnyFlatSpec with Matchers:
     val text = """Short line
 This is a much longer line with lots of content
 Another short
-Final line with medium length content here"""
+Final line with medium length content here""".replace("\r\n", "\n")
     val rope = Rope(text)
 
     // When: Split at various positions (simulating cursor operations)
@@ -185,12 +185,15 @@ let anotherOldName = oldName * 2;"""
   it should "integrate rope operations with editor component processing" in new RopeIntegrationFixture:
     // Given: Editor state with buffer
     val initialText = "Hello world"
-    val buffer      = Buffer(BufferId(1), Rope(initialText), isDirty = false, filePath = None)
+    val buffer      = Buffer(BufferId(1), Rope(initialText), isDirty = false, filePath = None).copy(
+      cursors = List(CursorPosition(0, 6)), // Position at "world"
+      viewport = Viewport(0, 0, 80, 24)
+    )
     val pane = EditorPane(
       id = PaneId(1),
       bufferId = Some(BufferId(1)),
-      cursors = List(CursorPosition(0, 6)), // Position at "world"
-      viewport = Viewport(0, 0, 80, 24),
+      cursors = List.empty,
+      viewport = Viewport.default,
       centerLine = 0
     )
     val appState = createTestAppState(Map(BufferId(1) -> buffer), Map(PaneId(1) -> pane))
@@ -230,8 +233,7 @@ let anotherOldName = oldName * 2;"""
     finalBuffer.isDirty shouldBe true
 
     // Cursor should be at end
-    val finalPane = currentState.layout.editorPanes(PaneId(1))
-    finalPane.cursors.head.column shouldBe 23
+    finalBuffer.cursors.head.column shouldBe 23
 
   it should "handle rope operations at chunk boundaries" in new RopeIntegrationFixture:
     // Given: Text that will span multiple rope chunks (leafChunkSize = 30)
@@ -271,7 +273,6 @@ let anotherOldName = oldName * 2;"""
 
       val layout = Layout(
         editorPanes = panes,
-        pinnedPanels = Map.empty,
         activeEditorPaneId = panes.keys.headOption
       )
 
@@ -279,8 +280,7 @@ let anotherOldName = oldName * 2;"""
         layout = layout,
         buffers = buffers,
         focus = Focus.EditorPane(panes.keys.head),
-        peekOverlay = None,
-        modal = None,
+        uiSurfaces = Nil,
         nextBufferId = BufferId(buffers.size + 1),
         nextPaneId = PaneId(panes.size + 1)
       )

@@ -1,17 +1,13 @@
 package com.serenity.state.models
 
-import com.serenity.ui.layout.PanelPosition
-
 enum Focus:
   case EditorPane(paneId: PaneId)
-  case PinnedPanel(position: PanelPosition)
-  case PeekOverlay
-  case Modal(modalType: ModalType)
-  case CommandRunner
+  case Surface(surfaceId: SurfaceId)
 
 enum ModalType:
-  case CommandPalette
-  case FileSearch
-  case QuickOpen
   case GotoLine
+  case Find
+  case FileWorkflow
+  case ReplaceWorkflow
+  case CloseWorkflow
   case Custom(name: String)

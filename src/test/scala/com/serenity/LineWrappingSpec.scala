@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import cats.syntax.traverse.*
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -9,6 +10,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** TDD tests for automatic line wrapping functionality.
   *
@@ -26,41 +29,52 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   behavior of "Visual Line Wrapping"
 
   it should "wrap long single line text within panel width while preserving buffer content" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    
+    val program = for
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(logger)
+      
+      bufferId <- stateManager.createBuffer("")
+      state <- stateManager.getCurrentState
+      paneId = state.layout.editorPanes.keys.head
+      _ <- stateManager.setBufferForPane(paneId, bufferId)
 
-    val bufferId = stateManager.createBuffer("").unsafeRunSync()
-    val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
-    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+      // Get panel width for wrapping calculations
+      currentState <- stateManager.getCurrentState
+      layout = LayoutEngine.calculateLayout(currentState, TerminalSize(80, 24))
+      panelWidth = layout.editorPanelRect.width
 
-    // Get panel width for wrapping calculations
-    val currentState = stateManager.getCurrentState.unsafeRunSync()
-    val layout       = LayoutEngine.calculateLayout(currentState, TerminalSize(80, 24))
-    val panelWidth   = layout.editorPanelRect.width
+      // Create text longer than panel width but shorter than 2 lines
+      longText = "The quick brown fox jumps over the lazy dog and continues running through the forest."
+      insertEvents = longText.map(char => InsertChar(char)).toList
+      _ <- insertEvents.traverse(event => stateManager.applyEvent(event))
 
-    // Create text longer than panel width but shorter than 2 lines
-    val longText = "The quick brown fox jumps over the lazy dog and continues running through the forest."
-    longText.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+      finalState <- stateManager.getCurrentState
+      buffer = finalState.buffers(bufferId)
+      pane = finalState.layout.editorPanes(paneId)
+    yield
+      // Buffer content should be exactly the original text (no artificial line breaks)
+      buffer.content.collect() shouldBe longText
+      buffer.content.lineCount shouldBe 1
 
-    val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers(bufferId)
-    val pane       = finalState.layout.editorPanes(paneId)
+      // Text should require wrapping
+      longText.length should be > panelWidth
 
-    // Buffer content should be exactly the original text (no artificial line breaks)
-    buffer.content.collect() shouldBe longText
-    buffer.content.lineCount shouldBe 1
+      // Visual representation should calculate wrapped lines
+      val visualLines = calculateVisualLines(longText, panelWidth)
+      visualLines.length should be > 1
+      visualLines.map(_.length).foreach(_ should be <= panelWidth)
 
-    // Text should require wrapping
-    longText.length should be > panelWidth
-
-    // Visual representation should calculate wrapped lines
-    val visualLines = calculateVisualLines(longText, panelWidth)
-    visualLines.length should be > 1
-    visualLines.map(_.length).foreach(_ should be <= panelWidth)
+    program.unsafeRunSync()
   }
 
   it should "handle cursor navigation across wrapped visual lines" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -79,7 +93,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
     val midState = stateManager.getCurrentState.unsafeRunSync()
     val buffer   = midState.buffers(bufferId)
-    val cursor   = midState.layout.editorPanes(paneId).cursors.head
+    val cursor   = buffer.cursors.head
 
     // Buffer should be single line
     buffer.content.lineCount shouldBe 1
@@ -93,7 +107,8 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     for _ <- 0 until targetColumn do stateManager.applyEvent(MoveRight).unsafeRunSync()
 
     val navState  = stateManager.getCurrentState.unsafeRunSync()
-    val navCursor = navState.layout.editorPanes(paneId).cursors.head
+    val navBuffer = navState.buffers(bufferId)
+    val navCursor = navBuffer.cursors.head
 
     navCursor.line shouldBe 0
     navCursor.column shouldBe targetColumn
@@ -105,7 +120,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "adjust viewport size dynamically based on terminal size changes" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -143,7 +162,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle multiple paragraphs with wrapped lines correctly" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -188,7 +211,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "scroll viewport to keep cursor visible when navigating wrapped lines" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -209,8 +236,9 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.layout.editorPanes(paneId)
-    val cursor     = finalPane.cursors.head
-    val viewport   = finalPane.viewport
+    val finalBuffer = finalPane.bufferId.flatMap(finalState.buffers.get).get
+    val cursor     = finalBuffer.cursors.head
+    val viewport   = finalBuffer.viewport
 
     // Cursor should be at end of content
     cursor.line shouldBe totalLines
@@ -226,7 +254,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "dynamically update viewport dimensions based on terminal size" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("test content").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -273,7 +305,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve exact cursor position during window resize operations" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -292,7 +328,9 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     for _ <- 0 until targetPosition do stateManager.applyEvent(MoveRight).unsafeRunSync()
 
     val beforeState  = stateManager.getCurrentState.unsafeRunSync()
-    val beforeCursor = beforeState.layout.editorPanes(paneId).cursors.head
+    val beforePane   = beforeState.layout.editorPanes(paneId)
+    val beforeBuffer = beforePane.bufferId.flatMap(beforeState.buffers.get).get
+    val beforeCursor = beforeBuffer.cursors.head
 
     // Simulate window resize by recalculating layouts with different terminal sizes
     val smallLayout = LayoutEngine.calculateLayout(beforeState, TerminalSize(50, 20))
@@ -318,7 +356,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   behavior of "Visual Line Navigation"
 
   it should "navigate up and down through visual lines correctly" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -340,13 +382,17 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     for _ <- 0 until secondVisualLine.length do stateManager.applyEvent(MoveLeft).unsafeRunSync()
 
     val beforeNavState = stateManager.getCurrentState.unsafeRunSync()
-    val beforeCursor   = beforeNavState.layout.editorPanes(paneId).cursors.head
+    val beforePane     = beforeNavState.layout.editorPanes(paneId)
+    val beforeBuffer   = beforePane.bufferId.flatMap(beforeNavState.buffers.get).get
+    val beforeCursor   = beforeBuffer.cursors.head
     beforeCursor.column shouldBe (panelWidth - 2) // At start of second visual line
 
     // Move up should go to same position in first visual line
     stateManager.applyEvent(MoveUp).unsafeRunSync()
     val afterUpState  = stateManager.getCurrentState.unsafeRunSync()
-    val afterUpCursor = afterUpState.layout.editorPanes(paneId).cursors.head
+    val afterUpPane   = afterUpState.layout.editorPanes(paneId)
+    val afterUpBuffer = afterUpPane.bufferId.flatMap(afterUpState.buffers.get).get
+    val afterUpCursor = afterUpBuffer.cursors.head
 
     info(s"Panel width: $panelWidth")
     info(s"Before navigation: line=${beforeCursor.line}, column=${beforeCursor.column}")
@@ -357,7 +403,9 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     // Move down should return to second visual line
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     val afterDownState  = stateManager.getCurrentState.unsafeRunSync()
-    val afterDownCursor = afterDownState.layout.editorPanes(paneId).cursors.head
+    val afterDownPane   = afterDownState.layout.editorPanes(paneId)
+    val afterDownBuffer = afterDownPane.bufferId.flatMap(afterDownState.buffers.get).get
+    val afterDownCursor = afterDownBuffer.cursors.head
 
     info(s"After move down: line=${afterDownCursor.line}, column=${afterDownCursor.column}")
 
@@ -369,7 +417,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "navigate across multiple buffer lines with wrapped content" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -397,7 +449,9 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     buffer.content.lineCount shouldBe 2
 
     // Position cursor at end of content
-    val endCursor = finalState.layout.editorPanes(paneId).cursors.head
+    val endPane = finalState.layout.editorPanes(paneId)
+    val endBuffer = endPane.bufferId.flatMap(finalState.buffers.get).get
+    val endCursor = endBuffer.cursors.head
     endCursor.line shouldBe 1 // Second buffer line
     endCursor.column shouldBe secondLine.length
 
@@ -410,7 +464,9 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       else
         stateManager.applyEvent(MoveUp).unsafeRunSync()
         val newState     = stateManager.getCurrentState.unsafeRunSync()
-        val cursor       = newState.layout.editorPanes(paneId).cursors.head
+        val pane         = newState.layout.editorPanes(paneId)
+        val buffer       = pane.bufferId.flatMap(newState.buffers.get).get
+        val cursor       = buffer.cursors.head
         val newPosition  = (cursor.line, cursor.column)
         val newPositions = positions :+ newPosition
 
@@ -424,30 +480,32 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     positions.length should be >= 4
 
     // Final position should be at start
-    val finalCursor = finalState.layout.editorPanes(paneId).cursors.head
+    val afterMoveState = stateManager.getCurrentState.unsafeRunSync()
+    val finalPane      = afterMoveState.layout.editorPanes(paneId)
+    val finalBuffer    = finalPane.bufferId.flatMap(afterMoveState.buffers.get).get
+    val finalCursor    = finalBuffer.cursors.head
     finalCursor.line shouldBe 0
     finalCursor.column shouldBe 0
   }
 
   // Helper functions for testing visual line wrapping logic
   private def calculateVisualLines(text: String, panelWidth: Int): List[String] =
-    if text.isEmpty || panelWidth <= 0 then return List("")
+    if text.isEmpty || panelWidth <= 0 then List("")
+    else
+      def wrapLine(remaining: String, acc: List[String]): List[String] =
+        if remaining.length <= panelWidth then acc :+ remaining
+        else
+          val chunk = remaining.substring(0, panelWidth)
+          val rest  = remaining.substring(panelWidth)
+          wrapLine(rest, acc :+ chunk)
 
-    def wrapLine(remaining: String, acc: List[String]): List[String] =
-      if remaining.length <= panelWidth then acc :+ remaining
-      else
-        val chunk = remaining.substring(0, panelWidth)
-        val rest  = remaining.substring(panelWidth)
-        wrapLine(rest, acc :+ chunk)
-
-    wrapLine(text, List.empty)
+      wrapLine(text, List.empty)
 
   case class VisualLinePosition(visualLine: Int, visualColumn: Int)
 
   private def calculateVisualLinePosition(bufferColumn: Int, panelWidth: Int): VisualLinePosition =
-    if panelWidth <= 0 then return VisualLinePosition(0, 0)
-
-    val visualLine   = bufferColumn / panelWidth
-    val visualColumn = bufferColumn % panelWidth
-
-    VisualLinePosition(visualLine, visualColumn)
+    if panelWidth <= 0 then VisualLinePosition(0, 0)
+    else
+      val visualLine   = bufferColumn / panelWidth
+      val visualColumn = bufferColumn % panelWidth
+      VisualLinePosition(visualLine, visualColumn)

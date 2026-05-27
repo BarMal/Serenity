@@ -8,6 +8,8 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Test viewport scrolling functionality to prevent text overflow beyond panel boundaries
   */
@@ -18,7 +20,11 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
   behavior of "Viewport Horizontal Scrolling"
 
   it should "scroll right when cursor moves beyond visible columns" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -36,8 +42,9 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.layout.editorPanes(paneId)
-    val cursor     = finalPane.cursors.head
-    val viewport   = finalPane.viewport
+    val buffer     = finalPane.bufferId.flatMap(finalState.buffers.get).get
+    val cursor     = buffer.cursors.head
+    val viewport   = buffer.viewport
 
     // Cursor should be at end of text
     cursor.column shouldBe longText.length
@@ -51,7 +58,11 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "scroll left when cursor moves back to left edge" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -67,8 +78,9 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.layout.editorPanes(paneId)
-    val cursor     = finalPane.cursors.head
-    val viewport   = finalPane.viewport
+    val buffer     = finalPane.bufferId.flatMap(finalState.buffers.get).get
+    val cursor     = buffer.cursors.head
+    val viewport   = buffer.viewport
 
     // Cursor should be at column 0
     cursor.column shouldBe 0
@@ -80,7 +92,11 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
   behavior of "Viewport Vertical Scrolling"
 
   it should "scroll down when cursor moves beyond visible lines" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -100,8 +116,9 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.layout.editorPanes(paneId)
-    val cursor     = finalPane.cursors.head
-    val viewport   = finalPane.viewport
+    val buffer     = finalPane.bufferId.flatMap(finalState.buffers.get).get
+    val cursor     = buffer.cursors.head
+    val viewport   = buffer.viewport
 
     // Cursor should be beyond the original visible area
     cursor.line should be >= visibleLines
@@ -117,7 +134,11 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
   behavior of "Buffer Content Integrity"
 
   it should "preserve all text content regardless of viewport position" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -148,7 +169,11 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle rapid scrolling movements without losing content" in {
-    val stateManager = StateManager.apply.unsafeRunSync()
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("Initial text").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()

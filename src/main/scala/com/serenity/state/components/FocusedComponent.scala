@@ -6,6 +6,26 @@ import com.serenity.state.models.AppState
 trait FocusedComponent:
   def processEvent(event: Event, currentState: AppState): ComponentResult
 
+trait LocalEventHandler:
+  type E <: Event
+
+  protected def decodeEvent(event: Event): Option[E]
+
+  protected def processTypedEvent(event: E, currentState: AppState): ComponentResult
+
+  protected def processFallbackEvent(event: Event, currentState: AppState): ComponentResult =
+    ComponentResult.noChange
+
+  final def processEvent(event: Event, currentState: AppState): ComponentResult =
+    decodeEvent(event) match
+      case Some(typedEvent) =>
+        processTypedEvent(typedEvent, currentState)
+      case None =>
+        processFallbackEvent(event, currentState)
+
+trait TypedFocusedComponent[E0 <: Event] extends FocusedComponent, LocalEventHandler:
+  final type E = E0
+
 trait ComponentState
 
 object ComponentState:

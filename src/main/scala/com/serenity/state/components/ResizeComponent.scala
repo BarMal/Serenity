@@ -10,16 +10,20 @@ class ResizeComponent extends FocusedComponent:
     event match
       case ResizeEvent(newSize) =>
         ComponentResult.StateChange { currentState =>
-          // Update all pane viewports based on new terminal size
           val newLayout = LayoutEngine.calculateLayout(currentState, newSize)
-          val updatedPanes = currentState.layout.editorPanes.map {
-            case (paneId, pane) =>
-              val updatedViewport = LayoutEngine.updateViewportDimensions(pane.viewport, newLayout.editorPanelRect)
-              paneId -> pane.copy(viewport = updatedViewport)
+          val updatedBuffers = currentState.layout.editorPanes.values.foldLeft(currentState.buffers) {
+            case (buffers, pane) =>
+              pane.bufferId.flatMap(buffers.get) match
+                case Some(buffer) =>
+                  val updatedViewport =
+                    LayoutEngine.updateViewportDimensions(buffer.viewport, newLayout.editorPanelRect)
+                  buffers + (buffer.id -> buffer.copy(viewport = updatedViewport))
+                case None =>
+                  buffers
           }
 
           currentState.copy(
-            layout = currentState.layout.copy(editorPanes = updatedPanes),
+            buffers = updatedBuffers,
             terminalSize = Some(newSize)
           )
         }
