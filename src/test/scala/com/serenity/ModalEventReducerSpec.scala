@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.keystroke.events.{Enter, InsertChar, MoveDown, ReverseTabKey, TabKey}
+import com.serenity.keystroke.events.{Direction, Enter, InsertChar, ModalNavigate, ReverseTabKey, TabKey}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState, CursorPosition, FileWorkflowField, FileWorkflowMode, FileWorkflowState, FileWorkflowSuggestion, FindState, Focus, Modal, ModalType, PaneId, ReplaceWorkflowField, ReplaceWorkflowState, SurfaceContent, SurfaceId, SurfacePlacement, SurfacePresentation, UiSurface}
 import com.serenity.state.reducers.{AppEffect, ModalEventReducer}
@@ -187,7 +187,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       focus = Focus.Surface(SurfaceId("file-workflow"))
     )
 
-    val moved = ModalEventReducer.reduce(ModalType.FileWorkflow, MoveDown, initialState).state
+    val moved = ModalEventReducer.reduce(ModalType.FileWorkflow, ModalNavigate(Direction.Down), initialState).state
     moved.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.FileWorkflow(initialWorkflow.copy(selectedSuggestionIndex = 1))

@@ -4,26 +4,27 @@ import com.googlecode.lanterna.input.KeyType
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.ModalEventReducer
+import com.serenity.state.reducers.{ModalEventReducer, Reducer}
 
 class ModalComponent(
     modalType: ModalType
-) extends FocusedComponent:
+) extends TypedFocusedComponent[ModalInputEvent]:
+  private val reducer: Reducer[ModalInputEvent] = ModalEventReducer.reducer(modalType)
 
-  def processEvent(event: Event, currentState: AppState): ComponentResult =
+  protected def decodeEvent(event: Event): Option[ModalInputEvent] =
     modalType match
-      case ModalType.GotoLine =>
-        ComponentResult.reducerResult(ModalEventReducer.reduce(ModalType.GotoLine, event, currentState))
-      case ModalType.Find =>
-        ComponentResult.reducerResult(ModalEventReducer.reduce(ModalType.Find, event, currentState))
-      case ModalType.FileWorkflow =>
-        ComponentResult.reducerResult(ModalEventReducer.reduce(ModalType.FileWorkflow, event, currentState))
-      case ModalType.ReplaceWorkflow =>
-        ComponentResult.reducerResult(ModalEventReducer.reduce(ModalType.ReplaceWorkflow, event, currentState))
-      case ModalType.CloseWorkflow =>
-        ComponentResult.reducerResult(ModalEventReducer.reduce(ModalType.CloseWorkflow, event, currentState))
+      case ModalType.Custom(_) => None
+      case _                   => ModalInputEvent.fromEvent(event)
+
+  protected def processTypedEvent(event: ModalInputEvent, currentState: AppState): ComponentResult =
+    ComponentResult.reducerResult(reducer.reduce(event, currentState))
+
+  override protected def processFallbackEvent(event: Event, currentState: AppState): ComponentResult =
+    modalType match
       case ModalType.Custom(name) =>
         processCustomModalEvent(name, event, currentState)
+      case _ =>
+        ComponentResult.noChange
 
   private def processCustomModalEvent(name: String, event: Event, currentState: AppState): ComponentResult =
     event match

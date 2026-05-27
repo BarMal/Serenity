@@ -1,6 +1,5 @@
 package com.serenity.ui.renderer
 
-import com.googlecode.lanterna.TextColor
 import com.googlecode.lanterna.graphics.TextGraphics
 import com.serenity.ui.theme.Theme
 
@@ -13,23 +12,25 @@ object PinnedPanelRenderer:
   ): Unit =
     val rect = panel.rect
 
-    graphics.setForegroundColor(theme.foregroundColor)
-    graphics.setBackgroundColor(TextColor.ANSI.BLACK_BRIGHT)
+    graphics.setForegroundColor(theme.panel.foreground)
+    graphics.setBackgroundColor(theme.panel.background)
 
     for y <- rect.y until rect.bottom do
       graphics.putString(rect.x, y, " " * rect.width)
 
-    drawBorder(graphics, panel)
+    drawBorder(graphics, panel, theme)
     drawTitle(graphics, panel)
     drawLines(graphics, panel)
 
-    graphics.setForegroundColor(theme.foregroundColor)
-    graphics.setBackgroundColor(theme.backgroundColor)
+    graphics.setForegroundColor(theme.foreground)
+    graphics.setBackgroundColor(theme.background)
 
-  private def drawBorder(graphics: TextGraphics, panel: TextPanelView): Unit =
+  private def drawBorder(graphics: TextGraphics, panel: TextPanelView, theme: Theme): Unit =
     val rect = panel.rect
 
     if rect.width >= 2 && rect.height >= 2 then
+      graphics.setForegroundColor(theme.border)
+      graphics.setBackgroundColor(theme.panel.background)
       graphics.putString(rect.x, rect.y, "+" + "-" * (rect.width - 2) + "+")
 
       for y <- (rect.y + 1) until (rect.bottom - 1) do

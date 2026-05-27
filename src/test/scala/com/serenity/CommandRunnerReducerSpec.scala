@@ -26,7 +26,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       uiSurfaces = List(surface)
     )
 
-  "CommandRunnerReducer" should "activate the command runner from an editor focus" in {
+  "CommandRunnerReducer" should "ignore global activation events because activation is owned by the app reducer" in {
     val registry = CommandRegistry.default
     val inactiveSurface = UiSurface(
       SurfaceId("command-runner"),
@@ -41,16 +41,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val result = CommandRunnerReducer.reduce(ToggleCommandRunner, initialState, registry)
-    val activeSurface = result.state.uiSurfaces.find(_.id == inactiveSurface.id)
 
-    activeSurface shouldBe defined
-    result.state.focus shouldBe Focus.Surface(inactiveSurface.id)
-    activeSurface.get.content match
-      case SurfaceContent.CommandPalette(runner) =>
-        runner.isActive shouldBe true
-        runner.previousFocus shouldBe Some(Focus.EditorPane(PaneId(1)))
-      case other =>
-        fail(s"Expected command palette surface, got $other")
+    result.state shouldBe initialState
+    result.effects shouldBe Nil
   }
 
   it should "filter commands when typing and execute the selection on enter" in {
@@ -133,7 +126,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val state    = activeState(registry)
 
-    val movedRight = CommandRunnerReducer.reduce(MoveRight, state, registry)
+    val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), state, registry)
     val runnerAfterRight = movedRight.state.commandRunnerSurface.flatMap {
       _.content match
         case SurfaceContent.CommandPalette(runner) => Some(runner)
@@ -142,7 +135,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     runnerAfterRight.activeCategory shouldBe CommandCategory.All
 
-    val movedLeft = CommandRunnerReducer.reduce(MoveLeft, state, registry)
+    val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
     val runnerAfterLeft = movedLeft.state.commandRunnerSurface.flatMap {
       _.content match
         case SurfaceContent.CommandPalette(runner) => Some(runner)
@@ -205,7 +198,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       uiSurfaces = List(surface)
     )
 
-    val movedLeft = CommandRunnerReducer.reduce(MoveLeft, state, registry)
+    val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
     val runnerAfterLeft = movedLeft.state.commandRunnerSurface.flatMap {
       _.content match
         case SurfaceContent.CommandPalette(updatedRunner) => Some(updatedRunner)
@@ -216,7 +209,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       case option: CommandSurfaceItem.OptionItem if option.id == "animation-mode" => option.selectedOption
     } shouldBe Some("Subtle")
 
-    val movedRight = CommandRunnerReducer.reduce(MoveRight, movedLeft.state, registry)
+    val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), movedLeft.state, registry)
     val runnerAfterRight = movedRight.state.commandRunnerSurface.flatMap {
       _.content match
         case SurfaceContent.CommandPalette(updatedRunner) => Some(updatedRunner)

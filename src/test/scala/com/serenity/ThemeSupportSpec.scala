@@ -86,7 +86,7 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
     val styledText = StyledText(
       "bold text",
       TextStyle(isBold = true, isItalic = false, isUnderlined = false),
-      TextColor.ANSI.WHITE
+      new TextColor.RGB(255, 255, 255)
     )
 
     // Should not throw an exception

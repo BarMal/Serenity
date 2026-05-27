@@ -1,9 +1,8 @@
 package com.serenity.ui.renderer
 
-import com.googlecode.lanterna.graphics.TextGraphics
 import com.googlecode.lanterna.TextColor
+import com.googlecode.lanterna.graphics.TextGraphics
 import com.serenity.ui.theme.Theme
-import com.serenity.ui.theme.SyntaxElement
 
 object TextOverlayRenderer:
 
@@ -15,29 +14,35 @@ object TextOverlayRenderer:
   ): Unit =
     val rect = overlay.rect
 
-    graphics.setForegroundColor(theme.foregroundColor)
-    graphics.setBackgroundColor(theme.backgroundColor)
+    graphics.setForegroundColor(theme.panel.foreground)
+    graphics.setBackgroundColor(theme.panel.background)
 
     for y <- rect.y until rect.bottom do
       graphics.putString(rect.x, y, " " * rect.width)
 
-    drawBorder(graphics, overlay)
+    drawBorder(graphics, overlay, theme)
     drawContent(graphics, overlay, theme, cursorVisible)
 
-    graphics.setForegroundColor(theme.foregroundColor)
-    graphics.setBackgroundColor(theme.backgroundColor)
+    graphics.setForegroundColor(theme.foreground)
+    graphics.setBackgroundColor(theme.background)
 
-  private def drawBorder(graphics: TextGraphics, overlay: TextOverlayView): Unit =
+  private def drawBorder(
+    graphics: TextGraphics,
+    overlay: TextOverlayView,
+    theme: Theme
+  ): Unit =
     val rect = overlay.rect
 
     if rect.width >= 2 && rect.height >= 2 then
-      graphics.putString(rect.x, rect.y, "┌" + "─" * (rect.width - 2) + "┐")
+      graphics.setForegroundColor(theme.border)
+      graphics.setBackgroundColor(theme.panel.background)
+      graphics.putString(rect.x, rect.y, "+" + "-" * (rect.width - 2) + "+")
 
       for y <- (rect.y + 1) until (rect.bottom - 1) do
-        graphics.putString(rect.x, y, "│")
-        graphics.putString(rect.right - 1, y, "│")
+        graphics.putString(rect.x, y, "|")
+        graphics.putString(rect.right - 1, y, "|")
 
-      graphics.putString(rect.x, rect.bottom - 1, "└" + "─" * (rect.width - 2) + "┘")
+      graphics.putString(rect.x, rect.bottom - 1, "+" + "-" * (rect.width - 2) + "+")
 
   private def drawContent(
     graphics: TextGraphics,
@@ -74,11 +79,11 @@ object TextOverlayRenderer:
   ): Unit =
     val rowBackground =
       row.backgroundColor.getOrElse(
-        if row.selected then theme.cursorColor else theme.backgroundColor
+        if row.selected then theme.highlighted.background else theme.panel.background
       )
     val rowForeground =
       row.foregroundColor.getOrElse(
-        if row.selected then theme.backgroundColor else theme.foregroundColor
+        if row.selected then theme.highlighted.foreground else theme.panel.foreground
       )
 
     graphics.setForegroundColor(rowForeground)
@@ -100,8 +105,8 @@ object TextOverlayRenderer:
           val cursorChar =
             if cursorColumn < row.plainText.length then row.plainText.charAt(cursorColumn)
             else ' '
-          graphics.setForegroundColor(theme.backgroundColor)
-          graphics.setBackgroundColor(theme.cursorColor)
+          graphics.setForegroundColor(theme.background)
+          graphics.setBackgroundColor(theme.cursor)
           CharacterRenderer.renderChar(graphics, cursorX, y, cursorChar)
       }
 
@@ -141,11 +146,11 @@ object TextOverlayRenderer:
   ): Unit =
     row.segments match
       case left :: rightSegments if rightSegments.nonEmpty =>
-        val rightTexts = rightSegments.map(_.text)
-        val rightGroupText = rightTexts.mkString(" ")
+        val rightTexts      = rightSegments.map(_.text)
+        val rightGroupText  = rightTexts.mkString(" ")
         val rightGroupWidth = math.min(width, rightGroupText.length)
-        val leftMaxWidth = math.max(0, width - rightGroupWidth - 1)
-        val leftText = left.text.take(leftMaxWidth)
+        val leftMaxWidth    = math.max(0, width - rightGroupWidth - 1)
+        val leftText        = left.text.take(leftMaxWidth)
 
         renderSegmentText(graphics, x, y, leftText.length, leftText, left, theme, defaultForeground, defaultBackground)
 
@@ -168,9 +173,9 @@ object TextOverlayRenderer:
     defaultForeground: TextColor,
     defaultBackground: TextColor
   ): Unit =
-    val text      = segment.text.take(width)
-    val leftPad   = math.max(0, (width - text.length) / 2)
-    val renderX   = x + leftPad
+    val text    = segment.text.take(width)
+    val leftPad = math.max(0, (width - text.length) / 2)
+    val renderX = x + leftPad
     renderSegmentText(graphics, renderX, y, text.length, text, segment, theme, defaultForeground, defaultBackground)
 
   private def renderSegmentText(
@@ -187,12 +192,15 @@ object TextOverlayRenderer:
     if width > 0 then
       val segmentBackground =
         segment.backgroundColor.getOrElse(
-          if segment.selected then theme.cursorColor else defaultBackground
+          if segment.selected then theme.highlighted.background
+          else if segment.tone == OverlayTone.Error then theme.error.background
+          else defaultBackground
         )
       val segmentForeground =
         segment.foregroundColor.getOrElse(
-          if segment.selected then theme.backgroundColor
-          else if segment.tone == OverlayTone.Muted then theme.colorFor(SyntaxElement.Comment).foreground
+          if segment.selected then theme.highlighted.foreground
+          else if segment.tone == OverlayTone.Muted then theme.muted
+          else if segment.tone == OverlayTone.Error then theme.error.foreground
           else defaultForeground
         )
       graphics.setForegroundColor(segmentForeground)

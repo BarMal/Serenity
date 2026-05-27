@@ -5,7 +5,7 @@ import com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal
 import com.googlecode.lanterna.{TerminalSize as LanternaSize}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Layout, LayoutEngine, TerminalSize}
+import com.serenity.ui.layout.{CursorLayout, Layout, LayoutEngine, TerminalSize}
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -62,6 +62,10 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     val testScreen = screen(100, 30)
     val layout     = LayoutEngine.calculateLayout(state, TerminalSize(100, 30))
     val overlay    = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+    val paneRect = LayoutEngine
+      .calculatePaneLayouts(state, layout)
+      .getOrElse(paneId, fail("Expected pane layout"))
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     Renderer.render(state, cursorVisible = true, testScreen)
 
@@ -90,10 +94,12 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     pathLine should include("project")
     innerLines.exists(_.contains("/tmp/project/new/")) shouldBe true
     innerLines.exists(_.contains("Create directories: new / nested")) shouldBe true
+    overlay.x shouldBe contentRect.x
+    overlay.width shouldBe contentRect.width
 
     val suggestionRowsHighlighted =
       List(overlay.y + 4, overlay.y + 5).exists { y =>
-        testScreen.getBackCharacter(overlay.x + 1, y).getBackgroundColor == state.theme.cursorColor
+        testScreen.getBackCharacter(overlay.x + 1, y).getBackgroundColor == state.theme.highlighted.background
       }
     suggestionRowsHighlighted shouldBe true
 
@@ -131,6 +137,10 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     val testScreen = screen(100, 30)
     val layout     = LayoutEngine.calculateLayout(state, TerminalSize(100, 30))
     val overlay    = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+    val paneRect = LayoutEngine
+      .calculatePaneLayouts(state, layout)
+      .getOrElse(paneId, fail("Expected pane layout"))
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     Renderer.render(state, cursorVisible = true, testScreen)
 
@@ -144,6 +154,8 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
 
     innerLines.mkString(" ") should include("File not found:")
     innerLines.mkString(" ") should include("missing.scala")
+    overlay.x shouldBe contentRect.x
+    overlay.width shouldBe contentRect.width
 
     testScreen.stopScreen()
   }

@@ -6,26 +6,24 @@ import com.serenity.state.models.{AppState, Focus, PaneId, SurfaceContent, Surfa
 
 object CommandRunnerReducer:
 
+  def reducer(registry: CommandRegistry): Reducer[CommandRunnerEvent] =
+    Reducer.instance((event, state) => reduce(event, state, registry))
+
   def reduce(event: Event, state: AppState, registry: CommandRegistry): ReducerResult =
+    CommandRunnerEvent.fromEvent(event)
+      .map(reduce(_, state, registry))
+      .getOrElse(ReducerResult.noEffects(state))
+
+  def reduce(event: CommandRunnerEvent, state: AppState, registry: CommandRegistry): ReducerResult =
+    if currentRunner(state).exists(_.isActive) then reduceActive(event, state, registry)
+    else ReducerResult.noEffects(state)
+
+  private def reduceActive(event: CommandRunnerEvent, state: AppState, registry: CommandRegistry): ReducerResult =
     event match
-      case ToggleCommandRunner =>
-        if currentRunner(state).exists(_.isActive) then
-          ReducerResult.noEffects(deactivate(state))
-        else
-          ReducerResult.noEffects(activate(state, registry))
-
-      case _ if currentRunner(state).exists(_.isActive) =>
-        reduceActive(event, state, registry)
-
-      case _ =>
-        ReducerResult.noEffects(state)
-
-  private def reduceActive(event: Event, state: AppState, registry: CommandRegistry): ReducerResult =
-    event match
-      case Escape =>
+      case RunnerDismiss =>
         ReducerResult.noEffects(deactivate(state))
 
-      case Enter =>
+      case RunnerSubmit =>
         currentRunner(state).flatMap(_.selectedItem) match
           case Some(CommandSurfaceItem.CommandItem(command)) =>
             val previousFocus = currentRunner(state).flatMap(_.previousFocus).getOrElse(Focus.EditorPane(PaneId(0)))
@@ -45,25 +43,25 @@ object CommandRunnerReducer:
           case None =>
             ReducerResult.noEffects(deactivate(state))
 
-      case InsertChar(char) =>
+      case RunnerInsertChar(char) =>
         given CommandRegistry = registry
         ReducerResult.noEffects(replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm + char)))
 
-      case DeleteBackward =>
+      case RunnerDeleteBackward =>
         if currentRunner(state).exists(_.searchTerm.nonEmpty) then
           given CommandRegistry = registry
           ReducerResult.noEffects(replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm.dropRight(1))))
         else ReducerResult.noEffects(state)
 
-      case MoveUp =>
+      case RunnerNavigate(Direction.Up) =>
         given CommandRegistry = registry
         ReducerResult.noEffects(replaceRunner(state, _.moveSelection(-1)))
 
-      case MoveDown =>
+      case RunnerNavigate(Direction.Down) =>
         given CommandRegistry = registry
         ReducerResult.noEffects(replaceRunner(state, _.moveSelection(1)))
 
-      case MoveLeft =>
+      case RunnerNavigate(Direction.Left) =>
         given CommandRegistry = registry
         currentRunner(state) match
           case Some(runner) if runner.searchTerm.isEmpty =>
@@ -82,7 +80,7 @@ object CommandRunnerReducer:
           case _ =>
             ReducerResult.noEffects(state)
 
-      case MoveRight =>
+      case RunnerNavigate(Direction.Right) =>
         given CommandRegistry = registry
         currentRunner(state) match
           case Some(runner) if runner.searchTerm.isEmpty =>
@@ -101,7 +99,7 @@ object CommandRunnerReducer:
           case _ =>
             ReducerResult.noEffects(state)
 
-      case TabKey =>
+      case RunnerNextCategory =>
         given CommandRegistry = registry
         currentRunner(state) match
           case Some(runner) if runner.searchTerm.isEmpty =>
@@ -109,16 +107,13 @@ object CommandRunnerReducer:
           case _ =>
             ReducerResult.noEffects(state)
 
-      case ReverseTabKey =>
+      case RunnerPreviousCategory =>
         given CommandRegistry = registry
         currentRunner(state) match
           case Some(runner) if runner.searchTerm.isEmpty =>
             ReducerResult.noEffects(replaceRunner(state, _.switchCategory(-1)))
           case _ =>
             ReducerResult.noEffects(state)
-
-      case _ =>
-        ReducerResult.noEffects(state)
 
   private def activate(state: AppState, registry: CommandRegistry): AppState =
     val activatedRunner = CommandRunner.empty

@@ -6,6 +6,9 @@ import com.serenity.state.models.*
 
 object EditorEventReducer:
 
+  def reducer(paneId: PaneId)(using balance: com.serenity.rope.Balance): Reducer[EditorEvent] =
+    Reducer.instance((event, state) => reduce(event, paneId, state))
+
   def reduce(
     event: EditorEvent,
     paneId: PaneId,

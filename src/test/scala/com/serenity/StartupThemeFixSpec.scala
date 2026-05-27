@@ -1,6 +1,5 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.ui.theme.DefaultThemes
 import com.serenity.ui.theme.config.{AppThemeManager, ThemeRegistry}
@@ -15,7 +14,7 @@ class StartupThemeFixSpec extends AnyFlatSpec with Matchers:
     // Should not crash and should return a valid theme
     val theme = themeManager.initializeWithTheme().unsafeRunSync()
 
-    theme.name shouldBe "default-dark"
+    theme.name shouldBe "dark"
     theme should not be null
     theme.syntaxColors should not be empty
   }

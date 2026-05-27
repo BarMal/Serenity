@@ -5,8 +5,8 @@ import cats.syntax.parallel.*
 import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
 import com.googlecode.lanterna.terminal.Terminal
 import com.serenity.config.AppConfig
-import com.serenity.input.{InputRouter, ScreenInputHandler}
-import com.serenity.keystroke.events.{Event, TextEntryEvent, UnhandledEvent}
+import com.serenity.input.{FocusedInputTranslator, InputRouter, ScreenInputHandler}
+import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -39,9 +39,10 @@ object Main extends IOApp.Simple:
           stateManager <- StateManager.apply(logger)
           // Note: StateManager.apply now creates initial state with 1 pane and 1 buffer automatically
           _           <- stateManager.updateState(_.copy(theme = defaultTheme))
-          inputRouter <- InputRouter.create[IO, TextEntryEvent](new TextEntryTranslator)
-          inputHandler = new ScreenInputHandler[IO, TextEntryEvent](screen, inputRouter)
+          inputRouter <- InputRouter.create[IO, Event](new TextEntryTranslator)
+          inputHandler = new ScreenInputHandler[IO, Event](screen, inputRouter)
           initialState  <- stateManager.getCurrentState
+          _             <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
           _             <- IO.blocking(Renderer.render(initialState, cursorVisible = true, screen))
           _             <- logger.info("Initial render completed, starting main loop")
           fastMode      <- SignallingRef.of[IO, Boolean](false)
@@ -54,6 +55,7 @@ object Main extends IOApp.Simple:
             s.evalMap(event =>
               checkResize >>
                 stateManager.applyEvent(event) >>
+                stateManager.getCurrentState.flatMap(state => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))) >>
                 fastMode.set(true)
             ).drain
           _ <-

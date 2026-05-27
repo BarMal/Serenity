@@ -13,6 +13,7 @@ enum SurfaceRenderMode:
 enum OverlayTone:
   case Normal
   case Muted
+  case Error
 
 enum OverlayRowLayout:
   case Plain
@@ -203,7 +204,7 @@ object SurfaceContentResolver:
             OverlaySegment(
               text = segment,
               selected = workflow.activeField == FileWorkflowField.Path && !isMissing,
-              foregroundColor = if isMissing then Some(TextColor.ANSI.RED) else None
+              tone = if isMissing then OverlayTone.Error else OverlayTone.Normal
             )
           }
 

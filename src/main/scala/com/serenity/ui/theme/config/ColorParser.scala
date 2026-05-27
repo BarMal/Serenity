@@ -8,37 +8,9 @@ object ColorParser:
 
   /** Parse a color string to Lanterna TextColor */
   def parseColor(colorStr: String): Either[String, TextColor] =
-    colorStr.toLowerCase.trim match
-      // ANSI colors
-      case "black"   => Right(TextColor.ANSI.BLACK)
-      case "red"     => Right(TextColor.ANSI.RED)
-      case "green"   => Right(TextColor.ANSI.GREEN)
-      case "yellow"  => Right(TextColor.ANSI.YELLOW)
-      case "blue"    => Right(TextColor.ANSI.BLUE)
-      case "magenta" => Right(TextColor.ANSI.MAGENTA)
-      case "cyan"    => Right(TextColor.ANSI.CYAN)
-      case "white"   => Right(TextColor.ANSI.WHITE)
-
-      // Bright ANSI colors
-      case "brightblack" | "bright_black" | "gray" | "grey" => Right(TextColor.ANSI.BLACK_BRIGHT)
-      case "brightred" | "bright_red"                       => Right(TextColor.ANSI.RED_BRIGHT)
-      case "brightgreen" | "bright_green"                   => Right(TextColor.ANSI.GREEN_BRIGHT)
-      case "brightyellow" | "bright_yellow"                 => Right(TextColor.ANSI.YELLOW_BRIGHT)
-      case "brightblue" | "bright_blue"                     => Right(TextColor.ANSI.BLUE_BRIGHT)
-      case "brightmagenta" | "bright_magenta"               => Right(TextColor.ANSI.MAGENTA_BRIGHT)
-      case "brightcyan" | "bright_cyan"                     => Right(TextColor.ANSI.CYAN_BRIGHT)
-      case "brightwhite" | "bright_white"                   => Right(TextColor.ANSI.WHITE_BRIGHT)
-
-      // Default color
-      case "default" => Right(TextColor.ANSI.DEFAULT)
-
-      // Hex colors
+    colorStr.trim match
       case hex if hex.startsWith("#") => parseHexColor(hex)
-
-      // RGB colors
       case rgb if rgb.startsWith("rgb(") => parseRgbColor(rgb)
-
-      // Unknown color
       case unknown => Left(s"Unknown color: $unknown")
 
   /** Parse hex color (#RRGGBB or #RGB) */

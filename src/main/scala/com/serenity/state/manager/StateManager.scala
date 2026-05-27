@@ -7,11 +7,11 @@ import cats.syntax.foldable.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner, CommandSurfaceItem}
 import com.serenity.io.{FileManager, FileUtils}
-import com.serenity.keystroke.events.{Event, FileEvent, GlobalAppEvent, SystemEvent}
+import com.serenity.keystroke.events.{Event, FileEvent, GlobalAppEvent, SystemEvent, ThemeEvent}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.components.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, AppEventReducer, CommandRunnerReducer, FileEventReducer, ModalStateReducer, PanelStateReducer, PeekStateReducer, ReducerResult, SystemEventReducer}
+import com.serenity.state.reducers.{AppEffect, AppEventReducer, FileEventReducer, ModalStateReducer, PanelStateReducer, PeekStateReducer, ReducerResult, SystemEventReducer, ThemeEventReducer}
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.AppThemeManager
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
@@ -343,9 +343,8 @@ object StateManager:
     def awaitQuit: IO[Unit] = quitSignal.get
 
     def applyEvent(event: Event): IO[Unit] =
-      for
-        currentState <- stateRef.get
-        _ <- event match
+      stateRef.get.flatMap { currentState =>
+        event match
           case systemEvent: SystemEvent =>
             applyReducerResult(SystemEventReducer.reduce(systemEvent, currentState), currentState)
           case com.serenity.keystroke.events.CloseTab =>
@@ -355,22 +354,31 @@ object StateManager:
           case appEvent: GlobalAppEvent =>
             val registry = CommandRegistry.withToggleUI
             applyReducerResult(AppEventReducer.reduce(appEvent, currentState, registry), currentState)
+          case themeEvent: ThemeEvent =>
+            applyReducerResult(ThemeEventReducer.reduce(themeEvent, currentState), currentState)
           case fileEvent: FileEvent =>
             applyReducerResult(FileEventReducer.reduce(fileEvent, currentState), currentState)
-          case _ if focusedCommandRunner(currentState).isDefined =>
-            val registry = CommandRegistry.withToggleUI
-            val runner   = focusedCommandRunner(currentState).get
-            val _        = ()
-            logger.info(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}") >>
-            applyReducerResult(CommandRunnerReducer.reduce(event, currentState, registry), currentState)
           case _ =>
-            val component = getComponentForFocus(currentState.focus, currentState)
-            val result    = component.processEvent(event, currentState)
-            for
-              newState <- applyComponentResult(result, currentState)
-              _        <- validateAndUpdateState(newState, currentState)
-            yield ()
-      yield ()
+            val logCommandRunnerEvent =
+              focusedCommandRunner(currentState) match
+                case Some(runner) =>
+                  logger.info(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}")
+                case None =>
+                  IO.unit
+
+            val result =
+              getTypedLocalHandlerForFocus(currentState.focus, currentState) match
+                case Some(handler) =>
+                  handler.processEvent(event, currentState)
+                case None =>
+                  val component = getLegacyComponentForFocus(currentState.focus, currentState)
+                  component.processEvent(event, currentState)
+
+            logCommandRunnerEvent >>
+              applyComponentResult(result, currentState).flatMap { newState =>
+                validateAndUpdateState(newState, currentState)
+              }
+      }
 
     private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       newState.validated match
@@ -390,22 +398,36 @@ object StateManager:
           logger.error(s"State validation failed: ${errors.mkString(", ")}") >>
             stateRef.set(fallbackState)
 
-    private def getComponentForFocus(focus: Focus, state: AppState): FocusedComponent =
+    private def getTypedLocalHandlerForFocus(focus: Focus, state: AppState): Option[LocalEventHandler] =
+      focus match
+        case Focus.EditorPane(paneId) => Some(new EditorPaneComponent(paneId))
+        case Focus.Surface(surfaceId) =>
+          state.surfaceById(surfaceId) match
+            case Some(surface) =>
+              surface.presentation match
+                case SurfacePresentation.Pinned(position, _) =>
+                  Some(new PinnedPanelComponent(position))
+                case SurfacePresentation.Floating(_, _) =>
+                  surface.content match
+                    case SurfaceContent.CommandPalette(_) =>
+                      val registry = CommandRegistry.withToggleUI
+                      Some(new CommandRunnerComponent(registry))
+                    case SurfaceContent.ModalWorkflow(modal) =>
+                      Some(new ModalComponent(modalType(modal)))
+                    case _ =>
+                      Some(new PeekOverlayComponent())
+            case None =>
+              None
+
+    private def getLegacyComponentForFocus(focus: Focus, state: AppState): FocusedComponent =
       focus match
         case Focus.EditorPane(paneId) => new EditorPaneComponent(paneId)
         case Focus.Surface(surfaceId) =>
           state.surfaceById(surfaceId) match
             case Some(surface) =>
-              surface.content match
-                case SurfaceContent.CommandPalette(_) =>
-                  val registry = CommandRegistry.withToggleUI
-                  new CommandRunnerComponent(registry)
-                case SurfaceContent.ModalWorkflow(modal) =>
-                  new ModalComponent(modalType(modal))
-                case _ =>
-                  surface.presentation match
-                    case SurfacePresentation.Pinned(position, _) => new PinnedPanelComponent(position)
-                    case SurfacePresentation.Floating(_, _)      => new PeekOverlayComponent()
+              surface.presentation match
+                case SurfacePresentation.Pinned(position, _) => new PinnedPanelComponent(position)
+                case SurfacePresentation.Floating(_, _)      => new PeekOverlayComponent()
             case None =>
               new PeekOverlayComponent()
 
@@ -422,6 +444,10 @@ object StateManager:
         case AppEffect.ExecuteCommand(command) =>
           logger.info(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
             stateRef.get.flatMap(state => interpretCommand(command, state))
+        case AppEffect.SwitchTheme(themeName) =>
+          applyThemeByName(themeName)
+        case AppEffect.ReloadTheme(themeName) =>
+          reloadThemeByName(themeName)
         case AppEffect.SaveBuffer(bufferId) =>
           saveBufferEffect(bufferId)
         case AppEffect.SaveBufferAs(bufferId, path) =>
@@ -449,6 +475,7 @@ object StateManager:
           IO.pure(dismissCurrentFocus(state).copy(focus = newFocus))
         case ComponentResult.ExecuteCommand(command) =>
           for
+            _            <- stateRef.set(state)
             _            <- interpretCommand(command, state)
             updatedState <- stateRef.get
           yield updatedState
@@ -764,16 +791,22 @@ object StateManager:
           case name if name.toLowerCase.contains("light") => "default-dark"
           case _                                          => "default-light"
 
-      themeManager
-        .loadTheme(targetThemeName)
-        .flatMap(theme => updateState(_.copy(theme = theme)))
-        .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to toggle theme to $targetThemeName"))
+      interpretEffect(AppEffect.SwitchTheme(targetThemeName))
 
     private def reloadThemeEffect(state: AppState): IO[Unit] =
+      interpretEffect(AppEffect.ReloadTheme(state.theme.name))
+
+    private def applyThemeByName(themeName: String): IO[Unit] =
       themeManager
-        .loadTheme(state.theme.name)
+        .loadTheme(themeName)
         .flatMap(theme => updateState(_.copy(theme = theme)))
-        .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to reload theme ${state.theme.name}"))
+        .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to switch theme to $themeName"))
+
+    private def reloadThemeByName(themeName: String): IO[Unit] =
+      themeManager
+        .loadTheme(themeName)
+        .flatMap(theme => updateState(_.copy(theme = theme)))
+        .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to reload theme $themeName"))
 
     private def openFileWorkflowModal(
         mode: FileWorkflowMode,

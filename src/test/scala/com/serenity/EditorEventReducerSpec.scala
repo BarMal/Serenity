@@ -53,3 +53,15 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.GotoLine("")))
     updatedState.focus shouldBe Focus.Surface(modalSurface.get.id)
   }
+
+  it should "provide a typed reducer instance for editor events" in {
+    val initialState = AppState.initial
+    val paneId       = PaneId(0)
+    val reducer      = EditorEventReducer.reducer(paneId)
+
+    val updatedState = reducer.reduce(OpenGotoLine, initialState).state
+    val modalSurface = updatedState.modalSurface
+
+    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.GotoLine("")))
+    updatedState.focus shouldBe Focus.Surface(modalSurface.get.id)
+  }

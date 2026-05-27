@@ -26,6 +26,6 @@ object TextStyle:
 case class StyledText(
     content: String,
     style: TextStyle = TextStyle.normal,
-    foregroundColor: TextColor = TextColor.ANSI.WHITE,
-    backgroundColor: TextColor = TextColor.ANSI.BLACK
+    foregroundColor: TextColor = new TextColor.RGB(255, 255, 255),
+    backgroundColor: TextColor = new TextColor.RGB(0, 0, 0)
 )

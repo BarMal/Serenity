@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.googlecode.lanterna.input.KeyType
 import com.googlecode.lanterna.input.KeyStroke
 import com.serenity.input.InputRouter
-import com.serenity.keystroke.events.{Event, TextEntryEvent}
+import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -23,7 +23,7 @@ class EOFGracefulShutdownIntegrationSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      inputRouter  <- InputRouter.create[IO, TextEntryEvent](new TextEntryTranslator)
+      inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator)
       
       // Simulate EOF keystroke being received (like when terminal closes)
       eofKeyStroke = new KeyStroke(KeyType.EOF)

@@ -45,28 +45,6 @@ object RgbInterpolator:
   def toRgb(color: TextColor): TextColor.RGB =
     color match
       case rgb: TextColor.RGB => rgb
-      case ansi               => ansiToRgb(ansi)
-
-  /** Convert ANSI colors to RGB approximations */
-  private def ansiToRgb(color: TextColor): TextColor.RGB =
-    color match
-      case TextColor.ANSI.BLACK   => new TextColor.RGB(0, 0, 0)
-      case TextColor.ANSI.RED     => new TextColor.RGB(128, 0, 0)
-      case TextColor.ANSI.GREEN   => new TextColor.RGB(0, 128, 0)
-      case TextColor.ANSI.YELLOW  => new TextColor.RGB(128, 128, 0)
-      case TextColor.ANSI.BLUE    => new TextColor.RGB(0, 0, 128)
-      case TextColor.ANSI.MAGENTA => new TextColor.RGB(128, 0, 128)
-      case TextColor.ANSI.CYAN    => new TextColor.RGB(0, 128, 128)
-      case TextColor.ANSI.WHITE   => new TextColor.RGB(255, 255, 255)
-
-      case TextColor.ANSI.BLACK_BRIGHT   => new TextColor.RGB(128, 128, 128)
-      case TextColor.ANSI.RED_BRIGHT     => new TextColor.RGB(255, 0, 0)
-      case TextColor.ANSI.GREEN_BRIGHT   => new TextColor.RGB(0, 255, 0)
-      case TextColor.ANSI.YELLOW_BRIGHT  => new TextColor.RGB(255, 255, 0)
-      case TextColor.ANSI.BLUE_BRIGHT    => new TextColor.RGB(0, 0, 255)
-      case TextColor.ANSI.MAGENTA_BRIGHT => new TextColor.RGB(255, 0, 255)
-      case TextColor.ANSI.CYAN_BRIGHT    => new TextColor.RGB(0, 255, 255)
-      case TextColor.ANSI.WHITE_BRIGHT   => new TextColor.RGB(255, 255, 255)
-
-      case TextColor.ANSI.DEFAULT => new TextColor.RGB(192, 192, 192) // Default to light gray
-      case _                      => new TextColor.RGB(192, 192, 192) // Fallback to light gray
+      case other =>
+        val awtColor = other.toColor
+        new TextColor.RGB(awtColor.getRed, awtColor.getGreen, awtColor.getBlue)

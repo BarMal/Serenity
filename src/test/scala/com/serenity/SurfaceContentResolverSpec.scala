@@ -4,7 +4,6 @@ import java.nio.file.Paths
 
 import cats.effect.IO
 import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner}
-import com.googlecode.lanterna.TextColor
 import com.serenity.state.models.{BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState, FileWorkflowField, FileWorkflowMode, FileWorkflowState, FileWorkflowSuggestion, Modal, ReplaceWorkflowField, ReplaceWorkflowState, SurfaceContent}
 import com.serenity.ui.layout.{DirEntry, LayoutRect}
 import com.serenity.ui.renderer.{OverlayRowLayout, OverlayTone, SurfaceContentResolver, SurfaceRenderMode}
@@ -147,7 +146,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     pathRow.layout shouldBe OverlayRowLayout.Split
     pathRow.selected shouldBe true
     pathRow.segments.head.text shouldBe "Path"
-    pathRow.segments.exists(_.foregroundColor.contains(TextColor.ANSI.RED)) shouldBe true
+    pathRow.segments.exists(_.tone == OverlayTone.Error) shouldBe true
 
     val suggestionRows = floating.rows.drop(2)
     suggestionRows.map(_.plainText) shouldBe List("/tmp/project/", "/tmp/project/new/")

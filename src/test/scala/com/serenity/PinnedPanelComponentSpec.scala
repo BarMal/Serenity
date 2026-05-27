@@ -2,9 +2,7 @@ package com.serenity
 
 import java.nio.file.Paths
 
-import com.googlecode.lanterna.input.KeyType
-import com.serenity.keystroke.events.{InsertChar, UnhandledEvent}
-import com.serenity.keystroke.translators.Translator
+import com.serenity.keystroke.events.{Direction, PanelInputEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, PinnedPanelComponent}
 import com.serenity.state.models.*
@@ -17,8 +15,6 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private val paneId = PaneId(0)
-  private object NoopTranslator extends Translator[com.serenity.keystroke.events.Event]:
-    val converters = List.empty
 
   private def baseState: AppState =
     val bufferId = BufferId(1)
@@ -48,16 +44,29 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
 
     val component = PinnedPanelComponent(PanelPosition.Left)
 
-    component.processEvent(InsertChar('x'), state) shouldBe ComponentResult.FocusTransfer(Focus.EditorPane(paneId))
+    component.processEvent(PanelInputEvent.ReturnFocus, state).shouldBe(ComponentResult.FocusTransfer(Focus.EditorPane(paneId)))
+  }
+
+  it should "keep navigation local to the pinned panel" in {
+    val surface = UiSurface.fromPanelContent(
+      SurfaceId("left-panel"),
+      PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
+      PanelPosition.Left,
+      24
+    )
+    val state = baseState.copy(
+      uiSurfaces = List(surface),
+      focus = Focus.Surface(surface.id)
+    )
+
+    val component = PinnedPanelComponent(PanelPosition.Left)
+
+    component.processEvent(PanelInputEvent.Navigate(Direction.Down), state).shouldBe(ComponentResult.NoChange)
   }
 
   it should "ignore input when no pinned surface exists at the requested position" in {
     val component = PinnedPanelComponent(PanelPosition.Right)
-    val event = UnhandledEvent(
-      new com.googlecode.lanterna.input.KeyStroke(KeyType.Enter),
-      NoopTranslator
-    )
 
-    component.processEvent(event, baseState) shouldBe ComponentResult.NoChange
+    component.processEvent(PanelInputEvent.NoOp, baseState).shouldBe(ComponentResult.NoChange)
   }
 end PinnedPanelComponentSpec

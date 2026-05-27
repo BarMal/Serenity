@@ -11,7 +11,7 @@ class AppThemeManager:
   private val configurableManager = new ConfigurableThemeManager(new ThemeConfigLoader())
 
   /** Initialize the application with a default theme */
-  def initializeWithTheme(themeName: String = "default-dark"): IO[Theme] =
+  def initializeWithTheme(themeName: String = "dark"): IO[Theme] =
     themeManager
       .loadAndSetTheme(themeName)
       .handleErrorWith(_ =>

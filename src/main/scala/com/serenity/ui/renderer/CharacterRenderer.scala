@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import com.googlecode.lanterna.TextColor
 import com.googlecode.lanterna.graphics.TextGraphics
-import com.serenity.animation.AnimationState
+import com.serenity.animation.{AnimationState, RgbInterpolator}
 import com.serenity.ui.theme.{Theme, ThemeManager, ThemeRenderer}
 
 object CharacterRenderer:
@@ -182,8 +182,8 @@ object CharacterRenderer:
   ): Unit =
     styledTexts.foldLeft(x) { (currentX, styledText) =>
       val segmentTheme = theme.copy(
-        foregroundColor = styledText.foregroundColor,
-        backgroundColor = styledText.backgroundColor
+        foreground = styledText.foregroundColor,
+        background = styledText.backgroundColor
       )
 
       styledText.content.foldLeft(currentX) { (posX, char) =>
@@ -207,28 +207,24 @@ object CharacterRenderer:
     screenAnimations.getCharacterColor(bufferColumn, bufferLine) match
       case Some(animatedColor) =>
         graphics.setForegroundColor(animatedColor)
-        graphics.setBackgroundColor(theme.backgroundColor)
+        graphics.setBackgroundColor(theme.background)
         renderChar(graphics, x, y, char)
       case None =>
-        graphics.setForegroundColor(theme.foregroundColor)
-        graphics.setBackgroundColor(theme.backgroundColor)
+        graphics.setForegroundColor(theme.foreground)
+        graphics.setBackgroundColor(theme.background)
         renderChar(graphics, x, y, char)
 
   /** Blend two colors with given opacity (alpha blending simulation) */
   private def blendColors(foreground: TextColor, background: TextColor, opacity: Double): TextColor =
-    // For terminal colors, we'll approximate blending by choosing intermediate colors
-    // This is a simplified approach since we can't do true RGB blending with ANSI colors
-    if opacity > 0.7 then foreground
-    else if opacity > 0.4 then
-      // Try to find a dimmer version of the foreground color
-      foreground match
-        case TextColor.ANSI.WHITE        => TextColor.ANSI.WHITE_BRIGHT
-        case TextColor.ANSI.WHITE_BRIGHT => TextColor.ANSI.BLACK_BRIGHT
-        case TextColor.ANSI.RED          => TextColor.ANSI.RED_BRIGHT
-        case TextColor.ANSI.GREEN        => TextColor.ANSI.GREEN_BRIGHT
-        case TextColor.ANSI.BLUE         => TextColor.ANSI.BLUE_BRIGHT
-        case TextColor.ANSI.YELLOW       => TextColor.ANSI.YELLOW_BRIGHT
-        case TextColor.ANSI.MAGENTA      => TextColor.ANSI.MAGENTA_BRIGHT
-        case TextColor.ANSI.CYAN         => TextColor.ANSI.CYAN_BRIGHT
-        case _                           => TextColor.ANSI.BLACK_BRIGHT
-    else TextColor.ANSI.BLACK_BRIGHT
+    val foregroundRgb = RgbInterpolator.toRgb(foreground)
+    val backgroundRgb = RgbInterpolator.toRgb(background)
+    val clampedOpacity = opacity.max(0.0).min(1.0)
+
+    val red =
+      math.round(backgroundRgb.getRed + (foregroundRgb.getRed - backgroundRgb.getRed) * clampedOpacity).toInt
+    val green =
+      math.round(backgroundRgb.getGreen + (foregroundRgb.getGreen - backgroundRgb.getGreen) * clampedOpacity).toInt
+    val blue =
+      math.round(backgroundRgb.getBlue + (foregroundRgb.getBlue - backgroundRgb.getBlue) * clampedOpacity).toInt
+
+    new TextColor.RGB(red, green, blue)

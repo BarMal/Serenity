@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.command.CommandRunner
-import com.serenity.ui.layout.{Layout, LayoutEngine, PeekContent, TerminalSize}
+import com.serenity.ui.layout.{CursorLayout, Layout, LayoutEngine, TerminalSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -50,12 +50,14 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     val rect          = layout.aboveCursorOverlayRect.get
     val paneRect      = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val contentRect   = CursorLayout.contentRectForPane(paneRect)
     val contentTopY   = paneRect.y + 1
     val cursorScreenY = contentTopY + 6
 
     rect.bottom should be <= cursorScreenY
-    rect.x should be >= paneRect.x
-    rect.right should be <= paneRect.right
+    rect.x shouldBe contentRect.x
+    rect.width shouldBe contentRect.width
+    rect.right shouldBe contentRect.right
     rect.y should be >= contentTopY
   }
 
@@ -77,10 +79,13 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     val rect        = layout.aboveCursorOverlayRect.get
     val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
     val contentTopY = paneRect.y + 1
 
     rect.y shouldBe contentTopY
     rect.bottom should be <= paneRect.bottom
+    rect.x shouldBe contentRect.x
+    rect.width shouldBe contentRect.width
   }
 
   it should "place an active command runner below the anchored cursor when space is available" in {
@@ -108,12 +113,14 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     val rect          = layout.belowCursorOverlayRect.get
     val paneRect      = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val contentRect   = CursorLayout.contentRectForPane(paneRect)
     val contentTopY   = paneRect.y + 1
     val cursorScreenY = contentTopY + 6
 
     rect.y should be > cursorScreenY
-    rect.x should be >= paneRect.x
-    rect.right should be <= paneRect.right
+    rect.x shouldBe contentRect.x
+    rect.width shouldBe contentRect.width
+    rect.right shouldBe contentRect.right
     rect.bottom should be <= paneRect.bottom
   }
 end CursorOverlayLayoutSpec

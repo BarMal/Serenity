@@ -15,8 +15,8 @@ class BundledThemesSpec extends AnyFlatSpec with Matchers:
     val darkTheme = manager.loadThemeFromResource("themes/dark.conf").unsafeRunSync()
 
     darkTheme.name shouldBe "dark"
-    darkTheme.foregroundColor.toString should include("WHITE")
-    darkTheme.backgroundColor.toString should include("BLACK")
+    darkTheme.foregroundColor shouldBe a[com.googlecode.lanterna.TextColor.RGB]
+    darkTheme.backgroundColor shouldBe a[com.googlecode.lanterna.TextColor.RGB]
 
     // Verify syntax highlighting colors are configured
     val keywordColor = darkTheme.colorFor(SyntaxElement.Keyword)
@@ -35,8 +35,8 @@ class BundledThemesSpec extends AnyFlatSpec with Matchers:
     val lightTheme = manager.loadThemeFromResource("themes/light.conf").unsafeRunSync()
 
     lightTheme.name shouldBe "light"
-    lightTheme.foregroundColor.toString should include("BLACK")
-    lightTheme.backgroundColor.toString should include("WHITE")
+    lightTheme.foregroundColor shouldBe a[com.googlecode.lanterna.TextColor.RGB]
+    lightTheme.backgroundColor shouldBe a[com.googlecode.lanterna.TextColor.RGB]
 
     // Verify syntax highlighting colors are configured
     val keywordColor = lightTheme.colorFor(SyntaxElement.Keyword)
@@ -53,10 +53,17 @@ class BundledThemesSpec extends AnyFlatSpec with Matchers:
     val configString = """
       theme {
         name = "hex-test"
-        colors {
+        ui {
           foreground = "#FFFFFF"
           background = "#000000"
           cursor = "#FF0000"
+          border = "#2F3B4A"
+          muted = "#7B8794"
+          placeholder = "#52606D"
+          highlighted { foreground = "#000000", background = "#5DADE2", style { bold = false, italic = false, underline = false } }
+          menu-item { foreground = "#FFFFFF", background = "#1F2933", style { bold = false, italic = false, underline = false } }
+          panel { foreground = "#FFFFFF", background = "#111821", style { bold = false, italic = false, underline = false } }
+          error { foreground = "#FF6B6B", background = "#2B1215", style { bold = false, italic = false, underline = false } }
         }
         syntax {
           keyword {

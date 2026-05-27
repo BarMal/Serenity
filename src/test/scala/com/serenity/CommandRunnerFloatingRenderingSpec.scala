@@ -7,7 +7,7 @@ import com.googlecode.lanterna.{TerminalSize as LanternaSize}
 import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Layout, LayoutEngine, TerminalSize}
+import com.serenity.ui.layout.{CursorLayout, Layout, LayoutEngine, TerminalSize}
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -63,6 +63,10 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val testScreen = screen(100, 30)
     val layout     = LayoutEngine.calculateLayout(state, TerminalSize(100, 30))
     val overlay    = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+    val paneRect = LayoutEngine
+      .calculatePaneLayouts(state, layout)
+      .getOrElse(paneId, fail("Expected pane layout"))
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     Renderer.render(state, cursorVisible = true, testScreen)
 
@@ -80,9 +84,12 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     searchLine should include("search: op")
     commandLine should include("open")
     commandLine should include("Open file")
+    overlay.width shouldBe contentRect.width
+    overlay.x shouldBe contentRect.x
 
-    testScreen.getBackCharacter(overlay.x + 1, overlay.y + 1).getBackgroundColor shouldBe state.theme.backgroundColor
-    testScreen.getBackCharacter(overlay.x + 1, overlay.y + 2).getBackgroundColor shouldBe state.theme.cursorColor
+    testScreen.getBackCharacter(0, 0).getBackgroundColor shouldBe state.theme.background
+    testScreen.getBackCharacter(overlay.x + 1, overlay.y + 1).getBackgroundColor shouldBe state.theme.panel.background
+    testScreen.getBackCharacter(overlay.x + 1, overlay.y + 2).getBackgroundColor shouldBe state.theme.highlighted.background
 
     val cursorX = overlay.x + 1 + "search: op".length
     testScreen.getBackCharacter(cursorX, overlay.y + 1).getBackgroundColor shouldBe state.theme.cursorColor

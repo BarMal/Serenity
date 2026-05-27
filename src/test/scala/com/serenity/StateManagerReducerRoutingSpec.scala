@@ -4,11 +4,11 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{Quit, SaveFile, ToggleCommandRunner}
+import com.serenity.keystroke.events.{Direction, InsertChar, PanelInputEvent, PeekInputEvent, Quit, ReloadCurrentTheme, SaveFile, SwitchTheme, TabKey, ToggleCommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{CursorPosition, Focus, Modal, SurfaceContent, UiSurface}
-import com.serenity.ui.layout.PeekContent
+import com.serenity.state.models.{CursorPosition, FileWorkflowField, FileWorkflowMode, Focus, Modal, SurfaceContent, UiSurface}
+import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition, PeekContent}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -113,4 +113,75 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
     finalState.uiSurfaces.exists(_.content == SurfaceContent.QuickInfo("hint")) shouldBe false
+  }
+
+  it should "route focused editor events through the typed local handler path" in {
+    val stateManager = createStateManager()
+    val initialState = stateManager.getCurrentState.unsafeRunSync()
+    val initialBufferId = initialState.focusedBufferId.get
+
+    stateManager.applyEvent(InsertChar('x')).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.buffers(initialBufferId).content.collect() shouldBe "x"
+    updatedState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+  }
+
+  it should "route focused modal events through the typed local handler path" in {
+    val stateManager = createStateManager()
+
+    stateManager.showModal(
+      Modal.FileWorkflow(
+        com.serenity.state.models.FileWorkflowState(mode = FileWorkflowMode.Open)
+      )
+    ).unsafeRunSync()
+
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.modalSurface.flatMap(_.content match
+      case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow.activeField)
+      case _                                                          => None
+    ) shouldBe Some(FileWorkflowField.Path)
+  }
+
+  it should "route focused pinned panel events through the typed local handler path" in {
+    val stateManager = createStateManager()
+
+    stateManager.pinPanel(
+      PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/repo")), None),
+      PanelPosition.Left,
+      24
+    ).unsafeRunSync()
+    val pinnedSurfaceId = stateManager.getCurrentState.unsafeRunSync().uiSurfaces.collectFirst {
+      case surface @ UiSurface(_, _, com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Left, _), _) =>
+        surface.id
+    }.get
+    stateManager.switchFocus(Focus.Surface(pinnedSurfaceId)).unsafeRunSync()
+
+    stateManager.applyEvent(PanelInputEvent.ReturnFocus).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+  }
+
+  it should "route focused peek events through the typed local handler path" in {
+    val stateManager = createStateManager()
+
+    stateManager.showPeek(PeekContent.QuickInfo("hint"), CursorPosition(1, 2)).unsafeRunSync()
+    stateManager.applyEvent(PeekInputEvent.Navigate(Direction.Up)).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.uiSurfaces.exists(_.content == SurfaceContent.QuickInfo("hint")) shouldBe false
+    updatedState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+  }
+
+  it should "route theme events through the application event path" in {
+    val stateManager = createStateManager()
+
+    stateManager.applyEvent(SwitchTheme("light")).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().theme.name shouldBe "light"
+
+    stateManager.applyEvent(ReloadCurrentTheme).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().theme.name shouldBe "light"
   }

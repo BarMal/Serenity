@@ -1,13 +1,19 @@
 package com.serenity.state.reducers
 
-import com.googlecode.lanterna.input.KeyType
-import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 
 object ModalEventReducer:
 
+  def reducer(modalType: ModalType): Reducer[ModalInputEvent] =
+    Reducer.instance((event, state) => reduce(modalType, event, state))
+
   def reduce(modalType: ModalType, event: Event, currentState: AppState): ReducerResult =
+    ModalInputEvent.fromEvent(event)
+      .map(reduce(modalType, _, currentState))
+      .getOrElse(ReducerResult.noEffects(currentState))
+
+  def reduce(modalType: ModalType, event: ModalInputEvent, currentState: AppState): ReducerResult =
     modalType match
       case ModalType.GotoLine => reduceGotoLine(event, currentState)
       case ModalType.Find     => reduceFind(event, currentState)
@@ -16,20 +22,20 @@ object ModalEventReducer:
       case ModalType.CloseWorkflow => reduceCloseWorkflow(event, currentState)
       case ModalType.Custom(_) => ReducerResult.noEffects(currentState)
 
-  private def reduceGotoLine(event: Event, currentState: AppState): ReducerResult =
+  private def reduceGotoLine(event: ModalInputEvent, currentState: AppState): ReducerResult =
     event match
-      case Escape => ReducerResult.noEffects(dismissToPane(currentState))
-      case InsertChar(char) if char.isDigit =>
+      case ModalDismiss => ReducerResult.noEffects(dismissToPane(currentState))
+      case ModalInsertChar(char) if char.isDigit =>
         currentModal(currentState) match
           case Some((surface, Modal.GotoLine(input))) =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.GotoLine(input + char)))
           case _ => ReducerResult.noEffects(currentState)
-      case DeleteBackward =>
+      case ModalDeleteBackward =>
         currentModal(currentState) match
           case Some((surface, Modal.GotoLine(input))) if input.nonEmpty =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.GotoLine(input.dropRight(1))))
           case _ => ReducerResult.noEffects(currentState)
-      case Enter =>
+      case ModalSubmit =>
         currentModal(currentState) match
           case Some((_, Modal.GotoLine(input))) =>
             input.toIntOption match
@@ -39,27 +45,23 @@ object ModalEventReducer:
                 ReducerResult.noEffects(dismissToPane(currentState))
           case _ =>
             ReducerResult.noEffects(dismissToPane(currentState))
-      case UnhandledEvent(keyStroke, _) =>
-        val keyInfo = KeyStrokeInfo.fromKeyStroke(keyStroke)
-        if keyInfo.keyType == KeyType.Escape then ReducerResult.noEffects(dismissToPane(currentState))
-        else ReducerResult.noEffects(currentState)
       case _ =>
         ReducerResult.noEffects(currentState)
 
-  private def reduceFind(event: Event, currentState: AppState): ReducerResult =
+  private def reduceFind(event: ModalInputEvent, currentState: AppState): ReducerResult =
     event match
-      case Escape => ReducerResult.noEffects(dismissToPane(currentState))
-      case InsertChar(char) =>
+      case ModalDismiss => ReducerResult.noEffects(dismissToPane(currentState))
+      case ModalInsertChar(char) =>
         currentModal(currentState) match
           case Some((surface, Modal.Find(query, results, idx))) =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.Find(query + char, results, idx)))
           case _ => ReducerResult.noEffects(currentState)
-      case DeleteBackward =>
+      case ModalDeleteBackward =>
         currentModal(currentState) match
           case Some((surface, Modal.Find(query, results, idx))) if query.nonEmpty =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.Find(query.dropRight(1), results, idx)))
           case _ => ReducerResult.noEffects(currentState)
-      case Enter =>
+      case ModalSubmit =>
         currentModal(currentState) match
           case Some((_, Modal.Find(query, _, _))) if query.nonEmpty =>
             val resultLines = currentState.layout.activeEditorPaneId.toList.flatMap { paneId =>
@@ -85,11 +87,11 @@ object ModalEventReducer:
       case _ =>
         ReducerResult.noEffects(currentState)
 
-  private def reduceFileWorkflow(event: Event, currentState: AppState): ReducerResult =
+  private def reduceFileWorkflow(event: ModalInputEvent, currentState: AppState): ReducerResult =
     event match
-      case Escape =>
+      case ModalDismiss =>
         ReducerResult.noEffects(dismissToPane(currentState))
-      case InsertChar(char) =>
+      case ModalInsertChar(char) =>
         currentModal(currentState) match
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
@@ -98,7 +100,7 @@ object ModalEventReducer:
             )
           case _ =>
             ReducerResult.noEffects(currentState)
-      case DeleteBackward =>
+      case ModalDeleteBackward =>
         currentModal(currentState) match
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
@@ -107,7 +109,7 @@ object ModalEventReducer:
             )
           case _ =>
             ReducerResult.noEffects(currentState)
-      case TabKey =>
+      case ModalNextField =>
         currentModal(currentState) match
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
@@ -116,7 +118,7 @@ object ModalEventReducer:
             )
           case _ =>
             ReducerResult.noEffects(currentState)
-      case ReverseTabKey =>
+      case ModalPreviousField =>
         currentModal(currentState) match
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
@@ -125,19 +127,19 @@ object ModalEventReducer:
             )
           case _ =>
             ReducerResult.noEffects(currentState)
-      case MoveUp =>
+      case ModalNavigate(Direction.Up) =>
         currentModal(currentState) match
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.FileWorkflow(workflow.moveSuggestion(-1))))
           case _ =>
             ReducerResult.noEffects(currentState)
-      case MoveDown =>
+      case ModalNavigate(Direction.Down) =>
         currentModal(currentState) match
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.FileWorkflow(workflow.moveSuggestion(1))))
           case _ =>
             ReducerResult.noEffects(currentState)
-      case Enter =>
+      case ModalSubmit =>
         currentModal(currentState) match
           case Some((surface, Modal.FileWorkflow(workflow))) if workflow.suggestions.nonEmpty && workflow.activeField == FileWorkflowField.Path =>
             ReducerResult.withEffect(
@@ -151,23 +153,23 @@ object ModalEventReducer:
       case _ =>
         ReducerResult.noEffects(currentState)
 
-  private def reduceCloseWorkflow(event: Event, currentState: AppState): ReducerResult =
+  private def reduceCloseWorkflow(event: ModalInputEvent, currentState: AppState): ReducerResult =
     event match
-      case Escape =>
+      case ModalDismiss =>
         ReducerResult.noEffects(cancelCloseWorkflow(currentState))
-      case TabKey | MoveRight =>
+      case ModalNextField | ModalNavigate(Direction.Right) =>
         currentModal(currentState) match
           case Some((surface, Modal.CloseWorkflow(workflow))) =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.CloseWorkflow(workflow.moveChoice(1))))
           case _ =>
             ReducerResult.noEffects(currentState)
-      case ReverseTabKey | MoveLeft =>
+      case ModalPreviousField | ModalNavigate(Direction.Left) =>
         currentModal(currentState) match
           case Some((surface, Modal.CloseWorkflow(workflow))) =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.CloseWorkflow(workflow.moveChoice(-1))))
           case _ =>
             ReducerResult.noEffects(currentState)
-      case Enter =>
+      case ModalSubmit =>
         currentModal(currentState) match
           case Some((surface, Modal.CloseWorkflow(_))) =>
             ReducerResult.withEffect(currentState, AppEffect.SubmitCloseWorkflow(surface.id))
@@ -176,11 +178,11 @@ object ModalEventReducer:
       case _ =>
         ReducerResult.noEffects(currentState)
 
-  private def reduceReplaceWorkflow(event: Event, currentState: AppState): ReducerResult =
+  private def reduceReplaceWorkflow(event: ModalInputEvent, currentState: AppState): ReducerResult =
     event match
-      case Escape =>
+      case ModalDismiss =>
         ReducerResult.noEffects(dismissToPane(currentState))
-      case InsertChar(char) =>
+      case ModalInsertChar(char) =>
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
@@ -188,7 +190,7 @@ object ModalEventReducer:
             )
           case _ =>
             ReducerResult.noEffects(currentState)
-      case DeleteBackward =>
+      case ModalDeleteBackward =>
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
@@ -196,7 +198,7 @@ object ModalEventReducer:
             )
           case _ =>
             ReducerResult.noEffects(currentState)
-      case TabKey =>
+      case ModalNextField =>
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
@@ -204,7 +206,7 @@ object ModalEventReducer:
             )
           case _ =>
             ReducerResult.noEffects(currentState)
-      case ReverseTabKey =>
+      case ModalPreviousField =>
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
@@ -212,7 +214,7 @@ object ModalEventReducer:
             )
           case _ =>
             ReducerResult.noEffects(currentState)
-      case Enter =>
+      case ModalSubmit =>
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(_))) =>
             ReducerResult.withEffect(currentState, AppEffect.SubmitReplaceWorkflow(surface.id))

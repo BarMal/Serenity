@@ -10,7 +10,7 @@ case class AnimatedCharacter(
 
   /** Get the current color to render (head of color steps) */
   def currentColor: TextColor =
-    colorSteps.headOption.getOrElse(TextColor.ANSI.WHITE)
+    colorSteps.headOption.getOrElse(new TextColor.RGB(255, 255, 255))
 
   /** Check if animation is complete (no more color steps) */
   def isComplete: Boolean =

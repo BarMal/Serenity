@@ -184,8 +184,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     val result = component.processEvent(ToggleCommandRunner, initialState)
 
-    result shouldNot be(ComponentResult.noChange)
-    // Should update state to show active command runner
+    result shouldBe ComponentResult.noChange
   }
 
   it should "handle search input" in {

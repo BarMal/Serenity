@@ -4,13 +4,17 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandRegistry, CommandRunner}
 import com.serenity.keystroke.events.*
+import com.serenity.rope.Balance
 import com.serenity.state.components.{CommandRunnerComponent, ComponentResult}
 import com.serenity.state.models.*
+import com.serenity.state.reducers.AppEventReducer
 import com.serenity.ui.layout.Layout
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
+
+  given Balance = Balance.default
 
   private def runnerState(
     registry: CommandRegistry,
@@ -40,20 +44,15 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
   describe("Command runner navigation and execution"):
     it("should activate and gain focus when toggled"):
       val registry  = CommandRegistry.default
-      val component = CommandRunnerComponent(registry)
-
       val initialState = runnerState(registry, CommandRunner.empty, Focus.EditorPane(PaneId(1)))
 
-      component.processEvent(ToggleCommandRunner, initialState) match
-        case ComponentResult.StateChange(update) =>
-          val newState = update(initialState)
-          val runner   = runnerFrom(newState)
+      val result   = AppEventReducer.reduce(ToggleCommandRunner, initialState, registry)
+      val newState = result.state
+      val runner   = runnerFrom(newState)
 
-          runner.isActive shouldEqual true
-          newState.focus shouldEqual Focus.Surface(SurfaceId("command-runner"))
-          runner.previousFocus shouldEqual Some(Focus.EditorPane(PaneId(1)))
-        case _ =>
-          fail("Expected state change")
+      runner.isActive shouldEqual true
+      newState.focus shouldEqual Focus.Surface(SurfaceId("command-runner"))
+      runner.previousFocus shouldEqual Some(Focus.EditorPane(PaneId(1)))
 
     it("should deactivate and restore previous focus when escaped"):
       val registry  = CommandRegistry.default

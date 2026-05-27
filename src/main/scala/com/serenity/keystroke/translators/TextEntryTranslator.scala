@@ -1,13 +1,14 @@
 package com.serenity.keystroke.translators
 
 import com.serenity.keystroke.KeyStrokeInfo
-import com.serenity.keystroke.events.TextEntryEvent
+import com.serenity.keystroke.events.Event
 
-class TextEntryTranslator extends Translator[TextEntryEvent]:
+class TextEntryTranslator extends Translator[Event]:
 
-  override def converters: List[PartialFunction[KeyStrokeInfo, TextEntryEvent]] = List(
-    TextHotkeyConverters.hotkeyConverter,
-    TextCharacterConverters.characterConverter,
-    TextNavigationConverters.navigationConverter,
-    TextDeletionConverters.deletionConverter
+  private val delegate = CompositeTranslator(
+    new GlobalHotkeyTranslator(),
+    new EditorInputTranslator()
   )
+
+  override def converters: List[PartialFunction[KeyStrokeInfo, Event]] =
+    delegate.converters

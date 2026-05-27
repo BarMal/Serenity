@@ -16,14 +16,21 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
     val configSource = ConfigSource.string("""
       theme {
         name = "test-theme"
-        colors {
-          foreground = "white"
-          background = "black" 
-          cursor = "yellow"
+        ui {
+          foreground = "#F5F7FA"
+          background = "#0B0F14"
+          cursor = "#F4D03F"
+          border = "#2F3B4A"
+          muted = "#7B8794"
+          placeholder = "#52606D"
+          highlighted { foreground = "#0B0F14", background = "#5DADE2", style { bold = false, italic = false, underline = false } }
+          menu-item { foreground = "#F5F7FA", background = "#1F2933", style { bold = false, italic = false, underline = false } }
+          panel { foreground = "#F5F7FA", background = "#111821", style { bold = false, italic = false, underline = false } }
+          error { foreground = "#FF6B6B", background = "#2B1215", style { bold = false, italic = false, underline = false } }
         }
         syntax {
           keyword {
-            foreground = "blue"
+            foreground = "#5DADE2"
             style {
               bold = true
               italic = false
@@ -31,7 +38,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
             }
           }
           string {
-            foreground = "green"
+            foreground = "#58D68D"
             style {
               bold = false
               italic = false  
@@ -39,7 +46,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
             }
           }
           comment {
-            foreground = "gray"
+            foreground = "#808080"
             style {
               bold = false
               italic = true
@@ -47,7 +54,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
             }
           }
           number {
-            foreground = "cyan"
+            foreground = "#F39C12"
             style {
               bold = false
               italic = false
@@ -55,7 +62,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
             }
           }
           operator {
-            foreground = "yellow"
+            foreground = "#E74C3C"
             style {
               bold = false
               italic = false
@@ -63,7 +70,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
             }
           }
           identifier {
-            foreground = "white"
+            foreground = "#FFFFFF"
             style {
               bold = false
               italic = false
@@ -71,7 +78,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
             }
           }
           typ {
-            foreground = "magenta"
+            foreground = "#AF7AC5"
             style {
               bold = true
               italic = false
@@ -79,7 +86,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
             }
           }
           delimiter {
-            foreground = "white"
+            foreground = "#D5D8DC"
             style {
               bold = false
               italic = false
@@ -87,7 +94,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
             }
           }
           whitespace {
-            foreground = "black"
+            foreground = "#0B0F14"
             style {
               bold = false
               italic = false
@@ -95,7 +102,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
             }
           }
           error {
-            foreground = "red"
+            foreground = "#FF6B6B"
             style {
               bold = false
               italic = false
@@ -103,7 +110,7 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
             }
           }
           normal {
-            foreground = "white"
+            foreground = "#FFFFFF"
             style {
               bold = false
               italic = false
@@ -118,8 +125,8 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
 
     themeConfig shouldBe a[Right[?, ?]]
     themeConfig.toOption.get.name shouldBe "test-theme"
-    themeConfig.toOption.get.colors.foreground shouldBe "white"
-    themeConfig.toOption.get.syntax.keyword.foreground shouldBe "blue"
+    themeConfig.toOption.get.ui.foreground shouldBe "#F5F7FA"
+    themeConfig.toOption.get.syntax.keyword.foreground shouldBe "#5DADE2"
     themeConfig.toOption.get.syntax.keyword.style.bold shouldBe true
     themeConfig.toOption.get.syntax.comment.style.italic shouldBe true
   }
@@ -135,34 +142,41 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
       """
       theme {
         name = "file-theme"
-        colors {
-          foreground = "white"
-          background = "black"
-          cursor = "yellow"
+        ui {
+          foreground = "#F5F7FA"
+          background = "#0B0F14"
+          cursor = "#F4D03F"
+          border = "#2F3B4A"
+          muted = "#7B8794"
+          placeholder = "#52606D"
+          highlighted { foreground = "#0B0F14", background = "#5DADE2", style { bold = false, italic = false, underline = false } }
+          menu-item { foreground = "#F5F7FA", background = "#1F2933", style { bold = false, italic = false, underline = false } }
+          panel { foreground = "#F5F7FA", background = "#111821", style { bold = false, italic = false, underline = false } }
+          error { foreground = "#FF6B6B", background = "#2B1215", style { bold = false, italic = false, underline = false } }
         }
         syntax {
           keyword {
-            foreground = "purple"
+            foreground = "#AF7AC5"
             style { bold = true, italic = false, underline = false }
           }
           string {
-            foreground = "green"
+            foreground = "#58D68D"
             style { bold = false, italic = false, underline = false }
           }
           comment {
-            foreground = "gray"
+            foreground = "#808080"
             style { bold = false, italic = true, underline = false }
           }
           number {
-            foreground = "cyan"
+            foreground = "#F39C12"
             style { bold = false, italic = false, underline = false }
           }
           operator {
-            foreground = "yellow"
+            foreground = "#E74C3C"
             style { bold = false, italic = false, underline = false }
           }
           identifier {
-            foreground = "white"
+            foreground = "#FFFFFF"
             style { bold = false, italic = false, underline = false }
           }
         }
@@ -173,25 +187,32 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
     try
       val result = loader.loadThemeFromFile(tempFile).unsafeRunSync()
       result.name shouldBe "file-theme"
-      result.syntax.keyword.foreground shouldBe "purple"
+      result.syntax.keyword.foreground shouldBe "#AF7AC5"
     finally Files.deleteIfExists(tempFile)
   }
 
   "ConfigurableThemeManager" should "convert config to Theme object" in {
     val themeConfig = ThemeConfig(
       name = "test",
-      colors = BaseColors(
-        foreground = "white",
-        background = "black",
-        cursor = "yellow"
+      ui = UiColors(
+        foreground = "#F5F7FA",
+        background = "#0B0F14",
+        cursor = "#F4D03F",
+        highlighted = UiTokenConfig(foreground = "#0B0F14", background = "#5DADE2"),
+        menuItem = UiTokenConfig(foreground = "#F5F7FA", background = "#1F2933"),
+        panel = UiTokenConfig(foreground = "#F5F7FA", background = "#111821"),
+        error = UiTokenConfig(foreground = "#FF6B6B", background = "#2B1215"),
+        border = "#2F3B4A",
+        muted = "#7B8794",
+        placeholder = "#52606D"
       ),
       syntax = SyntaxColors(
-        keyword = SyntaxElementConfig("blue", Some("black"), StyleConfig(bold = true, italic = false, underline = false)),
-        string = SyntaxElementConfig("green", Some("black"), StyleConfig(bold = false, italic = false, underline = false)),
-        comment = SyntaxElementConfig("gray", Some("black"), StyleConfig(bold = false, italic = true, underline = false)),
-        number = SyntaxElementConfig("cyan", Some("black"), StyleConfig(bold = false, italic = false, underline = false)),
-        operator = SyntaxElementConfig("yellow", Some("black"), StyleConfig(bold = false, italic = false, underline = false)),
-        identifier = SyntaxElementConfig("white", Some("black"), StyleConfig(bold = false, italic = false, underline = false))
+        keyword = SyntaxElementConfig("#5DADE2", Some("#0B0F14"), StyleConfig(bold = true, italic = false, underline = false)),
+        string = SyntaxElementConfig("#58D68D", Some("#0B0F14"), StyleConfig(bold = false, italic = false, underline = false)),
+        comment = SyntaxElementConfig("#808080", Some("#0B0F14"), StyleConfig(bold = false, italic = true, underline = false)),
+        number = SyntaxElementConfig("#F39C12", Some("#0B0F14"), StyleConfig(bold = false, italic = false, underline = false)),
+        operator = SyntaxElementConfig("#E74C3C", Some("#0B0F14"), StyleConfig(bold = false, italic = false, underline = false)),
+        identifier = SyntaxElementConfig("#FFFFFF", Some("#0B0F14"), StyleConfig(bold = false, italic = false, underline = false))
       )
     )
 
@@ -201,8 +222,9 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
     val theme = themeEither.toOption.get
 
     theme.name shouldBe "test"
-    theme.foregroundColor.toString should include("WHITE") // Lanterna color representation
+    theme.foreground shouldBe a[com.googlecode.lanterna.TextColor.RGB]
     theme.syntaxColors should contain key com.serenity.ui.theme.SyntaxElement.Keyword
+    theme.highlighted.background shouldBe a[com.googlecode.lanterna.TextColor.RGB]
 
     val keywordColor = theme.colorFor(com.serenity.ui.theme.SyntaxElement.Keyword)
     keywordColor.style.isBold shouldBe true
@@ -219,54 +241,61 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
         s"""
         theme {
           name = "reload-test"
-          colors {
+          ui {
             foreground = "$foregroundColor"
-            background = "black"
-            cursor = "yellow"
+            background = "#0B0F14"
+            cursor = "#F4D03F"
+            border = "#2F3B4A"
+            muted = "#7B8794"
+            placeholder = "#52606D"
+            highlighted { foreground = "#0B0F14", background = "#5DADE2", style { bold = false, italic = false, underline = false } }
+            menu-item { foreground = "#F5F7FA", background = "#1F2933", style { bold = false, italic = false, underline = false } }
+            panel { foreground = "#F5F7FA", background = "#111821", style { bold = false, italic = false, underline = false } }
+            error { foreground = "#FF6B6B", background = "#2B1215", style { bold = false, italic = false, underline = false } }
           }
           syntax {
             keyword {
-              foreground = "blue"
+              foreground = "#5DADE2"
               style { bold = true, italic = false, underline = false }
             }
             string {
-              foreground = "green" 
+              foreground = "#58D68D" 
               style { bold = false, italic = false, underline = false }
             }
             comment {
-              foreground = "gray"
+              foreground = "#808080"
               style { bold = false, italic = true, underline = false }
             }
             number {
-              foreground = "cyan"
+              foreground = "#F39C12"
               style { bold = false, italic = false, underline = false }
             }
             operator {
-              foreground = "yellow"
+              foreground = "#E74C3C"
               style { bold = false, italic = false, underline = false }
             }
             identifier {
-              foreground = "white"
+              foreground = "#FFFFFF"
               style { bold = false, italic = false, underline = false }
             }
             typ {
-              foreground = "magenta"
+              foreground = "#AF7AC5"
               style { bold = true, italic = false, underline = false }
             }
             delimiter {
-              foreground = "white"
+              foreground = "#D5D8DC"
               style { bold = false, italic = false, underline = false }
             }
             whitespace {
-              foreground = "black"
+              foreground = "#0B0F14"
               style { bold = false, italic = false, underline = false }
             }
             error {
-              foreground = "red"
+              foreground = "#FF6B6B"
               style { bold = false, italic = false, underline = true }
             }
             normal {
-              foreground = "white"
+              foreground = "#FFFFFF"
               style { bold = false, italic = false, underline = false }
             }
           }
@@ -276,18 +305,18 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
 
     try
       // Write initial config
-      writeThemeConfig("white")
+      writeThemeConfig("#F5F7FA")
 
       val reloader     = new ThemeReloader()
       val initialTheme = reloader.loadAndConvertTheme(tempFile).unsafeRunSync()
-      initialTheme.colors.foreground shouldBe "white"
+      initialTheme.ui.foreground shouldBe "#F5F7FA"
 
       // Update config file
-      writeThemeConfig("yellow")
+      writeThemeConfig("#F4D03F")
 
       // Reload
       val reloadedTheme = reloader.loadAndConvertTheme(tempFile).unsafeRunSync()
-      reloadedTheme.colors.foreground shouldBe "yellow"
+      reloadedTheme.ui.foreground shouldBe "#F4D03F"
 
     finally Files.deleteIfExists(tempFile)
   }

@@ -215,38 +215,7 @@ object LayoutEngine:
       )
 
   private def calculateFloatingSurfaceWidth(content: SurfaceContent, maxWidth: Int): Int =
-    val preferredWidth = content match
-      case SurfaceContent.QuickInfo(text) =>
-        text.linesIterator.map(_.length).maxOption.getOrElse(0) + 4
-      case SurfaceContent.FilePreview(path, content) =>
-        math.max(
-          path.getFileName.toString.length + 4,
-          content.linesIterator.take(4).map(_.length).maxOption.getOrElse(0) + 4
-        )
-      case SurfaceContent.SymbolDefinition(symbol, _) =>
-        symbol.length + 12
-      case SurfaceContent.DirectoryListing(path, entries, _) =>
-        math.max(
-          path.getFileName.toString.length + 12,
-          entries.take(4).map(_.name.length).maxOption.getOrElse(0) + 4
-        )
-      case SurfaceContent.CommandPalette(_) =>
-        maxWidth
-      case SurfaceContent.ModalWorkflow(modal) =>
-        modal match
-          case Modal.GotoLine(input)      => math.max(20, input.length + 8)
-          case Modal.Find(query, _, _)    => math.max(20, query.length + 8)
-          case Modal.FileWorkflow(workflow) =>
-            math.max(40, math.max(workflow.filename.length, workflow.path.length) + 12)
-          case Modal.ReplaceWorkflow(workflow) =>
-            math.max(28, math.max(workflow.findText.length, workflow.replacementText.length) + 12)
-          case Modal.CloseWorkflow(workflow) =>
-            math.max(28, workflow.currentBufferLabel.length + 12)
-          case Modal.Custom(name, input)  => math.max(24, math.max(name.length, input.length) + 6)
-      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_) | SurfaceContent.Diagnostics(_) =>
-        math.min(60, math.max(24, maxWidth - 2))
-
-    math.max(16, math.min(maxWidth, preferredWidth))
+    maxWidth
 
   private def calculateFloatingSurfaceHeight(content: SurfaceContent, maxHeight: Int): Int =
     val preferredHeight = content match

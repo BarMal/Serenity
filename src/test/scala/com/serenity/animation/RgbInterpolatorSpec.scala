@@ -42,8 +42,8 @@ class RgbInterpolatorSpec extends AnyFlatSpec with Matchers:
     middle.getRed should be < 150
   }
 
-  it should "handle ANSI to RGB interpolation" in {
-    val startColor = TextColor.ANSI.BLACK
+  it should "handle non-RGB to RGB interpolation without assuming ANSI palette steps" in {
+    val startColor = TextColor.Factory.fromString("#000000")
     val endColor   = new TextColor.RGB(255, 255, 255)
 
     val interpolated = RgbInterpolator.interpolate(startColor, endColor, 4)
@@ -53,9 +53,9 @@ class RgbInterpolatorSpec extends AnyFlatSpec with Matchers:
     interpolated.last shouldEqual endColor
   }
 
-  it should "handle RGB to ANSI interpolation" in {
+  it should "handle RGB to non-RGB interpolation" in {
     val startColor = new TextColor.RGB(0, 0, 0)
-    val endColor   = TextColor.ANSI.WHITE
+    val endColor   = TextColor.Factory.fromString("#ffffff")
 
     val interpolated = RgbInterpolator.interpolate(startColor, endColor, 3)
 
@@ -64,9 +64,9 @@ class RgbInterpolatorSpec extends AnyFlatSpec with Matchers:
     interpolated.last shouldEqual endColor
   }
 
-  it should "handle ANSI to ANSI interpolation" in {
-    val startColor = TextColor.ANSI.BLACK
-    val endColor   = TextColor.ANSI.WHITE
+  it should "handle interpolation between non-RGB endpoint colors" in {
+    val startColor = TextColor.Factory.fromString("#000000")
+    val endColor   = TextColor.Factory.fromString("#ffffff")
 
     val interpolated = RgbInterpolator.interpolate(startColor, endColor, 6)
 
@@ -80,7 +80,7 @@ class RgbInterpolatorSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle same color interpolation" in {
-    val color = TextColor.ANSI.RED
+    val color = TextColor.Factory.fromString("#ff0000")
 
     val interpolated = RgbInterpolator.interpolate(color, color, 5)
 
@@ -89,21 +89,21 @@ class RgbInterpolatorSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle zero steps gracefully" in {
-    val startColor = TextColor.ANSI.BLACK
-    val endColor   = TextColor.ANSI.WHITE
+    val startColor = TextColor.Factory.fromString("#000000")
+    val endColor   = TextColor.Factory.fromString("#ffffff")
 
     val interpolated = RgbInterpolator.interpolate(startColor, endColor, 0)
 
     interpolated should be(empty)
   }
 
-  "RgbInterpolator.toRgb" should "convert ANSI colors to RGB approximations" in {
-    val black = RgbInterpolator.toRgb(TextColor.ANSI.BLACK)
+  "RgbInterpolator.toRgb" should "convert non-RGB colors to RGB values" in {
+    val black = RgbInterpolator.toRgb(TextColor.Factory.fromString("#000000"))
     black.getRed shouldEqual 0
     black.getGreen shouldEqual 0
     black.getBlue shouldEqual 0
 
-    val white = RgbInterpolator.toRgb(TextColor.ANSI.WHITE)
+    val white = RgbInterpolator.toRgb(TextColor.Factory.fromString("#ffffff"))
     white.getRed shouldEqual 255
     white.getGreen shouldEqual 255
     white.getBlue shouldEqual 255

@@ -11,17 +11,45 @@ object ConfigurableThemeManager:
   /** Convert ThemeConfig to Theme object */
   def configToTheme(config: ThemeConfig): Either[String, Theme] =
     for
-      foreground   <- ColorParser.parseColor(config.colors.foreground)
-      background   <- ColorParser.parseColor(config.colors.background)
-      cursor       <- ColorParser.parseColor(config.colors.cursor)
+      foreground   <- ColorParser.parseColor(config.ui.foreground)
+      background   <- ColorParser.parseColor(config.ui.background)
+      cursor       <- ColorParser.parseColor(config.ui.cursor)
+      highlighted  <- convertUiToken(config.ui.highlighted)
+      menuItem     <- convertUiToken(config.ui.menuItem)
+      panel        <- convertUiToken(config.ui.panel)
+      error        <- convertUiToken(config.ui.error)
+      border       <- ColorParser.parseColor(config.ui.border)
+      muted        <- ColorParser.parseColor(config.ui.muted)
+      placeholder  <- ColorParser.parseColor(config.ui.placeholder)
       syntaxColors <- convertSyntaxColors(config.syntax, background)
     yield Theme(
       name = config.name,
-      foregroundColor = foreground,
-      backgroundColor = background,
-      cursorColor = cursor,
+      foreground = foreground,
+      background = background,
+      cursor = cursor,
+      highlighted = highlighted,
+      menuItem = menuItem,
+      panel = panel,
+      error = error,
+      border = border,
+      muted = muted,
+      placeholder = placeholder,
       textStyle = TextStyle.normal,
       syntaxColors = syntaxColors
+    )
+
+  private def convertUiToken(config: UiTokenConfig): Either[String, ThemeColor] =
+    for
+      foreground <- ColorParser.parseColor(config.foreground)
+      background <- ColorParser.parseColor(config.background)
+    yield ThemeColor(
+      foreground = foreground,
+      background = background,
+      style = TextStyle(
+        isBold = config.style.bold,
+        isItalic = config.style.italic,
+        isUnderlined = config.style.underline
+      )
     )
 
   /** Convert syntax colors configuration to map */
@@ -29,7 +57,7 @@ object ConfigurableThemeManager:
     syntax: SyntaxColors,
     defaultBackground: TextColor
   ): Either[String, Map[SyntaxElement, ThemeColor]] =
-    val defaultFg = SyntaxElementConfig("white", None, StyleConfig())
+    val defaultFg = SyntaxElementConfig("#F5F7FA", None, StyleConfig())
     val conversions = List(
       (SyntaxElement.Keyword, syntax.keyword),
       (SyntaxElement.String, syntax.string),
@@ -37,10 +65,10 @@ object ConfigurableThemeManager:
       (SyntaxElement.Number, syntax.number),
       (SyntaxElement.Operator, syntax.operator),
       (SyntaxElement.Identifier, syntax.identifier),
-      (SyntaxElement.Type, syntax.typ.getOrElse(SyntaxElementConfig("magenta", None, StyleConfig(bold = true)))),
+      (SyntaxElement.Type, syntax.typ.getOrElse(SyntaxElementConfig("#AF7AC5", None, StyleConfig(bold = true)))),
       (SyntaxElement.Delimiter, syntax.delimiter.getOrElse(defaultFg)),
-      (SyntaxElement.Whitespace, syntax.whitespace.getOrElse(SyntaxElementConfig("black", None, StyleConfig()))),
-      (SyntaxElement.Error, syntax.error.getOrElse(SyntaxElementConfig("red", None, StyleConfig(underline = true)))),
+      (SyntaxElement.Whitespace, syntax.whitespace.getOrElse(SyntaxElementConfig("#000000", None, StyleConfig()))),
+      (SyntaxElement.Error, syntax.error.getOrElse(SyntaxElementConfig("#FF6B6B", None, StyleConfig(underline = true)))),
       (SyntaxElement.Normal, syntax.normal.getOrElse(defaultFg))
     )
 
@@ -64,7 +92,7 @@ object ConfigurableThemeManager:
     for
       foreground <- ColorParser.parseColor(config.foreground)
       background <- config.background match
-        case None | Some("default") => Right(defaultBackground)
+        case None => Right(defaultBackground)
         case Some(colorStr)         => ColorParser.parseColor(colorStr)
     yield ThemeColor(
       foreground = foreground,

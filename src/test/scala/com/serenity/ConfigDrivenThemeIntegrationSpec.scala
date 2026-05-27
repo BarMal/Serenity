@@ -4,16 +4,22 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.{ReloadCurrentTheme, SwitchTheme}
 import com.serenity.rope.Balance
-import com.serenity.state.components.ComponentResult
-import com.serenity.state.components.ThemeComponent
+import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class ConfigDrivenThemeIntegrationSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
+  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+  private def createStateManager(): StateManager =
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("ConfigDrivenThemeIntegrationSpec"))
+    StateManager.apply(logger).unsafeRunSync()
 
   "Config-driven theming integration" should "load dark theme and update AppState" in {
     val themeManager = AppThemeManager.create
@@ -27,70 +33,43 @@ class ConfigDrivenThemeIntegrationSpec extends AnyFlatSpec with Matchers:
     initialState.theme.name shouldBe "dark"
 
     // Verify theme properties
-    darkTheme.foregroundColor.toString should include("WHITE")
-    darkTheme.backgroundColor.toString should include("BLACK")
+    darkTheme.foregroundColor shouldBe a[com.googlecode.lanterna.TextColor.RGB]
+    darkTheme.backgroundColor shouldBe a[com.googlecode.lanterna.TextColor.RGB]
   }
 
   it should "switch between dark and light themes dynamically" in {
-    val themeManager   = AppThemeManager.create
-    val themeComponent = new ThemeComponent(themeManager)
+    val stateManager = createStateManager()
 
-    // Start with dark theme
-    val darkTheme    = themeManager.initializeWithTheme("dark").unsafeRunSync()
-    val initialState = AppState.empty.copy(theme = darkTheme)
+    stateManager.updateState(_.copy(theme = AppThemeManager.create.initializeWithTheme("dark").unsafeRunSync())).unsafeRunSync()
+    val initialState = stateManager.getCurrentState.unsafeRunSync()
+    val darkTheme = initialState.theme
 
-    // Switch to light theme using component
-    val switchEvent = SwitchTheme("light")
-    val result      = themeComponent.processEvent(switchEvent, initialState)
+    stateManager.applyEvent(SwitchTheme("light")).unsafeRunSync()
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
 
-    result should not be ComponentResult.noChange
-    result match
-      case ComponentResult.StateChange(stateUpdate) =>
-        val newState = stateUpdate(initialState)
-        newState.theme.name shouldBe "light"
-        newState.theme.foregroundColor should not be darkTheme.foregroundColor
-        newState.theme.backgroundColor should not be darkTheme.backgroundColor
-      case _ => fail("Expected StateChange result")
+    updatedState.theme.name shouldBe "light"
+    updatedState.theme.foregroundColor should not be darkTheme.foregroundColor
+    updatedState.theme.backgroundColor should not be darkTheme.backgroundColor
   }
 
   it should "support theme reloading" in {
-    val themeManager   = AppThemeManager.create
-    val themeComponent = new ThemeComponent(themeManager)
+    val stateManager = createStateManager()
+    stateManager.updateState(_.copy(theme = AppThemeManager.create.initializeWithTheme("dark").unsafeRunSync())).unsafeRunSync()
 
-    // Initialize with a theme
-    val theme = themeManager.initializeWithTheme("dark").unsafeRunSync()
-    val state = AppState.empty.copy(theme = theme)
+    stateManager.applyEvent(ReloadCurrentTheme).unsafeRunSync()
 
-    // Trigger reload
-    val reloadEvent = ReloadCurrentTheme
-    val result      = themeComponent.processEvent(reloadEvent, state)
-
-    // Should either update state or return no change if reload was successful
-    result match
-      case ComponentResult.StateChange(stateUpdate) =>
-        val newState = stateUpdate(state)
-        newState.theme.name shouldBe "dark" // Should still be dark theme
-      case ComponentResult.NoChange => // This is also acceptable if no changes detected
-        succeed
-      case _ => fail("Expected StateChange or NoChange result")
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.theme.name shouldBe "dark"
   }
 
   it should "handle missing theme gracefully" in {
-    val themeManager   = AppThemeManager.create
-    val themeComponent = new ThemeComponent(themeManager)
+    val stateManager = createStateManager()
+    val initialState = stateManager.getCurrentState.unsafeRunSync()
 
-    val state = AppState.empty
+    noException should be thrownBy stateManager.applyEvent(SwitchTheme("nonexistent-theme")).unsafeRunSync()
 
-    // Try to switch to a non-existent theme
-    val switchEvent = SwitchTheme("nonexistent-theme")
-
-    // This should either fail gracefully or fall back to a default theme
-    val result =
-      try themeComponent.processEvent(switchEvent, state)
-      catch case _: Exception => ComponentResult.noChange // Expected for non-existent theme
-
-    // The test should not crash
-    succeed
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.theme shouldBe initialState.theme
   }
 
   it should "preserve theme across state updates" in {

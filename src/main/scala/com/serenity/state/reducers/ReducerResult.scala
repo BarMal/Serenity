@@ -8,6 +8,8 @@ import com.serenity.state.models.{AppState, BufferId, SurfaceId}
 enum AppEffect:
   case CompleteQuit
   case ExecuteCommand(command: Command)
+  case SwitchTheme(themeName: String)
+  case ReloadTheme(themeName: String)
   case SaveBuffer(bufferId: BufferId)
   case SaveBufferAs(bufferId: BufferId, path: Path)
   case RequestOpenFile

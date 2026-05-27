@@ -6,10 +6,14 @@ import org.scalatest.matchers.should.Matchers
 
 class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
 
+  private val black = TextColor.Factory.fromString("#000000")
+  private val white = TextColor.Factory.fromString("#ffffff")
+  private val red   = TextColor.Factory.fromString("#ff0000")
+
   "Animation System Integration" should "create realistic character animation workflow" in {
     // Simulate theme colors
-    val backgroundColor = TextColor.ANSI.BLACK
-    val foregroundColor = TextColor.ANSI.WHITE
+    val backgroundColor = black
+    val foregroundColor = white
 
     // Create animation config
     val animConfig = AnimationConfig.quick.get
@@ -78,8 +82,8 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
 
     // Add some animations
     animState = animState
-      .addCharacterAnimation('a', 0, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 6)
-      .addCharacterAnimation('b', 1, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 6)
+      .addCharacterAnimation('a', 0, 0, black, white, 6)
+      .addCharacterAnimation('b', 1, 0, black, white, 6)
 
     // Advance partway through
     animState = animState.advanceAnimations().advanceAnimations()
@@ -93,8 +97,8 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
     // All characters should now be completed with final colors
     themeChangedState.getCharacter(0, 0).get.isComplete should be(true)
     themeChangedState.getCharacter(1, 0).get.isComplete should be(true)
-    themeChangedState.getCharacter(0, 0).get.currentColor shouldEqual TextColor.ANSI.WHITE
-    themeChangedState.getCharacter(1, 0).get.currentColor shouldEqual TextColor.ANSI.WHITE
+    themeChangedState.getCharacter(0, 0).get.currentColor shouldEqual white
+    themeChangedState.getCharacter(1, 0).get.currentColor shouldEqual white
   }
 
   it should "support character modification during animation" in {
@@ -105,8 +109,8 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
       'x',
       5,
       5,
-      TextColor.ANSI.BLACK,
-      TextColor.ANSI.WHITE,
+      black,
+      white,
       6
     )
 
@@ -121,8 +125,8 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
       'y',
       5,
       5,
-      TextColor.ANSI.BLACK,
-      TextColor.ANSI.RED,
+      black,
+      red,
       3
     )
 
