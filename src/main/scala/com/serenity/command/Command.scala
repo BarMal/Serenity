@@ -34,6 +34,9 @@ enum CommandIntent:
   case SetAnimationMode(mode: AnimationMode)
   case ToggleLineNumbers
   case ToggleGutter
+  case StartupNewSession
+  case StartupRestoreSession
+  case StartupOpenFile
   case Custom(run: AppState => IO[Unit])
 
 /** A command that can be executed in the command runner */

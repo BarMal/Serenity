@@ -127,7 +127,36 @@
       "Bash(sbt \"testOnly *ScrollingNavigationSpec* -- -z \"\"handle vertical scrolling in large files\"\"\")",
       "Bash(sbt \"testOnly *ScrollingNavigationSpec* -- -z \"\"handle horizontal scrolling in wide lines\"\"\")",
       "Bash(sbt Test/compile)",
-      "Bash(sbt \"scalafix RemoveUnused\")"
+      "Bash(sbt \"scalafix RemoveUnused\")",
+      "Bash(sbt \"testOnly *StartupPageComponentSpec*\")",
+      "Bash(sbt \"testOnly *StartupPageComponentSpec* *StartupStateSpec*\")",
+      "Bash(sbt \"testOnly *StartupPageIntegrationSpec*\")",
+      "Bash(sbt \"testOnly *StartupPageDismissSpec*\")",
+      "Bash(sbt \"testOnly *StartupPageIntegrationSpec* -- -z \"\"dismiss startup page on Escape\"\"\")",
+      "Bash(sbt \"testOnly *StartupPageComponentRoutingSpec*\")",
+      "Bash(sbt \"testOnly *StartupPage* *StartupState*\")",
+      "Bash(sbt \"testOnly *Component* *StateManager*\")",
+      "Bash(sbt \"testOnly *StartupPage* *StartupState* *StartupRender*\")",
+      "Bash(sbt \"testOnly *ActualStartupFlowSpec*\")",
+      "Bash(sbt \"testOnly *StartupPageRenderingSpec*\")",
+      "Bash(sbt \"testOnly *StartupPage*\")",
+      "Bash(sbt \"testOnly *FocusedInput* *Input*\")",
+      "Bash(grep -n \"renderStartPage\" /home/barney/.Git/Serenity/src/main/scala/com/serenity/ui/renderer/Renderer.scala)",
+      "Bash(sbt \"testOnly *Render*\")",
+      "Bash(sbt \"testOnly *StartupCommandsSpec*\")",
+      "Bash(grep -n \"FileWorkflow(\" /home/barney/.Git/Serenity/src/main/scala/com/serenity/state/models/Modal.scala)",
+      "Bash(sbt \"testOnly *StartupPage* *StartupState* *StartupCommands*\")",
+      "Bash(sbt \"testOnly *StartupOptionsEndToEndSpec*\")",
+      "Bash(sbt \"testOnly *StateManager*\")",
+      "Bash(scala-cli test_session_persistence.scala --cp target/scala-3.8.3/classes)",
+      "Bash(sbt \"runMain test_session_persistence\")",
+      "Bash(rm test_session_persistence.scala)",
+      "Bash(scala-cli debug_session_check.scala --cp target/scala-3.8.3/classes)",
+      "Bash(rm debug_session_check.scala)",
+      "Bash(rm ~/.serenity/session.json)"
+    ],
+    "additionalDirectories": [
+      "/home/barney/.serenity"
     ]
   }
 }

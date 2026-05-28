@@ -24,7 +24,8 @@ object FocusedInputTranslator:
               surface.content match
                 case SurfaceContent.CommandPalette(_) => commandRunnerTranslator
                 case SurfaceContent.ModalWorkflow(_)  => formTranslator
-                case _                                => peekOverlayTranslator
+                case SurfaceContent.StartPage(_)     => editorTranslator
+                case _                               => peekOverlayTranslator
         case None =>
           editorTranslator
 

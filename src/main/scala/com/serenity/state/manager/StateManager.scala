@@ -14,6 +14,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer, FileEventReducer, ModalStateReducer, PanelStateReducer, PeekStateReducer, ReducerResult, SystemEventReducer, ThemeEventReducer}
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.AppThemeManager
+import com.serenity.session.{SessionManager, SessionPersistence}
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
 trait StateManager:
@@ -48,6 +49,11 @@ trait StateManager:
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
   def dismissPeek(): IO[Unit]
   def peekToPin(position: PanelPosition): IO[Unit]
+
+  // Session persistence operations
+  def saveSession(): IO[Unit]
+  def loadSession(): IO[Option[AppState]]
+  def sessionExists: IO[Boolean]
 
   // Panel operations
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
@@ -129,6 +135,12 @@ object StateManager:
       extends StateManager:
     private val fileManager = new FileManager()
     private val themeManager = AppThemeManager.create
+    private val sessionManager = SessionManager.create(themeManager, logger)
+    private val sessionPersistence = new SessionPersistence(
+      sessionManager, 
+      SessionManager.SessionPolicy(), 
+      logger
+    )
 
     def getCurrentState: IO[AppState] = stateRef.get
 
@@ -340,6 +352,19 @@ object StateManager:
     def dismissModal(): IO[Unit] =
       stateRef.get.flatMap(state => validateAndUpdateState(ModalStateReducer.dismiss(state).state, state))
 
+    // Session persistence operations
+    def saveSession(): IO[Unit] =
+      getCurrentState.flatMap { state =>
+        sessionManager.saveSession(state) >> 
+        logger.info("[SESSION] Session saved")
+      }.void
+
+    def loadSession(): IO[Option[AppState]] =
+      sessionManager.loadSession()
+
+    def sessionExists: IO[Boolean] =
+      sessionManager.sessionExists
+
     def awaitQuit: IO[Unit] = quitSignal.get
 
     def applyEvent(event: Event): IO[Unit] =
@@ -476,8 +501,19 @@ object StateManager:
           applyReducerResult(result, state) >> stateRef.get
         case ComponentResult.FocusTransfer(newFocus) => IO.pure(state.copy(focus = newFocus))
         case ComponentResult.Dismiss =>
-          val newFocus = determineFallbackFocus(state)
-          IO.pure(dismissCurrentFocus(state).copy(focus = newFocus))
+          val dismissedState = dismissCurrentFocus(state)
+          dismissedState.layout.activeEditorPaneId match
+            case Some(paneId) =>
+              // There's an existing editor pane to focus on
+              IO.pure(dismissedState.copy(focus = Focus.EditorPane(paneId)))
+            case None =>
+              // No editor panes exist, create a default one
+              for
+                _        <- stateRef.set(dismissedState)
+                bufferId <- createBuffer("")
+                paneId   <- createPane(Some(bufferId))
+                newState <- stateRef.get.map(_.copy(focus = Focus.EditorPane(paneId)))
+              yield newState
         case ComponentResult.ExecuteCommand(command) =>
           for
             _            <- stateRef.set(state)
@@ -487,10 +523,6 @@ object StateManager:
         case ComponentResult.Composite(results) =>
           results.foldLeftM(state)((s, r) => applyComponentResult(r, s))
 
-    private def determineFallbackFocus(state: AppState): Focus =
-      state.layout.activeEditorPaneId match
-        case Some(paneId) => Focus.EditorPane(paneId)
-        case None         => state.focus // fallback to current focus if no active pane
 
     private def dismissCurrentFocus(state: AppState): AppState =
       state.focus match
@@ -583,6 +615,33 @@ object StateManager:
               case AnimationMode.Subtle =>
                 s.copy(config = s.config.copy(characterAnimation = AnimationConfig.subtle))
           }
+        case CommandIntent.StartupNewSession =>
+          // Dismiss startup page and create new editor session  
+          updateState(_.copy(uiSurfaces = List.empty)) >>
+          createNewEmptyBuffer().flatMap(bufferId =>
+            createPane(Some(bufferId)).flatMap(paneId =>
+              switchToPane(paneId)
+            )
+          )
+        case CommandIntent.StartupRestoreSession =>
+          logger.info("[CMD] Session restore requested") >>
+          loadSession().flatMap {
+            case Some(restoredState) =>
+              logger.info("[CMD] Session loaded successfully") >>
+              updateState(_ => restoredState.copy(uiSurfaces = List.empty)) // Clear startup page
+            case None =>
+              logger.info("[CMD] No session found - creating default session") >>
+              updateState(_.copy(uiSurfaces = List.empty)) >>
+              createNewEmptyBuffer().flatMap(bufferId =>
+                createPane(Some(bufferId)).flatMap(paneId =>
+                  switchToPane(paneId)
+                )
+              )
+          }
+        case CommandIntent.StartupOpenFile =>
+          // Dismiss startup page and open file workflow
+          updateState(_.copy(uiSurfaces = List.empty)) >>
+          openFileWorkflowModal(FileWorkflowMode.Open, state)
 
     // File operations
     def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit] =
@@ -860,7 +919,10 @@ object StateManager:
         case Nil =>
           val finalState = clearCloseActions(stateAfterClean)
           stateRef.set(finalState) >>
-            Option.when(scope == CloseScope.Quit)(quitSignal.complete(()).attempt.void).getOrElse(IO.unit)
+            IO.whenA(scope == CloseScope.Quit)(
+              sessionPersistence.onAppClose(finalState) >> 
+              quitSignal.complete(()).attempt.void
+            )
         case currentBufferId :: remaining =>
           promptCloseWorkflow(stateAfterClean, CloseWorkflowState(
             scope = scope,
@@ -931,8 +993,12 @@ object StateManager:
             )
           )
         case Nil =>
-          stateRef.set(clearCloseActions(state)) >>
-            Option.when(workflow.scope == CloseScope.Quit)(quitSignal.complete(()).attempt.void).getOrElse(IO.unit)
+          val finalState = clearCloseActions(state)
+          stateRef.set(finalState) >>
+            IO.whenA(workflow.scope == CloseScope.Quit)(
+              sessionPersistence.onAppClose(finalState) >> 
+              quitSignal.complete(()).attempt.void
+            )
 
     private def focusBufferForWorkflow(state: AppState, bufferId: BufferId): AppState =
       AppEventReducer.rebalancePanes(state, Some(bufferId))

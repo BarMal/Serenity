@@ -286,16 +286,34 @@ object Renderer:
   ): Unit =
     val lines  = page.renderLines
     val startY = (terminalSize.height - lines.size) / 2
+    
+    // Calculate which line indices correspond to options
+    val titleLines = 2 // title + empty line
+    val optionStartIndex = titleLines
+    val optionEndIndex = titleLines + page.options.size - 1
 
-    graphics.setForegroundColor(theme.placeholder)
-    graphics.setBackgroundColor(theme.background)
-
-    lines.zipWithIndex.foreach { case (line, index) =>
-      val y = startY + index
+    lines.zipWithIndex.foreach { case (line, lineIndex) =>
+      val y = startY + lineIndex
       val x = math.max(0, (terminalSize.width - line.length) / 2)
 
       if y >= 0 && y < terminalSize.height then
-        CharacterRenderer.renderString(graphics, x, y, line)
+        // Check if this line is a selectable option
+        val isOption = lineIndex >= optionStartIndex && lineIndex <= optionEndIndex
+        val optionIndex = lineIndex - optionStartIndex
+        val isSelected = isOption && optionIndex == page.selectedIndex
+        
+        if isSelected then
+          // Render highlighted background across full width
+          graphics.setForegroundColor(theme.highlighted.foreground)
+          graphics.setBackgroundColor(theme.highlighted.background)
+          CharacterRenderer.renderStringPlain(graphics, 0, y, " " * terminalSize.width)
+          // Center the text over the highlighted background
+          CharacterRenderer.renderString(graphics, x, y, line)
+        else
+          // Render normal text
+          graphics.setForegroundColor(theme.placeholder)
+          graphics.setBackgroundColor(theme.background)
+          CharacterRenderer.renderString(graphics, x, y, line)
     }
 
   private def renderCursors(

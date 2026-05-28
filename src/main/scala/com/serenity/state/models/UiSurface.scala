@@ -10,13 +10,24 @@ case class SurfaceId(value: String)
 case class StartupPage(
     title: String,
     options: List[String],
-    statusMessage: Option[String] = None
+    statusMessage: Option[String] = None,
+    selectedIndex: Int = 0
 ):
   def renderLines: List[String] =
     val baseLines = List(title, "") ++ options
     statusMessage match
       case Some(message) => baseLines ++ List("", message)
       case None          => baseLines
+      
+  def withSelectedIndex(index: Int): StartupPage =
+    val clampedIndex = if options.isEmpty then 0 else ((index % options.size) + options.size) % options.size
+    copy(selectedIndex = clampedIndex)
+    
+  def moveSelectionUp: StartupPage =
+    withSelectedIndex(selectedIndex - 1)
+    
+  def moveSelectionDown: StartupPage =
+    withSelectedIndex(selectedIndex + 1)
 
 enum SurfacePlacement:
   case AboveCursor

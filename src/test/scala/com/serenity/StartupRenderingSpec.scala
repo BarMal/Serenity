@@ -34,33 +34,39 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
   behavior of "Startup State Rendering"
 
   it should "render the dedicated start page vertically centered in the viewport" in {
-    val screen = makeTestScreen(100, 30)
-    val state = AppStartup.startPageState(
-      com.serenity.ui.theme.Theme.dark,
-      TerminalSize(100, 30)
-    )
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    
+    val program = for
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, TerminalSize(100, 30))
+    yield 
+      val screen = makeTestScreen(100, 30)
+      Renderer.render(state, cursorVisible = true, screen)
 
-    Renderer.render(state, cursorVisible = true, screen)
+      val renderedLines =
+        (0 until 30).flatMap { y =>
+          val line =
+            (0 until 100)
+              .map(x => screen.getBackCharacter(x, y).getCharacter)
+              .mkString
+              .trim
+          Option.when(line.nonEmpty)((y, line))
+        }
 
-    val renderedLines =
-      (0 until 30).flatMap { y =>
-        val line =
-          (0 until 100)
-            .map(x => screen.getBackCharacter(x, y).getCharacter)
-            .mkString
-            .trim
-        Option.when(line.nonEmpty)((y, line))
-      }
+      val startPage = AppStartup.createStartPage(sessionExists = false) // Use false for test consistency
+      val fullExpectedLines = startPage.renderLines
+      val expectedLines = fullExpectedLines.filter(_.nonEmpty)
+      
+      renderedLines.map(_._2) should contain allElementsOf expectedLines
 
-    val fullExpectedLines = AppStartup.defaultStartPage.renderLines
-    val expectedLines = fullExpectedLines.filter(_.nonEmpty)
-    renderedLines.map(_._2) should contain allElementsOf expectedLines
+      val expectedStartY = (30 - fullExpectedLines.size) / 2
+      renderedLines.head._1.shouldBe(expectedStartY)
+      renderedLines.last._1.shouldBe(expectedStartY + fullExpectedLines.size - 1)
 
-    val expectedStartY = (30 - fullExpectedLines.size) / 2
-    renderedLines.head._1.shouldBe(expectedStartY)
-    renderedLines.last._1.shouldBe(expectedStartY + fullExpectedLines.size - 1)
-
-    screen.stopScreen()
+      screen.stopScreen()
+    
+    program.unsafeRunSync()
   }
 
   it should "have buffer content available immediately after setup" in {

@@ -8,33 +8,45 @@ import com.serenity.ui.theme.Theme
 
 object AppStartup:
 
-  val defaultStartPage: StartupPage = StartupPage(
-    title = "What would you like to do?",
-    options = List(
-      "1. Start a new session",
-      "2. Restore an existing session",
-      "3. Open an existing file or directory"
+  def createStartPage(sessionExists: Boolean): StartupPage = 
+    val statusMessage = if sessionExists then 
+      None 
+    else 
+      Some("No previous session found")
+      
+    StartupPage(
+      title = "What would you like to do?",
+      options = List(
+        "1. Start a new session",
+        "2. Restore an existing session",
+        "3. Open an existing file or directory"
+      ),
+      statusMessage = statusMessage
     )
-  )
 
   def startPageState(
+    stateManager: StateManager,
     theme: Theme,
     initialTerminalSize: TerminalSize
-  ): AppState =
-    val startPageSurfaceId = SurfaceId("surface-0")
-    AppState.empty.copy(
-      focus = Focus.Surface(startPageSurfaceId),
-      uiSurfaces = List(
-        UiSurface(
-          id = startPageSurfaceId,
-          content = SurfaceContent.StartPage(defaultStartPage),
-          presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-        )
-      ),
-      terminalSize = Some(initialTerminalSize),
-      theme = theme,
-      nextSurfaceId = 1
-    )
+  ): IO[AppState] =
+    for
+      sessionExists <- stateManager.sessionExists
+      startPage = createStartPage(sessionExists)
+    yield 
+      val startPageSurfaceId = SurfaceId("surface-0")
+      AppState.empty.copy(
+        focus = Focus.Surface(startPageSurfaceId),
+        uiSurfaces = List(
+          UiSurface(
+            id = startPageSurfaceId,
+            content = SurfaceContent.StartPage(startPage),
+            presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        ),
+        terminalSize = Some(initialTerminalSize),
+        theme = theme,
+        nextSurfaceId = 1
+      )
 
   /** Initialize the application state for first render using the active theme and current terminal size. */
   def initializeState(
@@ -43,6 +55,7 @@ object AppStartup:
     initialTerminalSize: TerminalSize
   ): IO[AppState] =
     for
-      _     <- stateManager.updateState(_ => startPageState(theme, initialTerminalSize))
-      state <- stateManager.getCurrentState
+      startState <- startPageState(stateManager, theme, initialTerminalSize)
+      _          <- stateManager.updateState(_ => startState)
+      state      <- stateManager.getCurrentState
     yield state

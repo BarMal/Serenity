@@ -24,6 +24,14 @@ libraryDependencies ++= Seq(
   "com.github.pureconfig"  %% "pureconfig-core" % "0.17.9"
 )
 
+val circeVersion = "0.14.10"
+
+libraryDependencies ++= Seq(
+  "io.circe" %% "circe-core"    % circeVersion,
+  "io.circe" %% "circe-generic" % circeVersion,
+  "io.circe" %% "circe-parser"  % circeVersion
+)
+
 val log4CatsVersion = "2.7.0"
 
 libraryDependencies ++= Seq(
