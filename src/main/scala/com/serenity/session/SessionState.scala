@@ -79,13 +79,13 @@ case class SessionFindState(
 )
 
 object SessionState:
-  
+
   /**
    * Convert AppState to SessionState for persistence
    */
-  def fromAppState(appState: AppState): SessionState =
+  def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
     SessionState(
-      buffers = appState.buffers.values.map(SessionBuffer.fromBuffer).toList,
+      buffers = appState.buffers.values.map(SessionBuffer.fromBuffer(_, persistUnsaved)).toList,
       layout = SessionLayout.fromLayout(appState.layout),
       focus = SessionFocus.fromFocus(appState.focus),
       bufferOrder = appState.bufferOrder.map(_.value),
@@ -129,7 +129,7 @@ object SessionState:
     )
 
 object SessionBuffer:
-  def fromBuffer(buffer: Buffer): SessionBuffer =
+  def fromBuffer(buffer: Buffer, persistUnsaved: Boolean = true): SessionBuffer =
     SessionBuffer(
       id = buffer.id.value,
       filePath = buffer.filePath.map(_.toString),
@@ -138,7 +138,9 @@ object SessionBuffer:
       isNewEmpty = buffer.isNewEmpty,
       cursors = buffer.cursors.map(SessionCursorPosition.fromCursorPosition),
       viewport = SessionViewport.fromViewport(buffer.viewport),
-      unsavedContent = Some(buffer.content.toString)
+      unsavedContent =
+        if persistUnsaved || (!buffer.isDirty && !buffer.isNewEmpty) then Some(buffer.content.toString)
+        else None
     )
   
   def toBuffer(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): Buffer =

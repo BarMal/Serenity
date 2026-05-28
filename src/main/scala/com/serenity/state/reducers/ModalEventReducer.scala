@@ -225,8 +225,14 @@ object ModalEventReducer:
 
   private def dismissToPane(state: AppState): AppState =
     state.layout.activeEditorPaneId match
-      case Some(paneId) => state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface), focus = Focus.EditorPane(paneId))
-      case None         => state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface))
+      case Some(paneId) =>
+        state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface), focus = Focus.EditorPane(paneId))
+      case None =>
+        state.startPageSurface match
+          case Some(startPage) =>
+            state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface), focus = Focus.Surface(startPage.id))
+          case None =>
+            state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface))
 
   private def cancelCloseWorkflow(state: AppState): AppState =
     dismissToPane(

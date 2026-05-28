@@ -144,7 +144,6 @@
       "Bash(grep -n \"renderStartPage\" /home/barney/.Git/Serenity/src/main/scala/com/serenity/ui/renderer/Renderer.scala)",
       "Bash(sbt \"testOnly *Render*\")",
       "Bash(sbt \"testOnly *StartupCommandsSpec*\")",
-      "Bash(grep -n \"FileWorkflow(\" /home/barney/.Git/Serenity/src/main/scala/com/serenity/state/models/Modal.scala)",
       "Bash(sbt \"testOnly *StartupPage* *StartupState* *StartupCommands*\")",
       "Bash(sbt \"testOnly *StartupOptionsEndToEndSpec*\")",
       "Bash(sbt \"testOnly *StateManager*\")",
@@ -153,7 +152,8 @@
       "Bash(rm test_session_persistence.scala)",
       "Bash(scala-cli debug_session_check.scala --cp target/scala-3.8.3/classes)",
       "Bash(rm debug_session_check.scala)",
-      "Bash(rm ~/.serenity/session.json)"
+      "Bash(rm ~/.serenity/session.json)",
+      "Bash(sbt \"testOnly com.serenity.SessionStateSpec com.serenity.SessionManagerSpec com.serenity.IntervalSaveStreamSpec\")"
     ],
     "additionalDirectories": [
       "/home/barney/.serenity"

@@ -16,7 +16,8 @@ import org.typelevel.log4cats.Logger
 class SessionManager(
     sessionRoot: Path,
     themeManager: AppThemeManager,
-    logger: Logger[IO]
+    logger: Logger[IO],
+    policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()
 ):
 
   private val indexFile: Path = sessionRoot.resolve("session-index.json")
@@ -66,7 +67,9 @@ class SessionManager(
       )
       index <- readIndex()
       _ <- writeSessionFile(metadata.sessionFileName, appState)
-      updatedIndex = upsertSession(index, metadata).copy(currentSessionId = Some(sessionId))
+      withNew = upsertSession(index, metadata)
+      pruned <- pruneHistory(withNew)
+      updatedIndex = pruned.copy(currentSessionId = Some(sessionId))
       _ <- writeIndex(updatedIndex)
       _ <- logger.info(s"[SESSION] Named session saved (${metadata.displayName})")
     yield sessionId
@@ -189,7 +192,7 @@ class SessionManager(
     writeUtf8(indexFile, _root_.io.circe.syntax.EncoderOps(index).asJson.spaces2)
 
   private def writeSessionFile(sessionFileName: String, appState: AppState): IO[Unit] =
-    val sessionState = SessionState.fromAppState(appState)
+    val sessionState = SessionState.fromAppState(appState, persistUnsaved = policy.persistUnsavedBuffers)
     writeUtf8(
       sessionsDirectory.resolve(sessionFileName),
       _root_.io.circe.syntax.EncoderOps(sessionState).asJson.spaces2
@@ -223,6 +226,20 @@ class SessionManager(
 
     index.copy(sessions = updatedSessions)
 
+  private def pruneHistory(index: SessionIndex): IO[SessionIndex] =
+    val namedSessions = index.sessions.filterNot(_.id == defaultSessionId)
+    val excess = namedSessions.size - policy.maxSessionHistory
+    if excess <= 0 then IO.pure(index)
+    else
+      val toPrune = namedSessions.sortBy(_.updatedAtEpochMillis).take(excess)
+      toPrune.traverse_(s => deleteSessionFile(s.sessionFileName)).map { _ =>
+        val pruned = toPrune.map(_.id).toSet
+        index.copy(
+          sessions = index.sessions.filterNot(s => pruned.contains(s.id)),
+          currentSessionId = index.currentSessionId.filterNot(pruned.contains)
+        )
+      }
+
   private def currentTimeMillis(): IO[Long] =
     IO.realTime.map(_.toMillis)
 
@@ -231,14 +248,14 @@ object SessionManager:
   /**
    * Create a SessionManager with the default session root directory.
    */
-  def create(themeManager: AppThemeManager, logger: Logger[IO]): SessionManager =
-    new SessionManager(defaultSessionRoot(), themeManager, logger)
+  def create(themeManager: AppThemeManager, logger: Logger[IO], policy: SessionPolicy = SessionPolicy()): SessionManager =
+    new SessionManager(defaultSessionRoot(), themeManager, logger, policy)
 
   /**
    * Create a SessionManager with a custom session root directory.
    */
-  def create(sessionRoot: Path, themeManager: AppThemeManager, logger: Logger[IO]): SessionManager =
-    new SessionManager(sessionRoot, themeManager, logger)
+  def create(sessionRoot: Path, themeManager: AppThemeManager, logger: Logger[IO], policy: SessionPolicy): SessionManager =
+    new SessionManager(sessionRoot, themeManager, logger, policy)
 
   /**
    * Get the default session root directory.

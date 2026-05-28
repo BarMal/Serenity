@@ -54,7 +54,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
           Option.when(line.nonEmpty)((y, line))
         }
 
-      val startPage = AppStartup.createStartPage(sessionExists = false) // Use false for test consistency
+      // Extract the actual start page that was rendered so expectations match reality
+      val startPage = state.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       val fullExpectedLines = startPage.renderLines
       val expectedLines = fullExpectedLines.filter(_.nonEmpty)
       

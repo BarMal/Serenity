@@ -108,8 +108,9 @@ object Main extends IOApp.Simple:
                 .compile
                 .drain,
               renderLoop.compile.drain,
-              stateManager.awaitQuit
-            ).parMapN((_, _, _) => ())
+              stateManager.awaitQuit,
+              stateManager.intervalSaveStream.compile.drain
+            ).parMapN((_, _, _, _) => ())
           _ <- logger.info("Serenity editor shutdown complete")
         yield ()
       }

@@ -33,6 +33,8 @@ object Renderer:
     } match
       case Some(page) =>
         renderStartPage(page, graphics, terminalSize, state.theme)
+        val floatContext = RenderContext(screen, graphics, layout, cursorVisible)
+        renderFloatingPanels(state, floatContext)
       case None =>
         val context = RenderContext(screen, graphics, layout, cursorVisible)
         renderSpacerColumns(context)

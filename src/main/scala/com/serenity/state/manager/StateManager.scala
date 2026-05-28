@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.foldable.*
+import fs2.Stream
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner, CommandSurfaceItem}
 import com.serenity.io.{FileManager, FileUtils}
@@ -14,7 +15,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer, FileEventReducer, ModalStateReducer, PanelStateReducer, PeekStateReducer, ReducerResult, SystemEventReducer, ThemeEventReducer}
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.AppThemeManager
-import com.serenity.session.{SessionManager, SessionPersistence}
+import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
 trait StateManager:
@@ -25,6 +26,7 @@ trait StateManager:
   def getActiveBuffer: IO[Option[Buffer]]
   def getActivePane: IO[Option[EditorPane]]
   def awaitQuit: IO[Unit]
+  def intervalSaveStream: Stream[IO, Unit]
   def updateState(update: AppState => AppState): IO[Unit]
   def handleTerminalResize(newSize: TerminalSize): IO[Unit]
   def advanceAnimationFrames(): IO[Unit]
@@ -94,14 +96,18 @@ trait StateManager:
 
 object StateManager:
 
-  def apply(parentLogger: Logger[IO])(using Balance, LoggerFactory[IO]): IO[StateManager] =
+  def apply(
+      parentLogger: Logger[IO],
+      policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()
+  )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     for
       stateRef   <- Ref.of[IO, AppState](AppState.initial)
       quitSignal <- Deferred[IO, Unit]
     yield new StateManagerImpl(
       stateRef,
       quitSignal,
-      LoggerFactory[IO].getLogger(using LoggerName("com.serenity.state.manager.StateManager"))
+      LoggerFactory[IO].getLogger(using LoggerName("com.serenity.state.manager.StateManager")),
+      policy
     )
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
@@ -127,17 +133,14 @@ object StateManager:
   private class StateManagerImpl(
       stateRef: Ref[IO, AppState],
       quitSignal: Deferred[IO, Unit],
-      logger: Logger[IO]
+      logger: Logger[IO],
+      policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()
   )(using Balance)
       extends StateManager:
     private val fileManager = new FileManager()
     private val themeManager = AppThemeManager.create
-    private val sessionManager = SessionManager.create(themeManager, logger)
-    private val sessionPersistence = new SessionPersistence(
-      sessionManager, 
-      SessionManager.SessionPolicy(), 
-      logger
-    )
+    private val sessionManager = SessionManager.create(themeManager, logger, policy)
+    private val sessionPersistence = new SessionPersistence(sessionManager, policy, logger)
 
     def getCurrentState: IO[AppState] = stateRef.get
 
@@ -366,6 +369,14 @@ object StateManager:
       sessionManager.clearSession()
 
     def awaitQuit: IO[Unit] = quitSignal.get
+
+    def intervalSaveStream: Stream[IO, Unit] =
+      policy.saveInterval match
+        case None => Stream.empty
+        case Some(interval) =>
+          Stream.fixedRate[IO](interval)
+            .interruptWhen(Stream.eval(quitSignal.get).as(true))
+            .evalMap(_ => stateRef.get.flatMap(sessionPersistence.maybeSaveSession(_, SessionSaveTrigger.Interval)))
 
     def applyEvent(event: Event): IO[Unit] =
       stateRef.get.flatMap { currentState =>
@@ -616,13 +627,13 @@ object StateManager:
                 s.copy(config = s.config.copy(characterAnimation = AnimationConfig.subtle))
           }
         case CommandIntent.StartupNewSession =>
-          // Dismiss startup page and create new editor session  
           updateState(_.copy(uiSurfaces = List.empty)) >>
-          createNewEmptyBuffer().flatMap(bufferId =>
+          createNewEmptyBuffer().flatMap { bufferId =>
+            updateState(s => s.copy(bufferOrder = s.bufferOrder :+ bufferId)) >>
             createPane(Some(bufferId)).flatMap(paneId =>
               switchToPane(paneId)
             )
-          )
+          }
         case CommandIntent.StartupRestoreSession =>
           logger.info("[CMD] Session restore requested") >>
           loadSession().flatMap {
@@ -632,15 +643,14 @@ object StateManager:
             case None =>
               logger.info("[CMD] No session found - creating default session") >>
               updateState(_.copy(uiSurfaces = List.empty)) >>
-              createNewEmptyBuffer().flatMap(bufferId =>
+              createNewEmptyBuffer().flatMap { bufferId =>
+                updateState(s => s.copy(bufferOrder = s.bufferOrder :+ bufferId)) >>
                 createPane(Some(bufferId)).flatMap(paneId =>
                   switchToPane(paneId)
                 )
-              )
+              }
           }
         case CommandIntent.StartupOpenFile =>
-          // Dismiss startup page and open file workflow
-          updateState(_.copy(uiSurfaces = List.empty)) >>
           openFileWorkflowModal(FileWorkflowMode.Open, state)
 
     // File operations
@@ -815,8 +825,11 @@ object StateManager:
               .saveBuffer(buffer)
               .flatMap(savedBuffer =>
                 stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> savedBuffer)))
-                )
-                .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId"))
+              )
+              .flatTap(_ => stateRef.get.flatMap(sessionPersistence.onBufferChange).handleErrorWith(ex =>
+                logger.error(ex)("[SESSION] Auto-save after file save failed")
+              ))
+              .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId"))
           case Some(_) =>
             logger.debug(s"[FILE] Buffer $bufferId has no file path; opening Save As workflow") >>
               openFileWorkflowModal(FileWorkflowMode.SaveAs, state, Some(bufferId))
@@ -833,6 +846,9 @@ object StateManager:
               .flatMap(savedBuffer =>
                 stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> savedBuffer)))
               )
+              .flatTap(_ => stateRef.get.flatMap(sessionPersistence.onBufferChange).handleErrorWith(ex =>
+                logger.error(ex)("[SESSION] Auto-save after file save failed")
+              ))
               .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId as $path"))
           case None =>
             logger.debug(s"[FILE] Buffer $bufferId not found for save as")
@@ -1184,7 +1200,7 @@ object StateManager:
                   buffers = state.buffers + (newBufferId -> bufferToInsert),
                   bufferOrder = insertBufferInOrder(state, newBufferId),
                   nextBufferId = BufferId(newBufferId.value + 1),
-                  uiSurfaces = state.uiSurfaces.filterNot(_.id == surfaceId)
+                  uiSurfaces = List.empty
                 )
                 val rebalanced = AppEventReducer.rebalancePanes(updatedState, Some(newBufferId))
                 val focused = focusBuffer(rebalanced, newBufferId)

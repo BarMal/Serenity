@@ -65,8 +65,9 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers:
       openFileState <- stateManager3.getCurrentState
       
       _ = {
-        openFileState.startPageSurface shouldBe None
-        
+        // Startup page remains as the back-destination while the file modal is open
+        openFileState.startPageSurface should not be None
+
         // Should have file workflow modal open
         val hasFileWorkflow = openFileState.uiSurfaces.exists { surface =>
           surface.content match
@@ -77,7 +78,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers:
             case _ => false
         }
         hasFileWorkflow shouldBe true
-        
+
         openFileState.focus should matchPattern { case Focus.Surface(_) => }
       }
       
