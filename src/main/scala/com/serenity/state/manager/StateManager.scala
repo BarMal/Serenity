@@ -54,6 +54,7 @@ trait StateManager:
   def saveSession(): IO[Unit]
   def loadSession(): IO[Option[AppState]]
   def sessionExists: IO[Boolean]
+  def clearSession(): IO[Unit]
 
   // Panel operations
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
@@ -90,10 +91,6 @@ trait StateManager:
   def smoothScrollTo(paneId: PaneId, targetLine: Int): IO[Unit]
   def progressSmoothScroll(paneId: PaneId, progress: Double): IO[Unit]
   def clickMinimap(paneId: PaneId, targetLine: Int): IO[Unit]
-
-  // Session operations (stubs for test compilation)
-  def serializeSession(): IO[String]
-  def restoreSession(sessionData: String): IO[Unit]
 
 object StateManager:
 
@@ -364,6 +361,9 @@ object StateManager:
 
     def sessionExists: IO[Boolean] =
       sessionManager.sessionExists
+
+    def clearSession(): IO[Unit] =
+      sessionManager.clearSession()
 
     def awaitQuit: IO[Unit] = quitSignal.get
 
@@ -797,13 +797,6 @@ object StateManager:
               case None => state // No buffer assigned to pane
           case None => state
       }
-
-    // Session operation stubs (TODO: implement)
-    def serializeSession(): IO[String] =
-      IO.pure("{\"TODO\": \"implement session serialization\"}")
-
-    def restoreSession(sessionData: String): IO[Unit] =
-      logger.debug(s"TODO: restoreSession($sessionData)")
 
     def handleTerminalResize(newSize: TerminalSize): IO[Unit] =
       for

@@ -72,7 +72,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
-  it should "create default session when session restore is selected (until persistence is implemented)" in {
+  it should "create a default editor session when no saved session exists" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     
     val program = for

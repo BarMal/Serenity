@@ -5,7 +5,7 @@ project/target/
 project/.ivy/
 project/.boot/
 .bsp/
-.metals/
+.metals/ 
 .vscode/
 *.log
 lib_managed/

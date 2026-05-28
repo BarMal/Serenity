@@ -36,7 +36,7 @@ case class SessionBuffer(
     isNewEmpty: Boolean,
     cursors: List[SessionCursorPosition],
     viewport: SessionViewport,
-    // Only persist unsaved content if configured to do so
+    // Persist buffer text so restore does not depend on disk reads
     unsavedContent: Option[String] = None
 )
 
@@ -138,8 +138,7 @@ object SessionBuffer:
       isNewEmpty = buffer.isNewEmpty,
       cursors = buffer.cursors.map(SessionCursorPosition.fromCursorPosition),
       viewport = SessionViewport.fromViewport(buffer.viewport),
-      // TODO: Add policy for whether to persist unsaved content
-      unsavedContent = if buffer.isDirty && buffer.filePath.isEmpty then Some(buffer.content.toString) else None
+      unsavedContent = Some(buffer.content.toString)
     )
   
   def toBuffer(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): Buffer =
