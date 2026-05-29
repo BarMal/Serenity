@@ -3,13 +3,15 @@ package com.serenity.ui.terminal
 import cats.effect.{IO, Resource}
 import com.serenity.ui.layout.{CellMetrics, TerminalSize}
 import java.awt.Dimension
-import java.awt.event.{ComponentAdapter, ComponentEvent}
+import java.awt.event.{ComponentAdapter, ComponentEvent, WindowAdapter, WindowEvent}
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.CountDownLatch
 import javax.swing.{JFrame, JPanel, SwingUtilities, WindowConstants}
 
 class SwingTerminal(initialPixelSize: Dimension, val metrics: CellMetrics):
   private val pixelSize     = new AtomicReference(initialPixelSize)
   private val pendingResize = new AtomicReference[Option[TerminalSize]](None)
+  private val closeLatch    = new CountDownLatch(1)
 
   val canvas: JPanel = new JPanel:
     setBackground(java.awt.Color.BLACK)
@@ -24,11 +26,16 @@ class SwingTerminal(initialPixelSize: Dimension, val metrics: CellMetrics):
 
   private val frame: JFrame =
     val f = new JFrame("Serenity")
-    f.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE)
+    f.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE)
+    f.addWindowListener(new WindowAdapter:
+      override def windowClosing(e: WindowEvent): Unit = closeLatch.countDown()
+    )
     f.add(canvas)
     f.pack()
     f.setLocationRelativeTo(null)
     f
+
+  def awaitClose: IO[Unit] = IO.blocking(closeLatch.await())
 
   def start(): Unit =
     SwingUtilities.invokeLater { () =>

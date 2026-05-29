@@ -46,7 +46,8 @@ object Main extends IOApp.Simple:
               checkResize         = IO { swingTerm.doResizeIfNecessary() },
               renderFull          = (state, vis) => IO.blocking(Renderer.render(state, vis, swingTerm, font)),
               renderCursorOnly    = (state, vis) => IO.blocking(Renderer.render(state, vis, swingTerm, font)),
-              appConfig           = appConfig
+              appConfig           = appConfig,
+              awaitExternalQuit   = swingTerm.awaitClose
             )
           }
         yield ()
@@ -77,7 +78,8 @@ object Main extends IOApp.Simple:
     checkResize: IO[Option[TerminalSize]],
     renderFull: (AppState, Boolean) => IO[Unit],
     renderCursorOnly: (AppState, Boolean) => IO[Unit],
-    appConfig: AppConfig
+    appConfig: AppConfig,
+    awaitExternalQuit: IO[Unit] = IO.never
   )(using logger: org.typelevel.log4cats.Logger[IO]): IO[Unit] =
     for
       _ <- logger.info("Starting Serenity text editor")
@@ -148,8 +150,9 @@ object Main extends IOApp.Simple:
             .drain,
           renderLoop.compile.drain,
           stateManager.awaitQuit,
-          stateManager.intervalSaveStream.compile.drain
-        ).parMapN((_, _, _, _) => ())
+          stateManager.intervalSaveStream.compile.drain,
+          awaitExternalQuit >> stateManager.applyEvent(com.serenity.keystroke.events.Quit)
+        ).parMapN((_, _, _, _, _) => ())
       _ <- logger.info("Serenity editor shutdown complete")
     yield ()
 

@@ -197,6 +197,7 @@ object StateManager:
         val buffer   = Buffer.fromString(bufferId, content).copy(filePath = filePath)
         val newState = state.copy(
           buffers = state.buffers + (bufferId -> buffer),
+          bufferOrder = state.bufferOrder :+ bufferId,
           nextBufferId = BufferId(bufferId.value + 1)
         )
         (newState, bufferId)
