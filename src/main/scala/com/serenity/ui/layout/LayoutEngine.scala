@@ -266,6 +266,12 @@ object LayoutEngine:
       visibleColumns = panelRect.width
     )
 
+  def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect, metrics: CellMetrics): Viewport =
+    viewport.copy(
+      visibleLines = panelRect.height / metrics.lineHeight,
+      visibleColumns = panelRect.width / metrics.charWidth
+    )
+
   /** Calculate individual pane layouts within the editor area */
   def calculatePaneLayouts(state: AppState, calculatedLayout: CalculatedLayout): Map[PaneId, LayoutRect] =
     calculatePaneLayoutsWithMinWidth(state, calculatedLayout, state.config.minimumPaneWidth)
