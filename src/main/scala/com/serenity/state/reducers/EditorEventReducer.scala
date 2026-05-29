@@ -395,17 +395,13 @@ object EditorEventReducer:
   ): Buffer =
     state.config.characterAnimation match
       case Some(animConfig) =>
-        val durationMs = animConfig.totalDuration.toMillis.toInt
-        val animatedChar = com.serenity.animation.AnimatedCharacter.createFadeAnimation(
+        val updatedAnimations = buffer.animations.addCharacterAnimation(
           char,
+          cursorColumn,
+          cursorLine,
           state.theme.backgroundColor,
           state.theme.foregroundColor,
-          durationMs,
-          16
-        )
-        val updatedAnimations = buffer.animations.copy(
-          animations = buffer.animations.animations +
-            (com.serenity.animation.CharacterKey(cursorColumn, cursorLine) -> animatedChar)
+          animConfig.steps
         )
         buffer.copy(animations = updatedAnimations)
       case None =>

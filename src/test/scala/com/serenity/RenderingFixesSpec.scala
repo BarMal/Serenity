@@ -9,7 +9,7 @@ import com.serenity.state.components.ComponentResult
 import com.serenity.state.components.EditorPaneComponent
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
-import com.serenity.ui.renderer.CharacterRenderer
+import com.serenity.ui.renderer.{CharacterRenderer, LanternaRenderSurface}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -57,11 +57,11 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
     val virtualTerminal = new DefaultVirtualTerminal(com.googlecode.lanterna.TerminalSize.ONE)
     virtualTerminal.setTerminalSize(com.googlecode.lanterna.TerminalSize(80, 24))
     val screen   = new TerminalScreen(virtualTerminal)
-    val graphics = screen.newTextGraphics()
+    val surface  = LanternaRenderSurface(screen, screen.newTextGraphics())
 
     // Test tab expansion with default 4-space width
     // This should not throw an exception
-    CharacterRenderer.renderStringPlain(graphics, 0, 0, "a\tb")
+    CharacterRenderer.renderStringPlain(surface, 0, 0, "a\tb")
     // Tab expansion logic is tested within CharacterRenderer.renderStringPlain
   }
 
@@ -69,10 +69,10 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
     val virtualTerminal = new DefaultVirtualTerminal(com.googlecode.lanterna.TerminalSize.ONE)
     virtualTerminal.setTerminalSize(com.googlecode.lanterna.TerminalSize(80, 24))
     val screen   = new TerminalScreen(virtualTerminal)
-    val graphics = screen.newTextGraphics()
+    val surface  = LanternaRenderSurface(screen, screen.newTextGraphics())
 
     // Test underscore rendering - should not throw an exception
-    CharacterRenderer.renderStringPlain(graphics, 0, 0, "test_underscore")
+    CharacterRenderer.renderStringPlain(surface, 0, 0, "test_underscore")
     // Underscore rendering logic is tested within CharacterRenderer.renderStringPlain
   }
 
@@ -85,9 +85,9 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
     val virtualTerminal = new DefaultVirtualTerminal(com.googlecode.lanterna.TerminalSize.ONE)
     virtualTerminal.setTerminalSize(com.googlecode.lanterna.TerminalSize(80, 24))
     val screen   = new TerminalScreen(virtualTerminal)
-    val graphics = screen.newTextGraphics()
+    val surface  = LanternaRenderSurface(screen, screen.newTextGraphics())
 
     // Test various special characters - should not throw an exception
-    CharacterRenderer.renderStringPlain(graphics, 0, 0, "a_b\tc")
+    CharacterRenderer.renderStringPlain(surface, 0, 0, "a_b\tc")
     // Character rendering is tested within CharacterRenderer.renderStringPlain
   }

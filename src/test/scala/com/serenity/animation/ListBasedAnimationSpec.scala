@@ -6,15 +6,14 @@ import org.scalatest.matchers.should.Matchers
 
 class ListBasedAnimationSpec extends AnyFlatSpec with Matchers:
 
-  "AnimatedCharacter list-based advancement" should "consume color steps on advance" in {
-    val colors = List(TextColor.ANSI.BLACK, TextColor.ANSI.WHITE)
-    val char   = AnimatedCharacter('a', colors)
+  "AnimatedCell list-based advancement" should "consume foreground steps on advance" in {
+    val cell = AnimatedCell(Some('a'), List(TextColor.ANSI.BLACK, TextColor.ANSI.WHITE), List.empty)
 
-    char.currentColor shouldEqual TextColor.ANSI.BLACK
-    char.isComplete should be(false)
+    cell.currentForeground shouldEqual Some(TextColor.ANSI.BLACK)
+    cell.isComplete should be(false)
 
-    val advanced = char.advance()
-    advanced.currentColor shouldEqual TextColor.ANSI.WHITE
+    val advanced = cell.advance()
+    advanced.currentForeground shouldEqual Some(TextColor.ANSI.WHITE)
     advanced.isComplete should be(false)
 
     val completed = advanced.advance()
@@ -22,40 +21,31 @@ class ListBasedAnimationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "create deterministic animation duration" in {
-    val char = AnimatedCharacter.createFadeAnimation(
+    val cell = AnimatedCell.createFadeAnimation(
       'x',
       TextColor.ANSI.BLACK,
       TextColor.ANSI.WHITE,
       durationMs = 96,
       tickRateMs = 16
     )
-
-    char.colorSteps.length shouldEqual 6 // Exactly 6 steps for 96ms duration
+    cell.foregroundSteps.length shouldEqual 6
   }
 
   it should "handle immediate completion for zero-step animations" in {
-    val char = AnimatedCharacter.createFadeAnimation(
-      'x',
-      TextColor.ANSI.WHITE,
-      TextColor.ANSI.WHITE,
-      durationMs = 0
-    )
-
-    char.isComplete shouldEqual true
+    val cell = AnimatedCell.createFadeAnimation('x', TextColor.ANSI.WHITE, TextColor.ANSI.WHITE, durationMs = 0)
+    cell.isComplete shouldEqual true
   }
 
   it should "handle single-step animations" in {
-    val char = AnimatedCharacter.createFadeAnimation(
+    val cell = AnimatedCell.createFadeAnimation(
       'x',
       TextColor.ANSI.BLACK,
       TextColor.ANSI.WHITE,
       durationMs = 16,
       tickRateMs = 16
     )
-
-    char.colorSteps.length shouldEqual 1
-    char.currentColor shouldEqual TextColor.ANSI.WHITE
-    char.advance().isComplete shouldEqual true
+    cell.foregroundSteps.length shouldEqual 1
+    cell.advance().isComplete shouldEqual true
   }
 
   "AnimationState list-based advancement" should "advance all animations automatically" in {
@@ -70,10 +60,10 @@ class ListBasedAnimationSpec extends AnyFlatSpec with Matchers:
     frame1.activeAnimationCount shouldEqual 2
 
     val frame2 = frame1.advanceAllAnimations()
-    frame2.activeAnimationCount shouldEqual 1 // 'b' completed
+    frame2.activeAnimationCount shouldEqual 1
 
     val frame3 = frame2.advanceAllAnimations()
-    frame3.activeAnimationCount shouldEqual 0 // All completed
+    frame3.activeAnimationCount shouldEqual 0
   }
 
   it should "automatically cleanup completed animations" in {
@@ -82,45 +72,40 @@ class ListBasedAnimationSpec extends AnyFlatSpec with Matchers:
 
     animState.animations.size shouldEqual 1
 
-    val advanced = animState.advanceAllAnimations().cleanupCompleted()
+    val cleaned = animState.advanceAllAnimations().cleanupCompleted()
 
-    // Character should be gone after cleanup
-    advanced.animations.size shouldEqual 0
-    advanced.getCharacterColor(0, 0) should be(None)
+    cleaned.animations.size shouldEqual 0
+    cleaned.getCell(0, 0) should be(None)
   }
 
   it should "handle rapid overlapping animations" in {
     var state = AnimationState.empty
-
-    // Simulate typing "abc" rapidly
-    state = state.addCharacterAnimation('a', 0, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 6)
-    state = state.addCharacterAnimation('b', 1, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 6)
-    state = state.addCharacterAnimation('c', 2, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 6)
+      .addCharacterAnimation('a', 0, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 6)
+      .addCharacterAnimation('b', 1, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 6)
+      .addCharacterAnimation('c', 2, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 6)
 
     state.activeAnimationCount shouldEqual 3
 
-    // All should advance independently
     var current = state
     (1 to 3).foreach { _ => current = current.advanceAllAnimations() }
-    current.activeAnimationCount shouldEqual 3 // All still active
+    current.activeAnimationCount shouldEqual 3
 
     (1 to 3).foreach { _ => current = current.advanceAnimations() }
-    current.activeAnimationCount shouldEqual 0 // All completed
+    current.activeAnimationCount shouldEqual 0
 
-    // Characters should still be accessible before cleanup
-    current.getCharacterColor(0, 0) should be(defined)
-    current.getCharacterColor(1, 0) should be(defined)
-    current.getCharacterColor(2, 0) should be(defined)
+    // Completed cells remain in the map until explicitly cleaned up
+    current.getCell(0, 0) should be(defined)
+    current.getCell(1, 0) should be(defined)
+    current.getCell(2, 0) should be(defined)
 
-    // After cleanup, completed animations are removed
     val cleanedUp = current.cleanupCompleted()
-    cleanedUp.getCharacterColor(0, 0) should be(empty)
-    cleanedUp.getCharacterColor(1, 0) should be(empty)
-    cleanedUp.getCharacterColor(2, 0) should be(empty)
+    cleanedUp.getCell(0, 0) should be(empty)
+    cleanedUp.getCell(1, 0) should be(empty)
+    cleanedUp.getCell(2, 0) should be(empty)
   }
 
-  "List-based animation lifecycle" should "create, advance, and cleanup automatically" in {
-    val char = AnimatedCharacter.createFadeAnimation(
+  "List-based animation lifecycle" should "create, advance, and complete deterministically" in {
+    val cell = AnimatedCell.createFadeAnimation(
       'x',
       TextColor.ANSI.BLACK,
       TextColor.ANSI.WHITE,
@@ -128,17 +113,14 @@ class ListBasedAnimationSpec extends AnyFlatSpec with Matchers:
       tickRateMs = 16
     )
 
-    char.colorSteps.length shouldEqual 3 // 48ms / 16ms = 3 steps
+    cell.foregroundSteps.length shouldEqual 3
 
-    // Step 1: first color
-    val step1 = char.advance()
+    val step1 = cell.advance()
     step1.isComplete should be(false)
 
-    // Step 2: second color
     val step2 = step1.advance()
     step2.isComplete should be(false)
 
-    // Step 3: final color and completion
     val step3 = step2.advance()
     step3.isComplete should be(true)
   }

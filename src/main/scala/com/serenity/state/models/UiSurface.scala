@@ -48,6 +48,8 @@ enum SurfaceContent:
   case Terminal(buffer: String, cursor: Int)
   case Outline(symbols: List[Symbol])
   case Diagnostics(issues: List[Diagnostic])
+  /** Transient ghost surface used during close-fade-out animation; never persisted in sessions. */
+  case GhostOverlay(originalContent: SurfaceContent, cachedRect: LayoutRect)
 
 case class UiSurface(
     id: SurfaceId,

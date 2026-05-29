@@ -1,15 +1,14 @@
 package com.serenity.ui.renderer
 
-import com.googlecode.lanterna.graphics.TextGraphics
 import com.googlecode.lanterna.screen.Screen
+import com.serenity.animation.ThemeInterpolator
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
 import org.slf4j.LoggerFactory
 
 case class RenderContext(
-    screen: Screen,
-    graphics: TextGraphics,
+    surface: RenderSurface,
     layout: CalculatedLayout,
     cursorVisible: Boolean = true
 )
@@ -17,42 +16,49 @@ case class RenderContext(
 object Renderer:
   private val logger = LoggerFactory.getLogger("com.serenity.ui.renderer.Renderer")
 
+  private def withEffectiveTheme(state: AppState): AppState =
+    state.themeTransition match
+      case None => state
+      case Some(t) =>
+        state.copy(theme = ThemeInterpolator.blend(t.previousTheme, state.theme, t.progress))
+
   def render(state: AppState, cursorVisible: Boolean, screen: Screen): Unit =
-    val graphics     = screen.newTextGraphics()
-    val terminalSize = TerminalSize(screen.getTerminalSize.getColumns, screen.getTerminalSize.getRows)
-    val layout       = LayoutEngine.calculateLayout(state, terminalSize)
+    val state0       = withEffectiveTheme(state)
+    val surface      = LanternaRenderSurface(screen, screen.newTextGraphics())
+    val terminalSize = TerminalSize(surface.viewportWidth, surface.viewportHeight)
+    val layout       = LayoutEngine.calculateLayout(state0, terminalSize)
 
-    screen.setCursorPosition(null)
-    graphics.setBackgroundColor(state.theme.background)
-    graphics.fillRectangle(com.googlecode.lanterna.TerminalPosition.TOP_LEFT_CORNER, screen.getTerminalSize, ' ')
+    surface.hideCursor()
+    surface.setBackgroundColor(state0.theme.background)
+    surface.fillRect(0, 0, surface.viewportWidth, surface.viewportHeight, ' ')
 
-    state.startPageSurface.flatMap {
+    state0.startPageSurface.flatMap {
       _.content match
         case SurfaceContent.StartPage(page) => Some(page)
         case _                              => None
     } match
       case Some(page) =>
-        renderStartPage(page, graphics, terminalSize, state.theme)
-        val floatContext = RenderContext(screen, graphics, layout, cursorVisible)
-        renderFloatingPanels(state, floatContext)
+        renderStartPage(page, surface, terminalSize, state0.theme)
+        val floatContext = RenderContext(surface, layout, cursorVisible)
+        renderFloatingPanels(state0, floatContext)
       case None =>
-        val context = RenderContext(screen, graphics, layout, cursorVisible)
+        val context = RenderContext(surface, layout, cursorVisible)
         renderSpacerColumns(context)
-        renderLineNumbers(state, context)
-        renderGutter(state, context)
-        renderPinnedPanels(state, context)
-        renderEditorPanes(state, context)
-        renderFloatingPanels(state, context)
+        renderLineNumbers(state0, context)
+        renderGutter(state0, context)
+        renderPinnedPanels(state0, context)
+        renderEditorPanes(state0, context)
+        renderFloatingPanels(state0, context)
 
-    screen.refresh()
+    surface.flush()
 
   def renderCursorOnly(state: AppState, cursorVisible: Boolean, screen: Screen): Unit =
-    val graphics     = screen.newTextGraphics()
-    val terminalSize = TerminalSize(screen.getTerminalSize.getColumns, screen.getTerminalSize.getRows)
+    val surface      = LanternaRenderSurface(screen, screen.newTextGraphics())
+    val terminalSize = TerminalSize(surface.viewportWidth, surface.viewportHeight)
     val layout       = LayoutEngine.calculateLayout(state, terminalSize)
     val paneLayouts  = LayoutEngine.calculatePaneLayouts(state, layout)
 
-    screen.setCursorPosition(null)
+    surface.hideCursor()
     state.focus match
       case Focus.EditorPane(focusedPaneId) =>
         for
@@ -73,22 +79,22 @@ object Renderer:
                   screenX >= 0 && screenX < terminalSize.width
               then
                 if cursorVisible then
-                  graphics.setBackgroundColor(state.theme.cursor)
-                  graphics.setForegroundColor(state.theme.background)
-                  CharacterRenderer.renderChar(graphics, screenX, screenY, ' ')
+                  surface.setBackgroundColor(state.theme.cursor)
+                  surface.setForegroundColor(state.theme.background)
+                  CharacterRenderer.renderChar(surface, screenX, screenY, ' ')
                 else
                   val charBeneath =
                     buffer.content
                       .getLine(cursor.line)
                       .map(line => if cursor.column < line.length then line(cursor.column) else ' ')
                       .getOrElse(' ')
-                  graphics.setBackgroundColor(state.theme.background)
-                  graphics.setForegroundColor(state.theme.foreground)
-                  CharacterRenderer.renderChar(graphics, screenX, screenY, charBeneath)
+                  surface.setBackgroundColor(state.theme.background)
+                  surface.setForegroundColor(state.theme.foreground)
+                  CharacterRenderer.renderChar(surface, screenX, screenY, charBeneath)
             case None => ()
       case _ => ()
 
-    screen.refresh()
+    surface.flush()
 
   private def renderSpacerColumns(context: RenderContext): Unit = ()
 
@@ -132,15 +138,15 @@ object Renderer:
     state: AppState,
     context: RenderContext
   ): Unit =
-    val graphics = context.graphics
+    val surface  = context.surface
     val isActive = state.layout.activeEditorPaneId.contains(pane.id)
 
     if isActive then
-      graphics.setBackgroundColor(state.theme.highlighted.background)
-      graphics.setForegroundColor(state.theme.highlighted.foreground)
+      surface.setBackgroundColor(state.theme.highlighted.background)
+      surface.setForegroundColor(state.theme.highlighted.foreground)
     else
-      graphics.setBackgroundColor(state.theme.panel.background)
-      graphics.setForegroundColor(state.theme.panel.foreground)
+      surface.setBackgroundColor(state.theme.panel.background)
+      surface.setForegroundColor(state.theme.panel.foreground)
 
     val bufferTitle = buffer match
       case Some(buf) =>
@@ -158,14 +164,14 @@ object Renderer:
       if bufferTitle.length > maxTitleWidth then bufferTitle.take(maxTitleWidth - 3) + "..."
       else bufferTitle
 
-    graphics.putString(rect.x, rect.y, " " * rect.width)
+    surface.putString(rect.x, rect.y, " " * rect.width)
 
     val paddingLeft = (rect.width - displayTitle.length) / 2
     val centeredX   = rect.x + paddingLeft
-    graphics.putString(centeredX, rect.y, displayTitle)
+    surface.putString(centeredX, rect.y, displayTitle)
 
-    graphics.setBackgroundColor(state.theme.background)
-    graphics.setForegroundColor(state.theme.foreground)
+    surface.setBackgroundColor(state.theme.background)
+    surface.setForegroundColor(state.theme.foreground)
 
   private def renderBufferContent(
     pane: EditorPane,
@@ -174,9 +180,9 @@ object Renderer:
     state: AppState,
     context: RenderContext
   ): Unit =
-    val viewport   = buffer.viewport
-    val rope       = buffer.content
-    val panelWidth = rect.width
+    val viewport    = buffer.viewport
+    val rope        = buffer.content
+    val panelWidth  = rect.width
     val visualLines = calculateVisualLinesInViewport(rope, viewport, panelWidth)
 
     visualLines.zipWithIndex.foreach {
@@ -185,17 +191,17 @@ object Renderer:
           val screenY = rect.y + screenLineIndex
           val screenX = rect.x
 
-          context.graphics.setForegroundColor(state.theme.foreground)
+          context.surface.setForegroundColor(state.theme.foreground)
 
-          if screenY < context.screen.getTerminalSize.getRows &&
+          if screenY < context.surface.viewportHeight &&
               screenY >= 0 &&
-              screenX < context.screen.getTerminalSize.getColumns &&
+              screenX < context.surface.viewportWidth &&
               screenX >= 0 &&
               screenY < rect.bottom &&
               screenX < rect.right
           then
             CharacterRenderer.renderStringWithAnimation(
-              context.graphics,
+              context.surface,
               screenX,
               screenY,
               visualLine.content,
@@ -205,6 +211,18 @@ object Renderer:
               bufferLine = visualLine.bufferLine,
               bufferStartColumn = visualLine.startColumn
             )
+
+            val stringEnd = visualLine.startColumn + visualLine.content.length
+            val lineAnims = buffer.animations.getLineAnimations(visualLine.bufferLine)
+            lineAnims
+              .filter((col, cell) => col >= stringEnd && cell.currentBackground.isDefined)
+              .foreach { (col, cell) =>
+                val bgScreenX = rect.x + (col - visualLine.startColumn)
+                if bgScreenX >= 0 && bgScreenX < rect.right then
+                  context.surface.setForegroundColor(state.theme.foreground)
+                  context.surface.setBackgroundColor(cell.currentBackground.get)
+                  context.surface.putString(bgScreenX, screenY, " ")
+              }
     }
 
   private case class VisualLine(content: String, bufferLine: Int, startColumn: Int, endColumn: Int)
@@ -254,9 +272,9 @@ object Renderer:
     val centerX = rect.x + (rect.width - message.length) / 2
     val centerY = rect.y + rect.height / 2
 
-    context.graphics.setForegroundColor(theme.muted)
-    if centerY < context.screen.getTerminalSize.getRows && centerX >= 0 then
-      CharacterRenderer.renderString(context.graphics, centerX, centerY, message)
+    context.surface.setForegroundColor(theme.muted)
+    if centerY < context.surface.viewportHeight && centerX >= 0 then
+      CharacterRenderer.renderString(context.surface, centerX, centerY, message)
 
   private def renderWelcomeText(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
     val lines = List(
@@ -269,53 +287,48 @@ object Renderer:
 
     val startY = rect.y + (rect.height - lines.length) / 2
 
-    context.graphics.setForegroundColor(theme.placeholder)
+    context.surface.setForegroundColor(theme.placeholder)
 
     lines.zipWithIndex.foreach {
       case (line, index) =>
         val lineY   = startY + index
         val centerX = rect.x + (rect.width - line.length) / 2
 
-        if lineY >= 0 && lineY < context.screen.getTerminalSize.getRows && centerX >= 0 then
-          CharacterRenderer.renderString(context.graphics, centerX, lineY, line)
+        if lineY >= 0 && lineY < context.surface.viewportHeight && centerX >= 0 then
+          CharacterRenderer.renderString(context.surface, centerX, lineY, line)
     }
 
   private def renderStartPage(
     page: StartupPage,
-    graphics: TextGraphics,
+    surface: RenderSurface,
     terminalSize: TerminalSize,
     theme: Theme
   ): Unit =
     val lines  = page.renderLines
     val startY = (terminalSize.height - lines.size) / 2
-    
-    // Calculate which line indices correspond to options
-    val titleLines = 2 // title + empty line
+
+    val titleLines       = 2
     val optionStartIndex = titleLines
-    val optionEndIndex = titleLines + page.options.size - 1
+    val optionEndIndex   = titleLines + page.options.size - 1
 
     lines.zipWithIndex.foreach { case (line, lineIndex) =>
       val y = startY + lineIndex
       val x = math.max(0, (terminalSize.width - line.length) / 2)
 
       if y >= 0 && y < terminalSize.height then
-        // Check if this line is a selectable option
-        val isOption = lineIndex >= optionStartIndex && lineIndex <= optionEndIndex
+        val isOption    = lineIndex >= optionStartIndex && lineIndex <= optionEndIndex
         val optionIndex = lineIndex - optionStartIndex
-        val isSelected = isOption && optionIndex == page.selectedIndex
-        
+        val isSelected  = isOption && optionIndex == page.selectedIndex
+
         if isSelected then
-          // Render highlighted background across full width
-          graphics.setForegroundColor(theme.highlighted.foreground)
-          graphics.setBackgroundColor(theme.highlighted.background)
-          CharacterRenderer.renderStringPlain(graphics, 0, y, " " * terminalSize.width)
-          // Center the text over the highlighted background
-          CharacterRenderer.renderString(graphics, x, y, line)
+          surface.setForegroundColor(theme.highlighted.foreground)
+          surface.setBackgroundColor(theme.highlighted.background)
+          CharacterRenderer.renderStringPlain(surface, 0, y, " " * terminalSize.width)
+          CharacterRenderer.renderString(surface, x, y, line)
         else
-          // Render normal text
-          graphics.setForegroundColor(theme.placeholder)
-          graphics.setBackgroundColor(theme.background)
-          CharacterRenderer.renderString(graphics, x, y, line)
+          surface.setForegroundColor(theme.placeholder)
+          surface.setBackgroundColor(theme.background)
+          CharacterRenderer.renderString(surface, x, y, line)
     }
 
   private def renderCursors(
@@ -335,14 +348,14 @@ object Renderer:
 
           if screenY >= rect.y && screenY < rect.bottom &&
               screenX >= rect.x && screenX < rect.right &&
-              screenY >= 0 && screenY < context.screen.getTerminalSize.getRows &&
-              screenX >= 0 && screenX < context.screen.getTerminalSize.getColumns
+              screenY >= 0 && screenY < context.surface.viewportHeight &&
+              screenX >= 0 && screenX < context.surface.viewportWidth
           then if context.cursorVisible then
-            context.graphics.setBackgroundColor(theme.cursor)
-            context.graphics.setForegroundColor(theme.background)
-            CharacterRenderer.renderChar(context.graphics, screenX, screenY, ' ')
-            context.graphics.setBackgroundColor(theme.background)
-            context.graphics.setForegroundColor(theme.foreground)
+            context.surface.setBackgroundColor(theme.cursor)
+            context.surface.setForegroundColor(theme.background)
+            CharacterRenderer.renderChar(context.surface, screenX, screenY, ' ')
+            context.surface.setBackgroundColor(theme.background)
+            context.surface.setForegroundColor(theme.foreground)
         case None => ()
     }
 
@@ -371,11 +384,11 @@ object Renderer:
 
     overlays.aboveCursor.foreach { overlay =>
       logger.info(s"[OVERLAY RENDERED] placement=AboveCursor rect=${overlay.rect} title=${overlay.title.getOrElse("")}")
-      TextOverlayRenderer.render(context.graphics, overlay, state.theme, context.cursorVisible)
+      TextOverlayRenderer.render(context.surface, overlay, state.theme, context.cursorVisible)
     }
     overlays.belowCursor.foreach { overlay =>
       logger.info(s"[OVERLAY RENDERED] placement=BelowCursor rect=${overlay.rect} title=${overlay.title.getOrElse("")}")
-      TextOverlayRenderer.render(context.graphics, overlay, state.theme, context.cursorVisible)
+      TextOverlayRenderer.render(context.surface, overlay, state.theme, context.cursorVisible)
     }
 
     context.layout.floatingPanelRect.foreach { rect =>
@@ -385,29 +398,25 @@ object Renderer:
   private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =
     PinnedPanelViewModel
       .fromLayout(context.layout, state.uiSurfaces)
-      .foreach(panel => PinnedPanelRenderer.render(context.graphics, panel, state.theme))
+      .foreach(panel => PinnedPanelRenderer.render(context.surface, panel, state.theme))
 
   private def renderFloatingPanelPlaceholder(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
-    context.graphics.setBackgroundColor(theme.panel.background)
-    context.graphics.setForegroundColor(theme.border)
+    context.surface.setBackgroundColor(theme.panel.background)
+    context.surface.setForegroundColor(theme.border)
 
     for y <- rect.y until rect.bottom; x <- rect.x until rect.right do
-      if y < context.screen.getTerminalSize.getRows && x < context.screen.getTerminalSize.getColumns then
-        CharacterRenderer.renderChar(context.graphics, x, y, '.')
+      if y < context.surface.viewportHeight && x < context.surface.viewportWidth then
+        CharacterRenderer.renderChar(context.surface, x, y, '.')
 
   private def renderLineNumbers(state: AppState, context: RenderContext): Unit =
     if state.config.showLineNumbers then
       context.layout.lineNumberRect foreach { lineRect =>
-        val graphics = context.graphics
+        val surface = context.surface
 
-        graphics.setBackgroundColor(state.theme.panel.background)
-        graphics.setForegroundColor(state.theme.muted)
+        surface.setBackgroundColor(state.theme.panel.background)
+        surface.setForegroundColor(state.theme.muted)
 
-        graphics.fillRectangle(
-          com.googlecode.lanterna.TerminalPosition(lineRect.x, lineRect.y),
-          com.googlecode.lanterna.TerminalSize(lineRect.width, lineRect.height),
-          ' '
-        )
+        surface.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height, ' ')
 
         state.layout.editorPanes.foreach { (_, pane) =>
           pane.bufferId.flatMap(state.buffers.get).foreach { buffer =>
@@ -422,7 +431,7 @@ object Renderer:
 
               if bufferLineIndex < buffer.content.lineCount then
                 val lineNumberText = displayLineNumber.toString.padTo(lineRect.width - 1, ' ') + " "
-                graphics.putString(lineRect.x, screenY, lineNumberText)
+                surface.putString(lineRect.x, screenY, lineNumberText)
           }
         }
       }
@@ -430,23 +439,19 @@ object Renderer:
   private def renderGutter(state: AppState, context: RenderContext): Unit =
     if state.config.showGutter then
       context.layout.gutterRect foreach { gutterRect =>
-        val graphics = context.graphics
+        val surface = context.surface
 
-        graphics.setBackgroundColor(state.theme.panel.background)
-        graphics.setForegroundColor(state.theme.panel.foreground)
+        surface.setBackgroundColor(state.theme.panel.background)
+        surface.setForegroundColor(state.theme.panel.foreground)
 
-        graphics.fillRectangle(
-          com.googlecode.lanterna.TerminalPosition(gutterRect.x, gutterRect.y),
-          com.googlecode.lanterna.TerminalSize(gutterRect.width, gutterRect.height),
-          ' '
-        )
+        surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
 
         val gutterContent = buildGutterContent(state)
         val displayContent =
           if gutterContent.length > gutterRect.width then gutterContent.take(gutterRect.width - 3) + "..."
           else gutterContent.padTo(gutterRect.width, ' ')
 
-        graphics.putString(gutterRect.x, gutterRect.y, displayContent)
+        surface.putString(gutterRect.x, gutterRect.y, displayContent)
       }
 
   private def buildGutterContent(state: AppState): String =

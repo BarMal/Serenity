@@ -87,6 +87,8 @@ object SurfaceContentResolver:
         resolveOutline(rect, mode, symbols.map(symbol => (symbol.kind.toString, symbol.name)))
       case SurfaceContent.Diagnostics(issues) =>
         resolveDiagnostics(rect, mode, issues)
+      case SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
+        resolve(originalContent, cachedRect, mode)
 
   private def resolveModalWorkflow(
     modal: Modal,

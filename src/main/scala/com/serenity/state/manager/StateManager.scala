@@ -5,10 +5,10 @@ import java.nio.file.{Files, Path, Paths}
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.foldable.*
 import fs2.Stream
-import com.serenity.animation.AnimationConfig
+import com.serenity.animation.{AnimatedCell, AnimationConfig, AnimationState, CellAnimation, CharacterKey, FlowAnimationBuilder, FlowDirection, RgbInterpolator, SweepDirection}
 import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner, CommandSurfaceItem}
 import com.serenity.io.{FileManager, FileUtils}
-import com.serenity.keystroke.events.{Event, FileEvent, GlobalAppEvent, SystemEvent, ThemeEvent}
+import com.serenity.keystroke.events.{Event, FileEvent, GlobalAppEvent, NextTab, PreviousTab, SystemEvent, ThemeEvent}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.components.*
 import com.serenity.state.models.*
@@ -163,19 +163,22 @@ object StateManager:
 
     def advanceAnimationsOnTick(): IO[Boolean] =
       stateRef.get.flatMap { state =>
-        // Check if any buffer has active animations
-        val hasAnyAnimations = state.buffers.values.exists(_.animations.hasActiveAnimations)
-        if !hasAnyAnimations then IO.pure(false)
+        val hasBufferAnimations  = state.buffers.values.exists(_.animations.hasActiveAnimations)
+        val hasThemeTransition   = state.themeTransition.isDefined
+        val hasSurfaceAnimations = state.surfaceAnimations.nonEmpty
+        if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations then IO.pure(false)
         else
-          // Advance animations for all buffers
           val updatedBuffers = state.buffers.view.mapValues { buffer =>
             buffer.copy(animations = buffer.animations.advanceAllAnimations())
           }.toMap
-
-          val newState           = state.copy(buffers = updatedBuffers)
-          val stillHasAnimations = newState.buffers.values.exists(_.animations.hasActiveAnimations)
-
-          stateRef.set(newState).as(stillHasAnimations)
+          val updatedTransition = state.themeTransition.map(_.advance).filterNot(_.isComplete)
+          val stateWithAdvancedBuffers = state.copy(buffers = updatedBuffers, themeTransition = updatedTransition)
+          val newState = advanceSurfaceAnimations(stateWithAdvancedBuffers)
+          val stillActive =
+            newState.buffers.values.exists(_.animations.hasActiveAnimations) ||
+              newState.themeTransition.isDefined ||
+              newState.surfaceAnimations.nonEmpty
+          stateRef.set(newState).as(stillActive)
       }
 
     def getActiveBuffer: IO[Option[Buffer]] =
@@ -379,41 +382,46 @@ object StateManager:
             .evalMap(_ => stateRef.get.flatMap(sessionPersistence.maybeSaveSession(_, SessionSaveTrigger.Interval)))
 
     def applyEvent(event: Event): IO[Unit] =
-      stateRef.get.flatMap { currentState =>
-        event match
+      stateRef.get.flatMap { prevState =>
+        val handleEvent: IO[Unit] = event match
           case systemEvent: SystemEvent =>
-            applyReducerResult(SystemEventReducer.reduce(systemEvent, currentState), currentState)
+            applyReducerResult(SystemEventReducer.reduce(systemEvent, prevState), prevState)
           case com.serenity.keystroke.events.CloseTab =>
-            beginCloseAction(CloseScope.Current, currentState)
+            beginCloseAction(CloseScope.Current, prevState)
           case com.serenity.keystroke.events.Quit =>
-            beginCloseAction(CloseScope.Quit, currentState)
+            beginCloseAction(CloseScope.Quit, prevState)
           case appEvent: GlobalAppEvent =>
             val registry = CommandRegistry.withToggleUI
-            applyReducerResult(AppEventReducer.reduce(appEvent, currentState, registry), currentState)
+            applyReducerResult(AppEventReducer.reduce(appEvent, prevState, registry), prevState) >>
+              (appEvent match
+                case NextTab     => applyPaneFlowAnimation(SweepDirection.Backward)
+                case PreviousTab => applyPaneFlowAnimation(SweepDirection.Forward)
+                case _           => IO.unit)
           case themeEvent: ThemeEvent =>
-            applyReducerResult(ThemeEventReducer.reduce(themeEvent, currentState), currentState)
+            applyReducerResult(ThemeEventReducer.reduce(themeEvent, prevState), prevState)
           case fileEvent: FileEvent =>
-            applyReducerResult(FileEventReducer.reduce(fileEvent, currentState), currentState)
+            applyReducerResult(FileEventReducer.reduce(fileEvent, prevState), prevState)
           case _ =>
             val logCommandRunnerEvent =
-              focusedCommandRunner(currentState) match
+              focusedCommandRunner(prevState) match
                 case Some(runner) =>
                   logger.info(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}")
                 case None =>
                   IO.unit
 
             val result =
-              getTypedLocalHandlerForFocus(currentState.focus, currentState) match
+              getTypedLocalHandlerForFocus(prevState.focus, prevState) match
                 case Some(handler) =>
-                  handler.processEvent(event, currentState)
+                  handler.processEvent(event, prevState)
                 case None =>
-                  val component = getLegacyComponentForFocus(currentState.focus, currentState)
-                  component.processEvent(event, currentState)
+                  val component = getLegacyComponentForFocus(prevState.focus, prevState)
+                  component.processEvent(event, prevState)
 
             logCommandRunnerEvent >>
-              applyComponentResult(result, currentState).flatMap { newState =>
-                validateAndUpdateState(newState, currentState)
+              applyComponentResult(result, prevState).flatMap { newState =>
+                validateAndUpdateState(newState, prevState)
               }
+        handleEvent >> applyAnimationHooks(prevState)
       }
 
     private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
@@ -477,6 +485,213 @@ object StateManager:
         _ <- validateAndUpdateState(result.state, fallbackState)
         _ <- result.effects.traverse_(interpretEffect)
       yield ()
+
+    private def applyPaneFlowAnimation(sweep: SweepDirection): IO[Unit] =
+      stateRef.get.flatMap { state =>
+        val steps = AnimationConfig.smooth.get.steps
+        val animOpt = for
+          paneId <- state.layout.activeEditorPaneId
+          pane   <- state.layout.editorPanes.get(paneId)
+          buffId <- pane.bufferId
+          buffer <- state.buffers.get(buffId)
+          vp      = buffer.viewport
+          cells   = (vp.topLine until (vp.topLine + vp.visibleLines)).flatMap { lineIdx =>
+            val line = buffer.content.getLine(lineIdx).getOrElse("")
+            line.zipWithIndex.take(vp.visibleColumns).map { (ch, col) =>
+              CharacterKey(col, lineIdx) -> CellAnimation(ch, state.theme.background, state.theme.foreground)
+            }
+          }.toMap
+          if cells.nonEmpty
+        yield
+          val animated  = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, sweep, steps)
+          val newAnims  = buffer.animations.clearAll().mergeAnimations(animated)
+          state.copy(buffers = state.buffers.updated(buffId, buffer.copy(animations = newAnims)))
+        animOpt match
+          case Some(newState) => stateRef.set(newState)
+          case None           => IO.unit
+      }
+
+    private def applyAnimationHooks(prevState: AppState): IO[Unit] =
+      stateRef.get.flatMap { currentState =>
+        val runnerOpened = prevState.commandRunnerSurface.isEmpty && currentState.commandRunnerSurface.isDefined
+        val runnerClosed = prevState.commandRunnerSurface.isDefined && currentState.commandRunnerSurface.isEmpty
+        (if runnerOpened then
+          applyCommandRunnerOpenAnimation(currentState.commandRunnerSurface.get, currentState)
+        else IO.unit) >>
+        (if runnerClosed then
+          applyCommandRunnerCloseAnimation(prevState.commandRunnerSurface.get, prevState, currentState)
+        else IO.unit)
+      }
+
+    private def applyCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): IO[Unit] =
+      val steps = AnimationConfig.smooth.get.steps
+      stateRef.update { s =>
+        val tSize = s.terminalSize.getOrElse(TerminalSize(80, 24))
+        val layout = LayoutEngine.calculateLayoutWithUI(s, tSize)
+        val overlayHeight = layout.belowCursorOverlayRect.map(_.height).getOrElse(4)
+        val stateWithFadeOut = buildBufferFadeOut(s, steps)
+        val surfAnim = SurfaceAnimationState(
+          phase = SurfacePhase.BufferFadingOut,
+          animationState = AnimationState.empty,
+          overlayHeight = overlayHeight,
+          bufferFadeLength = steps,
+          phaseTick = 0
+        )
+        stateWithFadeOut.copy(
+          surfaceAnimations = stateWithFadeOut.surfaceAnimations + (surface.id -> surfAnim)
+        )
+      }
+
+    private def applyCommandRunnerCloseAnimation(
+      closedSurface: UiSurface,
+      prevState: AppState,
+      currentState: AppState
+    ): IO[Unit] =
+      val steps = AnimationConfig.smooth.get.steps
+      stateRef.update { s =>
+        val tSize = prevState.terminalSize.orElse(s.terminalSize).getOrElse(TerminalSize(80, 24))
+        val previousLayout = LayoutEngine.calculateLayoutWithUI(prevState, tSize)
+        val overlayHeight = prevState.surfaceAnimations
+          .get(closedSurface.id)
+          .map(_.overlayHeight)
+          .orElse(previousLayout.belowCursorOverlayRect.map(_.height))
+          .getOrElse(4)
+        val cachedRect = previousLayout.belowCursorOverlayRect
+          .getOrElse(LayoutRect(12, 2, 56, overlayHeight))
+        val overlayFadeOutAnims = (0 until overlayHeight).map { rowOffset =>
+          val delay   = overlayHeight - 1 - rowOffset
+          val bgSteps = List.fill(delay)(s.theme.panel.background) ++
+            RgbInterpolator.interpolate(s.theme.panel.background, s.theme.background, steps)
+          val fgSteps = List.fill(delay)(s.theme.panel.foreground) ++
+            RgbInterpolator.interpolate(s.theme.panel.foreground, s.theme.background, steps)
+          CharacterKey(0, rowOffset) -> AnimatedCell(
+            content = None,
+            foregroundSteps = fgSteps,
+            backgroundSteps = bgSteps
+          )
+        }.toMap
+        val (stateWithId, ghostId) = s.allocateSurfaceId
+        val ghostSurface = UiSurface(
+          id = ghostId,
+          content = SurfaceContent.GhostOverlay(closedSurface.content, cachedRect),
+          presentation = closedSurface.presentation
+        )
+        val ghostAnimState = SurfaceAnimationState(
+          phase = SurfacePhase.Exiting,
+          animationState = AnimationState(overlayFadeOutAnims),
+          overlayHeight = overlayHeight,
+          bufferFadeLength = 0,
+          phaseTick = 0
+        )
+        val bufferFadeInDelay = overlayHeight + steps - 1
+        val stateWithBufferFadeIn = buildBufferFadeIn(stateWithId, bufferFadeInDelay, steps)
+        stateWithBufferFadeIn.copy(
+          uiSurfaces = stateWithBufferFadeIn.uiSurfaces :+ ghostSurface,
+          surfaceAnimations = stateWithBufferFadeIn.surfaceAnimations
+            - closedSurface.id
+            + (ghostId -> ghostAnimState)
+        )
+      }
+
+    private def buildBufferFadeOut(state: AppState, steps: Int): AppState =
+      (for
+        paneId   <- state.layout.activeEditorPaneId
+        pane     <- state.layout.editorPanes.get(paneId)
+        bufferId <- pane.bufferId
+        buffer   <- state.buffers.get(bufferId)
+      yield
+        val vp = buffer.viewport
+        val theme = state.theme
+        val lineRange = vp.topLine until math.min(vp.topLine + vp.visibleLines, buffer.content.lineCount)
+        val newAnims = lineRange.flatMap { bufferLine =>
+          val lineContent = buffer.content.getLine(bufferLine).getOrElse("")
+          (vp.leftColumn until (vp.leftColumn + vp.visibleColumns)).map { bufferCol =>
+            val char = if bufferCol < lineContent.length then lineContent(bufferCol) else ' '
+            CharacterKey(bufferCol, bufferLine) -> AnimatedCell(
+              content = Some(char),
+              foregroundSteps = RgbInterpolator.interpolate(theme.foreground, theme.background, steps),
+              backgroundSteps = List.empty
+            )
+          }
+        }.toMap
+        if newAnims.isEmpty then state
+        else
+          val updatedBuffer = buffer.copy(animations = buffer.animations.mergeAnimations(newAnims))
+          state.copy(buffers = state.buffers.updated(bufferId, updatedBuffer))
+      ).getOrElse(state)
+
+    private def buildBufferFadeIn(state: AppState, delayTicks: Int, steps: Int): AppState =
+      (for
+        paneId   <- state.layout.activeEditorPaneId
+        pane     <- state.layout.editorPanes.get(paneId)
+        bufferId <- pane.bufferId
+        buffer   <- state.buffers.get(bufferId)
+      yield
+        val vp = buffer.viewport
+        val theme = state.theme
+        val lineRange = vp.topLine until math.min(vp.topLine + vp.visibleLines, buffer.content.lineCount)
+        val newAnims = lineRange.flatMap { bufferLine =>
+          val lineContent = buffer.content.getLine(bufferLine).getOrElse("")
+          (vp.leftColumn until (vp.leftColumn + vp.visibleColumns)).map { bufferCol =>
+            val char = if bufferCol < lineContent.length then lineContent(bufferCol) else ' '
+            CharacterKey(bufferCol, bufferLine) -> AnimatedCell(
+              content = Some(char),
+              foregroundSteps = List.fill(delayTicks)(theme.background) ++
+                RgbInterpolator.interpolate(theme.background, theme.foreground, steps),
+              backgroundSteps = List.empty
+            )
+          }
+        }.toMap
+        if newAnims.isEmpty then state
+        else
+          val updatedBuffer = buffer.copy(animations = buffer.animations.mergeAnimations(newAnims))
+          state.copy(buffers = state.buffers.updated(bufferId, updatedBuffer))
+      ).getOrElse(state)
+
+    private def advanceSurfaceAnimations(state: AppState): AppState =
+      state.surfaceAnimations.foldLeft(state) { case (s, (surfaceId, surfAnim)) =>
+        surfAnim.phase match
+          case SurfacePhase.BufferFadingOut =>
+            val newTick = surfAnim.phaseTick + 1
+            if newTick >= surfAnim.bufferFadeLength then
+              val overlayFadeIn = (0 until surfAnim.overlayHeight).map { rowOffset =>
+                val delay   = rowOffset
+                val bgSteps = List.fill(delay)(s.theme.background) ++
+                  RgbInterpolator.interpolate(s.theme.background, s.theme.panel.background, AnimationConfig.smooth.get.steps)
+                val fgSteps = List.fill(delay)(s.theme.background) ++
+                  RgbInterpolator.interpolate(s.theme.background, s.theme.panel.foreground, AnimationConfig.smooth.get.steps)
+                CharacterKey(0, rowOffset) -> AnimatedCell(
+                  content = None,
+                  foregroundSteps = fgSteps,
+                  backgroundSteps = bgSteps
+                )
+              }.toMap
+              val newSurfAnim = surfAnim.copy(
+                phase = SurfacePhase.Visible,
+                animationState = AnimationState(overlayFadeIn),
+                phaseTick = 0
+              )
+              s.copy(surfaceAnimations = s.surfaceAnimations + (surfaceId -> newSurfAnim))
+            else
+              s.copy(surfaceAnimations = s.surfaceAnimations + (surfaceId -> surfAnim.copy(phaseTick = newTick)))
+
+          case SurfacePhase.Visible =>
+            val newAnimState = surfAnim.animationState.advanceAllAnimations()
+            if !newAnimState.hasActiveAnimations then
+              s.copy(surfaceAnimations = s.surfaceAnimations - surfaceId)
+            else
+              s.copy(surfaceAnimations = s.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState)))
+
+          case SurfacePhase.Exiting =>
+            val newAnimState = surfAnim.animationState.advanceAllAnimations()
+            if !newAnimState.hasActiveAnimations then
+              s.copy(
+                uiSurfaces = s.uiSurfaces.filterNot(_.id == surfaceId),
+                surfaceAnimations = s.surfaceAnimations - surfaceId
+              )
+            else
+              s.copy(surfaceAnimations = s.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState)))
+      }
 
     private def interpretEffect(effect: AppEffect): IO[Unit] =
       effect match
@@ -872,7 +1087,14 @@ object StateManager:
     private def applyThemeByName(themeName: String): IO[Unit] =
       themeManager
         .loadTheme(themeName)
-        .flatMap(theme => updateState(_.copy(theme = theme)))
+        .flatMap { newTheme =>
+          updateState { state =>
+            val transition =
+              if state.theme == newTheme then None
+              else Some(ThemeTransition(state.theme, 0, AnimationConfig.smooth.get.steps))
+            state.copy(theme = newTheme, themeTransition = transition)
+          }
+        }
         .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to switch theme to $themeName"))
 
     private def reloadThemeByName(themeName: String): IO[Unit] =

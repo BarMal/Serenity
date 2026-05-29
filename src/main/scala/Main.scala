@@ -94,8 +94,11 @@ object Main extends IOApp.Simple:
                 .map(_ => ())
                 .onFinalize {
                   stateManager.getCurrentState.flatMap { state =>
-                    if state.buffers.values.exists(_.animations.hasActiveAnimations) then IO.unit
-                    else fastMode.set(false)
+                    val stillActive =
+                      state.buffers.values.exists(_.animations.hasActiveAnimations) ||
+                        state.themeTransition.isDefined ||
+                        state.surfaceAnimations.nonEmpty
+                    if stillActive then IO.unit else fastMode.set(false)
                   }
                 }
 

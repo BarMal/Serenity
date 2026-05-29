@@ -236,6 +236,8 @@ object LayoutEngine:
           case _                  => 3
       case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_) | SurfaceContent.Diagnostics(_) =>
         math.min(8, math.max(4, maxHeight - 1))
+      case SurfaceContent.GhostOverlay(_, cachedRect) =>
+        cachedRect.height
 
     math.max(3, math.min(maxHeight, preferredHeight))
 

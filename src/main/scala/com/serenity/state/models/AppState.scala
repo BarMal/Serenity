@@ -1,14 +1,33 @@
 package com.serenity.state.models
 
+import com.serenity.animation.AnimationState
 import com.serenity.config.AppConfig
 import com.serenity.ui.layout.{Layout, TerminalSize}
 import com.serenity.ui.theme.Theme
+
+enum SurfacePhase:
+  case BufferFadingOut  // surface not rendered; buffer chars in overlay area fading out
+  case Visible          // surface rendered (may have fade-in animation)
+  case Exiting          // ghost surface fading out; focus already restored
+
+case class SurfaceAnimationState(
+    phase: SurfacePhase = SurfacePhase.Visible,
+    animationState: AnimationState = AnimationState.empty,
+    overlayHeight: Int = 0,     // rows in overlay (excluding border) for building fade-in
+    bufferFadeLength: Int = 0,  // ticks to stay in BufferFadingOut before transitioning
+    phaseTick: Int = 0          // ticks elapsed in current phase
+)
 
 case class FindState(
     query: String,
     resultLines: List[Int],
     currentIndex: Int
 )
+
+case class ThemeTransition(previousTheme: Theme, currentStep: Int, totalSteps: Int):
+  def progress: Double        = if totalSteps <= 0 then 1.0 else currentStep.toDouble / totalSteps
+  def advance: ThemeTransition = copy(currentStep = currentStep + 1)
+  def isComplete: Boolean     = currentStep >= totalSteps
 
 case class AppState(
     layout: Layout,
@@ -23,7 +42,9 @@ case class AppState(
     config: AppConfig = AppConfig.default,
     nextBufferId: BufferId = BufferId(0),
     nextPaneId: PaneId = PaneId(0),
-    nextSurfaceId: Int = 0
+    nextSurfaceId: Int = 0,
+    themeTransition: Option[ThemeTransition] = None,
+    surfaceAnimations: Map[SurfaceId, SurfaceAnimationState] = Map.empty
 ):
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled

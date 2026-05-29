@@ -17,7 +17,8 @@ object AppEventReducer:
         ReducerResult.withEffect(state, AppEffect.CompleteQuit)
 
       case ToggleCommandRunner =>
-        ReducerResult.noEffects(toggleCommandRunner(state, registry))
+        if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
+        else ReducerResult.noEffects(toggleCommandRunner(state, registry))
 
       case NewTab =>
         val (withBuffer, newBufferId) = createNewEmptyBuffer(state)

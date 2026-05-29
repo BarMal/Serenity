@@ -17,7 +17,7 @@ object FlowAnimationBuilder:
     direction: FlowDirection,
     sweep: SweepDirection,
     steps: Int
-  ): Map[CharacterKey, AnimatedCharacter] =
+  ): Map[CharacterKey, AnimatedCell] =
     if cells.isEmpty then Map.empty
     else
       val minCol = cells.keys.map(_.column).min
@@ -34,5 +34,5 @@ object FlowAnimationBuilder:
 
         val fade    = RgbInterpolator.interpolate(cell.startColor, cell.endColor, steps)
         val padding = List.fill(offset)(cell.startColor)
-        key -> AnimatedCharacter(cell.char, padding ++ fade)
+        key -> AnimatedCell(content = Some(cell.char), foregroundSteps = padding ++ fade, backgroundSteps = List.empty)
       }
