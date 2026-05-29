@@ -23,32 +23,47 @@ object Renderer:
         state.copy(theme = ThemeInterpolator.blend(t.previousTheme, state.theme, t.progress))
 
   def render(state: AppState, cursorVisible: Boolean, screen: Screen): Unit =
-    val state0       = withEffectiveTheme(state)
-    val surface      = LanternaRenderSurface(screen, screen.newTextGraphics())
+    val state0   = withEffectiveTheme(state)
+    val surface  = LanternaRenderSurface(screen, screen.newTextGraphics())
     val terminalSize = TerminalSize(surface.viewportWidth, surface.viewportHeight)
-    val layout       = LayoutEngine.calculateLayout(state0, terminalSize)
+    val layout   = LayoutEngine.calculateLayout(state0, terminalSize)
+    renderFrame(state0, cursorVisible, surface, terminalSize, layout)
 
+  def render(state: AppState, cursorVisible: Boolean, swingTerm: com.serenity.ui.terminal.SwingTerminal, font: java.awt.Font): Unit =
+    val state0   = withEffectiveTheme(state)
+    val surface  = Java2DRenderSurface.forFrame(swingTerm.metrics, font, swingTerm.canvas)
+    val terminalSize = swingTerm.terminalSize
+    val layout   = LayoutEngine.calculateLayout(state0, terminalSize)
+    renderFrame(state0, cursorVisible, surface, terminalSize, layout)
+
+  private def renderFrame(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
+    terminalSize: TerminalSize,
+    layout: CalculatedLayout
+  ): Unit =
     surface.hideCursor()
-    surface.setBackgroundColor(state0.theme.background)
+    surface.setBackgroundColor(state.theme.background)
     surface.fillRect(0, 0, surface.viewportWidth, surface.viewportHeight, ' ')
 
-    state0.startPageSurface.flatMap {
+    state.startPageSurface.flatMap {
       _.content match
         case SurfaceContent.StartPage(page) => Some(page)
         case _                              => None
     } match
       case Some(page) =>
-        renderStartPage(page, surface, terminalSize, state0.theme)
+        renderStartPage(page, surface, terminalSize, state.theme)
         val floatContext = RenderContext(surface, layout, cursorVisible)
-        renderFloatingPanels(state0, floatContext)
+        renderFloatingPanels(state, floatContext)
       case None =>
         val context = RenderContext(surface, layout, cursorVisible)
         renderSpacerColumns(context)
-        renderLineNumbers(state0, context)
-        renderGutter(state0, context)
-        renderPinnedPanels(state0, context)
-        renderEditorPanes(state0, context)
-        renderFloatingPanels(state0, context)
+        renderLineNumbers(state, context)
+        renderGutter(state, context)
+        renderPinnedPanels(state, context)
+        renderEditorPanes(state, context)
+        renderFloatingPanels(state, context)
 
     surface.flush()
 

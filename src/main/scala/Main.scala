@@ -36,14 +36,18 @@ object Main extends IOApp.Simple:
     backend match
       case "swing" =>
         SwingTerminal.resource().use { swingTerm =>
-          appRun(
-            initialTerminalSize = swingTerm.terminalSize,
-            makeInputHandler    = router => new SwingInputHandler[IO, Event](swingTerm.canvas, router),
-            checkResize         = IO { swingTerm.doResizeIfNecessary() },
-            renderFull          = (_, _) => IO.unit,
-            renderCursorOnly    = (_, _) => IO.unit,
-            appConfig           = appConfig
-          )
+          for
+            fonts <- com.serenity.ui.fonts.FontLoader.loadMonaspaceNeon(appConfig.fontConfig)
+            font   = fonts.headOption.getOrElse(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 14))
+            _ <- appRun(
+              initialTerminalSize = swingTerm.terminalSize,
+              makeInputHandler    = router => new SwingInputHandler[IO, Event](swingTerm.canvas, router),
+              checkResize         = IO { swingTerm.doResizeIfNecessary() },
+              renderFull          = (state, vis) => IO.blocking(Renderer.render(state, vis, swingTerm, font)),
+              renderCursorOnly    = (state, vis) => IO.blocking(Renderer.render(state, vis, swingTerm, font)),
+              appConfig           = appConfig
+            )
+          yield ()
         }
       case _ =>
         terminalResource(appConfig.fontConfig).use { terminal =>
