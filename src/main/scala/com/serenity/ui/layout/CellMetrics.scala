@@ -14,3 +14,16 @@ case class CellMetrics(charWidth: Int, lineHeight: Int, ascent: Int):
    */
   def terminalSize(pixelWidth: Int, pixelHeight: Int): TerminalSize =
     TerminalSize(pixelWidth / charWidth, pixelHeight / lineHeight)
+
+object CellMetrics:
+  /** Derive cell metrics from a java.awt.Font.
+   *  Uses M-width as the nominal charWidth (consistent across monospaced and variable-width fonts).
+   */
+  def fromFont(font: java.awt.Font): CellMetrics =
+    val image = new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    val g     = image.createGraphics()
+    g.setFont(font)
+    val fm     = g.getFontMetrics
+    val result = CellMetrics(fm.charWidth('M'), fm.getHeight, fm.getAscent)
+    g.dispose()
+    result
