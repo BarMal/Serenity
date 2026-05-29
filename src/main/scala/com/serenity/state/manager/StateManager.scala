@@ -8,7 +8,7 @@ import fs2.Stream
 import com.serenity.animation.{AnimatedCell, AnimationConfig, AnimationState, CellAnimation, CharacterKey, FlowAnimationBuilder, FlowDirection, RgbInterpolator, SweepDirection}
 import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner, CommandSurfaceItem}
 import com.serenity.io.{FileManager, FileUtils}
-import com.serenity.keystroke.events.{Event, FileEvent, GlobalAppEvent, NextTab, PreviousTab, SystemEvent, ThemeEvent}
+import com.serenity.keystroke.events.{Event, FileEvent, GlobalAppEvent, MouseClick, NextTab, PreviousTab, SystemEvent, ThemeEvent}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.components.*
 import com.serenity.state.models.*
@@ -401,6 +401,8 @@ object StateManager:
             applyReducerResult(ThemeEventReducer.reduce(themeEvent, prevState), prevState)
           case fileEvent: FileEvent =>
             applyReducerResult(FileEventReducer.reduce(fileEvent, prevState), prevState)
+          case click: MouseClick =>
+            handleMouseClick(click, prevState)
           case _ =>
             val logCommandRunnerEvent =
               focusedCommandRunner(prevState) match
@@ -778,6 +780,46 @@ object StateManager:
         uiSurfaces = stateWithId.uiSurfaces.filterNot(_.id == surfaceId) :+ surface,
         focus = Focus.Surface(surfaceId)
       )
+
+    private def handleMouseClick(click: MouseClick, state: AppState): IO[Unit] =
+      state.terminalSize match
+        case None => IO.unit
+        case Some(tSize) =>
+          val layout     = LayoutEngine.calculateLayoutWithUI(state, tSize)
+          val paneLayouts = LayoutEngine.calculatePaneLayouts(state, layout)
+          paneLayouts.find { case (_, rect) =>
+            click.col >= rect.x && click.col < rect.x + rect.width &&
+            click.row > rect.y && click.row < rect.y + rect.height
+          } match
+            case Some((paneId, paneRect)) =>
+              state.layout.editorPanes.get(paneId).flatMap(pane => pane.bufferId.flatMap(state.buffers.get)) match
+                case Some(buffer) =>
+                  val vp         = buffer.viewport
+                  val contentY   = paneRect.y + 1
+                  val bufferLine = (vp.topLine + (click.row - contentY)).max(0)
+                  val bufferCol  = (vp.leftColumn + (click.col - paneRect.x)).max(0)
+                  val clampedLine = bufferLine.min(math.max(0, buffer.content.lineCount - 1))
+                  val lineLen    = buffer.content.getLine(clampedLine).getOrElse("").length
+                  val clampedCol = bufferCol.min(lineLen)
+                  stateRef.update { s =>
+                    s.buffers.get(buffer.id) match
+                      case Some(current) =>
+                        s.copy(
+                          buffers = s.buffers.updated(
+                            buffer.id,
+                            current.copy(cursors = List(CursorPosition(clampedLine, clampedCol)))
+                          ),
+                          focus = Focus.EditorPane(paneId),
+                          layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                        )
+                      case None => s
+                  }
+                case None =>
+                  stateRef.update(s => s.copy(
+                    focus = Focus.EditorPane(paneId),
+                    layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                  ))
+            case None => IO.unit
 
     private def modalType(modal: Modal): ModalType =
       modal match

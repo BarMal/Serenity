@@ -42,7 +42,7 @@ object Main extends IOApp.Simple:
           _ <- SwingTerminal.resource(metrics).use { swingTerm =>
             appRun(
               initialTerminalSize = swingTerm.terminalSize,
-              makeInputHandler    = router => new SwingInputHandler[IO, Event](swingTerm.canvas, router),
+              makeInputHandler    = router => new SwingInputHandler[IO, Event](swingTerm.canvas, router, metrics),
               checkResize         = IO { swingTerm.doResizeIfNecessary() },
               renderFull          = (state, vis) => IO.blocking(Renderer.render(state, vis, swingTerm, font)),
               renderCursorOnly    = (state, vis) => IO.blocking(Renderer.render(state, vis, swingTerm, font)),

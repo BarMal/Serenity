@@ -3,40 +3,52 @@ package com.serenity.input
 import cats.effect.{Concurrent, Sync}
 import com.googlecode.lanterna.input.{KeyStroke, KeyType}
 import com.serenity.keystroke.KeyStrokeInfo
-import com.serenity.keystroke.events.Event
+import com.serenity.keystroke.events.{Event, MouseClick}
+import com.serenity.ui.layout.CellMetrics
 import fs2.Stream
-import java.awt.event.{KeyAdapter, KeyEvent}
+import java.awt.event.{KeyAdapter, KeyEvent, MouseAdapter, MouseEvent}
 import java.util.concurrent.LinkedBlockingQueue
 
-/** Bridges AWT keyboard events on a Swing component to the Lanterna-keyed input pipeline.
+/** Bridges AWT keyboard and mouse events on a Swing component to the input pipeline.
  *
  *  KEY_TYPED is used for printable characters (correct for keyboard-layout-aware input).
  *  KEY_PRESSED is used for navigation/function keys and Ctrl+letter combinations.
+ *  Mouse clicks are converted from pixel coords to cell coords via CellMetrics.
  */
 class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   component: java.awt.Component,
-  inputRouter: InputRouter[F, E]
+  inputRouter: InputRouter[F, E],
+  metrics: CellMetrics
 ) extends InputHandler[F]:
 
-  private val queue = new LinkedBlockingQueue[KeyStroke]()
+  private val keyQueue   = new LinkedBlockingQueue[KeyStroke]()
+  private val mouseQueue = new LinkedBlockingQueue[Event]()
 
   component.addKeyListener(new KeyAdapter:
     override def keyTyped(e: KeyEvent): Unit =
-      translateTyped(e).foreach(queue.put)
+      translateTyped(e).foreach(keyQueue.put)
     override def keyPressed(e: KeyEvent): Unit =
-      translatePressed(e).foreach(queue.put)
+      translatePressed(e).foreach(keyQueue.put)
+  )
+
+  component.addMouseListener(new MouseAdapter:
+    override def mouseClicked(e: MouseEvent): Unit =
+      mouseQueue.put(MouseClick(metrics.toCol(e.getX), metrics.toRow(e.getY)))
   )
 
   def keyStream: Stream[F, KeyStroke] =
     Stream
-      .repeatEval(Sync[F].blocking(queue.take()))
+      .repeatEval(Sync[F].blocking(keyQueue.take()))
       .filter(ks => ks != null && ks.getKeyType != null)
 
   def keyStrokeInfoStream: Stream[F, KeyStrokeInfo] =
     keyStream.map(KeyStrokeInfo.fromKeyStroke)
 
+  private def mouseStream: Stream[F, Event] =
+    Stream.repeatEval(Sync[F].blocking(mouseQueue.take()))
+
   def eventStream: Stream[F, Event] =
-    inputRouter.eventStream(keyStream)
+    inputRouter.eventStream(keyStream).merge(mouseStream)
 
   private def translateTyped(e: KeyEvent): Option[KeyStroke] =
     val char = e.getKeyChar
