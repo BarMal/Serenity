@@ -2,24 +2,24 @@ package com.serenity.ui.terminal
 
 import cats.effect.{IO, Resource}
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import java.awt.{BorderLayout, Color, Component, Cursor, Dimension, FlowLayout, Font, Frame, Rectangle}
+import java.awt.{BorderLayout, Color, Cursor, Dimension, FlowLayout, Font, Frame, Rectangle}
 import java.awt.event.{ComponentAdapter, ComponentEvent, MouseAdapter, MouseEvent, WindowAdapter, WindowEvent, WindowStateListener}
+import java.awt.geom.RoundRectangle2D
 import java.awt.image.BufferedImage
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.{JComponent, JFrame, JLabel, JPanel, SwingConstants, SwingUtilities, WindowConstants}
-import javax.swing.border.LineBorder
 
 class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
 
   private val TitleBarH     = 32
   private val BtnW          = 46
   private val Margin        = 6
+  private val CornerArc     = 12
   private val MinW          = 400
   private val MinH          = 300
   private val ColBar        = new Color(0x2b2b2b)
   private val ColBarFg      = new Color(0xcccccc)
-  private val ColBorder     = new Color(0x3c3c3c)
   private val ColBtnHover   = new Color(0x3f3f3f)
   private val ColCloseHover = new Color(0xc42b1c)
 
@@ -52,6 +52,13 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
     renderedImage = image
     SwingUtilities.invokeLater(() => canvas.repaint())
 
+  private def updateShape(): Unit =
+    if !maximized then
+      val d = frame.getSize
+      frame.setShape(new RoundRectangle2D.Double(0, 0, d.width, d.height, CornerArc, CornerArc))
+    else
+      frame.setShape(null)
+
   private def toggleMaximize(): Unit =
     if maximized then
       frame.setExtendedState(Frame.NORMAL)
@@ -72,10 +79,13 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
           setBackground(if isClose then ColCloseHover else ColBtnHover)
         override def mouseExited(e: MouseEvent): Unit =
           setBackground(ColBar)
-        override def mouseClicked(e: MouseEvent): Unit =
-          if isClose then closeLatch.countDown()
-          else if label == "─" then frame.setExtendedState(Frame.ICONIFIED)
-          else toggleMaximize()
+        // mouseReleased so the action fires even if the mouse drifts slightly;
+        // bounds-check guards against releasing outside the button after a press inside
+        override def mouseReleased(e: MouseEvent): Unit =
+          if e.getX >= 0 && e.getX < getWidth && e.getY >= 0 && e.getY < getHeight then
+            if isClose then closeLatch.countDown()
+            else if label == "─" then frame.setExtendedState(Frame.ICONIFIED)
+            else toggleMaximize()
       )
 
   private val titleBar: JPanel =
@@ -90,7 +100,12 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
     btnPanel.add(maxBtn)
     btnPanel.add(closeBtn)
 
-    val titleLabel = new JLabel("  Serenity"):
+    // Mirror spacer on WEST keeps the CENTER title visually centred relative to the window
+    val spacer = new JPanel:
+      setBackground(ColBar)
+      setPreferredSize(new Dimension(3 * BtnW, TitleBarH))
+
+    val titleLabel = new JLabel("Serenity", SwingConstants.CENTER):
       setForeground(ColBarFg)
       setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13))
 
@@ -117,7 +132,8 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
     val bar = new JPanel(new BorderLayout):
       setBackground(ColBar)
       setPreferredSize(new Dimension(0, TitleBarH))
-    bar.add(titleLabel, BorderLayout.WEST)
+    bar.add(spacer, BorderLayout.WEST)
+    bar.add(titleLabel, BorderLayout.CENTER)
     bar.add(btnPanel, BorderLayout.EAST)
     bar.addMouseListener(dragAdapter)
     bar.addMouseMotionListener(dragAdapter)
@@ -125,17 +141,20 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
     titleLabel.addMouseMotionListener(dragAdapter)
     bar
 
+  // Glass pane handles only the resize grip — its contains() override restricts hit-testing
+  // to the Margin-pixel border so interior events (title bar, canvas) reach their targets directly.
   private class ResizeGlassPane extends JComponent:
     setOpaque(false)
     setFocusable(false)
+
+    override def contains(x: Int, y: Int): Boolean =
+      x < Margin || x > getWidth - Margin || y < Margin || y > getHeight - Margin
 
     private var resizing    = false
     private var resizeDir   = 0
     private var pressX      = 0
     private var pressY      = 0
     private var pressBounds = new Rectangle()
-    private var dragTarget: Component = null
-    private var hoverTarget: Component = null
 
     private def edgeDir(e: MouseEvent): Int =
       val x = e.getX; val y = e.getY
@@ -158,32 +177,6 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
       case 10 => Cursor.getPredefinedCursor(Cursor.SE_RESIZE_CURSOR)
       case _  => Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR)
 
-    private def deepestAt(e: MouseEvent): Component =
-      val cp = frame.getContentPane
-      val pt = SwingUtilities.convertPoint(this, e.getPoint, cp)
-      SwingUtilities.getDeepestComponentAt(cp, pt.x, pt.y)
-
-    private def redispatch(e: MouseEvent, target: Component): Unit =
-      val pt = SwingUtilities.convertPoint(this, e.getPoint, target)
-      target.dispatchEvent(
-        new MouseEvent(target, e.getID, e.getWhen, e.getModifiersEx,
-          pt.x, pt.y, e.getClickCount, e.isPopupTrigger, e.getButton)
-      )
-
-    private def updateHover(e: MouseEvent, newTarget: Component): Unit =
-      if newTarget != hoverTarget then
-        if hoverTarget != null then
-          val pt = SwingUtilities.convertPoint(this, e.getPoint, hoverTarget)
-          hoverTarget.dispatchEvent(
-            new MouseEvent(hoverTarget, MouseEvent.MOUSE_EXITED, e.getWhen, 0, pt.x, pt.y, 0, false)
-          )
-        if newTarget != null then
-          val pt = SwingUtilities.convertPoint(this, e.getPoint, newTarget)
-          newTarget.dispatchEvent(
-            new MouseEvent(newTarget, MouseEvent.MOUSE_ENTERED, e.getWhen, 0, pt.x, pt.y, 0, false)
-          )
-        hoverTarget = newTarget
-
     private val adapter = new MouseAdapter:
       override def mousePressed(e: MouseEvent): Unit =
         val d = edgeDir(e)
@@ -193,36 +186,16 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
           pressX      = e.getXOnScreen
           pressY      = e.getYOnScreen
           pressBounds = frame.getBounds
-        else
-          dragTarget = deepestAt(e)
-          if dragTarget != null then redispatch(e, dragTarget)
 
       override def mouseReleased(e: MouseEvent): Unit =
-        if resizing then
-          resizing = false
-          resizeDir = 0
-        else if dragTarget != null then
-          redispatch(e, dragTarget)
-          dragTarget = null
-
-      override def mouseClicked(e: MouseEvent): Unit =
-        val t = deepestAt(e)
-        if t != null then redispatch(e, t)
-
-      override def mouseExited(e: MouseEvent): Unit =
-        updateHover(e, null)
-        setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR))
+        resizing  = false
+        resizeDir = 0
 
       override def mouseMoved(e: MouseEvent): Unit =
-        val d = edgeDir(e)
-        if d != 0 then
-          setCursor(dirCursor(d))
-          updateHover(e, null)
-        else
-          setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR))
-          val t = deepestAt(e)
-          updateHover(e, t)
-          if t != null then redispatch(e, t)
+        setCursor(dirCursor(edgeDir(e)))
+
+      override def mouseExited(e: MouseEvent): Unit =
+        setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR))
 
       override def mouseDragged(e: MouseEvent): Unit =
         if resizing then
@@ -230,13 +203,11 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
           val dy = e.getYOnScreen - pressY
           var nx = pressBounds.x;     var ny = pressBounds.y
           var nw = pressBounds.width; var nh = pressBounds.height
-          if (resizeDir & 1) != 0 then { ny = pressBounds.y + dy;    nh = pressBounds.height - dy }
+          if (resizeDir & 1) != 0 then { ny = pressBounds.y + dy; nh = pressBounds.height - dy }
           if (resizeDir & 2) != 0 then   nh = pressBounds.height + dy
-          if (resizeDir & 4) != 0 then { nx = pressBounds.x + dx;    nw = pressBounds.width - dx }
+          if (resizeDir & 4) != 0 then { nx = pressBounds.x + dx; nw = pressBounds.width - dx }
           if (resizeDir & 8) != 0 then   nw = pressBounds.width + dx
           if nw >= MinW && nh >= MinH then frame.setBounds(nx, ny, nw, nh)
-        else if dragTarget != null then
-          redispatch(e, dragTarget)
 
     addMouseListener(adapter)
     addMouseMotionListener(adapter)
@@ -251,16 +222,20 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
     f.addWindowStateListener((e: WindowEvent) =>
       val isMax = (e.getNewState & Frame.MAXIMIZED_BOTH) == Frame.MAXIMIZED_BOTH
       maximized = isMax
-      SwingUtilities.invokeLater(() =>
+      SwingUtilities.invokeLater { () =>
         if maxBtnRef != null then maxBtnRef.setText(if isMax then "❐" else "□")
-      )
+        updateShape()
+      }
+    )
+    f.addComponentListener(new ComponentAdapter:
+      override def componentResized(e: ComponentEvent): Unit =
+        SwingUtilities.invokeLater(() => updateShape())
     )
     val content = new JPanel(new BorderLayout):
       setBackground(Color.BLACK)
     content.add(titleBar, BorderLayout.NORTH)
     content.add(canvas, BorderLayout.CENTER)
     f.setContentPane(content)
-    f.getRootPane.setBorder(new LineBorder(ColBorder, 1))
     val glassPane = new ResizeGlassPane
     f.setGlassPane(glassPane)
     glassPane.setVisible(true)
@@ -274,6 +249,7 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
   def start(): Unit =
     SwingUtilities.invokeLater { () =>
       frame.setVisible(true)
+      updateShape()
       canvas.requestFocusInWindow()
     }
 
