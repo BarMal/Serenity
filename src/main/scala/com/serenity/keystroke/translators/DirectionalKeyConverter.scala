@@ -1,14 +1,14 @@
 package com.serenity.keystroke.translators
 
-import com.googlecode.lanterna.input.KeyType
+import com.serenity.keystroke.InputKey
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.Direction
 
 object DirectionalKeyConverter:
 
   def arrowKeys[E](wrap: Direction => E): PartialFunction[KeyStrokeInfo, E] = {
-    case KeyStrokeInfo(KeyType.ArrowUp, _, _)    => wrap(Direction.Up)
-    case KeyStrokeInfo(KeyType.ArrowDown, _, _)  => wrap(Direction.Down)
-    case KeyStrokeInfo(KeyType.ArrowLeft, _, _)  => wrap(Direction.Left)
-    case KeyStrokeInfo(KeyType.ArrowRight, _, _) => wrap(Direction.Right)
+    case KeyStrokeInfo(InputKey.ArrowUp, _, _)    => wrap(Direction.Up)
+    case KeyStrokeInfo(InputKey.ArrowDown, _, _)  => wrap(Direction.Down)
+    case KeyStrokeInfo(InputKey.ArrowLeft, _, _)  => wrap(Direction.Left)
+    case KeyStrokeInfo(InputKey.ArrowRight, _, _) => wrap(Direction.Right)
   }

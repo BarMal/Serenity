@@ -12,7 +12,7 @@ class ScreenInputHandler[F[_] : Sync : Concurrent, E <: Event](
     inputRouter: InputRouter[F, E]
 ) extends InputHandler[F]:
 
-  def keyStream: Stream[F, KeyStroke] =
+  private def keyStream: Stream[F, KeyStroke] =
     keyStreamUntilClosed
 
   private def keyStreamUntilClosed: Stream[F, KeyStroke] =
@@ -29,14 +29,10 @@ class ScreenInputHandler[F[_] : Sync : Concurrent, E <: Event](
     keyStream.map(KeyStrokeInfo.fromKeyStroke)
 
   def eventStream: Stream[F, Event] =
-    keyStreamEvents
-
-  private def keyStreamEvents: Stream[F, Event] =
-    inputRouter.eventStream(keyStream)
+    inputRouter.eventStream(keyStrokeInfoStream)
 
   private def readKeyStroke: F[Option[KeyStroke]] =
     Sync[F].blocking {
-      // Use readInput() to block until a key is pressed, avoiding busy-wait
       Option(screen.readInput())
     }
 

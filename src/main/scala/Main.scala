@@ -219,12 +219,12 @@ object Main extends IOApp.Simple:
       case _                                            => true
 
   private def isSystemEvent(event: UnhandledEvent[?]): Boolean =
-    import com.googlecode.lanterna.input.KeyType
-    event.keyStroke.getKeyType match
-      case KeyType.EOF       => false
-      case KeyType.Unknown   => true
-      case KeyType.Character =>
-        Option(event.keyStroke.getCharacter).exists { char =>
+    import com.serenity.keystroke.InputKey
+    event.info.keyType match
+      case InputKey.EOF       => false
+      case InputKey.Unknown   => true
+      case InputKey.Character =>
+        event.info.character.exists { char =>
           char.toInt == 0 ||
           char.toInt == 4 ||
           char.toInt == 26

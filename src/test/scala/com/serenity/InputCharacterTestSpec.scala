@@ -5,7 +5,8 @@ import cats.effect.unsafe.implicits.global
 import com.googlecode.lanterna.input.{KeyStroke, KeyType}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
-import com.serenity.keystroke.{KeyStrokeInfo, Modifier}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
+import com.serenity.keystroke.KeyStrokeInfo.fromKeyStroke
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -28,7 +29,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
 
     for char <- lowercaseLetters do
       val keyStroke = createKeyStroke(char)
-      val event     = translator.translate(keyStroke)
+      val event     = translator.translate(fromKeyStroke(keyStroke))
 
       event.shouldBe(InsertChar(char))
 
@@ -37,7 +38,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
 
     for char <- uppercaseLetters do
       val keyStroke = createKeyStrokeWithShift(char)
-      val event     = translator.translate(keyStroke)
+      val event     = translator.translate(fromKeyStroke(keyStroke))
 
       event.shouldBe(InsertChar(char))
 
@@ -46,7 +47,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
 
     for char <- digits do
       val keyStroke = createKeyStroke(char)
-      val event     = translator.translate(keyStroke)
+      val event     = translator.translate(fromKeyStroke(keyStroke))
 
       event.shouldBe(InsertChar(char))
 
@@ -55,7 +56,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
 
     for char <- basicPunctuation do
       val keyStroke = createKeyStroke(char)
-      val event     = translator.translate(keyStroke)
+      val event     = translator.translate(fromKeyStroke(keyStroke))
 
       event.shouldBe(InsertChar(char))
 
@@ -64,13 +65,13 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
 
     for char <- specialChars do
       val keyStroke = createKeyStroke(char)
-      val event     = translator.translate(keyStroke)
+      val event     = translator.translate(fromKeyStroke(keyStroke))
 
       event.shouldBe(InsertChar(char))
 
   it should "translate space character correctly" in new InputFixture:
     val keyStroke = createKeyStroke(' ')
-    val event     = translator.translate(keyStroke)
+    val event     = translator.translate(fromKeyStroke(keyStroke))
 
     event.shouldBe(InsertChar(' '))
 
@@ -197,12 +198,12 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
       val keyStrokeInfo = KeyStrokeInfo.fromKeyStroke(keyStroke)
 
       // Verify the keystroke info is correct
-      keyStrokeInfo.keyType.shouldBe(KeyType.Character)
+      keyStrokeInfo.keyType.shouldBe(InputKey.Character)
       keyStrokeInfo.character.shouldBe(Some(char))
       keyStrokeInfo.modifiers.shouldBe(empty)
 
       // Verify translation to event
-      val event = translator.translate(keyStroke)
+      val event = translator.translate(fromKeyStroke(keyStroke))
       event.shouldBe(InsertChar(char))
 
   it should "handle modifier keys correctly for uppercase letters" in new InputFixture:
@@ -217,7 +218,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
       keyStrokeInfo.character.shouldBe(Some(char))
 
       // However, the character converter should still work since it checks for printable chars
-      val event = translator.translate(keyStroke)
+      val event = translator.translate(fromKeyStroke(keyStroke))
       event.shouldBe(InsertChar(char))
 
   behavior of "Edge Cases and Error Conditions"

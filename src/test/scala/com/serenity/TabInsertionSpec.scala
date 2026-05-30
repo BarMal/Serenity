@@ -5,6 +5,7 @@ import com.googlecode.lanterna.input.KeyType
 import com.serenity.keystroke.events.{InsertChar, TabKey, TextEntryEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.keystroke.{KeyStrokeInfo, Modifier}
+import com.serenity.keystroke.KeyStrokeInfo.fromKeyStroke
 import com.serenity.state.components.ComponentResult
 import com.serenity.ui.layout.Layout
 import org.scalatest.flatspec.AnyFlatSpec
@@ -16,7 +17,7 @@ class TabInsertionSpec extends AnyFlatSpec with Matchers:
     val translator   = new TextEntryTranslator()
     val tabKeyStroke = com.googlecode.lanterna.input.KeyStroke(KeyType.Tab, false, false, false)
 
-    val result = translator.translate(tabKeyStroke)
+    val result = translator.translate(fromKeyStroke(tabKeyStroke))
 
     result shouldBe TabKey
   }
@@ -27,7 +28,7 @@ class TabInsertionSpec extends AnyFlatSpec with Matchers:
 
     // This tests the private isPrintableChar method indirectly
     val tabKeyStroke = com.googlecode.lanterna.input.KeyStroke(tabChar, false, false, false)
-    val result       = translator.translate(tabKeyStroke)
+    val result       = translator.translate(fromKeyStroke(tabKeyStroke))
 
     result shouldBe InsertChar('\t')
   }

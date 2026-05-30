@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.googlecode.lanterna.input.KeyType
 import com.googlecode.lanterna.input.KeyStroke
+import com.serenity.keystroke.KeyStrokeInfo
 import com.googlecode.lanterna.screen.Screen
 import com.googlecode.lanterna.terminal.Terminal
 import com.serenity.input.{InputHandlerImpl, InputRouter, ScreenInputHandler}
@@ -35,7 +36,7 @@ class EOFGracefulShutdownIntegrationSpec extends AnyFlatSpec with Matchers:
       
       // Translate keystroke to event (this is what InputRouter does)
       translator <- inputRouter.getActiveTranslator
-      event = translator.translate(eofKeyStroke)
+      event = translator.translate(KeyStrokeInfo.fromKeyStroke(eofKeyStroke))
       
       // Verify EOF translates to Quit
       _ = event shouldBe com.serenity.keystroke.events.Quit
@@ -59,10 +60,10 @@ class EOFGracefulShutdownIntegrationSpec extends AnyFlatSpec with Matchers:
       translator = new TextEntryTranslator()
       
       // Test EOF
-      eofEvent = translator.translate(new KeyStroke(KeyType.EOF))
-      
-      // Test Ctrl+Q  
-      ctrlQEvent = translator.translate(new KeyStroke('q', true, false, false))
+      eofEvent = translator.translate(KeyStrokeInfo.fromKeyStroke(new KeyStroke(KeyType.EOF)))
+
+      // Test Ctrl+Q
+      ctrlQEvent = translator.translate(KeyStrokeInfo.fromKeyStroke(new KeyStroke('q', true, false, false)))
       
       // Both should produce Quit event
       _ = eofEvent shouldBe com.serenity.keystroke.events.Quit

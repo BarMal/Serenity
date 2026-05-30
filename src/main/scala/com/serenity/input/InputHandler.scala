@@ -8,7 +8,6 @@ import com.serenity.keystroke.events.Event
 import fs2.Stream
 
 trait InputHandler[F[_]]:
-  def keyStream: Stream[F, KeyStroke]
   def keyStrokeInfoStream: Stream[F, KeyStrokeInfo]
   def eventStream: Stream[F, Event]
 
@@ -17,7 +16,7 @@ class InputHandlerImpl[F[_] : Sync, E <: Event](
     inputRouter: InputRouter[F, E]
 ) extends InputHandler[F]:
 
-  def keyStream: Stream[F, KeyStroke] =
+  private def keyStream: Stream[F, KeyStroke] =
     keyStreamUntilClosed
 
   private def keyStreamUntilClosed: Stream[F, KeyStroke] =
@@ -34,7 +33,7 @@ class InputHandlerImpl[F[_] : Sync, E <: Event](
     keyStream.map(KeyStrokeInfo.fromKeyStroke)
 
   def eventStream: Stream[F, Event] =
-    inputRouter.eventStream(keyStream)
+    inputRouter.eventStream(keyStrokeInfoStream)
 
   private def readKeyStroke: F[Option[KeyStroke]] =
     Sync[F].blocking {

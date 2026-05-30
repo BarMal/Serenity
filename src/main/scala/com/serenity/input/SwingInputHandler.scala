@@ -1,8 +1,7 @@
 package com.serenity.input
 
 import cats.effect.{Concurrent, Sync}
-import com.googlecode.lanterna.input.{KeyStroke, KeyType}
-import com.serenity.keystroke.KeyStrokeInfo
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.keystroke.events.{Event, MouseClick}
 import com.serenity.ui.layout.CellMetrics
 import fs2.Stream
@@ -21,14 +20,14 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   metrics: CellMetrics
 ) extends InputHandler[F]:
 
-  private val keyQueue   = new LinkedBlockingQueue[KeyStroke]()
+  private val infoQueue  = new LinkedBlockingQueue[KeyStrokeInfo]()
   private val mouseQueue = new LinkedBlockingQueue[Event]()
 
   component.addKeyListener(new KeyAdapter:
     override def keyTyped(e: KeyEvent): Unit =
-      translateTyped(e).foreach(keyQueue.put)
+      translateTyped(e).foreach(infoQueue.put)
     override def keyPressed(e: KeyEvent): Unit =
-      translatePressed(e).foreach(keyQueue.put)
+      translatePressed(e).foreach(infoQueue.put)
   )
 
   component.addMouseListener(new MouseAdapter:
@@ -36,63 +35,68 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
       mouseQueue.put(MouseClick(metrics.toCol(e.getX), metrics.toRow(e.getY)))
   )
 
-  def keyStream: Stream[F, KeyStroke] =
-    Stream
-      .repeatEval(Sync[F].blocking(keyQueue.take()))
-      .filter(ks => ks != null && ks.getKeyType != null)
-
   def keyStrokeInfoStream: Stream[F, KeyStrokeInfo] =
-    keyStream.map(KeyStrokeInfo.fromKeyStroke)
+    Stream
+      .repeatEval(Sync[F].blocking(infoQueue.take()))
+      .filter(_ != null)
 
   private def mouseStream: Stream[F, Event] =
     Stream.repeatEval(Sync[F].blocking(mouseQueue.take()))
 
   def eventStream: Stream[F, Event] =
-    inputRouter.eventStream(keyStream).merge(mouseStream)
+    inputRouter.eventStream(keyStrokeInfoStream).merge(mouseStream)
 
-  private def translateTyped(e: KeyEvent): Option[KeyStroke] =
+  private def mods(e: KeyEvent): Set[Modifier] =
+    Set(
+      Option.when(e.isControlDown)(Modifier.Ctrl),
+      Option.when(e.isAltDown)(Modifier.Alt),
+      Option.when(e.isShiftDown)(Modifier.Shift)
+    ).flatten
+
+  private def translateTyped(e: KeyEvent): Option[KeyStrokeInfo] =
     val char = e.getKeyChar
     if !e.isControlDown && !e.isAltDown && char != KeyEvent.CHAR_UNDEFINED && char >= 32 then
-      Some(new KeyStroke(char, false, false, e.isShiftDown))
+      Some(KeyStrokeInfo(InputKey.Character, Some(char), mods(e)))
     else None
 
-  private def translatePressed(e: KeyEvent): Option[KeyStroke] =
+  private def translatePressed(e: KeyEvent): Option[KeyStrokeInfo] =
     import KeyEvent.*
-    val ctrl = e.isControlDown
-    val alt  = e.isAltDown
+    val m = mods(e)
     e.getKeyCode match
-      case VK_UP         => Some(new KeyStroke(KeyType.ArrowUp, ctrl, alt))
-      case VK_DOWN       => Some(new KeyStroke(KeyType.ArrowDown, ctrl, alt))
-      case VK_LEFT       => Some(new KeyStroke(KeyType.ArrowLeft, ctrl, alt))
-      case VK_RIGHT      => Some(new KeyStroke(KeyType.ArrowRight, ctrl, alt))
-      case VK_BACK_SPACE => Some(new KeyStroke(KeyType.Backspace, ctrl, alt))
-      case VK_DELETE     => Some(new KeyStroke(KeyType.Delete, ctrl, alt))
-      case VK_ENTER      => Some(new KeyStroke(KeyType.Enter, ctrl, alt))
+      case VK_UP         => Some(KeyStrokeInfo(InputKey.ArrowUp, None, m))
+      case VK_DOWN       => Some(KeyStrokeInfo(InputKey.ArrowDown, None, m))
+      case VK_LEFT       => Some(KeyStrokeInfo(InputKey.ArrowLeft, None, m))
+      case VK_RIGHT      => Some(KeyStrokeInfo(InputKey.ArrowRight, None, m))
+      case VK_BACK_SPACE => Some(KeyStrokeInfo(InputKey.Backspace, None, m))
+      case VK_DELETE     => Some(KeyStrokeInfo(InputKey.Delete, None, m))
+      case VK_ENTER      => Some(KeyStrokeInfo(InputKey.Enter, None, m))
       case VK_TAB        =>
-        if e.isShiftDown then Some(new KeyStroke(KeyType.ReverseTab, ctrl, alt))
-        else Some(new KeyStroke(KeyType.Tab, ctrl, alt))
-      case VK_ESCAPE     => Some(new KeyStroke(KeyType.Escape, ctrl, alt))
-      case VK_HOME       => Some(new KeyStroke(KeyType.Home, ctrl, alt))
-      case VK_END        => Some(new KeyStroke(KeyType.End, ctrl, alt))
-      case VK_PAGE_UP    => Some(new KeyStroke(KeyType.PageUp, ctrl, alt))
-      case VK_PAGE_DOWN  => Some(new KeyStroke(KeyType.PageDown, ctrl, alt))
-      case VK_F1         => Some(new KeyStroke(KeyType.F1, ctrl, alt))
-      case VK_F2         => Some(new KeyStroke(KeyType.F2, ctrl, alt))
-      case VK_F3         => Some(new KeyStroke(KeyType.F3, ctrl, alt))
-      case VK_F4         => Some(new KeyStroke(KeyType.F4, ctrl, alt))
-      case VK_F5         => Some(new KeyStroke(KeyType.F5, ctrl, alt))
-      case VK_F6         => Some(new KeyStroke(KeyType.F6, ctrl, alt))
-      case VK_F7         => Some(new KeyStroke(KeyType.F7, ctrl, alt))
-      case VK_F8         => Some(new KeyStroke(KeyType.F8, ctrl, alt))
-      case VK_F9         => Some(new KeyStroke(KeyType.F9, ctrl, alt))
-      case VK_F10        => Some(new KeyStroke(KeyType.F10, ctrl, alt))
-      case VK_F11        => Some(new KeyStroke(KeyType.F11, ctrl, alt))
-      case VK_F12        => Some(new KeyStroke(KeyType.F12, ctrl, alt))
-      case code if ctrl =>
-        // Map Ctrl+letter to a character KeyStroke with ctrlDown=true.
-        // VK_A=65, VK_Z=90 — toLower maps to 'a'-'z'.
+        // Shift is encoded as ReverseTab; strip it from modifiers so translators
+        // only see Ctrl/Alt when deciding between NextTab / RunnerPreviousCategory etc.
+        val tabMods = m - Modifier.Shift
+        if e.isShiftDown then Some(KeyStrokeInfo(InputKey.ReverseTab, None, tabMods))
+        else Some(KeyStrokeInfo(InputKey.Tab, None, tabMods))
+      case VK_ESCAPE     => Some(KeyStrokeInfo(InputKey.Escape, None, m))
+      case VK_HOME       => Some(KeyStrokeInfo(InputKey.Home, None, m))
+      case VK_END        => Some(KeyStrokeInfo(InputKey.End, None, m))
+      case VK_PAGE_UP    => Some(KeyStrokeInfo(InputKey.PageUp, None, m))
+      case VK_PAGE_DOWN  => Some(KeyStrokeInfo(InputKey.PageDown, None, m))
+      case VK_F1         => Some(KeyStrokeInfo(InputKey.F1, None, m))
+      case VK_F2         => Some(KeyStrokeInfo(InputKey.F2, None, m))
+      case VK_F3         => Some(KeyStrokeInfo(InputKey.F3, None, m))
+      case VK_F4         => Some(KeyStrokeInfo(InputKey.F4, None, m))
+      case VK_F5         => Some(KeyStrokeInfo(InputKey.F5, None, m))
+      case VK_F6         => Some(KeyStrokeInfo(InputKey.F6, None, m))
+      case VK_F7         => Some(KeyStrokeInfo(InputKey.F7, None, m))
+      case VK_F8         => Some(KeyStrokeInfo(InputKey.F8, None, m))
+      case VK_F9         => Some(KeyStrokeInfo(InputKey.F9, None, m))
+      case VK_F10        => Some(KeyStrokeInfo(InputKey.F10, None, m))
+      case VK_F11        => Some(KeyStrokeInfo(InputKey.F11, None, m))
+      case VK_F12        => Some(KeyStrokeInfo(InputKey.F12, None, m))
+      case code if e.isControlDown =>
+        // Ctrl+letter: map VK_A–VK_Z and VK_0–VK_9 to Character strokes
         val ch = code.toChar.toLower
         if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') then
-          Some(new KeyStroke(ch, true, alt, false))
+          Some(KeyStrokeInfo(InputKey.Character, Some(ch), m))
         else None
       case _ => None

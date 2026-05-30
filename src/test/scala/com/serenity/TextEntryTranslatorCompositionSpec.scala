@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.googlecode.lanterna.input.{KeyStroke, KeyType}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
 import org.scalatest.flatspec.AnyFlatSpec
@@ -11,7 +11,7 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
   private val translator = new TextEntryTranslator()
 
   "TextEntryTranslator" should "keep plain character input in the editor event family" in {
-    val event = translator.translate(new KeyStroke('a', false, false, false))
+    val event = translator.translate(KeyStrokeInfo(InputKey.Character, Some('a'), Set.empty))
 
     event shouldBe InsertChar('a')
     event.isInstanceOf[EditorEvent] shouldBe true
@@ -19,9 +19,9 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "prioritize tab hotkeys ahead of plain tab insertion" in {
-    val ctrlTab = translator.translate(new KeyStroke(KeyType.Tab, true, false, false))
-    val plainTab = translator.translate(new KeyStroke(KeyType.Tab))
-    val ctrlReverseTab = translator.translate(new KeyStroke(KeyType.ReverseTab, true, false, false))
+    val ctrlTab       = translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set(Modifier.Ctrl)))
+    val plainTab      = translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set.empty))
+    val ctrlReverseTab = translator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set(Modifier.Ctrl)))
 
     ctrlTab shouldBe NextTab
     plainTab shouldBe TabKey
@@ -29,8 +29,8 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep application hotkeys in the application event family" in {
-    val openPalette = translator.translate(new KeyStroke('p', true, false, false))
-    val quit = translator.translate(new KeyStroke(KeyType.EOF))
+    val openPalette = translator.translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl)))
+    val quit        = translator.translate(KeyStrokeInfo(InputKey.EOF, None, Set.empty))
 
     openPalette shouldBe ToggleCommandRunner
     openPalette.isInstanceOf[AppEvent] shouldBe true

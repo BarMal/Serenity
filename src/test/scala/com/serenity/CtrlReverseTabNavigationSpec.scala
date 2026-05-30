@@ -4,7 +4,6 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.keystroke.events.NewTab
 import com.serenity.ui.layout.ViewportSize
-import com.googlecode.lanterna.input.{KeyStroke, KeyType}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -75,11 +74,12 @@ class CtrlReverseTabNavigationSpec extends AnyFlatSpec with Matchers:
   it should "verify translator maps Ctrl+ReverseTab to PreviousTab" in new CtrlReverseTabFixture {
     // Given: A TextEntryTranslator and Ctrl+ReverseTab keystroke
     import com.serenity.keystroke.translators.TextEntryTranslator
+    import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
     val translator = new TextEntryTranslator()
-    val ctrlReverseTabStroke = new KeyStroke(KeyType.ReverseTab, true, false, false)
-    
+    val ctrlReverseTab = KeyStrokeInfo(InputKey.ReverseTab, None, Set(Modifier.Ctrl))
+
     // When: Translate the keystroke
-    val result = translator.translate(ctrlReverseTabStroke)
+    val result = translator.translate(ctrlReverseTab)
     
     // Then: Should map to PreviousTab
     result shouldBe com.serenity.keystroke.events.PreviousTab

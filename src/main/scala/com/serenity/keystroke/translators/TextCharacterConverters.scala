@@ -1,20 +1,19 @@
 package com.serenity.keystroke.translators
 
-import com.googlecode.lanterna.input.KeyType
 import com.serenity.keystroke.events.{InsertChar, NewLine, ReverseTabKey, TabKey, TextEntryEvent}
-import com.serenity.keystroke.{KeyStrokeInfo, Modifier}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 
 object TextCharacterConverters:
 
   val characterConverter: PartialFunction[KeyStrokeInfo, TextEntryEvent] = {
-    case KeyStrokeInfo(KeyType.Character, Some(char), modifiers)
+    case KeyStrokeInfo(InputKey.Character, Some(char), modifiers)
         if isAcceptableForTextEntry(modifiers) && isPrintableChar(char) =>
       InsertChar(char)
-    case KeyStrokeInfo(KeyType.Tab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
+    case KeyStrokeInfo(InputKey.Tab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
       TabKey
-    case KeyStrokeInfo(KeyType.ReverseTab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
+    case KeyStrokeInfo(InputKey.ReverseTab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
       ReverseTabKey
-    case KeyStrokeInfo(KeyType.Enter, _, _) =>
+    case KeyStrokeInfo(InputKey.Enter, _, _) =>
       NewLine
   }
 

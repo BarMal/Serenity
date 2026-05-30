@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.googlecode.lanterna.input.KeyType
+import com.serenity.keystroke.KeyStrokeInfo
 import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
 import com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal
 import com.serenity.keystroke.events.{InsertChar, TabKey, TextEntryEvent}
@@ -25,12 +26,12 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
     // Test tab insertion through translator
     val translator   = new TextEntryTranslator()
     val tabKeyStroke = com.googlecode.lanterna.input.KeyStroke(KeyType.Tab, false, false, false)
-    val tabEvent     = translator.translate(tabKeyStroke)
+    val tabEvent     = translator.translate(KeyStrokeInfo.fromKeyStroke(tabKeyStroke))
     tabEvent shouldBe TabKey
 
     // Test underscore character handling
     val underscoreKeyStroke = com.googlecode.lanterna.input.KeyStroke('_', false, false, false)
-    val underscoreEvent     = translator.translate(underscoreKeyStroke)
+    val underscoreEvent     = translator.translate(KeyStrokeInfo.fromKeyStroke(underscoreKeyStroke))
     underscoreEvent shouldBe InsertChar('_')
 
     // Create state with theme

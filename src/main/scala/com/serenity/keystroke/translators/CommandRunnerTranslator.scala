@@ -1,7 +1,6 @@
 package com.serenity.keystroke.translators
 
-import com.googlecode.lanterna.input.KeyType
-import com.serenity.keystroke.KeyStrokeInfo
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.keystroke.events.*
 
 class CommandRunnerTranslator extends Translator[CommandRunnerEvent]:
@@ -9,14 +8,14 @@ class CommandRunnerTranslator extends Translator[CommandRunnerEvent]:
   override def converters = List(DirectionalKeyConverter.arrowKeys(RunnerNavigate.apply), commandRunnerConverter)
 
   private val commandRunnerConverter: PartialFunction[KeyStrokeInfo, CommandRunnerEvent] = {
-    case KeyStrokeInfo(KeyType.Character, Some(char), modifiers)
-        if modifiers.isEmpty || modifiers == Set(com.serenity.keystroke.Modifier.Shift) =>
+    case KeyStrokeInfo(InputKey.Character, Some(char), modifiers)
+        if modifiers.isEmpty || modifiers == Set(Modifier.Shift) =>
       RunnerInsertChar(char)
-    case KeyStrokeInfo(KeyType.Backspace, _, _) => RunnerDeleteBackward
-    case KeyStrokeInfo(KeyType.Tab, _, modifiers) if !modifiers.contains(com.serenity.keystroke.Modifier.Ctrl) =>
+    case KeyStrokeInfo(InputKey.Backspace, _, _) => RunnerDeleteBackward
+    case KeyStrokeInfo(InputKey.Tab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
       RunnerNextCategory
-    case KeyStrokeInfo(KeyType.ReverseTab, _, modifiers) if !modifiers.contains(com.serenity.keystroke.Modifier.Ctrl) =>
+    case KeyStrokeInfo(InputKey.ReverseTab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
       RunnerPreviousCategory
-    case KeyStrokeInfo(KeyType.Enter, _, _)  => RunnerSubmit
-    case KeyStrokeInfo(KeyType.Escape, _, _) => RunnerDismiss
+    case KeyStrokeInfo(InputKey.Enter, _, _)  => RunnerSubmit
+    case KeyStrokeInfo(InputKey.Escape, _, _) => RunnerDismiss
   }

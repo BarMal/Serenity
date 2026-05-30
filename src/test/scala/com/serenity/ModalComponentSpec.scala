@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.googlecode.lanterna.input.KeyType
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.keystroke.events.{InsertChar, TabKey, UnhandledEvent}
 import com.serenity.keystroke.translators.Translator
 import com.serenity.rope.Balance
@@ -43,14 +43,8 @@ class ModalComponentSpec extends AnyFlatSpec with Matchers:
 
   it should "dismiss custom modals on enter and escape" in {
     val component = ModalComponent(ModalType.Custom("signature-help"))
-    val enterEvent = UnhandledEvent(
-      new com.googlecode.lanterna.input.KeyStroke(KeyType.Enter),
-      NoopTranslator
-    )
-    val escapeEvent = UnhandledEvent(
-      new com.googlecode.lanterna.input.KeyStroke(KeyType.Escape),
-      NoopTranslator
-    )
+    val enterEvent  = UnhandledEvent(KeyStrokeInfo(InputKey.Enter, None, Set.empty), NoopTranslator)
+    val escapeEvent = UnhandledEvent(KeyStrokeInfo(InputKey.Escape, None, Set.empty), NoopTranslator)
 
     component.processEvent(enterEvent, modalState(Modal.Custom("signature-help", "map("))) shouldBe ComponentResult.Dismiss
     component.processEvent(escapeEvent, modalState(Modal.Custom("signature-help", "map("))) shouldBe ComponentResult.Dismiss
