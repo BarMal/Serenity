@@ -31,7 +31,7 @@ object Renderer:
 
   def render(state: AppState, cursorVisible: Boolean, swingTerm: com.serenity.ui.terminal.SwingTerminal, font: java.awt.Font): Unit =
     val state0   = withEffectiveTheme(state)
-    val surface  = Java2DRenderSurface.forFrame(swingTerm.metrics, font, swingTerm.canvas)
+    val surface  = Java2DRenderSurface.forFrame(swingTerm.metrics, font, swingTerm.canvas, swingTerm.onImageReady)
     val terminalSize = swingTerm.terminalSize
     val layout   = LayoutEngine.calculateLayout(state0, terminalSize)
     renderFrame(state0, cursorVisible, surface, terminalSize, layout)

@@ -9,16 +9,16 @@ import java.awt.image.BufferedImage
 /** A RenderSurface backed by a BufferedImage via Graphics2D.
  *
  *  All coordinates are in cell units (column, row). Pixel conversion uses CellMetrics.
- *  After all drawing is complete, call flush() to blit the BufferedImage to the canvas.
+ *  After all drawing is complete, call flush() to hand the finished image to onFlush.
  *
  *  Threading: draw methods are called from the Cats Effect thread pool (off-EDT).
- *  flush() schedules a repaint on the EDT via SwingUtilities.invokeLater.
+ *  onFlush is responsible for scheduling the EDT repaint (e.g. via SwingTerminal.onImageReady).
  */
 class Java2DRenderSurface(
   image: BufferedImage,
   metrics: CellMetrics,
   font: Font,
-  canvas: javax.swing.JPanel
+  onFlush: BufferedImage => Unit
 ) extends RenderSurface:
   private val g: Graphics2D = image.createGraphics()
   private val fm: FontMetrics = g.getFontMetrics(font)
@@ -84,22 +84,13 @@ class Java2DRenderSurface(
 
   def flush(): Unit =
     g.dispose()
-    javax.swing.SwingUtilities.invokeLater { () =>
-      canvas.getGraphics match
-        case cg: Graphics2D =>
-          cg.drawImage(image, 0, 0, null)
-          cg.dispose()
-        case cg if cg != null =>
-          cg.drawImage(image, 0, 0, null)
-          cg.dispose()
-        case _ => ()
-    }
+    onFlush(image)
 
 object Java2DRenderSurface:
-  def forFrame(metrics: CellMetrics, font: Font, canvas: javax.swing.JPanel): Java2DRenderSurface =
+  def forFrame(metrics: CellMetrics, font: Font, canvas: javax.swing.JPanel, onFlush: BufferedImage => Unit): Java2DRenderSurface =
     val image = new BufferedImage(
       canvas.getWidth.max(1),
       canvas.getHeight.max(1),
       BufferedImage.TYPE_INT_RGB
     )
-    new Java2DRenderSurface(image, metrics, font, canvas)
+    new Java2DRenderSurface(image, metrics, font, onFlush)

@@ -4,6 +4,7 @@ import cats.effect.{IO, Resource}
 import com.serenity.ui.layout.{CellMetrics, TerminalSize}
 import java.awt.Dimension
 import java.awt.event.{ComponentAdapter, ComponentEvent, WindowAdapter, WindowEvent}
+import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.CountDownLatch
 import javax.swing.{JFrame, JPanel, SwingUtilities, WindowConstants}
@@ -12,6 +13,7 @@ class SwingTerminal(initialPixelSize: Dimension, val metrics: CellMetrics):
   private val pixelSize     = new AtomicReference(initialPixelSize)
   private val pendingResize = new AtomicReference[Option[TerminalSize]](None)
   private val closeLatch    = new CountDownLatch(1)
+  @volatile private var renderedImage: BufferedImage = null
 
   val canvas: JPanel = new JPanel:
     setBackground(java.awt.Color.BLACK)
@@ -23,6 +25,14 @@ class SwingTerminal(initialPixelSize: Dimension, val metrics: CellMetrics):
         pixelSize.set(d)
         pendingResize.set(Some(metrics.terminalSize(d.width, d.height)))
     )
+    override def paintComponent(g: java.awt.Graphics): Unit =
+      val img = renderedImage
+      if img != null then g.drawImage(img, 0, 0, null)
+      else super.paintComponent(g)
+
+  def onImageReady(image: BufferedImage): Unit =
+    renderedImage = image
+    SwingUtilities.invokeLater(() => canvas.repaint())
 
   private val frame: JFrame =
     val f = new JFrame("Serenity")
