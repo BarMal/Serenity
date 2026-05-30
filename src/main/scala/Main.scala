@@ -1,4 +1,5 @@
 import cats.effect.*
+import cats.effect.unsafe.implicits.global
 import cats.syntax.parallel.*
 import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
 import com.googlecode.lanterna.terminal.Terminal
@@ -41,13 +42,14 @@ object Main extends IOApp.Simple:
           metrics = com.serenity.ui.layout.CellMetrics.fromFont(font)
           _ <- SwingWindow.resource(metrics).use { swingWin =>
             appRun(
-              initialViewportSize = swingWin.viewportSize,
-              makeInputHandler    = router => new SwingInputHandler[IO, Event](swingWin.canvas, router, metrics),
-              checkResize         = IO { swingWin.doResizeIfNecessary() },
-              renderFull          = (state, vis) => IO.blocking(Renderer.render(state, vis, swingWin, font)),
-              renderCursorOnly    = (state, vis) => IO.blocking(Renderer.render(state, vis, swingWin, font)),
-              appConfig           = appConfig,
-              awaitExternalQuit   = swingWin.awaitClose
+              initialViewportSize    = swingWin.viewportSize,
+              makeInputHandler       = router => new SwingInputHandler[IO, Event](swingWin.canvas, router, metrics),
+              checkResize            = IO { swingWin.doResizeIfNecessary() },
+              renderFull             = (state, vis) => IO.blocking(Renderer.render(state, vis, swingWin, font)),
+              renderCursorOnly       = (state, vis) => IO.blocking(Renderer.render(state, vis, swingWin, font)),
+              appConfig              = appConfig,
+              awaitExternalQuit      = swingWin.awaitClose,
+              registerResizeCallback = cb => swingWin.setOnResize(() => cb.unsafeRunAndForget())
             )
           }
         yield ()
@@ -79,7 +81,8 @@ object Main extends IOApp.Simple:
     renderFull: (AppState, Boolean) => IO[Unit],
     renderCursorOnly: (AppState, Boolean) => IO[Unit],
     appConfig: AppConfig,
-    awaitExternalQuit: IO[Unit] = IO.never
+    awaitExternalQuit: IO[Unit] = IO.never,
+    registerResizeCallback: IO[Unit] => Unit = _ => ()
   )(using logger: org.typelevel.log4cats.Logger[IO]): IO[Unit] =
     for
       _ <- logger.info("Starting Serenity text editor")
@@ -93,6 +96,7 @@ object Main extends IOApp.Simple:
       _                     <- renderFull(initialState, true)
       _                     <- logger.info("Initial render completed, starting main loop")
       fastMode              <- SignallingRef.of[IO, Boolean](false)
+      _                     <- IO(registerResizeCallback(fastMode.set(true)))
       cursorVisible         <- Ref.of[IO, Boolean](true)
       checkResizeAndHandle   = checkResize.flatMap(RenderController.handleResize(_, stateManager, fastMode.set(true)))
       inputFunnel            = (s: Stream[IO, Event]) =>
@@ -142,16 +146,21 @@ object Main extends IOApp.Simple:
 
         def renderLoop: Stream[IO, Unit] = idlePhase ++ fastPhase ++ renderLoop
 
+        val quitSignal = stateManager.awaitQuit.attempt
         (
           inputHandler.eventStream
             .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
             .through(inputFunnel)
+            .interruptWhen(quitSignal)
             .compile
             .drain,
-          renderLoop.compile.drain,
+          renderLoop.interruptWhen(quitSignal).compile.drain,
           stateManager.awaitQuit,
           stateManager.intervalSaveStream.compile.drain,
-          awaitExternalQuit >> stateManager.applyEvent(com.serenity.keystroke.events.Quit)
+          IO.race(
+            awaitExternalQuit >> stateManager.applyEvent(com.serenity.keystroke.events.Quit),
+            stateManager.awaitQuit
+          ).void
         ).parMapN((_, _, _, _, _) => ())
       _ <- logger.info("Serenity editor shutdown complete")
     yield ()

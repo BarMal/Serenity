@@ -30,6 +30,9 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
   @volatile private var savedBounds: Rectangle = null
   @volatile private var maximized: Boolean = false
   @volatile private var maxBtnRef: JLabel = null
+  @volatile private var onResizeCallback: Option[() => Unit] = None
+
+  def setOnResize(cb: () => Unit): Unit = onResizeCallback = Some(cb)
 
   val canvas: JPanel = new JPanel:
     setBackground(Color.BLACK)
@@ -40,13 +43,13 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
         val d = getSize()
         pixelSize.set(d)
         pendingResize.set(Some(metrics.viewportSize(d.width, d.height)))
+        onResizeCallback.foreach(_.apply())
     )
     override def paintComponent(g: java.awt.Graphics): Unit =
+      g.setColor(Color.BLACK)
+      g.fillRect(0, 0, getWidth, getHeight)
       val img = renderedImage
       if img != null then g.drawImage(img, 0, 0, null)
-      else
-        g.setColor(Color.BLACK)
-        g.fillRect(0, 0, getWidth, getHeight)
 
   def onImageReady(image: BufferedImage): Unit =
     renderedImage = image
