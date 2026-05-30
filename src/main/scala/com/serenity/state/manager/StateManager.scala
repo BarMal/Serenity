@@ -547,17 +547,30 @@ object StateManager:
         val tSize = s.viewportSize.getOrElse(ViewportSize(80, 24))
         val layout = LayoutEngine.calculateLayoutWithUI(s, tSize)
         val overlayHeight = layout.belowCursorOverlayRect.map(_.height).getOrElse(4)
-        val stateWithFadeOut = buildBufferFadeOut(s, steps)
+        val overlayFadeIn = (0 until overlayHeight).map { rowOffset =>
+          val delay    = rowOffset
+          val panelBg  = s.theme.panel.background.toColor()
+          val panelFg  = s.theme.panel.foreground.toColor()
+          val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
+          val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
+          val bgSteps  = List.fill(delay)(transpBg) ++
+            RgbInterpolator.interpolateRgba(transpBg, panelBg, steps)
+          val fgSteps  = List.fill(delay)(transpFg) ++
+            RgbInterpolator.interpolateRgba(transpFg, panelFg, steps)
+          CharacterKey(0, rowOffset) -> AnimatedCell(
+            content = None,
+            foregroundSteps = fgSteps,
+            backgroundSteps = bgSteps
+          )
+        }.toMap
         val surfAnim = SurfaceAnimationState(
-          phase = SurfacePhase.BufferFadingOut,
-          animationState = AnimationState.empty,
+          phase = SurfacePhase.Visible,
+          animationState = AnimationState(overlayFadeIn),
           overlayHeight = overlayHeight,
-          bufferFadeLength = steps,
+          bufferFadeLength = 0,
           phaseTick = 0
         )
-        stateWithFadeOut.copy(
-          surfaceAnimations = stateWithFadeOut.surfaceAnimations + (surface.id -> surfAnim)
-        )
+        s.copy(surfaceAnimations = s.surfaceAnimations + (surface.id -> surfAnim))
       }
 
     private def applyCommandRunnerCloseAnimation(
@@ -605,11 +618,9 @@ object StateManager:
           bufferFadeLength = 0,
           phaseTick = 0
         )
-        val bufferFadeInDelay = overlayHeight + steps - 1
-        val stateWithBufferFadeIn = buildBufferFadeIn(stateWithId, bufferFadeInDelay, steps)
-        stateWithBufferFadeIn.copy(
-          uiSurfaces = stateWithBufferFadeIn.uiSurfaces :+ ghostSurface,
-          surfaceAnimations = stateWithBufferFadeIn.surfaceAnimations
+        stateWithId.copy(
+          uiSurfaces = stateWithId.uiSurfaces :+ ghostSurface,
+          surfaceAnimations = stateWithId.surfaceAnimations
             - closedSurface.id
             + (ghostId -> ghostAnimState)
         )

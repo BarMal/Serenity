@@ -259,24 +259,34 @@ object SurfaceContentResolver:
             cursorColumn = Some(s"search: ${runner.searchTerm}".length)
           ))
 
-      val visibleItems = runner.visibleItems
-      val rows = visibleItems.zipWithIndex.map {
+      val allItems    = runner.visibleItems
+      val maxItemRows = math.max(1, rect.height - 4) // border(2) + header(1) + footer(1)
+      val offset =
+        if allItems.size <= maxItemRows then 0
+        else
+          val half = maxItemRows / 2
+          math.max(0, math.min(runner.selectedIndex - half, allItems.size - maxItemRows))
+
+      val windowItems           = allItems.slice(offset, offset + maxItemRows)
+      val adjustedSelectedIndex = runner.selectedIndex - offset
+
+      val rows = windowItems.zipWithIndex.map {
         case (CommandSurfaceItem.CommandItem(command), index) =>
           val prefix =
             if runner.searchTerm.isEmpty then ""
             else s"[${categoryLabel(command.category)}] "
           OverlayRow(
             plainText = s"$prefix${command.name} - ${command.description}",
-            selected = index == runner.selectedIndex
+            selected = index == adjustedSelectedIndex
           )
         case (option: CommandSurfaceItem.OptionItem, index) =>
-          optionRow(option, index == runner.selectedIndex)
+          optionRow(option, index == adjustedSelectedIndex)
         case (item: CommandSurfaceItem.InputItem, index) =>
           val editingText = if runner.editingItemId.contains(item.id) then Some(runner.editingText) else None
-          inputRow(item, index == runner.selectedIndex, editingText)
+          inputRow(item, index == adjustedSelectedIndex, editingText)
       }
       val footer =
-        if visibleItems.nonEmpty then Some(OverlayRow(s"${runner.selectedIndex + 1}/${visibleItems.length}"))
+        if allItems.nonEmpty then Some(OverlayRow(s"${runner.selectedIndex + 1}/${allItems.length}"))
         else None
 
       ResolvedSurfaceContent(

@@ -19,7 +19,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val logger = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerAnimationSpec"))
     StateManager.apply(logger).unsafeRunSync()
 
-  "Command runner open animation" should "start in BufferFadingOut phase" in {
+  "Command runner open animation" should "start in Visible phase immediately (no buffer fade)" in {
     val sm = createStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val state = sm.getCurrentState.unsafeRunSync()
@@ -28,23 +28,25 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val surfaceId = state.commandRunnerSurface.get.id
     val animState = state.surfaceAnimations.get(surfaceId)
     animState shouldBe defined
-    animState.get.phase shouldBe SurfacePhase.BufferFadingOut
+    animState.get.phase shouldBe SurfacePhase.Visible
   }
 
-  it should "set a bufferFadeLength equal to animation steps" in {
+  it should "set bufferFadeLength to zero (buffer is not animated)" in {
     val sm = createStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val state     = sm.getCurrentState.unsafeRunSync()
     val surfaceId = state.commandRunnerSurface.get.id
     val anim      = state.surfaceAnimations(surfaceId)
-    anim.bufferFadeLength should be > 0
+    anim.bufferFadeLength shouldBe 0
   }
 
-  it should "have active buffer animations after open" in {
+  it should "have active overlay animations but no buffer animations after open" in {
     val sm = createStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    val state = sm.getCurrentState.unsafeRunSync()
-    state.buffers.values.exists(_.animations.hasActiveAnimations) shouldBe true
+    val state     = sm.getCurrentState.unsafeRunSync()
+    val surfaceId = state.commandRunnerSurface.get.id
+    state.buffers.values.exists(_.animations.hasActiveAnimations) shouldBe false
+    state.surfaceAnimations(surfaceId).animationState.hasActiveAnimations shouldBe true
   }
 
   it should "transition to Visible after bufferFadeLength ticks" in {
@@ -103,7 +105,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     ghostAnim.get.animationState.hasActiveAnimations shouldBe true
   }
 
-  it should "set up buffer fade-in animations with delay on close" in {
+  it should "not animate buffers on close (buffer remains static)" in {
     val sm = createStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     advanceToVisible(sm)
@@ -111,7 +113,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val state = sm.getCurrentState.unsafeRunSync()
-    state.buffers.values.exists(_.animations.hasActiveAnimations) shouldBe true
+    state.buffers.values.exists(_.animations.hasActiveAnimations) shouldBe false
   }
 
   it should "remove the ghost surface when Exiting animation completes" in {
