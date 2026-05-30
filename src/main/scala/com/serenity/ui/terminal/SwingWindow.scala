@@ -38,6 +38,7 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
     setBackground(Color.BLACK)
     setPreferredSize(initialPixelSize)
     setFocusable(true)
+    setFocusTraversalKeysEnabled(false)
     addComponentListener(new ComponentAdapter:
       override def componentResized(e: ComponentEvent): Unit =
         val d = getSize()

@@ -68,7 +68,9 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
       case VK_BACK_SPACE => Some(new KeyStroke(KeyType.Backspace, ctrl, alt))
       case VK_DELETE     => Some(new KeyStroke(KeyType.Delete, ctrl, alt))
       case VK_ENTER      => Some(new KeyStroke(KeyType.Enter, ctrl, alt))
-      case VK_TAB        => Some(new KeyStroke(KeyType.Tab, ctrl, alt))
+      case VK_TAB        =>
+        if e.isShiftDown then Some(new KeyStroke(KeyType.ReverseTab, ctrl, alt))
+        else Some(new KeyStroke(KeyType.Tab, ctrl, alt))
       case VK_ESCAPE     => Some(new KeyStroke(KeyType.Escape, ctrl, alt))
       case VK_HOME       => Some(new KeyStroke(KeyType.Home, ctrl, alt))
       case VK_END        => Some(new KeyStroke(KeyType.End, ctrl, alt))

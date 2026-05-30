@@ -2,7 +2,7 @@ package com.serenity
 
 import com.googlecode.lanterna.input.{KeyStroke, KeyType}
 import com.serenity.input.FocusedInputTranslator
-import com.serenity.keystroke.events.{Direction, ModalNextField, ModalSubmit, NewLine, PanelInputEvent, PeekInputEvent, RunnerSubmit, ToggleCommandRunner}
+import com.serenity.keystroke.events.{Direction, ModalNextField, ModalSubmit, NewLine, NextTab, PanelInputEvent, PeekInputEvent, PreviousTab, RunnerNextCategory, RunnerPreviousCategory, RunnerSubmit, ToggleCommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
@@ -100,4 +100,42 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
     translator.translate(new KeyStroke(KeyType.ArrowDown)) shouldBe PeekInputEvent.Navigate(Direction.Down)
     translator.translate(new KeyStroke(KeyType.Enter)) shouldBe PeekInputEvent.Accept
+  }
+
+  it should "route Tab and Shift+Tab to command-runner category navigation" in {
+    val commandRunnerState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val translator = FocusedInputTranslator.forState(commandRunnerState)
+
+    translator.translate(new KeyStroke(KeyType.Tab, false, false)) shouldBe RunnerNextCategory
+    translator.translate(new KeyStroke(KeyType.ReverseTab, false, false)) shouldBe RunnerPreviousCategory
+  }
+
+  it should "route Ctrl+Tab and Ctrl+Shift+Tab to pane navigation regardless of focus" in {
+    val commandRunnerState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val runnerTranslator = FocusedInputTranslator.forState(commandRunnerState)
+    val editorTranslator  = FocusedInputTranslator.forState(editorState)
+
+    runnerTranslator.translate(new KeyStroke(KeyType.Tab, true, false)) shouldBe NextTab
+    editorTranslator.translate(new KeyStroke(KeyType.Tab, true, false))  shouldBe NextTab
+
+    runnerTranslator.translate(new KeyStroke(KeyType.ReverseTab, true, false)) shouldBe PreviousTab
+    editorTranslator.translate(new KeyStroke(KeyType.ReverseTab, true, false))  shouldBe PreviousTab
   }
