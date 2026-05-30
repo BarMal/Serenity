@@ -29,10 +29,10 @@ object Renderer:
     val layout   = LayoutEngine.calculateLayout(state0, viewportSize)
     renderFrame(state0, cursorVisible, surface, viewportSize, layout)
 
-  def render(state: AppState, cursorVisible: Boolean, swingTerm: com.serenity.ui.terminal.SwingTerminal, font: java.awt.Font): Unit =
+  def render(state: AppState, cursorVisible: Boolean, swingWin: com.serenity.ui.terminal.SwingWindow, font: java.awt.Font): Unit =
     val state0   = withEffectiveTheme(state)
-    val surface  = Java2DRenderSurface.forFrame(swingTerm.metrics, font, swingTerm.canvas, swingTerm.onImageReady)
-    val viewportSize = swingTerm.viewportSize
+    val surface  = Java2DRenderSurface.forFrame(swingWin.metrics, font, swingWin.canvas, swingWin.onImageReady)
+    val viewportSize = swingWin.viewportSize
     val layout   = LayoutEngine.calculateLayout(state0, viewportSize)
     renderFrame(state0, cursorVisible, surface, viewportSize, layout)
 

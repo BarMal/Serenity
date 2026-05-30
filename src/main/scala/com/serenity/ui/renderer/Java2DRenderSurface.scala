@@ -12,7 +12,7 @@ import java.awt.image.BufferedImage
  *  After all drawing is complete, call flush() to hand the finished image to onFlush.
  *
  *  Threading: draw methods are called from the Cats Effect thread pool (off-EDT).
- *  onFlush is responsible for scheduling the EDT repaint (e.g. via SwingTerminal.onImageReady).
+ *  onFlush is responsible for scheduling the EDT repaint (e.g. via SwingWindow.onImageReady).
  */
 class Java2DRenderSurface(
   image: BufferedImage,

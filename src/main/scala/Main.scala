@@ -13,7 +13,7 @@ import com.serenity.state.models.{AppState, Focus}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.{RenderController, Renderer}
-import com.serenity.ui.terminal.{SwingTerminal, TerminalFactory}
+import com.serenity.ui.terminal.{SwingWindow, TerminalFactory}
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import fs2.concurrent.SignallingRef
@@ -39,15 +39,15 @@ object Main extends IOApp.Simple:
           fonts <- com.serenity.ui.fonts.FontLoader.loadMonaspaceNeon(appConfig.fontConfig)
           font   = fonts.headOption.getOrElse(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 14))
           metrics = com.serenity.ui.layout.CellMetrics.fromFont(font)
-          _ <- SwingTerminal.resource(metrics).use { swingTerm =>
+          _ <- SwingWindow.resource(metrics).use { swingWin =>
             appRun(
-              initialViewportSize = swingTerm.viewportSize,
-              makeInputHandler    = router => new SwingInputHandler[IO, Event](swingTerm.canvas, router, metrics),
-              checkResize         = IO { swingTerm.doResizeIfNecessary() },
-              renderFull          = (state, vis) => IO.blocking(Renderer.render(state, vis, swingTerm, font)),
-              renderCursorOnly    = (state, vis) => IO.blocking(Renderer.render(state, vis, swingTerm, font)),
+              initialViewportSize = swingWin.viewportSize,
+              makeInputHandler    = router => new SwingInputHandler[IO, Event](swingWin.canvas, router, metrics),
+              checkResize         = IO { swingWin.doResizeIfNecessary() },
+              renderFull          = (state, vis) => IO.blocking(Renderer.render(state, vis, swingWin, font)),
+              renderCursorOnly    = (state, vis) => IO.blocking(Renderer.render(state, vis, swingWin, font)),
               appConfig           = appConfig,
-              awaitExternalQuit   = swingTerm.awaitClose
+              awaitExternalQuit   = swingWin.awaitClose
             )
           }
         yield ()

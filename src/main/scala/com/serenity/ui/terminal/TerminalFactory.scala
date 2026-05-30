@@ -32,7 +32,7 @@ object TerminalFactory:
       _       = factory.setForceTextTerminal(false) // Allow GUI terminal
       terminal <- IO.blocking {
         // For now, use the default factory
-        // In the future, we can add SwingTerminal customization here
+        // In the future, we can add SwingWindow customization here
         // when we understand the exact API for the Lanterna version we're using
         val terminal = factory.createTerminal()
 
