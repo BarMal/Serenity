@@ -7,7 +7,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -27,9 +27,9 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers:
       logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
       theme = Theme.default
-      terminalSize = TerminalSize(80, 24)
+      viewportSize = ViewportSize(80, 24)
 
-      _ <- AppStartup.initializeState(stateManager, theme, terminalSize)
+      _ <- AppStartup.initializeState(stateManager, theme, viewportSize)
       _ <- stateManager.applyEvent(MoveDown)
       _ <- stateManager.applyEvent(MoveDown)
 
@@ -65,9 +65,9 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers:
       logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
       theme = Theme.default
-      terminalSize = TerminalSize(80, 24)
+      viewportSize = ViewportSize(80, 24)
 
-      _ <- AppStartup.initializeState(stateManager, theme, terminalSize)
+      _ <- AppStartup.initializeState(stateManager, theme, viewportSize)
       _ <- stateManager.applyEvent(MoveDown)
       _ <- stateManager.applyEvent(MoveDown)
       _ <- stateManager.applyEvent(Enter)
@@ -99,9 +99,9 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers:
       logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
       theme = Theme.default
-      terminalSize = TerminalSize(80, 24)
+      viewportSize = ViewportSize(80, 24)
 
-      _ <- AppStartup.initializeState(stateManager, theme, terminalSize)
+      _ <- AppStartup.initializeState(stateManager, theme, viewportSize)
       _ <- stateManager.applyEvent(MoveDown)
 
       stateAfterNav <- stateManager.getCurrentState
@@ -129,9 +129,9 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers:
       logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
       theme = Theme.default
-      terminalSize = TerminalSize(80, 24)
+      viewportSize = ViewportSize(80, 24)
 
-      _ <- AppStartup.initializeState(stateManager, theme, terminalSize)
+      _ <- AppStartup.initializeState(stateManager, theme, viewportSize)
       _ <- stateManager.applyEvent(Enter) // Select first option: New Session
       finalState <- stateManager.getCurrentState
 

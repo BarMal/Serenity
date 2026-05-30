@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.keystroke.events.{NewTab, InsertChar, PreviousTab}
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -20,11 +20,11 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager.apply(logger).unsafeRunSync()
-    val wideTerminal = TerminalSize(400, 24) // Wide enough for multiple panes
+    val wideTerminal = ViewportSize(400, 24) // Wide enough for multiple panes
 
   it should "maintain cursor position per buffer when switching between buffers" in new CursorTrackingFixture {
     // Given: Wide terminal and two buffers with different content
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     
     // Type some text in first buffer
     stateManager.applyEvent(InsertChar('A')).unsafeRunSync()
@@ -74,7 +74,7 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
 
   it should "track viewport position per buffer" in new CursorTrackingFixture {
     // Given: Wide terminal and two buffers
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     
     // Add many lines to first buffer to trigger scrolling
     (1 to 30).foreach { i =>
@@ -107,7 +107,7 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
 
   it should "handle cursor position when adding content to different buffers" in new CursorTrackingFixture {
     // Given: Wide terminal and multiple buffers
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     
     // Add content to buffer 0
     stateManager.applyEvent(InsertChar('1')).unsafeRunSync()

@@ -2,7 +2,7 @@ package com.serenity.state.models
 
 import com.serenity.animation.AnimationState
 import com.serenity.config.AppConfig
-import com.serenity.ui.layout.{Layout, TerminalSize}
+import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
 
 enum SurfacePhase:
@@ -37,7 +37,7 @@ case class AppState(
     uiSurfaces: List[UiSurface] = List.empty,
     actionStack: List[AppAction] = Nil,
     findState: Option[FindState] = None,
-    terminalSize: Option[TerminalSize] = None,
+    viewportSize: Option[ViewportSize] = None,
     theme: Theme = Theme.default,
     config: AppConfig = AppConfig.default,
     nextBufferId: BufferId = BufferId(0),

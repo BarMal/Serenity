@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.keystroke.events.NewTab
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import com.googlecode.lanterna.input.{KeyStroke, KeyType}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -21,11 +21,11 @@ class CtrlReverseTabNavigationSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager.apply(logger).unsafeRunSync()
-    val wideTerminal = TerminalSize(400, 24) // Wide enough for multiple panes
+    val wideTerminal = ViewportSize(400, 24) // Wide enough for multiple panes
 
   it should "handle PreviousTab event and navigate to previous buffer" in new CtrlReverseTabFixture {
     // Given: Wide terminal and multiple buffers
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Create second buffer
     val state = stateManager.getCurrentState.unsafeRunSync()
     
@@ -47,7 +47,7 @@ class CtrlReverseTabNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "cycle through multiple buffers with PreviousTab events" in new CtrlReverseTabFixture {
     // Given: Wide terminal and three buffers
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 1
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 2
     val state = stateManager.getCurrentState.unsafeRunSync()

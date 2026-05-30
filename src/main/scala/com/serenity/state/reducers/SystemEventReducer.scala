@@ -23,7 +23,7 @@ object SystemEventReducer:
         ReducerResult.noEffects(
           state.copy(
             buffers = updatedBuffers,
-            terminalSize = Some(newSize)
+            viewportSize = Some(newSize)
           )
         )
 

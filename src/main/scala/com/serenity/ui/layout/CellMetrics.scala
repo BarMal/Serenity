@@ -9,11 +9,11 @@ case class CellMetrics(charWidth: Int, lineHeight: Int, ascent: Int):
   def toCol(pixelX: Int): Int  = pixelX / charWidth
   def toRow(pixelY: Int): Int  = pixelY / lineHeight
 
-  /** Derive a TerminalSize in cell units from a pixel viewport.
+  /** Derive a ViewportSize in cell units from a pixel viewport.
    *  Fractional cells at the right/bottom edge are excluded — those pixels stay background-filled.
    */
-  def terminalSize(pixelWidth: Int, pixelHeight: Int): TerminalSize =
-    TerminalSize(pixelWidth / charWidth, pixelHeight / lineHeight)
+  def viewportSize(pixelWidth: Int, pixelHeight: Int): ViewportSize =
+    ViewportSize(pixelWidth / charWidth, pixelHeight / lineHeight)
 
 object CellMetrics:
   /** Derive cell metrics from a java.awt.Font.

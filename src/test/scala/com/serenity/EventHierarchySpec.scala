@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.keystroke.events.*
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -29,5 +29,5 @@ class EventHierarchySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "classify system-originated events separately from editor actions" in {
-    ResizeEvent(TerminalSize(120, 40)).isInstanceOf[SystemEvent] shouldBe true
+    ResizeEvent(ViewportSize(120, 40)).isInstanceOf[SystemEvent] shouldBe true
   }

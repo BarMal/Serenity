@@ -156,8 +156,8 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveUp =>
-            val terminalSize = currentState.terminalSize.getOrElse(com.serenity.ui.layout.TerminalSize(80, 24))
-            val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, terminalSize)
+            val viewportSize = currentState.viewportSize.getOrElse(com.serenity.ui.layout.ViewportSize(80, 24))
+            val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, viewportSize)
             val panelWidth   = layout.editorPanelRect.width
             val newCursor       = moveUpVisualLine(cursor, buffer.content, panelWidth)
             val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
@@ -168,8 +168,8 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveDown =>
-            val terminalSize = currentState.terminalSize.getOrElse(com.serenity.ui.layout.TerminalSize(80, 24))
-            val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, terminalSize)
+            val viewportSize = currentState.viewportSize.getOrElse(com.serenity.ui.layout.ViewportSize(80, 24))
+            val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, viewportSize)
             val panelWidth   = layout.editorPanelRect.width
             val newCursor       = moveDownVisualLine(cursor, buffer.content, panelWidth)
             val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)

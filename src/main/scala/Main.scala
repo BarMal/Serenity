@@ -11,7 +11,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Focus}
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.{RenderController, Renderer}
 import com.serenity.ui.terminal.{SwingTerminal, TerminalFactory}
 import com.serenity.ui.theme.config.AppThemeManager
@@ -41,7 +41,7 @@ object Main extends IOApp.Simple:
           metrics = com.serenity.ui.layout.CellMetrics.fromFont(font)
           _ <- SwingTerminal.resource(metrics).use { swingTerm =>
             appRun(
-              initialTerminalSize = swingTerm.terminalSize,
+              initialViewportSize = swingTerm.viewportSize,
               makeInputHandler    = router => new SwingInputHandler[IO, Event](swingTerm.canvas, router, metrics),
               checkResize         = IO { swingTerm.doResizeIfNecessary() },
               renderFull          = (state, vis) => IO.blocking(Renderer.render(state, vis, swingTerm, font)),
@@ -55,15 +55,15 @@ object Main extends IOApp.Simple:
         terminalResource(appConfig.fontConfig).use { terminal =>
           screenResource(terminal).use { screen =>
             for
-              initialTerminalSize <- IO.blocking {
+              initialViewportSize <- IO.blocking {
                 val size = screen.getTerminalSize
-                TerminalSize(size.getColumns, size.getRows)
+                ViewportSize(size.getColumns, size.getRows)
               }
               _ <- appRun(
-                initialTerminalSize = initialTerminalSize,
+                initialViewportSize = initialViewportSize,
                 makeInputHandler    = router => new ScreenInputHandler[IO, Event](screen, router),
                 checkResize         = IO.blocking(Option(screen.doResizeIfNecessary()))
-                                        .map(_.map(s => TerminalSize(s.getColumns, s.getRows))),
+                                        .map(_.map(s => ViewportSize(s.getColumns, s.getRows))),
                 renderFull          = (state, vis) => IO.blocking(Renderer.render(state, vis, screen)),
                 renderCursorOnly    = (state, vis) => IO.blocking(Renderer.renderCursorOnly(state, vis, screen)),
                 appConfig           = appConfig
@@ -73,9 +73,9 @@ object Main extends IOApp.Simple:
         }
 
   private def appRun(
-    initialTerminalSize: TerminalSize,
+    initialViewportSize: ViewportSize,
     makeInputHandler: InputRouter[IO, Event] => InputHandler[IO],
-    checkResize: IO[Option[TerminalSize]],
+    checkResize: IO[Option[ViewportSize]],
     renderFull: (AppState, Boolean) => IO[Unit],
     renderCursorOnly: (AppState, Boolean) => IO[Unit],
     appConfig: AppConfig,
@@ -86,7 +86,7 @@ object Main extends IOApp.Simple:
       themeManager           = AppThemeManager.create
       defaultTheme          <- themeManager.initializeWithTheme()
       stateManager          <- StateManager.apply(logger)
-      initialState          <- AppStartup.initializeState(stateManager, defaultTheme, initialTerminalSize)
+      initialState          <- AppStartup.initializeState(stateManager, defaultTheme, initialViewportSize)
       inputRouter           <- InputRouter.create[IO, Event](new TextEntryTranslator)
       inputHandler           = makeInputHandler(inputRouter)
       _                     <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))

@@ -7,7 +7,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -27,10 +27,10 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers:
       logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
       theme = Theme.default
-      terminalSize = TerminalSize(80, 24)
+      viewportSize = ViewportSize(80, 24)
       
       // Initialize startup state
-      initialState <- AppStartup.initializeState(stateManager, theme, terminalSize)
+      initialState <- AppStartup.initializeState(stateManager, theme, viewportSize)
       
       // Verify we start with startup page focused
       _ = initialState.focus shouldBe Focus.Surface(SurfaceId("surface-0"))
@@ -84,10 +84,10 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers:
       logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
       theme = Theme.default
-      terminalSize = TerminalSize(80, 24)
+      viewportSize = ViewportSize(80, 24)
       
       // Initialize startup state  
-      initialState <- AppStartup.initializeState(stateManager, theme, terminalSize)
+      initialState <- AppStartup.initializeState(stateManager, theme, viewportSize)
       _ = initialState.startPageSurface should be (defined)
       
       // Press escape to dismiss

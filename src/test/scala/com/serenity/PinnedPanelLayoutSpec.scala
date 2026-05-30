@@ -47,8 +47,8 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val noPanels = LayoutEngine.calculateLayout(baseState, TerminalSize(120, 40))
-    val layout   = LayoutEngine.calculateLayout(state, TerminalSize(120, 40))
+    val noPanels = LayoutEngine.calculateLayout(baseState, ViewportSize(120, 40))
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(120, 40))
 
     layout.pinnedPanelRects(PanelPosition.Left) shouldBe LayoutRect(0, 0, 24, 33)
     layout.pinnedPanelRects(PanelPosition.Bottom) shouldBe LayoutRect(0, 33, 120, 6)

@@ -7,7 +7,7 @@ import com.googlecode.lanterna.{TerminalSize as LanternaSize}
 import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CursorLayout, Layout, LayoutEngine, TerminalSize}
+import com.serenity.ui.layout.{CursorLayout, Layout, LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -61,7 +61,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     )
     val state      = stateWithRunner(Theme.light, "op", commands)
     val testScreen = screen(100, 30)
-    val layout     = LayoutEngine.calculateLayout(state, TerminalSize(100, 30))
+    val layout     = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay    = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
     val paneRect = LayoutEngine
       .calculatePaneLayouts(state, layout)
@@ -130,7 +130,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       )
     )
     val testScreen = screen(100, 30)
-    val layout     = LayoutEngine.calculateLayout(state, TerminalSize(100, 30))
+    val layout     = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay    = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
 
     Renderer.render(state, cursorVisible = true, testScreen)

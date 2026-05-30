@@ -8,7 +8,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, TerminalSize as SerenityTerminalSize}
+import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -40,7 +40,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
       // Calculate actual panel boundaries
       currentState <- stateManager.getCurrentState
-      layout = LayoutEngine.calculateLayout(currentState, SerenityTerminalSize(mockScreen.cols, mockScreen.rows))
+      layout = LayoutEngine.calculateLayout(currentState, ViewportSize(mockScreen.cols, mockScreen.rows))
       panelRect = layout.editorPanelRect
 
       // Insert text much longer than panel width
@@ -53,8 +53,8 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
       
       // Simulate rendering by placing 'x' characters within panel bounds (this is what we're testing)
       _ = mockScreen.clear()
-      terminalSize = SerenityTerminalSize(mockScreen.cols, mockScreen.rows)
-      layout = LayoutEngine.calculateLayout(finalState, terminalSize)
+      viewportSize = ViewportSize(mockScreen.cols, mockScreen.rows)
+      layout = LayoutEngine.calculateLayout(finalState, viewportSize)
       panelRect = layout.editorPanelRect
       buffer = finalState.buffers(bufferId)
       content = buffer.content.collect()
@@ -86,7 +86,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
     // Get panel dimensions
     val currentState = stateManager.getCurrentState.unsafeRunSync()
-    val layout    = LayoutEngine.calculateLayout(currentState, SerenityTerminalSize(mockScreen.cols, mockScreen.rows))
+    val layout    = LayoutEngine.calculateLayout(currentState, ViewportSize(mockScreen.cols, mockScreen.rows))
     val panelRect = layout.editorPanelRect
 
     // Create a line with identifiable pattern that's longer than panel
@@ -122,7 +122,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
     // Get panel dimensions
     val currentState = stateManager.getCurrentState.unsafeRunSync()
-    val layout    = LayoutEngine.calculateLayout(currentState, SerenityTerminalSize(mockScreen.cols, mockScreen.rows))
+    val layout    = LayoutEngine.calculateLayout(currentState, ViewportSize(mockScreen.cols, mockScreen.rows))
     val panelRect = layout.editorPanelRect
 
     // Create text that will cause horizontal scrolling
@@ -158,7 +158,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(
       stateManager.getCurrentState.unsafeRunSync(),
-      SerenityTerminalSize(mockScreen.cols, mockScreen.rows)
+      ViewportSize(mockScreen.cols, mockScreen.rows)
     )
     val panelRect = layout.editorPanelRect
 
@@ -190,7 +190,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(
       stateManager.getCurrentState.unsafeRunSync(),
-      SerenityTerminalSize(mockScreen.cols, mockScreen.rows)
+      ViewportSize(mockScreen.cols, mockScreen.rows)
     )
     val panelRect = layout.editorPanelRect
 
@@ -261,8 +261,8 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
     def renderStateToMockScreen(state: AppState): Unit =
       mockScreen.clear()
 
-      val terminalSize = SerenityTerminalSize(mockScreen.cols, mockScreen.rows)
-      val layout       = LayoutEngine.calculateLayout(state, terminalSize)
+      val viewportSize = ViewportSize(mockScreen.cols, mockScreen.rows)
+      val layout       = LayoutEngine.calculateLayout(state, viewportSize)
 
       // Simulate the rendering logic from Renderer.scala
       state.layout.editorPanes.foreach { (paneId, pane) =>

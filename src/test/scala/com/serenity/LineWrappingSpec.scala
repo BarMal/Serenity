@@ -7,7 +7,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
+import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -42,7 +42,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
       // Get panel width for wrapping calculations
       currentState <- stateManager.getCurrentState
-      layout = LayoutEngine.calculateLayout(currentState, TerminalSize(80, 24))
+      layout = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
       panelWidth = layout.editorPanelRect.width
 
       // Create text longer than panel width but shorter than 2 lines
@@ -81,7 +81,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
-    val layout     = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), TerminalSize(80, 24))
+    val layout     = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), ViewportSize(80, 24))
     val panelWidth = layout.editorPanelRect.width
 
     // Create text that wraps to exactly 2 visual lines
@@ -132,8 +132,8 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     // Test different terminal sizes
-    val smallTerminal = TerminalSize(40, 12)
-    val largeTerminal = TerminalSize(120, 30)
+    val smallTerminal = ViewportSize(40, 12)
+    val largeTerminal = ViewportSize(120, 30)
 
     val smallLayout = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), smallTerminal)
     val largeLayout = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), largeTerminal)
@@ -173,7 +173,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
-    val layout     = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), TerminalSize(80, 24))
+    val layout     = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), ViewportSize(80, 24))
     val panelWidth = layout.editorPanelRect.width
 
     // Create multiple paragraphs
@@ -222,7 +222,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
-    val layout      = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), TerminalSize(80, 24))
+    val layout      = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), ViewportSize(80, 24))
     val panelWidth  = layout.editorPanelRect.width
     val panelHeight = layout.editorPanelRect.height
 
@@ -266,8 +266,8 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     // Test different terminal sizes and their effect on viewport
-    val smallTerminal = TerminalSize(60, 20)
-    val largeTerminal = TerminalSize(120, 40)
+    val smallTerminal = ViewportSize(60, 20)
+    val largeTerminal = ViewportSize(120, 40)
 
     val currentState = stateManager.getCurrentState.unsafeRunSync()
 
@@ -333,8 +333,8 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val beforeCursor = beforeBuffer.cursors.head
 
     // Simulate window resize by recalculating layouts with different terminal sizes
-    val smallLayout = LayoutEngine.calculateLayout(beforeState, TerminalSize(50, 20))
-    val largeLayout = LayoutEngine.calculateLayout(beforeState, TerminalSize(100, 30))
+    val smallLayout = LayoutEngine.calculateLayout(beforeState, ViewportSize(50, 20))
+    val largeLayout = LayoutEngine.calculateLayout(beforeState, ViewportSize(100, 30))
 
     // Cursor position in buffer coordinates should remain unchanged
     beforeCursor.line shouldBe 0
@@ -367,7 +367,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
-    val layout     = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), TerminalSize(80, 24))
+    val layout     = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), ViewportSize(80, 24))
     val panelWidth = layout.editorPanelRect.width
 
     // Create text that wraps to exactly 2 visual lines
@@ -428,7 +428,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
-    val layout     = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), TerminalSize(80, 24))
+    val layout     = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), ViewportSize(80, 24))
     val panelWidth = layout.editorPanelRect.width
 
     // Create first buffer line that wraps

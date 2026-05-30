@@ -28,7 +28,7 @@ trait StateManager:
   def awaitQuit: IO[Unit]
   def intervalSaveStream: Stream[IO, Unit]
   def updateState(update: AppState => AppState): IO[Unit]
-  def handleTerminalResize(newSize: TerminalSize): IO[Unit]
+  def handleViewportResize(newSize: ViewportSize): IO[Unit]
   def advanceAnimationFrames(): IO[Unit]
   def advanceAnimationsOnTick(): IO[Boolean]
 
@@ -385,6 +385,9 @@ object StateManager:
     def applyEvent(event: Event): IO[Unit] =
       stateRef.get.flatMap { prevState =>
         val handleEvent: IO[Unit] = event match
+          case resize: com.serenity.keystroke.events.ResizeEvent =>
+            applyReducerResult(SystemEventReducer.reduce(resize, prevState), prevState) >>
+              stateRef.update(s => AppEventReducer.rebalancePanes(s, s.focusedBufferId))
           case systemEvent: SystemEvent =>
             applyReducerResult(SystemEventReducer.reduce(systemEvent, prevState), prevState)
           case com.serenity.keystroke.events.CloseTab =>
@@ -529,7 +532,7 @@ object StateManager:
     private def applyCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): IO[Unit] =
       val steps = AnimationConfig.smooth.get.steps
       stateRef.update { s =>
-        val tSize = s.terminalSize.getOrElse(TerminalSize(80, 24))
+        val tSize = s.viewportSize.getOrElse(ViewportSize(80, 24))
         val layout = LayoutEngine.calculateLayoutWithUI(s, tSize)
         val overlayHeight = layout.belowCursorOverlayRect.map(_.height).getOrElse(4)
         val stateWithFadeOut = buildBufferFadeOut(s, steps)
@@ -552,7 +555,7 @@ object StateManager:
     ): IO[Unit] =
       val steps = AnimationConfig.smooth.get.steps
       stateRef.update { s =>
-        val tSize = prevState.terminalSize.orElse(s.terminalSize).getOrElse(TerminalSize(80, 24))
+        val tSize = prevState.viewportSize.orElse(s.viewportSize).getOrElse(ViewportSize(80, 24))
         val previousLayout = LayoutEngine.calculateLayoutWithUI(prevState, tSize)
         val overlayHeight = prevState.surfaceAnimations
           .get(closedSurface.id)
@@ -783,7 +786,7 @@ object StateManager:
       )
 
     private def handleMouseClick(click: MouseClick, state: AppState): IO[Unit] =
-      state.terminalSize match
+      state.viewportSize match
         case None => IO.unit
         case Some(tSize) =>
           val layout     = LayoutEngine.calculateLayoutWithUI(state, tSize)
@@ -1066,9 +1069,9 @@ object StateManager:
           case None => state
       }
 
-    def handleTerminalResize(newSize: TerminalSize): IO[Unit] =
+    def handleViewportResize(newSize: ViewportSize): IO[Unit] =
       for
-        _ <- logger.debug(s"Handling terminal resize to ${newSize.width}x${newSize.height}")
+        _ <- logger.debug(s"Handling viewport resize to ${newSize.width}x${newSize.height}")
         currentState <- stateRef.get
         resizedState = SystemEventReducer.reduce(com.serenity.keystroke.events.ResizeEvent(newSize), currentState).state
         rebalancedState = AppEventReducer.rebalancePanes(resizedState, resizedState.focusedBufferId)

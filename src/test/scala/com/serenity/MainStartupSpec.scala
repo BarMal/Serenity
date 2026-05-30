@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.state.manager.StateManager
 import com.serenity.app.AppStartup
 import com.serenity.state.models.{Focus, SurfaceContent}
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -21,7 +21,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val logger = LoggerFactory[IO].getLogger(using LoggerName("Main"))
-    val initialTerminalSize = TerminalSize(200, 40)
+    val initialViewportSize = ViewportSize(200, 40)
 
     val result = for {
       themeManager <- IO.pure(AppThemeManager.create)
@@ -30,13 +30,13 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       finalState <- AppStartup.initializeState(
         stateManager,
         defaultTheme,
-        initialTerminalSize
+        initialViewportSize
       )
     } yield finalState
 
     val finalState = result.unsafeRunSync()
 
-    finalState.terminalSize.shouldBe(Some(initialTerminalSize))
+    finalState.viewportSize.shouldBe(Some(initialViewportSize))
     finalState.theme.should(not.be(com.serenity.ui.theme.Theme.default))
     finalState.buffers.shouldBe(Map.empty)
     finalState.layout.editorPanes.shouldBe(Map.empty)
@@ -49,7 +49,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val logger = LoggerFactory[IO].getLogger(using LoggerName("Main"))
-    val wideTerminalSize = TerminalSize(200, 40)
+    val wideViewportSize = ViewportSize(200, 40)
 
     val result = for {
       themeManager <- IO.pure(AppThemeManager.create)
@@ -58,7 +58,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       finalState <- AppStartup.initializeState(
         stateManager,
         defaultTheme,
-        wideTerminalSize
+        wideViewportSize
       )
     } yield finalState
 

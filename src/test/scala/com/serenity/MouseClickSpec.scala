@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.{MouseClick, ResizeEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.PaneId
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -35,7 +35,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("aaaa\nbbbb\ncccc\ndddd").unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
-    sm.applyEvent(ResizeEvent(TerminalSize(80, 24))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
     // Click at (18, 3): bufferLine = topLine(0) + (3-1) = 2, bufferCol = leftCol(0) + (18-15) = 3
     sm.applyEvent(MouseClick(18, 3)).unsafeRunSync()
@@ -49,7 +49,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
-    sm.applyEvent(ResizeEvent(TerminalSize(80, 24))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
     // Click at (15, 1): first cell of content area → bufferLine=0, bufferCol=0
     sm.applyEvent(MouseClick(15, 1)).unsafeRunSync()
@@ -63,7 +63,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hi\nworld").unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
-    sm.applyEvent(ResizeEvent(TerminalSize(80, 24))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
     // Click at (35, 1): bufferLine=0, bufferCol = 35-15 = 20, "hi" length=2 → clamp to 2
     sm.applyEvent(MouseClick(35, 1)).unsafeRunSync()
@@ -77,7 +77,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello").unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
-    sm.applyEvent(ResizeEvent(TerminalSize(80, 24))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
     val initialCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.headOption
 
@@ -92,7 +92,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello").unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
-    sm.applyEvent(ResizeEvent(TerminalSize(80, 24))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
     val initialCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.headOption
 
@@ -107,7 +107,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello").unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
-    // No ResizeEvent applied — terminalSize is None
+    // No ResizeEvent applied — ViewportSize is None
 
     val initialCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.headOption
 

@@ -1,7 +1,7 @@
 package com.serenity.ui.terminal
 
 import cats.effect.{IO, Resource}
-import com.serenity.ui.layout.{CellMetrics, TerminalSize}
+import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import java.awt.Dimension
 import java.awt.event.{ComponentAdapter, ComponentEvent, WindowAdapter, WindowEvent}
 import java.awt.image.BufferedImage
@@ -11,7 +11,7 @@ import javax.swing.{JFrame, JPanel, SwingUtilities, WindowConstants}
 
 class SwingTerminal(initialPixelSize: Dimension, val metrics: CellMetrics):
   private val pixelSize     = new AtomicReference(initialPixelSize)
-  private val pendingResize = new AtomicReference[Option[TerminalSize]](None)
+  private val pendingResize = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch    = new CountDownLatch(1)
   @volatile private var renderedImage: BufferedImage = null
 
@@ -23,7 +23,7 @@ class SwingTerminal(initialPixelSize: Dimension, val metrics: CellMetrics):
       override def componentResized(e: ComponentEvent): Unit =
         val d = getSize()
         pixelSize.set(d)
-        pendingResize.set(Some(metrics.terminalSize(d.width, d.height)))
+        pendingResize.set(Some(metrics.viewportSize(d.width, d.height)))
     )
     override def paintComponent(g: java.awt.Graphics): Unit =
       val img = renderedImage
@@ -59,13 +59,13 @@ class SwingTerminal(initialPixelSize: Dimension, val metrics: CellMetrics):
       frame.dispose()
     }
 
-  /** Current terminal size in cell units, derived from the pixel size at call time. */
-  def terminalSize: TerminalSize =
+  /** Current viewport size in cell units, derived from the pixel size at call time. */
+  def viewportSize: ViewportSize =
     val d = pixelSize.get()
-    metrics.terminalSize(d.width, d.height)
+    metrics.viewportSize(d.width, d.height)
 
   /** Returns a pending resize event if one occurred since the last call, then clears it. */
-  def doResizeIfNecessary(): Option[TerminalSize] =
+  def doResizeIfNecessary(): Option[ViewportSize] =
     pendingResize.getAndSet(None)
 
 object SwingTerminal:

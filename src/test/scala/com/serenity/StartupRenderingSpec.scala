@@ -11,7 +11,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -39,7 +39,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
-      state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, TerminalSize(100, 30))
+      state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, ViewportSize(100, 30))
     yield 
       val screen = makeTestScreen(100, 30)
       Renderer.render(state, cursorVisible = true, screen)

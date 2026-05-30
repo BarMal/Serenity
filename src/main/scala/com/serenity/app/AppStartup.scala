@@ -3,7 +3,7 @@ package com.serenity.app
 import cats.effect.IO
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Focus, StartupPage, SurfaceContent, SurfaceId, SurfacePlacement, SurfacePresentation, UiSurface}
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 
 object AppStartup:
@@ -27,7 +27,7 @@ object AppStartup:
   def startPageState(
     stateManager: StateManager,
     theme: Theme,
-    initialTerminalSize: TerminalSize
+    initialViewportSize: ViewportSize
   ): IO[AppState] =
     for
       sessionExists <- stateManager.sessionExists
@@ -43,19 +43,19 @@ object AppStartup:
             presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         ),
-        terminalSize = Some(initialTerminalSize),
+        viewportSize = Some(initialViewportSize),
         theme = theme,
         nextSurfaceId = 1
       )
 
-  /** Initialize the application state for first render using the active theme and current terminal size. */
+  /** Initialize the application state for first render using the active theme and current viewport size. */
   def initializeState(
     stateManager: StateManager,
     theme: Theme,
-    initialTerminalSize: TerminalSize
+    initialViewportSize: ViewportSize
   ): IO[AppState] =
     for
-      startState <- startPageState(stateManager, theme, initialTerminalSize)
+      startState <- startPageState(stateManager, theme, initialViewportSize)
       _          <- stateManager.updateState(_ => startState)
       state      <- stateManager.getCurrentState
     yield state

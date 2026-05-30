@@ -27,8 +27,8 @@ class SinglePaneRenderingSpec extends AnyFlatSpec with Matchers:
       state.layout.editorPanes.should(have).size(1)
       
       // When: Calculate layout for rendering
-      val terminalSize = TerminalSize(100, 30)
-      val calculatedLayout = LayoutEngine.calculateLayout(state, terminalSize)
+      val viewportSize = ViewportSize(100, 30)
+      val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
       val paneLayouts = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
       
       // Then: Should produce exactly one pane layout
@@ -71,8 +71,8 @@ class SinglePaneRenderingSpec extends AnyFlatSpec with Matchers:
       println(s"Focus: ${initialState.focus}")
       
       // Check layout calculation
-      val terminalSize = TerminalSize(100, 30)
-      val calculatedLayout = LayoutEngine.calculateLayout(initialState, terminalSize)
+      val viewportSize = ViewportSize(100, 30)
+      val calculatedLayout = LayoutEngine.calculateLayout(initialState, viewportSize)
       val paneLayouts = LayoutEngine.calculatePaneLayouts(initialState, calculatedLayout)
       
       println(s"=== CALCULATED LAYOUT ===")

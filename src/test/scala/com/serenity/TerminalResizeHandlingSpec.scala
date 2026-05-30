@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.keystroke.events.NewTab
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -23,8 +23,8 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "trigger re-layout when terminal is resized" in new ResizeFixture {
     // Given: Wide terminal with multiple buffers
-    val wideTerminal = TerminalSize(400, 24)
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    val wideTerminal = ViewportSize(400, 24)
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     
@@ -35,13 +35,13 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val originalPaneCount = wideState.layout.editorPanes.size
     
     // When: Terminal is resized to narrow
-    val narrowTerminal = TerminalSize(80, 24)
-    stateManager.handleTerminalResize(narrowTerminal).unsafeRunSync()
+    val narrowTerminal = ViewportSize(80, 24)
+    stateManager.handleViewportResize(narrowTerminal).unsafeRunSync()
     
     val narrowState = stateManager.getCurrentState.unsafeRunSync()
     
     // Then: Layout should be recalculated with fewer panes
-    narrowState.terminalSize shouldBe Some(narrowTerminal)
+    narrowState.viewportSize shouldBe Some(narrowTerminal)
     narrowState.buffers should have size 3 // Buffers preserved
     narrowState.layout.editorPanes.size should be <= originalPaneCount // Fewer or same panes
     
@@ -52,8 +52,8 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "preserve buffer assignment and focus during resize" in new ResizeFixture {
     // Given: Wide terminal with multiple buffers
-    val wideTerminal = TerminalSize(400, 24)
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    val wideTerminal = ViewportSize(400, 24)
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     
@@ -62,8 +62,8 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val bufferOrderBeforeResize = beforeResize.bufferOrder
     
     // When: Terminal is resized
-    val narrowTerminal = TerminalSize(100, 24)
-    stateManager.handleTerminalResize(narrowTerminal).unsafeRunSync()
+    val narrowTerminal = ViewportSize(100, 24)
+    stateManager.handleViewportResize(narrowTerminal).unsafeRunSync()
     
     val afterResize = stateManager.getCurrentState.unsafeRunSync()
     
@@ -79,8 +79,8 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "expand layout when terminal grows wider" in new ResizeFixture {
     // Given: Narrow terminal with multiple buffers (limited panes)
-    val narrowTerminal = TerminalSize(80, 24)
-    stateManager.updateState(_.copy(terminalSize = Some(narrowTerminal))).unsafeRunSync()
+    val narrowTerminal = ViewportSize(80, 24)
+    stateManager.updateState(_.copy(viewportSize = Some(narrowTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     
@@ -88,13 +88,13 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val originalPaneCount = narrowState.layout.editorPanes.size
     
     // When: Terminal is resized to wide
-    val wideTerminal = TerminalSize(400, 24)
-    stateManager.handleTerminalResize(wideTerminal).unsafeRunSync()
+    val wideTerminal = ViewportSize(400, 24)
+    stateManager.handleViewportResize(wideTerminal).unsafeRunSync()
     
     val wideState = stateManager.getCurrentState.unsafeRunSync()
     
     // Then: More panes should be available
-    wideState.terminalSize shouldBe Some(wideTerminal)
+    wideState.viewportSize shouldBe Some(wideTerminal)
     wideState.layout.editorPanes.size should be >= originalPaneCount // Same or more panes
     
     // And: Additional buffers should be displayed in new panes
@@ -104,8 +104,8 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "handle repeated resize events correctly" in new ResizeFixture {
     // Given: Initial state with multiple buffers
-    val initialTerminal = TerminalSize(200, 24)
-    stateManager.updateState(_.copy(terminalSize = Some(initialTerminal))).unsafeRunSync()
+    val initialTerminal = ViewportSize(200, 24)
+    stateManager.updateState(_.copy(viewportSize = Some(initialTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     
@@ -115,14 +115,14 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
     
     // When: Multiple resize events occur
     val sizes = List(
-      TerminalSize(80, 24),   // Narrow
-      TerminalSize(300, 24),  // Wide
-      TerminalSize(120, 24),  // Medium
-      TerminalSize(400, 24)   // Very wide
+      ViewportSize(80, 24),   // Narrow
+      ViewportSize(300, 24),  // Wide
+      ViewportSize(120, 24),  // Medium
+      ViewportSize(400, 24)   // Very wide
     )
     
     sizes.foreach { size =>
-      stateManager.handleTerminalResize(size).unsafeRunSync()
+      stateManager.handleViewportResize(size).unsafeRunSync()
     }
     
     val finalState = stateManager.getCurrentState.unsafeRunSync()
@@ -131,7 +131,7 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
     finalState.bufferOrder shouldBe originalBufferOrder
     finalState.buffers should have size 3
     finalState.focusedBufferId.get shouldBe originalFocusedBuffer
-    finalState.terminalSize shouldBe Some(sizes.last)
+    finalState.viewportSize shouldBe Some(sizes.last)
     
     // And: All buffers should still be navigable
     originalBufferOrder.foreach { bufferId =>
@@ -144,7 +144,7 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val customMinWidth = 60
     stateManager.updateState(state =>
       state.copy(
-        terminalSize = Some(TerminalSize(300, 24)),
+        viewportSize = Some(ViewportSize(300, 24)),
         config = state.config.withMinimumPaneWidth(customMinWidth)
       )
     ).unsafeRunSync()
@@ -155,11 +155,11 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val testWidths = List(80, 120, 180, 240, 360)
     
     testWidths.foreach { width =>
-      val terminalSize = TerminalSize(width, 24)
-      stateManager.handleTerminalResize(terminalSize).unsafeRunSync()
+      val viewportSize = ViewportSize(width, 24)
+      stateManager.handleViewportResize(viewportSize).unsafeRunSync()
       
       val state = stateManager.getCurrentState.unsafeRunSync()
-      val layout = com.serenity.ui.layout.LayoutEngine.calculateLayout(state, terminalSize)
+      val layout = com.serenity.ui.layout.LayoutEngine.calculateLayout(state, viewportSize)
       val paneLayouts = com.serenity.ui.layout.LayoutEngine.calculatePaneLayouts(state, layout)
       
       // Then: All visible panes should respect minimum width

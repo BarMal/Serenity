@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import fs2.concurrent.SignallingRef
 import org.scalatest.flatspec.AnyFlatSpec
@@ -30,7 +30,7 @@ class ResizeRenderTriggerSpec extends AnyFlatSpec with Matchers:
     val result = for
       sm       <- makeStateManager()
       fastMode <- SignallingRef.of[IO, Boolean](false)
-      _        <- RenderController.handleResize(Some(TerminalSize(120, 40)), sm, fastMode.set(true))
+      _        <- RenderController.handleResize(Some(ViewportSize(120, 40)), sm, fastMode.set(true))
       flag     <- fastMode.get
     yield flag
     result.unsafeRunSync() shouldBe true
@@ -47,12 +47,12 @@ class ResizeRenderTriggerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "update state with the new terminal size when a resize is detected" in {
-    val newSize = TerminalSize(100, 35)
+    val newSize = ViewportSize(100, 35)
     val result = for
       sm    <- makeStateManager()
       _     <- RenderController.handleResize(Some(newSize), sm, IO.unit)
       state <- sm.getCurrentState
-    yield state.terminalSize
+    yield state.viewportSize
     result.unsafeRunSync() shouldBe Some(newSize)
   }
 
@@ -61,6 +61,6 @@ class ResizeRenderTriggerSpec extends AnyFlatSpec with Matchers:
       sm    <- makeStateManager()
       _     <- RenderController.handleResize(None, sm, IO.unit)
       state <- sm.getCurrentState
-    yield state.terminalSize
+    yield state.viewportSize
     result.unsafeRunSync() shouldBe None
   }

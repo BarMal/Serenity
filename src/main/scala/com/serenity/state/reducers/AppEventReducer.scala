@@ -3,7 +3,7 @@ package com.serenity.state.reducers
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
+import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 
 object AppEventReducer:
 
@@ -88,8 +88,8 @@ object AppEventReducer:
         state.copy(bufferOrder = state.bufferOrder :+ newBufferId)
 
   private def assignBuffersToPanes(state: AppState, focusedBufferId: Option[BufferId]): AppState =
-    val terminalSize        = state.terminalSize.getOrElse(TerminalSize(80, 24))
-    val layout              = LayoutEngine.calculateLayout(state, terminalSize)
+    val viewportSize        = state.viewportSize.getOrElse(ViewportSize(80, 24))
+    val layout              = LayoutEngine.calculateLayout(state, viewportSize)
     val maxPossiblePanes    = math.max(1, layout.editorPanelRect.width / state.config.minimumPaneWidth)
     val targetFocusedBuffer = focusedBufferId.orElse(state.focusedBufferId)
     updatePaneAssignments(state, maxPossiblePanes, targetFocusedBuffer)

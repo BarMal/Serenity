@@ -19,11 +19,11 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager.apply(logger).unsafeRunSync()
-    val wideTerminal = com.serenity.ui.layout.TerminalSize(400, 24) // Wide enough for multiple panes
+    val wideTerminal = com.serenity.ui.layout.ViewportSize(400, 24) // Wide enough for multiple panes
 
   it should "isolate animations to focused buffer only" in new AnimationFixture {
     // Given: Wide terminal to allow multiple panes, then two buffers
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
     val buffer1Id = initialState.bufferOrder.head
     
@@ -67,7 +67,7 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
 
   it should "maintain separate character animation states per buffer" in new AnimationFixture {
     // Given: Wide terminal and three buffers with different content
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 1
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 2
     val state = stateManager.getCurrentState.unsafeRunSync()
@@ -110,7 +110,7 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
 
   it should "not leak animations between buffers when switching focus rapidly" in new AnimationFixture {
     // Given: Wide terminal and two buffers
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     val state = stateManager.getCurrentState.unsafeRunSync()
     val bufferIds = state.bufferOrder

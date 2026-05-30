@@ -7,7 +7,7 @@ import com.serenity.keystroke.events.{Event, ResizeEvent, UnhandledEvent}
 import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -26,7 +26,7 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
       initialState <- stateManager.getCurrentState
       
       // Simulate a resize event
-      newSize = TerminalSize(120, 40)
+      newSize = ViewportSize(120, 40)
       resizeTriggered <- IO.ref(false)
       onResized = resizeTriggered.set(true)
       
@@ -36,8 +36,8 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
       wasTriggered <- resizeTriggered.get
     yield
       // The resize event should be applied to state
-      finalState.terminalSize shouldBe Some(newSize)
-      initialState.terminalSize should not be Some(newSize)
+      finalState.viewportSize shouldBe Some(newSize)
+      initialState.viewportSize should not be Some(newSize)
       
       // The onResized callback should be triggered immediately
       wasTriggered shouldBe true
@@ -61,7 +61,7 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
       wasTriggered <- resizeTriggered.get
     yield
       // State should remain unchanged
-      finalState.terminalSize shouldBe initialState.terminalSize
+      finalState.viewportSize shouldBe initialState.viewportSize
       
       // onResized should NOT be triggered
       wasTriggered shouldBe false

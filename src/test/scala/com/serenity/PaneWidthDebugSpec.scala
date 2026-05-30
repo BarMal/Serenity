@@ -23,9 +23,9 @@ class PaneWidthDebugSpec extends AnyFlatSpec with Matchers:
 
   it should "debug the actual behavior when creating many small panes" in new DebugFixture {
     // Given: Small terminal that you mentioned (dozens of characters per line)
-    val terminalSize = TerminalSize(80, 24) // Typical small terminal
-    val editorArea = (terminalSize.width * 0.7).toInt // 56 chars after spacers
-    println(s"Terminal width: ${terminalSize.width}, Editor area: $editorArea")
+    val viewportSize = ViewportSize(80, 24) // Typical small terminal
+    val editorArea = (viewportSize.width * 0.7).toInt // 56 chars after spacers
+    println(s"Terminal width: ${viewportSize.width}, Editor area: $editorArea")
     
     val initialState = stateManager.getCurrentState.unsafeRunSync()
     println(s"Initial: ${initialState.layout.editorPanes.size} panes")
@@ -41,7 +41,7 @@ class PaneWidthDebugSpec extends AnyFlatSpec with Matchers:
     println(s"Final state: ${finalState.layout.editorPanes.size} panes, ${finalState.buffers.size} buffers")
     
     // Check what the layout engine produces
-    val calculatedLayout = LayoutEngine.calculateLayout(finalState, terminalSize)
+    val calculatedLayout = LayoutEngine.calculateLayout(finalState, viewportSize)
     val paneLayouts1 = LayoutEngine.calculatePaneLayouts(finalState, calculatedLayout)
     val paneLayouts50 = LayoutEngine.calculatePaneLayoutsWithMinWidth(finalState, calculatedLayout, 50)
     val paneLayouts1Actual = LayoutEngine.calculatePaneLayoutsWithMinWidth(finalState, calculatedLayout, 1)

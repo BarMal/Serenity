@@ -25,22 +25,22 @@ object Renderer:
   def render(state: AppState, cursorVisible: Boolean, screen: Screen): Unit =
     val state0   = withEffectiveTheme(state)
     val surface  = LanternaRenderSurface(screen, screen.newTextGraphics())
-    val terminalSize = TerminalSize(surface.viewportWidth, surface.viewportHeight)
-    val layout   = LayoutEngine.calculateLayout(state0, terminalSize)
-    renderFrame(state0, cursorVisible, surface, terminalSize, layout)
+    val viewportSize = ViewportSize(surface.viewportWidth, surface.viewportHeight)
+    val layout   = LayoutEngine.calculateLayout(state0, viewportSize)
+    renderFrame(state0, cursorVisible, surface, viewportSize, layout)
 
   def render(state: AppState, cursorVisible: Boolean, swingTerm: com.serenity.ui.terminal.SwingTerminal, font: java.awt.Font): Unit =
     val state0   = withEffectiveTheme(state)
     val surface  = Java2DRenderSurface.forFrame(swingTerm.metrics, font, swingTerm.canvas, swingTerm.onImageReady)
-    val terminalSize = swingTerm.terminalSize
-    val layout   = LayoutEngine.calculateLayout(state0, terminalSize)
-    renderFrame(state0, cursorVisible, surface, terminalSize, layout)
+    val viewportSize = swingTerm.viewportSize
+    val layout   = LayoutEngine.calculateLayout(state0, viewportSize)
+    renderFrame(state0, cursorVisible, surface, viewportSize, layout)
 
   private def renderFrame(
     state: AppState,
     cursorVisible: Boolean,
     surface: RenderSurface,
-    terminalSize: TerminalSize,
+    viewportSize: ViewportSize,
     layout: CalculatedLayout
   ): Unit =
     surface.hideCursor()
@@ -53,7 +53,7 @@ object Renderer:
         case _                              => None
     } match
       case Some(page) =>
-        renderStartPage(page, surface, terminalSize, state.theme)
+        renderStartPage(page, surface, viewportSize, state.theme)
         val floatContext = RenderContext(surface, layout, cursorVisible)
         renderFloatingPanels(state, floatContext)
       case None =>
@@ -69,8 +69,8 @@ object Renderer:
 
   def renderCursorOnly(state: AppState, cursorVisible: Boolean, screen: Screen): Unit =
     val surface      = LanternaRenderSurface(screen, screen.newTextGraphics())
-    val terminalSize = TerminalSize(surface.viewportWidth, surface.viewportHeight)
-    val layout       = LayoutEngine.calculateLayout(state, terminalSize)
+    val viewportSize = ViewportSize(surface.viewportWidth, surface.viewportHeight)
+    val layout       = LayoutEngine.calculateLayout(state, viewportSize)
     val paneLayouts  = LayoutEngine.calculatePaneLayouts(state, layout)
 
     surface.hideCursor()
@@ -90,8 +90,8 @@ object Renderer:
               val screenY = contentRect.y + (visualLine - buffer.viewport.topLine)
               val screenX = contentRect.x + visualColumn
 
-              if screenY >= 0 && screenY < terminalSize.height &&
-                  screenX >= 0 && screenX < terminalSize.width
+              if screenY >= 0 && screenY < viewportSize.height &&
+                  screenX >= 0 && screenX < viewportSize.width
               then
                 if cursorVisible then
                   surface.setBackgroundColor(state.theme.cursor)
@@ -316,11 +316,11 @@ object Renderer:
   private def renderStartPage(
     page: StartupPage,
     surface: RenderSurface,
-    terminalSize: TerminalSize,
+    viewportSize: ViewportSize,
     theme: Theme
   ): Unit =
     val lines  = page.renderLines
-    val startY = (terminalSize.height - lines.size) / 2
+    val startY = (viewportSize.height - lines.size) / 2
 
     val titleLines       = 2
     val optionStartIndex = titleLines
@@ -328,9 +328,9 @@ object Renderer:
 
     lines.zipWithIndex.foreach { case (line, lineIndex) =>
       val y = startY + lineIndex
-      val x = math.max(0, (terminalSize.width - line.length) / 2)
+      val x = math.max(0, (viewportSize.width - line.length) / 2)
 
-      if y >= 0 && y < terminalSize.height then
+      if y >= 0 && y < viewportSize.height then
         val isOption    = lineIndex >= optionStartIndex && lineIndex <= optionEndIndex
         val optionIndex = lineIndex - optionStartIndex
         val isSelected  = isOption && optionIndex == page.selectedIndex
@@ -338,7 +338,7 @@ object Renderer:
         if isSelected then
           surface.setForegroundColor(theme.highlighted.foreground)
           surface.setBackgroundColor(theme.highlighted.background)
-          CharacterRenderer.renderStringPlain(surface, 0, y, " " * terminalSize.width)
+          CharacterRenderer.renderStringPlain(surface, 0, y, " " * viewportSize.width)
           CharacterRenderer.renderString(surface, x, y, line)
         else
           surface.setForegroundColor(theme.placeholder)

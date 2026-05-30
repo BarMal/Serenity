@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.keystroke.events.{NewTab, NextTab, PreviousTab}
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -20,8 +20,8 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager.apply(logger).unsafeRunSync()
-    val wideTerminal = TerminalSize(200, 24) // Wide enough for multiple panes
-    val narrowTerminal = TerminalSize(120, 24) // Only fits 1-2 panes at 50 chars minimum
+    val wideTerminal = ViewportSize(200, 24) // Wide enough for multiple panes
+    val narrowTerminal = ViewportSize(120, 24) // Only fits 1-2 panes at 50 chars minimum
 
   it should "start with exactly one pane and one buffer" in new NavigationBehaviorFixture {
     // When: App starts (initial state)
@@ -108,7 +108,7 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "show dual pane behavior: Ctrl+Shift+Tab moves cursor between visible panes" in new NavigationBehaviorFixture {
     // Given: Two buffers, wide terminal (2 panes can be visible)
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Create second buffer
     val stateWith2Buffers = stateManager.getCurrentState.unsafeRunSync()
     
@@ -148,7 +148,7 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "switch focus forward with Ctrl+Tab" in new NavigationBehaviorFixture {
     // Given: Two buffers, wide terminal (2 panes visible)
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     
     // Move to first buffer using PreviousTab
@@ -239,7 +239,7 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "show only focused buffer's cursor (cursor visibility follows focus)" in new NavigationBehaviorFixture {
     // Given: Two buffers, wide terminal (2 panes visible)
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     val stateWith2Buffers = stateManager.getCurrentState.unsafeRunSync()
     

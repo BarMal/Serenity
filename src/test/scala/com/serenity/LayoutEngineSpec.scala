@@ -21,10 +21,10 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       buffers = Map.empty,
       focus = Focus.EditorPane(PaneId(0))
     )
-    val terminalSize = TerminalSize(100, 30)
+    val viewportSize = ViewportSize(100, 30)
 
     // When: Calculate layout  
-    val calculatedLayout = LayoutEngine.calculateLayout(state, terminalSize)
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
 
     // Then: Single pane should get full editor area
     val paneLayouts = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
@@ -47,10 +47,10 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       buffers = Map.empty,
       focus = Focus.EditorPane(PaneId(1))
     )
-    val terminalSize = TerminalSize(100, 30)
+    val viewportSize = ViewportSize(100, 30)
 
     // When: Calculate layout
-    val calculatedLayout = LayoutEngine.calculateLayout(state, terminalSize)
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
     val paneLayouts = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
 
     // Then: With minimum width constraints, only one pane should be visible
@@ -79,10 +79,10 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     )
     val layout = Layout(editorPanes = panes, activeEditorPaneId = Some(PaneId(0)))
     val state = AppState(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(0)))
-    val terminalSize = TerminalSize(120, 24)
+    val viewportSize = ViewportSize(120, 24)
 
     // When: Calculate layout
-    val calculatedLayout = LayoutEngine.calculateLayout(state, terminalSize)
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
     val paneLayouts = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
 
     // Then: With minimum width constraints, only one pane should be visible
@@ -106,7 +106,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   it should "respect minimum pane width constraint" in {
     // Given: State with many panes that would exceed minimum width
     val minPaneWidth = 40
-    val terminalSize = TerminalSize(100, 24) // Editor area = 70 chars, max 1 pane at 40 chars min
+    val viewportSize = ViewportSize(100, 24) // Editor area = 70 chars, max 1 pane at 40 chars min
     
     val panes = (0 until 5).map { i =>
       PaneId(i) -> EditorPane.empty(PaneId(i))
@@ -116,7 +116,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val state = AppState(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(0)))
 
     // When: Calculate layout with minimum width constraint
-    val calculatedLayout = LayoutEngine.calculateLayout(state, terminalSize)
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
     val paneLayouts = LayoutEngine.calculatePaneLayoutsWithMinWidth(state, calculatedLayout, minPaneWidth)
 
     // Then: Only panes that fit should be visible, others should be off-screen but tracked
@@ -133,14 +133,14 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     // Other panes should be positioned off-screen (negative x or beyond screen width)
     for (i <- 1 until 5) {
       val hiddenPane = paneLayouts(PaneId(i))
-      (hiddenPane.x < 0 || hiddenPane.x >= terminalSize.width) shouldBe true
+      (hiddenPane.x < 0 || hiddenPane.x >= viewportSize.width) shouldBe true
     }
   }
 
   it should "handle pane navigation with minimum width constraints" in {
     // Given: 4 panes with terminal that can only show 2 at min width
     val minPaneWidth = 30
-    val terminalSize = TerminalSize(100, 24) // Editor area = 70 chars, max 2 panes visible
+    val viewportSize = ViewportSize(100, 24) // Editor area = 70 chars, max 2 panes visible
     
     val panes = (0 until 4).map { i =>
       PaneId(i) -> EditorPane.empty(PaneId(i))
@@ -150,7 +150,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val state = AppState(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(2)))
 
     // When: Calculate layout ensuring focused pane is visible
-    val calculatedLayout = LayoutEngine.calculateLayout(state, terminalSize)
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
     val paneLayouts = LayoutEngine.calculatePaneLayoutsWithMinWidth(state, calculatedLayout, minPaneWidth)
 
     // Then: Focused pane (PaneId(2)) should be visible, along with adjacent pane

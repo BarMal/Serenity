@@ -120,7 +120,7 @@ object SessionState:
       uiSurfaces = List.empty, // Never restore UI surfaces
       actionStack = Nil, // Never restore action stack
       findState = sessionState.findState.map(SessionFindState.toFindState),
-      terminalSize = None, // Will be set when app starts
+      viewportSize = None, // Will be set when app starts
       theme = theme,
       config = sessionState.config,
       nextBufferId = BufferId(bufferMap.keys.map(_.value).maxOption.getOrElse(-1) + 1),

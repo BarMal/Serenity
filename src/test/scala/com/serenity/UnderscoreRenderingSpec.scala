@@ -49,7 +49,7 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
   "Renderer" should "display underscore characters visibly" in {
     import com.serenity.rope.Balance
     import com.serenity.ui.renderer.Renderer
-    import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
+    import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
     import com.googlecode.lanterna.screen.VirtualScreen
     import com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal
 

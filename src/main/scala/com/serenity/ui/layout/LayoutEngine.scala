@@ -2,7 +2,7 @@ package com.serenity.ui.layout
 
 import com.serenity.state.models.*
 
-case class TerminalSize(width: Int, height: Int)
+case class ViewportSize(width: Int, height: Int)
 
 case class LayoutRect(x: Int, y: Int, width: Int, height: Int):
   def right: Int   = x + width
@@ -26,7 +26,7 @@ object LayoutManager:
 
   def calculateLayout(
     state: AppState,
-    terminalSize: TerminalSize
+    viewportSize: ViewportSize
   ): Unit = ()
 
 object LayoutEngine:
@@ -36,21 +36,21 @@ object LayoutEngine:
 
   def calculateLayout(
     state: AppState,
-    terminalSize: TerminalSize,
+    viewportSize: ViewportSize,
     spacerPercentage: Double = DefaultSpacerPercentage
   ): CalculatedLayout =
-    calculateLayoutWithUI(state, terminalSize, spacerPercentage)
+    calculateLayoutWithUI(state, viewportSize, spacerPercentage)
 
   def calculateLayoutWithUI(
     state: AppState,
-    terminalSize: TerminalSize,
+    viewportSize: ViewportSize,
     spacerPercentage: Double = DefaultSpacerPercentage
   ): CalculatedLayout =
     val gutterHeight = if state.config.showGutter then 1 else 0
-    val contentHeight = math.max(1, terminalSize.height - gutterHeight)
+    val contentHeight = math.max(1, viewportSize.height - gutterHeight)
     val pinnedPanelRects = calculatePinnedPanelRects(
       state.pinnedSurfaces,
-      terminalSize.width,
+      viewportSize.width,
       contentHeight
     )
 
@@ -66,7 +66,7 @@ object LayoutEngine:
     val workspaceX = leftPinnedWidth
     val workspaceY = topPinnedHeight
     val workspaceWidth =
-      math.max(1, terminalSize.width - leftPinnedWidth - rightPinnedWidth)
+      math.max(1, viewportSize.width - leftPinnedWidth - rightPinnedWidth)
     val workspaceHeight =
       math.max(1, contentHeight - topPinnedHeight - bottomPinnedHeight)
 
@@ -96,7 +96,7 @@ object LayoutEngine:
       LayoutRect(workspaceX + spacerWidth + lineNumberWidth + availableWidth, workspaceY, spacerWidth, workspaceHeight)
 
     val gutterRect =
-      if state.config.showGutter then Some(LayoutRect(0, terminalSize.height - 1, terminalSize.width, 1))
+      if state.config.showGutter then Some(LayoutRect(0, viewportSize.height - 1, viewportSize.width, 1))
       else None
 
     val baseLayout = CalculatedLayout(

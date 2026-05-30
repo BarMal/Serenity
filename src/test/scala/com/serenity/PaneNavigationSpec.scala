@@ -19,11 +19,11 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager.apply(logger).unsafeRunSync()
-    val wideTerminal = com.serenity.ui.layout.TerminalSize(400, 24) // Wide enough for multiple panes
+    val wideTerminal = com.serenity.ui.layout.ViewportSize(400, 24) // Wide enough for multiple panes
 
   it should "cycle forward through buffers with Ctrl+Tab (NextTab)" in new NavigationFixture {
     // Given: Wide terminal to allow multiple panes, then create three buffers
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 1
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 2
     val state = stateManager.getCurrentState.unsafeRunSync()
@@ -61,7 +61,7 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "cycle backward through buffers with Ctrl+Shift+Tab (PreviousTab)" in new NavigationFixture {
     // Given: Wide terminal to allow multiple panes, then create three buffers
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 1
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 2
     val state = stateManager.getCurrentState.unsafeRunSync()
@@ -96,7 +96,7 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "handle navigation with only two buffers" in new NavigationFixture {
     // Given: Wide terminal and two buffers
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 1
     val state = stateManager.getCurrentState.unsafeRunSync()
     
@@ -146,7 +146,7 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "maintain correct focus when buffers are closed during navigation" in new NavigationFixture {
     // Given: Wide terminal and four buffers
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     (1 to 3).foreach(_ => stateManager.applyEvent(NewTab).unsafeRunSync())
     val state = stateManager.getCurrentState.unsafeRunSync()
     
@@ -180,8 +180,8 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "navigate through all buffers regardless of pane visibility constraints" in new NavigationFixture {
     // Given: Many buffers but limited terminal width (fewer visible panes)
-    val narrowTerminal = com.serenity.ui.layout.TerminalSize(120, 24) // Limited width
-    stateManager.updateState(_.copy(terminalSize = Some(narrowTerminal))).unsafeRunSync()
+    val narrowTerminal = com.serenity.ui.layout.ViewportSize(120, 24) // Limited width
+    stateManager.updateState(_.copy(viewportSize = Some(narrowTerminal))).unsafeRunSync()
     
     // Create 5 buffers
     (1 to 4).foreach(_ => stateManager.applyEvent(NewTab).unsafeRunSync())
