@@ -1,16 +1,17 @@
 package com.serenity.animation
 
 import com.googlecode.lanterna.TextColor
+import java.awt.Color
 
 case class AnimatedCell(
     content: Option[Char],
-    foregroundSteps: List[TextColor],
-    backgroundSteps: List[TextColor],
+    foregroundSteps: List[Color],
+    backgroundSteps: List[Color],
     cycling: Boolean = false
 ):
 
-  def currentForeground: Option[TextColor] = foregroundSteps.headOption
-  def currentBackground: Option[TextColor] = backgroundSteps.headOption
+  def currentForeground: Option[Color] = foregroundSteps.headOption
+  def currentBackground: Option[Color] = backgroundSteps.headOption
 
   def isComplete: Boolean =
     !cycling && foregroundSteps.isEmpty && backgroundSteps.isEmpty
@@ -40,7 +41,7 @@ object AnimatedCell:
   ): AnimatedCell =
     AnimatedCell(
       content = Some(char),
-      foregroundSteps = RgbInterpolator.interpolate(startColor, endColor, steps),
+      foregroundSteps = RgbInterpolator.interpolate(startColor, endColor, steps).map(_.toColor()),
       backgroundSteps = List.empty
     )
 
@@ -53,14 +54,14 @@ object AnimatedCell:
   ): AnimatedCell =
     AnimatedCell(
       content = None,
-      foregroundSteps = RgbInterpolator.interpolate(oldForeground, newForeground, steps),
-      backgroundSteps = RgbInterpolator.interpolate(oldBackground, newBackground, steps)
+      foregroundSteps = RgbInterpolator.interpolate(oldForeground, newForeground, steps).map(_.toColor()),
+      backgroundSteps = RgbInterpolator.interpolate(oldBackground, newBackground, steps).map(_.toColor())
     )
 
   def completed(char: Char, color: TextColor): AnimatedCell =
     AnimatedCell(
       content = Some(char),
-      foregroundSteps = List(color),
+      foregroundSteps = List(color.toColor()),
       backgroundSteps = List.empty
     )
 

@@ -1,6 +1,7 @@
 package com.serenity.animation
 
 import com.googlecode.lanterna.TextColor
+import java.awt.Color
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -10,6 +11,9 @@ class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
   private val white = new TextColor.RGB(255, 255, 255)
   private val red   = new TextColor.RGB(255, 0, 0)
   private val blue  = new TextColor.RGB(0, 0, 255)
+
+  private val blackAwt = black.toColor()
+  private val whiteAwt = white.toColor()
 
   /** 3 columns (0–2) × 2 rows (0–1), uniform colour pair */
   private def grid3x2(start: TextColor = black, end: TextColor = white): Map[CharacterKey, CellAnimation] =
@@ -73,13 +77,13 @@ class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
     val steps  = 4
     val result = FlowAnimationBuilder.build(grid3x2(), FlowDirection.ByColumn, SweepDirection.Forward, steps)
     // Column 2 has a stagger of 2 so the first two entries must hold startColor
-    result(CharacterKey(2, 0)).foregroundSteps.take(2) shouldEqual List(black, black)
+    result(CharacterKey(2, 0)).foregroundSteps.take(2) shouldEqual List(blackAwt, blackAwt)
   }
 
   it should "match post-padding color steps to RgbInterpolator output" in {
     val steps    = 4
     val result   = FlowAnimationBuilder.build(grid3x2(), FlowDirection.ByColumn, SweepDirection.Forward, steps)
-    val expected = RgbInterpolator.interpolate(black, white, steps)
+    val expected = RgbInterpolator.interpolateRgba(blackAwt, whiteAwt, steps)
     // Column 0 has no padding — colorSteps is exactly the interpolation
     result(CharacterKey(0, 0)).foregroundSteps shouldEqual expected
     // Column 2 has 2 padding frames — dropping them yields the same interpolation
@@ -144,7 +148,7 @@ class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
     val result = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, SweepDirection.Forward, steps)
 
     result(CharacterKey(3, 7)).foregroundSteps should have length steps
-    result(CharacterKey(3, 7)).foregroundSteps shouldEqual RgbInterpolator.interpolate(black, white, steps)
+    result(CharacterKey(3, 7)).foregroundSteps shouldEqual RgbInterpolator.interpolateRgba(blackAwt, whiteAwt, steps)
   }
 
   it should "give all cells offset 0 when the element spans a single column with ByColumn direction" in {

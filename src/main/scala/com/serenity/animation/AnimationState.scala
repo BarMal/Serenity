@@ -1,6 +1,7 @@
 package com.serenity.animation
 
 import com.googlecode.lanterna.TextColor
+import java.awt.Color
 
 /** Buffer coordinate key for character animations (column, line) */
 case class CharacterKey(column: Int, line: Int)
@@ -58,7 +59,7 @@ case class AnimationState(
     animations.get(CharacterKey(x, y))
 
   /** Get the current animated foreground color at a buffer position, if an active animation exists */
-  def getCharacterColor(x: Int, y: Int): Option[TextColor] =
+  def getCharacterColor(x: Int, y: Int): Option[Color] =
     getCell(x, y).flatMap(_.currentForeground)
 
   /** Get all animated cells for a given buffer line, keyed by column */

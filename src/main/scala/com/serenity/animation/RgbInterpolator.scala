@@ -1,8 +1,27 @@
 package com.serenity.animation
 
 import com.googlecode.lanterna.TextColor
+import java.awt.Color
 
 object RgbInterpolator:
+
+  def interpolateRgba(startColor: Color, endColor: Color, steps: Int): List[Color] =
+    if steps <= 0 then List.empty
+    else if steps == 1 then List(endColor)
+    else if startColor == endColor then List.fill(steps)(startColor)
+    else
+      val stepSize = 1.0 / (steps - 1)
+      (0 until steps).map { step =>
+        if step == 0 then startColor
+        else if step == steps - 1 then endColor
+        else
+          val t = step * stepSize
+          val r = interpolateComponent(startColor.getRed,   endColor.getRed,   t)
+          val g = interpolateComponent(startColor.getGreen, endColor.getGreen, t)
+          val b = interpolateComponent(startColor.getBlue,  endColor.getBlue,  t)
+          val a = interpolateComponent(startColor.getAlpha, endColor.getAlpha, t)
+          new Color(r, g, b, a)
+      }.toList
 
   /** Interpolate between two colors with the specified number of steps */
   def interpolate(startColor: TextColor, endColor: TextColor, steps: Int): List[TextColor] =

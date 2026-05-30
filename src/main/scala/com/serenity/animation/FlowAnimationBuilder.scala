@@ -32,7 +32,9 @@ object FlowAnimationBuilder:
           case (FlowDirection.ByRow,    SweepDirection.Forward)  => key.line - minRow
           case (FlowDirection.ByRow,    SweepDirection.Backward) => maxRow - key.line
 
-        val fade    = RgbInterpolator.interpolate(cell.startColor, cell.endColor, steps)
-        val padding = List.fill(offset)(cell.startColor)
+        val startAwt = cell.startColor.toColor()
+        val endAwt   = cell.endColor.toColor()
+        val fade     = RgbInterpolator.interpolateRgba(startAwt, endAwt, steps)
+        val padding  = List.fill(offset)(startAwt)
         key -> AnimatedCell(content = Some(cell.char), foregroundSteps = padding ++ fade, backgroundSteps = List.empty)
       }

@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import java.awt.Color
 import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.{Deferred, IO, Ref}
@@ -565,11 +566,15 @@ object StateManager:
         val cachedRect = previousLayout.belowCursorOverlayRect
           .getOrElse(LayoutRect(12, 2, 56, overlayHeight))
         val overlayFadeOutAnims = (0 until overlayHeight).map { rowOffset =>
-          val delay   = overlayHeight - 1 - rowOffset
-          val bgSteps = List.fill(delay)(s.theme.panel.background) ++
-            RgbInterpolator.interpolate(s.theme.panel.background, s.theme.background, steps)
-          val fgSteps = List.fill(delay)(s.theme.panel.foreground) ++
-            RgbInterpolator.interpolate(s.theme.panel.foreground, s.theme.background, steps)
+          val delay      = overlayHeight - 1 - rowOffset
+          val panelBg    = s.theme.panel.background.toColor()
+          val panelFg    = s.theme.panel.foreground.toColor()
+          val transpBg   = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
+          val transpFg   = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
+          val bgSteps    = List.fill(delay)(panelBg) ++
+            RgbInterpolator.interpolateRgba(panelBg, transpBg, steps)
+          val fgSteps    = List.fill(delay)(panelFg) ++
+            RgbInterpolator.interpolateRgba(panelFg, transpFg, steps)
           CharacterKey(0, rowOffset) -> AnimatedCell(
             content = None,
             foregroundSteps = fgSteps,
@@ -615,7 +620,7 @@ object StateManager:
             val char = if bufferCol < lineContent.length then lineContent(bufferCol) else ' '
             CharacterKey(bufferCol, bufferLine) -> AnimatedCell(
               content = Some(char),
-              foregroundSteps = RgbInterpolator.interpolate(theme.foreground, theme.background, steps),
+              foregroundSteps = RgbInterpolator.interpolate(theme.foreground, theme.background, steps).map(_.toColor()),
               backgroundSteps = List.empty
             )
           }
@@ -642,8 +647,8 @@ object StateManager:
             val char = if bufferCol < lineContent.length then lineContent(bufferCol) else ' '
             CharacterKey(bufferCol, bufferLine) -> AnimatedCell(
               content = Some(char),
-              foregroundSteps = List.fill(delayTicks)(theme.background) ++
-                RgbInterpolator.interpolate(theme.background, theme.foreground, steps),
+              foregroundSteps = List.fill(delayTicks)(theme.background.toColor()) ++
+                RgbInterpolator.interpolate(theme.background, theme.foreground, steps).map(_.toColor()),
               backgroundSteps = List.empty
             )
           }
@@ -661,11 +666,15 @@ object StateManager:
             val newTick = surfAnim.phaseTick + 1
             if newTick >= surfAnim.bufferFadeLength then
               val overlayFadeIn = (0 until surfAnim.overlayHeight).map { rowOffset =>
-                val delay   = rowOffset
-                val bgSteps = List.fill(delay)(s.theme.background) ++
-                  RgbInterpolator.interpolate(s.theme.background, s.theme.panel.background, AnimationConfig.smooth.get.steps)
-                val fgSteps = List.fill(delay)(s.theme.background) ++
-                  RgbInterpolator.interpolate(s.theme.background, s.theme.panel.foreground, AnimationConfig.smooth.get.steps)
+                val delay    = rowOffset
+                val panelBg  = s.theme.panel.background.toColor()
+                val panelFg  = s.theme.panel.foreground.toColor()
+                val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
+                val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
+                val bgSteps  = List.fill(delay)(transpBg) ++
+                  RgbInterpolator.interpolateRgba(transpBg, panelBg, AnimationConfig.smooth.get.steps)
+                val fgSteps  = List.fill(delay)(transpFg) ++
+                  RgbInterpolator.interpolateRgba(transpFg, panelFg, AnimationConfig.smooth.get.steps)
                 CharacterKey(0, rowOffset) -> AnimatedCell(
                   content = None,
                   foregroundSteps = fgSteps,

@@ -7,13 +7,15 @@ import org.scalatest.matchers.should.Matchers
 class ListBasedAnimationSpec extends AnyFlatSpec with Matchers:
 
   "AnimatedCell list-based advancement" should "consume foreground steps on advance" in {
-    val cell = AnimatedCell(Some('a'), List(TextColor.ANSI.BLACK, TextColor.ANSI.WHITE), List.empty)
+    val awtBlack = TextColor.ANSI.BLACK.toColor()
+    val awtWhite = TextColor.ANSI.WHITE.toColor()
+    val cell = AnimatedCell(Some('a'), List(awtBlack, awtWhite), List.empty)
 
-    cell.currentForeground shouldEqual Some(TextColor.ANSI.BLACK)
+    cell.currentForeground shouldEqual Some(awtBlack)
     cell.isComplete should be(false)
 
     val advanced = cell.advance()
-    advanced.currentForeground shouldEqual Some(TextColor.ANSI.WHITE)
+    advanced.currentForeground shouldEqual Some(awtWhite)
     advanced.isComplete should be(false)
 
     val completed = advanced.advance()

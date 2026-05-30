@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import com.googlecode.lanterna.TextColor
 import com.serenity.ui.theme.Theme
+import java.awt.Color
 
 object TextOverlayRenderer:
 
@@ -13,14 +14,14 @@ object TextOverlayRenderer:
   ): Unit =
     val rect = overlay.rect
 
-    def rowColors(rowOffset: Int): (TextColor, TextColor) =
+    def rowColors(rowOffset: Int): (Color, Color) =
       overlay.animationState.getCell(0, rowOffset)
         .map(cell =>
-          ( cell.currentForeground.getOrElse(theme.panel.foreground)
-          , cell.currentBackground.getOrElse(theme.panel.background)
+          ( cell.currentForeground.getOrElse(theme.panel.foreground.toColor())
+          , cell.currentBackground.getOrElse(theme.panel.background.toColor())
           )
         )
-        .getOrElse((theme.panel.foreground, theme.panel.background))
+        .getOrElse((theme.panel.foreground.toColor(), theme.panel.background.toColor()))
 
     surface.setAlpha(theme.panel.alpha.toFloat)
 
@@ -42,27 +43,27 @@ object TextOverlayRenderer:
     surface: RenderSurface,
     overlay: TextOverlayView,
     theme: Theme,
-    rowColors: Int => (TextColor, TextColor)
+    rowColors: Int => (Color, Color)
   ): Unit =
     val rect      = overlay.rect
     val animated  = overlay.animationState.animations.nonEmpty
 
     if rect.width >= 2 && rect.height >= 2 then
       val (topFg, topBg) = rowColors(0)
-      surface.setForegroundColor(if animated then topFg else theme.border)
+      surface.setForegroundColor(if animated then topFg else theme.border.toColor())
       surface.setBackgroundColor(topBg)
       surface.putString(rect.x, rect.y, "+" + "-" * (rect.width - 2) + "+")
 
       for y <- (rect.y + 1) until (rect.bottom - 1) do
         val rowOff           = y - rect.y
         val (sideFg, sideBg) = rowColors(rowOff)
-        surface.setForegroundColor(if animated then sideFg else theme.border)
+        surface.setForegroundColor(if animated then sideFg else theme.border.toColor())
         surface.setBackgroundColor(sideBg)
         surface.putString(rect.x, y, "|")
         surface.putString(rect.right - 1, y, "|")
 
       val (botFg, botBg) = rowColors(rect.height - 1)
-      surface.setForegroundColor(if animated then botFg else theme.border)
+      surface.setForegroundColor(if animated then botFg else theme.border.toColor())
       surface.setBackgroundColor(botBg)
       surface.putString(rect.x, rect.bottom - 1, "+" + "-" * (rect.width - 2) + "+")
 
@@ -71,7 +72,7 @@ object TextOverlayRenderer:
     overlay: TextOverlayView,
     theme: Theme,
     cursorVisible: Boolean,
-    rowColors: Int => (TextColor, TextColor),
+    rowColors: Int => (Color, Color),
     animated: Boolean
   ): Unit =
     val rect        = overlay.rect
@@ -105,21 +106,21 @@ object TextOverlayRenderer:
     row: OverlayRow,
     theme: Theme,
     cursorVisible: Boolean,
-    defaultForeground: TextColor = null,
-    defaultBackground: TextColor = null,
+    defaultForeground: Color = null,
+    defaultBackground: Color = null,
     isAnimating: Boolean = false
   ): Unit =
-    val baseFg = if defaultForeground != null then defaultForeground else theme.panel.foreground
-    val baseBg = if defaultBackground != null then defaultBackground else theme.panel.background
+    val baseFg = if defaultForeground != null then defaultForeground else theme.panel.foreground.toColor()
+    val baseBg = if defaultBackground != null then defaultBackground else theme.panel.background.toColor()
     val rowBackground =
       if isAnimating then baseBg
-      else row.backgroundColor.getOrElse(
-        if row.selected then theme.highlighted.background else baseBg
+      else row.backgroundColor.map(_.toColor()).getOrElse(
+        if row.selected then theme.highlighted.background.toColor() else baseBg
       )
     val rowForeground =
       if isAnimating then baseFg
-      else row.foregroundColor.getOrElse(
-        if row.selected then theme.highlighted.foreground else baseFg
+      else row.foregroundColor.map(_.toColor()).getOrElse(
+        if row.selected then theme.highlighted.foreground.toColor() else baseFg
       )
 
     surface.setForegroundColor(rowForeground)
@@ -141,8 +142,8 @@ object TextOverlayRenderer:
           val cursorChar =
             if cursorColumn < row.plainText.length then row.plainText.charAt(cursorColumn)
             else ' '
-          surface.setForegroundColor(theme.background)
-          surface.setBackgroundColor(theme.cursor)
+          surface.setForegroundColor(theme.background.toColor())
+          surface.setBackgroundColor(theme.cursor.toColor())
           CharacterRenderer.renderChar(surface, cursorX, y, cursorChar)
       }
 
@@ -153,8 +154,8 @@ object TextOverlayRenderer:
     width: Int,
     row: OverlayRow,
     theme: Theme,
-    defaultForeground: TextColor,
-    defaultBackground: TextColor,
+    defaultForeground: Color,
+    defaultBackground: Color,
     isAnimating: Boolean = false
   ): Unit =
     val segments = row.segments
@@ -178,8 +179,8 @@ object TextOverlayRenderer:
     width: Int,
     row: OverlayRow,
     theme: Theme,
-    defaultForeground: TextColor,
-    defaultBackground: TextColor,
+    defaultForeground: Color,
+    defaultBackground: Color,
     isAnimating: Boolean = false
   ): Unit =
     row.segments match
@@ -208,8 +209,8 @@ object TextOverlayRenderer:
     width: Int,
     segment: OverlaySegment,
     theme: Theme,
-    defaultForeground: TextColor,
-    defaultBackground: TextColor,
+    defaultForeground: Color,
+    defaultBackground: Color,
     isAnimating: Boolean = false
   ): Unit =
     val text    = segment.text.take(width)
@@ -225,24 +226,24 @@ object TextOverlayRenderer:
     segmentText: String,
     segment: OverlaySegment,
     theme: Theme,
-    defaultForeground: TextColor,
-    defaultBackground: TextColor,
+    defaultForeground: Color,
+    defaultBackground: Color,
     isAnimating: Boolean = false
   ): Unit =
     if width > 0 then
       val segmentBackground =
         if isAnimating then defaultBackground
-        else segment.backgroundColor.getOrElse(
-          if segment.selected then theme.highlighted.background
-          else if segment.tone == OverlayTone.Error then theme.error.background
+        else segment.backgroundColor.map(_.toColor()).getOrElse(
+          if segment.selected then theme.highlighted.background.toColor()
+          else if segment.tone == OverlayTone.Error then theme.error.background.toColor()
           else defaultBackground
         )
       val segmentForeground =
         if isAnimating then defaultForeground
-        else segment.foregroundColor.getOrElse(
-          if segment.selected then theme.highlighted.foreground
-          else if segment.tone == OverlayTone.Muted then theme.muted
-          else if segment.tone == OverlayTone.Error then theme.error.foreground
+        else segment.foregroundColor.map(_.toColor()).getOrElse(
+          if segment.selected then theme.highlighted.foreground.toColor()
+          else if segment.tone == OverlayTone.Muted then theme.muted.toColor()
+          else if segment.tone == OverlayTone.Error then theme.error.foreground.toColor()
           else defaultForeground
         )
       surface.setForegroundColor(segmentForeground)

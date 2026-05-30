@@ -28,7 +28,7 @@ class AnimationStateSpec extends AnyFlatSpec with Matchers:
     )
 
     newState.getCell(5, 10) should be(defined)
-    newState.getCell(5, 10).get.currentForeground shouldEqual Some(backgroundColor)
+    newState.getCell(5, 10).get.currentForeground shouldEqual Some(backgroundColor.toColor())
     newState.hasActiveAnimations should be(true)
   }
 
@@ -40,7 +40,7 @@ class AnimationStateSpec extends AnyFlatSpec with Matchers:
     val cell = state.getCell(5, 10)
     cell should be(defined)
     cell.get.content shouldEqual Some('y')
-    cell.get.currentForeground shouldEqual Some(TextColor.ANSI.RED)
+    cell.get.currentForeground shouldEqual Some(TextColor.ANSI.RED.toColor())
   }
 
   it should "maintain multiple animations at different positions" in {
@@ -125,7 +125,7 @@ class AnimationStateSpec extends AnyFlatSpec with Matchers:
     val state = AnimationState.empty
       .addCharacterAnimation('a', 5, 10, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 2)
 
-    state.getCharacterColor(5, 10) shouldEqual Some(TextColor.ANSI.BLACK)
+    state.getCharacterColor(5, 10) shouldEqual Some(TextColor.ANSI.BLACK.toColor())
     state.getCharacterColor(6, 10) should be(empty)
   }
 

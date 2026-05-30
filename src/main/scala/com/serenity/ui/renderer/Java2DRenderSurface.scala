@@ -34,6 +34,9 @@ class Java2DRenderSurface(
   def setBackgroundColor(color: TextColor): Unit = bg = color.toColor
   def getBackgroundColor: TextColor = new TextColor.RGB(bg.getRed, bg.getGreen, bg.getBlue)
 
+  override def setForegroundColor(color: java.awt.Color): Unit = fg = color
+  override def setBackgroundColor(color: java.awt.Color): Unit = bg = color
+
   def putString(x: Int, y: Int, s: String): Unit =
     if s.nonEmpty then
       val px = metrics.toPixelX(x)

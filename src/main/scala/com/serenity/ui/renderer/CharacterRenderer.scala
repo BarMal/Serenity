@@ -168,10 +168,12 @@ object CharacterRenderer:
     bufferColumn: Int
   ): Unit =
     val cell = screenAnimations.getCell(bufferColumn, bufferLine)
-    val fg   = cell.flatMap(_.currentForeground).getOrElse(theme.foreground)
-    val bg   = cell.flatMap(_.currentBackground).getOrElse(theme.background)
-    surface.setForegroundColor(fg)
-    surface.setBackgroundColor(bg)
+    cell.flatMap(_.currentForeground) match
+      case Some(fg) => surface.setForegroundColor(fg)
+      case None     => surface.setForegroundColor(theme.foreground)
+    cell.flatMap(_.currentBackground) match
+      case Some(bg) => surface.setBackgroundColor(bg)
+      case None     => surface.setBackgroundColor(theme.background)
     renderChar(surface, x, y, char)
 
   private def blendColors(foreground: TextColor, background: TextColor, opacity: Double): TextColor =

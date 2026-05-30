@@ -27,7 +27,7 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
 
     characters.foreach { case (_, x, y) =>
       animState.getCell(x, y) should be(defined)
-      animState.getCell(x, y).get.currentForeground shouldEqual Some(backgroundColor)
+      animState.getCell(x, y).get.currentForeground shouldEqual Some(backgroundColor.toColor())
     }
 
     val frame1 = animState.advanceAnimations()
@@ -69,28 +69,30 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "apply background steps when cell has no foreground steps" in {
-    val backgroundColor = black
-    val foregroundColor = white
+    val blackAwt = black.toColor()
+    val whiteAwt = white.toColor()
     val cell = AnimatedCell(
       content = Some('a'),
       foregroundSteps = List.empty,
-      backgroundSteps = RgbInterpolator.interpolate(black, white, 3)
+      backgroundSteps = RgbInterpolator.interpolateRgba(blackAwt, whiteAwt, 3)
     )
     val state = AnimationState.empty.mergeAnimations(Map(CharacterKey(0, 0) -> cell))
 
     state.getCell(0, 0).get.currentForeground shouldEqual None
-    state.getCell(0, 0).get.currentBackground shouldEqual Some(black)
+    state.getCell(0, 0).get.currentBackground shouldEqual Some(blackAwt)
 
     val step1 = state.advanceAnimations()
-    step1.getCell(0, 0).get.currentBackground should not equal Some(black)
+    step1.getCell(0, 0).get.currentBackground should not equal Some(blackAwt)
     step1.getCell(0, 0).get.currentBackground should not equal None
   }
 
   it should "track background-only cells via getLineAnimations and advance their background color" in {
+    val blackAwt = black.toColor()
+    val whiteAwt = white.toColor()
     val bgCell = AnimatedCell(
       content = None,
       foregroundSteps = List.empty,
-      backgroundSteps = RgbInterpolator.interpolate(black, white, 3)
+      backgroundSteps = RgbInterpolator.interpolateRgba(blackAwt, whiteAwt, 3)
     )
     val state = AnimationState.empty
       .mergeAnimations(Map(CharacterKey(5, 2) -> bgCell))
@@ -102,11 +104,11 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
     line2Animations.keys should contain(7)
     line2Animations.keys should not contain 3
 
-    line2Animations(5).currentBackground shouldEqual Some(black)
+    line2Animations(5).currentBackground shouldEqual Some(blackAwt)
     line2Animations(5).currentForeground shouldEqual None
 
     val advanced = state.advanceAnimations()
-    advanced.getLineAnimations(2)(5).currentBackground should not equal Some(black)
+    advanced.getLineAnimations(2)(5).currentBackground should not equal Some(blackAwt)
     advanced.getLineAnimations(2)(5).currentBackground should not equal None
   }
 
