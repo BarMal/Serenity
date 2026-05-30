@@ -1,6 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.command.{CommandRegistry, CommandSurfaceItem, CommandRunner}
+import com.serenity.command.{CommandRegistry, CommandSurfaceItem, CommandRunner, Command, CommandCategory, CommandIntent}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.{AppState, Focus, PaneId, SurfaceContent, SurfacePlacement, SurfacePresentation, UiSurface}
 
@@ -24,34 +24,69 @@ object CommandRunnerReducer:
         ReducerResult.noEffects(deactivate(state))
 
       case RunnerSubmit =>
-        currentRunner(state).flatMap(_.selectedItem) match
-          case Some(CommandSurfaceItem.CommandItem(command)) =>
-            val previousFocus = currentRunner(state).flatMap(_.previousFocus).getOrElse(Focus.EditorPane(PaneId(0)))
-            ReducerResult(
-              state = deactivate(state).copy(focus = previousFocus),
-              effects = List(AppEffect.ExecuteCommand(command))
-            )
-          case Some(option: CommandSurfaceItem.OptionItem) =>
-            option.selectedIntent match
-              case Some(intent) =>
-                ReducerResult(
-                  state = state,
-                  effects = List(AppEffect.ExecuteCommand(com.serenity.command.Command.typed(option.id, option.label, intent, option.category)))
-                )
+        currentRunner(state).flatMap(_.editingItemId) match
+          case Some(itemId) =>
+            val runner = currentRunner(state).get
+            runner.inputItems.find(_.id == itemId) match
+              case Some(item) =>
+                item.parse(runner.editingText) match
+                  case Some(intent) =>
+                    val cmd = Command.typed(itemId, item.label, intent, CommandCategory.Settings)
+                    ReducerResult(
+                      state = replaceRunner(state, r => r.copy(editingItemId = None, editingText = "")),
+                      effects = List(AppEffect.ExecuteCommand(cmd))
+                    )
+                  case None =>
+                    ReducerResult.noEffects(state)
               case None =>
                 ReducerResult.noEffects(state)
+
           case None =>
-            ReducerResult.noEffects(deactivate(state))
+            currentRunner(state).flatMap(_.selectedItem) match
+              case Some(CommandSurfaceItem.CommandItem(command)) =>
+                val previousFocus = currentRunner(state).flatMap(_.previousFocus).getOrElse(Focus.EditorPane(PaneId(0)))
+                ReducerResult(
+                  state = deactivate(state).copy(focus = previousFocus),
+                  effects = List(AppEffect.ExecuteCommand(command))
+                )
+              case Some(option: CommandSurfaceItem.OptionItem) =>
+                option.selectedIntent match
+                  case Some(intent) =>
+                    ReducerResult(
+                      state = state,
+                      effects = List(AppEffect.ExecuteCommand(Command.typed(option.id, option.label, intent, option.category)))
+                    )
+                  case None =>
+                    ReducerResult.noEffects(state)
+              case _ =>
+                ReducerResult.noEffects(deactivate(state))
 
       case RunnerInsertChar(char) =>
-        given CommandRegistry = registry
-        ReducerResult.noEffects(replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm + char)))
+        currentRunner(state).flatMap(_.editingItemId) match
+          case Some(itemId) =>
+            val runner = currentRunner(state).get
+            val item   = runner.inputItems.find(_.id == itemId)
+            val allowDot = item.exists(_.isDecimal) && !runner.editingText.contains('.')
+            if char.isDigit || (char == '.' && allowDot) then
+              ReducerResult.noEffects(replaceRunner(state, r => r.copy(editingText = r.editingText + char)))
+            else
+              ReducerResult.noEffects(state)
+          case None =>
+            given CommandRegistry = registry
+            ReducerResult.noEffects(replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm + char)))
 
       case RunnerDeleteBackward =>
-        if currentRunner(state).exists(_.searchTerm.nonEmpty) then
-          given CommandRegistry = registry
-          ReducerResult.noEffects(replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm.dropRight(1))))
-        else ReducerResult.noEffects(state)
+        currentRunner(state).flatMap(_.editingItemId) match
+          case Some(_) =>
+            if currentRunner(state).exists(_.editingText.nonEmpty) then
+              ReducerResult.noEffects(replaceRunner(state, r => r.copy(editingText = r.editingText.dropRight(1))))
+            else
+              ReducerResult.noEffects(state)
+          case None =>
+            if currentRunner(state).exists(_.searchTerm.nonEmpty) then
+              given CommandRegistry = registry
+              ReducerResult.noEffects(replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm.dropRight(1))))
+            else ReducerResult.noEffects(state)
 
       case RunnerNavigate(Direction.Up) =>
         given CommandRegistry = registry
@@ -64,14 +99,14 @@ object CommandRunnerReducer:
       case RunnerNavigate(Direction.Left) =>
         given CommandRegistry = registry
         currentRunner(state) match
-          case Some(runner) if runner.searchTerm.isEmpty =>
+          case Some(runner) if runner.searchTerm.isEmpty && runner.editingItemId.isEmpty =>
             runner.selectedItem match
               case Some(_: CommandSurfaceItem.OptionItem) =>
                 val updatedRunner = runner.adjustSelectedOption(-1)
                 val effects = updatedRunner.selectedItem match
                   case Some(option: CommandSurfaceItem.OptionItem) =>
                     option.selectedIntent.toList.map(intent =>
-                      AppEffect.ExecuteCommand(com.serenity.command.Command.typed(option.id, option.label, intent, option.category))
+                      AppEffect.ExecuteCommand(Command.typed(option.id, option.label, intent, option.category))
                     )
                   case _ => Nil
                 ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
@@ -83,14 +118,14 @@ object CommandRunnerReducer:
       case RunnerNavigate(Direction.Right) =>
         given CommandRegistry = registry
         currentRunner(state) match
-          case Some(runner) if runner.searchTerm.isEmpty =>
+          case Some(runner) if runner.searchTerm.isEmpty && runner.editingItemId.isEmpty =>
             runner.selectedItem match
               case Some(_: CommandSurfaceItem.OptionItem) =>
                 val updatedRunner = runner.adjustSelectedOption(1)
                 val effects = updatedRunner.selectedItem match
                   case Some(option: CommandSurfaceItem.OptionItem) =>
                     option.selectedIntent.toList.map(intent =>
-                      AppEffect.ExecuteCommand(com.serenity.command.Command.typed(option.id, option.label, intent, option.category))
+                      AppEffect.ExecuteCommand(Command.typed(option.id, option.label, intent, option.category))
                     )
                   case _ => Nil
                 ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
@@ -117,7 +152,7 @@ object CommandRunnerReducer:
 
   private def activate(state: AppState, registry: CommandRegistry): AppState =
     val activatedRunner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, state.config)
       .withPreviousFocus(state.focus)
     val (stateWithId, surfaceId) =
       state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)

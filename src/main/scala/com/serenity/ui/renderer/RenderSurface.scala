@@ -18,6 +18,7 @@ trait RenderSurface:
   def enableStyle(style: TextStyle): Unit
   def disableStyle(style: TextStyle): Unit
   def setAlpha(alpha: Float): Unit = ()
+  def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit = ()
   def hideCursor(): Unit
   def viewportWidth: Int
   def viewportHeight: Int

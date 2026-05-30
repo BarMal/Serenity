@@ -399,10 +399,12 @@ object Renderer:
 
     overlays.aboveCursor.foreach { overlay =>
       logger.info(s"[OVERLAY RENDERED] placement=AboveCursor rect=${overlay.rect} title=${overlay.title.getOrElse("")}")
+      context.surface.blurRegion(overlay.rect.x, overlay.rect.y, overlay.rect.width, overlay.rect.height, state.config.blurRadius)
       TextOverlayRenderer.render(context.surface, overlay, state.theme, context.cursorVisible)
     }
     overlays.belowCursor.foreach { overlay =>
       logger.info(s"[OVERLAY RENDERED] placement=BelowCursor rect=${overlay.rect} title=${overlay.title.getOrElse("")}")
+      context.surface.blurRegion(overlay.rect.x, overlay.rect.y, overlay.rect.width, overlay.rect.height, state.config.blurRadius)
       TextOverlayRenderer.render(context.surface, overlay, state.theme, context.cursorVisible)
     }
 
@@ -413,7 +415,10 @@ object Renderer:
   private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =
     PinnedPanelViewModel
       .fromLayout(context.layout, state.uiSurfaces)
-      .foreach(panel => PinnedPanelRenderer.render(context.surface, panel, state.theme))
+      .foreach { panel =>
+        context.surface.blurRegion(panel.rect.x, panel.rect.y, panel.rect.width, panel.rect.height, state.config.blurRadius)
+        PinnedPanelRenderer.render(context.surface, panel, state.theme)
+      }
 
   private def renderFloatingPanelPlaceholder(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
     context.surface.setBackgroundColor(theme.panel.background)

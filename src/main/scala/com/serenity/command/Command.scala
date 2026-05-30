@@ -32,6 +32,9 @@ enum CommandIntent:
   case ReloadTheme
   case FormatCurrentFile
   case SetAnimationMode(mode: AnimationMode)
+  case SetBlurRadius(r: Float)
+  case SetAnimationDuration(ms: Int)
+  case SetAnimationSteps(n: Int)
   case ToggleLineNumbers
   case ToggleGutter
   case StartupNewSession
@@ -111,6 +114,22 @@ object CommandSurfaceItem:
         val rawIndex     = (selectedIndex + delta) % options.length
         val wrappedIndex = if rawIndex < 0 then options.length + rawIndex else rawIndex
         copy(selectedIndex = wrappedIndex)
+
+  case class InputItem(
+      id: String,
+      label: String,
+      hint: String,
+      currentValue: String,
+      isDecimal: Boolean,
+      parse: String => Option[CommandIntent],
+      category: CommandCategory
+  ) extends CommandSurfaceItem:
+    override def searchText: String = s"$label $hint"
+
+    def isOutOfBounds(text: String): Boolean =
+      text.nonEmpty && parse(text).isEmpty
+
+    def withCurrentValue(v: String): InputItem = copy(currentValue = v)
 
 /** Search result for a command with relevance scoring */
 case class CommandSearchResult(

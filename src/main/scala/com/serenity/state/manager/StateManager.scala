@@ -530,6 +530,17 @@ object StateManager:
         else IO.unit)
       }
 
+    private def withUpdatedRunnerConfig(state: AppState, config: com.serenity.config.AppConfig): AppState =
+      state.commandRunnerSurface match
+        case Some(surface) =>
+          surface.content match
+            case SurfaceContent.CommandPalette(runner) =>
+              val updatedRunner  = runner.updateInputItems(config)
+              val updatedSurface = surface.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+              state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
+            case _ => state
+        case None => state
+
     private def applyCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): IO[Unit] =
       val steps = AnimationConfig.smooth.get.steps
       stateRef.update { s =>
@@ -895,6 +906,31 @@ object StateManager:
                 s.copy(config = s.config.copy(characterAnimation = AnimationConfig.smooth))
               case AnimationMode.Subtle =>
                 s.copy(config = s.config.copy(characterAnimation = AnimationConfig.subtle))
+          }
+        case CommandIntent.SetBlurRadius(r) =>
+          updateState { s =>
+            val newConfig = s.config.withBlurRadius(r)
+            withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
+          }
+        case CommandIntent.SetAnimationDuration(ms) =>
+          updateState { s =>
+            val newAnim =
+              if ms <= 0 then None
+              else Some(s.config.characterAnimation.fold(
+                AnimationConfig(steps = 12, totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
+              )(existing => existing.copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))))
+            val newConfig = s.config.copy(characterAnimation = newAnim)
+            withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
+          }
+        case CommandIntent.SetAnimationSteps(n) =>
+          updateState { s =>
+            val newAnim =
+              if n <= 0 then None
+              else Some(s.config.characterAnimation.fold(
+                AnimationConfig(steps = n, totalDuration = scala.concurrent.duration.Duration.fromNanos(200_000_000L))
+              )(existing => existing.copy(steps = n)))
+            val newConfig = s.config.copy(characterAnimation = newAnim)
+            withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
           }
         case CommandIntent.StartupNewSession =>
           updateState(_.copy(uiSurfaces = List.empty)) >>

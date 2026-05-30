@@ -253,7 +253,17 @@ given Encoder[FontConfig] = deriveEncoder
 given Decoder[FontConfig] = deriveDecoder
 
 given Encoder[AppConfig] = deriveEncoder
-given Decoder[AppConfig] = deriveDecoder
+given Decoder[AppConfig] = Decoder.instance { cursor =>
+  for
+    characterAnimation        <- cursor.get[Option[AnimationConfig]]("characterAnimation")
+    syntaxHighlightingEnabled <- cursor.get[Boolean]("syntaxHighlightingEnabled")
+    fontConfig                <- cursor.get[FontConfig]("fontConfig")
+    minimumPaneWidth          <- cursor.get[Int]("minimumPaneWidth")
+    showLineNumbers           <- cursor.get[Boolean]("showLineNumbers")
+    showGutter                <- cursor.get[Boolean]("showGutter")
+    blurRadius                <- cursor.getOrElse[Float]("blurRadius")(0.0f)
+  yield AppConfig(characterAnimation, syntaxHighlightingEnabled, fontConfig, minimumPaneWidth, showLineNumbers, showGutter, blurRadius)
+}
 
 given Encoder[SessionState] = deriveEncoder
 given Decoder[SessionState] = deriveDecoder

@@ -271,6 +271,9 @@ object SurfaceContentResolver:
           )
         case (option: CommandSurfaceItem.OptionItem, index) =>
           optionRow(option, index == runner.selectedIndex)
+        case (item: CommandSurfaceItem.InputItem, index) =>
+          val editingText = if runner.editingItemId.contains(item.id) then Some(runner.editingText) else None
+          inputRow(item, index == runner.selectedIndex, editingText)
       }
       val footer =
         if visibleItems.nonEmpty then Some(OverlayRow(s"${runner.selectedIndex + 1}/${visibleItems.length}"))
@@ -319,6 +322,27 @@ object SurfaceContentResolver:
       plainText = s"${option.label}: ${option.hint.map(_ + " ").getOrElse("")}${option.selectedOption}",
       selected = selected,
       segments = OverlaySegment(option.label) :: rightSegments,
+      layout = OverlayRowLayout.Split
+    )
+
+  private def inputRow(
+    item: CommandSurfaceItem.InputItem,
+    selected: Boolean,
+    editingText: Option[String]
+  ): OverlayRow =
+    val displayText = editingText.getOrElse(item.currentValue)
+    val isError     = editingText.exists(item.isOutOfBounds)
+    val valueTone   = if isError then OverlayTone.Error else OverlayTone.Normal
+    val cursorCol   = editingText.map(_ => s"${item.label}: ${item.hint} ".length + displayText.length)
+    OverlayRow(
+      plainText = s"${item.label}: ${item.hint} $displayText",
+      selected = selected,
+      cursorColumn = cursorCol,
+      segments = List(
+        OverlaySegment(item.label),
+        OverlaySegment(item.hint, tone = OverlayTone.Muted),
+        OverlaySegment(displayText, tone = valueTone, selected = editingText.isDefined)
+      ),
       layout = OverlayRowLayout.Split
     )
 

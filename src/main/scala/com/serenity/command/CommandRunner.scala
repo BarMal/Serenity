@@ -1,5 +1,7 @@
 package com.serenity.command
 
+import com.serenity.config.AppConfig
+
 /** State for the command runner overlay */
 case class CommandRunner(
     isActive: Boolean,
@@ -8,19 +10,23 @@ case class CommandRunner(
     filteredCommands: List[Command],
     activeCategory: CommandCategory = CommandCategory.All,
     optionSelections: Map[String, Int] = Map.empty,
-    previousFocus: Option[com.serenity.state.models.Focus] = None
+    previousFocus: Option[com.serenity.state.models.Focus] = None,
+    inputItems: List[CommandSurfaceItem.InputItem] = List.empty,
+    editingItemId: Option[String] = None,
+    editingText: String = ""
 ):
 
   def visibleItems: List[CommandSurfaceItem] =
     val commandItems = filteredCommands.map(CommandSurfaceItem.CommandItem(_))
-    val optionItems =
+    val settingsItems =
       activeCategory match
         case CommandCategory.Settings =>
           val animationItem = CommandRunner.animationOptionItem(optionSelections)
-          if searchTerm.isEmpty || animationItem.searchText.toLowerCase.contains(searchTerm.toLowerCase) then List(animationItem)
-          else Nil
+          val allSettings: List[CommandSurfaceItem] = animationItem :: inputItems
+          if searchTerm.isEmpty then allSettings
+          else allSettings.filter(_.searchText.toLowerCase.contains(searchTerm.toLowerCase))
         case _ => Nil
-    optionItems ++ commandItems
+    settingsItems ++ commandItems
 
   def selectedItem: Option[CommandSurfaceItem] =
     visibleItems.lift(selectedIndex)
@@ -29,7 +35,7 @@ case class CommandRunner(
   def updateSearchTerm(term: String)(using registry: CommandRegistry): CommandRunner =
     val filtered =
       if term.isEmpty then registry.commandsForCategory(activeCategory)
-      else registry.searchCommands(term, maxResults = 50) // Allow more results for search
+      else registry.searchCommands(term, maxResults = 50)
     copy(
       searchTerm = term,
       selectedIndex = 0,
@@ -43,7 +49,7 @@ case class CommandRunner(
     else
       val newIndex     = (selectedIndex + delta) % itemCount
       val wrappedIndex = if newIndex < 0 then itemCount + newIndex else newIndex
-      copy(selectedIndex = wrappedIndex)
+      copy(selectedIndex = wrappedIndex).syncEditMode
 
   /** Get currently selected command */
   def selectedCommand: Option[Command] =
@@ -53,7 +59,7 @@ case class CommandRunner(
     copy(
       activeCategory = category,
       selectedIndex = 0
-    ).updateSearchTerm("")
+    ).updateSearchTerm("").syncEditMode
 
   def switchCategory(delta: Int)(using registry: CommandRegistry): CommandRunner =
     val categories = List(
@@ -77,17 +83,22 @@ case class CommandRunner(
 
   def withSelectedItem(itemId: String): CommandRunner =
     visibleItems.zipWithIndex.find(_._1.id == itemId) match
-      case Some((_, index)) => copy(selectedIndex = index)
+      case Some((_, index)) => copy(selectedIndex = index).syncEditMode
       case None             => this
 
-  /** Activate the command runner with given registry */
-  def activate(registry: CommandRegistry): CommandRunner =
+  /** Activate the command runner with given registry and config */
+  def activate(registry: CommandRegistry, config: AppConfig = AppConfig.default): CommandRunner =
     copy(
       isActive = true,
       searchTerm = "",
       selectedIndex = 0,
-      filteredCommands = registry.commandsForCategory(activeCategory)
-    )
+      filteredCommands = registry.commandsForCategory(activeCategory),
+      inputItems = CommandRunner.buildInputItems(config)
+    ).syncEditMode
+
+  /** Rebuild input items from a new config (called after a setting is applied) */
+  def updateInputItems(config: AppConfig): CommandRunner =
+    copy(inputItems = CommandRunner.buildInputItems(config)).syncEditMode
 
   /** Deactivate the command runner */
   def deactivate: CommandRunner =
@@ -98,8 +109,21 @@ case class CommandRunner(
       filteredCommands = List.empty,
       activeCategory = CommandCategory.All,
       optionSelections = Map.empty,
-      previousFocus = None
+      previousFocus = None,
+      inputItems = List.empty,
+      editingItemId = None,
+      editingText = ""
     )
+
+  /** Enter edit mode on the currently selected InputItem, or clear edit state otherwise */
+  def syncEditMode: CommandRunner =
+    selectedItem match
+      case Some(item: CommandSurfaceItem.InputItem) if editingItemId.contains(item.id) =>
+        this
+      case Some(item: CommandSurfaceItem.InputItem) =>
+        copy(editingItemId = Some(item.id), editingText = item.currentValue)
+      case _ =>
+        copy(editingItemId = None, editingText = "")
 
   /** Get commands to display based on selected index and viewport */
   def visibleCommands: List[Command] =
@@ -134,6 +158,50 @@ object CommandRunner:
       selectedIndex = optionSelections.getOrElse("animation-mode", 2),
       category = CommandCategory.Settings,
       hint = Some("Mode")
+    )
+
+  private[command] def buildInputItems(config: AppConfig): List[CommandSurfaceItem.InputItem] =
+    val durationValue = config.characterAnimation.map(_.durationMs.toString).getOrElse("0")
+    val stepsValue    = config.characterAnimation.map(_.steps.toString).getOrElse("0")
+    val blurValue     = config.blurRadius.toString
+
+    List(
+      CommandSurfaceItem.InputItem(
+        id = "animation-duration",
+        label = "Anim Duration",
+        hint = "ms (0–10000)",
+        currentValue = durationValue,
+        isDecimal = false,
+        parse = text =>
+          text.toIntOption
+            .filter(v => v >= 0 && v <= 10000)
+            .map(CommandIntent.SetAnimationDuration(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "animation-steps",
+        label = "Anim Steps",
+        hint = "(0–100)",
+        currentValue = stepsValue,
+        isDecimal = false,
+        parse = text =>
+          text.toIntOption
+            .filter(v => v >= 0 && v <= 100)
+            .map(CommandIntent.SetAnimationSteps(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "blur-radius",
+        label = "Blur Radius",
+        hint = "(0.0–1.0)",
+        currentValue = blurValue,
+        isDecimal = true,
+        parse = text =>
+          text.toFloatOption
+            .filter(v => v >= 0.0f && v <= 1.0f)
+            .map(CommandIntent.SetBlurRadius(_)),
+        category = CommandCategory.Settings
+      )
     )
 
   /** Empty/inactive command runner */

@@ -4,7 +4,7 @@ import com.googlecode.lanterna.TextColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.TextStyle
 import java.awt.{AlphaComposite, Color, Font, FontMetrics, Graphics2D, RenderingHints}
-import java.awt.image.BufferedImage
+import java.awt.image.{BufferedImage, ConvolveOp, Kernel}
 
 /** A RenderSurface backed by a BufferedImage via Graphics2D.
  *
@@ -82,6 +82,26 @@ class Java2DRenderSurface(
 
   override def setAlpha(alpha: Float): Unit =
     g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha.max(0f).min(1f)))
+
+  override def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
+    if radius > 0f then
+      val px = metrics.toPixelX(x)
+      val py = metrics.toPixelY(y)
+      val pw = width  * metrics.charWidth
+      val ph = height * metrics.lineHeight
+      val clampedX = px.max(0).min(image.getWidth  - 1)
+      val clampedY = py.max(0).min(image.getHeight - 1)
+      val clampedW = pw.min(image.getWidth  - clampedX)
+      val clampedH = ph.min(image.getHeight - clampedY)
+      if clampedW > 0 && clampedH > 0 then
+        val size   = (radius * 10).toInt.max(1) * 2 + 1
+        val weight = 1.0f / (size * size)
+        val data   = Array.fill(size * size)(weight)
+        val kernel = new Kernel(size, size, data)
+        val op     = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP, null)
+        val src    = image.getSubimage(clampedX, clampedY, clampedW, clampedH)
+        val blurred = op.filter(src, null)
+        g.drawImage(blurred, clampedX, clampedY, null)
 
   def hideCursor(): Unit = ()
 

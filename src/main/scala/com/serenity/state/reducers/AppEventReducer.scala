@@ -50,7 +50,7 @@ object AppEventReducer:
         )
       case _ =>
         val activatedRunner = CommandRunner.empty
-          .activate(registry)
+          .activate(registry, state.config)
           .withPreviousFocus(state.focus)
         val (stateWithId, surfaceId) =
           state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)

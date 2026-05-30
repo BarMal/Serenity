@@ -10,7 +10,8 @@ case class AppConfig(
     fontConfig: FontConfig = FontConfig(),
     minimumPaneWidth: Int = 50,
     showLineNumbers: Boolean = true,
-    showGutter: Boolean = true
+    showGutter: Boolean = true,
+    blurRadius: Float = 0.0f
 ):
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
@@ -39,6 +40,9 @@ case class AppConfig(
   /** Create a new config with gutter toggled */
   def withGutter(enabled: Boolean): AppConfig =
     copy(showGutter = enabled)
+
+  def withBlurRadius(r: Float): AppConfig =
+    copy(blurRadius = r.max(0.0f).min(1.0f))
 
 object AppConfig:
 
