@@ -3,7 +3,7 @@ package com.serenity.ui.renderer
 import com.googlecode.lanterna.TextColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.TextStyle
-import java.awt.{Color, Font, FontMetrics, Graphics2D, RenderingHints}
+import java.awt.{AlphaComposite, Color, Font, FontMetrics, Graphics2D, RenderingHints}
 import java.awt.image.BufferedImage
 
 /** A RenderSurface backed by a BufferedImage via Graphics2D.
@@ -77,6 +77,9 @@ class Java2DRenderSurface(
   def disableStyle(style: TextStyle): Unit =
     g.setFont(font)
 
+  override def setAlpha(alpha: Float): Unit =
+    g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha.max(0f).min(1f)))
+
   def hideCursor(): Unit = ()
 
   def viewportWidth: Int  = image.getWidth / metrics.charWidth
@@ -91,6 +94,6 @@ object Java2DRenderSurface:
     val image = new BufferedImage(
       canvas.getWidth.max(1),
       canvas.getHeight.max(1),
-      BufferedImage.TYPE_INT_RGB
+      BufferedImage.TYPE_INT_ARGB
     )
     new Java2DRenderSurface(image, metrics, font, onFlush)

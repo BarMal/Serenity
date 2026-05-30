@@ -22,6 +22,8 @@ object TextOverlayRenderer:
         )
         .getOrElse((theme.panel.foreground, theme.panel.background))
 
+    surface.setAlpha(theme.panel.alpha.toFloat)
+
     for (y, rowOffset) <- (rect.y until rect.bottom).zipWithIndex do
       val (fg, bg) = rowColors(rowOffset)
       surface.setForegroundColor(fg)
@@ -32,6 +34,7 @@ object TextOverlayRenderer:
     drawBorder(surface, overlay, theme, rowColors)
     drawContent(surface, overlay, theme, cursorVisible, rowColors, animated)
 
+    surface.setAlpha(1.0f)
     surface.setForegroundColor(theme.foreground)
     surface.setBackgroundColor(theme.background)
 

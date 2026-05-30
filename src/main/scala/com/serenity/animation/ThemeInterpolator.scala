@@ -35,7 +35,8 @@ object ThemeInterpolator:
     ThemeColor(
       foreground = blendColor(from.foreground, to.foreground, t),
       background = blendColor(from.background, to.background, t),
-      style      = to.style
+      style      = to.style,
+      alpha      = from.alpha + (to.alpha - from.alpha) * t
     )
 
   private def blendSyntaxColors(

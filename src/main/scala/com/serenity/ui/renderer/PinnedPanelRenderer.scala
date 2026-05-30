@@ -11,6 +11,7 @@ object PinnedPanelRenderer:
   ): Unit =
     val rect = panel.rect
 
+    surface.setAlpha(theme.panel.alpha.toFloat)
     surface.setForegroundColor(theme.panel.foreground)
     surface.setBackgroundColor(theme.panel.background)
 
@@ -21,6 +22,7 @@ object PinnedPanelRenderer:
     drawTitle(surface, panel)
     drawLines(surface, panel)
 
+    surface.setAlpha(1.0f)
     surface.setForegroundColor(theme.foreground)
     surface.setBackgroundColor(theme.background)
 

@@ -29,7 +29,8 @@ case class Theme(
 case class ThemeColor(
     foreground: TextColor,
     background: TextColor,
-    style: TextStyle = TextStyle.normal
+    style: TextStyle = TextStyle.normal,
+    alpha: Double = 1.0
 )
 
 object Theme:

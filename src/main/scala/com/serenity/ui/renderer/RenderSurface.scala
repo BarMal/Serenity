@@ -11,6 +11,7 @@ trait RenderSurface:
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit
   def enableStyle(style: TextStyle): Unit
   def disableStyle(style: TextStyle): Unit
+  def setAlpha(alpha: Float): Unit = ()
   def hideCursor(): Unit
   def viewportWidth: Int
   def viewportHeight: Int
