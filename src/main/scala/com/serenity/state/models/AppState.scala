@@ -45,7 +45,8 @@ case class AppState(
     nextSurfaceId: Int = 0,
     themeTransition: Option[ThemeTransition] = None,
     surfaceAnimations: Map[SurfaceId, SurfaceAnimationState] = Map.empty,
-    clipboard: Option[String] = None // not persisted between sessions
+    clipboard: Option[String] = None, // not persisted between sessions
+    recentFiles: List[java.nio.file.Path] = Nil
 ):
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled

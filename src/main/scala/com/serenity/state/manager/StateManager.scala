@@ -84,6 +84,8 @@ trait StateManager:
   // Pane splitting operations (stubs for test compilation)
   def splitPaneHorizontal(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
 
+  def getRecentFiles: IO[List[java.nio.file.Path]]
+
   // Panel operations (stubs for test compilation)
   def switchToPinnedPanel(position: PanelPosition): IO[Unit]
   def loadDirectoryTree(path: String, files: List[String]): IO[Unit]
@@ -1204,6 +1206,9 @@ object StateManager:
         }
       }.handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to move $sourceFile to $targetDir"))
 
+    def getRecentFiles: IO[List[java.nio.file.Path]] =
+      stateRef.get.map(_.recentFiles)
+
     def ensureCursorVisible(paneId: PaneId): IO[Unit] =
       stateRef.update { state =>
         state.layout.editorPanes.get(paneId) match
@@ -1326,6 +1331,7 @@ object StateManager:
               (focused, ())
             }
           }
+          .flatTap(_ => stateRef.update(s => s.copy(recentFiles = trackRecentFile(s.recentFiles, path))))
           .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load file at $path"))
 
     private def saveBufferEffect(bufferId: BufferId): IO[Unit] =
@@ -1357,6 +1363,7 @@ object StateManager:
               .flatMap(savedBuffer =>
                 stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> savedBuffer)))
               )
+              .flatTap(_ => stateRef.update(s => s.copy(recentFiles = trackRecentFile(s.recentFiles, path))))
               .flatTap(_ => stateRef.get.flatMap(sessionPersistence.onBufferChange).handleErrorWith(ex =>
                 logger.error(ex)("[SESSION] Auto-save after file save failed")
               ))
@@ -1841,6 +1848,9 @@ object StateManager:
           case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some((surface, workflow))
           case _                                                           => None
       }
+
+    private def trackRecentFile(current: List[java.nio.file.Path], path: java.nio.file.Path): List[java.nio.file.Path] =
+      (path :: current.filterNot(_ == path)).take(20)
 
     private def insertBufferInOrder(state: AppState, newBufferId: BufferId): List[BufferId] =
       state.focusedBufferId match

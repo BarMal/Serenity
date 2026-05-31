@@ -1,5 +1,7 @@
 package com.serenity.session
 
+import java.nio.file.Path
+
 import com.serenity.config.AppConfig
 import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
@@ -22,7 +24,8 @@ case class SessionState(
     bufferOrder: List[Int], // Use Int IDs instead of BufferId for serialization
     config: AppConfig,
     themeName: String, // Store theme name instead of full theme object
-    findState: Option[SessionFindState] = None
+    findState: Option[SessionFindState] = None,
+    recentFiles: List[String] = Nil
 )
 
 /**
@@ -91,7 +94,8 @@ object SessionState:
       bufferOrder = appState.bufferOrder.map(_.value),
       config = appState.config,
       themeName = appState.theme.name,
-      findState = appState.findState.map(SessionFindState.fromFindState)
+      findState = appState.findState.map(SessionFindState.fromFindState),
+      recentFiles = appState.recentFiles.map(_.toString)
     )
   
   /**
@@ -123,6 +127,7 @@ object SessionState:
       viewportSize = None, // Will be set when app starts
       theme = theme,
       config = sessionState.config,
+      recentFiles = sessionState.recentFiles.map(Path.of(_)),
       nextBufferId = BufferId(bufferMap.keys.map(_.value).maxOption.getOrElse(-1) + 1),
       nextPaneId = PaneId(layout.editorPanes.keys.map(_.value).maxOption.getOrElse(-1) + 1),
       nextSurfaceId = 0

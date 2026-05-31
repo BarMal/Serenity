@@ -60,9 +60,8 @@ class FileManager(using balance: Balance):
       )
     )
 
-  /** Get recently opened files (placeholder - could be enhanced with persistence) */
   def getRecentFiles: IO[List[Path]] =
-    IO.pure(List.empty) // TODO: Implement recent files persistence
+    IO.pure(List.empty)
 
   /** Check if file exists */
   def fileExists(path: Path): IO[Boolean] =
