@@ -23,7 +23,7 @@ case class CommandRunner(
         case CommandCategory.Settings =>
           val animationItem  = CommandRunner.animationOptionItem(optionSelections)
           val cursorModeItem = CommandRunner.cursorModeOptionItem(optionSelections)
-          val allSettings: List[CommandSurfaceItem] = List(animationItem, cursorModeItem) ++ inputItems
+          val allSettings: List[CommandSurfaceItem] = List(animationItem) ++ inputItems ++ List(cursorModeItem)
           if searchTerm.isEmpty then allSettings
           else allSettings.filter(_.searchText.toLowerCase.contains(searchTerm.toLowerCase))
         case _ => Nil

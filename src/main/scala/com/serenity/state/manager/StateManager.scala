@@ -128,6 +128,7 @@ object StateManager:
       runner.selectedItem match
         case Some(CommandSurfaceItem.CommandItem(command)) => s"selected=command:${command.name}"
         case Some(option: CommandSurfaceItem.OptionItem)   => s"selected=option:${option.id}"
+        case Some(item: CommandSurfaceItem.InputItem)      => s"selected=input:${item.id}"
         case None                                          => "selected=none"
 
     s"event=$event $modePart $selectedPart"

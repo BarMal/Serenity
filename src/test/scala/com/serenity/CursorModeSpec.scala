@@ -94,7 +94,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     // Open runner, navigate to Settings (4 tabs), move down to cursor mode option, press Right (Blink → Breathe)
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     for _ <- 1 to 4 do sm.applyEvent(TabKey).unsafeRunSync()
-    sm.applyEvent(MoveDown).unsafeRunSync()
+    for _ <- 1 to 4 do sm.applyEvent(MoveDown).unsafeRunSync()
     sm.applyEvent(MoveRight).unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().config.cursorMode shouldBe CursorMode.Breathe
@@ -104,7 +104,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     val sm = makeStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     for _ <- 1 to 4 do sm.applyEvent(TabKey).unsafeRunSync()
-    sm.applyEvent(MoveDown).unsafeRunSync()
+    for _ <- 1 to 4 do sm.applyEvent(MoveDown).unsafeRunSync()
     sm.applyEvent(MoveRight).unsafeRunSync()  // Blink → Breathe
     sm.applyEvent(MoveRight).unsafeRunSync()  // Breathe → Blink (wrap)
 
