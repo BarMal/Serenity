@@ -2,7 +2,7 @@ package com.serenity.session
 
 import java.nio.file.Path
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, CursorMode}
 import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.layout.Layout
@@ -260,6 +260,13 @@ given Decoder[AnimationConfig] = deriveDecoder
 given Encoder[FontConfig] = deriveEncoder
 given Decoder[FontConfig] = deriveDecoder
 
+given Encoder[CursorMode] = Encoder.encodeString.contramap(_.toString)
+given Decoder[CursorMode] = Decoder.decodeString.emap {
+  case "Blink"   => Right(CursorMode.Blink)
+  case "Breathe" => Right(CursorMode.Breathe)
+  case other     => Left(s"Unknown CursorMode: $other")
+}
+
 given Encoder[AppConfig] = deriveEncoder
 given Decoder[AppConfig] = Decoder.instance { cursor =>
   for
@@ -270,7 +277,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     showLineNumbers           <- cursor.get[Boolean]("showLineNumbers")
     showGutter                <- cursor.get[Boolean]("showGutter")
     blurRadius                <- cursor.getOrElse[Float]("blurRadius")(0.0f)
-  yield AppConfig(characterAnimation, syntaxHighlightingEnabled, fontConfig, minimumPaneWidth, showLineNumbers, showGutter, blurRadius)
+    cursorMode                <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
+  yield AppConfig(characterAnimation, syntaxHighlightingEnabled, fontConfig, minimumPaneWidth, showLineNumbers, showGutter, blurRadius, cursorMode)
 }
 
 given Encoder[SessionState] = deriveEncoder

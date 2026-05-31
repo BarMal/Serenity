@@ -3,6 +3,10 @@ package com.serenity.config
 import com.serenity.animation.AnimationConfig
 import com.serenity.ui.fonts.FontLoader.FontConfig
 
+enum CursorMode:
+  case Blink
+  case Breathe
+
 /** Global application configuration */
 case class AppConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
@@ -11,7 +15,8 @@ case class AppConfig(
     minimumPaneWidth: Int = 50,
     showLineNumbers: Boolean = true,
     showGutter: Boolean = true,
-    blurRadius: Float = 0.0f
+    blurRadius: Float = 0.0f,
+    cursorMode: CursorMode = CursorMode.Blink
 ):
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
@@ -43,6 +48,9 @@ case class AppConfig(
 
   def withBlurRadius(r: Float): AppConfig =
     copy(blurRadius = r.max(0.0f).min(1.0f))
+
+  def withCursorMode(mode: CursorMode): AppConfig =
+    copy(cursorMode = mode)
 
 object AppConfig:
 

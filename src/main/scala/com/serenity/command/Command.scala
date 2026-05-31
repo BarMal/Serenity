@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import cats.effect.IO
+import com.serenity.config.CursorMode
 import com.serenity.state.models.AppState
 
 enum AnimationMode:
@@ -37,6 +38,7 @@ enum CommandIntent:
   case SetAnimationSteps(n: Int)
   case ToggleLineNumbers
   case ToggleGutter
+  case SetCursorMode(mode: CursorMode)
   case OpenThemeChooser
   case ReloadThemes
   case StartupNewSession

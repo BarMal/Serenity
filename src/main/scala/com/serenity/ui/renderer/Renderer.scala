@@ -9,7 +9,8 @@ import org.slf4j.LoggerFactory
 case class RenderContext(
     surface: RenderSurface,
     layout: CalculatedLayout,
-    cursorVisible: Boolean = true
+    cursorVisible: Boolean = true,
+    cursorColorOverride: Option[java.awt.Color] = None
 )
 
 object Renderer:
@@ -22,23 +23,30 @@ object Renderer:
         state.copy(theme = ThemeInterpolator.blend(t.previousTheme, state.theme, t.progress))
 
   def render(state: AppState, cursorVisible: Boolean, swingWin: com.serenity.ui.terminal.SwingWindow, font: java.awt.Font): Unit =
+    render(state, cursorVisible, swingWin, font, None)
+
+  def render(state: AppState, cursorVisible: Boolean, swingWin: com.serenity.ui.terminal.SwingWindow, font: java.awt.Font, cursorColor: Option[java.awt.Color]): Unit =
     val state0       = withEffectiveTheme(state)
     val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, font, swingWin.canvas, swingWin.onImageReady)
     val viewportSize = swingWin.viewportSize
     val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
-    renderFrame(state0, cursorVisible, surface, viewportSize, layout)
+    renderFrame(state0, cursorVisible, surface, viewportSize, layout, cursorColor)
 
   def render(state: AppState, cursorVisible: Boolean, surface: RenderSurface, viewportSize: ViewportSize): Unit =
+    render(state, cursorVisible, surface, viewportSize, None)
+
+  def render(state: AppState, cursorVisible: Boolean, surface: RenderSurface, viewportSize: ViewportSize, cursorColor: Option[java.awt.Color]): Unit =
     val state0 = withEffectiveTheme(state)
     val layout = LayoutEngine.calculateLayout(state0, viewportSize)
-    renderFrame(state0, cursorVisible, surface, viewportSize, layout)
+    renderFrame(state0, cursorVisible, surface, viewportSize, layout, cursorColor)
 
   private def renderFrame(
     state: AppState,
     cursorVisible: Boolean,
     surface: RenderSurface,
     viewportSize: ViewportSize,
-    layout: CalculatedLayout
+    layout: CalculatedLayout,
+    cursorColor: Option[java.awt.Color] = None
   ): Unit =
     surface.hideCursor()
     surface.setBackgroundColor(state.theme.background)
@@ -51,10 +59,10 @@ object Renderer:
     } match
       case Some(page) =>
         renderStartPage(page, surface, viewportSize, state.theme)
-        val floatContext = RenderContext(surface, layout, cursorVisible)
+        val floatContext = RenderContext(surface, layout, cursorVisible, cursorColor)
         renderFloatingPanels(state, floatContext)
       case None =>
-        val context = RenderContext(surface, layout, cursorVisible)
+        val context = RenderContext(surface, layout, cursorVisible, cursorColor)
         renderSpacerColumns(context)
         renderLineNumbers(state, context)
         renderGutter(state, context)
@@ -319,7 +327,8 @@ object Renderer:
               screenY >= 0 && screenY < context.surface.viewportHeight &&
               screenX >= 0 && screenX < context.surface.viewportWidth
           then if context.cursorVisible then
-            context.surface.setBackgroundColor(theme.cursor)
+            val effectiveCursorColor = context.cursorColorOverride.getOrElse(theme.cursor)
+            context.surface.setBackgroundColor(effectiveCursorColor)
             context.surface.setForegroundColor(theme.background)
             CharacterRenderer.renderChar(context.surface, screenX, screenY, ' ')
             context.surface.setBackgroundColor(theme.background)

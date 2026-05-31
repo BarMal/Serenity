@@ -1082,6 +1082,11 @@ object StateManager:
             val newConfig = s.config.copy(characterAnimation = newAnim)
             withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
           }
+        case CommandIntent.SetCursorMode(mode) =>
+          updateState { s =>
+            val newConfig = s.config.withCursorMode(mode)
+            withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
+          }
         case CommandIntent.StartupNewSession =>
           updateState(_.copy(uiSurfaces = List.empty)) >>
           createNewEmptyBuffer().flatMap { bufferId =>

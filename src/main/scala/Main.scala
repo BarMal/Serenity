@@ -2,7 +2,7 @@ import cats.effect.*
 import cats.effect.unsafe.implicits.global
 import cats.syntax.parallel.*
 import com.serenity.app.AppStartup
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, CursorMode}
 import com.serenity.input.{FocusedInputTranslator, InputHandler, InputRouter, SwingInputHandler}
 import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -19,6 +19,7 @@ import fs2.concurrent.SignallingRef
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
+import java.awt.Color
 import scala.concurrent.duration.*
 
 given Balance = Balance.default
@@ -40,8 +41,8 @@ object Main extends IOApp.Simple:
           initialViewportSize    = swingWin.viewportSize,
           makeInputHandler       = router => new SwingInputHandler[IO, Event](swingWin.canvas, router, metrics),
           checkResize            = IO { swingWin.doResizeIfNecessary() },
-          renderFull             = (state, vis) => IO.blocking(Renderer.render(state, vis, swingWin, font)),
-          renderCursorOnly       = (state, vis) => IO.blocking(Renderer.render(state, vis, swingWin, font)),
+          renderFull             = (state, vis, cc) => IO.blocking(Renderer.render(state, vis, swingWin, font, cc)),
+          renderCursorOnly       = (state, vis, cc) => IO.blocking(Renderer.render(state, vis, swingWin, font, cc)),
           appConfig              = appConfig,
           awaitExternalQuit      = swingWin.awaitClose,
           registerResizeCallback = cb => swingWin.setOnResize(() => cb.unsafeRunAndForget())
@@ -53,8 +54,8 @@ object Main extends IOApp.Simple:
     initialViewportSize: ViewportSize,
     makeInputHandler: InputRouter[IO, Event] => InputHandler[IO],
     checkResize: IO[Option[ViewportSize]],
-    renderFull: (AppState, Boolean) => IO[Unit],
-    renderCursorOnly: (AppState, Boolean) => IO[Unit],
+    renderFull: (AppState, Boolean, Option[Color]) => IO[Unit],
+    renderCursorOnly: (AppState, Boolean, Option[Color]) => IO[Unit],
     appConfig: AppConfig,
     awaitExternalQuit: IO[Unit] = IO.never,
     registerResizeCallback: IO[Unit] => Unit = _ => ()
@@ -68,11 +69,12 @@ object Main extends IOApp.Simple:
       inputRouter           <- InputRouter.create[IO, Event](new TextEntryTranslator)
       inputHandler           = makeInputHandler(inputRouter)
       _                     <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
-      _                     <- renderFull(initialState, true)
+      _                     <- renderFull(initialState, true, None)
       _                     <- logger.info("Initial render completed, starting main loop")
       fastMode              <- SignallingRef.of[IO, Boolean](false)
       _                     <- IO(registerResizeCallback(fastMode.set(true)))
       cursorVisible         <- Ref.of[IO, Boolean](true)
+      breathIndex           <- Ref.of[IO, Int](0)
       checkResizeAndHandle   = checkResize.flatMap(RenderController.handleResize(_, stateManager, fastMode.set(true)))
       inputFunnel            = (s: Stream[IO, Event]) =>
         s.evalMap(event =>
@@ -83,16 +85,27 @@ object Main extends IOApp.Simple:
             fastMode.set(true)
         ).drain
       _ <-
+        def computeCursorForIdle(state: AppState): IO[(Boolean, Option[Color])] =
+          state.config.cursorMode match
+            case CursorMode.Blink =>
+              cursorVisible.updateAndGet(!_).map(vis => (vis, None))
+            case CursorMode.Breathe =>
+              for
+                i    <- breathIndex.updateAndGet(i => (i + 1) % 48)
+                c     = state.theme.cursor
+                alpha = ((math.sin(i * math.Pi / 24) + 1.0) / 2.0 * 255).toInt
+              yield (true, Some(new Color(c.getRed, c.getGreen, c.getBlue, alpha)))
+
         def idlePhase: Stream[IO, Unit] =
           Stream
             .fixedRate[IO](500.millis)
             .interruptWhen(fastMode.discrete)
             .evalMap { _ =>
               for
-                _       <- checkResizeAndHandle
-                visible <- cursorVisible.updateAndGet(b => !b)
-                state   <- stateManager.getCurrentState
-                _       <- renderCursorOnly(state, visible)
+                _                 <- checkResizeAndHandle
+                state             <- stateManager.getCurrentState
+                (visible, cursor) <- computeCursorForIdle(state)
+                _                 <- renderCursorOnly(state, visible, cursor)
               yield ()
             }
 
@@ -104,7 +117,7 @@ object Main extends IOApp.Simple:
                 _      <- checkResizeAndHandle
                 active <- stateManager.advanceAnimationsOnTick()
                 state  <- stateManager.getCurrentState
-                _      <- renderFull(state, true)
+                _      <- renderFull(state, true, None)
               yield active
             }
             .takeWhile(identity)

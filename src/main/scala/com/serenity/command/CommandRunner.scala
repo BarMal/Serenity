@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, CursorMode}
 
 /** State for the command runner overlay */
 case class CommandRunner(
@@ -21,8 +21,9 @@ case class CommandRunner(
     val settingsItems =
       activeCategory match
         case CommandCategory.Settings =>
-          val animationItem = CommandRunner.animationOptionItem(optionSelections)
-          val allSettings: List[CommandSurfaceItem] = animationItem :: inputItems
+          val animationItem  = CommandRunner.animationOptionItem(optionSelections)
+          val cursorModeItem = CommandRunner.cursorModeOptionItem(optionSelections)
+          val allSettings: List[CommandSurfaceItem] = List(animationItem, cursorModeItem) ++ inputItems
           if searchTerm.isEmpty then allSettings
           else allSettings.filter(_.searchText.toLowerCase.contains(searchTerm.toLowerCase))
         case _ => Nil
@@ -145,6 +146,19 @@ case class CommandRunner(
     copy(previousFocus = Some(focus))
 
 object CommandRunner:
+
+  private[command] def cursorModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "cursor-mode",
+      label = "Cursor Mode",
+      options = List(
+        CommandOption("Blink",   CommandIntent.SetCursorMode(CursorMode.Blink)),
+        CommandOption("Breathe", CommandIntent.SetCursorMode(CursorMode.Breathe))
+      ),
+      selectedIndex = optionSelections.getOrElse("cursor-mode", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Style")
+    )
 
   private[command] def animationOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
