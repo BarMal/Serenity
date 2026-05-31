@@ -1,11 +1,9 @@
 import cats.effect.*
 import cats.effect.unsafe.implicits.global
 import cats.syntax.parallel.*
-import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
-import com.googlecode.lanterna.terminal.Terminal
 import com.serenity.app.AppStartup
 import com.serenity.config.AppConfig
-import com.serenity.input.{FocusedInputTranslator, InputHandler, InputRouter, ScreenInputHandler, SwingInputHandler}
+import com.serenity.input.{FocusedInputTranslator, InputHandler, InputRouter, SwingInputHandler}
 import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
@@ -14,7 +12,7 @@ import com.serenity.state.models.{AppState, Focus}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.{RenderController, Renderer}
-import com.serenity.ui.terminal.{SwingWindow, TerminalFactory}
+import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import fs2.concurrent.SignallingRef
@@ -32,47 +30,24 @@ object Main extends IOApp.Simple:
   def run: IO[Unit] =
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
     val appConfig = AppConfig.default
-    val backend   = sys.env.getOrElse("SERENITY_BACKEND", "lanterna")
 
-    backend match
-      case "swing" =>
-        for
-          fonts <- com.serenity.ui.fonts.FontLoader.loadMonaspaceNeon(appConfig.fontConfig)
-          font   = fonts.headOption.getOrElse(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 14))
-          metrics = com.serenity.ui.layout.CellMetrics.fromFont(font)
-          _ <- SwingWindow.resource(metrics).use { swingWin =>
-            appRun(
-              initialViewportSize    = swingWin.viewportSize,
-              makeInputHandler       = router => new SwingInputHandler[IO, Event](swingWin.canvas, router, metrics),
-              checkResize            = IO { swingWin.doResizeIfNecessary() },
-              renderFull             = (state, vis) => IO.blocking(Renderer.render(state, vis, swingWin, font)),
-              renderCursorOnly       = (state, vis) => IO.blocking(Renderer.render(state, vis, swingWin, font)),
-              appConfig              = appConfig,
-              awaitExternalQuit      = swingWin.awaitClose,
-              registerResizeCallback = cb => swingWin.setOnResize(() => cb.unsafeRunAndForget())
-            )
-          }
-        yield ()
-      case _ =>
-        terminalResource(appConfig.fontConfig).use { terminal =>
-          screenResource(terminal).use { screen =>
-            for
-              initialViewportSize <- IO.blocking {
-                val size = screen.getTerminalSize
-                ViewportSize(size.getColumns, size.getRows)
-              }
-              _ <- appRun(
-                initialViewportSize = initialViewportSize,
-                makeInputHandler    = router => new ScreenInputHandler[IO, Event](screen, router),
-                checkResize         = IO.blocking(Option(screen.doResizeIfNecessary()))
-                                        .map(_.map(s => ViewportSize(s.getColumns, s.getRows))),
-                renderFull          = (state, vis) => IO.blocking(Renderer.render(state, vis, screen)),
-                renderCursorOnly    = (state, vis) => IO.blocking(Renderer.renderCursorOnly(state, vis, screen)),
-                appConfig           = appConfig
-              )
-            yield ()
-          }
-        }
+    for
+      fonts <- FontLoader.loadMonaspaceNeon(appConfig.fontConfig)
+      font   = fonts.headOption.getOrElse(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 14))
+      metrics = com.serenity.ui.layout.CellMetrics.fromFont(font)
+      _ <- SwingWindow.resource(metrics).use { swingWin =>
+        appRun(
+          initialViewportSize    = swingWin.viewportSize,
+          makeInputHandler       = router => new SwingInputHandler[IO, Event](swingWin.canvas, router, metrics),
+          checkResize            = IO { swingWin.doResizeIfNecessary() },
+          renderFull             = (state, vis) => IO.blocking(Renderer.render(state, vis, swingWin, font)),
+          renderCursorOnly       = (state, vis) => IO.blocking(Renderer.render(state, vis, swingWin, font)),
+          appConfig              = appConfig,
+          awaitExternalQuit      = swingWin.awaitClose,
+          registerResizeCallback = cb => swingWin.setOnResize(() => cb.unsafeRunAndForget())
+        )
+      }
+    yield ()
 
   private def appRun(
     initialViewportSize: ViewportSize,
@@ -164,34 +139,6 @@ object Main extends IOApp.Simple:
         ).parMapN((_, _, _, _, _) => ())
       _ <- logger.info("Serenity editor shutdown complete")
     yield ()
-
-  private def terminalResource(
-    fontConfig: FontLoader.FontConfig
-  )(using logger: org.typelevel.log4cats.Logger[IO]): Resource[IO, Terminal] =
-    Resource.make(
-      for
-        terminal <- TerminalFactory.createTerminal(fontConfig)
-        _        <- IO.blocking(terminal.enterPrivateMode())
-      yield terminal
-    )(terminal =>
-      IO.blocking {
-        terminal.exitPrivateMode()
-        terminal.close()
-      }
-    )
-
-  private def screenResource(terminal: Terminal): Resource[IO, Screen] =
-    Resource.make(
-      IO.blocking {
-        val screen = new TerminalScreen(terminal)
-        screen.startScreen()
-        screen
-      }
-    )(screen =>
-      IO.blocking {
-        screen.stopScreen()
-      }
-    )
 
   private def logSelectiveEvents(
     event: Event,

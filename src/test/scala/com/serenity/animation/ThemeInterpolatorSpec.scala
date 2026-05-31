@@ -1,18 +1,18 @@
 package com.serenity.animation
 
-import com.googlecode.lanterna.TextColor
+import java.awt.Color
 import com.serenity.ui.theme.{Theme, ThemeColor, TextStyle, SyntaxElement}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class ThemeInterpolatorSpec extends AnyFlatSpec with Matchers:
 
-  private val black = new TextColor.RGB(0, 0, 0)
-  private val white = new TextColor.RGB(255, 255, 255)
-  private val red   = new TextColor.RGB(255, 0, 0)
-  private val blue  = new TextColor.RGB(0, 0, 255)
+  private val black = new Color(0, 0, 0)
+  private val white = new Color(255, 255, 255)
+  private val red   = new Color(255, 0, 0)
+  private val blue  = new Color(0, 0, 255)
 
-  private def makeTheme(fg: TextColor, bg: TextColor): Theme =
+  private def makeTheme(fg: Color, bg: Color): Theme =
     Theme(
       name        = "test",
       foreground  = fg,
@@ -50,10 +50,9 @@ class ThemeInterpolatorSpec extends AnyFlatSpec with Matchers:
 
   it should "return midpoint colors at t=0.5" in {
     val result = ThemeInterpolator.blend(fromTheme, toTheme, 0.5)
-    val mid    = new TextColor.RGB(127, 127, 127)
-    RgbInterpolator.toRgb(result.foreground).getRed  shouldEqual 127 +- 2
-    RgbInterpolator.toRgb(result.background).getRed  shouldEqual 127 +- 2
-    RgbInterpolator.toRgb(result.panel.foreground).getRed shouldEqual 127 +- 2
+    result.foreground.getRed  shouldEqual 127 +- 2
+    result.background.getRed  shouldEqual 127 +- 2
+    result.panel.foreground.getRed shouldEqual 127 +- 2
   }
 
   it should "interpolate syntax colors" in {

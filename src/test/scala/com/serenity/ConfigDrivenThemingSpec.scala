@@ -222,9 +222,9 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
     val theme = themeEither.toOption.get
 
     theme.name shouldBe "test"
-    theme.foreground shouldBe a[com.googlecode.lanterna.TextColor.RGB]
+    theme.foreground shouldBe a[java.awt.Color]
     theme.syntaxColors should contain key com.serenity.ui.theme.SyntaxElement.Keyword
-    theme.highlighted.background shouldBe a[com.googlecode.lanterna.TextColor.RGB]
+    theme.highlighted.background shouldBe a[java.awt.Color]
 
     val keywordColor = theme.colorFor(com.serenity.ui.theme.SyntaxElement.Keyword)
     keywordColor.style.isBold shouldBe true

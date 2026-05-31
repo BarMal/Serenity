@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.googlecode.lanterna.TextColor
+import java.awt.Color
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -30,14 +30,14 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.updateState { state =>
       val bufferWithAnimation = state.buffers.values.headOption.map { buffer =>
         val animations = buffer.animations.addCharacterAnimation(
-          'a', 0, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 5
+          'a', 0, 0, Color.BLACK, Color.WHITE, 5
         )
         buffer.copy(animations = animations)
       }.getOrElse {
         // Create a buffer with animation if none exists
         val buffer = com.serenity.state.models.Buffer.newEmpty(state.nextBufferId).copy(
           animations = com.serenity.animation.AnimationState.empty.addCharacterAnimation(
-            'a', 0, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 5
+            'a', 0, 0, Color.BLACK, Color.WHITE, 5
           )
         )
         buffer
@@ -61,14 +61,14 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.updateState { state =>
       val bufferWithAnimation = state.buffers.values.headOption.map { buffer =>
         val animations = buffer.animations.addCharacterAnimation(
-          'a', 0, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 1
+          'a', 0, 0, Color.BLACK, Color.WHITE, 1
         )
         buffer.copy(animations = animations)
       }.getOrElse {
         // Create a buffer with animation if none exists
         val buffer = com.serenity.state.models.Buffer.newEmpty(state.nextBufferId).copy(
           animations = com.serenity.animation.AnimationState.empty.addCharacterAnimation(
-            'a', 0, 0, TextColor.ANSI.BLACK, TextColor.ANSI.WHITE, 1
+            'a', 0, 0, Color.BLACK, Color.WHITE, 1
           )
         )
         buffer

@@ -1,15 +1,12 @@
 package com.serenity
 
-import cats.effect.unsafe.implicits.global
-import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
-import com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal
 import com.serenity.keystroke.events.{InsertChar, ToggleSyntaxHighlighting}
 import com.serenity.rope.Balance
 import com.serenity.state.components.ComponentResult
 import com.serenity.state.components.EditorPaneComponent
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
-import com.serenity.ui.renderer.{CharacterRenderer, LanternaRenderSurface}
+import com.serenity.ui.renderer.CharacterRenderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -54,26 +51,13 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
   }
 
   "Tab character rendering" should "expand to proper width" in {
-    val virtualTerminal = new DefaultVirtualTerminal(com.googlecode.lanterna.TerminalSize.ONE)
-    virtualTerminal.setTerminalSize(com.googlecode.lanterna.TerminalSize(80, 24))
-    val screen   = new TerminalScreen(virtualTerminal)
-    val surface  = LanternaRenderSurface(screen, screen.newTextGraphics())
-
-    // Test tab expansion with default 4-space width
-    // This should not throw an exception
+    val surface = new MockRenderSurface(80, 24)
     CharacterRenderer.renderStringPlain(surface, 0, 0, "a\tb")
-    // Tab expansion logic is tested within CharacterRenderer.renderStringPlain
   }
 
   "Underscore character" should "render visibly" in {
-    val virtualTerminal = new DefaultVirtualTerminal(com.googlecode.lanterna.TerminalSize.ONE)
-    virtualTerminal.setTerminalSize(com.googlecode.lanterna.TerminalSize(80, 24))
-    val screen   = new TerminalScreen(virtualTerminal)
-    val surface  = LanternaRenderSurface(screen, screen.newTextGraphics())
-
-    // Test underscore rendering - should not throw an exception
+    val surface = new MockRenderSurface(80, 24)
     CharacterRenderer.renderStringPlain(surface, 0, 0, "test_underscore")
-    // Underscore rendering logic is tested within CharacterRenderer.renderStringPlain
   }
 
   "Default syntax highlighting" should "be off" in {
@@ -82,12 +66,6 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
   }
 
   "Character rendering" should "handle special cases" in {
-    val virtualTerminal = new DefaultVirtualTerminal(com.googlecode.lanterna.TerminalSize.ONE)
-    virtualTerminal.setTerminalSize(com.googlecode.lanterna.TerminalSize(80, 24))
-    val screen   = new TerminalScreen(virtualTerminal)
-    val surface  = LanternaRenderSurface(screen, screen.newTextGraphics())
-
-    // Test various special characters - should not throw an exception
+    val surface = new MockRenderSurface(80, 24)
     CharacterRenderer.renderStringPlain(surface, 0, 0, "a_b\tc")
-    // Character rendering is tested within CharacterRenderer.renderStringPlain
   }

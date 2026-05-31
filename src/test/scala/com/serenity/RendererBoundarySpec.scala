@@ -3,7 +3,6 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.traverse.*
-import com.googlecode.lanterna.TerminalSize
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -221,25 +220,25 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
   // Mock infrastructure for testing rendering behavior
   class MockScreen(val cols: Int = 80, val rows: Int = 24):
     private val buffer           = Array.fill(rows, cols)(' ')
-    private val backgroundColors = Array.fill(rows, cols)(com.googlecode.lanterna.TextColor.ANSI.BLACK)
+    private val backgroundColors = Array.fill(rows, cols)(java.awt.Color.BLACK)
 
     def putChar(x: Int, y: Int, char: Char): Unit =
       if y >= 0 && y < rows && x >= 0 && x < cols then buffer(y)(x) = char
 
-    def setBackground(x: Int, y: Int, color: com.googlecode.lanterna.TextColor.ANSI): Unit =
+    def setBackground(x: Int, y: Int, color: java.awt.Color): Unit =
       if y >= 0 && y < rows && x >= 0 && x < cols then backgroundColors(y)(x) = color
 
     def getChar(x: Int, y: Int): Char =
       if y >= 0 && y < rows && x >= 0 && x < cols then buffer(y)(x) else ' '
 
-    def getBackground(x: Int, y: Int): com.googlecode.lanterna.TextColor.ANSI =
+    def getBackground(x: Int, y: Int): java.awt.Color =
       if y >= 0 && y < rows && x >= 0 && x < cols then backgroundColors(y)(x)
-      else com.googlecode.lanterna.TextColor.ANSI.BLACK
+      else java.awt.Color.BLACK
 
     def clear(): Unit =
       for y <- 0 until rows; x <- 0 until cols do
         buffer(y)(x) = ' '
-        backgroundColors(y)(x) = com.googlecode.lanterna.TextColor.ANSI.BLACK
+        backgroundColors(y)(x) = java.awt.Color.BLACK
 
     def getRowContent(y: Int): String =
       if y >= 0 && y < rows then buffer(y).mkString else ""
@@ -318,5 +317,5 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
           if screenY < mockScreen.rows && screenX < mockScreen.cols &&
               screenX < rect.right && screenY < rect.bottom
-          then mockScreen.setBackground(screenX, screenY, com.googlecode.lanterna.TextColor.ANSI.WHITE)
+          then mockScreen.setBackground(screenX, screenY, java.awt.Color.WHITE)
       }

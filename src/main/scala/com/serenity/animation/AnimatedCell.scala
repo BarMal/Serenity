@@ -1,6 +1,5 @@
 package com.serenity.animation
 
-import com.googlecode.lanterna.TextColor
 import java.awt.Color
 
 case class AnimatedCell(
@@ -35,40 +34,40 @@ object AnimatedCell:
 
   def fromForegroundInterpolation(
     char: Char,
-    startColor: TextColor,
-    endColor: TextColor,
+    startColor: Color,
+    endColor: Color,
     steps: Int
   ): AnimatedCell =
     AnimatedCell(
       content = Some(char),
-      foregroundSteps = RgbInterpolator.interpolate(startColor, endColor, steps).map(_.toColor()),
+      foregroundSteps = RgbInterpolator.interpolateRgba(startColor, endColor, steps),
       backgroundSteps = List.empty
     )
 
   def fromThemeTransition(
-    oldForeground: TextColor,
-    newForeground: TextColor,
-    oldBackground: TextColor,
-    newBackground: TextColor,
+    oldForeground: Color,
+    newForeground: Color,
+    oldBackground: Color,
+    newBackground: Color,
     steps: Int
   ): AnimatedCell =
     AnimatedCell(
       content = None,
-      foregroundSteps = RgbInterpolator.interpolate(oldForeground, newForeground, steps).map(_.toColor()),
-      backgroundSteps = RgbInterpolator.interpolate(oldBackground, newBackground, steps).map(_.toColor())
+      foregroundSteps = RgbInterpolator.interpolateRgba(oldForeground, newForeground, steps),
+      backgroundSteps = RgbInterpolator.interpolateRgba(oldBackground, newBackground, steps)
     )
 
-  def completed(char: Char, color: TextColor): AnimatedCell =
+  def completed(char: Char, color: Color): AnimatedCell =
     AnimatedCell(
       content = Some(char),
-      foregroundSteps = List(color.toColor()),
+      foregroundSteps = List(color),
       backgroundSteps = List.empty
     )
 
   def createFadeAnimation(
     char: Char,
-    startColor: TextColor,
-    endColor: TextColor,
+    startColor: Color,
+    endColor: Color,
     durationMs: Int = 100,
     tickRateMs: Int = 16
   ): AnimatedCell =

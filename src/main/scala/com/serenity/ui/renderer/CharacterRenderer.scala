@@ -1,7 +1,7 @@
 package com.serenity.ui.renderer
 
-import com.googlecode.lanterna.TextColor
-import com.serenity.animation.{AnimationState, RgbInterpolator}
+import java.awt.Color
+import com.serenity.animation.AnimationState
 import com.serenity.ui.theme.Theme
 
 object CharacterRenderer:
@@ -64,8 +64,8 @@ object CharacterRenderer:
     x: Int,
     y: Int,
     char: Char,
-    foregroundColor: TextColor,
-    backgroundColor: TextColor,
+    foregroundColor: Color,
+    backgroundColor: Color,
     opacity: Double
   ): Unit =
     if opacity >= 1.0 then
@@ -176,16 +176,10 @@ object CharacterRenderer:
       case None     => surface.setBackgroundColor(theme.background)
     renderChar(surface, x, y, char)
 
-  private def blendColors(foreground: TextColor, background: TextColor, opacity: Double): TextColor =
-    val foregroundRgb   = RgbInterpolator.toRgb(foreground)
-    val backgroundRgb   = RgbInterpolator.toRgb(background)
-    val clampedOpacity  = opacity.max(0.0).min(1.0)
-
-    val red =
-      math.round(backgroundRgb.getRed + (foregroundRgb.getRed - backgroundRgb.getRed) * clampedOpacity).toInt
-    val green =
-      math.round(backgroundRgb.getGreen + (foregroundRgb.getGreen - backgroundRgb.getGreen) * clampedOpacity).toInt
-    val blue =
-      math.round(backgroundRgb.getBlue + (foregroundRgb.getBlue - backgroundRgb.getBlue) * clampedOpacity).toInt
-
-    new TextColor.RGB(red, green, blue)
+  private def blendColors(foreground: Color, background: Color, opacity: Double): Color =
+    val t = opacity.max(0.0).min(1.0)
+    new Color(
+      math.round(background.getRed   + (foreground.getRed   - background.getRed)   * t).toInt,
+      math.round(background.getGreen + (foreground.getGreen - background.getGreen) * t).toInt,
+      math.round(background.getBlue  + (foreground.getBlue  - background.getBlue)  * t).toInt
+    )

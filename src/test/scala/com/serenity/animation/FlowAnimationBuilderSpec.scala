@@ -1,28 +1,24 @@
 package com.serenity.animation
 
-import com.googlecode.lanterna.TextColor
 import java.awt.Color
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
 
-  private val black = new TextColor.RGB(0, 0, 0)
-  private val white = new TextColor.RGB(255, 255, 255)
-  private val red   = new TextColor.RGB(255, 0, 0)
-  private val blue  = new TextColor.RGB(0, 0, 255)
-
-  private val blackAwt = black.toColor()
-  private val whiteAwt = white.toColor()
+  private val black = new Color(0, 0, 0)
+  private val white = new Color(255, 255, 255)
+  private val red   = new Color(255, 0, 0)
+  private val blue  = new Color(0, 0, 255)
 
   /** 3 columns (0–2) × 2 rows (0–1), uniform colour pair */
-  private def grid3x2(start: TextColor = black, end: TextColor = white): Map[CharacterKey, CellAnimation] =
+  private def grid3x2(start: Color = black, end: Color = white): Map[CharacterKey, CellAnimation] =
     (for col <- 0 until 3; row <- 0 until 2 yield
       CharacterKey(col, row) -> CellAnimation('x', start, end)
     ).toMap
 
   /** 2 columns (0–1) × 3 rows (0–2), uniform colour pair */
-  private def grid2x3(start: TextColor = black, end: TextColor = white): Map[CharacterKey, CellAnimation] =
+  private def grid2x3(start: Color = black, end: Color = white): Map[CharacterKey, CellAnimation] =
     (for col <- 0 until 2; row <- 0 until 3 yield
       CharacterKey(col, row) -> CellAnimation('x', start, end)
     ).toMap
@@ -76,17 +72,14 @@ class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
   it should "fill padding frames with the cell's start colour" in {
     val steps  = 4
     val result = FlowAnimationBuilder.build(grid3x2(), FlowDirection.ByColumn, SweepDirection.Forward, steps)
-    // Column 2 has a stagger of 2 so the first two entries must hold startColor
-    result(CharacterKey(2, 0)).foregroundSteps.take(2) shouldEqual List(blackAwt, blackAwt)
+    result(CharacterKey(2, 0)).foregroundSteps.take(2) shouldEqual List(black, black)
   }
 
   it should "match post-padding color steps to RgbInterpolator output" in {
     val steps    = 4
     val result   = FlowAnimationBuilder.build(grid3x2(), FlowDirection.ByColumn, SweepDirection.Forward, steps)
-    val expected = RgbInterpolator.interpolateRgba(blackAwt, whiteAwt, steps)
-    // Column 0 has no padding — colorSteps is exactly the interpolation
+    val expected = RgbInterpolator.interpolateRgba(black, white, steps)
     result(CharacterKey(0, 0)).foregroundSteps shouldEqual expected
-    // Column 2 has 2 padding frames — dropping them yields the same interpolation
     result(CharacterKey(2, 0)).foregroundSteps.drop(2) shouldEqual expected
   }
 
@@ -106,7 +99,6 @@ class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
 
   it should "produce distinct color sequences for cells with different colour pairs at the same stagger offset" in {
     val steps = 4
-    // Column 1 has two cells with different colour pairs; both share stagger offset 1
     val cells = Map(
       CharacterKey(0, 0) -> CellAnimation('a', black, white),
       CharacterKey(1, 0) -> CellAnimation('b', red,   blue),
@@ -148,7 +140,7 @@ class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
     val result = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, SweepDirection.Forward, steps)
 
     result(CharacterKey(3, 7)).foregroundSteps should have length steps
-    result(CharacterKey(3, 7)).foregroundSteps shouldEqual RgbInterpolator.interpolateRgba(blackAwt, whiteAwt, steps)
+    result(CharacterKey(3, 7)).foregroundSteps shouldEqual RgbInterpolator.interpolateRgba(black, white, steps)
   }
 
   it should "give all cells offset 0 when the element spans a single column with ByColumn direction" in {
@@ -171,7 +163,6 @@ class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
 
   it should "compute stagger offset relative to the minimum column in the element" in {
     val steps = 4
-    // Element occupies columns 5–7; column 5 is the leading edge, offset 0
     val cells = (for col <- 5 until 8; row <- 0 until 2 yield
       CharacterKey(col, row) -> CellAnimation('x', black, white)
     ).toMap

@@ -2,8 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.googlecode.lanterna.input.{KeyStroke, KeyType}
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.keystroke.events.{Event, ResizeEvent, UnhandledEvent}
 import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.rope.Balance
@@ -65,9 +64,8 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
   "UnhandledEvent filtering" should "distinguish between critical and non-critical unhandled events" in {
     val translator = new TextEntryTranslator()
 
-    // EOF now translates to Quit; Unknown becomes UnhandledEvent
-    val eofEvent     = translator.translate(KeyStrokeInfo.fromKeyStroke(new KeyStroke(KeyType.EOF)))
-    val unknownEvent = translator.translate(KeyStrokeInfo.fromKeyStroke(new KeyStroke(KeyType.Unknown)))
+    val eofEvent     = translator.translate(KeyStrokeInfo(InputKey.EOF, None, Set.empty))
+    val unknownEvent = translator.translate(KeyStrokeInfo(InputKey.Unknown, None, Set.empty))
 
     eofEvent shouldBe com.serenity.keystroke.events.Quit
     unknownEvent shouldBe a[UnhandledEvent[?]]
@@ -79,7 +77,6 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
   "Event filtering logic" should "classify events correctly for logging" in {
     val translator = new TextEntryTranslator()
 
-    // Null char (0) is filtered to None by fromKeyStroke; 4 and 26 are non-printable chars
     val problematicInfos = List(
       KeyStrokeInfo(InputKey.Unknown, None, Set.empty),
       KeyStrokeInfo(InputKey.Character, None, Set.empty),
@@ -102,7 +99,7 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
   "EOF event handling" should "translate EOF keystroke to Quit event for graceful shutdown" in {
     val translator = new TextEntryTranslator()
 
-    val eofEvent = translator.translate(KeyStrokeInfo.fromKeyStroke(new KeyStroke(KeyType.EOF)))
+    val eofEvent = translator.translate(KeyStrokeInfo(InputKey.EOF, None, Set.empty))
 
     eofEvent shouldBe com.serenity.keystroke.events.Quit
     eofEvent should not be a[UnhandledEvent[?]]
@@ -122,10 +119,9 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
   "Main.isSystemEvent integration" should "no longer classify EOF as system event since it's handled" in {
     val translator = new TextEntryTranslator()
 
-    val eofEvent = translator.translate(KeyStrokeInfo.fromKeyStroke(new KeyStroke(KeyType.EOF)))
+    val eofEvent = translator.translate(KeyStrokeInfo(InputKey.EOF, None, Set.empty))
     eofEvent shouldBe com.serenity.keystroke.events.Quit
 
-    // Null char filtered to None; non-printable char; printable non-ASCII char
     val unknownEvent    = translator.translate(KeyStrokeInfo(InputKey.Unknown, None, Set.empty)).asInstanceOf[UnhandledEvent[?]]
     val nullCharEvent   = translator.translate(KeyStrokeInfo(InputKey.Character, None, Set.empty)).asInstanceOf[UnhandledEvent[?]]
     val normalCharEvent = translator.translate(KeyStrokeInfo(InputKey.Character, Some(167.toChar), Set.empty)).asInstanceOf[UnhandledEvent[?]]
@@ -135,7 +131,6 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
     isSystemEvent(normalCharEvent) shouldBe false
   }
 
-  // Null char (0) is filtered to None by fromKeyStroke; char.toInt 4 = Ctrl+D, 26 = Ctrl+Z
   private def isSystemEvent(event: UnhandledEvent[?]): Boolean =
     event.info.keyType match
       case InputKey.EOF     => false

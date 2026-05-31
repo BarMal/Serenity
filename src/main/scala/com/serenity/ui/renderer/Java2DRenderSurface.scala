@@ -1,6 +1,5 @@
 package com.serenity.ui.renderer
 
-import com.googlecode.lanterna.TextColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.TextStyle
 import java.awt.{AlphaComposite, Color, Font, FontMetrics, Graphics2D, RenderingHints}
@@ -23,19 +22,15 @@ class Java2DRenderSurface(
   private val g: Graphics2D = image.createGraphics()
   private val fm: FontMetrics = g.getFontMetrics(font)
 
-  // Enable text anti-aliasing for cleaner glyphs
   g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
   g.setFont(font)
 
   private var fg: Color = Color.WHITE
   private var bg: Color = Color.BLACK
 
-  def setForegroundColor(color: TextColor): Unit = fg = color.toColor
-  def setBackgroundColor(color: TextColor): Unit = bg = color.toColor
-  def getBackgroundColor: TextColor = new TextColor.RGB(bg.getRed, bg.getGreen, bg.getBlue)
-
-  override def setForegroundColor(color: java.awt.Color): Unit = fg = color
-  override def setBackgroundColor(color: java.awt.Color): Unit = bg = color
+  def setForegroundColor(color: Color): Unit = fg = color
+  def setBackgroundColor(color: Color): Unit = bg = color
+  def getBackgroundColor: Color              = bg
 
   def putString(x: Int, y: Int, s: String): Unit =
     if s.nonEmpty then

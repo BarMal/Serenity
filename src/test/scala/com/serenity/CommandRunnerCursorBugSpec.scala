@@ -8,9 +8,6 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.keystroke.events.{ToggleCommandRunner, InsertChar}
 import com.serenity.ui.layout.{ViewportSize, LayoutEngine}
-import com.serenity.ui.renderer.Renderer
-import com.googlecode.lanterna.screen.{TerminalScreen}
-import com.googlecode.lanterna.terminal.virtual.VirtualTerminal
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}

@@ -1,9 +1,6 @@
 package com.serenity
 
 import cats.effect.IO
-import com.googlecode.lanterna.screen.TerminalScreen
-import com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal
-import com.googlecode.lanterna.{TerminalSize as LanternaSize}
 import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -19,12 +16,6 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
   private val paneId   = PaneId(0)
   private val bufferId = BufferId(1)
-
-  private def screen(width: Int, height: Int): TerminalScreen =
-    val terminal = new DefaultVirtualTerminal(new LanternaSize(width, height))
-    val screen   = new TerminalScreen(terminal)
-    screen.startScreen()
-    screen
 
   private def stateWithRunner(theme: Theme, searchTerm: String, commands: List[Command]): AppState =
     val registry = CommandRegistry(commands)
@@ -59,27 +50,21 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       Command("open", "Open file", _ => IO.unit),
       Command("close", "Close current file", _ => IO.unit)
     )
-    val state      = stateWithRunner(Theme.light, "op", commands)
-    val testScreen = screen(100, 30)
-    val layout     = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
-    val overlay    = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+    val state   = stateWithRunner(Theme.light, "op", commands)
+    val surface = new MockRenderSurface(100, 30)
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
     val paneRect = LayoutEngine
       .calculatePaneLayouts(state, layout)
       .getOrElse(paneId, fail("Expected pane layout"))
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    Renderer.render(state, cursorVisible = true, testScreen)
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     val searchLine =
-      (overlay.x + 1 until overlay.right - 1)
-        .map(x => testScreen.getBackCharacter(x, overlay.y + 1).getCharacter)
-        .mkString
-        .trim
+      (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 1)).mkString.trim
     val commandLine =
-      (overlay.x + 1 until overlay.right - 1)
-        .map(x => testScreen.getBackCharacter(x, overlay.y + 2).getCharacter)
-        .mkString
-        .trim
+      (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 2)).mkString.trim
 
     searchLine should include("search: op")
     commandLine should include("open")
@@ -87,15 +72,12 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     overlay.width shouldBe contentRect.width
     overlay.x shouldBe contentRect.x
 
-    testScreen.getBackCharacter(0, 0).getBackgroundColor shouldBe state.theme.background
-    testScreen.getBackCharacter(overlay.x + 1, overlay.y + 1).getBackgroundColor shouldBe state.theme.panel.background
-    testScreen.getBackCharacter(overlay.x + 1, overlay.y + 2).getBackgroundColor shouldBe state.theme.highlighted.background
-    testScreen.getCursorPosition shouldBe null
+    surface.getBg(0, 0) shouldBe state.theme.background
+    surface.getBg(overlay.x + 1, overlay.y + 1) shouldBe state.theme.panel.background
+    surface.getBg(overlay.x + 1, overlay.y + 2) shouldBe state.theme.highlighted.background
 
     val cursorX = overlay.x + 1 + "search: op".length
-    testScreen.getBackCharacter(cursorX, overlay.y + 1).getBackgroundColor shouldBe state.theme.cursorColor
-
-    testScreen.stopScreen()
+    surface.getBg(cursorX, overlay.y + 1) shouldBe state.theme.cursorColor
   }
 
   it should "render category tabs in browse mode and show inline animation options in settings" in {
@@ -129,22 +111,16 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val testScreen = screen(100, 30)
-    val layout     = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
-    val overlay    = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+    val surface = new MockRenderSurface(100, 30)
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
 
-    Renderer.render(state, cursorVisible = true, testScreen)
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     val tabLine =
-      (overlay.x + 1 until overlay.right - 1)
-        .map(x => testScreen.getBackCharacter(x, overlay.y + 1).getCharacter)
-        .mkString
-        .trim
+      (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 1)).mkString.trim
     val optionLine =
-      (overlay.x + 1 until overlay.right - 1)
-        .map(x => testScreen.getBackCharacter(x, overlay.y + 2).getCharacter)
-        .mkString
-        .trim
+      (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 2)).mkString.trim
 
     tabLine should include("All")
     tabLine should include("File")
@@ -160,10 +136,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
     val settingsBackgrounds =
       (overlay.x + 1 until overlay.right - 1)
-        .map(x => testScreen.getBackCharacter(x, overlay.y + 1).getBackgroundColor)
+        .map(x => surface.getBg(x, overlay.y + 1))
         .distinct
     settingsBackgrounds.size should be > 1
-
-    testScreen.stopScreen()
   }
 end CommandRunnerFloatingRenderingSpec

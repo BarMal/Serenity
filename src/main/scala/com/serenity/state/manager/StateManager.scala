@@ -674,8 +674,8 @@ object StateManager:
         val overlayHeight = layout.belowCursorOverlayRect.map(_.height).getOrElse(4)
         val overlayFadeIn = (0 until overlayHeight).map { rowOffset =>
           val delay    = rowOffset
-          val panelBg  = s.theme.panel.background.toColor()
-          val panelFg  = s.theme.panel.foreground.toColor()
+          val panelBg  = s.theme.panel.background
+          val panelFg  = s.theme.panel.foreground
           val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
           val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
           val bgSteps  = List.fill(delay)(transpBg) ++
@@ -716,8 +716,8 @@ object StateManager:
           .getOrElse(LayoutRect(12, 2, 56, overlayHeight))
         val overlayFadeOutAnims = (0 until overlayHeight).map { rowOffset =>
           val delay      = overlayHeight - 1 - rowOffset
-          val panelBg    = s.theme.panel.background.toColor()
-          val panelFg    = s.theme.panel.foreground.toColor()
+          val panelBg    = s.theme.panel.background
+          val panelFg    = s.theme.panel.foreground
           val transpBg   = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
           val transpFg   = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
           val bgSteps    = List.fill(delay)(panelBg) ++
@@ -767,7 +767,7 @@ object StateManager:
             val char = if bufferCol < lineContent.length then lineContent(bufferCol) else ' '
             CharacterKey(bufferCol, bufferLine) -> AnimatedCell(
               content = Some(char),
-              foregroundSteps = RgbInterpolator.interpolate(theme.foreground, theme.background, steps).map(_.toColor()),
+              foregroundSteps = RgbInterpolator.interpolateRgba(theme.foreground, theme.background, steps),
               backgroundSteps = List.empty
             )
           }
@@ -794,8 +794,8 @@ object StateManager:
             val char = if bufferCol < lineContent.length then lineContent(bufferCol) else ' '
             CharacterKey(bufferCol, bufferLine) -> AnimatedCell(
               content = Some(char),
-              foregroundSteps = List.fill(delayTicks)(theme.background.toColor()) ++
-                RgbInterpolator.interpolate(theme.background, theme.foreground, steps).map(_.toColor()),
+              foregroundSteps = List.fill(delayTicks)(theme.background) ++
+                RgbInterpolator.interpolateRgba(theme.background, theme.foreground, steps),
               backgroundSteps = List.empty
             )
           }
@@ -814,8 +814,8 @@ object StateManager:
             if newTick >= surfAnim.bufferFadeLength then
               val overlayFadeIn = (0 until surfAnim.overlayHeight).map { rowOffset =>
                 val delay    = rowOffset
-                val panelBg  = s.theme.panel.background.toColor()
-                val panelFg  = s.theme.panel.foreground.toColor()
+                val panelBg  = s.theme.panel.background
+                val panelFg  = s.theme.panel.foreground
                 val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
                 val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
                 val bgSteps  = List.fill(delay)(transpBg) ++

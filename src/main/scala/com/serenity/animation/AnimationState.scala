@@ -1,6 +1,5 @@
 package com.serenity.animation
 
-import com.googlecode.lanterna.TextColor
 import java.awt.Color
 
 /** Buffer coordinate key for character animations (column, line) */
@@ -11,21 +10,19 @@ case class AnimationState(
     animations: Map[CharacterKey, AnimatedCell] = Map.empty
 ):
 
-  /** Add a foreground-only fade animation at the given buffer position (column, line) */
   def addCharacterAnimation(
     char: Char,
     x: Int,
     y: Int,
-    backgroundColor: TextColor,
-    foregroundColor: TextColor,
+    startColor: Color,
+    endColor: Color,
     steps: Int
   ): AnimationState =
     val key  = CharacterKey(x, y)
-    val cell = AnimatedCell.fromForegroundInterpolation(char, backgroundColor, foregroundColor, steps)
+    val cell = AnimatedCell.fromForegroundInterpolation(char, startColor, endColor, steps)
     copy(animations = animations + (key -> cell))
 
-  /** Add a completed character (no animation) at the given buffer position (column, line) */
-  def addCompletedCharacter(char: Char, x: Int, y: Int, color: TextColor): AnimationState =
+  def addCompletedCharacter(char: Char, x: Int, y: Int, color: Color): AnimationState =
     val key  = CharacterKey(x, y)
     val cell = AnimatedCell.completed(char, color)
     copy(animations = animations + (key -> cell))

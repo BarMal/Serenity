@@ -1,10 +1,9 @@
 package com.serenity.ui.renderer
 
+import java.awt.Color
 import com.serenity.command.{CommandCategory, CommandRegistry, CommandSurfaceItem}
 import com.serenity.state.models.{CloseWorkflowChoice, CloseWorkflowState, FileSearchState, FileWorkflowField, FileWorkflowMode, FileWorkflowState, Modal, ReplaceWorkflowField, ReplaceWorkflowState, SurfaceContent, ThemePickerState}
-import com.serenity.ui.layout.LayoutRect
-import com.googlecode.lanterna.TextColor
-import com.serenity.ui.layout.SurfaceLayoutKind
+import com.serenity.ui.layout.{LayoutRect, SurfaceLayoutKind}
 
 enum SurfaceRenderMode:
   case Floating
@@ -24,16 +23,16 @@ case class OverlaySegment(
     text: String,
     selected: Boolean = false,
     tone: OverlayTone = OverlayTone.Normal,
-    foregroundColor: Option[TextColor] = None,
-    backgroundColor: Option[TextColor] = None
+    foregroundColor: Option[Color] = None,
+    backgroundColor: Option[Color] = None
 )
 
 case class OverlayRow(
     plainText: String,
     selected: Boolean = false,
     cursorColumn: Option[Int] = None,
-    foregroundColor: Option[TextColor] = None,
-    backgroundColor: Option[TextColor] = None,
+    foregroundColor: Option[Color] = None,
+    backgroundColor: Option[Color] = None,
     segments: List[OverlaySegment] = Nil,
     layout: OverlayRowLayout = OverlayRowLayout.Plain
 )

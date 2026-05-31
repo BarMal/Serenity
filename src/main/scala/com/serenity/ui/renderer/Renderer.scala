@@ -1,6 +1,5 @@
 package com.serenity.ui.renderer
 
-import com.googlecode.lanterna.screen.Screen
 import com.serenity.animation.ThemeInterpolator
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -22,18 +21,16 @@ object Renderer:
       case Some(t) =>
         state.copy(theme = ThemeInterpolator.blend(t.previousTheme, state.theme, t.progress))
 
-  def render(state: AppState, cursorVisible: Boolean, screen: Screen): Unit =
-    val state0   = withEffectiveTheme(state)
-    val surface  = LanternaRenderSurface(screen, screen.newTextGraphics())
-    val viewportSize = ViewportSize(surface.viewportWidth, surface.viewportHeight)
-    val layout   = LayoutEngine.calculateLayout(state0, viewportSize)
+  def render(state: AppState, cursorVisible: Boolean, swingWin: com.serenity.ui.terminal.SwingWindow, font: java.awt.Font): Unit =
+    val state0       = withEffectiveTheme(state)
+    val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, font, swingWin.canvas, swingWin.onImageReady)
+    val viewportSize = swingWin.viewportSize
+    val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
     renderFrame(state0, cursorVisible, surface, viewportSize, layout)
 
-  def render(state: AppState, cursorVisible: Boolean, swingWin: com.serenity.ui.terminal.SwingWindow, font: java.awt.Font): Unit =
-    val state0   = withEffectiveTheme(state)
-    val surface  = Java2DRenderSurface.forFrame(swingWin.metrics, font, swingWin.canvas, swingWin.onImageReady)
-    val viewportSize = swingWin.viewportSize
-    val layout   = LayoutEngine.calculateLayout(state0, viewportSize)
+  def render(state: AppState, cursorVisible: Boolean, surface: RenderSurface, viewportSize: ViewportSize): Unit =
+    val state0 = withEffectiveTheme(state)
+    val layout = LayoutEngine.calculateLayout(state0, viewportSize)
     renderFrame(state0, cursorVisible, surface, viewportSize, layout)
 
   private def renderFrame(
@@ -64,50 +61,6 @@ object Renderer:
         renderPinnedPanels(state, context)
         renderEditorPanes(state, context)
         renderFloatingPanels(state, context)
-
-    surface.flush()
-
-  def renderCursorOnly(state: AppState, cursorVisible: Boolean, screen: Screen): Unit =
-    val surface      = LanternaRenderSurface(screen, screen.newTextGraphics())
-    val viewportSize = ViewportSize(surface.viewportWidth, surface.viewportHeight)
-    val layout       = LayoutEngine.calculateLayout(state, viewportSize)
-    val paneLayouts  = LayoutEngine.calculatePaneLayouts(state, layout)
-
-    surface.hideCursor()
-    state.focus match
-      case Focus.EditorPane(focusedPaneId) =>
-        for
-          paneId <- state.layout.activeEditorPaneId if paneId == focusedPaneId
-          pane   <- state.layout.editorPanes.get(paneId)
-          rect   <- paneLayouts.get(paneId)
-          buffer <- pane.bufferId.flatMap(state.buffers.get)
-          cursor <- buffer.cursors.headOption
-        do
-          val contentRect = LayoutRect(rect.x, rect.y + 1, rect.width, math.max(1, rect.height - 1))
-
-          calculateCursorVisualPosition(cursor, buffer.content, contentRect.width, buffer.viewport) match
-            case Some((visualLine, visualColumn)) =>
-              val screenY = contentRect.y + (visualLine - buffer.viewport.topLine)
-              val screenX = contentRect.x + visualColumn
-
-              if screenY >= 0 && screenY < viewportSize.height &&
-                  screenX >= 0 && screenX < viewportSize.width
-              then
-                if cursorVisible then
-                  surface.setBackgroundColor(state.theme.cursor)
-                  surface.setForegroundColor(state.theme.background)
-                  CharacterRenderer.renderChar(surface, screenX, screenY, ' ')
-                else
-                  val charBeneath =
-                    buffer.content
-                      .getLine(cursor.line)
-                      .map(line => if cursor.column < line.length then line(cursor.column) else ' ')
-                      .getOrElse(' ')
-                  surface.setBackgroundColor(state.theme.background)
-                  surface.setForegroundColor(state.theme.foreground)
-                  CharacterRenderer.renderChar(surface, screenX, screenY, charBeneath)
-            case None => ()
-      case _ => ()
 
     surface.flush()
 

@@ -1,6 +1,5 @@
 package com.serenity.animation
 
-import com.googlecode.lanterna.TextColor
 import java.awt.Color
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -11,12 +10,6 @@ class AnimatedCellSpec extends AnyFlatSpec with Matchers:
   private val white = new Color(255, 255, 255)
   private val red   = new Color(255, 0, 0)
   private val blue  = new Color(0, 0, 255)
-
-  // TextColor equivalents for factory method tests
-  private val tcBlack = new TextColor.RGB(0, 0, 0)
-  private val tcWhite = new TextColor.RGB(255, 255, 255)
-  private val tcRed   = new TextColor.RGB(255, 0, 0)
-  private val tcBlue  = new TextColor.RGB(0, 0, 255)
 
   // ── Consuming advance ─────────────────────────────────────────────────────
 
@@ -114,44 +107,44 @@ class AnimatedCellSpec extends AnyFlatSpec with Matchers:
   // ── Smart constructors ────────────────────────────────────────────────────
 
   "AnimatedCell.fromForegroundInterpolation" should "produce a foreground-only fade" in {
-    val cell = AnimatedCell.fromForegroundInterpolation('x', tcBlack, tcWhite, steps = 4)
+    val cell = AnimatedCell.fromForegroundInterpolation('x', black, white, steps = 4)
     cell.content shouldEqual Some('x')
-    cell.foregroundSteps shouldEqual RgbInterpolator.interpolate(tcBlack, tcWhite, 4).map(_.toColor())
+    cell.foregroundSteps shouldEqual RgbInterpolator.interpolateRgba(black, white, 4)
     cell.backgroundSteps shouldEqual List.empty
     cell.cycling should be(false)
   }
 
   "AnimatedCell.fromThemeTransition" should "interpolate both foreground and background" in {
     val cell = AnimatedCell.fromThemeTransition(
-      oldForeground = tcBlack,
-      newForeground = tcWhite,
-      oldBackground = tcRed,
-      newBackground = tcBlue,
+      oldForeground = black,
+      newForeground = white,
+      oldBackground = red,
+      newBackground = blue,
       steps = 4
     )
     cell.content shouldEqual None
-    cell.foregroundSteps shouldEqual RgbInterpolator.interpolate(tcBlack, tcWhite, 4).map(_.toColor())
-    cell.backgroundSteps shouldEqual RgbInterpolator.interpolate(tcRed, tcBlue, 4).map(_.toColor())
+    cell.foregroundSteps shouldEqual RgbInterpolator.interpolateRgba(black, white, 4)
+    cell.backgroundSteps shouldEqual RgbInterpolator.interpolateRgba(red, blue, 4)
     cell.cycling should be(false)
   }
 
   "AnimatedCell.completed" should "produce a cell with a single static foreground step" in {
-    val cell = AnimatedCell.completed('z', tcWhite)
+    val cell = AnimatedCell.completed('z', white)
     cell.content shouldEqual Some('z')
-    cell.currentForeground shouldEqual Some(tcWhite.toColor())
+    cell.currentForeground shouldEqual Some(white)
     cell.backgroundSteps shouldEqual List.empty
     cell.isComplete should be(false)
     cell.advance().isComplete should be(true)
   }
 
   "AnimatedCell.createFadeAnimation" should "derive step count from duration and tick rate" in {
-    val cell = AnimatedCell.createFadeAnimation('a', tcBlack, tcWhite, durationMs = 96, tickRateMs = 16)
+    val cell = AnimatedCell.createFadeAnimation('a', black, white, durationMs = 96, tickRateMs = 16)
     cell.content shouldEqual Some('a')
     cell.foregroundSteps should have length 6
     cell.backgroundSteps shouldEqual List.empty
   }
 
   it should "be immediately complete for zero duration" in {
-    val cell = AnimatedCell.createFadeAnimation('a', tcBlack, tcWhite, durationMs = 0)
+    val cell = AnimatedCell.createFadeAnimation('a', black, white, durationMs = 0)
     cell.isComplete should be(true)
   }

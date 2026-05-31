@@ -1,14 +1,14 @@
 package com.serenity.animation
 
-import com.googlecode.lanterna.TextColor
+import java.awt.Color
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
 
-  private val black = TextColor.Factory.fromString("#000000")
-  private val white = TextColor.Factory.fromString("#ffffff")
-  private val red   = TextColor.Factory.fromString("#ff0000")
+  private val black = new Color(0, 0, 0)
+  private val white = new Color(255, 255, 255)
+  private val red   = new Color(255, 0, 0)
 
   "Animation System Integration" should "create realistic character animation workflow" in {
     val backgroundColor = black
@@ -27,7 +27,7 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
 
     characters.foreach { case (_, x, y) =>
       animState.getCell(x, y) should be(defined)
-      animState.getCell(x, y).get.currentForeground shouldEqual Some(backgroundColor.toColor())
+      animState.getCell(x, y).get.currentForeground shouldEqual Some(backgroundColor)
     }
 
     val frame1 = animState.advanceAnimations()
@@ -46,7 +46,6 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
       cell should be(defined)
       cell.get.content shouldEqual Some(char)
       cell.get.isComplete should be(true)
-      // Once exhausted, currentForeground is None; renderer falls back to theme colour
       cell.get.currentForeground shouldEqual None
     }
   }
@@ -63,36 +62,31 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
 
     themeChangedState.getCell(0, 0).get.isComplete should be(true)
     themeChangedState.getCell(1, 0).get.isComplete should be(true)
-    // All fg steps cleared; renderer will use new theme colour
     themeChangedState.getCell(0, 0).get.currentForeground shouldEqual None
     themeChangedState.getCell(1, 0).get.currentForeground shouldEqual None
   }
 
   it should "apply background steps when cell has no foreground steps" in {
-    val blackAwt = black.toColor()
-    val whiteAwt = white.toColor()
     val cell = AnimatedCell(
-      content = Some('a'),
+      content         = Some('a'),
       foregroundSteps = List.empty,
-      backgroundSteps = RgbInterpolator.interpolateRgba(blackAwt, whiteAwt, 3)
+      backgroundSteps = RgbInterpolator.interpolateRgba(black, white, 3)
     )
     val state = AnimationState.empty.mergeAnimations(Map(CharacterKey(0, 0) -> cell))
 
     state.getCell(0, 0).get.currentForeground shouldEqual None
-    state.getCell(0, 0).get.currentBackground shouldEqual Some(blackAwt)
+    state.getCell(0, 0).get.currentBackground shouldEqual Some(black)
 
     val step1 = state.advanceAnimations()
-    step1.getCell(0, 0).get.currentBackground should not equal Some(blackAwt)
+    step1.getCell(0, 0).get.currentBackground should not equal Some(black)
     step1.getCell(0, 0).get.currentBackground should not equal None
   }
 
   it should "track background-only cells via getLineAnimations and advance their background color" in {
-    val blackAwt = black.toColor()
-    val whiteAwt = white.toColor()
     val bgCell = AnimatedCell(
-      content = None,
+      content         = None,
       foregroundSteps = List.empty,
-      backgroundSteps = RgbInterpolator.interpolateRgba(blackAwt, whiteAwt, 3)
+      backgroundSteps = RgbInterpolator.interpolateRgba(black, white, 3)
     )
     val state = AnimationState.empty
       .mergeAnimations(Map(CharacterKey(5, 2) -> bgCell))
@@ -104,11 +98,11 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
     line2Animations.keys should contain(7)
     line2Animations.keys should not contain 3
 
-    line2Animations(5).currentBackground shouldEqual Some(blackAwt)
+    line2Animations(5).currentBackground shouldEqual Some(black)
     line2Animations(5).currentForeground shouldEqual None
 
     val advanced = state.advanceAnimations()
-    advanced.getLineAnimations(2)(5).currentBackground should not equal Some(blackAwt)
+    advanced.getLineAnimations(2)(5).currentBackground should not equal Some(black)
     advanced.getLineAnimations(2)(5).currentBackground should not equal None
   }
 

@@ -1,6 +1,6 @@
 package com.serenity.animation
 
-import com.googlecode.lanterna.TextColor
+import java.awt.Color
 
 enum FlowDirection:
   case ByColumn, ByRow
@@ -8,7 +8,7 @@ enum FlowDirection:
 enum SweepDirection:
   case Forward, Backward
 
-case class CellAnimation(char: Char, startColor: TextColor, endColor: TextColor)
+case class CellAnimation(char: Char, startColor: Color, endColor: Color)
 
 object FlowAnimationBuilder:
 
@@ -32,9 +32,7 @@ object FlowAnimationBuilder:
           case (FlowDirection.ByRow,    SweepDirection.Forward)  => key.line - minRow
           case (FlowDirection.ByRow,    SweepDirection.Backward) => maxRow - key.line
 
-        val startAwt = cell.startColor.toColor()
-        val endAwt   = cell.endColor.toColor()
-        val fade     = RgbInterpolator.interpolateRgba(startAwt, endAwt, steps)
-        val padding  = List.fill(offset)(startAwt)
+        val fade    = RgbInterpolator.interpolateRgba(cell.startColor, cell.endColor, steps)
+        val padding = List.fill(offset)(cell.startColor)
         key -> AnimatedCell(content = Some(cell.char), foregroundSteps = padding ++ fade, backgroundSteps = List.empty)
       }

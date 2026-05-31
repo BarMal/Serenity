@@ -1,14 +1,13 @@
 package com.serenity.ui.theme.config
 
+import java.awt.Color
 import java.nio.file.Path
 
 import cats.effect.IO
-import com.googlecode.lanterna.TextColor
 import com.serenity.ui.theme.*
 
 object ConfigurableThemeManager:
 
-  /** Convert ThemeConfig to Theme object */
   def configToTheme(config: ThemeConfig): Either[String, Theme] =
     for
       foreground   <- ColorParser.parseColor(config.ui.foreground)
@@ -52,10 +51,9 @@ object ConfigurableThemeManager:
       )
     )
 
-  /** Convert syntax colors configuration to map */
   private def convertSyntaxColors(
     syntax: SyntaxColors,
-    defaultBackground: TextColor
+    defaultBackground: Color
   ): Either[String, Map[SyntaxElement, ThemeColor]] =
     val defaultFg = SyntaxElementConfig("#F5F7FA", None, StyleConfig())
     val conversions = List(
@@ -77,23 +75,21 @@ object ConfigurableThemeManager:
         convertSyntaxElementConfig(config, defaultBackground).map(element -> _)
     }
 
-    // Collect all errors or return success
     results.foldLeft(Right(Map.empty[SyntaxElement, ThemeColor]): Either[String, Map[SyntaxElement, ThemeColor]]) {
       case (Right(acc), Right((element, color))) => Right(acc + (element -> color))
       case (Left(error), _)                      => Left(error)
       case (_, Left(error))                      => Left(error)
     }
 
-  /** Convert a single syntax element configuration */
   private def convertSyntaxElementConfig(
     config: SyntaxElementConfig,
-    defaultBackground: TextColor
+    defaultBackground: Color
   ): Either[String, ThemeColor] =
     for
       foreground <- ColorParser.parseColor(config.foreground)
       background <- config.background match
-        case None => Right(defaultBackground)
-        case Some(colorStr)         => ColorParser.parseColor(colorStr)
+        case None           => Right(defaultBackground)
+        case Some(colorStr) => ColorParser.parseColor(colorStr)
     yield ThemeColor(
       foreground = foreground,
       background = background,

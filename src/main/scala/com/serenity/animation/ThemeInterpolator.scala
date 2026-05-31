@@ -1,6 +1,6 @@
 package com.serenity.animation
 
-import com.googlecode.lanterna.TextColor
+import java.awt.Color
 import com.serenity.ui.theme.{SyntaxElement, Theme, ThemeColor}
 
 object ThemeInterpolator:
@@ -22,13 +22,11 @@ object ThemeInterpolator:
       syntaxColors = blendSyntaxColors(from.syntaxColors, to.syntaxColors, t)
     )
 
-  private def blendColor(from: TextColor, to: TextColor, t: Double): TextColor =
-    val f = RgbInterpolator.toRgb(from)
-    val tt = RgbInterpolator.toRgb(to)
-    new TextColor.RGB(
-      blendChannel(f.getRed,   tt.getRed,   t),
-      blendChannel(f.getGreen, tt.getGreen, t),
-      blendChannel(f.getBlue,  tt.getBlue,  t)
+  private def blendColor(from: Color, to: Color, t: Double): Color =
+    new Color(
+      blendChannel(from.getRed,   to.getRed,   t),
+      blendChannel(from.getGreen, to.getGreen, t),
+      blendChannel(from.getBlue,  to.getBlue,  t)
     )
 
   private def blendThemeColor(from: ThemeColor, to: ThemeColor, t: Double): ThemeColor =
@@ -44,9 +42,10 @@ object ThemeInterpolator:
     to:   Map[SyntaxElement, ThemeColor],
     t:    Double
   ): Map[SyntaxElement, ThemeColor] =
+    val fallback = ThemeColor(Color.WHITE, Color.BLACK)
     (from.keySet ++ to.keySet).map { el =>
-      val f = from.getOrElse(el, to.getOrElse(el, ThemeColor(new TextColor.RGB(255, 255, 255), new TextColor.RGB(0, 0, 0))))
-      val tt = to.getOrElse(el, from.getOrElse(el, ThemeColor(new TextColor.RGB(255, 255, 255), new TextColor.RGB(0, 0, 0))))
+      val f  = from.getOrElse(el, to.getOrElse(el, fallback))
+      val tt = to.getOrElse(el, from.getOrElse(el, fallback))
       el -> blendThemeColor(f, tt, t)
     }.toMap
 
