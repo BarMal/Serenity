@@ -19,6 +19,6 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     PinnedPanelRenderer.render(surface, panel, Theme.light)
 
     surface.getBg(panel.rect.x + 1, panel.rect.y + 1) shouldBe Theme.light.panel.background
-    surface.getFg(panel.rect.x + 1, panel.rect.y) shouldBe Theme.light.border
+    surface.strokeRoundRectCalls.map(_.color) should contain(Theme.light.border)
   }
 end PinnedPanelRenderingSpec

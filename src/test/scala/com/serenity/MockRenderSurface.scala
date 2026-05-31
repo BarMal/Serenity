@@ -36,6 +36,14 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
         chars(py)(px) = char
         bgs(py)(px)   = currentBg
 
+  case class StrokeRoundRectCall(x: Int, y: Int, w: Int, h: Int, arcPx: Int, color: Color, strokeWidth: Float)
+  private val strokeRoundRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[StrokeRoundRectCall]
+
+  override def strokeRoundRect(x: Int, y: Int, width: Int, height: Int, arcPx: Int, color: Color, strokeWidth: Float = 1.5f): Unit =
+    strokeRoundRectCallsBuffer += StrokeRoundRectCall(x, y, width, height, arcPx, color, strokeWidth)
+
+  def strokeRoundRectCalls: List[StrokeRoundRectCall] = strokeRoundRectCallsBuffer.toList
+
   def enableStyle(style: TextStyle): Unit  = ()
   def disableStyle(style: TextStyle): Unit = ()
   def hideCursor(): Unit                   = ()

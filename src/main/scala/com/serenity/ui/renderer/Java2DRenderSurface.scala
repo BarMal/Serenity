@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.TextStyle
-import java.awt.{AlphaComposite, Color, Font, FontMetrics, Graphics2D, RenderingHints}
+import java.awt.{AlphaComposite, BasicStroke, Color, Font, FontMetrics, Graphics2D, RenderingHints}
 import java.awt.image.{BufferedImage, ConvolveOp, Kernel}
 
 /** A RenderSurface backed by a BufferedImage via Graphics2D.
@@ -97,6 +97,22 @@ class Java2DRenderSurface(
         val src    = image.getSubimage(clampedX, clampedY, clampedW, clampedH)
         val blurred = op.filter(src, null)
         g.drawImage(blurred, clampedX, clampedY, null)
+
+  override def strokeRoundRect(x: Int, y: Int, width: Int, height: Int, arcPx: Int, color: Color, strokeWidth: Float = 1.5f): Unit =
+    val px = metrics.toPixelX(x)
+    val py = metrics.toPixelY(y)
+    val pw = width  * metrics.charWidth
+    val ph = height * metrics.lineHeight
+    val inset          = math.ceil(strokeWidth / 2).toInt
+    val savedComposite = g.getComposite
+    val savedStroke    = g.getStroke
+    g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f))
+    g.setColor(color)
+    g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND))
+    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+    g.drawRoundRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset, arcPx * 2, arcPx * 2)
+    g.setStroke(savedStroke)
+    g.setComposite(savedComposite)
 
   def hideCursor(): Unit = ()
 
