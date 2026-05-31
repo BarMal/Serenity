@@ -69,31 +69,28 @@ trait StateManager:
   def showModal(modal: Modal): IO[Unit]
   def dismissModal(): IO[Unit]
 
-  // File operations (stubs for test compilation)
+  // File operations
   def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit]
   def saveBuffer(bufferId: BufferId): IO[Unit]
   def saveBufferAs(bufferId: BufferId, filePath: String): IO[Unit]
   def markBufferSaved(bufferId: BufferId): IO[Unit]
   def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean]
   def forceCloseBuffer(bufferId: BufferId): IO[Unit]
-
-  // Tab operations (stubs for test compilation)
-  def createPaneAfter(afterPaneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
-  def getTabOrder(): IO[List[PaneId]]
-
-  // Pane splitting operations (stubs for test compilation)
-  def splitPaneHorizontal(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
-
   def getRecentFiles: IO[List[java.nio.file.Path]]
 
-  // Panel operations (stubs for test compilation)
+  // Tab / pane operations
+  def createPaneAfter(afterPaneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
+  def getTabOrder(): IO[List[PaneId]]
+  def splitPaneHorizontal(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
+
+  // Panel operations
   def switchToPinnedPanel(position: PanelPosition): IO[Unit]
   def loadDirectoryTree(path: String, files: List[String]): IO[Unit]
   def selectFileInExplorer(filePath: String): IO[Unit]
   def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
   def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit]
 
-  // Scrolling operations (stubs for test compilation)
+  // Scrolling operations
   def ensureCursorVisible(paneId: PaneId): IO[Unit]
   def smoothScrollTo(paneId: PaneId, targetLine: Int): IO[Unit]
   def progressSmoothScroll(paneId: PaneId, progress: Double): IO[Unit]
@@ -1145,7 +1142,7 @@ object StateManager:
       }
 
     def forceCloseBuffer(bufferId: BufferId): IO[Unit] =
-      closeBuffer(bufferId) // Reuse existing implementation for now
+      closeBuffer(bufferId)
 
     def createPaneAfter(afterPaneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId] =
       stateRef.modify { state =>

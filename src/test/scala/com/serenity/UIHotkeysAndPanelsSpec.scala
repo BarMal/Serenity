@@ -99,6 +99,22 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.resizePinnedPanel(PanelPosition.Left, 40).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces shouldBe Nil
 
+  // ── switchToPinnedPanel ───────────────────────────────────────────────────
+
+  it should "move focus to a pinned panel on switchToPinnedPanel" in new UIFixture:
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
+    stateManager.switchToPinnedPanel(PanelPosition.Right).unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.focus match
+      case Focus.Surface(id) => state.pinnedSurfaces.map(_.id) should contain(id)
+      case other             => fail(s"Expected focus on pinned surface, got $other")
+
+  it should "do nothing on switchToPinnedPanel when no panel is at that position" in new UIFixture:
+    val focusBefore = stateManager.getCurrentState.unsafeRunSync().focus
+    stateManager.switchToPinnedPanel(PanelPosition.Right).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().focus shouldBe focusBefore
+
   // ── Backlog ───────────────────────────────────────────────────────────────
 
   it should "open file search with Ctrl+Shift+F" in new UIFixture:
