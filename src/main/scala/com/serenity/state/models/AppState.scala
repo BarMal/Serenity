@@ -44,7 +44,8 @@ case class AppState(
     nextPaneId: PaneId = PaneId(0),
     nextSurfaceId: Int = 0,
     themeTransition: Option[ThemeTransition] = None,
-    surfaceAnimations: Map[SurfaceId, SurfaceAnimationState] = Map.empty
+    surfaceAnimations: Map[SurfaceId, SurfaceAnimationState] = Map.empty,
+    clipboard: Option[String] = None // not persisted between sessions
 ):
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled

@@ -264,6 +264,54 @@ object EditorEventReducer:
               case _ =>
                 ReducerResult.noEffects(currentState)
 
+          case Copy =>
+            val lineText = buffer.content.getLine(cursor.line).getOrElse("")
+            ReducerResult.noEffects(currentState.copy(clipboard = Some(lineText)))
+
+          case Cut =>
+            val lineText  = buffer.content.getLine(cursor.line).getOrElse("")
+            val lineStart = lineColumnToOffset(buffer.content, cursor.line, 0)
+            val lineEnd   = lineColumnToOffset(buffer.content, cursor.line, lineText.length)
+            val (newContent, newCursor) =
+              if cursor.line == 0 && countLines(buffer.content) == 1 then
+                (buffer.content.delete(0, lineEnd), CursorPosition(0, 0))
+              else if cursor.line < countLines(buffer.content) - 1 then
+                // delete including the trailing newline
+                (buffer.content.delete(lineStart, lineEnd + 1), CursorPosition(cursor.line, 0))
+              else
+                // last line — delete preceding newline
+                (buffer.content.delete(lineStart - 1, lineEnd), CursorPosition(cursor.line - 1, 0))
+            val updatedBuffer = buffer.copy(
+              content = newContent,
+              isDirty = true,
+              isNewEmpty = false,
+              cursors = newCursor :: buffer.cursors.tail,
+              viewport = adjustViewportForCursor(buffer.viewport, newCursor)
+            )
+            ReducerResult.noEffects(
+              currentState.copy(
+                buffers = currentState.buffers + (buffer.id -> updatedBuffer),
+                clipboard = Some(lineText)
+              )
+            )
+
+          case Paste =>
+            currentState.clipboard match
+              case None => ReducerResult.noEffects(currentState)
+              case Some(text) if text.isEmpty => ReducerResult.noEffects(currentState)
+              case Some(text) =>
+                val offset     = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+                val newContent = buffer.content.insert(offset, text)
+                val newCursor  = cursor.copy(column = cursor.column + text.length)
+                val updatedBuffer = buffer.copy(
+                  content = newContent,
+                  isDirty = true,
+                  isNewEmpty = false,
+                  cursors = newCursor :: buffer.cursors.tail,
+                  viewport = adjustViewportForCursor(buffer.viewport, newCursor)
+                )
+                ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+
           case _ =>
             ReducerResult.noEffects(currentState)
 

@@ -2,11 +2,15 @@ package com.serenity
 
 import java.nio.file.Files
 
+import com.serenity.animation.AnimationConfig
+import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.session.SessionState
+import com.serenity.session.given
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.Theme
+import _root_.io.circe.syntax.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -114,4 +118,95 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     sessionBuffer.unsavedContent shouldBe Some("saved on disk")
     sessionBuffer.isDirty shouldBe false
+  }
+
+  it should "survive a JSON encode/decode round trip with content, cursor, viewport, and FindState" in {
+    val tempFile = Files.createTempFile("session-json-roundtrip", ".txt")
+    Files.writeString(tempFile, "json round trip content")
+
+    val buffer = Buffer
+      .fromFile(BufferId(20), tempFile, "json round trip content")
+      .copy(
+        cursors = List(CursorPosition(3, 7)),
+        viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 24, visibleColumns = 80)
+      )
+    val appState = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = Layout(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0))
+      ),
+      focus = Focus.EditorPane(PaneId(0)),
+      findState = Some(FindState("round", List(0, 5), 1)),
+      nextBufferId = BufferId(21),
+      nextPaneId = PaneId(1)
+    )
+
+    val sessionState = SessionState.fromAppState(appState)
+    val decoded      = sessionState.asJson.as[SessionState]
+
+    decoded.isRight shouldBe true
+
+    val restored       = SessionState.toAppState(decoded.toOption.get, Theme.default)
+    val restoredBuffer = restored.buffers(buffer.id)
+
+    restoredBuffer.content.toString shouldBe "json round trip content"
+    restoredBuffer.cursors.head shouldBe CursorPosition(3, 7)
+    restoredBuffer.viewport.topLine shouldBe 2
+    restoredBuffer.viewport.leftColumn shouldBe 1
+    restored.findState shouldBe Some(FindState("round", List(0, 5), 1))
+  }
+
+  it should "preserve config fields including blurRadius through JSON round trip" in {
+    val appState = AppState.initial.copy(
+      config = AppConfig(
+        characterAnimation = AnimationConfig.quick,
+        blurRadius = 0.42f,
+        showLineNumbers = false,
+        showGutter = false
+      )
+    )
+
+    val decoded = SessionState.fromAppState(appState).asJson.as[SessionState].toOption.get
+
+    decoded.config.blurRadius shouldBe 0.42f
+    decoded.config.showLineNumbers shouldBe false
+    decoded.config.showGutter shouldBe false
+    decoded.config.characterAnimation.map(_.steps) shouldBe
+      AnimationConfig.quick.map(_.steps)
+  }
+
+  it should "survive a multi-pane multi-buffer layout round trip" in {
+    val file1 = Files.createTempFile("session-multi-pane-1", ".txt")
+    val file2 = Files.createTempFile("session-multi-pane-2", ".txt")
+    Files.writeString(file1, "pane one content")
+    Files.writeString(file2, "pane two content")
+
+    val buffer1 = Buffer.fromFile(BufferId(30), file1, "pane one content")
+    val buffer2 = Buffer.fromFile(BufferId(31), file2, "pane two content")
+    val appState = AppState.initial.copy(
+      buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
+      bufferOrder = List(buffer1.id, buffer2.id),
+      layout = Layout(
+        editorPanes = Map(
+          PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer1.id),
+          PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
+        ),
+        activeEditorPaneId = Some(PaneId(1))
+      ),
+      focus = Focus.EditorPane(PaneId(1)),
+      nextBufferId = BufferId(32),
+      nextPaneId = PaneId(2)
+    )
+
+    val restored = SessionState.toAppState(SessionState.fromAppState(appState), Theme.default)
+
+    restored.buffers should have size 2
+    restored.buffers(buffer1.id).content.toString shouldBe "pane one content"
+    restored.buffers(buffer2.id).content.toString shouldBe "pane two content"
+    restored.layout.editorPanes should have size 2
+    restored.layout.activeEditorPaneId shouldBe Some(PaneId(1))
+    restored.focus shouldBe Focus.EditorPane(PaneId(1))
+    restored.bufferOrder shouldBe List(buffer1.id, buffer2.id)
   }

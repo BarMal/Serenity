@@ -112,6 +112,34 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
+  it should "round-trip content through saveSession and loadSession with no session ID" in {
+    val sessionManager = createManager()
+
+    val program = for
+      _      <- sessionManager.saveSession(stateWithText("current session content"))
+      loaded <- sessionManager.loadSession()
+    yield
+      loaded.map(_.buffers.values.head.content.toString) shouldBe Some("current session content")
+
+    program.unsafeRunSync()
+  }
+
+  it should "preserve config fields including blurRadius through full disk save/load" in {
+    val sessionManager = createManager()
+    import com.serenity.config.AppConfig
+
+    val state = AppState.initial.copy(config = AppConfig(blurRadius = 0.75f, showLineNumbers = false))
+
+    val program = for
+      _ <- sessionManager.saveSession(state)
+      loaded <- sessionManager.loadSession()
+    yield
+      loaded.map(_.config.blurRadius) shouldBe Some(0.75f)
+      loaded.map(_.config.showLineNumbers) shouldBe Some(false)
+
+    program.unsafeRunSync()
+  }
+
   it should "never prune the current auto-save session regardless of maxSessionHistory" in {
     val sessionManager = createManager(SessionManager.SessionPolicy(maxSessionHistory = 1))
 

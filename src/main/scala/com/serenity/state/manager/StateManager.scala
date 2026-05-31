@@ -9,7 +9,8 @@ import fs2.Stream
 import com.serenity.animation.{AnimatedCell, AnimationConfig, AnimationState, CellAnimation, CharacterKey, FlowAnimationBuilder, FlowDirection, RgbInterpolator, SweepDirection}
 import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner, CommandSurfaceItem}
 import com.serenity.io.{FileManager, FileUtils}
-import com.serenity.keystroke.events.{Event, FileEvent, GlobalAppEvent, MouseClick, NextTab, PreviousTab, SystemEvent, ThemeEvent}
+import com.serenity.keystroke.events.{Copy, Cut, DeleteBackward, DeleteForward, Enter, Event, FileEvent, GlobalAppEvent, InsertChar, MouseClick, NewLine, NextTab, Paste, PreviousTab, Redo, SystemEvent, TabKey, ThemeEvent, Undo}
+import com.serenity.state.undo.{HistoryEntry, PendingGroup, UndoState}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.components.*
 import com.serenity.state.models.*
@@ -103,9 +104,11 @@ object StateManager:
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     for
       stateRef   <- Ref.of[IO, AppState](AppState.initial)
+      undoRef    <- Ref.of[IO, UndoState](UndoState())
       quitSignal <- Deferred[IO, Unit]
     yield new StateManagerImpl(
       stateRef,
+      undoRef,
       quitSignal,
       LoggerFactory[IO].getLogger(using LoggerName("com.serenity.state.manager.StateManager")),
       policy
@@ -133,6 +136,7 @@ object StateManager:
 
   private class StateManagerImpl(
       stateRef: Ref[IO, AppState],
+      undoRef: Ref[IO, UndoState],
       quitSignal: Deferred[IO, Unit],
       logger: Logger[IO],
       policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()
@@ -386,6 +390,8 @@ object StateManager:
     def applyEvent(event: Event): IO[Unit] =
       stateRef.get.flatMap { prevState =>
         val handleEvent: IO[Unit] = event match
+          case Undo => applyUndo(prevState)
+          case Redo => applyRedo(prevState)
           case resize: com.serenity.keystroke.events.ResizeEvent =>
             applyReducerResult(SystemEventReducer.reduce(resize, prevState), prevState) >>
               stateRef.update(s => AppEventReducer.rebalancePanes(s, s.focusedBufferId))
@@ -428,8 +434,111 @@ object StateManager:
               applyComponentResult(result, prevState).flatMap { newState =>
                 validateAndUpdateState(newState, prevState)
               }
-        handleEvent >> applyAnimationHooks(prevState)
+        handleEvent >> recordUndoableEdit(event, prevState) >> applyAnimationHooks(prevState)
       }
+
+    private def recordUndoableEdit(event: Event, prevState: AppState): IO[Unit] =
+      focusedBufferAndPane(prevState) match
+        case None => IO.unit
+        case Some((bufferId, paneId, buffer)) =>
+          val beforeContent = buffer.content
+          val beforeCursor  = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+          event match
+            case InsertChar(_) | TabKey =>
+              undoRef.update { undo =>
+                val sameGroup = undo.pendingGroup.exists(g => g.bufferId == bufferId && g.paneId == paneId)
+                if sameGroup then undo.clearRedo
+                else
+                  val flushed   = undo.flushPendingGroup(beforeContent, beforeCursor)
+                  val newGroup  = PendingGroup(bufferId, paneId, beforeContent, beforeCursor)
+                  flushed.copy(pendingGroup = Some(newGroup), redoStack = Nil)
+              }
+            case DeleteBackward | DeleteForward | NewLine | Enter =>
+              undoRef.update { undo =>
+                val flushed = undo.flushPendingGroup(beforeContent, beforeCursor)
+                val entry   = HistoryEntry(bufferId, paneId, beforeContent, beforeCursor)
+                flushed.copy(undoStack = entry :: flushed.undoStack, redoStack = Nil)
+              }
+            case _ => IO.unit
+
+    private def applyUndo(prevState: AppState): IO[Unit] =
+      undoRef.get.flatMap { undo =>
+        val flushed = undo.pendingGroup match
+          case None => undo
+          case Some(group) =>
+            focusedBufferAndPane(prevState).fold(undo) { (_, _, buffer) =>
+              val cur = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+              undo.flushPendingGroup(buffer.content, cur)
+            }
+        flushed.undoStack match
+          case Nil => IO.unit
+          case entry :: rest =>
+            stateRef.get.flatMap { state =>
+              state.buffers.get(entry.bufferId) match
+                case None => IO.unit
+                case Some(current) =>
+                  val currentCursor  = current.cursors.headOption.getOrElse(CursorPosition(0, 0))
+                  val redoEntry      = HistoryEntry(entry.bufferId, entry.paneId, current.content, currentCursor)
+                  val restoredBuffer = current.copy(
+                    content = entry.content,
+                    cursors = List(entry.cursor),
+                    isDirty = true,
+                    viewport = adjustViewportForUndoCursor(current.viewport, entry.cursor)
+                  )
+                  val snappedState = snapFocusToPane(state, entry.paneId)
+                  undoRef.set(flushed.copy(undoStack = rest, redoStack = redoEntry :: flushed.redoStack)) >>
+                    validateAndUpdateState(
+                      snappedState.copy(buffers = snappedState.buffers + (entry.bufferId -> restoredBuffer)),
+                      state
+                    )
+            }
+      }
+
+    private def applyRedo(prevState: AppState): IO[Unit] =
+      undoRef.get.flatMap { undo =>
+        undo.redoStack match
+          case Nil => IO.unit
+          case entry :: rest =>
+            stateRef.get.flatMap { state =>
+              state.buffers.get(entry.bufferId) match
+                case None => IO.unit
+                case Some(current) =>
+                  val currentCursor = current.cursors.headOption.getOrElse(CursorPosition(0, 0))
+                  val undoEntry     = HistoryEntry(entry.bufferId, entry.paneId, current.content, currentCursor)
+                  val restoredBuffer = current.copy(
+                    content = entry.content,
+                    cursors = List(entry.cursor),
+                    isDirty = true,
+                    viewport = adjustViewportForUndoCursor(current.viewport, entry.cursor)
+                  )
+                  val snappedState = snapFocusToPane(state, entry.paneId)
+                  undoRef.set(undo.copy(undoStack = undoEntry :: undo.undoStack, redoStack = rest)) >>
+                    validateAndUpdateState(
+                      snappedState.copy(buffers = snappedState.buffers + (entry.bufferId -> restoredBuffer)),
+                      state
+                    )
+            }
+      }
+
+    private def focusedBufferAndPane(state: AppState): Option[(BufferId, PaneId, Buffer)] =
+      state.focus match
+        case Focus.EditorPane(paneId) =>
+          state.layout.editorPanes.get(paneId).flatMap { pane =>
+            pane.bufferId.flatMap(state.buffers.get).map(buf => (buf.id, paneId, buf))
+          }
+        case _ => None
+
+    private def snapFocusToPane(state: AppState, paneId: PaneId): AppState =
+      if state.focus == Focus.EditorPane(paneId) then state
+      else state.copy(
+        focus = Focus.EditorPane(paneId),
+        layout = state.layout.copy(activeEditorPaneId = Some(paneId))
+      )
+
+    private def adjustViewportForUndoCursor(viewport: Viewport, cursor: CursorPosition): Viewport =
+      val half       = viewport.visibleLines / 2
+      val newTopLine = math.max(0, cursor.line - half)
+      viewport.copy(topLine = newTopLine)
 
     private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       newState.validated match
