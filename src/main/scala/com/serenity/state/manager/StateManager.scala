@@ -1162,7 +1162,7 @@ object StateManager:
       logger.debug(s"TODO: selectFileInExplorer($filePath)")
 
     def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
-      logger.debug(s"TODO: resizePinnedPanel($position, $newSize)")
+      stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.resize(position, newSize, state).state, state))
 
     def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit] =
       logger.debug(s"TODO: dragFileToDirectory($sourceFile, $targetDir)")

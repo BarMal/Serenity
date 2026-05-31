@@ -4,7 +4,7 @@ import java.nio.file.Paths
 
 import cats.effect.IO
 import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner}
-import com.serenity.state.models.{BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState, FileWorkflowField, FileWorkflowMode, FileWorkflowState, FileWorkflowSuggestion, Modal, ReplaceWorkflowField, ReplaceWorkflowState, SurfaceContent}
+import com.serenity.state.models.{BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState, FileSearchResult, FileSearchState, FileWorkflowField, FileWorkflowMode, FileWorkflowState, FileWorkflowSuggestion, Modal, ReplaceWorkflowField, ReplaceWorkflowState, SurfaceContent, ThemePickerState}
 import com.serenity.ui.layout.{DirEntry, LayoutRect}
 import com.serenity.ui.renderer.{OverlayRowLayout, OverlayTone, SurfaceContentResolver, SurfaceRenderMode}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -226,4 +226,68 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
     floating.footer.map(_.plainText) shouldBe Some("3 matches will be replaced")
   }
+
+  // ── ThemePicker resolver ──────────────────────────────────────────────────
+
+  it should "resolve ThemePicker rows with the selected index highlighted" in {
+    val picker = ThemePickerState(List("dark", "light", "mocha"), selectedIndex = 1, originalTheme = "dark")
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.ThemePicker(picker),
+      LayoutRect(0, 0, 40, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows should have size 3
+    resolved.rows.map(_.plainText) shouldBe List("dark", "light", "mocha")
+    resolved.rows.count(_.selected) shouldBe 1
+    resolved.rows(1).selected shouldBe true
+    resolved.rows(0).selected shouldBe false
+  }
+
+  it should "include a title for ThemePicker when pinned" in {
+    val picker = ThemePickerState(List("dark"), selectedIndex = 0, originalTheme = "dark")
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.ThemePicker(picker),
+      LayoutRect(0, 0, 30, 6),
+      SurfaceRenderMode.Pinned
+    )
+    resolved.title shouldBe Some("Theme")
+  }
+
+  // ── FileSearch resolver ───────────────────────────────────────────────────
+
+  it should "resolve FileSearch with query as header and result rows" in {
+    val results = List(
+      FileSearchResult(BufferId(0), "main.scala", 5, "def foo(x: Int)"),
+      FileSearchResult(BufferId(1), "util.scala", 12, "def helper()")
+    )
+    val search = FileSearchState("def", results, selectedIndex = 0)
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.FileSearch(search),
+      LayoutRect(0, 0, 60, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.header.map(_.plainText) shouldBe Some("def")
+    resolved.header.flatMap(_.cursorColumn) shouldBe Some(3)
+    resolved.rows should have size 2
+    resolved.rows.head.selected shouldBe true
+    resolved.rows(1).selected shouldBe false
+    resolved.rows.head.plainText should include("main.scala")
+    resolved.rows.head.plainText should include("6") // line + 1
+  }
+
+  it should "resolve FileSearch with empty query as header with space" in {
+    val search = FileSearchState("", Nil, 0)
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.FileSearch(search),
+      LayoutRect(0, 0, 60, 10),
+      SurfaceRenderMode.Floating
+    )
+    resolved.header.map(_.plainText) shouldBe Some(" ")
+    resolved.rows shouldBe Nil
+  }
+
 end SurfaceContentResolverSpec

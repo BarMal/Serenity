@@ -21,6 +21,16 @@ object PanelStateReducer:
       case None =>
         ReducerResult.noEffects(state)
 
+  def resize(position: PanelPosition, newSize: Int, state: AppState): ReducerResult =
+    pinnedSurfaceAt(position, state) match
+      case Some(surface) =>
+        val resized = surface.copy(presentation = SurfacePresentation.Pinned(position, newSize))
+        ReducerResult.noEffects(
+          state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ resized)
+        )
+      case None =>
+        ReducerResult.noEffects(state)
+
   def unpin(position: PanelPosition, state: AppState): ReducerResult =
     val nextFocus =
       pinnedSurfaceAt(position, state).map(_.id) match

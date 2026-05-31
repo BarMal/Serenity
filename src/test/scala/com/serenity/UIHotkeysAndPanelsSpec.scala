@@ -82,6 +82,23 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     pinned should have size 1
     pinned.head.content shouldBe a[SurfaceContent.Diagnostics]
 
+  // ── Panel resize ─────────────────────────────────────────────────────────
+
+  it should "resize a pinned panel to a new size" in new UIFixture:
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
+    stateManager.resizePinnedPanel(PanelPosition.Right, 50).unsafeRunSync()
+
+    val state  = stateManager.getCurrentState.unsafeRunSync()
+    val pinned = state.pinnedSurfaces
+    pinned should have size 1
+    pinned.head.presentation match
+      case SurfacePresentation.Pinned(PanelPosition.Right, size) => size shouldBe 50
+      case other => fail(s"Expected Pinned(Right, 50), got $other")
+
+  it should "do nothing when resizing a position with no panel" in new UIFixture:
+    stateManager.resizePinnedPanel(PanelPosition.Left, 40).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces shouldBe Nil
+
   // ── Backlog ───────────────────────────────────────────────────────────────
 
   it should "open file search with Ctrl+Shift+F" in new UIFixture:
