@@ -150,7 +150,7 @@ object Main extends IOApp.Simple:
             awaitExternalQuit >> stateManager.applyEvent(com.serenity.keystroke.events.Quit),
             stateManager.awaitQuit
           ).void,
-          LspManager.run(stateManager.lspEffectStream, logger)
+          LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger)
         ).parMapN((_, _, _, _, _, _) => ())
       _ <- logger.info("Serenity editor shutdown complete")
     yield ()

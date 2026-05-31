@@ -19,6 +19,7 @@ lazy val root = (project in file("."))
 libraryDependencies ++= Seq(
   "org.typelevel"         %% "cats-effect"     % "3.7-4972921",
   "co.fs2"                %% "fs2-core"        % "3.13.0-M2",
+  "co.fs2"                %% "fs2-io"          % "3.13.0-M2",
   "org.scalatest"         %% "scalatest"       % "3.2.19" % "test",
   "com.github.pureconfig" %% "pureconfig-core" % "0.17.9"
 )
