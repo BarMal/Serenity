@@ -4,6 +4,7 @@ import cats.syntax.parallel.*
 import com.serenity.app.AppStartup
 import com.serenity.config.{AppConfig, CursorMode}
 import com.serenity.input.{FocusedInputTranslator, InputHandler, InputRouter, SwingInputHandler}
+import com.serenity.lsp.LspManager
 import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
@@ -148,8 +149,9 @@ object Main extends IOApp.Simple:
           IO.race(
             awaitExternalQuit >> stateManager.applyEvent(com.serenity.keystroke.events.Quit),
             stateManager.awaitQuit
-          ).void
-        ).parMapN((_, _, _, _, _) => ())
+          ).void,
+          LspManager.run(stateManager.lspEffectStream, logger)
+        ).parMapN((_, _, _, _, _, _) => ())
       _ <- logger.info("Serenity editor shutdown complete")
     yield ()
 

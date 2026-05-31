@@ -4,12 +4,15 @@ import java.awt.Color
 import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.{Deferred, IO, Ref}
+import cats.effect.std.Queue
 import cats.syntax.foldable.*
 import fs2.Stream
 import com.serenity.animation.{AnimatedCell, AnimationConfig, AnimationState, CellAnimation, CharacterKey, FlowAnimationBuilder, FlowDirection, RgbInterpolator, SweepDirection}
 import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner, CommandSurfaceItem}
 import com.serenity.io.{FileManager, FileUtils}
 import com.serenity.keystroke.events.{Copy, Cut, DeleteBackward, DeleteForward, Enter, Event, FileEvent, GlobalAppEvent, InsertChar, MouseClick, NewLine, NextTab, Paste, PreviousTab, Redo, SystemEvent, TabKey, ThemeEvent, Undo}
+import com.serenity.lsp.LspEffect
+import com.serenity.lsp.config.FileExtension
 import com.serenity.state.undo.{HistoryEntry, PendingGroup, UndoState}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.components.*
@@ -34,6 +37,7 @@ trait StateManager:
   def handleViewportResize(newSize: ViewportSize): IO[Unit]
   def advanceAnimationFrames(): IO[Unit]
   def advanceAnimationsOnTick(): IO[Boolean]
+  def lspEffectStream: Stream[IO, LspEffect]
 
   // Buffer operations
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
@@ -110,6 +114,7 @@ object StateManager:
                          .handleErrorWith(_ => IO.pure(Nil))
                          .flatMap(Ref.of[IO, List[String]])
       quitSignal    <- Deferred[IO, Unit]
+      lspQueue      <- Queue.unbounded[IO, LspEffect]
     yield new StateManagerImpl(
       stateRef,
       undoRef,
@@ -117,7 +122,8 @@ object StateManager:
       quitSignal,
       LoggerFactory[IO].getLogger(using LoggerName("com.serenity.state.manager.StateManager")),
       policy,
-      themeManager
+      themeManager,
+      lspQueue
     )
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
@@ -148,9 +154,14 @@ object StateManager:
       quitSignal: Deferred[IO, Unit],
       logger: Logger[IO],
       policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy(),
-      themeManager: AppThemeManager = AppThemeManager.create
+      themeManager: AppThemeManager = AppThemeManager.create,
+      lspQueue: Queue[IO, LspEffect]
   )(using Balance)
       extends StateManager:
+
+    def lspEffectStream: Stream[IO, LspEffect] =
+      Stream.fromQueueUnterminated(lspQueue)
+        .interruptWhen(Stream.eval(quitSignal.get).as(true))
     private val fileManager    = new FileManager()
     private val sessionManager = SessionManager.create(themeManager, logger, policy)
     private val sessionPersistence = new SessionPersistence(sessionManager, policy, logger)
@@ -240,16 +251,26 @@ object StateManager:
       }
 
     def closeBuffer(bufferId: BufferId): IO[Unit] =
-      stateRef.update { state =>
+      stateRef.modify { state =>
+        val closingBuffer = state.buffers.get(bufferId)
         val updatedPanes = state.layout.editorPanes.view.mapValues { pane =>
           if pane.bufferId.contains(bufferId) then pane.copy(bufferId = None)
           else pane
         }.toMap
-
-        state.copy(
+        val newState = state.copy(
           buffers = state.buffers - bufferId,
           layout = state.layout.copy(editorPanes = updatedPanes)
         )
+        (newState, closingBuffer)
+      }.flatMap { closingBuffer =>
+        closingBuffer match
+          case Some(buf) =>
+            val lspIO = (buf.filePath, buf.language) match
+              case (Some(path), Some(languageId)) =>
+                lspQueue.offer(LspEffect.FileClosed(path.toUri.toString, languageId))
+              case _ => IO.unit
+            lspIO
+          case None => IO.unit
       }
 
     def createPane(bufferId: Option[BufferId] = None): IO[PaneId] =
@@ -889,6 +910,8 @@ object StateManager:
           submitReplaceWorkflowEffect(surfaceId)
         case AppEffect.SubmitCloseWorkflow(surfaceId) =>
           submitCloseWorkflowEffect(surfaceId)
+        case AppEffect.EnqueueLspEffect(effect) =>
+          lspQueue.offer(effect)
 
     private def applyComponentResult(result: ComponentResult, state: AppState): IO[AppState] =
       result match
@@ -1353,11 +1376,20 @@ object StateManager:
               )
               val rebalanced = AppEventReducer.rebalancePanes(updatedState, Some(newBufferId))
               val focused    = focusBuffer(rebalanced, newBufferId)
-              (focused, ())
+              (focused, loadedBuffer)
             }
+          }
+          .flatTap { loadedBuffer =>
+            loadedBuffer.language match
+              case Some(languageId) =>
+                val uri = path.toUri.toString
+                val text = loadedBuffer.content.collect()
+                lspQueue.offer(LspEffect.FileOpened(uri, languageId, text))
+              case None => IO.unit
           }
           .flatTap(_ => stateRef.update(s => s.copy(recentFiles = trackRecentFile(s.recentFiles, path))))
           .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load file at $path"))
+          .void
 
     private def saveBufferEffect(bufferId: BufferId): IO[Unit] =
       stateRef.get.flatMap { state =>

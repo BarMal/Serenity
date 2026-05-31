@@ -3,6 +3,7 @@ package com.serenity.state.reducers
 import java.nio.file.Path
 
 import com.serenity.command.Command
+import com.serenity.lsp.LspEffect
 import com.serenity.state.models.{AppState, BufferId, SurfaceId}
 
 enum AppEffect:
@@ -21,6 +22,7 @@ enum AppEffect:
   case SubmitFileWorkflow(surfaceId: SurfaceId)
   case SubmitReplaceWorkflow(surfaceId: SurfaceId)
   case SubmitCloseWorkflow(surfaceId: SurfaceId)
+  case EnqueueLspEffect(effect: LspEffect)
 
 case class ReducerResult(
     state: AppState,
