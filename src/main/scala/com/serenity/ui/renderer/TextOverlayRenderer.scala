@@ -51,20 +51,20 @@ object TextOverlayRenderer:
       val (topFg, topBg) = rowColors(0)
       surface.setForegroundColor(if animated then topFg else theme.border)
       surface.setBackgroundColor(topBg)
-      surface.putString(rect.x, rect.y, "+" + "-" * (rect.width - 2) + "+")
+      surface.putString(rect.x, rect.y, "┌" + "─" * (rect.width - 2) + "┐")
 
       for y <- (rect.y + 1) until (rect.bottom - 1) do
         val rowOff           = y - rect.y
         val (sideFg, sideBg) = rowColors(rowOff)
         surface.setForegroundColor(if animated then sideFg else theme.border)
         surface.setBackgroundColor(sideBg)
-        surface.putString(rect.x, y, "|")
-        surface.putString(rect.right - 1, y, "|")
+        surface.putString(rect.x, y, "│")
+        surface.putString(rect.right - 1, y, "│")
 
       val (botFg, botBg) = rowColors(rect.height - 1)
       surface.setForegroundColor(if animated then botFg else theme.border)
       surface.setBackgroundColor(botBg)
-      surface.putString(rect.x, rect.bottom - 1, "+" + "-" * (rect.width - 2) + "+")
+      surface.putString(rect.x, rect.bottom - 1, "└" + "─" * (rect.width - 2) + "┘")
 
   private def drawContent(
     surface: RenderSurface,

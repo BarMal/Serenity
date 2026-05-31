@@ -32,13 +32,13 @@ object PinnedPanelRenderer:
     if rect.width >= 2 && rect.height >= 2 then
       surface.setForegroundColor(theme.border)
       surface.setBackgroundColor(theme.panel.background)
-      surface.putString(rect.x, rect.y, "+" + "-" * (rect.width - 2) + "+")
+      surface.putString(rect.x, rect.y, "┌" + "─" * (rect.width - 2) + "┐")
 
       for y <- (rect.y + 1) until (rect.bottom - 1) do
-        surface.putString(rect.x, y, "|")
-        surface.putString(rect.right - 1, y, "|")
+        surface.putString(rect.x, y, "│")
+        surface.putString(rect.right - 1, y, "│")
 
-      surface.putString(rect.x, rect.bottom - 1, "+" + "-" * (rect.width - 2) + "+")
+      surface.putString(rect.x, rect.bottom - 1, "└" + "─" * (rect.width - 2) + "┘")
 
   private def drawTitle(surface: RenderSurface, panel: TextPanelView): Unit =
     val rect  = panel.rect

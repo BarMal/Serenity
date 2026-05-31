@@ -57,7 +57,8 @@ object AppConfig:
   /** Default configuration with smooth animations and syntax highlighting disabled */
   val default: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.smooth,
-    syntaxHighlightingEnabled = false
+    syntaxHighlightingEnabled = false,
+    blurRadius = 0.3f
   )
 
   /** Test configuration with visible animations enabled */
