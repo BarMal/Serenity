@@ -414,9 +414,33 @@ object Renderer:
               if bufferLineIndex < buffer.content.lineCount then
                 val lineNumberText = displayLineNumber.toString.padTo(lineRect.width - 1, ' ') + " "
                 surface.putString(lineRect.x, screenY, lineNumberText)
+                renderDiagnosticIndicator(surface, lineRect, screenY, bufferLineIndex, buffer, state)
           }
         }
       }
+
+  private def renderDiagnosticIndicator(
+    surface:         RenderSurface,
+    lineRect:        LayoutRect,
+    screenY:         Int,
+    bufferLineIndex: Int,
+    buffer:          Buffer,
+    state:           AppState
+  ): Unit =
+    val uriOpt = buffer.filePath.map(_.toUri.toString)
+    uriOpt.foreach { uri =>
+      val lineDiags = state.diagnostics.getOrElse(uri, Nil)
+        .filter(d => d.range.start.line == bufferLineIndex)
+      if lineDiags.nonEmpty then
+        val worstCode = lineDiags.flatMap(_.severity).map(_.code).minOption
+        val color = worstCode match
+          case Some(1) => state.theme.error.foreground
+          case Some(2) => state.theme.warning.foreground
+          case _       => state.theme.muted
+        surface.setForegroundColor(color)
+        surface.setBackgroundColor(state.theme.panel.background)
+        surface.putString(lineRect.x + lineRect.width - 1, screenY, "!")
+    }
 
   private def renderGutter(state: AppState, context: RenderContext): Unit =
     if state.config.showGutter then

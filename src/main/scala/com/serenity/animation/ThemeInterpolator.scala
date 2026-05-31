@@ -15,6 +15,7 @@ object ThemeInterpolator:
       menuItem     = blendThemeColor(from.menuItem, to.menuItem, t),
       panel        = blendThemeColor(from.panel, to.panel, t),
       error        = blendThemeColor(from.error, to.error, t),
+      warning      = blendThemeColor(from.warning, to.warning, t),
       border       = blendColor(from.border, to.border, t),
       muted        = blendColor(from.muted, to.muted, t),
       placeholder  = blendColor(from.placeholder, to.placeholder, t),

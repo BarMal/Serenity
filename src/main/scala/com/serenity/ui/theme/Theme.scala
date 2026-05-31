@@ -11,6 +11,7 @@ case class Theme(
     menuItem: ThemeColor,
     panel: ThemeColor,
     error: ThemeColor,
+    warning: ThemeColor,
     border: Color,
     muted: Color,
     placeholder: Color,

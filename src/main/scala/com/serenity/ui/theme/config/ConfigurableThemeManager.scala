@@ -17,6 +17,9 @@ object ConfigurableThemeManager:
       menuItem     <- convertUiToken(config.ui.menuItem)
       panel        <- convertUiToken(config.ui.panel)
       error        <- convertUiToken(config.ui.error)
+      warning      <- config.ui.warning match
+                        case Some(w) => convertUiToken(w)
+                        case None    => Right(ThemeColor(new java.awt.Color(0xF0B429), new java.awt.Color(0x2B2000)))
       border       <- ColorParser.parseColor(config.ui.border)
       muted        <- ColorParser.parseColor(config.ui.muted)
       placeholder  <- ColorParser.parseColor(config.ui.placeholder)
@@ -30,6 +33,7 @@ object ConfigurableThemeManager:
       menuItem = menuItem,
       panel = panel,
       error = error,
+      warning = warning,
       border = border,
       muted = muted,
       placeholder = placeholder,
