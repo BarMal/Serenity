@@ -1187,7 +1187,22 @@ object StateManager:
       stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.resize(position, newSize, state).state, state))
 
     def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit] =
-      logger.debug(s"TODO: dragFileToDirectory($sourceFile, $targetDir)")
+      val src    = Path.of(sourceFile)
+      val dst    = Path.of(targetDir).resolve(src.getFileName)
+      val srcDir = src.getParent
+      IO.blocking(Files.move(src, dst)).flatMap { _ =>
+        stateRef.update { state =>
+          state.pinnedSurfaces.foldLeft(state) { (s, surface) =>
+            surface.content match
+              case SurfaceContent.DirectoryListing(root, entries, sel) if root == srcDir =>
+                val updated = surface.copy(
+                  content = SurfaceContent.DirectoryListing(root, entries.filterNot(_.path == src), sel)
+                )
+                s.copy(uiSurfaces = s.uiSurfaces.filterNot(_.id == surface.id) :+ updated)
+              case _ => s
+          }
+        }
+      }.handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to move $sourceFile to $targetDir"))
 
     def ensureCursorVisible(paneId: PaneId): IO[Unit] =
       stateRef.update { state =>

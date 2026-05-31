@@ -1,6 +1,6 @@
 package com.serenity
 
-import java.nio.file.Paths
+import java.nio.file.{Files, Paths}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -86,3 +86,42 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
   it should "do nothing when no directory panel is pinned" in new ExplorerFixture:
     sm.selectFileInExplorer("/repo/build.sbt").unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().pinnedSurfaces shouldBe Nil
+
+  // ── dragFileToDirectory ───────────────────────────────────────────────────
+
+  it should "move the source file into the target directory on the filesystem" in new ExplorerFixture:
+    val srcDir = Files.createTempDirectory("drag-src")
+    val dstDir = Files.createTempDirectory("drag-dst")
+    val srcFile = Files.createFile(srcDir.resolve("hello.txt"))
+    Files.writeString(srcFile, "content")
+    try
+      sm.dragFileToDirectory(srcFile.toString, dstDir.toString).unsafeRunSync()
+
+      Files.exists(srcFile) shouldBe false
+      Files.exists(dstDir.resolve("hello.txt")) shouldBe true
+      new String(Files.readAllBytes(dstDir.resolve("hello.txt"))) shouldBe "content"
+    finally
+      Files.deleteIfExists(dstDir.resolve("hello.txt"))
+      Files.deleteIfExists(srcFile)
+      Files.deleteIfExists(srcDir)
+      Files.deleteIfExists(dstDir)
+
+  it should "remove the moved file from the source directory listing panel" in new ExplorerFixture:
+    val srcDir = Files.createTempDirectory("drag-src2")
+    val dstDir = Files.createTempDirectory("drag-dst2")
+    val srcFile = Files.createFile(srcDir.resolve("mover.txt"))
+    try
+      sm.loadDirectoryTree(srcDir.toString, List("mover.txt", "keeper.txt")).unsafeRunSync()
+      sm.dragFileToDirectory(srcFile.toString, dstDir.toString).unsafeRunSync()
+
+      val state = sm.getCurrentState.unsafeRunSync()
+      state.pinnedSurfaces.head.content match
+        case SurfaceContent.DirectoryListing(_, entries, _) =>
+          entries.map(_.name) should not contain "mover.txt"
+          entries.map(_.name) should contain("keeper.txt")
+        case other => fail(s"Expected DirectoryListing, got $other")
+    finally
+      Files.deleteIfExists(dstDir.resolve("mover.txt"))
+      Files.deleteIfExists(srcFile)
+      Files.deleteIfExists(srcDir)
+      Files.deleteIfExists(dstDir)
