@@ -165,7 +165,8 @@ object AppState:
     val initialPane     = EditorPane.withBuffer(PaneId(0), initialBufferId)
     val layout = Layout(
       editorPanes = Map(PaneId(0) -> initialPane),
-      activeEditorPaneId = Some(PaneId(0))
+      activeEditorPaneId = Some(PaneId(0)),
+      paneOrder = List(PaneId(0))
     )
     AppState(
       layout = layout,

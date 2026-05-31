@@ -283,7 +283,7 @@ object LayoutEngine:
     minWidth: Int
   ): Map[PaneId, LayoutRect] =
     val editorRect = calculatedLayout.editorPanelRect
-    val paneIds    = state.layout.editorPanes.keys.toList.sortBy(_.value)
+    val paneIds    = state.layout.orderedPaneIds
     val paneCount  = paneIds.size
 
     if paneCount == 0 then Map.empty

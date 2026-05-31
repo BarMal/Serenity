@@ -48,7 +48,8 @@ case class SessionBuffer(
  */
 case class SessionLayout(
     editorPanes: List[SessionEditorPane],
-    activeEditorPaneId: Option[Int]
+    activeEditorPaneId: Option[Int],
+    paneOrder: List[Int] = Nil
 )
 
 case class SessionEditorPane(
@@ -167,18 +168,20 @@ object SessionLayout:
   def fromLayout(layout: Layout): SessionLayout =
     SessionLayout(
       editorPanes = layout.editorPanes.values.map(SessionEditorPane.fromEditorPane).toList,
-      activeEditorPaneId = layout.activeEditorPaneId.map(_.value)
+      activeEditorPaneId = layout.activeEditorPaneId.map(_.value),
+      paneOrder = layout.paneOrder.map(_.value)
     )
-  
+
   def toLayout(sessionLayout: SessionLayout): Layout =
     val editorPanes = sessionLayout.editorPanes.map { sessionPane =>
       val pane = SessionEditorPane.toEditorPane(sessionPane)
       PaneId(sessionPane.id) -> pane
     }.toMap
-    
+
     Layout(
       editorPanes = editorPanes,
-      activeEditorPaneId = sessionLayout.activeEditorPaneId.map(PaneId.apply)
+      activeEditorPaneId = sessionLayout.activeEditorPaneId.map(PaneId.apply),
+      paneOrder = sessionLayout.paneOrder.map(PaneId.apply)
     )
 
 object SessionEditorPane:

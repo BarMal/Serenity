@@ -264,7 +264,8 @@ object StateManager:
         val newState = state.copy(
           layout = state.layout.copy(
             editorPanes = state.layout.editorPanes + (paneId -> pane),
-            activeEditorPaneId = Some(paneId)
+            activeEditorPaneId = Some(paneId),
+            paneOrder = state.layout.paneOrder :+ paneId
           ),
           focus = Focus.EditorPane(paneId),
           nextPaneId = PaneId(paneId.value + 1)
@@ -285,13 +286,17 @@ object StateManager:
     def closePane(paneId: PaneId): IO[Unit] =
       stateRef.update { state =>
         val updatedPanes = state.layout.editorPanes - paneId
+        val updatedOrder = state.layout.paneOrder.filterNot(_ == paneId)
         val newActivePaneId =
-          if state.layout.activeEditorPaneId.contains(paneId) then updatedPanes.keys.headOption
+          if state.layout.activeEditorPaneId.contains(paneId) then
+            val idx = state.layout.orderedPaneIds.indexOf(paneId)
+            updatedOrder.lift(idx).orElse(updatedOrder.lastOption)
           else state.layout.activeEditorPaneId
 
         val updatedState = state.copy(
           layout = state.layout.copy(
             editorPanes = updatedPanes,
+            paneOrder = updatedOrder,
             activeEditorPaneId = newActivePaneId
           )
         )
@@ -1142,18 +1147,35 @@ object StateManager:
     def forceCloseBuffer(bufferId: BufferId): IO[Unit] =
       closeBuffer(bufferId) // Reuse existing implementation for now
 
-    // Tab operation stubs (TODO: implement)
     def createPaneAfter(afterPaneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId] =
-      createPane(bufferId) // Fallback to regular createPane for now
+      stateRef.modify { state =>
+        val paneId = state.nextPaneId
+        val pane = bufferId match
+          case Some(id) => EditorPane.withBuffer(paneId, id)
+          case None     => EditorPane.empty(paneId)
+
+        val insertIdx = state.layout.paneOrder.indexOf(afterPaneId) match
+          case -1  => state.layout.paneOrder.size
+          case idx => idx + 1
+
+        val newState = state.copy(
+          layout = state.layout.copy(
+            editorPanes = state.layout.editorPanes + (paneId -> pane),
+            activeEditorPaneId = Some(paneId),
+            paneOrder = state.layout.paneOrder.patch(insertIdx, List(paneId), 0)
+          ),
+          focus = Focus.EditorPane(paneId),
+          nextPaneId = PaneId(paneId.value + 1)
+        )
+        (newState, paneId)
+      }
 
     def getTabOrder(): IO[List[PaneId]] =
-      stateRef.get.map(_.layout.editorPanes.keys.toList.sortBy(_.value))
+      stateRef.get.map(_.layout.orderedPaneIds)
 
-    // Pane splitting operation stubs (TODO: implement)
     def splitPaneHorizontal(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId] =
-      createPane(bufferId) // Fallback to regular createPane for now
+      createPaneAfter(paneId, bufferId)
 
-    // Panel operation stubs (TODO: implement)
     def switchToPinnedPanel(position: PanelPosition): IO[Unit] =
       stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.focus(position, state).state, state))
 

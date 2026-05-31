@@ -112,24 +112,27 @@ object AppEventReducer:
 
         val neededPanes  = visibleBuffers.size
         val currentPanes = state.layout.editorPanes
-        val paneIds      = currentPanes.keys.toList.sortBy(_.value)
+        val paneIds      = state.layout.orderedPaneIds
 
         val updatedState =
           if paneIds.size < neededPanes then
-            val additionalPanes = (paneIds.size until neededPanes).map { i =>
-              val paneId = PaneId(state.nextPaneId.value + i - paneIds.size)
-              paneId -> EditorPane.empty(paneId)
-            }.toMap
+            val newPaneIds = (paneIds.size until neededPanes).map { i =>
+              PaneId(state.nextPaneId.value + i - paneIds.size)
+            }.toList
+            val additionalPanes = newPaneIds.map(id => id -> EditorPane.empty(id)).toMap
             val newNextPaneId = PaneId(
               math.max(state.nextPaneId.value, state.nextPaneId.value + neededPanes - paneIds.size)
             )
             state.copy(
-              layout = state.layout.copy(editorPanes = currentPanes ++ additionalPanes),
+              layout = state.layout.copy(
+                editorPanes = currentPanes ++ additionalPanes,
+                paneOrder = state.layout.paneOrder ++ newPaneIds
+              ),
               nextPaneId = newNextPaneId
             )
           else state
 
-        val finalPanes      = updatedState.layout.editorPanes.keys.toList.sortBy(_.value)
+        val finalPanes      = updatedState.layout.orderedPaneIds
         val paneAssignments = finalPanes.take(visibleBuffers.size).zip(visibleBuffers).toMap
 
         val assignedPanes = finalPanes.map { paneId =>
@@ -191,13 +194,17 @@ object AppEventReducer:
 
   private def closePaneState(state: AppState, paneId: PaneId): AppState =
     val updatedPanes = state.layout.editorPanes - paneId
+    val updatedOrder = state.layout.paneOrder.filterNot(_ == paneId)
     val newActivePaneId =
-      if state.layout.activeEditorPaneId.contains(paneId) then updatedPanes.keys.headOption
+      if state.layout.activeEditorPaneId.contains(paneId) then
+        val idx = state.layout.orderedPaneIds.indexOf(paneId)
+        updatedOrder.lift(idx).orElse(updatedOrder.lastOption)
       else state.layout.activeEditorPaneId
 
     val baseState = state.copy(
       layout = state.layout.copy(
         editorPanes = updatedPanes,
+        paneOrder = updatedOrder,
         activeEditorPaneId = newActivePaneId
       )
     )
