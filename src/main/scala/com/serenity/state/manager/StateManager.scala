@@ -1156,10 +1156,32 @@ object StateManager:
       stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.focus(position, state).state, state))
 
     def loadDirectoryTree(path: String, files: List[String]): IO[Unit] =
-      logger.debug(s"TODO: loadDirectoryTree($path, ${files.size} files)")
+      val rootPath = Path.of(path)
+      val entries = files.map { name =>
+        val isDir = name.endsWith("/")
+        DirEntry(rootPath.resolve(name), name, isDirectory = isDir)
+      }
+      val tree    = DirectoryTreeData(rootPath, entries = Map(rootPath -> entries))
+      val content = PanelContent.DirectoryTree(tree, selectedPath = None)
+      pinPanel(content, PanelPosition.Left, 30)
 
     def selectFileInExplorer(filePath: String): IO[Unit] =
-      logger.debug(s"TODO: selectFileInExplorer($filePath)")
+      val targetPath = Path.of(filePath)
+      stateRef.get.flatMap { state =>
+        val updated = state.pinnedSurfaces.find { surface =>
+          surface.presentation match
+            case SurfacePresentation.Pinned(PanelPosition.Left, _) => true
+            case _                                                  => false
+        }.flatMap { surface =>
+          surface.content match
+            case SurfaceContent.DirectoryListing(rootPath, entries, _) =>
+              val newContent  = SurfaceContent.DirectoryListing(rootPath, entries, Some(targetPath))
+              val newSurface  = surface.copy(content = newContent)
+              Some(state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface))
+            case _ => None
+        }.getOrElse(state)
+        validateAndUpdateState(updated, state)
+      }
 
     def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
       stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.resize(position, newSize, state).state, state))
