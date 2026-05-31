@@ -44,6 +44,7 @@ enum SurfaceContent:
   case SymbolDefinition(symbol: String, location: Location)
   case DirectoryListing(path: Path, entries: List[DirEntry], selectedPath: Option[Path] = None)
   case CommandPalette(runner: CommandRunner)
+  case ThemePicker(state: ThemePickerState)
   case ModalWorkflow(modal: Modal)
   case Terminal(buffer: String, cursor: Int)
   case Outline(symbols: List[Symbol])

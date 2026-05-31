@@ -13,6 +13,7 @@ import com.serenity.keystroke.events.{Copy, Cut, DeleteBackward, DeleteForward, 
 import com.serenity.state.undo.{HistoryEntry, PendingGroup, UndoState}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.components.*
+import com.serenity.state.models.ThemePickerState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer, FileEventReducer, ModalStateReducer, PanelStateReducer, PeekStateReducer, ReducerResult, SystemEventReducer, ThemeEventReducer}
 import com.serenity.ui.layout.*
@@ -102,16 +103,22 @@ object StateManager:
       parentLogger: Logger[IO],
       policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
+    val themeManager = AppThemeManager.create
     for
-      stateRef   <- Ref.of[IO, AppState](AppState.initial)
-      undoRef    <- Ref.of[IO, UndoState](UndoState())
-      quitSignal <- Deferred[IO, Unit]
+      stateRef      <- Ref.of[IO, AppState](AppState.initial)
+      undoRef       <- Ref.of[IO, UndoState](UndoState())
+      themeNamesRef <- themeManager.listAvailableThemes
+                         .handleErrorWith(_ => IO.pure(Nil))
+                         .flatMap(Ref.of[IO, List[String]])
+      quitSignal    <- Deferred[IO, Unit]
     yield new StateManagerImpl(
       stateRef,
       undoRef,
+      themeNamesRef,
       quitSignal,
       LoggerFactory[IO].getLogger(using LoggerName("com.serenity.state.manager.StateManager")),
-      policy
+      policy,
+      themeManager
     )
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
@@ -137,13 +144,14 @@ object StateManager:
   private class StateManagerImpl(
       stateRef: Ref[IO, AppState],
       undoRef: Ref[IO, UndoState],
+      themeNamesRef: Ref[IO, List[String]],
       quitSignal: Deferred[IO, Unit],
       logger: Logger[IO],
-      policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()
+      policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy(),
+      themeManager: AppThemeManager = AppThemeManager.create
   )(using Balance)
       extends StateManager:
-    private val fileManager = new FileManager()
-    private val themeManager = AppThemeManager.create
+    private val fileManager    = new FileManager()
     private val sessionManager = SessionManager.create(themeManager, logger, policy)
     private val sessionPersistence = new SessionPersistence(sessionManager, policy, logger)
 
@@ -572,6 +580,8 @@ object StateManager:
                     case SurfaceContent.CommandPalette(_) =>
                       val registry = CommandRegistry.withToggleUI
                       Some(new CommandRunnerComponent(registry))
+                    case SurfaceContent.ThemePicker(_) =>
+                      Some(new ThemePickerComponent())
                     case SurfaceContent.StartPage(_) =>
                       Some(new StartupPageComponent())
                     case SurfaceContent.ModalWorkflow(modal) =>
@@ -854,6 +864,8 @@ object StateManager:
           saveBufferEffect(bufferId)
         case AppEffect.SaveBufferAs(bufferId, path) =>
           saveBufferAsEffect(bufferId, path)
+        case AppEffect.OpenThemePicker =>
+          stateRef.get.flatMap(openThemePickerEffect)
         case AppEffect.RequestOpenFile =>
           stateRef.get.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))
         case AppEffect.RequestSaveAs =>
@@ -1017,6 +1029,12 @@ object StateManager:
           toggleThemeEffect(state)
         case CommandIntent.ReloadTheme =>
           reloadThemeEffect(state)
+        case CommandIntent.OpenThemeChooser =>
+          openThemePickerEffect(state)
+        case CommandIntent.ReloadThemes =>
+          themeManager.listAvailableThemes
+            .flatMap(themeNamesRef.set)
+            .handleErrorWith(ex => logger.error(ex)("[THEMES] Failed to reload theme list"))
         case CommandIntent.FormatCurrentFile =>
           logger.debug("[CMD] Format command requested")
         case CommandIntent.SetAnimationMode(mode) =>
@@ -1339,6 +1357,28 @@ object StateManager:
         .loadTheme(themeName)
         .flatMap(theme => updateState(_.copy(theme = theme)))
         .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to reload theme $themeName"))
+
+    private def openThemePickerEffect(state: AppState): IO[Unit] =
+      themeNamesRef.get.flatMap { themeNames =>
+        if themeNames.isEmpty then IO.unit
+        else
+          val currentTheme  = state.theme.name
+          val selectedIndex = themeNames.indexOf(currentTheme).max(0)
+          val pickerState   = ThemePickerState(themeNames, selectedIndex, currentTheme)
+          val (stateWithId, surfaceId) = state.allocateSurfaceId
+          val surface = UiSurface(
+            id           = surfaceId,
+            content      = SurfaceContent.ThemePicker(pickerState),
+            presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+          )
+          validateAndUpdateState(
+            stateWithId.copy(
+              uiSurfaces = stateWithId.uiSurfaces :+ surface,
+              focus      = Focus.Surface(surfaceId)
+            ),
+            state
+          )
+      }
 
     private def openFileWorkflowModal(
         mode: FileWorkflowMode,

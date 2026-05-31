@@ -37,6 +37,8 @@ enum CommandIntent:
   case SetAnimationSteps(n: Int)
   case ToggleLineNumbers
   case ToggleGutter
+  case OpenThemeChooser
+  case ReloadThemes
   case StartupNewSession
   case StartupRestoreSession
   case StartupOpenFile

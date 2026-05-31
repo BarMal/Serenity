@@ -84,6 +84,9 @@ case class AppState(
   def commandRunnerSurface: Option[UiSurface] =
     uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.CommandPalette])
 
+  def themePickerSurface: Option[UiSurface] =
+    uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.ThemePicker])
+
   def startPageSurface: Option[UiSurface] =
     uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.StartPage])
 

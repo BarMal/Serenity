@@ -163,6 +163,18 @@ object CommandRegistry:
       CommandCategory.Settings
     ),
     Command.typed(
+      "theme-chooser",
+      "Choose theme with live preview",
+      CommandIntent.OpenThemeChooser,
+      CommandCategory.Settings
+    ),
+    Command.typed(
+      "reload-themes",
+      "Reload available themes from disk",
+      CommandIntent.ReloadThemes,
+      CommandCategory.Settings
+    ),
+    Command.typed(
       "format",
       "Format current file",
       CommandIntent.FormatCurrentFile,
