@@ -13,6 +13,8 @@ enum AppEffect:
   case SaveBuffer(bufferId: BufferId)
   case SaveBufferAs(bufferId: BufferId, path: Path)
   case RequestOpenFile
+  case RequestSaveAs
+  case DirectLoadFile(path: Path)
   case RefreshFileWorkflow(surfaceId: SurfaceId)
   case SubmitFileWorkflow(surfaceId: SurfaceId)
   case SubmitReplaceWorkflow(surfaceId: SurfaceId)

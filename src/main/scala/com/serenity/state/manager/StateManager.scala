@@ -855,7 +855,11 @@ object StateManager:
         case AppEffect.SaveBufferAs(bufferId, path) =>
           saveBufferAsEffect(bufferId, path)
         case AppEffect.RequestOpenFile =>
-          logger.debug("[FILE] Open file requested")
+          stateRef.get.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))
+        case AppEffect.RequestSaveAs =>
+          stateRef.get.flatMap(state => openFileWorkflowModal(FileWorkflowMode.SaveAs, state))
+        case AppEffect.DirectLoadFile(path) =>
+          directLoadFileEffect(path)
         case AppEffect.RefreshFileWorkflow(surfaceId) =>
           refreshFileWorkflowEffect(surfaceId)
         case AppEffect.SubmitFileWorkflow(surfaceId) =>
@@ -1242,6 +1246,28 @@ object StateManager:
         rebalancedState = AppEventReducer.rebalancePanes(resizedState, resizedState.focusedBufferId)
         _ <- validateAndUpdateState(rebalancedState, currentState)
       yield ()
+
+    private def directLoadFileEffect(path: Path): IO[Unit] =
+      if !FileUtils.isReadableFile(path) then
+        logger.debug(s"[FILE] DirectLoad: file not readable: $path")
+      else
+        fileManager
+          .loadFile(path)
+          .flatMap { loadedBuffer =>
+            stateRef.modify { state =>
+              val newBufferId    = state.nextBufferId
+              val bufferToInsert = loadedBuffer.copy(id = newBufferId)
+              val updatedState   = state.copy(
+                buffers      = state.buffers + (newBufferId -> bufferToInsert),
+                bufferOrder  = insertBufferInOrder(state, newBufferId),
+                nextBufferId = BufferId(newBufferId.value + 1)
+              )
+              val rebalanced = AppEventReducer.rebalancePanes(updatedState, Some(newBufferId))
+              val focused    = focusBuffer(rebalanced, newBufferId)
+              (focused, ())
+            }
+          }
+          .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load file at $path"))
 
     private def saveBufferEffect(bufferId: BufferId): IO[Unit] =
       stateRef.get.flatMap { state =>
