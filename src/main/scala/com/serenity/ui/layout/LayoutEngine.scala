@@ -224,7 +224,7 @@ object LayoutEngine:
       case SurfaceContent.FilePreview(_, content)      => math.max(4, math.min(6, content.linesIterator.take(4).size + 2))
       case SurfaceContent.SymbolDefinition(_, _)       => 4
       case SurfaceContent.DirectoryListing(_, entries, _) => math.max(4, math.min(6, entries.take(4).size + 2))
-      case SurfaceContent.CommandPalette(_) =>
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.ThemePicker(_) =>
         math.min(8, math.max(4, maxHeight - 1))
       case SurfaceContent.ModalWorkflow(modal) =>
         modal match

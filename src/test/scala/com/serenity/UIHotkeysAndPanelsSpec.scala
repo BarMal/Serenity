@@ -6,6 +6,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.ui.layout.{PanelContent, PanelPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -15,54 +16,80 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
   given balance: Balance = Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
 
-  behavior of "UI Hotkeys and Directory Panels"
+  behavior of "UI Hotkeys and Panels"
 
-  it should "toggle file explorer panel with Ctrl+Shift+E" in new UIFixture:
-    pending // TODO: Implement file explorer panel
+  // ── Command palette (Ctrl+P → ToggleCommandRunner) ────────────────────────
 
-  it should "toggle terminal panel with Ctrl+`" in new UIFixture:
-    pending // TODO: Implement terminal panel
+  it should "open command palette on ToggleCommandRunner" in new UIFixture:
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
-  it should "open command palette with Ctrl+Shift+P" in new UIFixture:
-    pending // TODO: Implement command palette
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.commandRunnerSurface shouldBe defined
+    state.focus match
+      case Focus.Surface(id) => state.commandRunnerSurface.map(_.id) shouldBe Some(id)
+      case _                 => fail("Expected focus on command runner surface")
 
-  it should "open quick file search with Ctrl+P" in new UIFixture:
-    pending // TODO: Implement quick file search
+  it should "close command palette on a second ToggleCommandRunner" in new UIFixture:
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
-  it should "handle ESC to close modals and overlays" in new UIFixture:
-    pending // TODO: Implement modal/overlay management
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.commandRunnerSurface shouldBe None
+    state.focus shouldBe a[Focus.EditorPane]
 
-  it should "toggle search panel with Ctrl+Shift+F" in new UIFixture:
-    pending // TODO: Implement search panel
+  // ── ESC dismissal ─────────────────────────────────────────────────────────
 
-  it should "navigate directory tree in file explorer" in new UIFixture:
-    pending // TODO: Implement directory navigation
+  it should "dismiss command palette with ESC" in new UIFixture:
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    stateManager.applyEvent(Escape).unsafeRunSync()
 
-  it should "open file from explorer with double-click simulation" in new UIFixture:
-    pending // TODO: Implement file opening from explorer
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.commandRunnerSurface shouldBe None
+    state.focus shouldBe a[Focus.EditorPane]
 
-  it should "handle panel resizing" in new UIFixture:
-    pending // TODO: Implement panel resizing
+  it should "dismiss a modal overlay with ESC and restore editor focus" in new UIFixture:
+    stateManager.showModal(Modal.GotoLine("")).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().modalSurface shouldBe defined
 
-  it should "handle multiple panels open simultaneously" in new UIFixture:
-    pending // TODO: Implement multiple panel management
+    stateManager.applyEvent(Escape).unsafeRunSync()
 
-  it should "handle keyboard shortcuts for panel focus cycling" in new UIFixture:
-    pending // TODO: Implement focus cycling
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.modalSurface shouldBe None
+    state.focus shouldBe a[Focus.EditorPane]
 
-  it should "handle panel-specific keyboard shortcuts" in new UIFixture:
-    pending // TODO: Implement panel-specific shortcuts
+  // ── Multiple pinned panels ────────────────────────────────────────────────
 
-  it should "handle search in file explorer" in new UIFixture:
-    pending // TODO: Implement explorer search
+  it should "support two pinned panels at different positions simultaneously" in new UIFixture:
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
+    stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 10).unsafeRunSync()
 
-  it should "handle drag and drop in file explorer" in new UIFixture:
-    pending // TODO: Implement drag and drop
+    val state     = stateManager.getCurrentState.unsafeRunSync()
+    val pinned    = state.pinnedSurfaces
+    pinned should have size 2
+
+    val positions = pinned.collect {
+      case UiSurface(_, _, SurfacePresentation.Pinned(pos, _), _) => pos
+    }
+    positions should contain(PanelPosition.Right)
+    positions should contain(PanelPosition.Bottom)
+
+  it should "replace a pinned panel when a new one occupies the same position" in new UIFixture:
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
+    stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30).unsafeRunSync()
+
+    val state  = stateManager.getCurrentState.unsafeRunSync()
+    val pinned = state.pinnedSurfaces
+    pinned should have size 1
+    pinned.head.content shouldBe a[SurfaceContent.Diagnostics]
+
+  // ── Backlog ───────────────────────────────────────────────────────────────
+
+  it should "open file search with Ctrl+Shift+F" in new UIFixture:
+    pending // Add Ctrl+Shift+F hotkey + file search surface
 
   trait UIFixture:
-
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager: StateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
