@@ -1,22 +1,23 @@
 package com.serenity.lsp.client
 
-import cats.effect.std.Queue
-import cats.effect.{Deferred, IO, Ref, Resource}
-import fs2.Stream
-import io.circe.Json
-import com.serenity.lsp.config.{LanguageId, LspServerConfig}
-import com.serenity.lsp.model.Diagnostic
-import org.typelevel.log4cats.Logger
-
 import java.io.{BufferedInputStream, BufferedOutputStream}
 
+import cats.effect.*
+import cats.effect.std.Queue
+import com.serenity.lsp.config.{LanguageId, LspServerConfig}
+import com.serenity.lsp.model.Diagnostic
+import fs2.Stream
+import fs2.io.readInputStream
+import io.circe.Json
+import org.typelevel.log4cats.Logger
+
 class LspConnection private (
-  val languageId: LanguageId,
-  val incoming:   Stream[IO, Json],
-  sendQueue:      Queue[IO, Option[Json]],
-  idRef:          Ref[IO, Long],
-  pendingRef:     Ref[IO, Map[Long, Deferred[IO, Json]]],
-  logger:         Logger[IO]
+    val languageId: LanguageId,
+    sendQueue: Queue[IO, Option[Json]],
+    idRef: Ref[IO, Long],
+    pendingRef: Ref[IO, Map[Long, Deferred[IO, Json]]],
+    notifQueue: Queue[IO, Option[Json]],
+    logger: Logger[IO]
 ):
 
   def sendRequest(method: String, params: Json): IO[Json] =
@@ -24,34 +25,36 @@ class LspConnection private (
       id       <- idRef.updateAndGet(_ + 1)
       deferred <- Deferred[IO, Json]
       _        <- pendingRef.update(_ + (id -> deferred))
-      _        <- sendQueue.offer(Some(Json.obj(
-                    "jsonrpc" -> io.circe.Json.fromString("2.0"),
-                    "id"      -> io.circe.Json.fromLong(id),
-                    "method"  -> io.circe.Json.fromString(method),
-                    "params"  -> params
-                  )))
-      result   <- deferred.get
+      _ <- sendQueue.offer(
+        Some(
+          Json.obj(
+            "jsonrpc" -> io.circe.Json.fromString("2.0"),
+            "id"      -> io.circe.Json.fromLong(id),
+            "method"  -> io.circe.Json.fromString(method),
+            "params"  -> params
+          )
+        )
+      )
+      result <- deferred.get
     yield result
 
   def sendNotification(method: String, params: Json): IO[Unit] =
-    sendQueue.offer(Some(Json.obj(
-      "jsonrpc" -> io.circe.Json.fromString("2.0"),
-      "method"  -> io.circe.Json.fromString(method),
-      "params"  -> params
-    ))).void
+    sendQueue
+      .offer(
+        Some(
+          Json.obj(
+            "jsonrpc" -> io.circe.Json.fromString("2.0"),
+            "method"  -> io.circe.Json.fromString(method),
+            "params"  -> params
+          )
+        )
+      )
+      .void
 
   def processIncoming(onDiagnostics: (String, List[Diagnostic]) => IO[Unit]): IO[Unit] =
-    incoming.evalMap { json =>
-      if LspProtocol.isResponse(json) then
-        LspProtocol.responseId(json) match
-          case Some(id) =>
-            pendingRef.modify { pending =>
-              pending.get(id) match
-                case Some(d) => (pending - id, d.complete(json).void)
-                case None    => (pending, IO.unit)
-            }.flatten
-          case None => IO.unit
-      else if LspProtocol.isNotification(json) then
+    Stream
+      .fromQueueNoneTerminated(notifQueue)
+      .evalMap { json =>
         LspProtocol.notificationMethod(json) match
           case Some("textDocument/publishDiagnostics") =>
             LspProtocol.parseDiagnostics(json) match
@@ -60,46 +63,120 @@ class LspConnection private (
           case Some(method) =>
             logger.debug(s"[LSP] Notification: $method")
           case None => IO.unit
-      else IO.unit
-    }.compile.drain
+      }
+      .compile
+      .drain
 
+  private[lsp] def handleIncomingJson(json: Json): IO[Unit] =
+    if LspProtocol.isResponse(json) then
+      LspProtocol.responseId(json) match
+        case Some(id) =>
+          pendingRef.modify { pending =>
+            pending.get(id) match
+              case Some(d) => (pending - id, d.complete(json).void)
+              case None    => (pending, IO.unit)
+          }.flatten
+        case None => IO.unit
+    else if LspProtocol.isNotification(json) then
+      notifQueue.offer(Some(json))
+    else
+      IO.unit
+
+  private[lsp] def takeOutgoing: IO[Option[Json]] =
+    sendQueue.take
+
+  private[lsp] def outgoingMessages: Stream[IO, Json] =
+    Stream.fromQueueNoneTerminated(sendQueue)
+
+  private[lsp] def closeQueues: IO[Unit] =
+    sendQueue.offer(None).attempt.void >>
+      notifQueue.offer(None).attempt.void
+
+  private[lsp] def completeNotifications: IO[Unit] =
+    notifQueue.offer(None).attempt.void
 
 object LspConnection:
 
-  def apply(
-    config:  LspServerConfig,
-    rootUri: String,
-    logger:  Logger[IO]
-  ): Resource[IO, LspConnection] =
-    val cmd = (config.binary.command :: config.defaultArgs).toArray
+  private case class ConnectionFibers(
+    writer: Fiber[IO, Throwable, Unit],
+    reader: Fiber[IO, Throwable, Unit]
+  )
+
+  private[lsp] def create(
+    languageId: LanguageId,
+    logger: Logger[IO]
+  ): IO[LspConnection] =
     for
-      process    <- Resource.make(
-                      IO.blocking(new java.lang.ProcessBuilder(cmd*).start())
-                    )(proc => IO.blocking(proc.destroyForcibly()).void)
-      sendQueue  <- Resource.eval(Queue.bounded[IO, Option[Json]](256))
-      idRef      <- Resource.eval(Ref.of[IO, Long](0L))
-      pendingRef <- Resource.eval(Ref.of[IO, Map[Long, Deferred[IO, Json]]](Map.empty))
-      out         = new BufferedOutputStream(process.getOutputStream)
-      in          = new BufferedInputStream(process.getInputStream)
-      inStream    = fs2.io.readInputStream(IO.pure(in), chunkSize = 8192)
-                      .through(LspFramer.decode)
-      conn        = new LspConnection(config.languageId, inStream, sendQueue, idRef, pendingRef, logger)
-      // writer fiber: drain outgoing queue → stdin
-      _ <- Resource.make(
-             Stream.fromQueueNoneTerminated(sendQueue)
-               .evalMap(json => IO.blocking { out.write(LspFramer.encode(json)); out.flush() })
-               .compile.drain
-               .start
-           )(fiber => sendQueue.offer(None) >> fiber.join.void)
+      sendQueue  <- Queue.bounded[IO, Option[Json]](256)
+      idRef      <- Ref.of[IO, Long](0L)
+      pendingRef <- Ref.of[IO, Map[Long, Deferred[IO, Json]]](Map.empty)
+      notifQueue <- Queue.bounded[IO, Option[Json]](256)
+    yield new LspConnection(languageId, sendQueue, idRef, pendingRef, notifQueue, logger)
+
+  // Package-visible entry point — accepts pre-opened streams; used by tests via MockLspServer.
+  private[lsp] def connect(
+    languageId: LanguageId,
+    rawIn: java.io.InputStream,
+    rawOut: java.io.OutputStream,
+    rootUri: String,
+    logger: Logger[IO]
+  ): Resource[IO, LspConnection] =
+    for
+      conn <- Resource.eval(create(languageId, logger))
+      in   = new BufferedInputStream(rawIn)
+      out  = new BufferedOutputStream(rawOut)
+      _ <- Resource.make {
+        for
+          writerFiber <- conn.outgoingMessages
+            .evalMap(json => IO.blocking { out.write(LspFramer.encode(json)); out.flush() })
+            .compile
+            .drain
+            .start
+          readerFiber <- readInputStream(IO.pure(in), 8192)
+            .through(LspFramer.decode)
+            .evalMap(conn.handleIncomingJson)
+            .compile
+            .drain
+            .guarantee(conn.completeNotifications)
+            .start
+        yield ConnectionFibers(writer = writerFiber, reader = readerFiber)
+      } {
+        case ConnectionFibers(writerFiber, readerFiber) =>
+          closeQuietly(out) >>
+            closeQuietly(in) >>
+            conn.closeQueues >>
+            writerFiber.cancel >>
+            readerFiber.cancel
+      }
       _ <- Resource.eval(initHandshake(conn, rootUri, logger))
+    yield conn
+
+  def apply(
+    config: LspServerConfig,
+    rootUri: String,
+    logger: Logger[IO]
+  ): Resource[IO, LspConnection] =
+    for
+      process <- Resource.make(
+        IO.blocking(
+          new java.lang.ProcessBuilder(
+            (config.binary.command :: config.defaultArgs).toArray*
+          ).start()
+        )
+      )(proc => IO.blocking(proc.destroyForcibly()).void)
+      conn <- connect(config.languageId, process.getInputStream, process.getOutputStream, rootUri, logger)
     yield conn
 
   private def initHandshake(conn: LspConnection, rootUri: String, logger: Logger[IO]): IO[Unit] =
     for
       pid <- IO(ProcessHandle.current().pid().toInt)
       _   <- logger.info(s"[LSP] initialize ${conn.languageId.id} rootUri=$rootUri")
-      _   <- conn.sendRequest("initialize", LspProtocol.initializeParams(pid, rootUri))
-               .handleErrorWith(ex => logger.error(ex)("[LSP] initialize failed") >> IO.raiseError(ex))
-      _   <- conn.sendNotification("initialized", LspProtocol.initializedParams)
-      _   <- logger.info(s"[LSP] Handshake complete: ${conn.languageId.id}")
+      _ <- conn
+        .sendRequest("initialize", LspProtocol.initializeParams(pid, rootUri))
+        .handleErrorWith(ex => logger.error(ex)("[LSP] initialize failed") >> IO.raiseError(ex))
+      _ <- conn.sendNotification("initialized", LspProtocol.initializedParams)
+      _ <- logger.info(s"[LSP] Handshake complete: ${conn.languageId.id}")
     yield ()
+
+  private def closeQuietly(closeable: AutoCloseable): IO[Unit] =
+    IO.blocking(closeable.close()).attempt.void

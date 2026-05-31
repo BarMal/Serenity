@@ -1,0 +1,8 @@
+{
+  "jsonrpc": "2.0",
+  "method": "window/logMessage",
+  "params": {
+    "type": 3,
+    "message": "Mock LSP server ready"
+  }
+}

@@ -1,51 +1,52 @@
 package com.serenity.ui.renderer
 
+import java.awt.*
+import java.awt.image.{BufferedImage, ConvolveOp, Kernel}
+import java.util.concurrent.atomic.AtomicReference
+
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.TextStyle
-import java.awt.{AlphaComposite, BasicStroke, Color, Font, FontMetrics, Graphics2D, RenderingHints}
-import java.awt.image.{BufferedImage, ConvolveOp, Kernel}
 
 /** A RenderSurface backed by a BufferedImage via Graphics2D.
- *
- *  All coordinates are in cell units (column, row). Pixel conversion uses CellMetrics.
- *  After all drawing is complete, call flush() to hand the finished image to onFlush.
- *
- *  Threading: draw methods are called from the Cats Effect thread pool (off-EDT).
- *  onFlush is responsible for scheduling the EDT repaint (e.g. via SwingWindow.onImageReady).
- */
+  *
+  * All coordinates are in cell units (column, row). Pixel conversion uses CellMetrics. After all drawing is complete,
+  * call flush() to hand the finished image to onFlush.
+  *
+  * Threading: draw methods are called from the Cats Effect thread pool (off-EDT). onFlush is responsible for scheduling
+  * the EDT repaint (e.g. via SwingWindow.onImageReady).
+  */
 class Java2DRenderSurface(
-  image: BufferedImage,
-  metrics: CellMetrics,
-  font: Font,
-  onFlush: BufferedImage => Unit
+    image: BufferedImage,
+    metrics: CellMetrics,
+    font: Font,
+    onFlush: BufferedImage => Unit
 ) extends RenderSurface:
-  private val g: Graphics2D = image.createGraphics()
+  private val g: Graphics2D   = image.createGraphics()
   private val fm: FontMetrics = g.getFontMetrics(font)
 
   g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
   g.setFont(font)
 
-  private var fg: Color = Color.WHITE
-  private var bg: Color = Color.BLACK
+  private val fgRef = AtomicReference(Color.WHITE)
+  private val bgRef = AtomicReference(Color.BLACK)
 
-  def setForegroundColor(color: Color): Unit = fg = color
-  def setBackgroundColor(color: Color): Unit = bg = color
-  def getBackgroundColor: Color              = bg
+  def setForegroundColor(color: Color): Unit = fgRef.set(color)
+  def setBackgroundColor(color: Color): Unit = bgRef.set(color)
+  def getBackgroundColor: Color              = bgRef.get()
 
   def putString(x: Int, y: Int, s: String): Unit =
     if s.nonEmpty then
       val px = metrics.toPixelX(x)
       val py = metrics.toPixelY(y)
       // Fill background for the whole string using nominal width
-      g.setColor(bg)
+      g.setColor(bgRef.get())
       g.fillRect(px, py, s.length * metrics.charWidth, metrics.lineHeight)
       // Draw each character with its actual advance width
-      g.setColor(fg)
-      var curX = px
-      s.foreach { char =>
+      g.setColor(fgRef.get())
+      s.foldLeft(px) { (curX, char) =>
         val advance = fm.charWidth(char)
         g.drawString(char.toString, curX, py + metrics.ascent)
-        curX += advance
+        curX + advance
       }
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
@@ -53,22 +54,20 @@ class Java2DRenderSurface(
     val py = metrics.toPixelY(y)
     val pw = width * metrics.charWidth
     val ph = height * metrics.lineHeight
-    g.setColor(bg)
+    g.setColor(bgRef.get())
     g.fillRect(px, py, pw, ph)
     if char != ' ' then
-      g.setColor(fg)
-      var row = 0
-      while row < height do
-        var col = 0
-        while col < width do
+      g.setColor(fgRef.get())
+      (0 until height).foreach { row =>
+        (0 until width).foreach { col =>
           g.drawString(char.toString, metrics.toPixelX(x + col), metrics.toPixelY(y + row) + metrics.ascent)
-          col += 1
-        row += 1
+        }
+      }
 
   def enableStyle(style: TextStyle): Unit =
     val derived = font.deriveFont(
       (if style.isBold then java.awt.Font.BOLD else 0) |
-      (if style.isItalic then java.awt.Font.ITALIC else 0)
+        (if style.isItalic then java.awt.Font.ITALIC else 0)
     )
     g.setFont(derived)
 
@@ -80,29 +79,37 @@ class Java2DRenderSurface(
 
   override def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
     if radius > 0f then
-      val px = metrics.toPixelX(x)
-      val py = metrics.toPixelY(y)
-      val pw = width  * metrics.charWidth
-      val ph = height * metrics.lineHeight
-      val clampedX = px.max(0).min(image.getWidth  - 1)
+      val px       = metrics.toPixelX(x)
+      val py       = metrics.toPixelY(y)
+      val pw       = width * metrics.charWidth
+      val ph       = height * metrics.lineHeight
+      val clampedX = px.max(0).min(image.getWidth - 1)
       val clampedY = py.max(0).min(image.getHeight - 1)
-      val clampedW = pw.min(image.getWidth  - clampedX)
+      val clampedW = pw.min(image.getWidth - clampedX)
       val clampedH = ph.min(image.getHeight - clampedY)
       if clampedW > 0 && clampedH > 0 then
-        val size   = (radius * 10).toInt.max(1) * 2 + 1
-        val weight = 1.0f / (size * size)
-        val data   = Array.fill(size * size)(weight)
-        val kernel = new Kernel(size, size, data)
-        val op     = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP, null)
-        val src    = image.getSubimage(clampedX, clampedY, clampedW, clampedH)
+        val size    = (radius * 10).toInt.max(1) * 2 + 1
+        val weight  = 1.0f / (size * size)
+        val data    = Array.fill(size * size)(weight)
+        val kernel  = new Kernel(size, size, data)
+        val op      = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP, null)
+        val src     = image.getSubimage(clampedX, clampedY, clampedW, clampedH)
         val blurred = op.filter(src, null)
         g.drawImage(blurred, clampedX, clampedY, null)
 
-  override def strokeRoundRect(x: Int, y: Int, width: Int, height: Int, arcPx: Int, color: Color, strokeWidth: Float = 1.5f): Unit =
-    val px = metrics.toPixelX(x)
-    val py = metrics.toPixelY(y)
-    val pw = width  * metrics.charWidth
-    val ph = height * metrics.lineHeight
+  override def strokeRoundRect(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    arcPx: Int,
+    color: Color,
+    strokeWidth: Float = 1.5f
+  ): Unit =
+    val px             = metrics.toPixelX(x)
+    val py             = metrics.toPixelY(y)
+    val pw             = width * metrics.charWidth
+    val ph             = height * metrics.lineHeight
     val inset          = math.ceil(strokeWidth / 2).toInt
     val savedComposite = g.getComposite
     val savedStroke    = g.getStroke
@@ -124,7 +131,13 @@ class Java2DRenderSurface(
     onFlush(image)
 
 object Java2DRenderSurface:
-  def forFrame(metrics: CellMetrics, font: Font, canvas: javax.swing.JPanel, onFlush: BufferedImage => Unit): Java2DRenderSurface =
+
+  def forFrame(
+    metrics: CellMetrics,
+    font: Font,
+    canvas: javax.swing.JPanel,
+    onFlush: BufferedImage => Unit
+  ): Java2DRenderSurface =
     val image = new BufferedImage(
       canvas.getWidth.max(1),
       canvas.getHeight.max(1),

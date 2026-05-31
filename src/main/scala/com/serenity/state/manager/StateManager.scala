@@ -3,25 +3,24 @@ package com.serenity.state.manager
 import java.awt.Color
 import java.nio.file.{Files, Path, Paths}
 
-import cats.effect.{Deferred, IO, Ref}
 import cats.effect.std.Queue
+import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.foldable.*
-import fs2.Stream
-import com.serenity.animation.{AnimatedCell, AnimationConfig, AnimationState, CellAnimation, CharacterKey, FlowAnimationBuilder, FlowDirection, RgbInterpolator, SweepDirection}
-import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner, CommandSurfaceItem}
+import com.serenity.animation.*
+import com.serenity.command.*
 import com.serenity.io.{FileManager, FileUtils}
-import com.serenity.keystroke.events.{Copy, Cut, DeleteBackward, DeleteForward, Enter, Event, FileEvent, GlobalAppEvent, InsertChar, MouseClick, NewLine, NextTab, Paste, PreviousTab, Redo, SystemEvent, TabKey, ThemeEvent, Undo}
+import com.serenity.keystroke.events.*
 import com.serenity.lsp.LspEffect
-import com.serenity.lsp.config.FileExtension
-import com.serenity.state.undo.{HistoryEntry, PendingGroup, UndoState}
 import com.serenity.rope.{Balance, Rope}
+import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
 import com.serenity.state.components.*
-import com.serenity.state.models.ThemePickerState
+import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, AppEventReducer, FileEventReducer, ModalStateReducer, PanelStateReducer, PeekStateReducer, ReducerResult, SystemEventReducer, ThemeEventReducer}
+import com.serenity.state.reducers.*
+import com.serenity.state.undo.{HistoryEntry, PendingGroup, UndoState}
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.AppThemeManager
-import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
+import fs2.Stream
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
 trait StateManager:
@@ -103,18 +102,18 @@ trait StateManager:
 object StateManager:
 
   def apply(
-      parentLogger: Logger[IO],
-      policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()
+    parentLogger: Logger[IO],
+    policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     for
-      stateRef      <- Ref.of[IO, AppState](AppState.initial)
-      undoRef       <- Ref.of[IO, UndoState](UndoState())
+      stateRef <- Ref.of[IO, AppState](AppState.initial)
+      undoRef  <- Ref.of[IO, UndoState](UndoState())
       themeNamesRef <- themeManager.listAvailableThemes
-                         .handleErrorWith(_ => IO.pure(Nil))
-                         .flatMap(Ref.of[IO, List[String]])
-      quitSignal    <- Deferred[IO, Unit]
-      lspQueue      <- Queue.unbounded[IO, LspEffect]
+        .handleErrorWith(_ => IO.pure(Nil))
+        .flatMap(Ref.of[IO, List[String]])
+      quitSignal <- Deferred[IO, Unit]
+      lspQueue   <- Queue.unbounded[IO, LspEffect]
     yield new StateManagerImpl(
       stateRef,
       undoRef,
@@ -160,10 +159,12 @@ object StateManager:
       extends StateManager:
 
     def lspEffectStream: Stream[IO, LspEffect] =
-      Stream.fromQueueUnterminated(lspQueue)
+      Stream
+        .fromQueueUnterminated(lspQueue)
         .interruptWhen(Stream.eval(quitSignal.get).as(true))
-    private val fileManager    = new FileManager()
-    private val sessionManager = SessionManager.create(themeManager, logger, policy)
+
+    private val fileManager        = new FileManager()
+    private val sessionManager     = SessionManager.create(themeManager, logger, policy)
     private val sessionPersistence = new SessionPersistence(sessionManager, policy, logger)
 
     def getCurrentState: IO[AppState] = stateRef.get
@@ -195,9 +196,9 @@ object StateManager:
           val updatedBuffers = state.buffers.view.mapValues { buffer =>
             buffer.copy(animations = buffer.animations.advanceAllAnimations())
           }.toMap
-          val updatedTransition = state.themeTransition.map(_.advance).filterNot(_.isComplete)
+          val updatedTransition        = state.themeTransition.map(_.advance).filterNot(_.isComplete)
           val stateWithAdvancedBuffers = state.copy(buffers = updatedBuffers, themeTransition = updatedTransition)
-          val newState = advanceSurfaceAnimations(stateWithAdvancedBuffers)
+          val newState                 = advanceSurfaceAnimations(stateWithAdvancedBuffers)
           val stillActive =
             newState.buffers.values.exists(_.animations.hasActiveAnimations) ||
               newState.themeTransition.isDefined ||
@@ -228,15 +229,7 @@ object StateManager:
       }
 
     def createNewEmptyBuffer(): IO[BufferId] =
-      stateRef.modify { state =>
-        val bufferId = state.nextBufferId
-        val buffer   = Buffer.newEmpty(bufferId)
-        val newState = state.copy(
-          buffers = state.buffers + (bufferId -> buffer),
-          nextBufferId = BufferId(bufferId.value + 1)
-        )
-        (newState, bufferId)
-      }
+      stateRef.modify(EditorState.createNewEmptyBuffer)
 
     def updateBuffer(bufferId: BufferId, content: String): IO[Unit] =
       stateRef.update { state =>
@@ -251,27 +244,29 @@ object StateManager:
       }
 
     def closeBuffer(bufferId: BufferId): IO[Unit] =
-      stateRef.modify { state =>
-        val closingBuffer = state.buffers.get(bufferId)
-        val updatedPanes = state.layout.editorPanes.view.mapValues { pane =>
-          if pane.bufferId.contains(bufferId) then pane.copy(bufferId = None)
-          else pane
-        }.toMap
-        val newState = state.copy(
-          buffers = state.buffers - bufferId,
-          layout = state.layout.copy(editorPanes = updatedPanes)
-        )
-        (newState, closingBuffer)
-      }.flatMap { closingBuffer =>
-        closingBuffer match
-          case Some(buf) =>
-            val lspIO = (buf.filePath, buf.language) match
-              case (Some(path), Some(languageId)) =>
-                lspQueue.offer(LspEffect.FileClosed(path.toUri.toString, languageId))
-              case _ => IO.unit
-            lspIO
-          case None => IO.unit
-      }
+      stateRef
+        .modify { state =>
+          val closingBuffer = state.buffers.get(bufferId)
+          val updatedPanes = state.layout.editorPanes.view.mapValues { pane =>
+            if pane.bufferId.contains(bufferId) then pane.copy(bufferId = None)
+            else pane
+          }.toMap
+          val newState = state.copy(
+            buffers = state.buffers - bufferId,
+            layout = state.layout.copy(editorPanes = updatedPanes)
+          )
+          (newState, closingBuffer)
+        }
+        .flatMap { closingBuffer =>
+          closingBuffer match
+            case Some(buf) =>
+              val lspIO = (buf.filePath, buf.language) match
+                case (Some(path), Some(languageId)) =>
+                  lspQueue.offer(LspEffect.FileClosed(path.toUri.toString, languageId))
+                case _ => IO.unit
+              lspIO
+            case None => IO.unit
+        }
 
     def createPane(bufferId: Option[BufferId] = None): IO[PaneId] =
       stateRef.modify { state =>
@@ -381,10 +376,14 @@ object StateManager:
       stateRef.get.flatMap(state => validateAndUpdateState(PeekStateReducer.dismiss(state).state, state))
 
     def peekToPin(position: PanelPosition): IO[Unit] =
-      stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.pinPeekOverlay(position, state).state, state))
+      stateRef.get.flatMap(state =>
+        validateAndUpdateState(PanelStateReducer.pinPeekOverlay(position, state).state, state)
+      )
 
     def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
-      stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.pin(content, position, size, state).state, state))
+      stateRef.get.flatMap(state =>
+        validateAndUpdateState(PanelStateReducer.pin(content, position, size, state).state, state)
+      )
 
     def unpinPanel(position: PanelPosition): IO[Unit] =
       stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.unpin(position, state).state, state))
@@ -398,8 +397,8 @@ object StateManager:
     // Session persistence operations
     def saveSession(): IO[Unit] =
       getCurrentState.flatMap { state =>
-        sessionManager.saveSession(state) >> 
-        logger.info("[SESSION] Session saved")
+        sessionManager.saveSession(state) >>
+          logger.info("[SESSION] Session saved")
       }.void
 
     def loadSession(): IO[Option[AppState]] =
@@ -417,7 +416,8 @@ object StateManager:
       policy.saveInterval match
         case None => Stream.empty
         case Some(interval) =>
-          Stream.fixedRate[IO](interval)
+          Stream
+            .fixedRate[IO](interval)
             .interruptWhen(Stream.eval(quitSignal.get).as(true))
             .evalMap(_ => stateRef.get.flatMap(sessionPersistence.maybeSaveSession(_, SessionSaveTrigger.Interval)))
 
@@ -465,9 +465,7 @@ object StateManager:
                   component.processEvent(event, prevState)
 
             logCommandRunnerEvent >>
-              applyComponentResult(result, prevState).flatMap { newState =>
-                validateAndUpdateState(newState, prevState)
-              }
+              applyComponentResult(result, prevState).flatMap(newState => validateAndUpdateState(newState, prevState))
         handleEvent >> recordUndoableEdit(event, prevState) >> applyAnimationHooks(prevState)
       }
 
@@ -483,8 +481,8 @@ object StateManager:
                 val sameGroup = undo.pendingGroup.exists(g => g.bufferId == bufferId && g.paneId == paneId)
                 if sameGroup then undo.clearRedo
                 else
-                  val flushed   = undo.flushPendingGroup(beforeContent, beforeCursor)
-                  val newGroup  = PendingGroup(bufferId, paneId, beforeContent, beforeCursor)
+                  val flushed  = undo.flushPendingGroup(beforeContent, beforeCursor)
+                  val newGroup = PendingGroup(bufferId, paneId, beforeContent, beforeCursor)
                   flushed.copy(pendingGroup = Some(newGroup), redoStack = Nil)
               }
             case DeleteBackward | DeleteForward | NewLine | Enter =>
@@ -511,8 +509,8 @@ object StateManager:
               state.buffers.get(entry.bufferId) match
                 case None => IO.unit
                 case Some(current) =>
-                  val currentCursor  = current.cursors.headOption.getOrElse(CursorPosition(0, 0))
-                  val redoEntry      = HistoryEntry(entry.bufferId, entry.paneId, current.content, currentCursor)
+                  val currentCursor = current.cursors.headOption.getOrElse(CursorPosition(0, 0))
+                  val redoEntry     = HistoryEntry(entry.bufferId, entry.paneId, current.content, currentCursor)
                   val restoredBuffer = current.copy(
                     content = entry.content,
                     cursors = List(entry.cursor),
@@ -564,10 +562,11 @@ object StateManager:
 
     private def snapFocusToPane(state: AppState, paneId: PaneId): AppState =
       if state.focus == Focus.EditorPane(paneId) then state
-      else state.copy(
-        focus = Focus.EditorPane(paneId),
-        layout = state.layout.copy(activeEditorPaneId = Some(paneId))
-      )
+      else
+        state.copy(
+          focus = Focus.EditorPane(paneId),
+          layout = state.layout.copy(activeEditorPaneId = Some(paneId))
+        )
 
     private def adjustViewportForUndoCursor(viewport: Viewport, cursor: CursorPosition): Viewport =
       val half       = viewport.visibleLines / 2
@@ -648,8 +647,8 @@ object StateManager:
           pane   <- state.layout.editorPanes.get(paneId)
           buffId <- pane.bufferId
           buffer <- state.buffers.get(buffId)
-          vp      = buffer.viewport
-          cells   = (vp.topLine until (vp.topLine + vp.visibleLines)).flatMap { lineIdx =>
+          vp = buffer.viewport
+          cells = (vp.topLine until (vp.topLine + vp.visibleLines)).flatMap { lineIdx =>
             val line = buffer.content.getLine(lineIdx).getOrElse("")
             line.zipWithIndex.take(vp.visibleColumns).map { (ch, col) =>
               CharacterKey(col, lineIdx) -> CellAnimation(ch, state.theme.background, state.theme.foreground)
@@ -657,8 +656,8 @@ object StateManager:
           }.toMap
           if cells.nonEmpty
         yield
-          val animated  = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, sweep, steps)
-          val newAnims  = buffer.animations.clearAll().mergeAnimations(animated)
+          val animated = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, sweep, steps)
+          val newAnims = buffer.animations.clearAll().mergeAnimations(animated)
           state.copy(buffers = state.buffers.updated(buffId, buffer.copy(animations = newAnims)))
         animOpt match
           case Some(newState) => stateRef.set(newState)
@@ -669,12 +668,11 @@ object StateManager:
       stateRef.get.flatMap { currentState =>
         val runnerOpened = prevState.commandRunnerSurface.isEmpty && currentState.commandRunnerSurface.isDefined
         val runnerClosed = prevState.commandRunnerSurface.isDefined && currentState.commandRunnerSurface.isEmpty
-        (if runnerOpened then
-          applyCommandRunnerOpenAnimation(currentState.commandRunnerSurface.get, currentState)
-        else IO.unit) >>
-        (if runnerClosed then
-          applyCommandRunnerCloseAnimation(prevState.commandRunnerSurface.get, prevState, currentState)
-        else IO.unit)
+        (if runnerOpened then applyCommandRunnerOpenAnimation(currentState.commandRunnerSurface.get, currentState)
+         else IO.unit) >>
+          (if runnerClosed then
+             applyCommandRunnerCloseAnimation(prevState.commandRunnerSurface.get, prevState, currentState)
+           else IO.unit)
       }
 
     private def withUpdatedRunnerConfig(state: AppState, config: com.serenity.config.AppConfig): AppState =
@@ -691,8 +689,8 @@ object StateManager:
     private def applyCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): IO[Unit] =
       val steps = AnimationConfig.smooth.get.steps
       stateRef.update { s =>
-        val tSize = s.viewportSize.getOrElse(ViewportSize(80, 24))
-        val layout = LayoutEngine.calculateLayoutWithUI(s, tSize)
+        val tSize         = s.viewportSize.getOrElse(ViewportSize(80, 24))
+        val layout        = LayoutEngine.calculateLayoutWithUI(s, tSize)
         val overlayHeight = layout.belowCursorOverlayRect.map(_.height).getOrElse(4)
         val overlayFadeIn = (0 until overlayHeight).map { rowOffset =>
           val delay    = rowOffset
@@ -700,9 +698,9 @@ object StateManager:
           val panelFg  = s.theme.panel.foreground
           val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
           val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
-          val bgSteps  = List.fill(delay)(transpBg) ++
+          val bgSteps = List.fill(delay)(transpBg) ++
             RgbInterpolator.interpolateRgba(transpBg, panelBg, steps)
-          val fgSteps  = List.fill(delay)(transpFg) ++
+          val fgSteps = List.fill(delay)(transpFg) ++
             RgbInterpolator.interpolateRgba(transpFg, panelFg, steps)
           CharacterKey(0, rowOffset) -> AnimatedCell(
             content = None,
@@ -727,7 +725,7 @@ object StateManager:
     ): IO[Unit] =
       val steps = AnimationConfig.smooth.get.steps
       stateRef.update { s =>
-        val tSize = prevState.viewportSize.orElse(s.viewportSize).getOrElse(ViewportSize(80, 24))
+        val tSize          = prevState.viewportSize.orElse(s.viewportSize).getOrElse(ViewportSize(80, 24))
         val previousLayout = LayoutEngine.calculateLayoutWithUI(prevState, tSize)
         val overlayHeight = prevState.surfaceAnimations
           .get(closedSurface.id)
@@ -737,14 +735,14 @@ object StateManager:
         val cachedRect = previousLayout.belowCursorOverlayRect
           .getOrElse(LayoutRect(12, 2, 56, overlayHeight))
         val overlayFadeOutAnims = (0 until overlayHeight).map { rowOffset =>
-          val delay      = overlayHeight - 1 - rowOffset
-          val panelBg    = s.theme.panel.background
-          val panelFg    = s.theme.panel.foreground
-          val transpBg   = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
-          val transpFg   = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
-          val bgSteps    = List.fill(delay)(panelBg) ++
+          val delay    = overlayHeight - 1 - rowOffset
+          val panelBg  = s.theme.panel.background
+          val panelFg  = s.theme.panel.foreground
+          val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
+          val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
+          val bgSteps = List.fill(delay)(panelBg) ++
             RgbInterpolator.interpolateRgba(panelBg, transpBg, steps)
-          val fgSteps    = List.fill(delay)(panelFg) ++
+          val fgSteps = List.fill(delay)(panelFg) ++
             RgbInterpolator.interpolateRgba(panelFg, transpFg, steps)
           CharacterKey(0, rowOffset) -> AnimatedCell(
             content = None,
@@ -780,8 +778,8 @@ object StateManager:
         bufferId <- pane.bufferId
         buffer   <- state.buffers.get(bufferId)
       yield
-        val vp = buffer.viewport
-        val theme = state.theme
+        val vp        = buffer.viewport
+        val theme     = state.theme
         val lineRange = vp.topLine until math.min(vp.topLine + vp.visibleLines, buffer.content.lineCount)
         val newAnims = lineRange.flatMap { bufferLine =>
           val lineContent = buffer.content.getLine(bufferLine).getOrElse("")
@@ -807,8 +805,8 @@ object StateManager:
         bufferId <- pane.bufferId
         buffer   <- state.buffers.get(bufferId)
       yield
-        val vp = buffer.viewport
-        val theme = state.theme
+        val vp        = buffer.viewport
+        val theme     = state.theme
         val lineRange = vp.topLine until math.min(vp.topLine + vp.visibleLines, buffer.content.lineCount)
         val newAnims = lineRange.flatMap { bufferLine =>
           val lineContent = buffer.content.getLine(bufferLine).getOrElse("")
@@ -829,52 +827,55 @@ object StateManager:
       ).getOrElse(state)
 
     private def advanceSurfaceAnimations(state: AppState): AppState =
-      state.surfaceAnimations.foldLeft(state) { case (s, (surfaceId, surfAnim)) =>
-        surfAnim.phase match
-          case SurfacePhase.BufferFadingOut =>
-            val newTick = surfAnim.phaseTick + 1
-            if newTick >= surfAnim.bufferFadeLength then
-              val overlayFadeIn = (0 until surfAnim.overlayHeight).map { rowOffset =>
-                val delay    = rowOffset
-                val panelBg  = s.theme.panel.background
-                val panelFg  = s.theme.panel.foreground
-                val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
-                val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
-                val bgSteps  = List.fill(delay)(transpBg) ++
-                  RgbInterpolator.interpolateRgba(transpBg, panelBg, AnimationConfig.smooth.get.steps)
-                val fgSteps  = List.fill(delay)(transpFg) ++
-                  RgbInterpolator.interpolateRgba(transpFg, panelFg, AnimationConfig.smooth.get.steps)
-                CharacterKey(0, rowOffset) -> AnimatedCell(
-                  content = None,
-                  foregroundSteps = fgSteps,
-                  backgroundSteps = bgSteps
+      state.surfaceAnimations.foldLeft(state) {
+        case (s, (surfaceId, surfAnim)) =>
+          surfAnim.phase match
+            case SurfacePhase.BufferFadingOut =>
+              val newTick = surfAnim.phaseTick + 1
+              if newTick >= surfAnim.bufferFadeLength then
+                val overlayFadeIn = (0 until surfAnim.overlayHeight).map { rowOffset =>
+                  val delay    = rowOffset
+                  val panelBg  = s.theme.panel.background
+                  val panelFg  = s.theme.panel.foreground
+                  val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
+                  val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
+                  val bgSteps = List.fill(delay)(transpBg) ++
+                    RgbInterpolator.interpolateRgba(transpBg, panelBg, AnimationConfig.smooth.get.steps)
+                  val fgSteps = List.fill(delay)(transpFg) ++
+                    RgbInterpolator.interpolateRgba(transpFg, panelFg, AnimationConfig.smooth.get.steps)
+                  CharacterKey(0, rowOffset) -> AnimatedCell(
+                    content = None,
+                    foregroundSteps = fgSteps,
+                    backgroundSteps = bgSteps
+                  )
+                }.toMap
+                val newSurfAnim = surfAnim.copy(
+                  phase = SurfacePhase.Visible,
+                  animationState = AnimationState(overlayFadeIn),
+                  phaseTick = 0
                 )
-              }.toMap
-              val newSurfAnim = surfAnim.copy(
-                phase = SurfacePhase.Visible,
-                animationState = AnimationState(overlayFadeIn),
-                phaseTick = 0
-              )
-              s.copy(surfaceAnimations = s.surfaceAnimations + (surfaceId -> newSurfAnim))
-            else
-              s.copy(surfaceAnimations = s.surfaceAnimations + (surfaceId -> surfAnim.copy(phaseTick = newTick)))
+                s.copy(surfaceAnimations = s.surfaceAnimations + (surfaceId -> newSurfAnim))
+              else s.copy(surfaceAnimations = s.surfaceAnimations + (surfaceId -> surfAnim.copy(phaseTick = newTick)))
 
-          case SurfacePhase.Visible =>
-            val newAnimState = surfAnim.animationState.advanceAllAnimations()
-            if !newAnimState.hasActiveAnimations then
-              s.copy(surfaceAnimations = s.surfaceAnimations - surfaceId)
-            else
-              s.copy(surfaceAnimations = s.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState)))
+            case SurfacePhase.Visible =>
+              val newAnimState = surfAnim.animationState.advanceAllAnimations()
+              if !newAnimState.hasActiveAnimations then s.copy(surfaceAnimations = s.surfaceAnimations - surfaceId)
+              else
+                s.copy(surfaceAnimations =
+                  s.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState))
+                )
 
-          case SurfacePhase.Exiting =>
-            val newAnimState = surfAnim.animationState.advanceAllAnimations()
-            if !newAnimState.hasActiveAnimations then
-              s.copy(
-                uiSurfaces = s.uiSurfaces.filterNot(_.id == surfaceId),
-                surfaceAnimations = s.surfaceAnimations - surfaceId
-              )
-            else
-              s.copy(surfaceAnimations = s.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState)))
+            case SurfacePhase.Exiting =>
+              val newAnimState = surfAnim.animationState.advanceAllAnimations()
+              if !newAnimState.hasActiveAnimations then
+                s.copy(
+                  uiSurfaces = s.uiSurfaces.filterNot(_.id == surfaceId),
+                  surfaceAnimations = s.surfaceAnimations - surfaceId
+                )
+              else
+                s.copy(surfaceAnimations =
+                  s.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState))
+                )
       }
 
     private def interpretEffect(effect: AppEffect): IO[Unit] =
@@ -915,9 +916,9 @@ object StateManager:
 
     private def applyComponentResult(result: ComponentResult, state: AppState): IO[AppState] =
       result match
-        case ComponentResult.NoChange                => IO.pure(state)
-        case ComponentResult.StateChange(update)     => IO.pure(update(state))
-        case ComponentResult.ReducerUpdate(result)   =>
+        case ComponentResult.NoChange            => IO.pure(state)
+        case ComponentResult.StateChange(update) => IO.pure(update(state))
+        case ComponentResult.ReducerUpdate(result) =>
           applyReducerResult(result, state) >> stateRef.get
         case ComponentResult.FocusTransfer(newFocus) => IO.pure(state.copy(focus = newFocus))
         case ComponentResult.Dismiss =>
@@ -943,7 +944,6 @@ object StateManager:
         case ComponentResult.Composite(results) =>
           results.foldLeftM(state)((s, r) => applyComponentResult(r, s))
 
-
     private def dismissCurrentFocus(state: AppState): AppState =
       state.focus match
         case Focus.Surface(surfaceId) =>
@@ -960,7 +960,7 @@ object StateManager:
 
     private def ensureCommandRunnerSurface(state: AppState): AppState =
       val registry = CommandRegistry.default
-      val runner = CommandRunner.empty.activate(registry).withPreviousFocus(Focus.EditorPane(PaneId(0)))
+      val runner   = CommandRunner.empty.activate(registry).withPreviousFocus(Focus.EditorPane(PaneId(0)))
       val (stateWithId, surfaceId) =
         state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
       val surface = UiSurface(
@@ -977,22 +977,23 @@ object StateManager:
       state.viewportSize match
         case None => IO.unit
         case Some(tSize) =>
-          val layout     = LayoutEngine.calculateLayoutWithUI(state, tSize)
+          val layout      = LayoutEngine.calculateLayoutWithUI(state, tSize)
           val paneLayouts = LayoutEngine.calculatePaneLayouts(state, layout)
-          paneLayouts.find { case (_, rect) =>
-            click.col >= rect.x && click.col < rect.x + rect.width &&
-            click.row > rect.y && click.row < rect.y + rect.height
+          paneLayouts.find {
+            case (_, rect) =>
+              click.col >= rect.x && click.col < rect.x + rect.width &&
+              click.row > rect.y && click.row < rect.y + rect.height
           } match
             case Some((paneId, paneRect)) =>
               state.layout.editorPanes.get(paneId).flatMap(pane => pane.bufferId.flatMap(state.buffers.get)) match
                 case Some(buffer) =>
-                  val vp         = buffer.viewport
-                  val contentY   = paneRect.y + 1
-                  val bufferLine = (vp.topLine + (click.row - contentY)).max(0)
-                  val bufferCol  = (vp.leftColumn + (click.col - paneRect.x)).max(0)
+                  val vp          = buffer.viewport
+                  val contentY    = paneRect.y + 1
+                  val bufferLine  = (vp.topLine + (click.row - contentY)).max(0)
+                  val bufferCol   = (vp.leftColumn + (click.col - paneRect.x)).max(0)
                   val clampedLine = bufferLine.min(math.max(0, buffer.content.lineCount - 1))
-                  val lineLen    = buffer.content.getLine(clampedLine).getOrElse("").length
-                  val clampedCol = bufferCol.min(lineLen)
+                  val lineLen     = buffer.content.getLine(clampedLine).getOrElse("").length
+                  val clampedCol  = bufferCol.min(lineLen)
                   stateRef.update { s =>
                     s.buffers.get(buffer.id) match
                       case Some(current) =>
@@ -1007,20 +1008,22 @@ object StateManager:
                       case None => s
                   }
                 case None =>
-                  stateRef.update(s => s.copy(
-                    focus = Focus.EditorPane(paneId),
-                    layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-                  ))
+                  stateRef.update(s =>
+                    s.copy(
+                      focus = Focus.EditorPane(paneId),
+                      layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                    )
+                  )
             case None => IO.unit
 
     private def modalType(modal: Modal): ModalType =
       modal match
-        case Modal.GotoLine(_)      => ModalType.GotoLine
-        case Modal.Find(_, _, _)    => ModalType.Find
-        case Modal.FileWorkflow(_)  => ModalType.FileWorkflow
+        case Modal.GotoLine(_)        => ModalType.GotoLine
+        case Modal.Find(_, _, _)      => ModalType.Find
+        case Modal.FileWorkflow(_)    => ModalType.FileWorkflow
         case Modal.ReplaceWorkflow(_) => ModalType.ReplaceWorkflow
-        case Modal.CloseWorkflow(_) => ModalType.CloseWorkflow
-        case Modal.Custom(name, _)  => ModalType.Custom(name)
+        case Modal.CloseWorkflow(_)   => ModalType.CloseWorkflow
+        case Modal.Custom(name, _)    => ModalType.Custom(name)
 
     private def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =
       import com.serenity.command.{AnimationMode, CommandIntent}
@@ -1090,9 +1093,17 @@ object StateManager:
           updateState { s =>
             val newAnim =
               if ms <= 0 then None
-              else Some(s.config.characterAnimation.fold(
-                AnimationConfig(steps = 12, totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
-              )(existing => existing.copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))))
+              else
+                Some(
+                  s.config.characterAnimation.fold(
+                    AnimationConfig(
+                      steps = 12,
+                      totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L)
+                    )
+                  )(existing =>
+                    existing.copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
+                  )
+                )
             val newConfig = s.config.copy(characterAnimation = newAnim)
             withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
           }
@@ -1100,9 +1111,15 @@ object StateManager:
           updateState { s =>
             val newAnim =
               if n <= 0 then None
-              else Some(s.config.characterAnimation.fold(
-                AnimationConfig(steps = n, totalDuration = scala.concurrent.duration.Duration.fromNanos(200_000_000L))
-              )(existing => existing.copy(steps = n)))
+              else
+                Some(
+                  s.config.characterAnimation.fold(
+                    AnimationConfig(
+                      steps = n,
+                      totalDuration = scala.concurrent.duration.Duration.fromNanos(200_000_000L)
+                    )
+                  )(existing => existing.copy(steps = n))
+                )
             val newConfig = s.config.copy(characterAnimation = newAnim)
             withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
           }
@@ -1113,28 +1130,24 @@ object StateManager:
           }
         case CommandIntent.StartupNewSession =>
           updateState(_.copy(uiSurfaces = List.empty)) >>
-          createNewEmptyBuffer().flatMap { bufferId =>
-            updateState(s => s.copy(bufferOrder = s.bufferOrder :+ bufferId)) >>
-            createPane(Some(bufferId)).flatMap(paneId =>
-              switchToPane(paneId)
-            )
-          }
+            createNewEmptyBuffer().flatMap { bufferId =>
+              updateState(s => s.copy(bufferOrder = s.bufferOrder :+ bufferId)) >>
+                createPane(Some(bufferId)).flatMap(paneId => switchToPane(paneId))
+            }
         case CommandIntent.StartupRestoreSession =>
           logger.info("[CMD] Session restore requested") >>
-          loadSession().flatMap {
-            case Some(restoredState) =>
-              logger.info("[CMD] Session loaded successfully") >>
-              updateState(_ => restoredState.copy(uiSurfaces = List.empty)) // Clear startup page
-            case None =>
-              logger.info("[CMD] No session found - creating default session") >>
-              updateState(_.copy(uiSurfaces = List.empty)) >>
-              createNewEmptyBuffer().flatMap { bufferId =>
-                updateState(s => s.copy(bufferOrder = s.bufferOrder :+ bufferId)) >>
-                createPane(Some(bufferId)).flatMap(paneId =>
-                  switchToPane(paneId)
-                )
-              }
-          }
+            loadSession().flatMap {
+              case Some(restoredState) =>
+                logger.info("[CMD] Session loaded successfully") >>
+                  updateState(_ => restoredState.copy(uiSurfaces = List.empty)) // Clear startup page
+              case None =>
+                logger.info("[CMD] No session found - creating default session") >>
+                  updateState(_.copy(uiSurfaces = List.empty)) >>
+                  createNewEmptyBuffer().flatMap { bufferId =>
+                    updateState(s => s.copy(bufferOrder = s.bufferOrder :+ bufferId)) >>
+                      createPane(Some(bufferId)).flatMap(paneId => switchToPane(paneId))
+                  }
+            }
         case CommandIntent.StartupOpenFile =>
           openFileWorkflowModal(FileWorkflowMode.Open, state)
 
@@ -1218,41 +1231,48 @@ object StateManager:
     def selectFileInExplorer(filePath: String): IO[Unit] =
       val targetPath = Path.of(filePath)
       stateRef.get.flatMap { state =>
-        val updated = state.pinnedSurfaces.find { surface =>
-          surface.presentation match
-            case SurfacePresentation.Pinned(PanelPosition.Left, _) => true
-            case _                                                  => false
-        }.flatMap { surface =>
-          surface.content match
-            case SurfaceContent.DirectoryListing(rootPath, entries, _) =>
-              val newContent  = SurfaceContent.DirectoryListing(rootPath, entries, Some(targetPath))
-              val newSurface  = surface.copy(content = newContent)
-              Some(state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface))
-            case _ => None
-        }.getOrElse(state)
+        val updated = state.pinnedSurfaces
+          .find { surface =>
+            surface.presentation match
+              case SurfacePresentation.Pinned(PanelPosition.Left, _) => true
+              case _                                                 => false
+          }
+          .flatMap { surface =>
+            surface.content match
+              case SurfaceContent.DirectoryListing(rootPath, entries, _) =>
+                val newContent = SurfaceContent.DirectoryListing(rootPath, entries, Some(targetPath))
+                val newSurface = surface.copy(content = newContent)
+                Some(state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface))
+              case _ => None
+          }
+          .getOrElse(state)
         validateAndUpdateState(updated, state)
       }
 
     def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
-      stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.resize(position, newSize, state).state, state))
+      stateRef.get.flatMap(state =>
+        validateAndUpdateState(PanelStateReducer.resize(position, newSize, state).state, state)
+      )
 
     def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit] =
       val src    = Path.of(sourceFile)
       val dst    = Path.of(targetDir).resolve(src.getFileName)
       val srcDir = src.getParent
-      IO.blocking(Files.move(src, dst)).flatMap { _ =>
-        stateRef.update { state =>
-          state.pinnedSurfaces.foldLeft(state) { (s, surface) =>
-            surface.content match
-              case SurfaceContent.DirectoryListing(root, entries, sel) if root == srcDir =>
-                val updated = surface.copy(
-                  content = SurfaceContent.DirectoryListing(root, entries.filterNot(_.path == src), sel)
-                )
-                s.copy(uiSurfaces = s.uiSurfaces.filterNot(_.id == surface.id) :+ updated)
-              case _ => s
+      IO.blocking(Files.move(src, dst))
+        .flatMap { _ =>
+          stateRef.update { state =>
+            state.pinnedSurfaces.foldLeft(state) { (s, surface) =>
+              surface.content match
+                case SurfaceContent.DirectoryListing(root, entries, sel) if root == srcDir =>
+                  val updated = surface.copy(
+                    content = SurfaceContent.DirectoryListing(root, entries.filterNot(_.path == src), sel)
+                  )
+                  s.copy(uiSurfaces = s.uiSurfaces.filterNot(_.id == surface.id) :+ updated)
+                case _ => s
+            }
           }
         }
-      }.handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to move $sourceFile to $targetDir"))
+        .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to move $sourceFile to $targetDir"))
 
     def getRecentFiles: IO[List[java.nio.file.Path]] =
       stateRef.get.map(_.recentFiles)
@@ -1352,7 +1372,7 @@ object StateManager:
 
     def handleViewportResize(newSize: ViewportSize): IO[Unit] =
       for
-        _ <- logger.debug(s"Handling viewport resize to ${newSize.width}x${newSize.height}")
+        _            <- logger.debug(s"Handling viewport resize to ${newSize.width}x${newSize.height}")
         currentState <- stateRef.get
         resizedState = SystemEventReducer.reduce(com.serenity.keystroke.events.ResizeEvent(newSize), currentState).state
         rebalancedState = AppEventReducer.rebalancePanes(resizedState, resizedState.focusedBufferId)
@@ -1360,8 +1380,7 @@ object StateManager:
       yield ()
 
     private def directLoadFileEffect(path: Path): IO[Unit] =
-      if !FileUtils.isReadableFile(path) then
-        logger.debug(s"[FILE] DirectLoad: file not readable: $path")
+      if !FileUtils.isReadableFile(path) then logger.debug(s"[FILE] DirectLoad: file not readable: $path")
       else
         fileManager
           .loadFile(path)
@@ -1369,20 +1388,20 @@ object StateManager:
             stateRef.modify { state =>
               val newBufferId    = state.nextBufferId
               val bufferToInsert = loadedBuffer.copy(id = newBufferId)
-              val updatedState   = state.copy(
-                buffers      = state.buffers + (newBufferId -> bufferToInsert),
-                bufferOrder  = insertBufferInOrder(state, newBufferId),
+              val stateWithBuffer = state.copy(
+                buffers = state.buffers + (newBufferId -> bufferToInsert),
                 nextBufferId = BufferId(newBufferId.value + 1)
               )
-              val rebalanced = AppEventReducer.rebalancePanes(updatedState, Some(newBufferId))
-              val focused    = focusBuffer(rebalanced, newBufferId)
+              val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
+              val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
+              val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
               (focused, loadedBuffer)
             }
           }
           .flatTap { loadedBuffer =>
             loadedBuffer.language match
               case Some(languageId) =>
-                val uri = path.toUri.toString
+                val uri  = path.toUri.toString
                 val text = loadedBuffer.content.collect()
                 lspQueue.offer(LspEffect.FileOpened(uri, languageId, text))
               case None => IO.unit
@@ -1400,9 +1419,11 @@ object StateManager:
               .flatMap(savedBuffer =>
                 stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> savedBuffer)))
               )
-              .flatTap(_ => stateRef.get.flatMap(sessionPersistence.onBufferChange).handleErrorWith(ex =>
-                logger.error(ex)("[SESSION] Auto-save after file save failed")
-              ))
+              .flatTap(_ =>
+                stateRef.get
+                  .flatMap(sessionPersistence.onBufferChange)
+                  .handleErrorWith(ex => logger.error(ex)("[SESSION] Auto-save after file save failed"))
+              )
               .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId"))
           case Some(_) =>
             logger.debug(s"[FILE] Buffer $bufferId has no file path; opening Save As workflow") >>
@@ -1421,9 +1442,11 @@ object StateManager:
                 stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> savedBuffer)))
               )
               .flatTap(_ => stateRef.update(s => s.copy(recentFiles = trackRecentFile(s.recentFiles, path))))
-              .flatTap(_ => stateRef.get.flatMap(sessionPersistence.onBufferChange).handleErrorWith(ex =>
-                logger.error(ex)("[SESSION] Auto-save after file save failed")
-              ))
+              .flatTap(_ =>
+                stateRef.get
+                  .flatMap(sessionPersistence.onBufferChange)
+                  .handleErrorWith(ex => logger.error(ex)("[SESSION] Auto-save after file save failed"))
+              )
               .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId as $path"))
           case None =>
             logger.debug(s"[FILE] Buffer $bufferId not found for save as")
@@ -1432,10 +1455,10 @@ object StateManager:
     private def toggleThemeEffect(state: AppState): IO[Unit] =
       val targetThemeName =
         state.theme.name match
-          case "light"         => "dark"
-          case "dark"          => "light"
-          case "default-light" => "default-dark"
-          case "default-dark"  => "default-light"
+          case "light"                                    => "dark"
+          case "dark"                                     => "light"
+          case "default-light"                            => "default-dark"
+          case "default-dark"                             => "default-light"
           case name if name.toLowerCase.contains("light") => "default-dark"
           case _                                          => "default-light"
 
@@ -1467,19 +1490,19 @@ object StateManager:
       themeNamesRef.get.flatMap { themeNames =>
         if themeNames.isEmpty then IO.unit
         else
-          val currentTheme  = state.theme.name
-          val selectedIndex = themeNames.indexOf(currentTheme).max(0)
-          val pickerState   = ThemePickerState(themeNames, selectedIndex, currentTheme)
+          val currentTheme             = state.theme.name
+          val selectedIndex            = themeNames.indexOf(currentTheme).max(0)
+          val pickerState              = ThemePickerState(themeNames, selectedIndex, currentTheme)
           val (stateWithId, surfaceId) = state.allocateSurfaceId
           val surface = UiSurface(
-            id           = surfaceId,
-            content      = SurfaceContent.ThemePicker(pickerState),
+            id = surfaceId,
+            content = SurfaceContent.ThemePicker(pickerState),
             presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
           )
           validateAndUpdateState(
             stateWithId.copy(
               uiSurfaces = stateWithId.uiSurfaces :+ surface,
-              focus      = Focus.Surface(surfaceId)
+              focus = Focus.Surface(surfaceId)
             ),
             state
           )
@@ -1488,56 +1511,57 @@ object StateManager:
     private def openFileSearchEffect(state: AppState): IO[Unit] =
       val (stateWithId, surfaceId) = state.allocateSurfaceId
       val surface = UiSurface(
-        id           = surfaceId,
-        content      = SurfaceContent.FileSearch(FileSearchState("", Nil, 0)),
+        id = surfaceId,
+        content = SurfaceContent.FileSearch(FileSearchState("", Nil, 0)),
         presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
       )
       validateAndUpdateState(
         stateWithId.copy(
           uiSurfaces = stateWithId.uiSurfaces :+ surface,
-          focus      = Focus.Surface(surfaceId)
+          focus = Focus.Surface(surfaceId)
         ),
         state
       )
 
     private def openFileWorkflowModal(
-        mode: FileWorkflowMode,
-        state: AppState,
-        bufferIdOverride: Option[BufferId] = None
+      mode: FileWorkflowMode,
+      state: AppState,
+      bufferIdOverride: Option[BufferId] = None
     ): IO[Unit] =
       val targetBufferId = bufferIdOverride.orElse(state.focusedBufferId)
-      val focusedPath = targetBufferId.flatMap(id => state.buffers.get(id)).flatMap(_.filePath)
+      val focusedPath    = targetBufferId.flatMap(id => state.buffers.get(id)).flatMap(_.filePath)
       val filename = mode match
-        case FileWorkflowMode.SaveAs => focusedPath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("")
-        case FileWorkflowMode.Open   => ""
+        case FileWorkflowMode.SaveAs =>
+          focusedPath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("")
+        case FileWorkflowMode.Open => ""
 
-        val pathIO =
-          mode match
-            case FileWorkflowMode.SaveAs =>
-              focusedPath
-                .flatMap(path => Option(path.getParent))
-                .map(IO.pure)
-                .getOrElse(com.serenity.io.FileUtils.getCurrentDirectory)
-            case FileWorkflowMode.Open =>
-              com.serenity.io.FileUtils.getCurrentDirectory
+      val pathIO =
+        mode match
+          case FileWorkflowMode.SaveAs =>
+            focusedPath
+              .flatMap(path => Option(path.getParent))
+              .map(IO.pure)
+              .getOrElse(com.serenity.io.FileUtils.getCurrentDirectory)
+          case FileWorkflowMode.Open =>
+            com.serenity.io.FileUtils.getCurrentDirectory
 
-        pathIO.flatMap { basePath =>
-          val workflow = FileWorkflowState(
-            mode = mode,
-            filename = filename,
-            path = basePath.toString
-          )
-          val predictedState = ModalStateReducer.show(Modal.FileWorkflow(workflow), state).state
-          logger.info(
-            s"[FILE-WORKFLOW OPENED] mode=$mode filename=${workflow.filename} path=${workflow.path} " +
-              s"surfaceId=${predictedState.modalSurface.map(_.id).getOrElse("none")} focus=${predictedState.focus}"
-          ) >>
-            updateState(current => ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state)
-        }
+      pathIO.flatMap { basePath =>
+        val workflow = FileWorkflowState(
+          mode = mode,
+          filename = filename,
+          path = basePath.toString
+        )
+        val predictedState = ModalStateReducer.show(Modal.FileWorkflow(workflow), state).state
+        logger.info(
+          s"[FILE-WORKFLOW OPENED] mode=$mode filename=${workflow.filename} path=${workflow.path} " +
+            s"surfaceId=${predictedState.modalSurface.map(_.id).getOrElse("none")} focus=${predictedState.focus}"
+        ) >>
+          updateState(current => ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state)
+      }
 
     private def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
       val targetBufferIds = closeTargets(scope, state)
-      val dirtyBufferIds = targetBufferIds.filter(bufferId => state.buffers.get(bufferId).exists(_.isDirty))
+      val dirtyBufferIds  = targetBufferIds.filter(bufferId => state.buffers.get(bufferId).exists(_.isDirty))
       val cleanBufferIds =
         if scope == CloseScope.Quit then Nil
         else targetBufferIds.filterNot(dirtyBufferIds.contains)
@@ -1548,29 +1572,34 @@ object StateManager:
           val finalState = clearCloseActions(stateAfterClean)
           stateRef.set(finalState) >>
             IO.whenA(scope == CloseScope.Quit)(
-              sessionPersistence.onAppClose(finalState) >> 
-              quitSignal.complete(()).attempt.void
+              sessionPersistence.onAppClose(finalState) >>
+                quitSignal.complete(()).attempt.void
             )
         case currentBufferId :: remaining =>
-          promptCloseWorkflow(stateAfterClean, CloseWorkflowState(
-            scope = scope,
-            currentBufferId = currentBufferId,
-            currentBufferLabel = closeBufferLabel(stateAfterClean, currentBufferId),
-            remainingBufferIds = remaining
-          ))
+          promptCloseWorkflow(
+            stateAfterClean,
+            CloseWorkflowState(
+              scope = scope,
+              currentBufferId = currentBufferId,
+              currentBufferLabel = closeBufferLabel(stateAfterClean, currentBufferId),
+              remainingBufferIds = remaining
+            )
+          )
 
     private def closeTargets(scope: CloseScope, state: AppState): List[BufferId] =
       scope match
         case CloseScope.Current => state.focusedBufferId.toList
         case CloseScope.All     => state.bufferOrder
-        case CloseScope.Others  => state.focusedBufferId.toList match
+        case CloseScope.Others =>
+          state.focusedBufferId.toList match
             case focused :: Nil => state.bufferOrder.filterNot(_ == focused)
             case Nil            => state.bufferOrder
-        case CloseScope.Quit    => state.bufferOrder
+        case CloseScope.Quit => state.bufferOrder
 
     private def promptCloseWorkflow(state: AppState, workflow: CloseWorkflowState): IO[Unit] =
       val focusedState = focusBufferForWorkflow(state, workflow.currentBufferId)
-      val modalState = ModalStateReducer.show(Modal.CloseWorkflow(workflow), withCloseAction(focusedState, workflow)).state
+      val modalState =
+        ModalStateReducer.show(Modal.CloseWorkflow(workflow), withCloseAction(focusedState, workflow)).state
       stateRef.set(modalState)
 
     private def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
@@ -1624,20 +1653,21 @@ object StateManager:
           val finalState = clearCloseActions(state)
           stateRef.set(finalState) >>
             IO.whenA(workflow.scope == CloseScope.Quit)(
-              sessionPersistence.onAppClose(finalState) >> 
-              quitSignal.complete(()).attempt.void
+              sessionPersistence.onAppClose(finalState) >>
+                quitSignal.complete(()).attempt.void
             )
 
     private def focusBufferForWorkflow(state: AppState, bufferId: BufferId): AppState =
-      AppEventReducer.rebalancePanes(state, Some(bufferId))
+      EditorState.rebalancePanes(state, Some(bufferId))
 
     private def closeBufferUsingExistingFlow(state: AppState, bufferId: BufferId): AppState =
-      val registry = CommandRegistry.withToggleUI
+      val registry     = CommandRegistry.withToggleUI
       val focusedState = focusBufferForWorkflow(state, bufferId)
       AppEventReducer.reduce(com.serenity.keystroke.events.CloseTab, focusedState, registry).state
 
     private def closeBufferLabel(state: AppState, bufferId: BufferId): String =
-      state.buffers.get(bufferId)
+      state.buffers
+        .get(bufferId)
         .flatMap(_.filePath.flatMap(path => Option(path.getFileName).map(_.toString)))
         .getOrElse(s"Buffer ${bufferId.value} - unsaved")
 
@@ -1660,9 +1690,7 @@ object StateManager:
       stateRef.get.flatMap { state =>
         fileWorkflowSurface(state, surfaceId) match
           case Some((_, workflow)) =>
-            refreshWorkflowState(workflow).flatMap { refreshed =>
-              updateFileWorkflowSurface(surfaceId, refreshed)
-            }
+            refreshWorkflowState(workflow).flatMap(refreshed => updateFileWorkflowSurface(surfaceId, refreshed))
           case None =>
             IO.unit
       }
@@ -1723,7 +1751,7 @@ object StateManager:
                       surfaceId,
                       workflow.copy(statusMessage = Some("No active buffer"))
                     )
-                
+
           case None =>
             IO.unit
       }
@@ -1732,13 +1760,14 @@ object StateManager:
       for
         directoryPath <- workflowDirectoryPath(workflow)
         suggestions <- workflow.activeField match
-          case FileWorkflowField.Path => pathSuggestions(workflow.path)
+          case FileWorkflowField.Path                                               => pathSuggestions(workflow.path)
           case FileWorkflowField.Filename if workflow.mode == FileWorkflowMode.Open => filenameSuggestions(workflow)
-          case FileWorkflowField.Filename => IO.pure(Nil)
+          case FileWorkflowField.Filename                                           => IO.pure(Nil)
         missingSegments <- missingDirectorySegments(directoryPath)
       yield workflow.copy(
         suggestions = suggestions,
-        selectedSuggestionIndex = if suggestions.isEmpty then 0 else math.min(workflow.selectedSuggestionIndex, suggestions.length - 1),
+        selectedSuggestionIndex =
+          if suggestions.isEmpty then 0 else math.min(workflow.selectedSuggestionIndex, suggestions.length - 1),
         missingPathSegments = missingSegments,
         confirmCreateDirectories = false,
         statusMessage = None
@@ -1748,11 +1777,15 @@ object StateManager:
       for
         currentDirectory <- FileUtils.getCurrentDirectory
         basePathInput = if pathInput.trim.isEmpty then currentDirectory.toString else pathInput
-        resolvedPath <- FileUtils.resolvePath(basePathInput)
+        resolvedPath    <- FileUtils.resolvePath(basePathInput)
         isDirectoryPath <- IO.blocking(Files.exists(resolvedPath) && Files.isDirectory(resolvedPath))
         endsWithSeparator = pathInput.endsWith("/") || pathInput.endsWith("\\")
-        baseDirectory = if endsWithSeparator || isDirectoryPath then resolvedPath else Option(resolvedPath.getParent).getOrElse(currentDirectory)
-        prefix = if endsWithSeparator || isDirectoryPath then "" else Option(resolvedPath.getFileName).map(_.toString).getOrElse("")
+        baseDirectory =
+          if endsWithSeparator || isDirectoryPath then resolvedPath
+          else Option(resolvedPath.getParent).getOrElse(currentDirectory)
+        prefix =
+          if endsWithSeparator || isDirectoryPath then ""
+          else Option(resolvedPath.getFileName).map(_.toString).getOrElse("")
         entries <- fileManager.getFileBrowser.listDirectory(baseDirectory)
       yield entries
         .filter(_.isDirectory)
@@ -1762,42 +1795,44 @@ object StateManager:
     private def filenameSuggestions(workflow: FileWorkflowState): IO[List[FileWorkflowSuggestion]] =
       for
         directoryPath <- workflowDirectoryPath(workflow)
-        entries <- fileManager.getFileBrowser.listDirectory(directoryPath)
+        entries       <- fileManager.getFileBrowser.listDirectory(directoryPath)
       yield entries
         .filterNot(_.isDirectory)
-        .filter(entry => workflow.filename.trim.isEmpty || entry.name.toLowerCase.startsWith(workflow.filename.toLowerCase))
+        .filter(entry =>
+          workflow.filename.trim.isEmpty || entry.name.toLowerCase.startsWith(workflow.filename.toLowerCase)
+        )
         .filter(entry => FileUtils.isReadableFile(entry.path))
         .map(entry => FileWorkflowSuggestion(entry.name, isDirectory = false))
 
     private def workflowDirectoryPath(workflow: FileWorkflowState): IO[Path] =
-      if workflow.filename.trim.nonEmpty then
-        FileUtils.resolvePath(workflow.path)
-      else
-        FileUtils.resolvePath(workflow.path).map(path => Option(path.getParent).getOrElse(path))
+      if workflow.filename.trim.nonEmpty then FileUtils.resolvePath(workflow.path)
+      else FileUtils.resolvePath(workflow.path).map(path => Option(path.getParent).getOrElse(path))
 
     private def workflowTargetPath(workflow: FileWorkflowState): IO[Path] =
       if workflow.filename.trim.nonEmpty then
         FileUtils.resolvePath(workflow.path).map(_.resolve(workflow.filename.trim).normalize())
-      else
-        FileUtils.resolvePath(workflow.path)
+      else FileUtils.resolvePath(workflow.path)
 
     private def missingDirectorySegments(directoryPath: Path): IO[List[String]] =
       IO.blocking {
-        val normalized = directoryPath.normalize()
+        val normalized   = directoryPath.normalize()
         val segmentNames = (0 until normalized.getNameCount).toList.map(index => normalized.getName(index).toString)
         val initialPath =
           Option(normalized.getRoot).getOrElse(Paths.get(""))
 
-        segmentNames.foldLeft((initialPath, false, List.empty[String])) { case ((currentPath, alreadyMissing, missing), segment) =>
-          val nextPath =
-            if currentPath.toString.isEmpty then Paths.get(segment)
-            else currentPath.resolve(segment)
-          val nextMissing =
-            if alreadyMissing || !Files.exists(nextPath) then missing :+ segment
-            else missing
-          val nextAlreadyMissing = alreadyMissing || !Files.exists(nextPath)
-          (nextPath, nextAlreadyMissing, nextMissing)
-        }._3
+        segmentNames
+          .foldLeft((initialPath, false, List.empty[String])) {
+            case ((currentPath, alreadyMissing, missing), segment) =>
+              val nextPath =
+                if currentPath.toString.isEmpty then Paths.get(segment)
+                else currentPath.resolve(segment)
+              val nextMissing =
+                if alreadyMissing || !Files.exists(nextPath) then missing :+ segment
+                else missing
+              val nextAlreadyMissing = alreadyMissing || !Files.exists(nextPath)
+              (nextPath, nextAlreadyMissing, nextMissing)
+          }
+          ._3
       }
 
     private def completeOpenWorkflow(surfaceId: SurfaceId, workflow: FileWorkflowState): IO[Unit] =
@@ -1813,16 +1848,16 @@ object StateManager:
             .loadFile(targetPath)
             .flatMap { loadedBuffer =>
               stateRef.modify { state =>
-                val newBufferId = state.nextBufferId
+                val newBufferId    = state.nextBufferId
                 val bufferToInsert = loadedBuffer.copy(id = newBufferId)
-                val updatedState = state.copy(
+                val stateWithBuffer = state.copy(
                   buffers = state.buffers + (newBufferId -> bufferToInsert),
-                  bufferOrder = insertBufferInOrder(state, newBufferId),
                   nextBufferId = BufferId(newBufferId.value + 1),
                   uiSurfaces = List.empty
                 )
-                val rebalanced = AppEventReducer.rebalancePanes(updatedState, Some(newBufferId))
-                val focused = focusBuffer(rebalanced, newBufferId)
+                val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
+                val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
+                val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
                 (focused, ())
               }
             }
@@ -1838,7 +1873,9 @@ object StateManager:
             workflowTargetPath(workflow).flatMap { targetPath =>
               saveBufferAsEffect(bufferId, targetPath) >>
                 stateRef.get.flatMap { savedState =>
-                  savedState.actionStack.collectFirst { case AppAction.CloseWorkflow(closeWorkflow) => closeWorkflow } match
+                  savedState.actionStack.collectFirst {
+                    case AppAction.CloseWorkflow(closeWorkflow) => closeWorkflow
+                  } match
                     case Some(closeWorkflow) if closeWorkflow.currentBufferId == bufferId =>
                       val dismissedState = dismissModalSurface(savedState)
                       val nextState =
@@ -1892,7 +1929,10 @@ object StateManager:
           case _                                                          => None
       }
 
-    private def replaceWorkflowSurface(state: AppState, surfaceId: SurfaceId): Option[(UiSurface, ReplaceWorkflowState)] =
+    private def replaceWorkflowSurface(
+      state: AppState,
+      surfaceId: SurfaceId
+    ): Option[(UiSurface, ReplaceWorkflowState)] =
       state.surfaceById(surfaceId).flatMap { surface =>
         surface.content match
           case SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)) => Some((surface, workflow))
@@ -1908,24 +1948,3 @@ object StateManager:
 
     private def trackRecentFile(current: List[java.nio.file.Path], path: java.nio.file.Path): List[java.nio.file.Path] =
       (path :: current.filterNot(_ == path)).take(20)
-
-    private def insertBufferInOrder(state: AppState, newBufferId: BufferId): List[BufferId] =
-      state.focusedBufferId match
-        case Some(currentBufferId) =>
-          val currentIndex = state.bufferOrder.indexOf(currentBufferId)
-          if currentIndex == -1 then state.bufferOrder :+ newBufferId
-          else
-            val (before, after) = state.bufferOrder.splitAt(currentIndex + 1)
-            before ++ List(newBufferId) ++ after
-        case None =>
-          state.bufferOrder :+ newBufferId
-
-    private def focusBuffer(state: AppState, bufferId: BufferId): AppState =
-      state.layout.editorPanes.find(_._2.bufferId.contains(bufferId)) match
-        case Some((paneId, _)) =>
-          state.copy(
-            focus = Focus.EditorPane(paneId),
-            layout = state.layout.copy(activeEditorPaneId = Some(paneId))
-          )
-        case None =>
-          state
