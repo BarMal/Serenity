@@ -582,6 +582,8 @@ object StateManager:
                       Some(new CommandRunnerComponent(registry))
                     case SurfaceContent.ThemePicker(_) =>
                       Some(new ThemePickerComponent())
+                    case SurfaceContent.FileSearch(_) =>
+                      Some(new FileSearchComponent())
                     case SurfaceContent.StartPage(_) =>
                       Some(new StartupPageComponent())
                     case SurfaceContent.ModalWorkflow(modal) =>
@@ -866,6 +868,8 @@ object StateManager:
           saveBufferAsEffect(bufferId, path)
         case AppEffect.OpenThemePicker =>
           stateRef.get.flatMap(openThemePickerEffect)
+        case AppEffect.OpenFileSearch =>
+          stateRef.get.flatMap(openFileSearchEffect)
         case AppEffect.RequestOpenFile =>
           stateRef.get.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))
         case AppEffect.RequestSaveAs =>
@@ -1379,6 +1383,21 @@ object StateManager:
             state
           )
       }
+
+    private def openFileSearchEffect(state: AppState): IO[Unit] =
+      val (stateWithId, surfaceId) = state.allocateSurfaceId
+      val surface = UiSurface(
+        id           = surfaceId,
+        content      = SurfaceContent.FileSearch(FileSearchState("", Nil, 0)),
+        presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+      )
+      validateAndUpdateState(
+        stateWithId.copy(
+          uiSurfaces = stateWithId.uiSurfaces :+ surface,
+          focus      = Focus.Surface(surfaceId)
+        ),
+        state
+      )
 
     private def openFileWorkflowModal(
         mode: FileWorkflowMode,

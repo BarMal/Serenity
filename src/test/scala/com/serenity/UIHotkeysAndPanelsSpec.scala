@@ -85,7 +85,13 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
   // ── Backlog ───────────────────────────────────────────────────────────────
 
   it should "open file search with Ctrl+Shift+F" in new UIFixture:
-    pending // Add Ctrl+Shift+F hotkey + file search surface
+    stateManager.applyEvent(FileSearch).unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.fileSearchSurface shouldBe defined
+    state.focus match
+      case Focus.Surface(id) => state.fileSearchSurface.map(_.id) shouldBe Some(id)
+      case _                 => fail("Expected focus on file search surface")
 
   trait UIFixture:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]

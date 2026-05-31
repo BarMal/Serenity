@@ -16,6 +16,7 @@ enum AppEffect:
   case RequestSaveAs
   case DirectLoadFile(path: Path)
   case OpenThemePicker
+  case OpenFileSearch
   case RefreshFileWorkflow(surfaceId: SurfaceId)
   case SubmitFileWorkflow(surfaceId: SurfaceId)
   case SubmitReplaceWorkflow(surfaceId: SurfaceId)

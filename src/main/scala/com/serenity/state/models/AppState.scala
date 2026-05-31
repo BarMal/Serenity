@@ -87,6 +87,9 @@ case class AppState(
   def themePickerSurface: Option[UiSurface] =
     uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.ThemePicker])
 
+  def fileSearchSurface: Option[UiSurface] =
+    uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.FileSearch])
+
   def startPageSurface: Option[UiSurface] =
     uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.StartPage])
 

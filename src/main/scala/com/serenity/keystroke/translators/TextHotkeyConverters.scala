@@ -22,6 +22,9 @@ object TextHotkeyConverters:
       ToggleCommandRunner
     case KeyStrokeInfo(InputKey.Character, Some('t'), modifiers) if modifiers.contains(Modifier.Ctrl) => NewTab
     case KeyStrokeInfo(InputKey.Character, Some('w'), modifiers) if modifiers.contains(Modifier.Ctrl) => CloseTab
+    case KeyStrokeInfo(InputKey.Character, Some('f'), modifiers)
+        if modifiers.contains(Modifier.Ctrl) && modifiers.contains(Modifier.Shift) =>
+      FileSearch
     // Ctrl+Shift+Tab from Lanterna (terminal path): Tab key with both modifiers
     case KeyStrokeInfo(InputKey.Tab, _, modifiers)
         if modifiers.contains(Modifier.Ctrl) && modifiers.contains(Modifier.Shift) =>

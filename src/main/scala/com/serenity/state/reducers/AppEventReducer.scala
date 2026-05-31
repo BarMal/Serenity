@@ -37,6 +37,9 @@ object AppEventReducer:
       case PreviousTab =>
         ReducerResult.noEffects(navigateBuffer(state, _.previousBufferInOrder))
 
+      case FileSearch =>
+        ReducerResult.withEffect(state, AppEffect.OpenFileSearch)
+
   def rebalancePanes(state: AppState, focusedBufferId: Option[BufferId] = None): AppState =
     assignBuffersToPanes(state, focusedBufferId)
 

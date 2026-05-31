@@ -1,7 +1,7 @@
 package com.serenity.ui.renderer
 
 import com.serenity.command.{CommandCategory, CommandRegistry, CommandSurfaceItem}
-import com.serenity.state.models.{CloseWorkflowChoice, CloseWorkflowState, FileWorkflowField, FileWorkflowMode, FileWorkflowState, Modal, ReplaceWorkflowField, ReplaceWorkflowState, SurfaceContent}
+import com.serenity.state.models.{CloseWorkflowChoice, CloseWorkflowState, FileSearchState, FileWorkflowField, FileWorkflowMode, FileWorkflowState, Modal, ReplaceWorkflowField, ReplaceWorkflowState, SurfaceContent, ThemePickerState}
 import com.serenity.ui.layout.LayoutRect
 import com.googlecode.lanterna.TextColor
 import com.serenity.ui.layout.SurfaceLayoutKind
@@ -87,6 +87,10 @@ object SurfaceContentResolver:
         resolveOutline(rect, mode, symbols.map(symbol => (symbol.kind.toString, symbol.name)))
       case SurfaceContent.Diagnostics(issues) =>
         resolveDiagnostics(rect, mode, issues)
+      case SurfaceContent.ThemePicker(state) =>
+        resolveThemePicker(state, mode)
+      case SurfaceContent.FileSearch(state) =>
+        resolveFileSearch(state, rect, mode)
       case SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
         resolve(originalContent, cachedRect, mode)
 
@@ -445,3 +449,26 @@ object SurfaceContentResolver:
         List(s"${issues.length} issues", s"$errorCount error")
 
     ResolvedSurfaceContent(titleFor(mode, "diagnostics"), rows = shaped.map(OverlayRow(_)))
+
+  private def resolveThemePicker(state: ThemePickerState, mode: SurfaceRenderMode): ResolvedSurfaceContent =
+    val rows = state.themes.zipWithIndex.map { (name, idx) =>
+      OverlayRow(plainText = name, selected = idx == state.selectedIndex)
+    }
+    ResolvedSurfaceContent(titleFor(mode, "Theme"), rows = rows)
+
+  private def resolveFileSearch(state: FileSearchState, rect: LayoutRect, mode: SurfaceRenderMode): ResolvedSurfaceContent =
+    val headerRow = OverlayRow(
+      plainText = if state.query.isEmpty then " " else state.query,
+      cursorColumn = Some(state.query.length)
+    )
+    val resultRows = state.results.take(rect.height - 2).zipWithIndex.map { (result, idx) =>
+      OverlayRow(
+        plainText = s"${result.bufferName}:${result.line + 1}  ${result.lineContent}",
+        selected = idx == state.selectedIndex
+      )
+    }
+    ResolvedSurfaceContent(
+      title = titleFor(mode, "Search"),
+      header = Some(headerRow),
+      rows = resultRows
+    )
