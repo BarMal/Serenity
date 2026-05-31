@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import cats.Order
 import com.serenity.animation.AnimationState
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Rope
 
 case class BufferId(value: Int)
@@ -16,7 +17,7 @@ case class Buffer(
     content: Rope,
     filePath: Option[Path] = None,
     isDirty: Boolean = false,
-    language: Option[String] = None,
+    language: Option[LanguageId] = None,
     isNewEmpty: Boolean = false,
     animations: AnimationState = AnimationState.empty,
     cursors: List[CursorPosition] = List(CursorPosition(0, 0)),

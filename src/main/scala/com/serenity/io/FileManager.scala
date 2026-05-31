@@ -3,6 +3,7 @@ package com.serenity.io
 import java.nio.file.Path
 
 import cats.effect.IO
+import com.serenity.lsp.config.FileExtension
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 
@@ -13,25 +14,27 @@ class FileManager(using balance: Balance):
   def loadFile(path: Path): IO[Buffer] =
     for
       content <- FileUtils.readFileContent(path)
-      fileType = FileUtils.detectFileType(path)
       bufferId = BufferId(System.currentTimeMillis().toInt) // Temporary ID generation
     yield Buffer(
       id = bufferId,
       content = com.serenity.rope.Rope(content),
       filePath = Some(path),
       isDirty = false,
-      language = Some(FileType.displayName(fileType))
+      language = Option(path.getFileName).map(_.toString)
+        .flatMap(n => n.lastIndexOf('.') match { case -1 => None; case i => Some(n.substring(i + 1)) })
+        .flatMap(FileExtension.languageIdFor)
     )
 
   /** Save buffer to file */
   def saveBuffer(buffer: Buffer, path: Path): IO[Buffer] =
     for
       _ <- FileUtils.writeFileContent(path, buffer.content.collect())
-      fileType = FileUtils.detectFileType(path)
     yield buffer.copy(
       filePath = Some(path),
       isDirty = false,
-      language = Some(FileType.displayName(fileType))
+      language = Option(path.getFileName).map(_.toString)
+        .flatMap(n => n.lastIndexOf('.') match { case -1 => None; case i => Some(n.substring(i + 1)) })
+        .flatMap(FileExtension.languageIdFor)
     )
 
   /** Save buffer to its existing file path */

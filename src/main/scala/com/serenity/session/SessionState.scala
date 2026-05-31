@@ -3,6 +3,7 @@ package com.serenity.session
 import java.nio.file.Path
 
 import com.serenity.config.{AppConfig, CursorMode}
+import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.layout.Layout
@@ -140,7 +141,7 @@ object SessionBuffer:
       id = buffer.id.value,
       filePath = buffer.filePath.map(_.toString),
       isDirty = buffer.isDirty,
-      language = buffer.language,
+      language = buffer.language.map(_.id),
       isNewEmpty = buffer.isNewEmpty,
       cursors = buffer.cursors.map(SessionCursorPosition.fromCursorPosition),
       viewport = SessionViewport.fromViewport(buffer.viewport),
@@ -158,7 +159,7 @@ object SessionBuffer:
       content = sessionBuffer.unsavedContent.map(Rope.apply).getOrElse(Rope.empty),
       filePath = sessionBuffer.filePath.map(path => Paths.get(path)),
       isDirty = sessionBuffer.isDirty,
-      language = sessionBuffer.language,
+      language = sessionBuffer.language.flatMap(LanguageId.fromString),
       isNewEmpty = sessionBuffer.isNewEmpty,
       cursors = sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition),
       viewport = SessionViewport.toViewport(sessionBuffer.viewport)

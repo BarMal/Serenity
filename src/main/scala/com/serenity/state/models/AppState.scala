@@ -2,6 +2,7 @@ package com.serenity.state.models
 
 import com.serenity.animation.AnimationState
 import com.serenity.config.AppConfig
+import com.serenity.lsp.model.Diagnostic
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
 
@@ -46,7 +47,8 @@ case class AppState(
     themeTransition: Option[ThemeTransition] = None,
     surfaceAnimations: Map[SurfaceId, SurfaceAnimationState] = Map.empty,
     clipboard: Option[String] = None, // not persisted between sessions
-    recentFiles: List[java.nio.file.Path] = Nil
+    recentFiles: List[java.nio.file.Path] = Nil,
+    diagnostics: Map[String, List[Diagnostic]] = Map.empty
 ):
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled
