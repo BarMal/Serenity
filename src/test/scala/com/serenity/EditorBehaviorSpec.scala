@@ -2,19 +2,26 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
 class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
   given balance: Balance                 = Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
   given loggerFactory: LoggerFactory[IO] = Slf4jFactory.create[IO]
+  given logger: Logger[IO]               = Slf4jLogger.getLogger[IO]
 
   behavior of "Text Editor End-to-End Behavior"
 
@@ -318,6 +325,46 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     val afterSecondDown = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.head
     afterSecondDown shouldBe CursorPosition(2, 4)
+
+  it should "preserve measured visual x when moving through proportional text lines" in new EditorFixture:
+    val bufferId = stateManager.createBuffer("iiii\nW\nWWWW").unsafeRunSync()
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId   = state.layout.editorPanes.keys.head
+
+    stateManager.updateState(_.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false))).unsafeRunSync()
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.updateState { current =>
+      current.copy(
+        buffers = current.buffers.updated(
+          bufferId,
+          current.buffers(bufferId).copy(language = Some(LanguageId.Markdown))
+        )
+      )
+    }.unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+    stateManager.setCursorPosition(paneId, 0, 4).unsafeRunSync()
+
+    val font = FontLoader.loadTextFont(
+      FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
+    ).unsafeRunSync()
+    val currentState = stateManager.getCurrentState.unsafeRunSync()
+    val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
+    val panelWidthPx = layout.editorPanelRect.width * CellMetrics.fromFont(font).charWidth
+    val snapshot = TextLayoutSnapshot.fromBuffer(
+      currentState.buffers(bufferId),
+      panelWidthPx,
+      font
+    )
+    val preferredXPx = snapshot.xPxForCursor(CursorPosition(0, 4)).getOrElse(fail("missing caret x"))
+    val expectedCol  = snapshot.visualLines(2).nearestColumnForXPx(preferredXPx)
+
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    val afterFirstDown = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.head
+    afterFirstDown shouldBe CursorPosition(1, 1)
+
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    val afterSecondDown = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.head
+    afterSecondDown shouldBe CursorPosition(2, expectedCol)
 
   it should "handle undo/redo operations correctly" in new EditorFixture:
     // TODO: Implement Undo/Redo events and state management

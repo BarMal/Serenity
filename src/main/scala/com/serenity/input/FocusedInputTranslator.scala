@@ -15,7 +15,9 @@ object FocusedInputTranslator:
 
   def forState(state: AppState): Translator[Event] =
     val localTranslator =
-      state.activeSurface match
+      if state.hasCommandRunnerDomain then commandRunnerTranslator
+      else
+        state.activeSurface match
         case Some(surface) =>
           surface.presentation match
             case com.serenity.state.models.SurfacePresentation.Pinned(_, _) =>

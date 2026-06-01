@@ -39,11 +39,18 @@ object FontLoader:
     baseFontIO.map(applyFontFeatures(_, config.enableLigatures))
 
   def loadTextFont(config: FontConfig)(using Logger[IO]): IO[Font] =
-    IO.pure(
-      applyFontFeatures(
-        Font(config.textFontFamily, Font.PLAIN, config.fontSize.toInt).deriveFont(config.fontSize),
-        config.enableLigatures
-      )
+    IO.pure(previewTextFont(config))
+
+  def previewCodeFont(config: FontConfig): Font =
+    val base =
+      if config.codeFontFamily == BundledCodeFontFamily then defaultSystemMonospace(config.fontSize)
+      else Font(config.codeFontFamily, Font.PLAIN, config.fontSize.toInt).deriveFont(config.fontSize)
+    applyFontFeatures(base, config.enableLigatures)
+
+  def previewTextFont(config: FontConfig): Font =
+    applyFontFeatures(
+      Font(config.textFontFamily, Font.PLAIN, config.fontSize.toInt).deriveFont(config.fontSize),
+      config.enableLigatures
     )
 
   /** Compatibility shim while the runtime moves to separate code/text fonts. */

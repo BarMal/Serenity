@@ -31,10 +31,10 @@ final class RuntimeDisplayState private (
     textMetricsRef.get()
 
   def fontFor(state: AppState): Font =
-    if usesCodeTypography(state) then codeFont else textFont
+    if usesChromeTypography(state) || usesCodeTypography(state) then codeFont else textFont
 
   def metricsFor(state: AppState): CellMetrics =
-    if usesCodeTypography(state) then codeMetrics else textMetrics
+    if usesChromeTypography(state) || usesCodeTypography(state) then codeMetrics else textMetrics
 
   def update(config: FontConfig)(using logger: Logger[IO]): IO[Unit] =
     RuntimeDisplayState
@@ -47,10 +47,25 @@ final class RuntimeDisplayState private (
       }
 
   private def usesCodeTypography(state: AppState): Boolean =
-    state.focusedBufferId
+    state.layout.activeEditorPaneId
+      .flatMap(state.layout.editorPanes.get)
+      .flatMap(_.bufferId)
+      .orElse(state.focusedBufferId)
       .flatMap(state.buffers.get)
       .flatMap(_.language)
       .exists(RuntimeDisplayState.usesCodeTypography)
+
+  private def usesChromeTypography(state: AppState): Boolean =
+    state.activeSurface.exists { surface =>
+      surface.content match
+        case com.serenity.state.models.SurfaceContent.StartPage(_)                   => true
+        case com.serenity.state.models.SurfaceContent.CommandPalette(_)              => true
+        case com.serenity.state.models.SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
+        case com.serenity.state.models.SurfaceContent.ThemePicker(_)                 => true
+        case com.serenity.state.models.SurfaceContent.FileSearch(_)                  => true
+        case com.serenity.state.models.SurfaceContent.ModalWorkflow(_)               => true
+        case _                                                                       => false
+    }
 
 object RuntimeDisplayState:
 

@@ -307,7 +307,7 @@ object SurfaceContentResolver:
             selected = index == adjustedSelectedIndex,
             segments = List(
               OverlaySegment(group.label),
-              OverlaySegment(group.hint.getOrElse(""), tone = OverlayTone.Muted)
+              OverlaySegment(group.hint.getOrElse(""), tone = OverlayTone.Normal)
             ).filterNot(_.text.isEmpty),
             layout = OverlayRowLayout.Split
           )
@@ -392,7 +392,7 @@ object SurfaceContentResolver:
 
   private def optionRow(option: CommandSurfaceItem.OptionItem, selected: Boolean): OverlayRow =
     val rightSegments =
-      option.hint.toList.map(hint => OverlaySegment(hint, tone = OverlayTone.Muted)) :+
+      option.hint.toList.map(hint => OverlaySegment(hint, tone = OverlayTone.Normal)) :+
         OverlaySegment(option.selectedOption, selected = true)
 
     OverlayRow(
@@ -417,7 +417,7 @@ object SurfaceContentResolver:
       cursorColumn = cursorCol,
       segments = List(
         OverlaySegment(item.label),
-        OverlaySegment(item.hint, tone = OverlayTone.Muted),
+        OverlaySegment(item.hint, tone = OverlayTone.Normal),
         OverlaySegment(displayText, tone = valueTone, selected = editingText.isDefined)
       ),
       layout = OverlayRowLayout.Split

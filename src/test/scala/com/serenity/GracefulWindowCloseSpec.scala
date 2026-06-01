@@ -52,3 +52,18 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
     state.modalSurface shouldBe defined
     state.buffers.get(bufferId).exists(_.isDirty) shouldBe true
   }
+
+  it should "allow an external close to terminate immediately even with dirty buffers" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("hello").unsafeRunSync()
+    sm.createPane().unsafeRunSync()
+    sm.updateBuffer(bufferId, "modified").unsafeRunSync()
+
+    val program = (
+      sm.awaitQuit,
+      IO.sleep(50.millis) >> sm.forceQuit()
+    ).parMapN((_, _) => ())
+
+    program.unsafeRunTimed(2.seconds) shouldBe defined
+    sm.getCurrentState.unsafeRunSync().buffers.get(bufferId).exists(_.isDirty) shouldBe true
+  }

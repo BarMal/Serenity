@@ -129,7 +129,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     optionRow.segments should have size 2
     optionRow.segments.head.text shouldBe "Animation"
     optionRow.segments(1).text shouldBe "Mode, timing, steps"
-    optionRow.segments(1).tone shouldBe OverlayTone.Muted
+    optionRow.segments(1).tone shouldBe OverlayTone.Normal
   }
 
   it should "return no floating rows for inactive command palettes" in {

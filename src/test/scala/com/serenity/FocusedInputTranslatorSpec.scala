@@ -143,6 +143,22 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)) shouldBe RunnerDismiss
   }
 
+  it should "keep routing input to the command runner while its surfaces remain open" in {
+    val leakedFocusState = editorState.copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val translator = FocusedInputTranslator.forState(leakedFocusState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)) shouldBe RunnerDismiss
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)) shouldBe RunnerSubmit
+  }
+
   it should "route Ctrl+Tab and Ctrl+Shift+Tab to pane navigation regardless of focus" in {
     val commandRunnerState = editorState.copy(
       focus = Focus.Surface(SurfaceId("command-runner")),

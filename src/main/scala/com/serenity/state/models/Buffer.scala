@@ -32,6 +32,7 @@ case class Buffer(
     cursors: List[CursorPosition] = List(CursorPosition(0, 0)),
     selection: Option[Selection] = None,
     preferredColumn: Option[Int] = None,
+    preferredXPx: Option[Float] = None,
     viewport: Viewport = Viewport.default
 )
 

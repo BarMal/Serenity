@@ -162,6 +162,12 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val appState = AppState.initial.copy(
       config = AppConfig(
         characterAnimation = AnimationConfig.quick,
+        fontConfig = com.serenity.ui.fonts.FontLoader.FontConfig(
+          codeFontFamily = "Monospaced",
+          textFontFamily = "SansSerif",
+          fontSize = 15.0f,
+          enableLigatures = false
+        ),
         blurRadius = 0.42f,
         backgroundStyle = BackgroundStyle.GlassLike,
         windowChromeMode = WindowChromeMode.Custom,
@@ -175,6 +181,10 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.blurRadius shouldBe 0.42f
     decoded.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
     decoded.config.windowChromeMode shouldBe WindowChromeMode.Custom
+    decoded.config.fontConfig.codeFontFamily shouldBe "Monospaced"
+    decoded.config.fontConfig.textFontFamily shouldBe "SansSerif"
+    decoded.config.fontConfig.fontSize shouldBe 15.0f
+    decoded.config.fontConfig.enableLigatures shouldBe false
     decoded.config.showLineNumbers shouldBe false
     decoded.config.showGutter shouldBe false
     decoded.config.characterAnimation.map(_.steps) shouldBe

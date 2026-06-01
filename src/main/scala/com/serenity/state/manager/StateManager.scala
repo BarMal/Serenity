@@ -19,6 +19,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.state.undo.{HistoryEntry, PendingGroup, UndoState}
 import com.serenity.ui.layout.*
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
@@ -32,6 +33,7 @@ trait StateManager:
   def getActiveBuffer: IO[Option[Buffer]]
   def getActivePane: IO[Option[EditorPane]]
   def awaitQuit: IO[Unit]
+  def forceQuit(): IO[Unit]
   def intervalSaveStream: Stream[IO, Unit]
   def updateState(update: AppState => AppState): IO[Unit]
   def handleViewportResize(newSize: ViewportSize): IO[Unit]
@@ -322,7 +324,11 @@ object StateManager:
             pane.bufferId.flatMap(state.buffers.get) match
               case Some(buffer) =>
                 val newCursor     = CursorPosition(line, column)
-                val updatedBuffer = buffer.copy(cursors = List(newCursor), preferredColumn = Some(column))
+                val updatedBuffer = buffer.copy(
+                  cursors = List(newCursor),
+                  preferredColumn = Some(column),
+                  preferredXPx = None
+                )
                 state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
               case None => state // No buffer assigned to pane
           case None => state // Pane doesn't exist, no change
@@ -395,6 +401,12 @@ object StateManager:
 
     def awaitQuit: IO[Unit] = quitSignal.get
 
+    def forceQuit(): IO[Unit] =
+      stateRef.get.flatMap { state =>
+        sessionPersistence.onAppClose(clearCloseActions(state)) >>
+          quitSignal.complete(()).attempt.void
+      }
+
     def intervalSaveStream: Stream[IO, Unit] =
       policy.saveInterval match
         case None => Stream.empty
@@ -405,7 +417,9 @@ object StateManager:
             .evalMap(_ => stateRef.get.flatMap(sessionPersistence.maybeSaveSession(_, SessionSaveTrigger.Interval)))
 
     def applyEvent(event: Event): IO[Unit] =
-      stateRef.get.flatMap { prevState =>
+      stateRef.get.flatMap { rawState =>
+        val prevState = normalizeCommandRunnerFocus(rawState)
+        val syncFocus = if prevState == rawState then IO.unit else stateRef.set(prevState)
         val handleEvent: IO[Unit] = event match
           case Undo => applyUndo(prevState)
           case Redo => applyRedo(prevState)
@@ -449,7 +463,7 @@ object StateManager:
 
             logCommandRunnerEvent >>
               applyComponentResult(result, prevState).flatMap(newState => validateAndUpdateState(newState, prevState))
-        handleEvent >> recordUndoableEdit(event, prevState) >> applyAnimationHooks(prevState)
+        syncFocus >> handleEvent >> recordUndoableEdit(event, prevState) >> applyAnimationHooks(prevState)
       }
 
     private def recordUndoableEdit(event: Event, prevState: AppState): IO[Unit] =
@@ -1016,13 +1030,23 @@ object StateManager:
             case Some((paneId, paneRect)) =>
               state.layout.editorPanes.get(paneId).flatMap(pane => pane.bufferId.flatMap(state.buffers.get)) match
                 case Some(buffer) =>
-                  val vp          = buffer.viewport
-                  val contentY    = paneRect.y + 1
-                  val bufferLine  = (vp.topLine + (click.row - contentY)).max(0)
-                  val bufferCol   = (vp.leftColumn + (click.col - paneRect.x)).max(0)
-                  val clampedLine = bufferLine.min(math.max(0, buffer.content.lineCount - 1))
-                  val lineLen     = buffer.content.getLine(clampedLine).getOrElse("").length
-                  val clampedCol  = bufferCol.min(lineLen)
+                  val vp         = buffer.viewport
+                  val contentY   = paneRect.y + 1
+                  val visualRow  = (click.row - contentY).max(0)
+                  val font       = previewFontForBuffer(buffer, state.config.fontConfig)
+                  val metrics    = CellMetrics.fromFont(font)
+                  val panelWidthPx = paneRect.width * metrics.charWidth
+                  val snapshot   = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font)
+                  val xPx        = ((click.col - paneRect.x).max(0) * metrics.charWidth).toFloat
+                  val clickedCursor = snapshot
+                    .cursorForVisualRowAndXPx(visualRow, xPx)
+                    .orElse {
+                      val bufferLine  = (vp.topLine + visualRow).max(0)
+                      val bufferCol   = (vp.leftColumn + (click.col - paneRect.x)).max(0)
+                      val clampedLine = bufferLine.min(math.max(0, buffer.content.lineCount - 1))
+                      val lineLen     = buffer.content.getLine(clampedLine).getOrElse("").length
+                      Some(CursorPosition(clampedLine, bufferCol.min(lineLen)))
+                    }
                   stateRef.update { s =>
                     s.buffers.get(buffer.id) match
                       case Some(current) =>
@@ -1030,8 +1054,9 @@ object StateManager:
                           buffers = s.buffers.updated(
                             buffer.id,
                             current.copy(
-                              cursors = List(CursorPosition(clampedLine, clampedCol)),
-                              preferredColumn = Some(clampedCol)
+                              cursors = clickedCursor.toList,
+                              preferredColumn = clickedCursor.map(_.column),
+                              preferredXPx = None
                             )
                           ),
                           focus = Focus.EditorPane(paneId),
@@ -1056,6 +1081,14 @@ object StateManager:
         case Modal.ReplaceWorkflow(_) => ModalType.ReplaceWorkflow
         case Modal.CloseWorkflow(_)   => ModalType.CloseWorkflow
         case Modal.Custom(name, _)    => ModalType.Custom(name)
+
+    private def previewFontForBuffer(
+      buffer: Buffer,
+      config: FontConfig
+    ): java.awt.Font =
+      buffer.language match
+        case Some(com.serenity.lsp.config.LanguageId.Markdown) => FontLoader.previewTextFont(config)
+        case _                                                 => FontLoader.previewCodeFont(config)
 
     private def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =
       import com.serenity.command.{AnimationMode, CommandIntent}

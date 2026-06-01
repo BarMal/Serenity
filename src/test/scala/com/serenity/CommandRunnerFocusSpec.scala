@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.{Enter, Escape, MoveDown, TabKey, ToggleCommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{Focus, SurfaceContent, SurfaceId}
+import com.serenity.state.models.{Focus, PaneId, SurfaceContent, SurfaceId}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
@@ -84,4 +84,17 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     afterFourthEscape.commandRunnerSubmenuSurface shouldBe None
     afterFourthEscape.focus should not be Focus.Surface(SurfaceId("command-runner"))
     afterFourthEscape.focus should not be Focus.Surface(SurfaceId("command-runner-submenu"))
+  }
+
+  it should "close the runner even if focus has leaked back to the editor while the runner remains visible" in {
+    val stateManager = createStateManager()
+
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    stateManager.updateState(_.copy(focus = Focus.EditorPane(PaneId(0)))).unsafeRunSync()
+
+    stateManager.applyEvent(Escape).unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.commandRunnerSurface shouldBe None
+    state.commandRunnerSubmenuSurface shouldBe None
   }

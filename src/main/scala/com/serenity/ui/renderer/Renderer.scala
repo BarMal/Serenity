@@ -1,5 +1,7 @@
 package com.serenity.ui.renderer
 
+import java.awt.Font
+
 import com.serenity.animation.ThemeInterpolator
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -10,7 +12,9 @@ case class RenderContext(
     surface: RenderSurface,
     layout: CalculatedLayout,
     cursorVisible: Boolean = true,
-    cursorColorOverride: Option[java.awt.Color] = None
+    cursorColorOverride: Option[java.awt.Color] = None,
+    font: java.awt.Font,
+    cellMetrics: CellMetrics
 )
 
 object Renderer:
@@ -41,10 +45,11 @@ object Renderer:
     val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, font, swingWin.canvas, swingWin.onImageReady)
     val viewportSize = swingWin.viewportSize
     val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
-    renderFrame(state0, cursorVisible, surface, viewportSize, layout, cursorColor)
+    renderFrame(state0, cursorVisible, surface, viewportSize, layout, font, swingWin.metrics, cursorColor)
 
   def render(state: AppState, cursorVisible: Boolean, surface: RenderSurface, viewportSize: ViewportSize): Unit =
-    render(state, cursorVisible, surface, viewportSize, None)
+    val defaultFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    render(state, cursorVisible, surface, viewportSize, defaultFont, CellMetrics.fromFont(defaultFont), None)
 
   def render(
     state: AppState,
@@ -53,9 +58,21 @@ object Renderer:
     viewportSize: ViewportSize,
     cursorColor: Option[java.awt.Color]
   ): Unit =
+    val defaultFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    render(state, cursorVisible, surface, viewportSize, defaultFont, CellMetrics.fromFont(defaultFont), cursorColor)
+
+  def render(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    font: java.awt.Font,
+    cellMetrics: CellMetrics,
+    cursorColor: Option[java.awt.Color] = None
+  ): Unit =
     val state0 = withEffectiveTheme(state)
     val layout = LayoutEngine.calculateLayout(state0, viewportSize)
-    renderFrame(state0, cursorVisible, surface, viewportSize, layout, cursorColor)
+    renderFrame(state0, cursorVisible, surface, viewportSize, layout, font, cellMetrics, cursorColor)
 
   private def renderFrame(
     state: AppState,
@@ -63,6 +80,8 @@ object Renderer:
     surface: RenderSurface,
     viewportSize: ViewportSize,
     layout: CalculatedLayout,
+    font: java.awt.Font,
+    cellMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color] = None
   ): Unit =
     surface.hideCursor()
@@ -76,10 +95,10 @@ object Renderer:
     } match
       case Some(page) =>
         renderStartPage(page, surface, viewportSize, state.theme)
-        val floatContext = RenderContext(surface, layout, cursorVisible, cursorColor)
+        val floatContext = RenderContext(surface, layout, cursorVisible, cursorColor, font, cellMetrics)
         renderFloatingPanels(state, floatContext)
       case None =>
-        val context = RenderContext(surface, layout, cursorVisible, cursorColor)
+        val context = RenderContext(surface, layout, cursorVisible, cursorColor, font, cellMetrics)
         renderSpacerColumns(context)
         renderLineNumbers(state, context)
         renderGutter(state, context)
@@ -173,10 +192,9 @@ object Renderer:
     state: AppState,
     context: RenderContext
   ): Unit =
-    val viewport    = buffer.viewport
-    val rope        = buffer.content
-    val panelWidth  = rect.width
-    val visualLines = calculateVisualLinesInViewport(rope, viewport, panelWidth)
+    val panelWidthPx = rect.width * context.cellMetrics.charWidth
+    val snapshot     = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, context.font)
+    val visualLines  = snapshot.visualLines
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
@@ -197,7 +215,7 @@ object Renderer:
               context.surface,
               screenX,
               screenY,
-              visualLine.content,
+              visualLine.text,
               state.theme,
               buffer.animations,
               state.syntaxHighlightingEnabled,
@@ -214,7 +232,7 @@ object Renderer:
               state.theme
             )
 
-            val stringEnd = visualLine.startColumn + visualLine.content.length
+            val stringEnd = visualLine.startColumn + visualLine.text.length
             val lineAnims = buffer.animations.getLineAnimations(visualLine.bufferLine)
             lineAnims
               .filter((col, cell) => col >= stringEnd && cell.currentBackground.isDefined)
@@ -227,12 +245,10 @@ object Renderer:
               }
     }
 
-  private case class VisualLine(content: String, bufferLine: Int, startColumn: Int, endColumn: Int)
-
   private def renderSelectionHighlights(
     surface: RenderSurface,
     buffer: Buffer,
-    visualLine: VisualLine,
+    visualLine: TextVisualLine,
     rect: LayoutRect,
     screenY: Int,
     theme: Theme
@@ -245,7 +261,7 @@ object Renderer:
           if screenX >= rect.x && screenX < rect.right then
             val charIndex = bufferColumn - visualLine.startColumn
             val charToRender =
-              if charIndex >= 0 && charIndex < visualLine.content.length then visualLine.content.charAt(charIndex)
+              if charIndex >= 0 && charIndex < visualLine.text.length then visualLine.text.charAt(charIndex)
               else ' '
             surface.setForegroundColor(theme.highlighted.foreground)
             surface.setBackgroundColor(theme.highlighted.background)
@@ -254,7 +270,7 @@ object Renderer:
       }
     }
 
-  private def selectionColumnsForLine(selection: Selection, visualLine: VisualLine): Option[(Int, Int)] =
+  private def selectionColumnsForLine(selection: Selection, visualLine: TextVisualLine): Option[(Int, Int)] =
     if visualLine.bufferLine < selection.start.line || visualLine.bufferLine > selection.end.line then None
     else
       val lineSelectionStart =
@@ -266,46 +282,6 @@ object Renderer:
       val overlapEnd   = math.min(lineSelectionEnd, visualLine.endColumn)
 
       Option.when(overlapStart < overlapEnd)((overlapStart, overlapEnd))
-
-  private def calculateVisualLinesInViewport(
-    rope: com.serenity.rope.Rope,
-    viewport: Viewport,
-    panelWidth: Int
-  ): List[VisualLine] =
-    def processBufferLines(bufferLine: Int, currentVisualLine: Int): List[VisualLine] =
-      if bufferLine >= rope.lineCount || currentVisualLine >= (viewport.topLine + viewport.visibleLines) then List.empty
-      else
-        val lineContent     = rope.getLine(bufferLine).getOrElse("")
-        val wrappedSegments = wrapLineToSegments(lineContent, panelWidth)
-
-        val (segmentsInViewport, nextVisualLine) =
-          wrappedSegments.foldLeft((List.empty[VisualLine], currentVisualLine)) {
-            case ((acc, visualLine), (content, startCol, endCol)) =>
-              val newVisualLine =
-                if visualLine >= viewport.topLine && visualLine < (viewport.topLine + viewport.visibleLines) then
-                  acc :+ VisualLine(content, bufferLine, startCol, endCol)
-                else acc
-              (newVisualLine, visualLine + 1)
-          }
-
-        segmentsInViewport ++ processBufferLines(bufferLine + 1, nextVisualLine)
-
-    processBufferLines(0, 0)
-
-  private def wrapLineToSegments(lineContent: String, panelWidth: Int): List[(String, Int, Int)] =
-    if lineContent.isEmpty || panelWidth <= 0 then List(("", 0, 0))
-    else
-      def buildSegments(remaining: String, currentStartColumn: Int): List[(String, Int, Int)] =
-        if remaining.isEmpty then List.empty
-        else
-          val segmentLength  = math.min(remaining.length, panelWidth)
-          val segment        = remaining.substring(0, segmentLength)
-          val endColumn      = currentStartColumn + segmentLength
-          val currentSegment = (segment, currentStartColumn, endColumn)
-
-          currentSegment :: buildSegments(remaining.substring(segmentLength), endColumn)
-
-      buildSegments(lineContent, 0)
 
   private def renderEmptyPane(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
     val message = "~ Empty ~"
@@ -378,13 +354,12 @@ object Renderer:
     theme: Theme,
     context: RenderContext
   ): Unit =
-    val viewport   = buffer.viewport
-    val panelWidth = rect.width
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, rect.width * context.cellMetrics.charWidth, context.font)
 
     buffer.cursors.foreach { cursor =>
-      calculateCursorVisualPosition(cursor, buffer.content, panelWidth, viewport) match
+      calculateCursorVisualPosition(cursor, snapshot, context.cellMetrics) match
         case Some((visualLine, visualColumn)) =>
-          val screenY = rect.y + (visualLine - viewport.topLine)
+          val screenY = rect.y + visualLine
           val screenX = rect.x + visualColumn
 
           if screenY >= rect.y && screenY < rect.bottom &&
@@ -404,23 +379,16 @@ object Renderer:
 
   private def calculateCursorVisualPosition(
     cursor: CursorPosition,
-    rope: com.serenity.rope.Rope,
-    panelWidth: Int,
-    viewport: Viewport
+    snapshot: TextLayoutSnapshot,
+    cellMetrics: CellMetrics
   ): Option[(Int, Int)] =
-    def findCursorPosition(bufferLine: Int, currentVisualLine: Int): Option[(Int, Int)] =
-      if bufferLine >= rope.lineCount then None
-      else if bufferLine == cursor.line then
-        val visualLineInBuffer = cursor.column / panelWidth
-        val visualColumnInLine = cursor.column % panelWidth
-        val totalVisualLine    = currentVisualLine + visualLineInBuffer
-        Some((totalVisualLine, visualColumnInLine))
-      else
-        val lineContent             = rope.getLine(bufferLine).getOrElse("")
-        val visualLinesInThisBuffer = math.max(1, (lineContent.length + panelWidth - 1) / panelWidth)
-        findCursorPosition(bufferLine + 1, currentVisualLine + visualLinesInThisBuffer)
-
-    findCursorPosition(0, 0)
+    snapshot.visualLines.zipWithIndex.collectFirst {
+      case (line, visualIndex)
+          if line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn =>
+        val xPx        = line.xForColumn(cursor.column).getOrElse(line.widthPx)
+        val visualCell = math.max(0, math.round(xPx / cellMetrics.charWidth.toFloat))
+        (visualIndex, visualCell)
+    }
 
   private def renderFloatingPanels(state: AppState, context: RenderContext): Unit =
     val overlays = OverlayViewModel.fromState(state, context.layout)

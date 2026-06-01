@@ -1,8 +1,11 @@
 package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 
 object EditorEventReducer:
 
@@ -115,6 +118,7 @@ object EditorEventReducer:
                     cursors = newCursor :: buffer.cursors.tail,
                     selection = None,
                     preferredColumn = Some(newCursor.column),
+                    preferredXPx = None,
                     viewport = updatedViewport
                   )
                   ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -135,7 +139,8 @@ object EditorEventReducer:
                     content = newContent,
                     isDirty = true,
                     isNewEmpty = false,
-                    preferredColumn = Some(cursor.column)
+                    preferredColumn = Some(cursor.column),
+                    preferredXPx = None
                   )
                   ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
                 else ReducerResult.noEffects(currentState)
@@ -153,6 +158,7 @@ object EditorEventReducer:
               cursors = newCursor :: buffer.cursors.tail,
               selection = None,
               preferredColumn = Some(newCursor.column),
+              preferredXPx = None,
               viewport = updatedViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -171,38 +177,49 @@ object EditorEventReducer:
               cursors = newCursor :: buffer.cursors.tail,
               selection = None,
               preferredColumn = Some(newCursor.column),
+              preferredXPx = None,
               viewport = updatedViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveUp =>
-            val viewportSize = currentState.viewportSize.getOrElse(com.serenity.ui.layout.ViewportSize(80, 24))
-            val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, viewportSize)
-            val panelWidth   = layout.editorPanelRect.width
-            val movementStart   = selectionFocusOrCursor(buffer, cursor)
+            val movementStart = selectionFocusOrCursor(buffer, cursor)
             val preferredColumn = buffer.preferredColumn.getOrElse(movementStart.column)
-            val newCursor       = moveUpVisualLine(movementStart, buffer.content, panelWidth, preferredColumn)
+            val preferredXPx = preferredVisualXPx(buffer, currentState, movementStart)
+            val newCursor = moveVerticalByLayout(
+              movementStart,
+              buffer,
+              currentState,
+              preferredXPx,
+              direction = -1
+            ).getOrElse(moveUpVisualLine(movementStart, buffer.content, effectivePanelWidth(currentState), preferredColumn))
             val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
               selection = None,
               preferredColumn = Some(preferredColumn),
+              preferredXPx = Some(preferredXPx),
               viewport = updatedViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveDown =>
-            val viewportSize = currentState.viewportSize.getOrElse(com.serenity.ui.layout.ViewportSize(80, 24))
-            val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, viewportSize)
-            val panelWidth   = layout.editorPanelRect.width
-            val movementStart   = selectionFocusOrCursor(buffer, cursor)
+            val movementStart = selectionFocusOrCursor(buffer, cursor)
             val preferredColumn = buffer.preferredColumn.getOrElse(movementStart.column)
-            val newCursor       = moveDownVisualLine(movementStart, buffer.content, panelWidth, preferredColumn)
+            val preferredXPx = preferredVisualXPx(buffer, currentState, movementStart)
+            val newCursor = moveVerticalByLayout(
+              movementStart,
+              buffer,
+              currentState,
+              preferredXPx,
+              direction = 1
+            ).getOrElse(moveDownVisualLine(movementStart, buffer.content, effectivePanelWidth(currentState), preferredColumn))
             val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
               selection = None,
               preferredColumn = Some(preferredColumn),
+              preferredXPx = Some(preferredXPx),
               viewport = updatedViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -223,6 +240,7 @@ object EditorEventReducer:
               cursors = newCursor :: buffer.cursors.tail,
               selection = None,
               preferredColumn = Some(newCursor.column),
+              preferredXPx = None,
               viewport = updatedViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -235,6 +253,7 @@ object EditorEventReducer:
               cursors = newCursor :: buffer.cursors.tail,
               selection = None,
               preferredColumn = Some(newCursor.column),
+              preferredXPx = None,
               viewport = updatedViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -248,6 +267,7 @@ object EditorEventReducer:
               cursors = List(endCursor),
               selection = Some(Selection(startCursor, endCursor)),
               preferredColumn = Some(endCursor.column),
+              preferredXPx = None,
               viewport = adjustViewportForCursor(buffer.viewport, endCursor)
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -262,6 +282,7 @@ object EditorEventReducer:
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
               preferredColumn = Some(newCursor.column),
+              preferredXPx = None,
               viewport = newViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -276,6 +297,7 @@ object EditorEventReducer:
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
               preferredColumn = Some(newCursor.column),
+              preferredXPx = None,
               viewport = newViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -296,6 +318,7 @@ object EditorEventReducer:
                 val updatedBuffer = buffer.copy(
                   cursors = List(CursorPosition(targetLine, 0)),
                   preferredColumn = Some(0),
+                  preferredXPx = None,
                   viewport = buffer.viewport.copy(topLine = newTopLine)
                 )
                 ReducerResult.noEffects(
@@ -346,6 +369,7 @@ object EditorEventReducer:
               isNewEmpty = false,
               cursors = newCursor :: buffer.cursors.tail,
               preferredColumn = Some(newCursor.column),
+              preferredXPx = None,
               viewport = adjustViewportForCursor(buffer.viewport, newCursor)
             )
             ReducerResult.noEffects(
@@ -369,6 +393,7 @@ object EditorEventReducer:
                   cursors = replacedBuffer.cursors,
                   selection = replacedBuffer.selection,
                   preferredColumn = Some(newCursor.column),
+                  preferredXPx = None,
                   viewport = adjustViewportForCursor(buffer.viewport, newCursor)
                 )
                 ReducerResult.noEffects(
@@ -531,6 +556,39 @@ object EditorEventReducer:
   private def selectionFocusOrCursor(buffer: Buffer, cursor: CursorPosition): CursorPosition =
     buffer.selection.map(_.focus).getOrElse(cursor)
 
+  private def effectivePanelWidth(currentState: AppState): Int =
+    val viewportSize = currentState.viewportSize.getOrElse(com.serenity.ui.layout.ViewportSize(80, 24))
+    val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, viewportSize)
+    layout.editorPanelRect.width
+
+  private def preferredVisualXPx(buffer: Buffer, currentState: AppState, cursor: CursorPosition): Float =
+    buffer.preferredXPx.getOrElse {
+      val font         = previewFontForBuffer(buffer, currentState.config.fontConfig)
+      val panelWidthPx = effectivePanelWidth(currentState) * CellMetrics.fromFont(font).charWidth
+      val snapshot     = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font)
+      snapshot.xPxForCursor(cursor).getOrElse(cursor.column.toFloat * CellMetrics.fromFont(font).charWidth.toFloat)
+    }
+
+  private def moveVerticalByLayout(
+    cursor: CursorPosition,
+    buffer: Buffer,
+    currentState: AppState,
+    preferredXPx: Float,
+    direction: Int
+  ): Option[CursorPosition] =
+    val font         = previewFontForBuffer(buffer, currentState.config.fontConfig)
+    val panelWidthPx = effectivePanelWidth(currentState) * CellMetrics.fromFont(font).charWidth
+    val snapshot     = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font)
+    snapshot.moveVertical(cursor, direction, preferredXPx)
+
+  private def previewFontForBuffer(
+    buffer: Buffer,
+    config: com.serenity.ui.fonts.FontLoader.FontConfig
+  ): java.awt.Font =
+    buffer.language match
+      case Some(LanguageId.Markdown) => FontLoader.previewTextFont(config)
+      case _                         => FontLoader.previewCodeFont(config)
+
   private def replaceSelectionOrInsert(buffer: Buffer, cursor: CursorPosition, text: String)(using
     balance: com.serenity.rope.Balance
   ): Buffer =
@@ -558,7 +616,8 @@ object EditorEventReducer:
       isNewEmpty = false,
       cursors = newCursor :: buffer.cursors.tail,
       selection = None,
-      preferredColumn = Some(newCursor.column)
+      preferredColumn = Some(newCursor.column),
+      preferredXPx = None
     )
 
   private def deleteSelectedRange(buffer: Buffer, selection: Selection): Buffer =
@@ -574,6 +633,7 @@ object EditorEventReducer:
       cursors = newCursor :: buffer.cursors.tail,
       selection = None,
       preferredColumn = Some(newCursor.column),
+      preferredXPx = None,
       viewport = adjustViewportForCursor(buffer.viewport, newCursor)
     )
 

@@ -121,7 +121,7 @@ object AppRuntime:
           stateManager.awaitQuit,
           stateManager.intervalSaveStream.compile.drain,
           IO.race(
-            awaitExternalQuit >> stateManager.applyEvent(com.serenity.keystroke.events.Quit),
+            awaitExternalQuit >> stateManager.forceQuit(),
             stateManager.awaitQuit
           ).void,
           LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger)
