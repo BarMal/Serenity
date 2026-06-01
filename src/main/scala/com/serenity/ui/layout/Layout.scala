@@ -7,6 +7,7 @@ case class Layout(
     activeEditorPaneId: Option[PaneId],
     paneOrder: List[PaneId] = Nil
 ):
+
   def orderedPaneIds: List[PaneId] =
     if paneOrder.nonEmpty then paneOrder
     else editorPanes.keys.toList.sortBy(_.value)

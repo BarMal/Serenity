@@ -2,7 +2,8 @@ package com.serenity
 
 import com.serenity.input.FocusedInputTranslator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
-import com.serenity.keystroke.events.{Direction, ModalNextField, ModalSubmit, NewLine, NextTab, PanelInputEvent, PeekInputEvent, PreviousTab, RunnerNextCategory, RunnerPreviousCategory, RunnerSubmit, ToggleCommandRunner}
+import com.serenity.command.CommandRunner
+import com.serenity.keystroke.events.{Direction, ModalNextField, ModalSubmit, NewLine, NextTab, PanelInputEvent, PeekInputEvent, PreviousTab, RunnerDismiss, RunnerNextCategory, RunnerPreviousCategory, RunnerSubmit, ToggleCommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
@@ -117,6 +118,29 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
     translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set.empty)) shouldBe RunnerNextCategory
     translator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set.empty)) shouldBe RunnerPreviousCategory
+  }
+
+  it should "treat submenu focus as command-runner input rather than peek input" in {
+    val runner = CommandRunner.empty
+    val submenuState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("command-runner-submenu")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner-submenu"),
+          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val translator = FocusedInputTranslator.forState(submenuState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)) shouldBe RunnerSubmit
+    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)) shouldBe RunnerDismiss
   }
 
   it should "route Ctrl+Tab and Ctrl+Shift+Tab to pane navigation regardless of focus" in {

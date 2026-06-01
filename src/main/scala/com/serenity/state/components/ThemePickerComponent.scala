@@ -18,7 +18,7 @@ class ThemePickerComponent extends TypedFocusedComponent[ModalInputEvent]:
             event match
               case ModalNavigate(Direction.Up)   => navigate(currentState, surface, pickerState, -1)
               case ModalNavigate(Direction.Down) => navigate(currentState, surface, pickerState, 1)
-              case ModalSubmit                   => ComponentResult.updateState(_ => dismissToRunner(currentState, surface))
+              case ModalSubmit => ComponentResult.updateState(_ => dismissToRunner(currentState, surface))
               case ModalDismiss =>
                 val dismissed = dismissToRunner(currentState, surface)
                 ComponentResult.reducerResult(
@@ -28,10 +28,10 @@ class ThemePickerComponent extends TypedFocusedComponent[ModalInputEvent]:
           case _ => ComponentResult.noChange
 
   private def navigate(
-      state: AppState,
-      surface: UiSurface,
-      pickerState: ThemePickerState,
-      delta: Int
+    state: AppState,
+    surface: UiSurface,
+    pickerState: ThemePickerState,
+    delta: Int
   ): ComponentResult =
     val newPicker  = pickerState.moveSelection(delta)
     val newSurface = surface.copy(content = SurfaceContent.ThemePicker(newPicker))

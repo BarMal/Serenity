@@ -1,7 +1,7 @@
 package com.serenity.state.components
 
 import com.serenity.command.{Command, CommandIntent}
-import com.serenity.keystroke.events.{Event, StartupPageEvent, StartupPageMoveDown, StartupPageMoveUp, StartupPageSubmit, StartupPageDismiss}
+import com.serenity.keystroke.events.*
 import com.serenity.state.models.{AppState, SurfaceContent}
 
 class StartupPageComponent extends TypedFocusedComponent[StartupPageEvent]:
@@ -28,10 +28,12 @@ class StartupPageComponent extends TypedFocusedComponent[StartupPageEvent]:
           case _ => ComponentResult.noChange
       case None => ComponentResult.noChange
 
-  private def updateStartPage(surfaceId: com.serenity.state.models.SurfaceId, updatedPage: com.serenity.state.models.StartupPage)(state: AppState): AppState =
+  private def updateStartPage(
+    surfaceId: com.serenity.state.models.SurfaceId,
+    updatedPage: com.serenity.state.models.StartupPage
+  )(state: AppState): AppState =
     val updatedSurfaces = state.uiSurfaces.map { surface =>
-      if surface.id == surfaceId then 
-        surface.copy(content = SurfaceContent.StartPage(updatedPage))
+      if surface.id == surfaceId then surface.copy(content = SurfaceContent.StartPage(updatedPage))
       else surface
     }
     state.copy(uiSurfaces = updatedSurfaces)
@@ -39,14 +41,14 @@ class StartupPageComponent extends TypedFocusedComponent[StartupPageEvent]:
   private def createCommandForSelection(selectedIndex: Int): ComponentResult =
     val intent = selectedIndex match
       case 0 => CommandIntent.StartupNewSession
-      case 1 => CommandIntent.StartupRestoreSession  
+      case 1 => CommandIntent.StartupRestoreSession
       case 2 => CommandIntent.StartupOpenFile
       case _ => CommandIntent.StartupNewSession // Default fallback
-    
+
     val command = selectedIndex match
       case 0 => Command.typed("startup.new-session", "Start a new session", intent)
       case 1 => Command.typed("startup.restore-session", "Restore an existing session", intent)
       case 2 => Command.typed("startup.open-file", "Open an existing file or directory", intent)
       case _ => Command.typed("startup.new-session", "Start a new session", intent)
-    
+
     ComponentResult.executeCommand(command)

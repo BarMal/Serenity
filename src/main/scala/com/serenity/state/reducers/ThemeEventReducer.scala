@@ -1,6 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.keystroke.events.{ListAvailableThemes, ReloadCurrentTheme, SwitchTheme, ThemeEvent}
+import com.serenity.keystroke.events.*
 import com.serenity.state.models.AppState
 
 object ThemeEventReducer:

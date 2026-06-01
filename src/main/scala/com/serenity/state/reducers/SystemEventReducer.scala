@@ -32,4 +32,3 @@ object SystemEventReducer:
 
       case _ =>
         ReducerResult.noEffects(state)
-

@@ -116,6 +116,24 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     state.buffers.values.exists(_.animations.hasActiveAnimations) shouldBe false
   }
 
+  it should "fade the ghost overlay out without row-staggered collapse" in {
+    val sm = createStateManager()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    advanceToVisible(sm)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    val state = sm.getCurrentState.unsafeRunSync()
+
+    val ghost    = state.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay]).get
+    val ghostAnim = state.surfaceAnimations(ghost.id).animationState
+    val animatedRows = ghostAnim.animations.keys.map(_.line).toSet.toList.sorted
+
+    val firstRowSteps = ghostAnim.getCell(0, animatedRows.head).map(_.backgroundSteps.length).getOrElse(0)
+    animatedRows.foreach { row =>
+      ghostAnim.getCell(0, row).map(_.backgroundSteps.length).getOrElse(0) shouldBe firstRowSteps
+    }
+  }
+
   it should "remove the ghost surface when Exiting animation completes" in {
     val sm = createStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
@@ -139,6 +157,40 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
     state.commandRunnerSurface shouldBe None
     state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
+  }
+
+  it should "animate the submenu preview when settings browsing opens a child panel" in {
+    val sm = createStateManager()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.applyEvent(TabKey).unsafeRunSync()
+    sm.applyEvent(TabKey).unsafeRunSync()
+    sm.applyEvent(TabKey).unsafeRunSync()
+    sm.applyEvent(TabKey).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    val submenu = state.commandRunnerSubmenuSurface.getOrElse(fail("Expected submenu preview surface"))
+
+    state.surfaceAnimations.get(submenu.id) shouldBe defined
+    state.surfaceAnimations(submenu.id).phase shouldBe SurfacePhase.Visible
+  }
+
+  it should "add a ghost overlay when the submenu preview is dismissed" in {
+    val sm = createStateManager()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.applyEvent(TabKey).unsafeRunSync()
+    sm.applyEvent(TabKey).unsafeRunSync()
+    sm.applyEvent(TabKey).unsafeRunSync()
+    sm.applyEvent(TabKey).unsafeRunSync()
+    advanceToVisible(sm)
+
+    sm.applyEvent(TabKey).unsafeRunSync()
+    val state = sm.getCurrentState.unsafeRunSync()
+
+    state.commandRunnerSubmenuSurface shouldBe None
+    state.uiSurfaces.exists {
+      case UiSurface(_, SurfaceContent.GhostOverlay(SurfaceContent.CommandPaletteSubmenu(_, _, _), _), _, _) => true
+      case _                                                                                                  => false
+    } shouldBe true
   }
 
   private def advanceToVisible(sm: StateManager): Unit =

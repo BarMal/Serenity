@@ -3,11 +3,17 @@ package com.serenity.ui.renderer
 import com.serenity.state.models.{SurfacePresentation, UiSurface}
 import com.serenity.ui.layout.*
 
+case class TextPanelRow(
+    plainText: String,
+    selected: Boolean = false
+)
+
 case class TextPanelView(
     rect: LayoutRect,
     title: String,
-    lines: List[String]
-)
+    rows: List[TextPanelRow]
+):
+  def lines: List[String] = rows.map(_.plainText)
 
 object PinnedPanelViewModel:
 
@@ -21,9 +27,15 @@ object PinnedPanelViewModel:
 
   def resolve(surface: UiSurface, rect: LayoutRect): TextPanelView =
     val resolved = SurfaceContentResolver.resolve(surface.content, rect, SurfaceRenderMode.Pinned)
-    val lines = resolved.header.toList.map(_.plainText) ++ resolved.rows.map(_.plainText) ++ resolved.footer.toList.map(_.plainText)
+    val rows = resolved.header.toList.map(toPanelRow) ++ resolved.rows.map(toPanelRow) ++ resolved.footer.toList.map(toPanelRow)
     TextPanelView(
       rect = rect,
       title = resolved.title.getOrElse(""),
-      lines = lines
+      rows = rows
+    )
+
+  private def toPanelRow(row: OverlayRow): TextPanelRow =
+    TextPanelRow(
+      plainText = row.plainText,
+      selected = row.selected
     )

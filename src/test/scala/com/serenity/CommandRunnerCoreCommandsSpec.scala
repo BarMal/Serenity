@@ -8,6 +8,7 @@ import com.serenity.io.FileUtils
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{BufferId, CloseScope, FileWorkflowMode, Focus, Modal, SurfaceContent}
+import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -284,4 +285,106 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
       case _                                                           => None
     ).map(_.scope) shouldBe Some(CloseScope.Quit)
+  }
+
+  it should "pin the explorer panel from the command runner" in {
+    val stateManager      = createStateManager()
+    val currentDirectory  = FileUtils.getCurrentDirectory.unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "pin-explorer", "pin-explorer")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.commandRunnerSurface shouldBe None
+    val pinnedSurface = updatedState.pinnedSurfaces.collectFirst {
+      case surface @ com.serenity.state.models.UiSurface(
+            _,
+            SurfaceContent.DirectoryTree(tree, _),
+            com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Left, _),
+            _
+          ) => surface -> tree.rootPath
+    }.getOrElse(fail("Expected pinned explorer surface"))
+
+    pinnedSurface._2 shouldBe currentDirectory
+  }
+
+  it should "pin the outline panel from the command runner" in {
+    val stateManager = createStateManager()
+
+    executeCommandThroughRunner(stateManager, "pin-outline", "pin-outline")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.pinnedSurfaces.exists {
+      _.presentation == com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Right, 30)
+    } shouldBe true
+    updatedState.pinnedSurfaces.exists(_.content == SurfaceContent.Outline(Nil)) shouldBe true
+  }
+
+  it should "pin the diagnostics panel from the command runner" in {
+    val stateManager = createStateManager()
+
+    executeCommandThroughRunner(stateManager, "pin-diagnostics", "pin-diagnostics")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.pinnedSurfaces.exists {
+      _.presentation == com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Bottom, 10)
+    } shouldBe true
+    updatedState.pinnedSurfaces.exists(_.content == SurfaceContent.Diagnostics(Nil)) shouldBe true
+  }
+
+  it should "focus the left panel from the command runner" in {
+    val stateManager = createStateManager()
+    stateManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync().toString, List("src")).unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "focus-left-panel", "focus-left-panel")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.focus shouldBe a[Focus.Surface]
+    val focusedId = updatedState.focus match
+      case Focus.Surface(id) => id
+      case other             => fail(s"Expected focus on a surface, got $other")
+    updatedState.pinnedSurfaces.map(_.id) should contain(focusedId)
+  }
+
+  it should "unpin the left panel from the command runner" in {
+    val stateManager = createStateManager()
+    stateManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync().toString, List("src")).unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "unpin-left-panel", "unpin-left-panel")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.pinnedSurfaces.exists {
+      _.presentation match
+        case com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Left, _) => true
+        case _                                                                            => false
+    } shouldBe false
+  }
+
+  it should "increase font size from the command runner" in {
+    val stateManager = createStateManager()
+    val initialSize  = stateManager.getCurrentState.unsafeRunSync().config.fontConfig.fontSize
+
+    executeCommandThroughRunner(stateManager, "increase-font-size", "increase-font-size")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.config.fontConfig.fontSize shouldBe (initialSize + 1.0f)
+  }
+
+  it should "decrease font size from the command runner" in {
+    val stateManager = createStateManager()
+    val initialSize  = stateManager.getCurrentState.unsafeRunSync().config.fontConfig.fontSize
+
+    executeCommandThroughRunner(stateManager, "decrease-font-size", "decrease-font-size")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.config.fontConfig.fontSize shouldBe (initialSize - 1.0f)
+  }
+
+  it should "toggle ligatures from the command runner" in {
+    val stateManager        = createStateManager()
+    val initialLigaturesOn  = stateManager.getCurrentState.unsafeRunSync().config.fontConfig.enableLigatures
+
+    executeCommandThroughRunner(stateManager, "toggle-ligatures", "toggle-ligatures")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.config.fontConfig.enableLigatures shouldBe !initialLigaturesOn
   }

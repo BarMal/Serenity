@@ -1,7 +1,7 @@
 package com.serenity.session
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths, StandardOpenOption}
+import java.nio.file.*
 import java.util.UUID
 
 import cats.effect.IO
@@ -10,9 +10,8 @@ import com.serenity.state.models.AppState
 import com.serenity.ui.theme.config.AppThemeManager
 import org.typelevel.log4cats.Logger
 
-/**
- * Manages session persistence - saving and loading workspace state.
- */
+/** Manages session persistence - saving and loading workspace state.
+  */
 class SessionManager(
     sessionRoot: Path,
     themeManager: AppThemeManager,
@@ -20,39 +19,39 @@ class SessionManager(
     policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()
 ):
 
-  private val indexFile: Path = sessionRoot.resolve("session-index.json")
+  private val indexFile: Path         = sessionRoot.resolve("session-index.json")
   private val sessionsDirectory: Path = sessionRoot.resolve("sessions")
-  private val defaultSessionId = SessionId("current")
-  private val defaultSessionName = "Last Session"
-  private val defaultSessionFileName = "session.json"
+  private val defaultSessionId        = SessionId("current")
+  private val defaultSessionName      = "Last Session"
+  private val defaultSessionFileName  = "session.json"
 
-  /**
-   * Save the current app state to the current session, creating one if needed.
-   */
+  /** Save the current app state to the current session, creating one if needed.
+    */
   def saveSession(appState: AppState): IO[Unit] =
     for
-      now <- currentTimeMillis()
+      now   <- currentTimeMillis()
       index <- readIndex()
       sessionId = index.currentSessionId.getOrElse(defaultSessionId)
-      metadata = index.sessions.find(_.id == sessionId).getOrElse(
-        SessionMetadata(
-          id = defaultSessionId,
-          displayName = defaultSessionName,
-          sessionFileName = defaultSessionFileName,
-          createdAtEpochMillis = now,
-          updatedAtEpochMillis = now
+      metadata = index.sessions
+        .find(_.id == sessionId)
+        .getOrElse(
+          SessionMetadata(
+            id = defaultSessionId,
+            displayName = defaultSessionName,
+            sessionFileName = defaultSessionFileName,
+            createdAtEpochMillis = now,
+            updatedAtEpochMillis = now
+          )
         )
-      )
       _ <- writeSessionFile(metadata.sessionFileName, appState)
       updatedMetadata = metadata.copy(updatedAtEpochMillis = now)
-      updatedIndex = upsertSession(index, updatedMetadata).copy(currentSessionId = Some(updatedMetadata.id))
+      updatedIndex    = upsertSession(index, updatedMetadata).copy(currentSessionId = Some(updatedMetadata.id))
       _ <- writeIndex(updatedIndex)
       _ <- logger.info(s"[SESSION] Session saved successfully (${updatedMetadata.displayName})")
     yield ()
 
-  /**
-   * Save the current app state as a named session and make it current.
-   */
+  /** Save the current app state as a named session and make it current.
+    */
   def saveSessionAs(displayName: String, appState: AppState): IO[SessionId] =
     for
       now <- currentTimeMillis()
@@ -66,7 +65,7 @@ class SessionManager(
         lastOpenedAtEpochMillis = Some(now)
       )
       index <- readIndex()
-      _ <- writeSessionFile(metadata.sessionFileName, appState)
+      _     <- writeSessionFile(metadata.sessionFileName, appState)
       withNew = upsertSession(index, metadata)
       pruned <- pruneHistory(withNew)
       updatedIndex = pruned.copy(currentSessionId = Some(sessionId))
@@ -74,9 +73,8 @@ class SessionManager(
       _ <- logger.info(s"[SESSION] Named session saved (${metadata.displayName})")
     yield sessionId
 
-  /**
-   * Load the current session, if one exists.
-   */
+  /** Load the current session, if one exists.
+    */
   def loadSession()(using com.serenity.rope.Balance): IO[Option[AppState]] =
     readIndex().flatMap {
       _.currentSessionId match
@@ -85,9 +83,8 @@ class SessionManager(
           logger.debug("[SESSION] No current session selected").as(None)
     }
 
-  /**
-   * Load a session by id and mark it current.
-   */
+  /** Load a session by id and mark it current.
+    */
   def loadSession(sessionId: SessionId)(using com.serenity.rope.Balance): IO[Option[AppState]] =
     readIndex().flatMap { index =>
       index.sessions.find(_.id == sessionId) match
@@ -108,27 +105,24 @@ class SessionManager(
           logger.debug(s"[SESSION] No session metadata found for ${sessionId.value}").as(None)
     }
 
-  /**
-   * List saved sessions in index order.
-   */
+  /** List saved sessions in index order.
+    */
   def listSessions(): IO[List[SessionMetadata]] =
     readIndex().map(_.sessions)
 
-  /**
-   * Rename a saved session.
-   */
+  /** Rename a saved session.
+    */
   def renameSession(sessionId: SessionId, newDisplayName: String): IO[Unit] =
     for
-      now <- currentTimeMillis()
+      now   <- currentTimeMillis()
       index <- readIndex()
       updatedIndex = index.rename(sessionId, newDisplayName, now)
       _ <- writeIndex(updatedIndex)
       _ <- logger.info(s"[SESSION] Session renamed to '$newDisplayName'")
     yield ()
 
-  /**
-   * Delete a saved session by id.
-   */
+  /** Delete a saved session by id.
+    */
   def deleteSession(sessionId: SessionId): IO[Unit] =
     for
       index <- readIndex()
@@ -138,20 +132,18 @@ class SessionManager(
       _ <- logger.info(s"[SESSION] Session deleted (${sessionId.value})")
     yield ()
 
-  /**
-   * Check if the current session exists.
-   */
+  /** Check if the current session exists.
+    */
   def sessionExists: IO[Boolean] =
     readIndex().map { index =>
-        index.currentSessionId
-          .flatMap(sessionId => index.sessions.find(_.id == sessionId))
-          .map(metadata => sessionsDirectory.resolve(metadata.sessionFileName))
-          .exists(path => Files.exists(path))
+      index.currentSessionId
+        .flatMap(sessionId => index.sessions.find(_.id == sessionId))
+        .map(metadata => sessionsDirectory.resolve(metadata.sessionFileName))
+        .exists(path => Files.exists(path))
     }
 
-  /**
-   * Delete the current session.
-   */
+  /** Delete the current session.
+    */
   def clearSession(): IO[Unit] =
     readIndex().flatMap {
       _.currentSessionId match
@@ -161,14 +153,14 @@ class SessionManager(
 
   private def loadSessionFile(sessionFileName: String)(using com.serenity.rope.Balance): IO[Option[AppState]] =
     val sessionFile = sessionsDirectory.resolve(sessionFileName)
-    if !Files.exists(sessionFile) then
-      logger.debug(s"[SESSION] No session file found at ${sessionFile}").as(None)
+    if !Files.exists(sessionFile) then logger.debug(s"[SESSION] No session file found at $sessionFile").as(None)
     else
       for
-        _ <- logger.debug(s"[SESSION] Loading session from ${sessionFile}")
-        jsonString <- readUtf8(sessionFile)
+        _            <- logger.debug(s"[SESSION] Loading session from $sessionFile")
+        jsonString   <- readUtf8(sessionFile)
         sessionState <- IO.fromEither(_root_.io.circe.parser.decode[SessionState](jsonString))
-        theme <- themeManager.initializeWithTheme(sessionState.themeName)
+        theme <- themeManager
+          .initializeWithTheme(sessionState.themeName)
           .handleErrorWith(_ =>
             logger.warn(s"[SESSION] Theme '${sessionState.themeName}' not found, using default") >>
               themeManager.initializeWithTheme("dark")
@@ -178,15 +170,14 @@ class SessionManager(
       yield Some(appState)
 
   private def readIndex(): IO[SessionIndex] =
-    if !Files.exists(indexFile) then
-      IO.pure(SessionIndex.empty)
+    if !Files.exists(indexFile) then IO.pure(SessionIndex.empty)
     else
-      readUtf8(indexFile).flatMap { jsonString =>
-        IO.fromEither(_root_.io.circe.parser.decode[SessionIndex](jsonString))
-      }.handleErrorWith { error =>
-        logger.error(error)(s"[SESSION] Failed to read session index at ${indexFile}") >>
-          IO.pure(SessionIndex.empty)
-      }
+      readUtf8(indexFile)
+        .flatMap(jsonString => IO.fromEither(_root_.io.circe.parser.decode[SessionIndex](jsonString)))
+        .handleErrorWith { error =>
+          logger.error(error)(s"[SESSION] Failed to read session index at $indexFile") >>
+            IO.pure(SessionIndex.empty)
+        }
 
   private def writeIndex(index: SessionIndex): IO[Unit] =
     writeUtf8(indexFile, _root_.io.circe.syntax.EncoderOps(index).asJson.spaces2)
@@ -202,9 +193,7 @@ class SessionManager(
     val sessionFile = sessionsDirectory.resolve(sessionFileName)
     IO.blocking {
       if Files.exists(sessionFile) then Files.delete(sessionFile)
-    }.handleErrorWith { error =>
-      logger.error(error)(s"[SESSION] Failed to delete session file ${sessionFile}")
-    }
+    }.handleErrorWith(error => logger.error(error)(s"[SESSION] Failed to delete session file $sessionFile"))
 
   private def writeUtf8(path: Path, value: String): IO[Unit] =
     IO.blocking {
@@ -228,7 +217,7 @@ class SessionManager(
 
   private def pruneHistory(index: SessionIndex): IO[SessionIndex] =
     val namedSessions = index.sessions.filterNot(_.id == defaultSessionId)
-    val excess = namedSessions.size - policy.maxSessionHistory
+    val excess        = namedSessions.size - policy.maxSessionHistory
     if excess <= 0 then IO.pure(index)
     else
       val toPrune = namedSessions.sortBy(_.updatedAtEpochMillis).take(excess)
@@ -245,28 +234,33 @@ class SessionManager(
 
 object SessionManager:
 
-  /**
-   * Create a SessionManager with the default session root directory.
-   */
-  def create(themeManager: AppThemeManager, logger: Logger[IO], policy: SessionPolicy = SessionPolicy()): SessionManager =
+  /** Create a SessionManager with the default session root directory.
+    */
+  def create(
+    themeManager: AppThemeManager,
+    logger: Logger[IO],
+    policy: SessionPolicy = SessionPolicy()
+  ): SessionManager =
     new SessionManager(defaultSessionRoot(), themeManager, logger, policy)
 
-  /**
-   * Create a SessionManager with a custom session root directory.
-   */
-  def create(sessionRoot: Path, themeManager: AppThemeManager, logger: Logger[IO], policy: SessionPolicy): SessionManager =
+  /** Create a SessionManager with a custom session root directory.
+    */
+  def create(
+    sessionRoot: Path,
+    themeManager: AppThemeManager,
+    logger: Logger[IO],
+    policy: SessionPolicy
+  ): SessionManager =
     new SessionManager(sessionRoot, themeManager, logger, policy)
 
-  /**
-   * Get the default session root directory.
-   */
+  /** Get the default session root directory.
+    */
   def defaultSessionRoot(): Path =
     val userHome = System.getProperty("user.home")
     Paths.get(userHome, ".serenity")
 
-  /**
-   * Session persistence policy configuration.
-   */
+  /** Session persistence policy configuration.
+    */
   case class SessionPolicy(
       saveOnFileChange: Boolean = true,
       saveOnAppClose: Boolean = true,
@@ -275,48 +269,41 @@ object SessionManager:
       maxSessionHistory: Int = 5
   )
 
-/**
- * Higher-level session operations.
- */
+/** Higher-level session operations.
+  */
 trait SessionOperations:
   def saveSession(appState: AppState): IO[Unit]
   def loadSession()(using com.serenity.rope.Balance): IO[Option[AppState]]
   def sessionExists: IO[Boolean]
   def clearSession(): IO[Unit]
 
-/**
- * Session persistence integration for StateManager.
- */
+/** Session persistence integration for StateManager.
+  */
 class SessionPersistence(
     sessionManager: SessionManager,
     policy: SessionManager.SessionPolicy,
     logger: Logger[IO]
 ):
 
-  /**
-   * Trigger session save based on policy.
-   */
+  /** Trigger session save based on policy.
+    */
   def maybeSaveSession(appState: AppState, trigger: SessionSaveTrigger): IO[Unit] =
     val shouldSave = trigger match
       case SessionSaveTrigger.FileChange => policy.saveOnFileChange
-      case SessionSaveTrigger.AppClose => policy.saveOnAppClose
-      case SessionSaveTrigger.Manual => true
-      case SessionSaveTrigger.Interval => policy.saveInterval.isDefined
+      case SessionSaveTrigger.AppClose   => policy.saveOnAppClose
+      case SessionSaveTrigger.Manual     => true
+      case SessionSaveTrigger.Interval   => policy.saveInterval.isDefined
 
-    if shouldSave then
-      sessionManager.saveSession(appState)
-    else
-      IO.unit
+    if shouldSave then sessionManager.saveSession(appState)
+    else IO.unit
 
-  /**
-   * Auto-save session when buffers change.
-   */
+  /** Auto-save session when buffers change.
+    */
   def onBufferChange(appState: AppState): IO[Unit] =
     maybeSaveSession(appState, SessionSaveTrigger.FileChange)
 
-  /**
-   * Save session on application close.
-   */
+  /** Save session on application close.
+    */
   def onAppClose(appState: AppState): IO[Unit] =
     maybeSaveSession(appState, SessionSaveTrigger.AppClose)
 

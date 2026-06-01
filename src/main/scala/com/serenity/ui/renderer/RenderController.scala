@@ -7,9 +7,9 @@ import com.serenity.ui.layout.ViewportSize
 
 object RenderController:
 
-  /** Apply a detected viewport resize to state and invoke onResized. Separating the backend query from this
-    * method makes the logic unit-testable: callers pass the already-extracted Option[ViewportSize] rather than the
-    * backend handle itself.
+  /** Apply a detected viewport resize to state and invoke onResized. Separating the backend query from this method
+    * makes the logic unit-testable: callers pass the already-extracted Option[ViewportSize] rather than the backend
+    * handle itself.
     */
   def handleResize(
     newSize: Option[ViewportSize],

@@ -3,9 +3,19 @@ package com.serenity.config
 import com.serenity.animation.AnimationConfig
 import com.serenity.ui.fonts.FontLoader.FontConfig
 
+enum BackgroundStyle:
+  case Solid
+  case Transparent
+  case Frosted
+  case GlassLike
+
 enum CursorMode:
   case Blink
   case Breathe
+
+enum WindowChromeMode:
+  case Native
+  case Custom
 
 /** Global application configuration */
 case class AppConfig(
@@ -16,7 +26,9 @@ case class AppConfig(
     showLineNumbers: Boolean = true,
     showGutter: Boolean = true,
     blurRadius: Float = 0.0f,
-    cursorMode: CursorMode = CursorMode.Blink
+    backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
+    cursorMode: CursorMode = CursorMode.Blink,
+    windowChromeMode: WindowChromeMode = WindowChromeMode.Native
 ):
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
@@ -49,8 +61,14 @@ case class AppConfig(
   def withBlurRadius(r: Float): AppConfig =
     copy(blurRadius = r.max(0.0f).min(1.0f))
 
+  def withBackgroundStyle(style: BackgroundStyle): AppConfig =
+    copy(backgroundStyle = style)
+
   def withCursorMode(mode: CursorMode): AppConfig =
     copy(cursorMode = mode)
+
+  def withWindowChromeMode(mode: WindowChromeMode): AppConfig =
+    copy(windowChromeMode = mode)
 
 object AppConfig:
 
@@ -58,7 +76,8 @@ object AppConfig:
   val default: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.smooth,
     syntaxHighlightingEnabled = false,
-    blurRadius = 0.3f
+    blurRadius = 0.3f,
+    backgroundStyle = BackgroundStyle.Frosted
   )
 
   /** Test configuration with visible animations enabled */

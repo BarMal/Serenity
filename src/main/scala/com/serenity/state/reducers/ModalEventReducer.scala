@@ -9,18 +9,19 @@ object ModalEventReducer:
     Reducer.instance((event, state) => reduce(modalType, event, state))
 
   def reduce(modalType: ModalType, event: Event, currentState: AppState): ReducerResult =
-    ModalInputEvent.fromEvent(event)
+    ModalInputEvent
+      .fromEvent(event)
       .map(reduce(modalType, _, currentState))
       .getOrElse(ReducerResult.noEffects(currentState))
 
   def reduce(modalType: ModalType, event: ModalInputEvent, currentState: AppState): ReducerResult =
     modalType match
-      case ModalType.GotoLine => reduceGotoLine(event, currentState)
-      case ModalType.Find     => reduceFind(event, currentState)
-      case ModalType.FileWorkflow => reduceFileWorkflow(event, currentState)
+      case ModalType.GotoLine        => reduceGotoLine(event, currentState)
+      case ModalType.Find            => reduceFind(event, currentState)
+      case ModalType.FileWorkflow    => reduceFileWorkflow(event, currentState)
       case ModalType.ReplaceWorkflow => reduceReplaceWorkflow(event, currentState)
-      case ModalType.CloseWorkflow => reduceCloseWorkflow(event, currentState)
-      case ModalType.Custom(_) => ReducerResult.noEffects(currentState)
+      case ModalType.CloseWorkflow   => reduceCloseWorkflow(event, currentState)
+      case ModalType.Custom(_)       => ReducerResult.noEffects(currentState)
 
   private def reduceGotoLine(event: ModalInputEvent, currentState: AppState): ReducerResult =
     event match
@@ -80,8 +81,7 @@ object ModalEventReducer:
             if resultLines.nonEmpty then
               val findState = FindState(query, resultLines, 0)
               ReducerResult.noEffects(applyFindResult(currentState, findState, resultLines.head))
-            else
-              ReducerResult.noEffects(dismissToPane(currentState))
+            else ReducerResult.noEffects(dismissToPane(currentState))
           case _ =>
             ReducerResult.noEffects(dismissToPane(currentState))
       case _ =>
@@ -111,6 +111,11 @@ object ModalEventReducer:
             ReducerResult.noEffects(currentState)
       case ModalNextField =>
         currentModal(currentState) match
+          case Some((surface, Modal.FileWorkflow(workflow))) if workflow.suggestions.nonEmpty =>
+            ReducerResult.withEffect(
+              updateModal(currentState, surface, Modal.FileWorkflow(workflow.applySelectedSuggestion)),
+              AppEffect.RefreshFileWorkflow(surface.id)
+            )
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
               updateModal(currentState, surface, Modal.FileWorkflow(workflow.switchField(1))),
@@ -141,11 +146,6 @@ object ModalEventReducer:
             ReducerResult.noEffects(currentState)
       case ModalSubmit =>
         currentModal(currentState) match
-          case Some((surface, Modal.FileWorkflow(workflow))) if workflow.suggestions.nonEmpty && workflow.activeField == FileWorkflowField.Path =>
-            ReducerResult.withEffect(
-              updateModal(currentState, surface, Modal.FileWorkflow(workflow.applySelectedSuggestion)),
-              AppEffect.RefreshFileWorkflow(surface.id)
-            )
           case Some((surface, Modal.FileWorkflow(_))) =>
             ReducerResult.withEffect(currentState, AppEffect.SubmitFileWorkflow(surface.id))
           case _ =>
@@ -236,9 +236,7 @@ object ModalEventReducer:
 
   private def cancelCloseWorkflow(state: AppState): AppState =
     dismissToPane(
-      state.copy(actionStack = state.actionStack.filter {
-        case AppAction.CloseWorkflow(_) => false
-      })
+      state.copy(actionStack = state.actionStack.filter { case AppAction.CloseWorkflow(_) => false })
     )
 
   private def jumpToLine(state: AppState, targetLine: Int): AppState =

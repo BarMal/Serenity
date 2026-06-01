@@ -12,6 +12,15 @@ case class BufferId(value: Int)
 object BufferId:
   given Order[BufferId] = Order.by(_.value)
 
+case class Selection(anchor: CursorPosition, focus: CursorPosition):
+
+  def start: CursorPosition =
+    if anchor.line < focus.line || (anchor.line == focus.line && anchor.column <= focus.column) then anchor
+    else focus
+
+  def end: CursorPosition =
+    if start == anchor then focus else anchor
+
 case class Buffer(
     id: BufferId,
     content: Rope,
@@ -21,6 +30,8 @@ case class Buffer(
     isNewEmpty: Boolean = false,
     animations: AnimationState = AnimationState.empty,
     cursors: List[CursorPosition] = List(CursorPosition(0, 0)),
+    selection: Option[Selection] = None,
+    preferredColumn: Option[Int] = None,
     viewport: Viewport = Viewport.default
 )
 

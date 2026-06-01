@@ -2,18 +2,17 @@ package com.serenity.app
 
 import cats.effect.IO
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{AppState, Focus, StartupPage, SurfaceContent, SurfaceId, SurfacePlacement, SurfacePresentation, UiSurface}
+import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 
 object AppStartup:
 
-  def createStartPage(sessionExists: Boolean): StartupPage = 
-    val statusMessage = if sessionExists then 
-      None 
-    else 
-      Some("No previous session found")
-      
+  def createStartPage(sessionExists: Boolean): StartupPage =
+    val statusMessage =
+      if sessionExists then None
+      else Some("No previous session found")
+
     StartupPage(
       title = "What would you like to do?",
       options = List(
@@ -32,7 +31,7 @@ object AppStartup:
     for
       sessionExists <- stateManager.sessionExists
       startPage = createStartPage(sessionExists)
-    yield 
+    yield
       val startPageSurfaceId = SurfaceId("surface-0")
       AppState.empty.copy(
         focus = Focus.Surface(startPageSurfaceId),

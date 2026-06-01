@@ -84,8 +84,12 @@ class UiSurfaceSpec extends AnyFlatSpec with Matchers:
       ),
       UiSurface(
         SurfaceId("pinned"),
-        SurfaceContent.Diagnostics(
-          List(Diagnostic("Unused import", DiagnosticSeverity.Warning, Location(2, 1)))
+        SurfaceContent.DirectoryTree(
+          DirectoryTreeData(
+            root,
+            entries = Map(root -> List(DirEntry(root.resolve("src"), "src", isDirectory = true)))
+          ),
+          Some(root.resolve("src"))
         ),
         SurfacePresentation.Pinned(PanelPosition.Bottom, 8)
       )
@@ -95,5 +99,12 @@ class UiSurfaceSpec extends AnyFlatSpec with Matchers:
 
     state.floatingSurfaces.map(_.id) shouldBe List(SurfaceId("peek"))
     state.pinnedSurfaces.map(_.id) shouldBe List(SurfaceId("pinned"))
+    state.pinnedSurfaces.head.content shouldBe SurfaceContent.DirectoryTree(
+      DirectoryTreeData(
+        root,
+        entries = Map(root -> List(DirEntry(root.resolve("src"), "src", isDirectory = true)))
+      ),
+      Some(root.resolve("src"))
+    )
   }
 end UiSurfaceSpec

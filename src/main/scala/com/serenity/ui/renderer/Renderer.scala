@@ -22,10 +22,21 @@ object Renderer:
       case Some(t) =>
         state.copy(theme = ThemeInterpolator.blend(t.previousTheme, state.theme, t.progress))
 
-  def render(state: AppState, cursorVisible: Boolean, swingWin: com.serenity.ui.terminal.SwingWindow, font: java.awt.Font): Unit =
+  def render(
+    state: AppState,
+    cursorVisible: Boolean,
+    swingWin: com.serenity.ui.terminal.SwingWindow,
+    font: java.awt.Font
+  ): Unit =
     render(state, cursorVisible, swingWin, font, None)
 
-  def render(state: AppState, cursorVisible: Boolean, swingWin: com.serenity.ui.terminal.SwingWindow, font: java.awt.Font, cursorColor: Option[java.awt.Color]): Unit =
+  def render(
+    state: AppState,
+    cursorVisible: Boolean,
+    swingWin: com.serenity.ui.terminal.SwingWindow,
+    font: java.awt.Font,
+    cursorColor: Option[java.awt.Color]
+  ): Unit =
     val state0       = withEffectiveTheme(state)
     val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, font, swingWin.canvas, swingWin.onImageReady)
     val viewportSize = swingWin.viewportSize
@@ -35,7 +46,13 @@ object Renderer:
   def render(state: AppState, cursorVisible: Boolean, surface: RenderSurface, viewportSize: ViewportSize): Unit =
     render(state, cursorVisible, surface, viewportSize, None)
 
-  def render(state: AppState, cursorVisible: Boolean, surface: RenderSurface, viewportSize: ViewportSize, cursorColor: Option[java.awt.Color]): Unit =
+  def render(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    cursorColor: Option[java.awt.Color]
+  ): Unit =
     val state0 = withEffectiveTheme(state)
     val layout = LayoutEngine.calculateLayout(state0, viewportSize)
     renderFrame(state0, cursorVisible, surface, viewportSize, layout, cursorColor)
@@ -188,6 +205,15 @@ object Renderer:
               bufferStartColumn = visualLine.startColumn
             )
 
+            renderSelectionHighlights(
+              context.surface,
+              buffer,
+              visualLine,
+              rect,
+              screenY,
+              state.theme
+            )
+
             val stringEnd = visualLine.startColumn + visualLine.content.length
             val lineAnims = buffer.animations.getLineAnimations(visualLine.bufferLine)
             lineAnims
@@ -202,6 +228,44 @@ object Renderer:
     }
 
   private case class VisualLine(content: String, bufferLine: Int, startColumn: Int, endColumn: Int)
+
+  private def renderSelectionHighlights(
+    surface: RenderSurface,
+    buffer: Buffer,
+    visualLine: VisualLine,
+    rect: LayoutRect,
+    screenY: Int,
+    theme: Theme
+  ): Unit =
+    buffer.selection.foreach { selection =>
+      selectionColumnsForLine(selection, visualLine).foreach { case (selectionStart, selectionEnd) =>
+        (selectionStart until selectionEnd).foreach { bufferColumn =>
+          val relativeColumn = bufferColumn - visualLine.startColumn
+          val screenX        = rect.x + relativeColumn
+          if screenX >= rect.x && screenX < rect.right then
+            val charIndex = bufferColumn - visualLine.startColumn
+            val charToRender =
+              if charIndex >= 0 && charIndex < visualLine.content.length then visualLine.content.charAt(charIndex)
+              else ' '
+            surface.setForegroundColor(theme.highlighted.foreground)
+            surface.setBackgroundColor(theme.highlighted.background)
+            CharacterRenderer.renderChar(surface, screenX, screenY, charToRender)
+        }
+      }
+    }
+
+  private def selectionColumnsForLine(selection: Selection, visualLine: VisualLine): Option[(Int, Int)] =
+    if visualLine.bufferLine < selection.start.line || visualLine.bufferLine > selection.end.line then None
+    else
+      val lineSelectionStart =
+        if visualLine.bufferLine == selection.start.line then selection.start.column else visualLine.startColumn
+      val lineSelectionEnd =
+        if visualLine.bufferLine == selection.end.line then selection.end.column else visualLine.endColumn
+
+      val overlapStart = math.max(lineSelectionStart, visualLine.startColumn)
+      val overlapEnd   = math.min(lineSelectionEnd, visualLine.endColumn)
+
+      Option.when(overlapStart < overlapEnd)((overlapStart, overlapEnd))
 
   private def calculateVisualLinesInViewport(
     rope: com.serenity.rope.Rope,
@@ -287,24 +351,25 @@ object Renderer:
     val optionStartIndex = titleLines
     val optionEndIndex   = titleLines + page.options.size - 1
 
-    lines.zipWithIndex.foreach { case (line, lineIndex) =>
-      val y = startY + lineIndex
-      val x = math.max(0, (viewportSize.width - line.length) / 2)
+    lines.zipWithIndex.foreach {
+      case (line, lineIndex) =>
+        val y = startY + lineIndex
+        val x = math.max(0, (viewportSize.width - line.length) / 2)
 
-      if y >= 0 && y < viewportSize.height then
-        val isOption    = lineIndex >= optionStartIndex && lineIndex <= optionEndIndex
-        val optionIndex = lineIndex - optionStartIndex
-        val isSelected  = isOption && optionIndex == page.selectedIndex
+        if y >= 0 && y < viewportSize.height then
+          val isOption    = lineIndex >= optionStartIndex && lineIndex <= optionEndIndex
+          val optionIndex = lineIndex - optionStartIndex
+          val isSelected  = isOption && optionIndex == page.selectedIndex
 
-        if isSelected then
-          surface.setForegroundColor(theme.highlighted.foreground)
-          surface.setBackgroundColor(theme.highlighted.background)
-          CharacterRenderer.renderStringPlain(surface, 0, y, " " * viewportSize.width)
-          CharacterRenderer.renderString(surface, x, y, line)
-        else
-          surface.setForegroundColor(theme.placeholder)
-          surface.setBackgroundColor(theme.background)
-          CharacterRenderer.renderString(surface, x, y, line)
+          if isSelected then
+            surface.setForegroundColor(theme.highlighted.foreground)
+            surface.setBackgroundColor(theme.highlighted.background)
+            CharacterRenderer.renderStringPlain(surface, 0, y, " " * viewportSize.width)
+            CharacterRenderer.renderString(surface, x, y, line)
+          else
+            surface.setForegroundColor(theme.placeholder)
+            surface.setBackgroundColor(theme.background)
+            CharacterRenderer.renderString(surface, x, y, line)
     }
 
   private def renderCursors(
@@ -326,13 +391,14 @@ object Renderer:
               screenX >= rect.x && screenX < rect.right &&
               screenY >= 0 && screenY < context.surface.viewportHeight &&
               screenX >= 0 && screenX < context.surface.viewportWidth
-          then if context.cursorVisible then
-            val effectiveCursorColor = context.cursorColorOverride.getOrElse(theme.cursor)
-            context.surface.setBackgroundColor(effectiveCursorColor)
-            context.surface.setForegroundColor(theme.background)
-            CharacterRenderer.renderChar(context.surface, screenX, screenY, ' ')
-            context.surface.setBackgroundColor(theme.background)
-            context.surface.setForegroundColor(theme.foreground)
+          then
+            if context.cursorVisible then
+              val effectiveCursorColor = context.cursorColorOverride.getOrElse(theme.cursor)
+              context.surface.setBackgroundColor(effectiveCursorColor)
+              context.surface.setForegroundColor(theme.background)
+              CharacterRenderer.renderChar(context.surface, screenX, screenY, ' ')
+              context.surface.setBackgroundColor(theme.background)
+              context.surface.setForegroundColor(theme.foreground)
         case None => ()
     }
 
@@ -361,25 +427,48 @@ object Renderer:
 
     overlays.aboveCursor.foreach { overlay =>
       logger.info(s"[OVERLAY RENDERED] placement=AboveCursor rect=${overlay.rect} title=${overlay.title.getOrElse("")}")
-      context.surface.blurRegion(overlay.rect.x, overlay.rect.y, overlay.rect.width, overlay.rect.height, state.config.blurRadius)
-      TextOverlayRenderer.render(context.surface, overlay, state.theme, context.cursorVisible)
+      val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
+      if blurRadius > 0f then
+        context.surface.blurRegion(
+          overlay.rect.x,
+          overlay.rect.y,
+          overlay.rect.width,
+          overlay.rect.height,
+          blurRadius
+        )
+      TextOverlayRenderer.render(context.surface, overlay, state.theme, state.config, context.cursorVisible)
     }
-    overlays.belowCursor.foreach { overlay =>
+    val belowOverlays = if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
+    belowOverlays.foreach { overlay =>
       logger.info(s"[OVERLAY RENDERED] placement=BelowCursor rect=${overlay.rect} title=${overlay.title.getOrElse("")}")
-      context.surface.blurRegion(overlay.rect.x, overlay.rect.y, overlay.rect.width, overlay.rect.height, state.config.blurRadius)
-      TextOverlayRenderer.render(context.surface, overlay, state.theme, context.cursorVisible)
+      val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
+      if blurRadius > 0f then
+        context.surface.blurRegion(
+          overlay.rect.x,
+          overlay.rect.y,
+          overlay.rect.width,
+          overlay.rect.height,
+          blurRadius
+        )
+      TextOverlayRenderer.render(context.surface, overlay, state.theme, state.config, context.cursorVisible)
     }
 
-    context.layout.floatingPanelRect.foreach { rect =>
-      renderFloatingPanelPlaceholder(rect, state.theme, context)
-    }
+    context.layout.floatingPanelRect.foreach(rect => renderFloatingPanelPlaceholder(rect, state.theme, context))
 
   private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =
     PinnedPanelViewModel
       .fromLayout(context.layout, state.uiSurfaces)
       .foreach { panel =>
-        context.surface.blurRegion(panel.rect.x, panel.rect.y, panel.rect.width, panel.rect.height, state.config.blurRadius)
-        PinnedPanelRenderer.render(context.surface, panel, state.theme)
+        val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
+        if blurRadius > 0f then
+          context.surface.blurRegion(
+            panel.rect.x,
+            panel.rect.y,
+            panel.rect.width,
+            panel.rect.height,
+            blurRadius
+          )
+        PinnedPanelRenderer.render(context.surface, panel, state.theme, state.config)
       }
 
   private def renderFloatingPanelPlaceholder(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
@@ -420,16 +509,17 @@ object Renderer:
       }
 
   private def renderDiagnosticIndicator(
-    surface:         RenderSurface,
-    lineRect:        LayoutRect,
-    screenY:         Int,
+    surface: RenderSurface,
+    lineRect: LayoutRect,
+    screenY: Int,
     bufferLineIndex: Int,
-    buffer:          Buffer,
-    state:           AppState
+    buffer: Buffer,
+    state: AppState
   ): Unit =
     val uriOpt = buffer.filePath.map(_.toUri.toString)
     uriOpt.foreach { uri =>
-      val lineDiags = state.diagnostics.getOrElse(uri, Nil)
+      val lineDiags = state.diagnostics
+        .getOrElse(uri, Nil)
         .filter(d => d.range.start.line == bufferLineIndex)
       if lineDiags.nonEmpty then
         val worstCode = lineDiags.flatMap(_.severity).map(_.code).minOption

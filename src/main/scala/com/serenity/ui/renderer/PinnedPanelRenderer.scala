@@ -1,5 +1,6 @@
 package com.serenity.ui.renderer
 
+import com.serenity.config.AppConfig
 import com.serenity.ui.theme.Theme
 
 object PinnedPanelRenderer:
@@ -7,20 +8,21 @@ object PinnedPanelRenderer:
   def render(
     surface: RenderSurface,
     panel: TextPanelView,
-    theme: Theme
+    theme: Theme,
+    config: AppConfig
   ): Unit =
     val rect = panel.rect
 
-    surface.setAlpha(theme.panel.alpha.toFloat)
+    surface.setAlpha(SurfaceMaterials.panelAlpha(config, theme))
     surface.setForegroundColor(theme.panel.foreground)
     surface.setBackgroundColor(theme.panel.background)
 
-    for y <- rect.y until rect.bottom do
-      surface.putString(rect.x, y, " " * rect.width)
+    for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
 
+    applyGlassSheen(surface, panel, theme, config)
     drawBorder(surface, panel, theme)
     drawTitle(surface, panel)
-    drawLines(surface, panel)
+    drawLines(surface, panel, theme)
 
     surface.setAlpha(1.0f)
     surface.setForegroundColor(theme.foreground)
@@ -34,15 +36,38 @@ object PinnedPanelRenderer:
   private def drawTitle(surface: RenderSurface, panel: TextPanelView): Unit =
     val rect  = panel.rect
     val title = panel.title.take(math.max(0, rect.width - 2)).padTo(math.max(0, rect.width - 2), ' ')
-    if rect.width >= 2 then
-      CharacterRenderer.renderStringPlain(surface, rect.x + 1, rect.y, title)
+    if rect.width >= 2 then CharacterRenderer.renderStringPlain(surface, rect.x + 1, rect.y, title)
 
-  private def drawLines(surface: RenderSurface, panel: TextPanelView): Unit =
+  private def drawLines(surface: RenderSurface, panel: TextPanelView, theme: Theme): Unit =
     val rect        = panel.rect
     val maxLineSize = math.max(0, rect.width - 2)
     val maxLines    = math.max(0, rect.height - 2)
 
-    panel.lines.take(maxLines).zipWithIndex.foreach { case (line, index) =>
-      val padded = line.take(maxLineSize).padTo(maxLineSize, ' ')
-      CharacterRenderer.renderStringPlain(surface, rect.x + 1, rect.y + 1 + index, padded)
+    panel.rows.take(maxLines).zipWithIndex.foreach {
+      case (row, index) =>
+        val padded = row.plainText.take(maxLineSize).padTo(maxLineSize, ' ')
+        if row.selected then
+          surface.setForegroundColor(theme.highlighted.foreground)
+          surface.setBackgroundColor(theme.highlighted.background)
+        else
+          surface.setForegroundColor(theme.panel.foreground)
+          surface.setBackgroundColor(theme.panel.background)
+        CharacterRenderer.renderStringPlain(surface, rect.x + 1, rect.y + 1 + index, padded)
+    }
+
+  private def applyGlassSheen(
+    surface: RenderSurface,
+    panel: TextPanelView,
+    theme: Theme,
+    config: AppConfig
+  ): Unit =
+    SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
+      val rect        = panel.rect
+      val sheenWidth  = math.max(0, rect.width - 2)
+      val sheenHeight = math.min(2, math.max(0, rect.height - 2))
+      if sheenWidth > 0 && sheenHeight > 0 then
+        surface.setBackgroundColor(sheenColor)
+        (0 until sheenHeight).foreach { rowOffset =>
+          CharacterRenderer.renderStringPlain(surface, rect.x + 1, rect.y + 1 + rowOffset, " " * sheenWidth)
+        }
     }

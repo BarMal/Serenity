@@ -5,6 +5,7 @@ import java.nio.file.Path
 import com.serenity.command.Command
 import com.serenity.lsp.LspEffect
 import com.serenity.state.models.{AppState, BufferId, SurfaceId}
+import com.serenity.ui.layout.PanelPosition
 
 enum AppEffect:
   case CompleteQuit
@@ -16,6 +17,7 @@ enum AppEffect:
   case RequestOpenFile
   case RequestSaveAs
   case DirectLoadFile(path: Path)
+  case LoadPinnedDirectory(position: PanelPosition, path: Path)
   case OpenThemePicker
   case OpenFileSearch
   case RefreshFileWorkflow(surfaceId: SurfaceId)

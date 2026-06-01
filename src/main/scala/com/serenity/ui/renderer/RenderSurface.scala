@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import java.awt.Color
+
 import com.serenity.ui.theme.TextStyle
 
 trait RenderSurface:
@@ -11,9 +12,19 @@ trait RenderSurface:
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit
   def enableStyle(style: TextStyle): Unit
   def disableStyle(style: TextStyle): Unit
-  def setAlpha(alpha: Float): Unit = ()
+  def setAlpha(alpha: Float): Unit                                             = ()
   def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit = ()
-  def strokeRoundRect(x: Int, y: Int, width: Int, height: Int, arcPx: Int, color: Color, strokeWidth: Float = 1.5f): Unit = ()
+
+  def strokeRoundRect(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    arcPx: Int,
+    color: Color,
+    strokeWidth: Float = 1.5f
+  ): Unit = ()
+
   def hideCursor(): Unit
   def viewportWidth: Int
   def viewportHeight: Int

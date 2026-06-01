@@ -3,7 +3,7 @@ package com.serenity
 import java.nio.file.Files
 
 import com.serenity.animation.AnimationConfig
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, BackgroundStyle, WindowChromeMode}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionState
 import com.serenity.session.given
@@ -158,11 +158,13 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restored.findState shouldBe Some(FindState("round", List(0, 5), 1))
   }
 
-  it should "preserve config fields including blurRadius through JSON round trip" in {
+  it should "preserve config fields including blurRadius and backgroundStyle through JSON round trip" in {
     val appState = AppState.initial.copy(
       config = AppConfig(
         characterAnimation = AnimationConfig.quick,
         blurRadius = 0.42f,
+        backgroundStyle = BackgroundStyle.GlassLike,
+        windowChromeMode = WindowChromeMode.Custom,
         showLineNumbers = false,
         showGutter = false
       )
@@ -171,10 +173,40 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = SessionState.fromAppState(appState).asJson.as[SessionState].toOption.get
 
     decoded.config.blurRadius shouldBe 0.42f
+    decoded.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    decoded.config.windowChromeMode shouldBe WindowChromeMode.Custom
     decoded.config.showLineNumbers shouldBe false
     decoded.config.showGutter shouldBe false
     decoded.config.characterAnimation.map(_.steps) shouldBe
       AnimationConfig.quick.map(_.steps)
+  }
+
+  it should "default backgroundStyle to Frosted when loading older JSON without the field" in {
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val configObject = originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val jsonWithoutBackgroundStyle =
+      originalJson.mapObject(
+        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("backgroundStyle")))
+      )
+
+    val decoded = jsonWithoutBackgroundStyle.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.backgroundStyle shouldBe BackgroundStyle.Frosted
+  }
+
+  it should "default windowChromeMode to Native when loading older JSON without the field" in {
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val configObject = originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val jsonWithoutWindowChromeMode =
+      originalJson.mapObject(
+        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("windowChromeMode")))
+      )
+
+    val decoded = jsonWithoutWindowChromeMode.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.windowChromeMode shouldBe WindowChromeMode.Native
   }
 
   it should "survive a multi-pane multi-buffer layout round trip" in {

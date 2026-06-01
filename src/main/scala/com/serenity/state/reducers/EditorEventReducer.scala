@@ -72,18 +72,11 @@ object EditorEventReducer:
       case Some(cursor) =>
         event match
           case InsertChar(char) =>
-            val offset          = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-            val newContent      = buffer.content.insert(offset, char.toString)
-            val newCursor       = cursor.copy(column = cursor.column + 1)
+            val replacedBuffer  = replaceSelectionOrInsert(buffer, cursor, char.toString)
+            val newCursor       = replacedBuffer.cursors.headOption.getOrElse(cursor)
             val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
             val updatedBuffer = addCharacterAnimationToBuffer(
-              buffer.copy(
-                content = newContent,
-                isDirty = true,
-                isNewEmpty = false,
-                cursors = newCursor :: buffer.cursors.tail,
-                viewport = updatedViewport
-              ),
+              replacedBuffer.copy(viewport = updatedViewport),
               currentState,
               char,
               cursor.line,
@@ -98,59 +91,86 @@ object EditorEventReducer:
             reduceTextEventForBuffer(DeleteBackward, buffer, paneId, currentState)
 
           case DeleteBackward =>
-            val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-            if offset > 0 then
-              val newContent = buffer.content.delete(offset - 1, offset)
-              val newCursor =
-                if cursor.column > 0 then cursor.copy(column = cursor.column - 1)
-                else if cursor.line > 0 then
-                  val prevLineEnd = findLineEnd(buffer.content, cursor.line - 1)
-                  cursor.copy(line = cursor.line - 1, column = prevLineEnd)
-                else cursor
-              val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
-              val updatedBuffer = buffer.copy(
-                content = newContent,
-                isDirty = true,
-                isNewEmpty = false,
-                cursors = newCursor :: buffer.cursors.tail,
-                viewport = updatedViewport
-              )
-              ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
-            else ReducerResult.noEffects(currentState)
+            buffer.selection match
+              case Some(selection) =>
+                val updatedBuffer = deleteSelectedRange(buffer, selection)
+                ReducerResult.noEffects(
+                  currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
+                )
+              case None =>
+                val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+                if offset > 0 then
+                  val newContent = buffer.content.delete(offset - 1, offset)
+                  val newCursor =
+                    if cursor.column > 0 then cursor.copy(column = cursor.column - 1)
+                    else if cursor.line > 0 then
+                      val prevLineEnd = findLineEnd(buffer.content, cursor.line - 1)
+                      cursor.copy(line = cursor.line - 1, column = prevLineEnd)
+                    else cursor
+                  val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
+                  val updatedBuffer = buffer.copy(
+                    content = newContent,
+                    isDirty = true,
+                    isNewEmpty = false,
+                    cursors = newCursor :: buffer.cursors.tail,
+                    selection = None,
+                    preferredColumn = Some(newCursor.column),
+                    viewport = updatedViewport
+                  )
+                  ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+                else ReducerResult.noEffects(currentState)
 
           case DeleteForward =>
-            val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-            if offset < buffer.content.weight then
-              val newContent    = buffer.content.delete(offset, offset + 1)
-              val updatedBuffer = buffer.copy(content = newContent, isDirty = true, isNewEmpty = false)
-              ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
-            else ReducerResult.noEffects(currentState)
+            buffer.selection match
+              case Some(selection) =>
+                val updatedBuffer = deleteSelectedRange(buffer, selection)
+                ReducerResult.noEffects(
+                  currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
+                )
+              case None =>
+                val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+                if offset < buffer.content.weight then
+                  val newContent    = buffer.content.delete(offset, offset + 1)
+                  val updatedBuffer = buffer.copy(
+                    content = newContent,
+                    isDirty = true,
+                    isNewEmpty = false,
+                    preferredColumn = Some(cursor.column)
+                  )
+                  ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+                else ReducerResult.noEffects(currentState)
 
           case MoveLeft =>
+            val movementStart = selectionFocusOrCursor(buffer, cursor)
             val newCursor =
-              if cursor.column > 0 then cursor.moveLeft
-              else if cursor.line > 0 then
-                val prevLineEnd = findLineEnd(buffer.content, cursor.line - 1)
-                cursor.copy(line = cursor.line - 1, column = prevLineEnd)
-              else cursor
+              if movementStart.column > 0 then movementStart.moveLeft
+              else if movementStart.line > 0 then
+                val prevLineEnd = findLineEnd(buffer.content, movementStart.line - 1)
+                movementStart.copy(line = movementStart.line - 1, column = prevLineEnd)
+              else movementStart
             val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
+              selection = None,
+              preferredColumn = Some(newCursor.column),
               viewport = updatedViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveRight =>
-            val currentLineEnd = findLineEnd(buffer.content, cursor.line)
+            val movementStart = selectionFocusOrCursor(buffer, cursor)
+            val currentLineEnd = findLineEnd(buffer.content, movementStart.line)
             val newCursor =
-              if cursor.column < currentLineEnd then cursor.moveRight
+              if movementStart.column < currentLineEnd then movementStart.moveRight
               else
                 val totalLines = countLines(buffer.content)
-                if cursor.line < totalLines - 1 then cursor.copy(line = cursor.line + 1, column = 0)
-                else cursor
+                if movementStart.line < totalLines - 1 then movementStart.copy(line = movementStart.line + 1, column = 0)
+                else movementStart
             val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
+              selection = None,
+              preferredColumn = Some(newCursor.column),
               viewport = updatedViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -159,10 +179,14 @@ object EditorEventReducer:
             val viewportSize = currentState.viewportSize.getOrElse(com.serenity.ui.layout.ViewportSize(80, 24))
             val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, viewportSize)
             val panelWidth   = layout.editorPanelRect.width
-            val newCursor       = moveUpVisualLine(cursor, buffer.content, panelWidth)
+            val movementStart   = selectionFocusOrCursor(buffer, cursor)
+            val preferredColumn = buffer.preferredColumn.getOrElse(movementStart.column)
+            val newCursor       = moveUpVisualLine(movementStart, buffer.content, panelWidth, preferredColumn)
             val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
+              selection = None,
+              preferredColumn = Some(preferredColumn),
               viewport = updatedViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -171,33 +195,34 @@ object EditorEventReducer:
             val viewportSize = currentState.viewportSize.getOrElse(com.serenity.ui.layout.ViewportSize(80, 24))
             val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, viewportSize)
             val panelWidth   = layout.editorPanelRect.width
-            val newCursor       = moveDownVisualLine(cursor, buffer.content, panelWidth)
+            val movementStart   = selectionFocusOrCursor(buffer, cursor)
+            val preferredColumn = buffer.preferredColumn.getOrElse(movementStart.column)
+            val newCursor       = moveDownVisualLine(movementStart, buffer.content, panelWidth, preferredColumn)
             val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
+              selection = None,
+              preferredColumn = Some(preferredColumn),
               viewport = updatedViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case NewLine | Enter =>
-            val offset          = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-            val newContent      = buffer.content.insert(offset, "\n")
-            val newCursor       = cursor.copy(line = cursor.line + 1, column = 0)
+            val updatedBuffer   = replaceSelectionOrInsert(buffer, cursor, "\n")
+            val newCursor       = updatedBuffer.cursors.headOption.getOrElse(cursor)
             val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
-            val updatedBuffer = buffer.copy(
-              content = newContent,
-              isDirty = true,
-              isNewEmpty = false,
-              cursors = newCursor :: buffer.cursors.tail,
-              viewport = updatedViewport
+            val updatedBufferWithViewport = updatedBuffer.copy(viewport = updatedViewport)
+            ReducerResult.noEffects(
+              currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBufferWithViewport))
             )
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveToStart =>
             val newCursor       = cursor.copy(column = 0)
             val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
+              selection = None,
+              preferredColumn = Some(newCursor.column),
               viewport = updatedViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -208,7 +233,22 @@ object EditorEventReducer:
             val updatedViewport = adjustViewportForCursor(buffer.viewport, newCursor)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
+              selection = None,
+              preferredColumn = Some(newCursor.column),
               viewport = updatedViewport
+            )
+            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+
+          case SelectAll =>
+            val lastLine    = math.max(0, countLines(buffer.content) - 1)
+            val lastColumn  = findLineEnd(buffer.content, lastLine)
+            val startCursor = CursorPosition(0, 0)
+            val endCursor   = CursorPosition(lastLine, lastColumn)
+            val updatedBuffer = buffer.copy(
+              cursors = List(endCursor),
+              selection = Some(Selection(startCursor, endCursor)),
+              preferredColumn = Some(endCursor.column),
+              viewport = adjustViewportForCursor(buffer.viewport, endCursor)
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
@@ -221,6 +261,7 @@ object EditorEventReducer:
             val newViewport   = buffer.viewport.copy(topLine = newTopLine)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
+              preferredColumn = Some(newCursor.column),
               viewport = newViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -234,6 +275,7 @@ object EditorEventReducer:
             val newViewport = buffer.viewport.copy(topLine = newTopLine)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
+              preferredColumn = Some(newCursor.column),
               viewport = newViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -253,6 +295,7 @@ object EditorEventReducer:
                 val newTopLine  = math.max(0, targetLine - halfVisible)
                 val updatedBuffer = buffer.copy(
                   cursors = List(CursorPosition(targetLine, 0)),
+                  preferredColumn = Some(0),
                   viewport = buffer.viewport.copy(topLine = newTopLine)
                 )
                 ReducerResult.noEffects(
@@ -264,9 +307,25 @@ object EditorEventReducer:
               case _ =>
                 ReducerResult.noEffects(currentState)
 
+          case Copy if buffer.selection.isDefined =>
+            val selection = buffer.selection.get
+            ReducerResult.noEffects(
+              currentState.copy(clipboard = Some(selectedText(buffer, selection)))
+            )
+
+          case Cut if buffer.selection.isDefined =>
+            val selection     = buffer.selection.get
+            val updatedBuffer = deleteSelectedRange(buffer, selection)
+            ReducerResult.noEffects(
+              currentState.copy(
+                buffers = currentState.buffers + (buffer.id -> updatedBuffer),
+                clipboard = Some(selectedText(buffer, selection))
+              )
+            )
+
           case Copy =>
-            val lineText = buffer.content.getLine(cursor.line).getOrElse("")
-            ReducerResult.noEffects(currentState.copy(clipboard = Some(lineText)))
+            val clipboardText = buffer.content.getLine(cursor.line).getOrElse("")
+            ReducerResult.noEffects(currentState.copy(clipboard = Some(clipboardText)))
 
           case Cut =>
             val lineText  = buffer.content.getLine(cursor.line).getOrElse("")
@@ -286,6 +345,7 @@ object EditorEventReducer:
               isDirty = true,
               isNewEmpty = false,
               cursors = newCursor :: buffer.cursors.tail,
+              preferredColumn = Some(newCursor.column),
               viewport = adjustViewportForCursor(buffer.viewport, newCursor)
             )
             ReducerResult.noEffects(
@@ -297,20 +357,23 @@ object EditorEventReducer:
 
           case Paste =>
             currentState.clipboard match
-              case None => ReducerResult.noEffects(currentState)
+              case None                       => ReducerResult.noEffects(currentState)
               case Some(text) if text.isEmpty => ReducerResult.noEffects(currentState)
               case Some(text) =>
-                val offset     = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-                val newContent = buffer.content.insert(offset, text)
-                val newCursor  = cursor.copy(column = cursor.column + text.length)
+                val replacedBuffer = replaceSelectionOrInsert(buffer, cursor, text)
+                val newCursor      = replacedBuffer.cursors.headOption.getOrElse(cursor)
                 val updatedBuffer = buffer.copy(
-                  content = newContent,
-                  isDirty = true,
-                  isNewEmpty = false,
-                  cursors = newCursor :: buffer.cursors.tail,
+                  content = replacedBuffer.content,
+                  isDirty = replacedBuffer.isDirty,
+                  isNewEmpty = replacedBuffer.isNewEmpty,
+                  cursors = replacedBuffer.cursors,
+                  selection = replacedBuffer.selection,
+                  preferredColumn = Some(newCursor.column),
                   viewport = adjustViewportForCursor(buffer.viewport, newCursor)
                 )
-                ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+                ReducerResult.noEffects(
+                  currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
+                )
 
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -398,38 +461,48 @@ object EditorEventReducer:
       leftColumn = clampedLeftColumn
     )
 
-  private def moveUpVisualLine(cursor: CursorPosition, rope: Rope, panelWidth: Int): CursorPosition =
+  private def moveUpVisualLine(
+    cursor: CursorPosition,
+    rope: Rope,
+    panelWidth: Int,
+    preferredColumn: Int
+  ): CursorPosition =
     if cursor.line == 0 && cursor.column < panelWidth then cursor.copy(column = 0)
     else
       val currentLineContent        = rope.getLine(cursor.line).getOrElse("")
       val currentVisualLineInBuffer = cursor.column / panelWidth
 
       if currentVisualLineInBuffer > 0 then
-        val newColumn = cursor.column - panelWidth
+        val newColumn = currentVisualLineInBuffer * panelWidth - panelWidth + (preferredColumn % panelWidth)
         cursor.copy(column = math.max(0, newColumn))
       else if cursor.line > 0 then
         val prevLineContent = rope.getLine(cursor.line - 1).getOrElse("")
         if prevLineContent.length <= panelWidth then
-          val newColumn = math.min(cursor.column, prevLineContent.length)
+          val newColumn = math.min(preferredColumn, prevLineContent.length)
           cursor.copy(line = cursor.line - 1, column = newColumn)
         else
           val lastVisualLineInPrev   = (prevLineContent.length - 1) / panelWidth
           val baseColumnInLastVisual = lastVisualLineInPrev * panelWidth
-          val newColumn = math.min(baseColumnInLastVisual + (cursor.column % panelWidth), prevLineContent.length)
+          val newColumn = math.min(baseColumnInLastVisual + (preferredColumn % panelWidth), prevLineContent.length)
           cursor.copy(line = cursor.line - 1, column = newColumn)
       else cursor
 
-  private def moveDownVisualLine(cursor: CursorPosition, rope: Rope, panelWidth: Int): CursorPosition =
+  private def moveDownVisualLine(
+    cursor: CursorPosition,
+    rope: Rope,
+    panelWidth: Int,
+    preferredColumn: Int
+  ): CursorPosition =
     val currentLineContent        = rope.getLine(cursor.line).getOrElse("")
     val currentVisualLineInBuffer = cursor.column / panelWidth
     val totalVisualLinesInCurrent = math.max(1, (currentLineContent.length + panelWidth - 1) / panelWidth)
 
     if currentVisualLineInBuffer < totalVisualLinesInCurrent - 1 then
-      val newColumn = cursor.column + panelWidth
+      val newColumn = currentVisualLineInBuffer * panelWidth + panelWidth + (preferredColumn % panelWidth)
       cursor.copy(column = math.min(newColumn, currentLineContent.length))
     else if cursor.line < rope.lineCount - 1 then
       val nextLineContent      = rope.getLine(cursor.line + 1).getOrElse("")
-      val targetColumnInVisual = cursor.column % panelWidth
+      val targetColumnInVisual = preferredColumn % panelWidth
       val newColumn            = math.min(targetColumnInVisual, nextLineContent.length)
       cursor.copy(line = cursor.line + 1, column = newColumn)
     else cursor
@@ -454,3 +527,62 @@ object EditorEventReducer:
         buffer.copy(animations = updatedAnimations)
       case None =>
         buffer
+
+  private def selectionFocusOrCursor(buffer: Buffer, cursor: CursorPosition): CursorPosition =
+    buffer.selection.map(_.focus).getOrElse(cursor)
+
+  private def replaceSelectionOrInsert(buffer: Buffer, cursor: CursorPosition, text: String)(using
+    balance: com.serenity.rope.Balance
+  ): Buffer =
+    val (baseContent, insertionStart) = buffer.selection match
+      case Some(selection) =>
+        val startOffset = lineColumnToOffset(buffer.content, selection.start.line, selection.start.column)
+        val endOffset   = lineColumnToOffset(buffer.content, selection.end.line, selection.end.column)
+        (
+          buffer.content.delete(startOffset, endOffset),
+          selection.start
+        )
+      case None =>
+        (
+          buffer.content,
+          cursor
+        )
+
+    val startOffset = lineColumnToOffset(baseContent, insertionStart.line, insertionStart.column)
+    val newContent  = baseContent.insert(startOffset, text)
+    val newCursor   = cursorAfterInsertion(insertionStart, text)
+
+    buffer.copy(
+      content = newContent,
+      isDirty = true,
+      isNewEmpty = false,
+      cursors = newCursor :: buffer.cursors.tail,
+      selection = None,
+      preferredColumn = Some(newCursor.column)
+    )
+
+  private def deleteSelectedRange(buffer: Buffer, selection: Selection): Buffer =
+    val startOffset = lineColumnToOffset(buffer.content, selection.start.line, selection.start.column)
+    val endOffset   = lineColumnToOffset(buffer.content, selection.end.line, selection.end.column)
+    val newContent  = buffer.content.delete(startOffset, endOffset)
+    val newCursor   = selection.start
+
+    buffer.copy(
+      content = newContent,
+      isDirty = true,
+      isNewEmpty = false,
+      cursors = newCursor :: buffer.cursors.tail,
+      selection = None,
+      preferredColumn = Some(newCursor.column),
+      viewport = adjustViewportForCursor(buffer.viewport, newCursor)
+    )
+
+  private def selectedText(buffer: Buffer, selection: Selection): String =
+    val startOffset = lineColumnToOffset(buffer.content, selection.start.line, selection.start.column)
+    val endOffset   = lineColumnToOffset(buffer.content, selection.end.line, selection.end.column)
+    buffer.content.collect().slice(startOffset, endOffset)
+
+  private def cursorAfterInsertion(start: CursorPosition, insertedText: String): CursorPosition =
+    val lines = insertedText.split("\n", -1)
+    if lines.length == 1 then start.copy(column = start.column + insertedText.length)
+    else CursorPosition(start.line + lines.length - 1, lines.last.length)

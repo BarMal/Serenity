@@ -1,11 +1,13 @@
 package com.serenity
 
 import cats.effect.IO
+import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
 import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner}
+import com.serenity.config.{AppConfig, BackgroundStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CursorLayout, Layout, LayoutEngine, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.{Renderer, SurfaceMaterials}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -80,7 +82,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getBg(cursorX, overlay.y + 1) shouldBe state.theme.cursorColor
   }
 
-  it should "render category tabs in browse mode and show inline animation options in settings" in {
+  it should "render category tabs in browse mode and show grouped settings rows" in {
     val commands = List(
       Command.typed("open", "Open file", com.serenity.command.CommandIntent.OpenFile),
       Command.typed("toggle-theme", "Switch between light and dark theme", com.serenity.command.CommandIntent.ToggleTheme)
@@ -130,8 +132,6 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     tabLine should not include "["
     tabLine.indexOf("Settings") should be > tabLine.length / 2
     optionLine should include("Animation")
-    optionLine should include("Mode")
-    optionLine should include("Full")
     optionLine should not include "["
 
     val settingsBackgrounds =
@@ -139,5 +139,153 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
         .map(x => surface.getBg(x, overlay.y + 1))
         .distinct
     settingsBackgrounds.size should be > 1
+  }
+
+  it should "keep the selected command highlighted while the overlay is animating" in {
+    val commands = List(
+      Command("open", "Open file", _ => IO.unit),
+      Command("close", "Close current file", _ => IO.unit)
+    )
+    val baseState = stateWithRunner(Theme.light, "op", commands)
+    val surfaceId = SurfaceId("command-runner")
+    val animationState = AnimationState.empty.mergeAnimations(
+      Map(
+        CharacterKey(0, 2) -> AnimatedCell.fromThemeTransition(
+          baseState.theme.panel.foreground,
+          baseState.theme.panel.foreground,
+          baseState.theme.panel.background,
+          baseState.theme.panel.background,
+          steps = 2
+        )
+      )
+    )
+    val state = baseState.copy(
+      surfaceAnimations = Map(surfaceId -> SurfaceAnimationState(animationState = animationState))
+    )
+
+    val surface = new MockRenderSurface(100, 30)
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+
+    surface.getBg(overlay.x + 1, overlay.y + 2) shouldBe state.theme.highlighted.background
+    surface.getFg(overlay.x + 1, overlay.y + 2) shouldBe state.theme.highlighted.foreground
+  }
+
+  it should "draw the floating border with the rounded stroke even while animating" in {
+    val commands = List(Command("open", "Open file", _ => IO.unit))
+    val baseState = stateWithRunner(Theme.light, "op", commands)
+    val surfaceId = SurfaceId("command-runner")
+    val animationState = AnimationState.empty.mergeAnimations(
+      Map(
+        CharacterKey(0, 0) -> AnimatedCell.fromThemeTransition(
+          baseState.theme.panel.foreground,
+          baseState.theme.panel.foreground,
+          baseState.theme.panel.background,
+          baseState.theme.panel.background,
+          steps = 2
+        )
+      )
+    )
+    val state = baseState.copy(
+      surfaceAnimations = Map(surfaceId -> SurfaceAnimationState(animationState = animationState))
+    )
+
+    val surface = new MockRenderSurface(100, 30)
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+
+    surface.strokeRoundRectCalls should not be empty
+  }
+
+  it should "request backdrop blur for the floating overlay using the configured blur radius" in {
+    val commands = List(Command("open", "Open file", _ => IO.unit))
+    val state = stateWithRunner(Theme.light, "op", commands).copy(
+      config = AppConfig.default.withBlurRadius(0.6f)
+    )
+    val surface = new MockRenderSurface(100, 30)
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+
+    surface.blurRegionCalls should contain(
+      surface.BlurRegionCall(overlay.x, overlay.y, overlay.width, overlay.height, 0.6f)
+    )
+  }
+
+  it should "skip backdrop blur for a solid overlay background style" in {
+    val commands = List(Command("open", "Open file", _ => IO.unit))
+    val state = stateWithRunner(Theme.light, "op", commands).copy(
+      config = AppConfig.default
+        .withBlurRadius(0.6f)
+        .withBackgroundStyle(BackgroundStyle.Solid)
+    )
+    val surface = new MockRenderSurface(100, 30)
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+
+    surface.blurRegionCalls shouldBe empty
+  }
+
+  it should "use a stronger blur radius for the glass-like overlay style" in {
+    val commands = List(Command("open", "Open file", _ => IO.unit))
+    val state = stateWithRunner(Theme.light, "op", commands).copy(
+      config = AppConfig.default
+        .withBlurRadius(0.2f)
+        .withBackgroundStyle(BackgroundStyle.GlassLike)
+    )
+    val surface = new MockRenderSurface(100, 30)
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+
+    surface.blurRegionCalls should contain(
+      surface.BlurRegionCall(overlay.x, overlay.y, overlay.width, overlay.height, 0.6f)
+    )
+  }
+
+  it should "render a ghost submenu preview beneath the main command runner with reduced alpha" in {
+    val registry = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry)
+      .withActiveCategory(CommandCategory.Settings)
+    val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma").copy(
+      cursors = List(CursorPosition(1, 2))
+    )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      theme = Theme.light,
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner-submenu"),
+          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = true),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val surface = new MockRenderSurface(100, 30)
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+
+    surface.strokeRoundRectCalls should have size 2
+    surface.alphaCalls.exists(_ < SurfaceMaterials.panelAlpha(state.config, state.theme)) shouldBe true
   }
 end CommandRunnerFloatingRenderingSpec

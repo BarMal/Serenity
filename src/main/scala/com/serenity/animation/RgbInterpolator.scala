@@ -15,9 +15,9 @@ object RgbInterpolator:
         else if step == steps - 1 then endColor
         else
           val t = step * stepSize
-          val r = interpolateComponent(startColor.getRed,   endColor.getRed,   t)
+          val r = interpolateComponent(startColor.getRed, endColor.getRed, t)
           val g = interpolateComponent(startColor.getGreen, endColor.getGreen, t)
-          val b = interpolateComponent(startColor.getBlue,  endColor.getBlue,  t)
+          val b = interpolateComponent(startColor.getBlue, endColor.getBlue, t)
           val a = interpolateComponent(startColor.getAlpha, endColor.getAlpha, t)
           new Color(r, g, b, a)
       }.toList

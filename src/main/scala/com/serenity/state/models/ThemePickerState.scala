@@ -5,6 +5,7 @@ case class ThemePickerState(
     selectedIndex: Int,
     originalTheme: String
 ):
+
   def moveSelection(delta: Int): ThemePickerState =
     if themes.isEmpty then this
     else

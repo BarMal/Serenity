@@ -1,10 +1,14 @@
 package com.serenity.ui.renderer
 
 import java.awt.Color
+
 import com.serenity.animation.AnimationState
 import com.serenity.ui.theme.Theme
 
 object CharacterRenderer:
+
+  private case class TextRun(startX: Int, content: String)
+  private case class CollectedRuns(runs: List[TextRun], endX: Int)
 
   def renderString(
     surface: RenderSurface,
@@ -21,22 +25,8 @@ object CharacterRenderer:
     content: String,
     tabWidth: Int = 4
   ): Unit =
-    content.foldLeft(x) { (currentX, char) =>
-      char match
-        case '\t' =>
-          val spacesToAdd = tabWidth - (currentX % tabWidth)
-          val tabSpaces   = " " * spacesToAdd
-          surface.putString(currentX, y, tabSpaces)
-          currentX + spacesToAdd
-        case '_' =>
-          surface.putString(currentX, y, "_")
-          currentX + 1
-        case c if c >= 32 && c <= 126 =>
-          surface.putString(currentX, y, c.toString)
-          currentX + 1
-        case _ =>
-          currentX
-    }
+    val collectedRuns = collectPlainRuns(x, content, tabWidth)
+    flushPlainRuns(surface, y, collectedRuns.runs)
 
   def renderChar(
     surface: RenderSurface,
@@ -72,8 +62,7 @@ object CharacterRenderer:
       surface.setForegroundColor(foregroundColor)
       surface.setBackgroundColor(backgroundColor)
       renderChar(surface, x, y, char)
-    else if opacity <= 0.0 then
-      ()
+    else if opacity <= 0.0 then ()
     else
       val blendedForeground = blendColors(foregroundColor, backgroundColor, opacity)
       surface.setForegroundColor(blendedForeground)
@@ -117,22 +106,17 @@ object CharacterRenderer:
     bufferLine: Int = 0,
     bufferStartColumn: Int = 0
   ): Unit =
-    content.foldLeft(x) { (currentX, char) =>
-      char match
-        case '\t' =>
-          val spacesToAdd = tabWidth - (currentX % tabWidth)
-          (0 until spacesToAdd).foldLeft(currentX) { (posX, _) =>
-            val bufferColumn = bufferStartColumn + (posX - x)
-            renderCharAtPosition(surface, posX, y, ' ', theme, screenAnimations, bufferLine, bufferColumn)
-            posX + 1
-          }
-        case c if c >= 32 && c <= 126 =>
-          val bufferColumn = bufferStartColumn + (currentX - x)
-          renderCharAtPosition(surface, currentX, y, c, theme, screenAnimations, bufferLine, bufferColumn)
-          currentX + 1
-        case _ =>
-          currentX
-    }
+    val collectedRuns = collectPlainRuns(x, content, tabWidth)
+    renderAnimatedRuns(
+      surface,
+      x,
+      y,
+      collectedRuns.runs,
+      theme,
+      screenAnimations,
+      bufferLine,
+      bufferStartColumn
+    )
 
   private def renderStyledLineWithAnimation(
     surface: RenderSurface,
@@ -149,13 +133,125 @@ object CharacterRenderer:
         foreground = styledText.foregroundColor,
         background = styledText.backgroundColor
       )
+      val collectedRuns = collectPlainRuns(currentX, styledText.content, tabWidth = 4)
+      renderAnimatedRuns(
+        surface,
+        currentX,
+        y,
+        collectedRuns.runs,
+        segmentTheme,
+        screenAnimations,
+        bufferLine,
+        bufferStartColumn + (currentX - x)
+      )
+      collectedRuns.endX
+    }
 
-      styledText.content.foldLeft(currentX) { (posX, char) =>
-        val bufferColumn = bufferStartColumn + (posX - x)
-        renderCharAtPosition(surface, posX, y, char, segmentTheme, screenAnimations, bufferLine, bufferColumn)
-        posX + 1
+  private def collectPlainRuns(
+    startX: Int,
+    content: String,
+    tabWidth: Int
+  ): CollectedRuns =
+    val runs          = scala.collection.mutable.ListBuffer.empty[TextRun]
+    val currentText   = StringBuilder()
+    var currentStartX = startX
+    var currentX      = startX
+
+    def flushCurrent(): Unit =
+      if currentText.nonEmpty then
+        runs += TextRun(currentStartX, currentText.result())
+        currentText.clear()
+
+    content.foreach { char =>
+      char match
+        case '\t' =>
+          flushCurrent()
+          val spacesToAdd = tabWidth - (currentX % tabWidth)
+          val tabSpaces   = " " * spacesToAdd
+          runs += TextRun(currentX, tabSpaces)
+          currentX += spacesToAdd
+          currentStartX = currentX
+        case c if isVisibleChar(c) =>
+          if currentText.isEmpty then currentStartX = currentX
+          currentText.append(c)
+          currentX += 1
+        case _ =>
+          flushCurrent()
+          currentStartX = currentX
+    }
+
+    flushCurrent()
+    CollectedRuns(runs.toList, currentX)
+
+  private def flushPlainRuns(surface: RenderSurface, y: Int, runs: List[TextRun]): Unit =
+    runs.foreach(run => surface.putString(run.startX, y, run.content))
+
+  private def renderAnimatedRuns(
+    surface: RenderSurface,
+    screenOriginX: Int,
+    y: Int,
+    runs: List[TextRun],
+    theme: Theme,
+    screenAnimations: AnimationState,
+    bufferLine: Int,
+    bufferStartColumn: Int
+  ): Unit =
+    runs.foreach { run =>
+      val grouped =
+        groupRunByEffectiveColors(run, screenOriginX, theme, screenAnimations, bufferLine, bufferStartColumn)
+      grouped.foreach { case (startX, text, foreground, background) =>
+        surface.setForegroundColor(foreground)
+        surface.setBackgroundColor(background)
+        surface.putString(startX, y, text)
       }
     }
+
+  private def groupRunByEffectiveColors(
+    run: TextRun,
+    screenOriginX: Int,
+    theme: Theme,
+    screenAnimations: AnimationState,
+    bufferLine: Int,
+    bufferStartColumn: Int
+  ): List[(Int, String, Color, Color)] =
+    val groups = scala.collection.mutable.ListBuffer.empty[(Int, String, Color, Color)]
+    val text   = run.content
+
+    if text.nonEmpty then
+      var currentText       = StringBuilder()
+      var currentStartX     = run.startX
+      var currentForeground = theme.foreground
+      var currentBackground = theme.background
+
+      def flushCurrent(): Unit =
+        if currentText.nonEmpty then
+          groups += ((currentStartX, currentText.result(), currentForeground, currentBackground))
+          currentText.clear()
+
+      text.zipWithIndex.foreach { case (char, index) =>
+        val bufferColumn = bufferStartColumn + (run.startX - screenOriginX) + index
+        val cell         = screenAnimations.getCell(bufferColumn, bufferLine)
+        val foreground   = cell.flatMap(_.currentForeground).getOrElse(theme.foreground)
+        val background   = cell.flatMap(_.currentBackground).getOrElse(theme.background)
+
+        if currentText.isEmpty then
+          currentStartX = run.startX + index
+          currentForeground = foreground
+          currentBackground = background
+          currentText.append(char)
+        else if foreground == currentForeground && background == currentBackground then
+          currentText.append(char)
+        else
+          flushCurrent()
+          currentStartX = run.startX + index
+          currentForeground = foreground
+          currentBackground = background
+          currentText.append(char)
+      }
+
+      flushCurrent()
+
+    groups.toList
 
   private def renderCharAtPosition(
     surface: RenderSurface,
@@ -179,7 +275,7 @@ object CharacterRenderer:
   private def blendColors(foreground: Color, background: Color, opacity: Double): Color =
     val t = opacity.max(0.0).min(1.0)
     new Color(
-      math.round(background.getRed   + (foreground.getRed   - background.getRed)   * t).toInt,
+      math.round(background.getRed + (foreground.getRed - background.getRed) * t).toInt,
       math.round(background.getGreen + (foreground.getGreen - background.getGreen) * t).toInt,
-      math.round(background.getBlue  + (foreground.getBlue  - background.getBlue)  * t).toInt
+      math.round(background.getBlue + (foreground.getBlue - background.getBlue) * t).toInt
     )

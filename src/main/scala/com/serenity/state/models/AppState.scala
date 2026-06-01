@@ -7,16 +7,16 @@ import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
 
 enum SurfacePhase:
-  case BufferFadingOut  // surface not rendered; buffer chars in overlay area fading out
-  case Visible          // surface rendered (may have fade-in animation)
-  case Exiting          // ghost surface fading out; focus already restored
+  case BufferFadingOut // surface not rendered; buffer chars in overlay area fading out
+  case Visible         // surface rendered (may have fade-in animation)
+  case Exiting         // ghost surface fading out; focus already restored
 
 case class SurfaceAnimationState(
     phase: SurfacePhase = SurfacePhase.Visible,
     animationState: AnimationState = AnimationState.empty,
-    overlayHeight: Int = 0,     // rows in overlay (excluding border) for building fade-in
-    bufferFadeLength: Int = 0,  // ticks to stay in BufferFadingOut before transitioning
-    phaseTick: Int = 0          // ticks elapsed in current phase
+    overlayHeight: Int = 0,    // rows in overlay (excluding border) for building fade-in
+    bufferFadeLength: Int = 0, // ticks to stay in BufferFadingOut before transitioning
+    phaseTick: Int = 0         // ticks elapsed in current phase
 )
 
 case class FindState(
@@ -26,9 +26,9 @@ case class FindState(
 )
 
 case class ThemeTransition(previousTheme: Theme, currentStep: Int, totalSteps: Int):
-  def progress: Double        = if totalSteps <= 0 then 1.0 else currentStep.toDouble / totalSteps
+  def progress: Double         = if totalSteps <= 0 then 1.0 else currentStep.toDouble / totalSteps
   def advance: ThemeTransition = copy(currentStep = currentStep + 1)
-  def isComplete: Boolean     = currentStep >= totalSteps
+  def isComplete: Boolean      = currentStep >= totalSteps
 
 case class AppState(
     layout: Layout,
@@ -86,6 +86,29 @@ case class AppState(
 
   def commandRunnerSurface: Option[UiSurface] =
     uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.CommandPalette])
+
+  def commandRunnerSubmenuSurface: Option[UiSurface] =
+    uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.CommandPaletteSubmenu])
+
+  def commandRunnerDomainSurfaceIds: Set[SurfaceId] =
+    Set.from(List(commandRunnerSurface.map(_.id), commandRunnerSubmenuSurface.map(_.id)).flatten)
+
+  def hasCommandRunnerDomain: Boolean =
+    commandRunnerDomainSurfaceIds.nonEmpty
+
+  def isCommandRunnerDomainFocus(currentFocus: Focus = focus): Boolean =
+    currentFocus match
+      case Focus.Surface(surfaceId) => commandRunnerDomainSurfaceIds.contains(surfaceId)
+      case _                        => false
+
+  def preferredCommandRunnerFocus: Option[Focus] =
+    commandRunnerSubmenuSurface.flatMap {
+      _.content match
+        case SurfaceContent.CommandPaletteSubmenu(_, _, previewOnly) if !previewOnly =>
+          commandRunnerSubmenuSurface.map(surface => Focus.Surface(surface.id))
+        case _ =>
+          None
+    }.orElse(commandRunnerSurface.map(surface => Focus.Surface(surface.id)))
 
   def themePickerSurface: Option[UiSurface] =
     uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.ThemePicker])

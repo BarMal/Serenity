@@ -20,20 +20,29 @@ class FileManager(using balance: Balance):
       content = com.serenity.rope.Rope(content),
       filePath = Some(path),
       isDirty = false,
-      language = Option(path.getFileName).map(_.toString)
-        .flatMap(n => n.lastIndexOf('.') match { case -1 => None; case i => Some(n.substring(i + 1)) })
+      language = Option(path.getFileName)
+        .map(_.toString)
+        .flatMap(n =>
+          n.lastIndexOf('.') match
+            case -1 => None;
+            case i  => Some(n.substring(i + 1))
+        )
         .flatMap(FileExtension.languageIdFor)
     )
 
   /** Save buffer to file */
   def saveBuffer(buffer: Buffer, path: Path): IO[Buffer] =
-    for
-      _ <- FileUtils.writeFileContent(path, buffer.content.collect())
+    for _ <- FileUtils.writeFileContent(path, buffer.content.collect())
     yield buffer.copy(
       filePath = Some(path),
       isDirty = false,
-      language = Option(path.getFileName).map(_.toString)
-        .flatMap(n => n.lastIndexOf('.') match { case -1 => None; case i => Some(n.substring(i + 1)) })
+      language = Option(path.getFileName)
+        .map(_.toString)
+        .flatMap(n =>
+          n.lastIndexOf('.') match
+            case -1 => None;
+            case i  => Some(n.substring(i + 1))
+        )
         .flatMap(FileExtension.languageIdFor)
     )
 

@@ -56,6 +56,22 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
 
     getClipboard shouldBe Some("line two")
 
+  it should "copy the active selection instead of the whole line" in new ClipFixture:
+    setupBuffer("Hello World Program")
+    setSelection(Selection(CursorPosition(0, 6), CursorPosition(0, 11)))
+
+    applyEvent(Copy)
+
+    getClipboard shouldBe Some("World")
+
+  it should "copy a multiline selection exactly" in new ClipFixture:
+    setupBuffer("alpha\nbeta\ngamma")
+    setSelection(Selection(CursorPosition(0, 2), CursorPosition(1, 2)))
+
+    applyEvent(Copy)
+
+    getClipboard shouldBe Some("pha\nbe")
+
   behavior of "Paste"
 
   it should "insert clipboard content at the cursor position" in new ClipFixture:
@@ -83,6 +99,27 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
 
     getCursor.column shouldBe 2
 
+  it should "replace the active selection when pasting" in new ClipFixture:
+    val bufferId = setupBuffer("Hello World Program")
+    setSelection(Selection(CursorPosition(0, 6), CursorPosition(0, 11)))
+    stateManager.updateState(_.copy(clipboard = Some("Universe"))).unsafeRunSync()
+
+    applyEvent(Paste)
+
+    getContent(bufferId) shouldBe "Hello Universe Program"
+    getCursor shouldBe CursorPosition(0, 14)
+    getState.buffers(bufferId).selection shouldBe None
+
+  it should "place the cursor at the true multiline insertion end after paste" in new ClipFixture:
+    val bufferId = setupBuffer("alpha\nomega")
+    setCursor(0, 5)
+    stateManager.updateState(_.copy(clipboard = Some("\nbeta\ngamma"))).unsafeRunSync()
+
+    applyEvent(Paste)
+
+    getContent(bufferId) shouldBe "alpha\nbeta\ngamma\nomega"
+    getCursor shouldBe CursorPosition(2, 5)
+
   behavior of "Cut"
 
   it should "copy the current line to the clipboard" in new ClipFixture:
@@ -106,6 +143,28 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     applyEvent(Cut)
 
     getState.buffers(bufferId).isDirty shouldBe true
+
+  it should "cut the active selection instead of the whole line" in new ClipFixture:
+    val bufferId = setupBuffer("Hello World Program")
+    setSelection(Selection(CursorPosition(0, 6), CursorPosition(0, 11)))
+
+    applyEvent(Cut)
+
+    getClipboard shouldBe Some("World")
+    getContent(bufferId) shouldBe "Hello  Program"
+    getCursor shouldBe CursorPosition(0, 6)
+    getState.buffers(bufferId).selection shouldBe None
+
+  it should "cut a multiline selection and join the remaining text" in new ClipFixture:
+    val bufferId = setupBuffer("alpha\nbeta\ngamma")
+    setSelection(Selection(CursorPosition(0, 2), CursorPosition(1, 2)))
+
+    applyEvent(Cut)
+
+    getClipboard shouldBe Some("pha\nbe")
+    getContent(bufferId) shouldBe "alta\ngamma"
+    getCursor shouldBe CursorPosition(0, 2)
+    getState.buffers(bufferId).selection shouldBe None
 
   it should "round-trip: cut then paste restores the line" in new ClipFixture:
     val bufferId = setupBuffer("original")
@@ -135,6 +194,19 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
 
     def setCursor(line: Int, col: Int): Unit =
       stateManager.setCursorPosition(activePaneId, line, col).unsafeRunSync()
+
+    def setSelection(selection: Selection): Unit =
+      stateManager.updateState { state =>
+        state.copy(
+          buffers = state.buffers.updated(
+            activeBufferId,
+            state.buffers(activeBufferId).copy(
+              cursors = List(selection.start),
+              selection = Some(selection)
+            )
+          )
+        )
+      }.unsafeRunSync()
 
     def applyEvent(event: Event): Unit =
       stateManager.applyEvent(event).unsafeRunSync()

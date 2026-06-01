@@ -1,5 +1,6 @@
 package com.serenity
 
+import com.serenity.animation.AnimationState
 import com.serenity.keystroke.events.{InsertChar, ToggleSyntaxHighlighting}
 import com.serenity.rope.Balance
 import com.serenity.state.components.ComponentResult
@@ -7,6 +8,7 @@ import com.serenity.state.components.EditorPaneComponent
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.renderer.CharacterRenderer
+import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -53,11 +55,15 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
   "Tab character rendering" should "expand to proper width" in {
     val surface = new MockRenderSurface(80, 24)
     CharacterRenderer.renderStringPlain(surface, 0, 0, "a\tb")
+
+    surface.putStringCalls.map(_.s) shouldBe List("a", "   ", "b")
   }
 
   "Underscore character" should "render visibly" in {
     val surface = new MockRenderSurface(80, 24)
     CharacterRenderer.renderStringPlain(surface, 0, 0, "test_underscore")
+
+    surface.putStringCalls.map(_.s) shouldBe List("test_underscore")
   }
 
   "Default syntax highlighting" should "be off" in {
@@ -68,4 +74,45 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
   "Character rendering" should "handle special cases" in {
     val surface = new MockRenderSurface(80, 24)
     CharacterRenderer.renderStringPlain(surface, 0, 0, "a_b\tc")
+
+    surface.putStringCalls.map(_.s) shouldBe List("a_b", " ", "c")
+  }
+
+  it should "batch contiguous printable runs in plain rendering" in {
+    val surface = new MockRenderSurface(80, 24)
+
+    CharacterRenderer.renderStringPlain(surface, 0, 0, "abc")
+
+    surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "abc"))
+  }
+
+  it should "batch contiguous printable runs in animated plain rendering when cell colors match" in {
+    val surface = new MockRenderSurface(80, 24)
+
+    CharacterRenderer.renderStringWithAnimationPlain(
+      surface,
+      0,
+      0,
+      "abc",
+      Theme.default,
+      AnimationState.empty
+    )
+
+    surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "abc"))
+  }
+
+  it should "batch contiguous runs in syntax-highlighted rendering when the styled segment is uniform" in {
+    val surface = new MockRenderSurface(80, 24)
+
+    CharacterRenderer.renderStringWithAnimation(
+      surface,
+      0,
+      0,
+      "abc",
+      Theme.default,
+      AnimationState.empty,
+      syntaxHighlightingEnabled = true
+    )
+
+    surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "abc"))
   }

@@ -1,7 +1,8 @@
 package com.serenity.lsp.config
 
-import cats.effect.IO
 import java.nio.file.{Files, Path, Paths}
+
+import cats.effect.IO
 
 object WorkspaceRootDetector:
 

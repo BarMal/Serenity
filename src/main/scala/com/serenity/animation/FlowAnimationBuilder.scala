@@ -29,8 +29,8 @@ object FlowAnimationBuilder:
         val offset = (direction, sweep) match
           case (FlowDirection.ByColumn, SweepDirection.Forward)  => key.column - minCol
           case (FlowDirection.ByColumn, SweepDirection.Backward) => maxCol - key.column
-          case (FlowDirection.ByRow,    SweepDirection.Forward)  => key.line - minRow
-          case (FlowDirection.ByRow,    SweepDirection.Backward) => maxRow - key.line
+          case (FlowDirection.ByRow, SweepDirection.Forward)     => key.line - minRow
+          case (FlowDirection.ByRow, SweepDirection.Backward)    => maxRow - key.line
 
         val fade    = RgbInterpolator.interpolateRgba(cell.startColor, cell.endColor, steps)
         val padding = List.fill(offset)(cell.startColor)

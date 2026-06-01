@@ -19,6 +19,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.state.undo.{HistoryEntry, PendingGroup, UndoState}
 import com.serenity.ui.layout.*
+import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
@@ -103,7 +104,8 @@ object StateManager:
 
   def apply(
     parentLogger: Logger[IO],
-    policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()
+    policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy(),
+    onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     for
@@ -122,7 +124,8 @@ object StateManager:
       LoggerFactory[IO].getLogger(using LoggerName("com.serenity.state.manager.StateManager")),
       policy,
       themeManager,
-      lspQueue
+      lspQueue,
+      onFontConfigChanged
     )
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
@@ -134,6 +137,7 @@ object StateManager:
         case Some(CommandSurfaceItem.CommandItem(command)) => s"selected=command:${command.name}"
         case Some(option: CommandSurfaceItem.OptionItem)   => s"selected=option:${option.id}"
         case Some(item: CommandSurfaceItem.InputItem)      => s"selected=input:${item.id}"
+        case Some(group: CommandSurfaceItem.GroupItem)     => s"selected=group:${group.id}"
         case None                                          => "selected=none"
 
     s"event=$event $modePart $selectedPart"
@@ -154,7 +158,8 @@ object StateManager:
       logger: Logger[IO],
       policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy(),
       themeManager: AppThemeManager = AppThemeManager.create,
-      lspQueue: Queue[IO, LspEffect]
+      lspQueue: Queue[IO, LspEffect],
+      onFontConfigChanged: FontConfig => IO[Unit]
   )(using Balance)
       extends StateManager:
 
@@ -247,14 +252,7 @@ object StateManager:
       stateRef
         .modify { state =>
           val closingBuffer = state.buffers.get(bufferId)
-          val updatedPanes = state.layout.editorPanes.view.mapValues { pane =>
-            if pane.bufferId.contains(bufferId) then pane.copy(bufferId = None)
-            else pane
-          }.toMap
-          val newState = state.copy(
-            buffers = state.buffers - bufferId,
-            layout = state.layout.copy(editorPanes = updatedPanes)
-          )
+          val newState      = EditorState.removeBuffer(state, bufferId)
           (newState, closingBuffer)
         }
         .flatMap { closingBuffer =>
@@ -299,24 +297,9 @@ object StateManager:
 
     def closePane(paneId: PaneId): IO[Unit] =
       stateRef.update { state =>
-        val updatedPanes = state.layout.editorPanes - paneId
-        val updatedOrder = state.layout.paneOrder.filterNot(_ == paneId)
-        val newActivePaneId =
-          if state.layout.activeEditorPaneId.contains(paneId) then
-            val idx = state.layout.orderedPaneIds.indexOf(paneId)
-            updatedOrder.lift(idx).orElse(updatedOrder.lastOption)
-          else state.layout.activeEditorPaneId
-
-        val updatedState = state.copy(
-          layout = state.layout.copy(
-            editorPanes = updatedPanes,
-            paneOrder = updatedOrder,
-            activeEditorPaneId = newActivePaneId
-          )
-        )
-        newActivePaneId match
-          case Some(id) => updatedState.copy(focus = Focus.EditorPane(id))
-          case None     => ensureCommandRunnerSurface(updatedState)
+        val updatedState = EditorState.removePane(state, paneId)
+        if updatedState.layout.activeEditorPaneId.isDefined then updatedState
+        else ensureCommandRunnerSurface(updatedState)
       }
 
     def setBufferForPane(paneId: PaneId, bufferId: BufferId): IO[Unit] =
@@ -339,7 +322,7 @@ object StateManager:
             pane.bufferId.flatMap(state.buffers.get) match
               case Some(buffer) =>
                 val newCursor     = CursorPosition(line, column)
-                val updatedBuffer = buffer.copy(cursors = List(newCursor))
+                val updatedBuffer = buffer.copy(cursors = List(newCursor), preferredColumn = Some(column))
                 state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
               case None => state // No buffer assigned to pane
           case None => state // Pane doesn't exist, no change
@@ -574,7 +557,7 @@ object StateManager:
       viewport.copy(topLine = newTopLine)
 
     private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-      newState.validated match
+      normalizeCommandRunnerFocus(newState).validated match
         case Right(validState) =>
           val modalTransitionLog =
             (fallbackState.modalSurface, validState.modalSurface) match
@@ -602,7 +585,7 @@ object StateManager:
                   Some(new PinnedPanelComponent(position))
                 case SurfacePresentation.Floating(_, _) =>
                   surface.content match
-                    case SurfaceContent.CommandPalette(_) =>
+                    case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
                       val registry = CommandRegistry.withToggleUI
                       Some(new CommandRunnerComponent(registry))
                     case SurfaceContent.ThemePicker(_) =>
@@ -639,6 +622,13 @@ object StateManager:
         _ <- result.effects.traverse_(interpretEffect)
       yield ()
 
+    private def normalizeCommandRunnerFocus(state: AppState): AppState =
+      if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then
+        state.preferredCommandRunnerFocus match
+          case Some(focus) => state.copy(focus = focus)
+          case None        => state
+      else state
+
     private def applyPaneFlowAnimation(sweep: SweepDirection): IO[Unit] =
       stateRef.get.flatMap { state =>
         val steps = AnimationConfig.smooth.get.steps
@@ -666,13 +656,15 @@ object StateManager:
 
     private def applyAnimationHooks(prevState: AppState): IO[Unit] =
       stateRef.get.flatMap { currentState =>
-        val runnerOpened = prevState.commandRunnerSurface.isEmpty && currentState.commandRunnerSurface.isDefined
-        val runnerClosed = prevState.commandRunnerSurface.isDefined && currentState.commandRunnerSurface.isEmpty
-        (if runnerOpened then applyCommandRunnerOpenAnimation(currentState.commandRunnerSurface.get, currentState)
-         else IO.unit) >>
-          (if runnerClosed then
-             applyCommandRunnerCloseAnimation(prevState.commandRunnerSurface.get, prevState, currentState)
-           else IO.unit)
+        val prevSurfaces    = animatedCommandSurfaces(prevState)
+        val currentSurfaces = animatedCommandSurfaces(currentState)
+        val openedSurfaces =
+          currentSurfaces.filter(surface => !prevSurfaces.exists(_.id == surface.id))
+        val closedSurfaces =
+          prevSurfaces.filter(surface => !currentSurfaces.exists(_.id == surface.id))
+
+        openedSurfaces.traverse_(surface => applyCommandRunnerOpenAnimation(surface, currentState)) >>
+          closedSurfaces.traverse_(surface => applyCommandRunnerCloseAnimation(surface, prevState, currentState))
       }
 
     private def withUpdatedRunnerConfig(state: AppState, config: com.serenity.config.AppConfig): AppState =
@@ -680,18 +672,42 @@ object StateManager:
         case Some(surface) =>
           surface.content match
             case SurfaceContent.CommandPalette(runner) =>
-              val updatedRunner  = runner.updateInputItems(config)
-              val updatedSurface = surface.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-              state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
+              val updatedRunner = runner.updateInputItems(config)
+              val updatedSurfaces = state.uiSurfaces.map {
+                case current if current.id == surface.id =>
+                  current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+                case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
+                  current.copy(content = SurfaceContent.CommandPaletteSubmenu(updatedRunner, groupId, previewOnly))
+                case other => other
+              }
+              state.copy(uiSurfaces = updatedSurfaces)
             case _ => state
         case None => state
+
+    private def updateConfig(
+      update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
+    ): IO[com.serenity.config.AppConfig] =
+      stateRef.modify { state =>
+        val newConfig = update(state.config)
+        val newState  = withUpdatedRunnerConfig(state.copy(config = newConfig), newConfig)
+        (newState, newConfig)
+      }
+
+    private def updateFontConfig(
+      update: FontConfig => FontConfig
+    ): IO[Unit] =
+      updateConfig(config => config.withFontConfig(update(config.fontConfig)))
+        .flatMap(config => onFontConfigChanged(config.fontConfig))
+
+    private def clampFontSize(size: Float): Float =
+      size.max(8.0f).min(48.0f)
 
     private def applyCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): IO[Unit] =
       val steps = AnimationConfig.smooth.get.steps
       stateRef.update { s =>
         val tSize         = s.viewportSize.getOrElse(ViewportSize(80, 24))
         val layout        = LayoutEngine.calculateLayoutWithUI(s, tSize)
-        val overlayHeight = layout.belowCursorOverlayRect.map(_.height).getOrElse(4)
+        val overlayHeight = overlayRectForSurface(layout, surface.id).map(_.height).getOrElse(4)
         val overlayFadeIn = (0 until overlayHeight).map { rowOffset =>
           val delay    = rowOffset
           val panelBg  = s.theme.panel.background
@@ -730,20 +746,17 @@ object StateManager:
         val overlayHeight = prevState.surfaceAnimations
           .get(closedSurface.id)
           .map(_.overlayHeight)
-          .orElse(previousLayout.belowCursorOverlayRect.map(_.height))
+          .orElse(overlayRectForSurface(previousLayout, closedSurface.id).map(_.height))
           .getOrElse(4)
-        val cachedRect = previousLayout.belowCursorOverlayRect
+        val cachedRect = overlayRectForSurface(previousLayout, closedSurface.id)
           .getOrElse(LayoutRect(12, 2, 56, overlayHeight))
         val overlayFadeOutAnims = (0 until overlayHeight).map { rowOffset =>
-          val delay    = overlayHeight - 1 - rowOffset
           val panelBg  = s.theme.panel.background
           val panelFg  = s.theme.panel.foreground
           val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
           val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
-          val bgSteps = List.fill(delay)(panelBg) ++
-            RgbInterpolator.interpolateRgba(panelBg, transpBg, steps)
-          val fgSteps = List.fill(delay)(panelFg) ++
-            RgbInterpolator.interpolateRgba(panelFg, transpFg, steps)
+          val bgSteps = RgbInterpolator.interpolateRgba(panelBg, transpBg, steps)
+          val fgSteps = RgbInterpolator.interpolateRgba(panelFg, transpFg, steps)
           CharacterKey(0, rowOffset) -> AnimatedCell(
             content = None,
             foregroundSteps = fgSteps,
@@ -770,6 +783,20 @@ object StateManager:
             + (ghostId -> ghostAnimState)
         )
       }
+
+    private def animatedCommandSurfaces(state: AppState): List[UiSurface] =
+      state.uiSurfaces.filter {
+        _.content match
+          case SurfaceContent.CommandPalette(_)              => true
+          case SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
+          case _                                             => false
+      }
+
+    private def overlayRectForSurface(layout: CalculatedLayout, surfaceId: SurfaceId): Option[LayoutRect] =
+      layout.aboveCursorOverlayStack
+        .find(_._1 == surfaceId)
+        .map(_._2)
+        .orElse(layout.belowCursorOverlayStack.find(_._1 == surfaceId).map(_._2))
 
     private def buildBufferFadeOut(state: AppState, steps: Int): AppState =
       (for
@@ -903,6 +930,8 @@ object StateManager:
           stateRef.get.flatMap(state => openFileWorkflowModal(FileWorkflowMode.SaveAs, state))
         case AppEffect.DirectLoadFile(path) =>
           directLoadFileEffect(path)
+        case AppEffect.LoadPinnedDirectory(position, path) =>
+          loadPinnedDirectoryEffect(position, path)
         case AppEffect.RefreshFileWorkflow(surfaceId) =>
           refreshFileWorkflowEffect(surfaceId)
         case AppEffect.SubmitFileWorkflow(surfaceId) =>
@@ -1000,7 +1029,10 @@ object StateManager:
                         s.copy(
                           buffers = s.buffers.updated(
                             buffer.id,
-                            current.copy(cursors = List(CursorPosition(clampedLine, clampedCol)))
+                            current.copy(
+                              cursors = List(CursorPosition(clampedLine, clampedCol)),
+                              preferredColumn = Some(clampedCol)
+                            )
                           ),
                           focus = Focus.EditorPane(paneId),
                           layout = s.layout.copy(activeEditorPaneId = Some(paneId))
@@ -1070,6 +1102,16 @@ object StateManager:
           themeManager.listAvailableThemes
             .flatMap(themeNamesRef.set)
             .handleErrorWith(ex => logger.error(ex)("[THEMES] Failed to reload theme list"))
+        case CommandIntent.PinExplorerPanel =>
+          FileUtils.getCurrentDirectory.flatMap(pinExplorerPanelEffect)
+        case CommandIntent.PinOutlinePanel =>
+          pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30)
+        case CommandIntent.PinDiagnosticsPanel =>
+          pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 10)
+        case CommandIntent.FocusPanel(position) =>
+          switchToPinnedPanel(position)
+        case CommandIntent.UnpinPanel(position) =>
+          unpinPanel(position)
         case CommandIntent.FormatCurrentFile =>
           logger.debug("[CMD] Format command requested")
         case CommandIntent.SetAnimationMode(mode) =>
@@ -1083,6 +1125,11 @@ object StateManager:
                 s.copy(config = s.config.copy(characterAnimation = AnimationConfig.smooth))
               case AnimationMode.Subtle =>
                 s.copy(config = s.config.copy(characterAnimation = AnimationConfig.subtle))
+          }
+        case CommandIntent.SetBackgroundStyle(style) =>
+          updateState { s =>
+            val newConfig = s.config.withBackgroundStyle(style)
+            withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
           }
         case CommandIntent.SetBlurRadius(r) =>
           updateState { s =>
@@ -1128,6 +1175,20 @@ object StateManager:
             val newConfig = s.config.withCursorMode(mode)
             withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
           }
+        case CommandIntent.IncreaseFontSize =>
+          updateFontConfig(config => config.copy(fontSize = clampFontSize(config.fontSize + 1.0f)))
+        case CommandIntent.DecreaseFontSize =>
+          updateFontConfig(config => config.copy(fontSize = clampFontSize(config.fontSize - 1.0f)))
+        case CommandIntent.SetFontSize(size) =>
+          updateFontConfig(_.copy(fontSize = clampFontSize(size)))
+        case CommandIntent.SetCodeFontFamily(family) =>
+          updateFontConfig(_.copy(codeFontFamily = family))
+        case CommandIntent.SetTextFontFamily(family) =>
+          updateFontConfig(_.copy(textFontFamily = family))
+        case CommandIntent.SetLigatures(enabled) =>
+          updateFontConfig(_.copy(enableLigatures = enabled))
+        case CommandIntent.ToggleLigatures =>
+          updateFontConfig(config => config.copy(enableLigatures = !config.enableLigatures))
         case CommandIntent.StartupNewSession =>
           updateState(_.copy(uiSurfaces = List.empty)) >>
             createNewEmptyBuffer().flatMap { bufferId =>
@@ -1228,6 +1289,58 @@ object StateManager:
       val content = PanelContent.DirectoryTree(tree, selectedPath = None)
       pinPanel(content, PanelPosition.Left, 30)
 
+    private def pinExplorerPanelEffect(path: Path): IO[Unit] =
+      for
+        fileEntries <- fileManager.getFileBrowser.listDirectory(path)
+        dirEntries = fileEntries.map(entry =>
+          DirEntry(entry.path, entry.name, entry.isDirectory)
+        )
+        tree    = DirectoryTreeData(path, entries = Map(path -> dirEntries))
+        content = PanelContent.DirectoryTree(tree, selectedPath = dirEntries.headOption.map(_.path))
+        _ <- pinPanel(content, PanelPosition.Left, 30)
+      yield ()
+
+    private def loadPinnedDirectoryEffect(position: PanelPosition, path: Path): IO[Unit] =
+      for
+        fileEntries <- fileManager.getFileBrowser.listDirectory(path)
+        dirEntries = fileEntries.map(entry =>
+          DirEntry(entry.path, entry.name, entry.isDirectory)
+        )
+        _ <- stateRef.get.flatMap { state =>
+          val updated = state.pinnedSurfaces
+            .find {
+              _.presentation match
+                case SurfacePresentation.Pinned(pos, _) if pos == position => true
+                case _                                                     => false
+            }
+            .map { surface =>
+              val updatedSurface = surface.content match
+                case SurfaceContent.DirectoryTree(tree, selectedPath) =>
+                  val nextSelected =
+                    if selectedPath.contains(path) || selectedPath.isEmpty then Some(path)
+                    else selectedPath
+                  surface.copy(
+                    content = SurfaceContent.DirectoryTree(
+                      tree.copy(
+                        expandedPaths = tree.expandedPaths + path,
+                        entries = tree.entries + (path -> dirEntries)
+                      ),
+                      nextSelected
+                    )
+                  )
+                case _ =>
+                  val tree = DirectoryTreeData(
+                    rootPath = path,
+                    entries = Map(path -> dirEntries)
+                  )
+                  surface.copy(content = SurfaceContent.DirectoryTree(tree, Some(path)))
+              state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
+            }
+            .getOrElse(state)
+          validateAndUpdateState(updated, state)
+        }
+      yield ()
+
     def selectFileInExplorer(filePath: String): IO[Unit] =
       val targetPath = Path.of(filePath)
       stateRef.get.flatMap { state =>
@@ -1239,8 +1352,8 @@ object StateManager:
           }
           .flatMap { surface =>
             surface.content match
-              case SurfaceContent.DirectoryListing(rootPath, entries, _) =>
-                val newContent = SurfaceContent.DirectoryListing(rootPath, entries, Some(targetPath))
+              case SurfaceContent.DirectoryTree(tree, _) =>
+                val newContent = SurfaceContent.DirectoryTree(tree, Some(targetPath))
                 val newSurface = surface.copy(content = newContent)
                 Some(state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface))
               case _ => None
@@ -1263,9 +1376,12 @@ object StateManager:
           stateRef.update { state =>
             state.pinnedSurfaces.foldLeft(state) { (s, surface) =>
               surface.content match
-                case SurfaceContent.DirectoryListing(root, entries, sel) if root == srcDir =>
+                case SurfaceContent.DirectoryTree(tree, sel) if tree.entries.contains(srcDir) =>
                   val updated = surface.copy(
-                    content = SurfaceContent.DirectoryListing(root, entries.filterNot(_.path == src), sel)
+                    content = SurfaceContent.DirectoryTree(
+                      tree.copy(entries = tree.entries.updated(srcDir, tree.entries(srcDir).filterNot(_.path == src))),
+                      sel
+                    )
                   )
                   s.copy(uiSurfaces = s.uiSurfaces.filterNot(_.id == surface.id) :+ updated)
                 case _ => s
@@ -1591,9 +1707,9 @@ object StateManager:
         case CloseScope.Current => state.focusedBufferId.toList
         case CloseScope.All     => state.bufferOrder
         case CloseScope.Others =>
-          state.focusedBufferId.toList match
-            case focused :: Nil => state.bufferOrder.filterNot(_ == focused)
-            case Nil            => state.bufferOrder
+          state.focusedBufferId match
+            case Some(focused) => state.bufferOrder.filterNot(_ == focused)
+            case None          => state.bufferOrder
         case CloseScope.Quit => state.bufferOrder
 
     private def promptCloseWorkflow(state: AppState, workflow: CloseWorkflowState): IO[Unit] =
@@ -1658,12 +1774,13 @@ object StateManager:
             )
 
     private def focusBufferForWorkflow(state: AppState, bufferId: BufferId): AppState =
-      EditorState.rebalancePanes(state, Some(bufferId))
+      EditorState.focusBuffer(EditorState.rebalancePanes(state, Some(bufferId)), bufferId)
 
     private def closeBufferUsingExistingFlow(state: AppState, bufferId: BufferId): AppState =
-      val registry     = CommandRegistry.withToggleUI
       val focusedState = focusBufferForWorkflow(state, bufferId)
-      AppEventReducer.reduce(com.serenity.keystroke.events.CloseTab, focusedState, registry).state
+      val closedState  = EditorState.closeFocusedTab(focusedState)
+      if closedState.layout.activeEditorPaneId.isDefined then closedState
+      else ensureCommandRunnerSurface(closedState)
 
     private def closeBufferLabel(state: AppState, bufferId: BufferId): String =
       state.buffers
@@ -1675,10 +1792,7 @@ object StateManager:
       state.copy(actionStack = AppAction.CloseWorkflow(workflow) :: clearCloseActions(state).actionStack)
 
     private def clearCloseActions(state: AppState): AppState =
-      state.copy(actionStack = state.actionStack.filter {
-        case AppAction.CloseWorkflow(_) => false
-        case _                          => true
-      })
+      state.copy(actionStack = Nil)
 
     private def dismissModalSurface(state: AppState): AppState =
       state.copy(uiSurfaces = state.uiSurfaces.filterNot {

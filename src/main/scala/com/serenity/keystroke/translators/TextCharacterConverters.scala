@@ -1,6 +1,6 @@
 package com.serenity.keystroke.translators
 
-import com.serenity.keystroke.events.{InsertChar, NewLine, ReverseTabKey, TabKey, TextEntryEvent}
+import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 
 object TextCharacterConverters:

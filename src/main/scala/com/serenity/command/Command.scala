@@ -1,8 +1,9 @@
 package com.serenity.command
 
 import cats.effect.IO
-import com.serenity.config.CursorMode
+import com.serenity.config.{BackgroundStyle, CursorMode}
 import com.serenity.state.models.AppState
+import com.serenity.ui.layout.PanelPosition
 
 enum AnimationMode:
   case None
@@ -33,6 +34,7 @@ enum CommandIntent:
   case ReloadTheme
   case FormatCurrentFile
   case SetAnimationMode(mode: AnimationMode)
+  case SetBackgroundStyle(style: BackgroundStyle)
   case SetBlurRadius(r: Float)
   case SetAnimationDuration(ms: Int)
   case SetAnimationSteps(n: Int)
@@ -41,6 +43,18 @@ enum CommandIntent:
   case SetCursorMode(mode: CursorMode)
   case OpenThemeChooser
   case ReloadThemes
+  case PinExplorerPanel
+  case PinOutlinePanel
+  case PinDiagnosticsPanel
+  case FocusPanel(position: PanelPosition)
+  case UnpinPanel(position: PanelPosition)
+  case IncreaseFontSize
+  case DecreaseFontSize
+  case SetFontSize(size: Float)
+  case SetCodeFontFamily(family: String)
+  case SetTextFontFamily(family: String)
+  case SetLigatures(enabled: Boolean)
+  case ToggleLigatures
   case StartupNewSession
   case StartupRestoreSession
   case StartupOpenFile
@@ -53,6 +67,7 @@ case class Command private (
     intent: CommandIntent,
     category: CommandCategory = CommandCategory.Edit
 ):
+
   /** Execute this command directly when it carries a custom effect. */
   def execute(state: AppState): IO[Unit] =
     intent match
@@ -64,6 +79,7 @@ case class Command private (
     execute
 
 object Command:
+
   def apply(
     name: String,
     description: String,
@@ -90,10 +106,11 @@ sealed trait CommandSurfaceItem:
   def searchText: String
 
 object CommandSurfaceItem:
+
   case class CommandItem(command: Command) extends CommandSurfaceItem:
-    override def id: String = command.name
+    override def id: String                = command.name
     override def category: CommandCategory = command.category
-    override def searchText: String = s"${command.name} ${command.description}"
+    override def searchText: String        = s"${command.name} ${command.description}"
 
   case class OptionItem(
       id: String,
@@ -134,6 +151,16 @@ object CommandSurfaceItem:
       text.nonEmpty && parse(text).isEmpty
 
     def withCurrentValue(v: String): InputItem = copy(currentValue = v)
+
+  case class GroupItem(
+      id: String,
+      label: String,
+      children: List[CommandSurfaceItem],
+      category: CommandCategory,
+      hint: Option[String] = None
+  ) extends CommandSurfaceItem:
+    override def searchText: String =
+      s"$label ${children.map(_.searchText).mkString(" ")}"
 
 /** Search result for a command with relevance scoring */
 case class CommandSearchResult(

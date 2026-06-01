@@ -1,6 +1,8 @@
 package com.serenity.ui.renderer
 
 import java.awt.Color
+
+import com.serenity.config.AppConfig
 import com.serenity.ui.theme.Theme
 
 object TextOverlayRenderer:
@@ -9,20 +11,23 @@ object TextOverlayRenderer:
     surface: RenderSurface,
     overlay: TextOverlayView,
     theme: Theme,
+    config: AppConfig,
     cursorVisible: Boolean
   ): Unit =
     val rect = overlay.rect
 
     def rowColors(rowOffset: Int): (Color, Color) =
-      overlay.animationState.getCell(0, rowOffset)
+      overlay.animationState
+        .getCell(0, rowOffset)
         .map(cell =>
-          ( cell.currentForeground.getOrElse(theme.panel.foreground)
-          , cell.currentBackground.getOrElse(theme.panel.background)
+          (
+            cell.currentForeground.getOrElse(theme.panel.foreground),
+            cell.currentBackground.getOrElse(theme.panel.background)
           )
         )
         .getOrElse((theme.panel.foreground, theme.panel.background))
 
-    surface.setAlpha(theme.panel.alpha.toFloat)
+    surface.setAlpha(SurfaceMaterials.panelAlpha(config, theme) * overlay.alphaMultiplier)
 
     for (y, rowOffset) <- (rect.y until rect.bottom).zipWithIndex do
       val (fg, bg) = rowColors(rowOffset)
@@ -30,8 +35,10 @@ object TextOverlayRenderer:
       surface.setBackgroundColor(bg)
       surface.putString(rect.x, y, " " * rect.width)
 
+    applyGlassSheen(surface, rect, theme, config)
+
     val animated = overlay.animationState.animations.nonEmpty
-    drawBorder(surface, overlay, theme, rowColors)
+    drawBorder(surface, overlay, theme)
     drawContent(surface, overlay, theme, cursorVisible, rowColors, animated)
 
     surface.setAlpha(1.0f)
@@ -41,16 +48,11 @@ object TextOverlayRenderer:
   private def drawBorder(
     surface: RenderSurface,
     overlay: TextOverlayView,
-    theme: Theme,
-    rowColors: Int => (Color, Color)
+    theme: Theme
   ): Unit =
-    val rect     = overlay.rect
-    val animated = overlay.animationState.animations.nonEmpty
-
+    val rect = overlay.rect
     if rect.width >= 2 && rect.height >= 2 then
-      val (topFg, _) = rowColors(0)
-      val borderColor = if animated then topFg else theme.border
-      surface.strokeRoundRect(rect.x, rect.y, rect.width, rect.height, arcPx = 8, borderColor)
+      surface.strokeRoundRect(rect.x, rect.y, rect.width, rect.height, arcPx = 8, theme.border)
 
   private def drawContent(
     surface: RenderSurface,
@@ -66,21 +68,22 @@ object TextOverlayRenderer:
 
     val contentRows = overlay.header.toList ++ overlay.rows ++ overlay.footer.toList
 
-    contentRows.take(maxLines).zipWithIndex.foreach { case (row, index) =>
-      val rowOffset        = 1 + index
-      val (animFg, animBg) = rowColors(rowOffset)
-      renderRow(
-        surface,
-        rect.x + 1,
-        rect.y + 1 + index,
-        maxLineSize,
-        row,
-        theme,
-        cursorVisible,
-        defaultForeground = animFg,
-        defaultBackground = animBg,
-        isAnimating = animated
-      )
+    contentRows.take(maxLines).zipWithIndex.foreach {
+      case (row, index) =>
+        val rowOffset        = 1 + index
+        val (animFg, animBg) = rowColors(rowOffset)
+        renderRow(
+          surface,
+          rect.x + 1,
+          rect.y + 1 + index,
+          maxLineSize,
+          row,
+          theme,
+          cursorVisible,
+          defaultForeground = animFg,
+          defaultBackground = animBg,
+          isAnimating = animated
+        )
     }
 
   private def renderRow(
@@ -98,13 +101,11 @@ object TextOverlayRenderer:
     val baseFg = if defaultForeground != null then defaultForeground else theme.panel.foreground
     val baseBg = if defaultBackground != null then defaultBackground else theme.panel.background
     val rowBackground =
-      if isAnimating then baseBg
-      else row.backgroundColor.getOrElse(
+      row.backgroundColor.getOrElse(
         if row.selected then theme.highlighted.background else baseBg
       )
     val rowForeground =
-      if isAnimating then baseFg
-      else row.foregroundColor.getOrElse(
+      row.foregroundColor.getOrElse(
         if row.selected then theme.highlighted.foreground else baseFg
       )
 
@@ -144,16 +145,26 @@ object TextOverlayRenderer:
     isAnimating: Boolean = false
   ): Unit =
     val segments = row.segments
-    if segments.isEmpty then
-      CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
+    if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
     else
       val baseCellWidth = width / segments.length
       val remainder     = width % segments.length
 
-      segments.zipWithIndex.foldLeft(x) { case (cursorX, (segment, index)) =>
-        val cellWidth = baseCellWidth + (if index < remainder then 1 else 0)
-        renderSegmentCell(surface, cursorX, y, cellWidth, segment, theme, defaultForeground, defaultBackground, isAnimating)
-        cursorX + cellWidth
+      segments.zipWithIndex.foldLeft(x) {
+        case (cursorX, (segment, index)) =>
+          val cellWidth = baseCellWidth + (if index < remainder then 1 else 0)
+          renderSegmentCell(
+            surface,
+            cursorX,
+            y,
+            cellWidth,
+            segment,
+            theme,
+            defaultForeground,
+            defaultBackground,
+            isAnimating
+          )
+          cursorX + cellWidth
       }
       ()
 
@@ -176,12 +187,34 @@ object TextOverlayRenderer:
         val leftMaxWidth    = math.max(0, width - rightGroupWidth - 1)
         val leftText        = left.text.take(leftMaxWidth)
 
-        renderSegmentText(surface, x, y, leftText.length, leftText, left, theme, defaultForeground, defaultBackground, isAnimating)
+        renderSegmentText(
+          surface,
+          x,
+          y,
+          leftText.length,
+          leftText,
+          left,
+          theme,
+          defaultForeground,
+          defaultBackground,
+          isAnimating
+        )
 
         val rightStartX = x + math.max(0, width - rightGroupWidth)
         rightSegments.foldLeft(rightStartX) { (cursorX, segment) =>
           val text = segment.text.take(math.max(0, x + width - cursorX))
-          renderSegmentText(surface, cursorX, y, text.length, text, segment, theme, defaultForeground, defaultBackground, isAnimating)
+          renderSegmentText(
+            surface,
+            cursorX,
+            y,
+            text.length,
+            text,
+            segment,
+            theme,
+            defaultForeground,
+            defaultBackground,
+            isAnimating
+          )
           cursorX + text.length + 1
         }
       case _ =>
@@ -201,7 +234,18 @@ object TextOverlayRenderer:
     val text    = segment.text.take(width)
     val leftPad = math.max(0, (width - text.length) / 2)
     val renderX = x + leftPad
-    renderSegmentText(surface, renderX, y, text.length, text, segment, theme, defaultForeground, defaultBackground, isAnimating)
+    renderSegmentText(
+      surface,
+      renderX,
+      y,
+      text.length,
+      text,
+      segment,
+      theme,
+      defaultForeground,
+      defaultBackground,
+      isAnimating
+    )
 
   private def renderSegmentText(
     surface: RenderSurface,
@@ -217,15 +261,13 @@ object TextOverlayRenderer:
   ): Unit =
     if width > 0 then
       val segmentBackground =
-        if isAnimating then defaultBackground
-        else segment.backgroundColor.getOrElse(
+        segment.backgroundColor.getOrElse(
           if segment.selected then theme.highlighted.background
           else if segment.tone == OverlayTone.Error then theme.error.background
           else defaultBackground
         )
       val segmentForeground =
-        if isAnimating then defaultForeground
-        else segment.foregroundColor.getOrElse(
+        segment.foregroundColor.getOrElse(
           if segment.selected then theme.highlighted.foreground
           else if segment.tone == OverlayTone.Muted then theme.muted
           else if segment.tone == OverlayTone.Error then theme.error.foreground
@@ -234,3 +276,19 @@ object TextOverlayRenderer:
       surface.setForegroundColor(segmentForeground)
       surface.setBackgroundColor(segmentBackground)
       CharacterRenderer.renderStringPlain(surface, x, y, segmentText.take(width))
+
+  private def applyGlassSheen(
+    surface: RenderSurface,
+    rect: com.serenity.ui.layout.LayoutRect,
+    theme: Theme,
+    config: AppConfig
+  ): Unit =
+    SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
+      val sheenWidth  = math.max(0, rect.width - 2)
+      val sheenHeight = math.min(2, math.max(0, rect.height - 2))
+      if sheenWidth > 0 && sheenHeight > 0 then
+        surface.setBackgroundColor(sheenColor)
+        (0 until sheenHeight).foreach { rowOffset =>
+          CharacterRenderer.renderStringPlain(surface, rect.x + 1, rect.y + 1 + rowOffset, " " * sheenWidth)
+        }
+    }

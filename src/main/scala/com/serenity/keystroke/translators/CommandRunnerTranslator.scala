@@ -1,7 +1,7 @@
 package com.serenity.keystroke.translators
 
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.keystroke.events.*
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 
 class CommandRunnerTranslator extends Translator[CommandRunnerEvent]:
 

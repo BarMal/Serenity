@@ -1,8 +1,7 @@
 package com.serenity.keystroke.translators
 
-import com.serenity.keystroke.InputKey
-import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.Direction
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 
 object DirectionalKeyConverter:
 

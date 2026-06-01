@@ -38,3 +38,10 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
     quit shouldBe Quit
     quit.isInstanceOf[AppEvent] shouldBe true
   }
+
+  it should "translate Ctrl+A into select-all in the editor event family" in {
+    val selectAll = translator.translate(KeyStrokeInfo(InputKey.Character, Some('a'), Set(Modifier.Ctrl)))
+
+    selectAll shouldBe SelectAll
+    selectAll.isInstanceOf[EditorEvent] shouldBe true
+  }

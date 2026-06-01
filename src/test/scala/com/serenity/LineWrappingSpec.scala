@@ -371,23 +371,24 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val panelWidth = layout.editorPanelRect.width
 
     // Create text that wraps to exactly 2 visual lines
-    val firstVisualLine  = "a" * (panelWidth - 2) // Leave room for a few more chars
-    val secondVisualLine = "bcdef"                // This will be on the second visual line
+    val firstVisualLine  = "a" * panelWidth
+    val secondVisualLine = "bcdef"
     val longLine         = firstVisualLine + secondVisualLine
 
     longLine.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
-    // Position cursor at start of second visual line
-    stateManager.applyEvent(MoveToEnd).unsafeRunSync()
-    for _ <- 0 until secondVisualLine.length do stateManager.applyEvent(MoveLeft).unsafeRunSync()
+    // Position cursor within the second visual line, preserving a non-zero visual column
+    stateManager.applyEvent(MoveToStart).unsafeRunSync()
+    val targetColumn = panelWidth + 2
+    for _ <- 0 until targetColumn do stateManager.applyEvent(MoveRight).unsafeRunSync()
 
     val beforeNavState = stateManager.getCurrentState.unsafeRunSync()
     val beforePane     = beforeNavState.layout.editorPanes(paneId)
     val beforeBuffer   = beforePane.bufferId.flatMap(beforeNavState.buffers.get).get
     val beforeCursor   = beforeBuffer.cursors.head
-    beforeCursor.column shouldBe (panelWidth - 2) // At start of second visual line
+    beforeCursor.column shouldBe targetColumn
 
-    // Move up should go to same position in first visual line
+    // Move up should go to the same visual column in the first visual line
     stateManager.applyEvent(MoveUp).unsafeRunSync()
     val afterUpState  = stateManager.getCurrentState.unsafeRunSync()
     val afterUpPane   = afterUpState.layout.editorPanes(paneId)
@@ -398,7 +399,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     info(s"Before navigation: line=${beforeCursor.line}, column=${beforeCursor.column}")
     info(s"After move up: line=${afterUpCursor.line}, column=${afterUpCursor.column}")
 
-    afterUpCursor.column should be <= (panelWidth - 2) // Should be near same position but within first visual line
+    afterUpCursor.column shouldBe 2
 
     // Move down should return to second visual line
     stateManager.applyEvent(MoveDown).unsafeRunSync()
@@ -409,11 +410,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
     info(s"After move down: line=${afterDownCursor.line}, column=${afterDownCursor.column}")
 
-    // Should be back near the original position in second visual line
-    val columnDiff = math.abs(afterDownCursor.column - beforeCursor.column)
-    info(s"Column difference: $columnDiff")
-    // Allow for slight differences due to line endings and wrapping behavior
-    columnDiff should be <= 3
+    afterDownCursor shouldBe beforeCursor
   }
 
   it should "navigate across multiple buffer lines with wrapped content" in {

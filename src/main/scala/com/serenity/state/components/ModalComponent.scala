@@ -1,7 +1,7 @@
 package com.serenity.state.components
 
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.keystroke.events.*
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalEventReducer, Reducer}
 
@@ -27,9 +27,9 @@ class ModalComponent(
 
   private def processCustomModalEvent(name: String, event: Event, currentState: AppState): ComponentResult =
     event match
-      case textEvent: TextEntryEvent       => processModalTextEvent(textEvent)
-      case UnhandledEvent(info, _)         => processModalKeyInfo(info)
-      case _                               => ComponentResult.noChange
+      case textEvent: TextEntryEvent => processModalTextEvent(textEvent)
+      case UnhandledEvent(info, _)   => processModalKeyInfo(info)
+      case _                         => ComponentResult.noChange
 
   private def processModalTextEvent(event: TextEntryEvent): ComponentResult =
     event match

@@ -53,6 +53,65 @@ object EditorState:
   def navigateToPreviousBuffer(state: AppState): AppState =
     navigateBuffer(state, _.previousBufferInOrder)
 
+  def closeFocusedTab(state: AppState): AppState =
+    state.focus match
+      case Focus.EditorPane(paneId) =>
+        state.layout.editorPanes.get(paneId) match
+          case Some(pane) =>
+            pane.bufferId match
+              case Some(bufferId) =>
+                val withoutBuffer  = removeBuffer(state, bufferId)
+                val fallbackBuffer = nextRemainingBuffer(state, bufferId)
+                val rebalancedState =
+                  fallbackBuffer match
+                    case Some(nextBufferId) =>
+                      focusBuffer(rebalancePanes(withoutBuffer, Some(nextBufferId)), nextBufferId)
+                    case None =>
+                      withoutBuffer
+
+                if state.layout.editorPanes.size > 1 then removePane(rebalancedState, paneId)
+                else rebalancedState
+              case None =>
+                if state.layout.editorPanes.size > 1 then removePane(state, paneId)
+                else state
+          case None =>
+            state
+      case _ =>
+        state
+
+  def removeBuffer(state: AppState, bufferId: BufferId): AppState =
+    val updatedPanes = state.layout.editorPanes.view.mapValues { pane =>
+      if pane.bufferId.contains(bufferId) then pane.copy(bufferId = None) else pane
+    }.toMap
+
+    state.copy(
+      buffers = state.buffers - bufferId,
+      bufferOrder = state.bufferOrder.filterNot(_ == bufferId),
+      layout = state.layout.copy(editorPanes = updatedPanes)
+    )
+
+  def removePane(state: AppState, paneId: PaneId): AppState =
+    val updatedPanes = state.layout.editorPanes - paneId
+    val updatedOrder = state.layout.paneOrder.filterNot(_ == paneId)
+    val newActivePaneId =
+      if state.layout.activeEditorPaneId.contains(paneId) then
+        val idx = state.layout.orderedPaneIds.indexOf(paneId)
+        updatedOrder.lift(idx).orElse(updatedOrder.lastOption)
+      else state.layout.activeEditorPaneId.filter(updatedPanes.contains)
+
+    val updatedFocus = newActivePaneId match
+      case Some(id) => Focus.EditorPane(id)
+      case None     => Focus.EditorPane(PaneId(0))
+
+    state.copy(
+      layout = state.layout.copy(
+        editorPanes = updatedPanes,
+        paneOrder = updatedOrder,
+        activeEditorPaneId = newActivePaneId
+      ),
+      focus = updatedFocus
+    )
+
   private def assignBuffersToPanes(state: AppState, focusedBufferId: Option[BufferId]): AppState =
     val viewportSize        = state.viewportSize.getOrElse(ViewportSize(80, 24))
     val layout              = LayoutEngine.calculateLayout(state, viewportSize)
@@ -136,3 +195,11 @@ object EditorState:
           state.bufferOrder.headOption match
             case Some(firstBufferId) => focusBuffer(state, firstBufferId)
             case None                => state
+
+  private def nextRemainingBuffer(state: AppState, removedBufferId: BufferId): Option[BufferId] =
+    val remainingBuffers = state.bufferOrder.filterNot(_ == removedBufferId)
+    if remainingBuffers.isEmpty then None
+    else
+      val removedIndex = state.bufferOrder.indexOf(removedBufferId)
+      if removedIndex == -1 then remainingBuffers.headOption
+      else remainingBuffers.lift(math.min(removedIndex, remainingBuffers.size - 1)).orElse(remainingBuffers.lastOption)

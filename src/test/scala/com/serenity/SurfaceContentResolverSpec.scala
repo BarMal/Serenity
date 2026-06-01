@@ -5,7 +5,7 @@ import java.nio.file.Paths
 import cats.effect.IO
 import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner}
 import com.serenity.state.models.{BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState, FileSearchResult, FileSearchState, FileWorkflowField, FileWorkflowMode, FileWorkflowState, FileWorkflowSuggestion, Modal, ReplaceWorkflowField, ReplaceWorkflowState, SurfaceContent, ThemePickerState}
-import com.serenity.ui.layout.{DirEntry, LayoutRect}
+import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, LayoutRect}
 import com.serenity.ui.renderer.{OverlayRowLayout, OverlayTone, SurfaceContentResolver, SurfaceRenderMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -17,6 +17,17 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     DirEntry(root.resolve("src"), "src", isDirectory = true),
     DirEntry(root.resolve("test"), "test", isDirectory = true),
     DirEntry(root.resolve("build.sbt"), "build.sbt", isDirectory = false)
+  )
+  private val tree = DirectoryTreeData(
+    rootPath = root,
+    expandedPaths = Set(root, root.resolve("src")),
+    entries = Map(
+      root -> entries,
+      root.resolve("src") -> List(
+        DirEntry(root.resolve("src").resolve("main"), "main", isDirectory = true),
+        DirEntry(root.resolve("src").resolve("Serenity.scala"), "Serenity.scala", isDirectory = false)
+      )
+    )
   )
 
   "SurfaceContentResolver" should "shape the same directory content differently when floating versus pinned" in {
@@ -38,6 +49,28 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
     pinned.title shouldBe Some("repo")
     pinned.rows.map(_.plainText) shouldBe List("Selected: src", "src", "test", "build.sbt")
+  }
+
+  it should "resolve directory trees with an explicit root row and lazy-load markers" in {
+    val content = SurfaceContent.DirectoryTree(tree, Some(root.resolve("src")))
+
+    val pinned = SurfaceContentResolver.resolve(
+      content,
+      LayoutRect(0, 0, 24, 20),
+      SurfaceRenderMode.Pinned
+    )
+
+    pinned.title shouldBe Some("repo")
+    pinned.rows.map(_.plainText) shouldBe List(
+      "▾ repo",
+      "  ▾ src",
+      "    ▹ main",
+      "    Serenity.scala",
+      "  ▹ test",
+      "  build.sbt"
+    )
+    pinned.rows.count(_.selected) shouldBe 1
+    pinned.rows.find(_.selected).map(_.plainText) shouldBe Some("  ▾ src")
   }
 
   it should "resolve command palettes into search chrome, highlighted rows, and scroll metadata once typing begins" in {
@@ -69,13 +102,13 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.footer.map(_.plainText) shouldBe Some("1/1")
   }
 
-  it should "resolve browse mode into distributed category tabs and split option rows without bracket markers" in {
+  it should "resolve browse mode into distributed category tabs and grouped settings rows without bracket markers" in {
     val registry = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry)
       .withActiveCategory(CommandCategory.Settings)
-      .withSelectedItem("animation-mode")
+      .withSelectedItem("settings-animation")
 
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),
@@ -89,16 +122,14 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     header.segments.count(_.selected) shouldBe 1
     header.segments.find(_.selected).map(_.text) shouldBe Some("Settings")
 
-    val optionRow = floating.rows.headOption.getOrElse(fail("Expected animation option row"))
+    val optionRow = floating.rows.headOption.getOrElse(fail("Expected animation group row"))
     optionRow.layout shouldBe OverlayRowLayout.Split
-    optionRow.plainText shouldBe "Animation: Mode Full"
+    optionRow.plainText shouldBe "Animation"
     optionRow.plainText should not include "["
-    optionRow.segments should have size 3
+    optionRow.segments should have size 2
     optionRow.segments.head.text shouldBe "Animation"
-    optionRow.segments(1).text shouldBe "Mode"
+    optionRow.segments(1).text shouldBe "Mode, timing, steps"
     optionRow.segments(1).tone shouldBe OverlayTone.Muted
-    optionRow.segments.last.text shouldBe "Full"
-    optionRow.segments.last.selected shouldBe true
   }
 
   it should "return no floating rows for inactive command palettes" in {

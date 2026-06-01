@@ -13,19 +13,20 @@ case class StartupPage(
     statusMessage: Option[String] = None,
     selectedIndex: Int = 0
 ):
+
   def renderLines: List[String] =
     val baseLines = List(title, "") ++ options
     statusMessage match
       case Some(message) => baseLines ++ List("", message)
       case None          => baseLines
-      
+
   def withSelectedIndex(index: Int): StartupPage =
     val clampedIndex = if options.isEmpty then 0 else ((index % options.size) + options.size) % options.size
     copy(selectedIndex = clampedIndex)
-    
+
   def moveSelectionUp: StartupPage =
     withSelectedIndex(selectedIndex - 1)
-    
+
   def moveSelectionDown: StartupPage =
     withSelectedIndex(selectedIndex + 1)
 
@@ -43,13 +44,16 @@ enum SurfaceContent:
   case FilePreview(path: Path, content: String)
   case SymbolDefinition(symbol: String, location: Location)
   case DirectoryListing(path: Path, entries: List[DirEntry], selectedPath: Option[Path] = None)
+  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None)
   case CommandPalette(runner: CommandRunner)
+  case CommandPaletteSubmenu(runner: CommandRunner, groupId: String, previewOnly: Boolean)
   case ThemePicker(state: ThemePickerState)
   case FileSearch(state: FileSearchState)
   case ModalWorkflow(modal: Modal)
   case Terminal(buffer: String, cursor: Int)
   case Outline(symbols: List[Symbol])
   case Diagnostics(issues: List[Diagnostic])
+
   /** Transient ghost surface used during close-fade-out animation; never persisted in sessions. */
   case GhostOverlay(originalContent: SurfaceContent, cachedRect: LayoutRect)
 
@@ -70,11 +74,7 @@ object UiSurface:
   ): UiSurface =
     val surfaceContent = content match
       case PanelContent.DirectoryTree(tree, selectedPath) =>
-        SurfaceContent.DirectoryListing(
-          tree.rootPath,
-          tree.entries.getOrElse(tree.rootPath, List.empty),
-          selectedPath
-        )
+        SurfaceContent.DirectoryTree(tree, selectedPath)
       case PanelContent.Terminal(buffer, cursor) =>
         SurfaceContent.Terminal(buffer, cursor)
       case PanelContent.Outline(symbols) =>

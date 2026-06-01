@@ -21,8 +21,7 @@ class Java2DRenderSurface(
     font: Font,
     onFlush: BufferedImage => Unit
 ) extends RenderSurface:
-  private val g: Graphics2D   = image.createGraphics()
-  private val fm: FontMetrics = g.getFontMetrics(font)
+  private val g: Graphics2D = image.createGraphics()
 
   g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
   g.setFont(font)
@@ -41,13 +40,9 @@ class Java2DRenderSurface(
       // Fill background for the whole string using nominal width
       g.setColor(bgRef.get())
       g.fillRect(px, py, s.length * metrics.charWidth, metrics.lineHeight)
-      // Draw each character with its actual advance width
+      // Draw the foreground as one shaped string so font features like ligatures can apply.
       g.setColor(fgRef.get())
-      s.foldLeft(px) { (curX, char) =>
-        val advance = fm.charWidth(char)
-        g.drawString(char.toString, curX, py + metrics.ascent)
-        curX + advance
-      }
+      g.drawString(s, px, py + metrics.ascent)
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
     val px = metrics.toPixelX(x)
@@ -111,15 +106,12 @@ class Java2DRenderSurface(
     val pw             = width * metrics.charWidth
     val ph             = height * metrics.lineHeight
     val inset          = math.ceil(strokeWidth / 2).toInt
-    val savedComposite = g.getComposite
     val savedStroke    = g.getStroke
-    g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f))
     g.setColor(color)
     g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND))
     g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
     g.drawRoundRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset, arcPx * 2, arcPx * 2)
     g.setStroke(savedStroke)
-    g.setComposite(savedComposite)
 
   def hideCursor(): Unit = ()
 

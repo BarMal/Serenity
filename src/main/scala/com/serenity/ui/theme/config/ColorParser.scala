@@ -1,15 +1,16 @@
 package com.serenity.ui.theme.config
 
 import java.awt.Color
+
 import scala.util.Try
 
 object ColorParser:
 
   def parseColor(colorStr: String): Either[String, Color] =
     colorStr.trim match
-      case hex if hex.startsWith("#") => parseHexColor(hex)
+      case hex if hex.startsWith("#")    => parseHexColor(hex)
       case rgb if rgb.startsWith("rgb(") => parseRgbColor(rgb)
-      case unknown => Left(s"Unknown color: $unknown")
+      case unknown                       => Left(s"Unknown color: $unknown")
 
   private def parseHexColor(hex: String): Either[String, Color] =
     Try {

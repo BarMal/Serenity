@@ -2,22 +2,21 @@ package com.serenity.session
 
 import java.nio.file.Path
 
-import com.serenity.config.{AppConfig, CursorMode}
+import scala.concurrent.duration.FiniteDuration
+
+import com.serenity.animation.AnimationConfig
+import com.serenity.config.{AppConfig, BackgroundStyle, CursorMode, WindowChromeMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
-import com.serenity.ui.theme.Theme
-import com.serenity.ui.layout.Layout
-import com.serenity.animation.AnimationConfig
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import scala.concurrent.duration.FiniteDuration
-import io.circe.{Decoder, Encoder}
+import com.serenity.ui.layout.Layout
+import com.serenity.ui.theme.Theme
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import io.circe.{Decoder, Encoder}
 
-/**
- * Represents the persistent session state that survives application restarts.
- * This is a subset of AppState containing only the information needed to
- * restore the user's workspace.
- */
+/** Represents the persistent session state that survives application restarts. This is a subset of AppState containing
+  * only the information needed to restore the user's workspace.
+  */
 case class SessionState(
     buffers: List[SessionBuffer],
     layout: SessionLayout,
@@ -29,9 +28,8 @@ case class SessionState(
     recentFiles: List[String] = Nil
 )
 
-/**
- * Persistent representation of a buffer
- */
+/** Persistent representation of a buffer
+  */
 case class SessionBuffer(
     id: Int,
     filePath: Option[String], // Use String instead of Path for JSON serialization
@@ -44,9 +42,8 @@ case class SessionBuffer(
     unsavedContent: Option[String] = None
 )
 
-/**
- * Persistent layout information
- */
+/** Persistent layout information
+  */
 case class SessionLayout(
     editorPanes: List[SessionEditorPane],
     activeEditorPaneId: Option[Int],
@@ -58,9 +55,8 @@ case class SessionEditorPane(
     bufferId: Option[Int]
 )
 
-/**
- * Persistent focus state
- */
+/** Persistent focus state
+  */
 enum SessionFocus:
   case EditorPane(paneId: Int)
   // Note: We don't persist Surface focus as UI surfaces are not persistent
@@ -85,9 +81,8 @@ case class SessionFindState(
 
 object SessionState:
 
-  /**
-   * Convert AppState to SessionState for persistence
-   */
+  /** Convert AppState to SessionState for persistence
+    */
   def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
     SessionState(
       buffers = appState.buffers.values.map(SessionBuffer.fromBuffer(_, persistUnsaved)).toList,
@@ -99,32 +94,33 @@ object SessionState:
       findState = appState.findState.map(SessionFindState.fromFindState),
       recentFiles = appState.recentFiles.map(_.toString)
     )
-  
-  /**
-   * Convert SessionState back to AppState for restoration
-   */
+
+  /** Convert SessionState back to AppState for restoration
+    */
   def toAppState(sessionState: SessionState, theme: Theme)(using balance: com.serenity.rope.Balance): AppState =
     // Convert session buffers back to app buffers
     val bufferMap = sessionState.buffers.map { sessionBuffer =>
       val buffer = SessionBuffer.toBuffer(sessionBuffer)
       BufferId(sessionBuffer.id) -> buffer
     }.toMap
-    
+
     // Convert session layout back to app layout
     val layout = SessionLayout.toLayout(sessionState.layout)
-    
+
     // Convert focus
-    val focus = sessionState.focus.map(SessionFocus.toFocus).getOrElse(
-      layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(Focus.EditorPane(PaneId(0)))
-    )
-    
+    val focus = sessionState.focus
+      .map(SessionFocus.toFocus)
+      .getOrElse(
+        layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(Focus.EditorPane(PaneId(0)))
+      )
+
     AppState(
       layout = layout,
       buffers = bufferMap,
       bufferOrder = sessionState.bufferOrder.map(BufferId.apply),
       focus = focus,
       uiSurfaces = List.empty, // Never restore UI surfaces
-      actionStack = Nil, // Never restore action stack
+      actionStack = Nil,       // Never restore action stack
       findState = sessionState.findState.map(SessionFindState.toFindState),
       viewportSize = None, // Will be set when app starts
       theme = theme,
@@ -136,6 +132,7 @@ object SessionState:
     )
 
 object SessionBuffer:
+
   def fromBuffer(buffer: Buffer, persistUnsaved: Boolean = true): SessionBuffer =
     SessionBuffer(
       id = buffer.id.value,
@@ -149,11 +146,11 @@ object SessionBuffer:
         if persistUnsaved || (!buffer.isDirty && !buffer.isNewEmpty) then Some(buffer.content.toString)
         else None
     )
-  
+
   def toBuffer(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): Buffer =
     import com.serenity.rope.Rope
     import java.nio.file.Paths
-    
+
     Buffer(
       id = BufferId(sessionBuffer.id),
       content = sessionBuffer.unsavedContent.map(Rope.apply).getOrElse(Rope.empty),
@@ -166,6 +163,7 @@ object SessionBuffer:
     )
 
 object SessionLayout:
+
   def fromLayout(layout: Layout): SessionLayout =
     SessionLayout(
       editorPanes = layout.editorPanes.values.map(SessionEditorPane.fromEditorPane).toList,
@@ -186,12 +184,13 @@ object SessionLayout:
     )
 
 object SessionEditorPane:
+
   def fromEditorPane(pane: EditorPane): SessionEditorPane =
     SessionEditorPane(
       id = pane.id.value,
       bufferId = pane.bufferId.map(_.value)
     )
-  
+
   def toEditorPane(sessionPane: SessionEditorPane): EditorPane =
     EditorPane(
       id = PaneId(sessionPane.id),
@@ -202,11 +201,12 @@ object SessionEditorPane:
     )
 
 object SessionFocus:
+
   def fromFocus(focus: Focus): Option[SessionFocus] =
     focus match
       case Focus.EditorPane(paneId) => Some(SessionFocus.EditorPane(paneId.value))
-      case Focus.Surface(_) => None // Don't persist surface focus
-  
+      case Focus.Surface(_)         => None // Don't persist surface focus
+
   def toFocus(sessionFocus: SessionFocus): Focus =
     sessionFocus match
       case SessionFocus.EditorPane(paneId) => Focus.EditorPane(PaneId(paneId))
@@ -214,11 +214,12 @@ object SessionFocus:
 object SessionCursorPosition:
   def fromCursorPosition(cursor: CursorPosition): SessionCursorPosition =
     SessionCursorPosition(cursor.line, cursor.column)
-  
+
   def toCursorPosition(sessionCursor: SessionCursorPosition): CursorPosition =
     CursorPosition(sessionCursor.line, sessionCursor.column)
 
 object SessionViewport:
+
   def fromViewport(viewport: Viewport): SessionViewport =
     SessionViewport(
       leftColumn = viewport.leftColumn,
@@ -226,7 +227,7 @@ object SessionViewport:
       visibleColumns = viewport.visibleColumns,
       visibleLines = viewport.visibleLines
     )
-  
+
   def toViewport(sessionViewport: SessionViewport): Viewport =
     Viewport(
       leftColumn = sessionViewport.leftColumn,
@@ -236,13 +237,14 @@ object SessionViewport:
     )
 
 object SessionFindState:
+
   def fromFindState(findState: FindState): SessionFindState =
     SessionFindState(
       query = findState.query,
       resultLines = findState.resultLines,
       currentIndex = findState.currentIndex
     )
-  
+
   def toFindState(sessionFindState: SessionFindState): FindState =
     FindState(
       query = sessionFindState.query,
@@ -262,13 +264,33 @@ given Encoder[FontConfig] = deriveEncoder
 given Decoder[FontConfig] = deriveDecoder
 
 given Encoder[CursorMode] = Encoder.encodeString.contramap(_.toString)
+
 given Decoder[CursorMode] = Decoder.decodeString.emap {
   case "Blink"   => Right(CursorMode.Blink)
   case "Breathe" => Right(CursorMode.Breathe)
   case other     => Left(s"Unknown CursorMode: $other")
 }
 
+given Encoder[WindowChromeMode] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[WindowChromeMode] = Decoder.decodeString.emap {
+  case "Native" => Right(WindowChromeMode.Native)
+  case "Custom" => Right(WindowChromeMode.Custom)
+  case other    => Left(s"Unknown WindowChromeMode: $other")
+}
+
+given Encoder[BackgroundStyle] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[BackgroundStyle] = Decoder.decodeString.emap {
+  case "Solid"       => Right(BackgroundStyle.Solid)
+  case "Transparent" => Right(BackgroundStyle.Transparent)
+  case "Frosted"     => Right(BackgroundStyle.Frosted)
+  case "GlassLike"   => Right(BackgroundStyle.GlassLike)
+  case other         => Left(s"Unknown BackgroundStyle: $other")
+}
+
 given Encoder[AppConfig] = deriveEncoder
+
 given Decoder[AppConfig] = Decoder.instance { cursor =>
   for
     characterAnimation        <- cursor.get[Option[AnimationConfig]]("characterAnimation")
@@ -278,8 +300,21 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     showLineNumbers           <- cursor.get[Boolean]("showLineNumbers")
     showGutter                <- cursor.get[Boolean]("showGutter")
     blurRadius                <- cursor.getOrElse[Float]("blurRadius")(0.0f)
+    backgroundStyle           <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
     cursorMode                <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
-  yield AppConfig(characterAnimation, syntaxHighlightingEnabled, fontConfig, minimumPaneWidth, showLineNumbers, showGutter, blurRadius, cursorMode)
+    windowChromeMode          <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(WindowChromeMode.Native)
+  yield AppConfig(
+    characterAnimation,
+    syntaxHighlightingEnabled,
+    fontConfig,
+    minimumPaneWidth,
+    showLineNumbers,
+    showGutter,
+    blurRadius,
+    backgroundStyle,
+    cursorMode,
+    windowChromeMode
+  )
 }
 
 given Encoder[SessionState] = deriveEncoder

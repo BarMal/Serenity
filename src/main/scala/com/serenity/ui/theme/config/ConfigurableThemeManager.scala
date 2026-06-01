@@ -10,16 +10,16 @@ object ConfigurableThemeManager:
 
   def configToTheme(config: ThemeConfig): Either[String, Theme] =
     for
-      foreground   <- ColorParser.parseColor(config.ui.foreground)
-      background   <- ColorParser.parseColor(config.ui.background)
-      cursor       <- ColorParser.parseColor(config.ui.cursor)
-      highlighted  <- convertUiToken(config.ui.highlighted)
-      menuItem     <- convertUiToken(config.ui.menuItem)
-      panel        <- convertUiToken(config.ui.panel)
-      error        <- convertUiToken(config.ui.error)
-      warning      <- config.ui.warning match
-                        case Some(w) => convertUiToken(w)
-                        case None    => Right(ThemeColor(new java.awt.Color(0xF0B429), new java.awt.Color(0x2B2000)))
+      foreground  <- ColorParser.parseColor(config.ui.foreground)
+      background  <- ColorParser.parseColor(config.ui.background)
+      cursor      <- ColorParser.parseColor(config.ui.cursor)
+      highlighted <- convertUiToken(config.ui.highlighted)
+      menuItem    <- convertUiToken(config.ui.menuItem)
+      panel       <- convertUiToken(config.ui.panel)
+      error       <- convertUiToken(config.ui.error)
+      warning <- config.ui.warning match
+        case Some(w) => convertUiToken(w)
+        case None    => Right(ThemeColor(new java.awt.Color(0xf0b429), new java.awt.Color(0x2b2000)))
       border       <- ColorParser.parseColor(config.ui.border)
       muted        <- ColorParser.parseColor(config.ui.muted)
       placeholder  <- ColorParser.parseColor(config.ui.placeholder)
@@ -71,7 +71,10 @@ object ConfigurableThemeManager:
       (SyntaxElement.Type, syntax.typ.getOrElse(SyntaxElementConfig("#AF7AC5", None, StyleConfig(bold = true)))),
       (SyntaxElement.Delimiter, syntax.delimiter.getOrElse(defaultFg)),
       (SyntaxElement.Whitespace, syntax.whitespace.getOrElse(SyntaxElementConfig("#000000", None, StyleConfig()))),
-      (SyntaxElement.Error, syntax.error.getOrElse(SyntaxElementConfig("#FF6B6B", None, StyleConfig(underline = true)))),
+      (
+        SyntaxElement.Error,
+        syntax.error.getOrElse(SyntaxElementConfig("#FF6B6B", None, StyleConfig(underline = true)))
+      ),
       (SyntaxElement.Normal, syntax.normal.getOrElse(defaultFg))
     )
 

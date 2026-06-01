@@ -6,7 +6,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.{CommandCategory, CommandIntent, CommandRunner, CommandSurfaceItem}
-import com.serenity.config.{AppConfig, CursorMode}
+import com.serenity.config.{AppConfig, BackgroundStyle, CursorMode}
 import com.serenity.keystroke.events.{MoveDown, MoveRight, TabKey, ToggleCommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionState
@@ -109,6 +109,16 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MoveRight).unsafeRunSync()  // Breathe → Blink (wrap)
 
     sm.getCurrentState.unsafeRunSync().config.cursorMode shouldBe CursorMode.Blink
+  }
+
+  "SetBackgroundStyle" should "update config.backgroundStyle via command runner navigation" in {
+    val sm = makeStateManager()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    for _ <- 1 to 4 do sm.applyEvent(TabKey).unsafeRunSync()
+    for _ <- 1 to 5 do sm.applyEvent(MoveDown).unsafeRunSync()
+    sm.applyEvent(MoveRight).unsafeRunSync()
+
+    sm.getCurrentState.unsafeRunSync().config.backgroundStyle shouldBe BackgroundStyle.GlassLike
   }
 
   // ── SessionState JSON round-trip ──────────────────────────────────────────

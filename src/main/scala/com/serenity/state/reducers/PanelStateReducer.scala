@@ -1,13 +1,13 @@
 package com.serenity.state.reducers
 
-import com.serenity.state.models.{AppState, Focus, PaneId, SurfaceContent, SurfacePresentation, UiSurface}
-import com.serenity.ui.layout.{PanelContent, PanelPosition}
+import com.serenity.state.models.*
+import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
 
 object PanelStateReducer:
 
   def pin(content: PanelContent, position: PanelPosition, size: Int, state: AppState): ReducerResult =
     val (stateWithId, surfaceId) = state.allocateSurfaceId
-    val panel = UiSurface.fromPanelContent(surfaceId, content, position, size)
+    val panel                    = UiSurface.fromPanelContent(surfaceId, content, position, size)
     ReducerResult.noEffects(
       stateWithId.copy(
         uiSurfaces = replacePinnedAtPosition(stateWithId.uiSurfaces, position, panel)
@@ -76,23 +76,39 @@ object PanelStateReducer:
       case SurfaceContent.DirectoryListing(path, entries, selectedPath) =>
         Some(
           surface.copy(
-            content = SurfaceContent.DirectoryListing(path, entries, selectedPath.orElse(Some(path))),
+            content = SurfaceContent.DirectoryTree(
+              DirectoryTreeData(path, entries = Map(path -> entries)),
+              selectedPath.orElse(Some(path))
+            ),
+            presentation = SurfacePresentation.Pinned(position, 30),
+            dismissOnMove = false
+          )
+        )
+      case SurfaceContent.DirectoryTree(tree, selectedPath) =>
+        Some(
+          surface.copy(
+            content = SurfaceContent.DirectoryTree(tree, selectedPath.orElse(Some(tree.rootPath))),
             presentation = SurfacePresentation.Pinned(position, 30),
             dismissOnMove = false
           )
         )
       case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_) | SurfaceContent.Diagnostics(_) =>
         Some(surface.copy(presentation = SurfacePresentation.Pinned(position, 30), dismissOnMove = false))
-      case SurfaceContent.StartPage(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.ThemePicker(_) |
-           SurfaceContent.FileSearch(_) | SurfaceContent.ModalWorkflow(_) | SurfaceContent.QuickInfo(_) |
-           SurfaceContent.FilePreview(_, _) | SurfaceContent.SymbolDefinition(_, _) |
-           SurfaceContent.GhostOverlay(_, _) =>
+      case SurfaceContent.StartPage(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) |
+          SurfaceContent.ThemePicker(_) |
+          SurfaceContent.FileSearch(_) | SurfaceContent.ModalWorkflow(_) | SurfaceContent.QuickInfo(_) |
+          SurfaceContent.FilePreview(_, _) | SurfaceContent.SymbolDefinition(_, _) |
+          SurfaceContent.GhostOverlay(_, _) =>
         None
 
   private def replaceSurface(surfaces: List[UiSurface], updated: UiSurface): List[UiSurface] =
     surfaces.filterNot(_.id == updated.id) :+ updated
 
-  private def replacePinnedAtPosition(surfaces: List[UiSurface], position: PanelPosition, updated: UiSurface): List[UiSurface] =
+  private def replacePinnedAtPosition(
+    surfaces: List[UiSurface],
+    position: PanelPosition,
+    updated: UiSurface
+  ): List[UiSurface] =
     surfaces.filterNot {
       _.presentation match
         case SurfacePresentation.Pinned(pos, _) if pos == position => true

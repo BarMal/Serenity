@@ -9,9 +9,14 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import javax.swing.*
 
 import cats.effect.{IO, Resource}
+import com.serenity.config.WindowChromeMode
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 
-class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
+class SwingWindow(
+    initialPixelSize: Dimension,
+    initialMetrics: CellMetrics,
+    chromeMode: WindowChromeMode = WindowChromeMode.Native
+):
 
   private val TitleBarH     = 32
   private val BtnW          = 46
@@ -25,6 +30,7 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
   private val ColCloseHover = new Color(0xc42b1c)
 
   private val pixelSize           = new AtomicReference(initialPixelSize)
+  private val metricsRef          = new AtomicReference(initialMetrics)
   private val pendingResize       = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch          = new CountDownLatch(1)
   private val renderedImageRef    = new AtomicReference[Option[BufferedImage]](None)
@@ -32,6 +38,7 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
   private val maximizedRef        = new AtomicBoolean(false)
   private val maxBtnRef           = new AtomicReference[Option[JLabel]](None)
   private val onResizeCallbackRef = new AtomicReference[Option[() => Unit]](None)
+  private val usesCustomChrome    = chromeMode == WindowChromeMode.Custom
 
   def setOnResize(cb: () => Unit): Unit = onResizeCallbackRef.set(Some(cb))
 
@@ -58,10 +65,10 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
     SwingUtilities.invokeLater(() => canvas.repaint())
 
   private def updateShape(): Unit =
-    if !maximizedRef.get() then
+    if usesCustomChrome && !maximizedRef.get() then
       val d = frame.getSize
       frame.setShape(new RoundRectangle2D.Double(0, 0, d.width, d.height, CornerArc, CornerArc))
-    else frame.setShape(null)
+    else if usesCustomChrome then frame.setShape(null)
 
   private def toggleMaximize(): Unit =
     if maximizedRef.get() then
@@ -83,8 +90,6 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
           setBackground(if isClose then ColCloseHover else ColBtnHover)
         override def mouseExited(e: MouseEvent): Unit =
           setBackground(ColBar)
-        // mouseReleased so the action fires even if the mouse drifts slightly;
-        // bounds-check guards against releasing outside the button after a press inside
         override def mouseReleased(e: MouseEvent): Unit =
           if e.getX >= 0 && e.getX < getWidth && e.getY >= 0 && e.getY < getHeight then
             if isClose then closeLatch.countDown()
@@ -103,7 +108,6 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
     btnPanel.add(maxBtn)
     btnPanel.add(closeBtn)
 
-    // Mirror spacer on WEST keeps the CENTER title visually centred relative to the window
     val spacer = new JPanel:
       setBackground(ColBar)
       setPreferredSize(new Dimension(3 * BtnW, TitleBarH))
@@ -143,8 +147,6 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
     titleLabel.addMouseMotionListener(dragAdapter)
     bar
 
-  // Glass pane handles only the resize grip — its contains() override restricts hit-testing
-  // to the Margin-pixel border so interior events (title bar, canvas) reach their targets directly.
   private class ResizeGlassPane extends JComponent:
     setOpaque(false)
     setFocusable(false)
@@ -243,7 +245,7 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
 
   private val frame: JFrame =
     val f = new JFrame("Serenity")
-    f.setUndecorated(true)
+    f.setUndecorated(usesCustomChrome)
     f.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE)
     f.addWindowListener(
       new WindowAdapter:
@@ -253,23 +255,25 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
       val isMax = (e.getNewState & Frame.MAXIMIZED_BOTH) == Frame.MAXIMIZED_BOTH
       maximizedRef.set(isMax)
       SwingUtilities.invokeLater { () =>
-        maxBtnRef.get().foreach(_.setText(if isMax then "❐" else "□"))
-        updateShape()
+        if usesCustomChrome then
+          maxBtnRef.get().foreach(_.setText(if isMax then "❐" else "□"))
+          updateShape()
       }
     )
     f.addComponentListener(
       new ComponentAdapter:
         override def componentResized(e: ComponentEvent): Unit =
-          SwingUtilities.invokeLater(() => updateShape())
+          if usesCustomChrome then SwingUtilities.invokeLater(() => updateShape())
     )
     val content = new JPanel(new BorderLayout):
       setBackground(Color.BLACK)
-    content.add(titleBar, BorderLayout.NORTH)
+    if usesCustomChrome then content.add(titleBar, BorderLayout.NORTH)
     content.add(canvas, BorderLayout.CENTER)
     f.setContentPane(content)
-    val glassPane = new ResizeGlassPane
-    f.setGlassPane(glassPane)
-    glassPane.setVisible(true)
+    if usesCustomChrome then
+      val glassPane = new ResizeGlassPane
+      f.setGlassPane(glassPane)
+      glassPane.setVisible(true)
     f.pack()
     f.setMinimumSize(new Dimension(MinW, MinH))
     f.setLocationRelativeTo(null)
@@ -280,7 +284,7 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
   def start(): Unit =
     SwingUtilities.invokeLater { () =>
       frame.setVisible(true)
-      updateShape()
+      if usesCustomChrome then updateShape()
       canvas.requestFocusInWindow()
     }
 
@@ -294,16 +298,28 @@ class SwingWindow(initialPixelSize: Dimension, val metrics: CellMetrics):
     val d = pixelSize.get()
     metrics.viewportSize(d.width, d.height)
 
+  def metrics: CellMetrics =
+    metricsRef.get()
+
+  def updateMetrics(newMetrics: CellMetrics): Unit =
+    metricsRef.set(newMetrics)
+    val d = pixelSize.get()
+    pendingResize.set(Some(newMetrics.viewportSize(d.width, d.height)))
+    onResizeCallbackRef.get().foreach(_.apply())
+
   def doResizeIfNecessary(): Option[ViewportSize] =
     pendingResize.getAndSet(None)
 
 object SwingWindow:
   val DefaultMetrics: CellMetrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13)
 
-  def resource(metrics: CellMetrics = DefaultMetrics): Resource[IO, SwingWindow] =
+  def resource(
+    metrics: CellMetrics = DefaultMetrics,
+    chromeMode: WindowChromeMode = WindowChromeMode.Native
+  ): Resource[IO, SwingWindow] =
     Resource.make(
       IO.blocking {
-        val win = new SwingWindow(new Dimension(1024, 768), metrics)
+        val win = new SwingWindow(new Dimension(1024, 768), metrics, chromeMode)
         win.start()
         win
       }

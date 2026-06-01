@@ -1,6 +1,6 @@
 package com.serenity.lsp.client
 
-import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
+import com.serenity.lsp.model.*
 import io.circe.Json
 import io.circe.syntax.*
 
@@ -24,19 +24,21 @@ object LspProtocol:
       "params"  -> params
     )
 
-  def isResponse(json: Json): Boolean   = json.hcursor.downField("id").succeeded && json.hcursor.downField("method").failed
-  def isNotification(json: Json): Boolean = json.hcursor.downField("method").succeeded && json.hcursor.downField("id").failed
+  def isResponse(json: Json): Boolean =
+    json.hcursor.downField("id").succeeded && json.hcursor.downField("method").failed
+  def isNotification(json: Json): Boolean =
+    json.hcursor.downField("method").succeeded && json.hcursor.downField("id").failed
 
-  def responseId(json: Json): Option[Long]  = json.hcursor.downField("id").as[Long].toOption
+  def responseId(json: Json): Option[Long]           = json.hcursor.downField("id").as[Long].toOption
   def notificationMethod(json: Json): Option[String] = json.hcursor.downField("method").as[String].toOption
 
   // ── Initialize ──────────────────────────────────────────────────────────────
 
   def initializeParams(pid: Int, rootUri: String): Json =
     Json.obj(
-      "processId"    -> pid.asJson,
-      "clientInfo"   -> Json.obj("name" -> "Serenity".asJson, "version" -> "0.1.0".asJson),
-      "rootUri"      -> rootUri.asJson,
+      "processId"  -> pid.asJson,
+      "clientInfo" -> Json.obj("name" -> "Serenity".asJson, "version" -> "0.1.0".asJson),
+      "rootUri"    -> rootUri.asJson,
       "capabilities" -> Json.obj(
         "textDocument" -> Json.obj(
           "publishDiagnostics" -> Json.obj("relatedInformation" -> true.asJson)
@@ -72,9 +74,12 @@ object LspProtocol:
   def parseDiagnostics(json: Json): Option[(String, List[Diagnostic])] =
     val c = json.hcursor.downField("params")
     for
-      uri  <- c.downField("uri").as[String].toOption
-      diags = c.downField("diagnostics").as[List[Json]].getOrElse(Nil)
-                .flatMap(parseDiagnostic)
+      uri <- c.downField("uri").as[String].toOption
+      diags = c
+        .downField("diagnostics")
+        .as[List[Json]]
+        .getOrElse(Nil)
+        .flatMap(parseDiagnostic)
     yield (uri, diags)
 
   private def parseDiagnostic(json: Json): Option[Diagnostic] =
@@ -90,9 +95,9 @@ object LspProtocol:
       val source   = c.downField("source").as[String].toOption
       val code     = c.downField("code").as[String].orElse(c.downField("code").as[Int].map(_.toString)).toOption
       Diagnostic(
-        range    = LspRange(LspPosition(startLine, startChar), LspPosition(endLine, endChar)),
+        range = LspRange(LspPosition(startLine, startChar), LspPosition(endLine, endChar)),
         severity = severity,
-        message  = message,
-        source   = source,
-        code     = code
+        message = message,
+        source = source,
+        code = code
       )
