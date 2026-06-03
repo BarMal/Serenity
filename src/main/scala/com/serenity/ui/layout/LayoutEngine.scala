@@ -2,7 +2,7 @@ package com.serenity.ui.layout
 
 import com.serenity.state.models.*
 
-case class TerminalSize(width: Int, height: Int)
+case class ViewportSize(width: Int, height: Int)
 
 case class LayoutRect(x: Int, y: Int, width: Int, height: Int):
   def right: Int   = x + width
@@ -18,6 +18,9 @@ case class CalculatedLayout(
     floatingPanelRect: Option[LayoutRect] = None,
     aboveCursorOverlayRect: Option[LayoutRect] = None,
     belowCursorOverlayRect: Option[LayoutRect] = None,
+    aboveCursorOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
+    belowCursorOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
+    collapsedFloatingSurfaceIds: Set[SurfaceId] = Set.empty,
     lineNumberRect: Option[LayoutRect] = None,
     gutterRect: Option[LayoutRect] = None
 )
@@ -26,7 +29,7 @@ object LayoutManager:
 
   def calculateLayout(
     state: AppState,
-    terminalSize: TerminalSize
+    viewportSize: ViewportSize
   ): Unit = ()
 
 object LayoutEngine:
@@ -36,21 +39,21 @@ object LayoutEngine:
 
   def calculateLayout(
     state: AppState,
-    terminalSize: TerminalSize,
+    viewportSize: ViewportSize,
     spacerPercentage: Double = DefaultSpacerPercentage
   ): CalculatedLayout =
-    calculateLayoutWithUI(state, terminalSize, spacerPercentage)
+    calculateLayoutWithUI(state, viewportSize, spacerPercentage)
 
   def calculateLayoutWithUI(
     state: AppState,
-    terminalSize: TerminalSize,
+    viewportSize: ViewportSize,
     spacerPercentage: Double = DefaultSpacerPercentage
   ): CalculatedLayout =
-    val gutterHeight = if state.config.showGutter then 1 else 0
-    val contentHeight = math.max(1, terminalSize.height - gutterHeight)
+    val gutterHeight  = if state.config.showGutter then 1 else 0
+    val contentHeight = math.max(1, viewportSize.height - gutterHeight)
     val pinnedPanelRects = calculatePinnedPanelRects(
       state.pinnedSurfaces,
-      terminalSize.width,
+      viewportSize.width,
       contentHeight
     )
 
@@ -66,7 +69,7 @@ object LayoutEngine:
     val workspaceX = leftPinnedWidth
     val workspaceY = topPinnedHeight
     val workspaceWidth =
-      math.max(1, terminalSize.width - leftPinnedWidth - rightPinnedWidth)
+      math.max(1, viewportSize.width - leftPinnedWidth - rightPinnedWidth)
     val workspaceHeight =
       math.max(1, contentHeight - topPinnedHeight - bottomPinnedHeight)
 
@@ -83,7 +86,8 @@ object LayoutEngine:
 
     val leftSpacerRect = LayoutRect(workspaceX, workspaceY, spacerWidth, workspaceHeight)
     val lineNumberRect =
-      if state.config.showLineNumbers then Some(LayoutRect(workspaceX + spacerWidth, workspaceY + 1, lineNumberWidth, availableHeight))
+      if state.config.showLineNumbers then
+        Some(LayoutRect(workspaceX + spacerWidth, workspaceY + 1, lineNumberWidth, availableHeight))
       else None
 
     val editorPanelRect = LayoutRect(
@@ -96,7 +100,7 @@ object LayoutEngine:
       LayoutRect(workspaceX + spacerWidth + lineNumberWidth + availableWidth, workspaceY, spacerWidth, workspaceHeight)
 
     val gutterRect =
-      if state.config.showGutter then Some(LayoutRect(0, terminalSize.height - 1, terminalSize.width, 1))
+      if state.config.showGutter then Some(LayoutRect(0, viewportSize.height - 1, viewportSize.width, 1))
       else None
 
     val baseLayout = CalculatedLayout(
@@ -110,24 +114,23 @@ object LayoutEngine:
 
     val paneLayouts = calculatePaneLayouts(state, baseLayout)
 
-    val aboveCursorOverlayRect = state.floatingSurfaces
-      .find {
-        _.presentation match
-          case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) => true
-          case _                                                             => false
-      }
-      .flatMap(surface => calculateFloatingSurfaceRect(surface, state, paneLayouts))
-    val belowCursorOverlayRect = state.floatingSurfaces
-      .find {
-        _.presentation match
-          case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
-          case _                                                             => false
-      }
-      .flatMap(surface => calculateFloatingSurfaceRect(surface, state, paneLayouts))
+    val aboveSurfaces = state.floatingSurfaces.filter {
+      _.presentation match
+        case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) => true
+        case _                                                             => false
+    }
+    val belowSurfaces = orderedBelowCursorSurfaces(state)
+    val aboveCursorOverlayStack = aboveSurfaces.flatMap(surface =>
+      calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface.id -> _)
+    )
+    val belowLayout = calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
 
     baseLayout.copy(
-      aboveCursorOverlayRect = aboveCursorOverlayRect,
-      belowCursorOverlayRect = belowCursorOverlayRect
+      aboveCursorOverlayRect = aboveCursorOverlayStack.headOption.map(_._2),
+      belowCursorOverlayRect = belowLayout.stack.headOption.map(_._2),
+      aboveCursorOverlayStack = aboveCursorOverlayStack,
+      belowCursorOverlayStack = belowLayout.stack,
+      collapsedFloatingSurfaceIds = belowLayout.collapsedSurfaceIds
     )
 
   private def calculatePinnedPanelRects(
@@ -142,24 +145,29 @@ object LayoutEngine:
     }.toMap
     val topHeight = panelsByPosition.get(PanelPosition.Top).map(size => math.min(size, contentHeight)).getOrElse(0)
     val remainingAfterTop = math.max(1, contentHeight - topHeight)
-    val bottomHeight = panelsByPosition.get(PanelPosition.Bottom).map(size => math.min(size, remainingAfterTop)).getOrElse(0)
-    val verticalZoneY = topHeight
+    val bottomHeight =
+      panelsByPosition.get(PanelPosition.Bottom).map(size => math.min(size, remainingAfterTop)).getOrElse(0)
+    val verticalZoneY      = topHeight
     val verticalZoneHeight = math.max(1, contentHeight - topHeight - bottomHeight)
 
     val leftWidth = panelsByPosition.get(PanelPosition.Left).map(size => math.min(size, terminalWidth)).getOrElse(0)
     val remainingAfterLeft = math.max(1, terminalWidth - leftWidth)
-    val rightWidth = panelsByPosition.get(PanelPosition.Right).map(size => math.min(size, remainingAfterLeft)).getOrElse(0)
+    val rightWidth =
+      panelsByPosition.get(PanelPosition.Right).map(size => math.min(size, remainingAfterLeft)).getOrElse(0)
 
     val rects = List.newBuilder[(PanelPosition, LayoutRect)]
 
-    if topHeight > 0 then
-      rects += PanelPosition.Top -> LayoutRect(0, 0, terminalWidth, topHeight)
+    if topHeight > 0 then rects += PanelPosition.Top -> LayoutRect(0, 0, terminalWidth, topHeight)
     if bottomHeight > 0 then
       rects += PanelPosition.Bottom -> LayoutRect(0, contentHeight - bottomHeight, terminalWidth, bottomHeight)
-    if leftWidth > 0 then
-      rects += PanelPosition.Left -> LayoutRect(0, verticalZoneY, leftWidth, verticalZoneHeight)
+    if leftWidth > 0 then rects += PanelPosition.Left -> LayoutRect(0, verticalZoneY, leftWidth, verticalZoneHeight)
     if rightWidth > 0 then
-      rects += PanelPosition.Right -> LayoutRect(terminalWidth - rightWidth, verticalZoneY, rightWidth, verticalZoneHeight)
+      rects += PanelPosition.Right -> LayoutRect(
+        terminalWidth - rightWidth,
+        verticalZoneY,
+        rightWidth,
+        verticalZoneHeight
+      )
 
     rects.result().toMap
 
@@ -174,10 +182,12 @@ object LayoutEngine:
   private def calculateFloatingSurfaceRect(
     surface: UiSurface,
     state: AppState,
-    paneLayouts: Map[PaneId, LayoutRect]
+    paneLayouts: Map[PaneId, LayoutRect],
+    topYOverride: Option[Int] = None,
+    forcedHeight: Option[Int] = None
   ): Option[LayoutRect] =
     for
-      paneId  <- state.layout.activeEditorPaneId
+      paneId   <- state.layout.activeEditorPaneId
       pane     <- state.layout.editorPanes.get(paneId)
       paneRect <- paneLayouts.get(paneId)
       bufferId <- pane.bufferId
@@ -197,7 +207,7 @@ object LayoutEngine:
         contentRect.x,
         math.min(screenPosition.x - (preferredWidth / 2), contentRect.right - preferredWidth)
       )
-      val overlayY = surface.presentation match
+      val overlayY = topYOverride.getOrElse(surface.presentation match
         case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) =>
           math.max(contentRect.y, screenPosition.y - preferredHeight)
         case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) =>
@@ -205,37 +215,112 @@ object LayoutEngine:
           if preferredBelowY + preferredHeight <= contentRect.bottom then preferredBelowY
           else math.max(contentRect.y, screenPosition.y - preferredHeight)
         case _ =>
-          contentRect.y
+          contentRect.y)
+      val finalHeight = forcedHeight.getOrElse(preferredHeight)
 
       LayoutRect(
         x = overlayX,
         y = overlayY,
         width = preferredWidth,
-        height = preferredHeight
+        height = finalHeight
       )
+
+  private case class BelowOverlayLayout(
+    stack: List[(SurfaceId, LayoutRect)],
+    collapsedSurfaceIds: Set[SurfaceId]
+  )
+
+  private def orderedBelowCursorSurfaces(state: AppState): List[UiSurface] =
+    val maybeRunner  = state.commandRunnerSurface.toList
+    val maybeSubmenu = state.commandRunnerSubmenuSurface.toList
+    if maybeRunner.nonEmpty && maybeSubmenu.nonEmpty then maybeRunner ++ maybeSubmenu
+    else
+      val belowSurfaces = state.floatingSurfaces.filter {
+        _.presentation match
+          case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
+          case _                                                             => false
+      }
+      state.focus match
+        case Focus.Surface(surfaceId) =>
+          belowSurfaces.find(_.id == surfaceId) match
+            case Some(focused) => List(focused)
+            case None          => belowSurfaces.headOption.toList
+        case _ =>
+          belowSurfaces.headOption.toList
+
+  private def calculateBelowCursorOverlayStack(
+    surfaces: List[UiSurface],
+    state: AppState,
+    paneLayouts: Map[PaneId, LayoutRect]
+  ): BelowOverlayLayout =
+    if surfaces.isEmpty then BelowOverlayLayout(Nil, Set.empty)
+    else if surfaces.length == 1 then
+      BelowOverlayLayout(
+        surfaces.flatMap(surface => calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface.id -> _)),
+        Set.empty
+      )
+    else
+      surfaces match
+        case main :: submenu :: _ =>
+          val mainRectOpt = calculateFloatingSurfaceRect(main, state, paneLayouts)
+          val submenuBaseRectOpt = calculateFloatingSurfaceRect(submenu, state, paneLayouts)
+          (mainRectOpt, submenuBaseRectOpt) match
+            case (Some(mainRect), Some(submenuRect)) =>
+              val collapsedHeight = 3
+              val gapRows         = 1
+              val availableBottom = state.layout.activeEditorPaneId
+                .flatMap(paneLayouts.get)
+                .map(CursorLayout.contentRectForPane)
+                .map(_.bottom)
+                .getOrElse(mainRect.bottom + submenuRect.height + gapRows)
+              val totalHeight = mainRect.height + gapRows + submenuRect.height
+              val shouldCollapse = mainRect.y + totalHeight > availableBottom
+              val adjustedMainHeight = if shouldCollapse then collapsedHeight else mainRect.height
+              val adjustedMainRect   = mainRect.copy(height = adjustedMainHeight)
+              val remainingHeight    = math.max(3, availableBottom - adjustedMainRect.bottom - gapRows)
+              val adjustedSubmenuHeight = math.min(submenuRect.height, remainingHeight)
+              val adjustedSubmenuRect = submenuRect.copy(
+                y = adjustedMainRect.bottom + gapRows,
+                height = adjustedSubmenuHeight
+              )
+              BelowOverlayLayout(
+                List(main.id -> adjustedMainRect, submenu.id -> adjustedSubmenuRect),
+                if shouldCollapse then Set(main.id) else Set.empty
+              )
+            case _ =>
+              BelowOverlayLayout(Nil, Set.empty)
+        case _ =>
+          BelowOverlayLayout(Nil, Set.empty)
 
   private def calculateFloatingSurfaceWidth(content: SurfaceContent, maxWidth: Int): Int =
     maxWidth
 
   private def calculateFloatingSurfaceHeight(content: SurfaceContent, maxHeight: Int): Int =
     val preferredHeight = content match
-      case SurfaceContent.StartPage(_)                 => maxHeight
-      case SurfaceContent.QuickInfo(text)              => math.max(3, text.linesIterator.size + 2)
-      case SurfaceContent.FilePreview(_, content)      => math.max(4, math.min(6, content.linesIterator.take(4).size + 2))
-      case SurfaceContent.SymbolDefinition(_, _)       => 4
+      case SurfaceContent.StartPage(_)            => maxHeight
+      case SurfaceContent.QuickInfo(text)         => math.max(3, text.linesIterator.size + 2)
+      case SurfaceContent.FilePreview(_, content) => math.max(4, math.min(6, content.linesIterator.take(4).size + 2))
+      case SurfaceContent.SymbolDefinition(_, _)  => 4
       case SurfaceContent.DirectoryListing(_, entries, _) => math.max(4, math.min(6, entries.take(4).size + 2))
-      case SurfaceContent.CommandPalette(_) =>
+      case SurfaceContent.DirectoryTree(tree, _) =>
+        math.max(4, math.min(8, DirectoryTreeData.visibleRows(tree).size + 2))
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.ThemePicker(_) | SurfaceContent.FileSearch(_) =>
         math.min(8, math.max(4, maxHeight - 1))
+      case SurfaceContent.CommandPaletteSubmenu(runner, groupId, _) =>
+        val itemCount = runner.submenuItems(groupId).size
+        math.min(8, math.max(4, itemCount + 3))
       case SurfaceContent.ModalWorkflow(modal) =>
         modal match
           case Modal.FileWorkflow(workflow) =>
             math.max(8, math.min(12, workflow.suggestions.take(4).size + 6))
           case Modal.ReplaceWorkflow(_) => 5
           case Modal.CloseWorkflow(_)   => 4
-          case Modal.Custom(_, _) => 4
-          case _                  => 3
+          case Modal.Custom(_, _)       => 4
+          case _                        => 3
       case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_) | SurfaceContent.Diagnostics(_) =>
         math.min(8, math.max(4, maxHeight - 1))
+      case SurfaceContent.GhostOverlay(_, cachedRect) =>
+        cachedRect.height
 
     math.max(3, math.min(maxHeight, preferredHeight))
 
@@ -264,6 +349,12 @@ object LayoutEngine:
       visibleColumns = panelRect.width
     )
 
+  def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect, metrics: CellMetrics): Viewport =
+    viewport.copy(
+      visibleLines = panelRect.height / metrics.lineHeight,
+      visibleColumns = panelRect.width / metrics.charWidth
+    )
+
   /** Calculate individual pane layouts within the editor area */
   def calculatePaneLayouts(state: AppState, calculatedLayout: CalculatedLayout): Map[PaneId, LayoutRect] =
     calculatePaneLayoutsWithMinWidth(state, calculatedLayout, state.config.minimumPaneWidth)
@@ -275,7 +366,7 @@ object LayoutEngine:
     minWidth: Int
   ): Map[PaneId, LayoutRect] =
     val editorRect = calculatedLayout.editorPanelRect
-    val paneIds    = state.layout.editorPanes.keys.toList.sortBy(_.value)
+    val paneIds    = state.layout.orderedPaneIds
     val paneCount  = paneIds.size
 
     if paneCount == 0 then Map.empty

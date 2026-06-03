@@ -2,13 +2,11 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
-import com.googlecode.lanterna.terminal.{DefaultTerminalFactory, Terminal}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
+import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -42,7 +40,7 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
     longText.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val layout     = LayoutEngine.calculateLayout(finalState, TerminalSize(80, 24))
+    val layout     = LayoutEngine.calculateLayout(finalState, ViewportSize(80, 24))
     val panelRect  = layout.editorPanelRect
 
     // Get the viewport settings
@@ -66,9 +64,9 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
 
   it should "demonstrate the clipping solution for putString panel overflow" in {
     // This test shows how the clipping solution works
-    val terminalSize = TerminalSize(80, 24)
+    val viewportSize = ViewportSize(80, 24)
     val mockState    = createMockState()
-    val layout       = LayoutEngine.calculateLayout(mockState, terminalSize)
+    val layout       = LayoutEngine.calculateLayout(mockState, viewportSize)
     val panelRect    = layout.editorPanelRect
 
     // Original problem: text longer than panelRect.width would extend beyond panel
@@ -92,7 +90,7 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
   it should "show viewport.visibleColumns defaults are larger than typical panel width" in {
     val viewport  = Viewport.default
     val mockState = createMockState()
-    val layout    = LayoutEngine.calculateLayout(mockState, TerminalSize(80, 24))
+    val layout    = LayoutEngine.calculateLayout(mockState, ViewportSize(80, 24))
     val panelRect = layout.editorPanelRect
 
     info(s"Default viewport visibleColumns: ${viewport.visibleColumns}")

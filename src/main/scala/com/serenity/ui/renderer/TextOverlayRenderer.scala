@@ -1,54 +1,66 @@
 package com.serenity.ui.renderer
 
-import com.googlecode.lanterna.TextColor
-import com.googlecode.lanterna.graphics.TextGraphics
+import java.awt.Color
+
+import com.serenity.config.AppConfig
 import com.serenity.ui.theme.Theme
 
 object TextOverlayRenderer:
 
   def render(
-    graphics: TextGraphics,
+    surface: RenderSurface,
     overlay: TextOverlayView,
     theme: Theme,
+    config: AppConfig,
     cursorVisible: Boolean
   ): Unit =
     val rect = overlay.rect
 
-    graphics.setForegroundColor(theme.panel.foreground)
-    graphics.setBackgroundColor(theme.panel.background)
+    def rowColors(rowOffset: Int): (Color, Color) =
+      overlay.animationState
+        .getCell(0, rowOffset)
+        .map(cell =>
+          (
+            cell.currentForeground.getOrElse(theme.panel.foreground),
+            cell.currentBackground.getOrElse(theme.panel.background)
+          )
+        )
+        .getOrElse((theme.panel.foreground, theme.panel.background))
 
-    for y <- rect.y until rect.bottom do
-      graphics.putString(rect.x, y, " " * rect.width)
+    surface.setAlpha(SurfaceMaterials.panelAlpha(config, theme) * overlay.alphaMultiplier)
 
-    drawBorder(graphics, overlay, theme)
-    drawContent(graphics, overlay, theme, cursorVisible)
+    for (y, rowOffset) <- (rect.y until rect.bottom).zipWithIndex do
+      val (fg, bg) = rowColors(rowOffset)
+      surface.setForegroundColor(fg)
+      surface.setBackgroundColor(bg)
+      surface.putString(rect.x, y, " " * rect.width)
 
-    graphics.setForegroundColor(theme.foreground)
-    graphics.setBackgroundColor(theme.background)
+    applyGlassSheen(surface, rect, theme, config)
+
+    val animated = overlay.animationState.animations.nonEmpty
+    drawBorder(surface, overlay, theme)
+    drawContent(surface, overlay, theme, cursorVisible, rowColors, animated)
+
+    surface.setAlpha(1.0f)
+    surface.setForegroundColor(theme.foreground)
+    surface.setBackgroundColor(theme.background)
 
   private def drawBorder(
-    graphics: TextGraphics,
+    surface: RenderSurface,
     overlay: TextOverlayView,
     theme: Theme
   ): Unit =
     val rect = overlay.rect
-
     if rect.width >= 2 && rect.height >= 2 then
-      graphics.setForegroundColor(theme.border)
-      graphics.setBackgroundColor(theme.panel.background)
-      graphics.putString(rect.x, rect.y, "+" + "-" * (rect.width - 2) + "+")
-
-      for y <- (rect.y + 1) until (rect.bottom - 1) do
-        graphics.putString(rect.x, y, "|")
-        graphics.putString(rect.right - 1, y, "|")
-
-      graphics.putString(rect.x, rect.bottom - 1, "+" + "-" * (rect.width - 2) + "+")
+      surface.strokeRoundRect(rect.x, rect.y, rect.width, rect.height, arcPx = 8, theme.border)
 
   private def drawContent(
-    graphics: TextGraphics,
+    surface: RenderSurface,
     overlay: TextOverlayView,
     theme: Theme,
-    cursorVisible: Boolean
+    cursorVisible: Boolean,
+    rowColors: Int => (Color, Color),
+    animated: Boolean
   ): Unit =
     val rect        = overlay.rect
     val maxLineSize = math.max(0, rect.width - 2)
@@ -56,47 +68,58 @@ object TextOverlayRenderer:
 
     val contentRows = overlay.header.toList ++ overlay.rows ++ overlay.footer.toList
 
-    contentRows.take(maxLines).zipWithIndex.foreach { case (row, index) =>
-      renderRow(
-        graphics,
-        rect.x + 1,
-        rect.y + 1 + index,
-        maxLineSize,
-        row,
-        theme,
-        cursorVisible
-      )
+    contentRows.take(maxLines).zipWithIndex.foreach {
+      case (row, index) =>
+        val rowOffset        = 1 + index
+        val (animFg, animBg) = rowColors(rowOffset)
+        renderRow(
+          surface,
+          rect.x + 1,
+          rect.y + 1 + index,
+          maxLineSize,
+          row,
+          theme,
+          cursorVisible,
+          defaultForeground = animFg,
+          defaultBackground = animBg,
+          isAnimating = animated
+        )
     }
 
   private def renderRow(
-    graphics: TextGraphics,
+    surface: RenderSurface,
     x: Int,
     y: Int,
     width: Int,
     row: OverlayRow,
     theme: Theme,
-    cursorVisible: Boolean
+    cursorVisible: Boolean,
+    defaultForeground: Color = null,
+    defaultBackground: Color = null,
+    isAnimating: Boolean = false
   ): Unit =
+    val baseFg = if defaultForeground != null then defaultForeground else theme.panel.foreground
+    val baseBg = if defaultBackground != null then defaultBackground else theme.panel.background
     val rowBackground =
       row.backgroundColor.getOrElse(
-        if row.selected then theme.highlighted.background else theme.panel.background
+        if row.selected then theme.highlighted.background else baseBg
       )
     val rowForeground =
       row.foregroundColor.getOrElse(
-        if row.selected then theme.highlighted.foreground else theme.panel.foreground
+        if row.selected then theme.highlighted.foreground else baseFg
       )
 
-    graphics.setForegroundColor(rowForeground)
-    graphics.setBackgroundColor(rowBackground)
-    CharacterRenderer.renderStringPlain(graphics, x, y, " " * width)
+    surface.setForegroundColor(rowForeground)
+    surface.setBackgroundColor(rowBackground)
+    CharacterRenderer.renderStringPlain(surface, x, y, " " * width)
 
     row.layout match
       case OverlayRowLayout.Plain =>
-        CharacterRenderer.renderStringPlain(graphics, x, y, row.plainText.take(width))
+        CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
       case OverlayRowLayout.Distributed =>
-        renderDistributedRow(graphics, x, y, width, row, theme, rowForeground, rowBackground)
+        renderDistributedRow(surface, x, y, width, row, theme, rowForeground, rowBackground, isAnimating)
       case OverlayRowLayout.Split =>
-        renderSplitRow(graphics, x, y, width, row, theme, rowForeground, rowBackground)
+        renderSplitRow(surface, x, y, width, row, theme, rowForeground, rowBackground, isAnimating)
 
     if cursorVisible then
       row.cursorColumn.foreach { cursorColumn =>
@@ -105,44 +128,56 @@ object TextOverlayRenderer:
           val cursorChar =
             if cursorColumn < row.plainText.length then row.plainText.charAt(cursorColumn)
             else ' '
-          graphics.setForegroundColor(theme.background)
-          graphics.setBackgroundColor(theme.cursor)
-          CharacterRenderer.renderChar(graphics, cursorX, y, cursorChar)
+          surface.setForegroundColor(theme.background)
+          surface.setBackgroundColor(theme.cursor)
+          CharacterRenderer.renderChar(surface, cursorX, y, cursorChar)
       }
 
   private def renderDistributedRow(
-    graphics: TextGraphics,
+    surface: RenderSurface,
     x: Int,
     y: Int,
     width: Int,
     row: OverlayRow,
     theme: Theme,
-    defaultForeground: TextColor,
-    defaultBackground: TextColor
+    defaultForeground: Color,
+    defaultBackground: Color,
+    isAnimating: Boolean = false
   ): Unit =
     val segments = row.segments
-    if segments.isEmpty then
-      CharacterRenderer.renderStringPlain(graphics, x, y, row.plainText.take(width))
+    if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
     else
       val baseCellWidth = width / segments.length
       val remainder     = width % segments.length
 
-      segments.zipWithIndex.foldLeft(x) { case (cursorX, (segment, index)) =>
-        val cellWidth = baseCellWidth + (if index < remainder then 1 else 0)
-        renderSegmentCell(graphics, cursorX, y, cellWidth, segment, theme, defaultForeground, defaultBackground)
-        cursorX + cellWidth
+      segments.zipWithIndex.foldLeft(x) {
+        case (cursorX, (segment, index)) =>
+          val cellWidth = baseCellWidth + (if index < remainder then 1 else 0)
+          renderSegmentCell(
+            surface,
+            cursorX,
+            y,
+            cellWidth,
+            segment,
+            theme,
+            defaultForeground,
+            defaultBackground,
+            isAnimating
+          )
+          cursorX + cellWidth
       }
       ()
 
   private def renderSplitRow(
-    graphics: TextGraphics,
+    surface: RenderSurface,
     x: Int,
     y: Int,
     width: Int,
     row: OverlayRow,
     theme: Theme,
-    defaultForeground: TextColor,
-    defaultBackground: TextColor
+    defaultForeground: Color,
+    defaultBackground: Color,
+    isAnimating: Boolean = false
   ): Unit =
     row.segments match
       case left :: rightSegments if rightSegments.nonEmpty =>
@@ -152,42 +187,77 @@ object TextOverlayRenderer:
         val leftMaxWidth    = math.max(0, width - rightGroupWidth - 1)
         val leftText        = left.text.take(leftMaxWidth)
 
-        renderSegmentText(graphics, x, y, leftText.length, leftText, left, theme, defaultForeground, defaultBackground)
+        renderSegmentText(
+          surface,
+          x,
+          y,
+          leftText.length,
+          leftText,
+          left,
+          theme,
+          defaultForeground,
+          defaultBackground,
+          isAnimating
+        )
 
         val rightStartX = x + math.max(0, width - rightGroupWidth)
         rightSegments.foldLeft(rightStartX) { (cursorX, segment) =>
           val text = segment.text.take(math.max(0, x + width - cursorX))
-          renderSegmentText(graphics, cursorX, y, text.length, text, segment, theme, defaultForeground, defaultBackground)
+          renderSegmentText(
+            surface,
+            cursorX,
+            y,
+            text.length,
+            text,
+            segment,
+            theme,
+            defaultForeground,
+            defaultBackground,
+            isAnimating
+          )
           cursorX + text.length + 1
         }
       case _ =>
-        CharacterRenderer.renderStringPlain(graphics, x, y, row.plainText.take(width))
+        CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
 
   private def renderSegmentCell(
-    graphics: TextGraphics,
+    surface: RenderSurface,
     x: Int,
     y: Int,
     width: Int,
     segment: OverlaySegment,
     theme: Theme,
-    defaultForeground: TextColor,
-    defaultBackground: TextColor
+    defaultForeground: Color,
+    defaultBackground: Color,
+    isAnimating: Boolean = false
   ): Unit =
     val text    = segment.text.take(width)
     val leftPad = math.max(0, (width - text.length) / 2)
     val renderX = x + leftPad
-    renderSegmentText(graphics, renderX, y, text.length, text, segment, theme, defaultForeground, defaultBackground)
+    renderSegmentText(
+      surface,
+      renderX,
+      y,
+      text.length,
+      text,
+      segment,
+      theme,
+      defaultForeground,
+      defaultBackground,
+      isAnimating
+    )
 
   private def renderSegmentText(
-    graphics: TextGraphics,
+    surface: RenderSurface,
     x: Int,
     y: Int,
     width: Int,
     segmentText: String,
     segment: OverlaySegment,
     theme: Theme,
-    defaultForeground: TextColor,
-    defaultBackground: TextColor
+    defaultForeground: Color,
+    defaultBackground: Color,
+    isAnimating: Boolean = false
   ): Unit =
     if width > 0 then
       val segmentBackground =
@@ -203,6 +273,22 @@ object TextOverlayRenderer:
           else if segment.tone == OverlayTone.Error then theme.error.foreground
           else defaultForeground
         )
-      graphics.setForegroundColor(segmentForeground)
-      graphics.setBackgroundColor(segmentBackground)
-      CharacterRenderer.renderStringPlain(graphics, x, y, segmentText.take(width))
+      surface.setForegroundColor(segmentForeground)
+      surface.setBackgroundColor(segmentBackground)
+      CharacterRenderer.renderStringPlain(surface, x, y, segmentText.take(width))
+
+  private def applyGlassSheen(
+    surface: RenderSurface,
+    rect: com.serenity.ui.layout.LayoutRect,
+    theme: Theme,
+    config: AppConfig
+  ): Unit =
+    SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
+      val sheenWidth  = math.max(0, rect.width - 2)
+      val sheenHeight = math.min(2, math.max(0, rect.height - 2))
+      if sheenWidth > 0 && sheenHeight > 0 then
+        surface.setBackgroundColor(sheenColor)
+        (0 until sheenHeight).foreach { rowOffset =>
+          CharacterRenderer.renderStringPlain(surface, rect.x + 1, rect.y + 1 + rowOffset, " " * sheenWidth)
+        }
+    }

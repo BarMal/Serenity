@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.command.CommandRunner
-import com.serenity.ui.layout.{CursorLayout, Layout, LayoutEngine, TerminalSize}
+import com.serenity.ui.layout.{CursorLayout, Layout, LayoutEngine, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -43,7 +43,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val layout = LayoutEngine.calculateLayout(state, TerminalSize(100, 30))
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
     layout.aboveCursorOverlayRect shouldBe defined
     layout.belowCursorOverlayRect shouldBe None
@@ -73,7 +73,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val layout = LayoutEngine.calculateLayout(state, TerminalSize(100, 20))
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 20))
 
     layout.aboveCursorOverlayRect shouldBe defined
 
@@ -106,7 +106,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val layout = LayoutEngine.calculateLayout(state, TerminalSize(100, 30))
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
     layout.aboveCursorOverlayRect shouldBe None
     layout.belowCursorOverlayRect shouldBe defined

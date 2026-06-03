@@ -1,5 +1,5 @@
 package com.serenity.keystroke.events
 
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 
-case class ResizeEvent(newSize: TerminalSize) extends SystemEvent
+case class ResizeEvent(newSize: ViewportSize) extends SystemEvent

@@ -4,7 +4,9 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
+import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
+import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -102,8 +104,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       )
       
       // When: Calculate layout with UI elements enabled
-      terminalSize = TerminalSize(80, 24)
-      layout = LayoutEngine.calculateLayoutWithUI(stateWithLineNumbers, terminalSize)
+      viewportSize = ViewportSize(80, 24)
+      layout = LayoutEngine.calculateLayoutWithUI(stateWithLineNumbers, viewportSize)
       
       // Calculate expected dimensions based on actual buffer content (3 lines = 1 digit + 1 space = min 3 chars)
       lineNumberWidth = 3 // Based on actual LayoutEngine calculation for 3-line buffer
@@ -120,7 +122,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         layout.gutterRect should be(defined)
         layout.gutterRect.get.height should be(gutterHeight)
         // Gutter should be at bottom of terminal
-        layout.gutterRect.get.y should be(terminalSize.height - gutterHeight)
+        layout.gutterRect.get.y should be(viewportSize.height - gutterHeight)
       
     program.unsafeRunSync()
   }
@@ -162,6 +164,40 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
+  it should "render shared gutter line numbers from the active pane only" in {
+    val buffer1 = Buffer
+      .fromString(BufferId(1), (1 to 20).map(i => s"left $i").mkString("\n"))
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 10, visibleColumns = 20))
+    val buffer2 = Buffer
+      .fromString(BufferId(2), (1 to 20).map(i => s"right $i").mkString("\n"))
+      .copy(viewport = Viewport(topLine = 5, leftColumn = 0, visibleLines = 10, visibleColumns = 20))
+    val state = AppState.initial.copy(
+      buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
+      bufferOrder = List(buffer1.id, buffer2.id),
+      layout = com.serenity.ui.layout.Layout(
+        editorPanes = Map(
+          PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer1.id),
+          PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
+        ),
+        activeEditorPaneId = Some(PaneId(1)),
+        paneOrder = List(PaneId(0), PaneId(1))
+      ),
+      focus = Focus.EditorPane(PaneId(1)),
+      theme = Theme.light
+    )
+    val surface = new MockRenderSurface(80, 24)
+    val viewport = ViewportSize(80, 24)
+    val layout   = LayoutEngine.calculateLayout(state, viewport)
+    val lineRect = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
+
+    Renderer.render(state, cursorVisible = true, surface, viewport)
+
+    val firstRenderedLine =
+      (lineRect.x until lineRect.right).map(x => surface.getChar(x, lineRect.y)).mkString.trim
+
+    firstRenderedLine shouldBe "6"
+  }
+
   it should "position gutter correctly below buffer header and use black background" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     
@@ -179,18 +215,18 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       stateWithGutter = initialState.copy(
         config = initialState.config.copy(showGutter = true)
       )
-      terminalSize = TerminalSize(80, 24)
-      layout = LayoutEngine.calculateLayoutWithUI(stateWithGutter, terminalSize)
+      viewportSize = ViewportSize(80, 24)
+      layout = LayoutEngine.calculateLayoutWithUI(stateWithGutter, viewportSize)
       
     yield
       // Then: Gutter should be positioned to account for buffer header
       layout.gutterRect should be(defined)
       
       // Gutter should be at absolute bottom (not interfering with editor content)
-      layout.gutterRect.get.y should be(terminalSize.height - 1)
+      layout.gutterRect.get.y should be(viewportSize.height - 1)
       
       // Editor panel should have reduced height to accommodate gutter
-      layout.editorPanelRect.height should be < terminalSize.height
+      layout.editorPanelRect.height should be < viewportSize.height
       
       // Verify gutter styling would be black (this will be tested in rendering)
       checkGutterStyling() shouldBe "black_background"

@@ -12,9 +12,9 @@ class EditorPaneComponent(
 
   protected def decodeEvent(event: Event): Option[EditorEvent] =
     event match
-      case ToggleSyntaxHighlighting      => None
+      case ToggleSyntaxHighlighting => None
       case editorEvent: EditorEvent => Some(editorEvent)
-      case _                             => None
+      case _                        => None
 
   protected def processTypedEvent(event: EditorEvent, currentState: AppState): ComponentResult =
     currentState.layout.editorPanes.get(paneId) match

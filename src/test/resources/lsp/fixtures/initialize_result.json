@@ -1,0 +1,12 @@
+{
+  "capabilities": {
+    "textDocumentSync": 1,
+    "hoverProvider": true,
+    "completionProvider": {},
+    "definitionProvider": true
+  },
+  "serverInfo": {
+    "name": "mock-lsp",
+    "version": "0.1.0"
+  }
+}

@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.rope.Balance
 import com.serenity.command.{Command, CommandRegistry, CommandRunner}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Layout, LayoutEngine, TerminalSize}
+import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.OverlayViewModel
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -41,7 +41,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
 
   "OverlayViewModel.fromState" should "derive an above-cursor quick-info overlay view from peek state" in {
     val state  = stateWithQuickInfo("List.map(f)")
-    val layout = LayoutEngine.calculateLayout(state, TerminalSize(100, 24))
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
 
     val overlays = OverlayViewModel.fromState(state, layout)
 
@@ -74,7 +74,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val layout = LayoutEngine.calculateLayout(state, TerminalSize(100, 24))
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
 
     val overlays = OverlayViewModel.fromState(state, layout)
 
@@ -114,7 +114,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val layout = LayoutEngine.calculateLayout(state, TerminalSize(100, 24))
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
 
     val overlays = OverlayViewModel.fromState(state, layout)
     val overlay = overlays.belowCursor.getOrElse(fail("Expected command runner overlay"))
@@ -147,7 +147,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val layout = LayoutEngine.calculateLayout(state, TerminalSize(100, 24))
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
 
     val overlays = OverlayViewModel.fromState(state, layout)
 
@@ -195,7 +195,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val layout = LayoutEngine.calculateLayout(state, TerminalSize(100, 24))
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
 
     val overlays = OverlayViewModel.fromState(state, layout)
     val overlay = overlays.belowCursor.getOrElse(fail("Expected focused modal overlay"))
@@ -203,4 +203,84 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlay.rows.exists(_.plainText.startsWith("Filename")) shouldBe true
     overlay.rows.exists(_.plainText.startsWith("Path")) shouldBe true
     overlay.header.map(_.plainText) should not contain "search: op"
+  }
+
+  it should "stack the command runner and submenu preview beneath the cursor" in {
+    val registry = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry)
+      .withActiveCategory(com.serenity.command.CommandCategory.Settings)
+    val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
+      cursors = List(CursorPosition(1, 2))
+    )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner-submenu"),
+          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = true),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
+
+    val overlays = OverlayViewModel.fromState(state, layout)
+    val stack    = overlays.belowCursorStack
+
+    stack should have size 2
+    stack.head.rect.y should be < stack(1).rect.y
+    stack(1).rect.y shouldBe stack.head.rect.bottom + 1
+  }
+
+  it should "collapse the parent runner to one content row when there is not enough vertical space for both panels" in {
+    val registry = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry)
+      .withActiveCategory(com.serenity.command.CommandCategory.Settings)
+    val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
+      cursors = List(CursorPosition(2, 2))
+    )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner-submenu")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(CursorPosition(2, 2)), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner-submenu"),
+          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+          SurfacePresentation.Floating(Some(CursorPosition(2, 2)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(60, 8))
+    val overlays = OverlayViewModel.fromState(state, layout)
+    val stack    = overlays.belowCursorStack
+
+    stack should have size 2
+    stack.head.rows should have size 1
   }

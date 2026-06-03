@@ -35,6 +35,7 @@ case class CloseWorkflowState(
     remainingBufferIds: List[BufferId] = Nil,
     selectedChoice: CloseWorkflowChoice = CloseWorkflowChoice.Save
 ):
+
   def moveChoice(delta: Int): CloseWorkflowState =
     val choices = List(
       CloseWorkflowChoice.Save,
@@ -42,7 +43,7 @@ case class CloseWorkflowState(
       CloseWorkflowChoice.Cancel
     )
     val currentIndex = choices.indexOf(selectedChoice)
-    val rawIndex = (currentIndex + delta) % choices.length
+    val rawIndex     = (currentIndex + delta) % choices.length
     val wrappedIndex = if rawIndex < 0 then choices.length + rawIndex else rawIndex
     copy(selectedChoice = choices(wrappedIndex))
 
@@ -52,6 +53,7 @@ case class ReplaceWorkflowState(
     activeField: ReplaceWorkflowField = ReplaceWorkflowField.Find,
     statusMessage: Option[String] = None
 ):
+
   def appendToActiveField(char: Char): ReplaceWorkflowState =
     activeField match
       case ReplaceWorkflowField.Find        => copy(findText = findText + char, statusMessage = None)
@@ -59,13 +61,14 @@ case class ReplaceWorkflowState(
 
   def deleteFromActiveField: ReplaceWorkflowState =
     activeField match
-      case ReplaceWorkflowField.Find        => copy(findText = findText.dropRight(1), statusMessage = None)
-      case ReplaceWorkflowField.ReplaceWith => copy(replacementText = replacementText.dropRight(1), statusMessage = None)
+      case ReplaceWorkflowField.Find => copy(findText = findText.dropRight(1), statusMessage = None)
+      case ReplaceWorkflowField.ReplaceWith =>
+        copy(replacementText = replacementText.dropRight(1), statusMessage = None)
 
   def switchField(delta: Int): ReplaceWorkflowState =
-    val fields = List(ReplaceWorkflowField.Find, ReplaceWorkflowField.ReplaceWith)
+    val fields       = List(ReplaceWorkflowField.Find, ReplaceWorkflowField.ReplaceWith)
     val currentIndex = fields.indexOf(activeField)
-    val rawIndex = (currentIndex + delta) % fields.length
+    val rawIndex     = (currentIndex + delta) % fields.length
     val wrappedIndex = if rawIndex < 0 then fields.length + rawIndex else rawIndex
     copy(activeField = fields(wrappedIndex), statusMessage = None)
 
@@ -80,6 +83,7 @@ case class FileWorkflowState(
     confirmCreateDirectories: Boolean = false,
     statusMessage: Option[String] = None
 ):
+
   def appendToActiveField(char: Char): FileWorkflowState =
     activeField match
       case FileWorkflowField.Filename => copy(filename = filename + char, statusMessage = None)
@@ -91,16 +95,16 @@ case class FileWorkflowState(
       case FileWorkflowField.Path     => copy(path = path.dropRight(1), statusMessage = None)
 
   def switchField(delta: Int): FileWorkflowState =
-    val fields = List(FileWorkflowField.Filename, FileWorkflowField.Path)
+    val fields       = List(FileWorkflowField.Filename, FileWorkflowField.Path)
     val currentIndex = fields.indexOf(activeField)
-    val rawIndex = (currentIndex + delta) % fields.length
+    val rawIndex     = (currentIndex + delta) % fields.length
     val wrappedIndex = if rawIndex < 0 then fields.length + rawIndex else rawIndex
     copy(activeField = fields(wrappedIndex), statusMessage = None)
 
   def moveSuggestion(delta: Int): FileWorkflowState =
     if suggestions.isEmpty then this
     else
-      val rawIndex = (selectedSuggestionIndex + delta) % suggestions.length
+      val rawIndex     = (selectedSuggestionIndex + delta) % suggestions.length
       val wrappedIndex = if rawIndex < 0 then suggestions.length + rawIndex else rawIndex
       copy(selectedSuggestionIndex = wrappedIndex, statusMessage = None)
 
@@ -111,8 +115,12 @@ case class FileWorkflowState(
         val normalizedValue =
           if suggestion.isDirectory && !suggestion.value.endsWith(separator) then suggestion.value + separator
           else suggestion.value
-        copy(path = normalizedValue, statusMessage = None)
-      case None             => this
+        activeField match
+          case FileWorkflowField.Path =>
+            copy(path = normalizedValue, statusMessage = None)
+          case FileWorkflowField.Filename =>
+            copy(filename = normalizedValue, statusMessage = None)
+      case None => this
 
 enum Modal:
 

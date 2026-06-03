@@ -24,7 +24,7 @@ class ResizeComponent extends FocusedComponent:
 
           currentState.copy(
             buffers = updatedBuffers,
-            terminalSize = Some(newSize)
+            viewportSize = Some(newSize)
           )
         }
       case _ => ComponentResult.NoChange

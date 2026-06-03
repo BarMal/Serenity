@@ -7,10 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.keystroke.events.{ToggleCommandRunner, InsertChar}
-import com.serenity.ui.layout.{TerminalSize, LayoutEngine}
-import com.serenity.ui.renderer.Renderer
-import com.googlecode.lanterna.screen.{TerminalScreen}
-import com.googlecode.lanterna.terminal.virtual.VirtualTerminal
+import com.serenity.ui.layout.{ViewportSize, LayoutEngine}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
@@ -37,7 +34,7 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
       _ <- stateManager.applyEvent(InsertChar('o'))
       
       // Set terminal size for testing
-      _ <- stateManager.handleTerminalResize(TerminalSize(80, 24))
+      _ <- stateManager.handleViewportResize(ViewportSize(80, 24))
       
       // Activate command runner
       _ <- stateManager.applyEvent(ToggleCommandRunner)
@@ -73,7 +70,7 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
       
       // Set terminal size for consistent testing  
-      _ <- stateManager.handleTerminalResize(TerminalSize(80, 24))
+      _ <- stateManager.handleViewportResize(ViewportSize(80, 24))
       
       // Create a buffer with multiple lines and position cursor in the middle
       _ <- stateManager.applyEvent(InsertChar('L'))

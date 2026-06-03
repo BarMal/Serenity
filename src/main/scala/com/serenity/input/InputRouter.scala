@@ -3,13 +3,13 @@ package com.serenity.input
 import cats.FlatMap
 import cats.effect.{Ref, Sync}
 import cats.syntax.functor.*
-import com.googlecode.lanterna.input.KeyStroke
+import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.Translator
 import fs2.Stream
 
 trait InputRouter[F[_], E <: Event]:
-  def eventStream(keyStream: Stream[F, KeyStroke]): Stream[F, Event]
+  def eventStream(infoStream: Stream[F, KeyStrokeInfo]): Stream[F, Event]
   def setActiveTranslator(translator: Translator[E]): F[Unit]
   def getActiveTranslator: F[Translator[E]]
 
@@ -17,8 +17,8 @@ class InputRouterImpl[F[_] : FlatMap, E <: Event](
     activeTranslatorRef: Ref[F, Translator[E]]
 ) extends InputRouter[F, E]:
 
-  def eventStream(keyStream: Stream[F, KeyStroke]): Stream[F, Event] =
-    keyStream.evalMap(translateKeyStroke)
+  def eventStream(infoStream: Stream[F, KeyStrokeInfo]): Stream[F, Event] =
+    infoStream.evalMap(translate)
 
   def setActiveTranslator(translator: Translator[E]): F[Unit] =
     activeTranslatorRef.set(translator)
@@ -26,10 +26,10 @@ class InputRouterImpl[F[_] : FlatMap, E <: Event](
   def getActiveTranslator: F[Translator[E]] =
     activeTranslatorRef.get
 
-  private def translateKeyStroke(keyStroke: KeyStroke): F[Event] =
+  private def translate(info: KeyStrokeInfo): F[Event] =
     for
       translator <- activeTranslatorRef.get
-      event = translator.translate(keyStroke)
+      event = translator.translate(info)
     yield event
 
 object InputRouter:

@@ -21,6 +21,7 @@ case object MoveUp                extends NavigationEvent
 case object MoveDown              extends NavigationEvent
 case object MoveToStart           extends NavigationEvent
 case object MoveToEnd             extends NavigationEvent
+case object SelectAll             extends TextEntryEvent
 case object NewLine               extends TextEntryEvent
 case object PageDown              extends NavigationEvent
 case object PageUp                extends NavigationEvent

@@ -1,10 +1,10 @@
 package com.serenity.ui.renderer
 
+import java.awt.Color
+
 import com.serenity.command.{CommandCategory, CommandRegistry, CommandSurfaceItem}
-import com.serenity.state.models.{CloseWorkflowChoice, CloseWorkflowState, FileWorkflowField, FileWorkflowMode, FileWorkflowState, Modal, ReplaceWorkflowField, ReplaceWorkflowState, SurfaceContent}
-import com.serenity.ui.layout.LayoutRect
-import com.googlecode.lanterna.TextColor
-import com.serenity.ui.layout.SurfaceLayoutKind
+import com.serenity.state.models.*
+import com.serenity.ui.layout.{LayoutRect, SurfaceLayoutKind}
 
 enum SurfaceRenderMode:
   case Floating
@@ -24,16 +24,16 @@ case class OverlaySegment(
     text: String,
     selected: Boolean = false,
     tone: OverlayTone = OverlayTone.Normal,
-    foregroundColor: Option[TextColor] = None,
-    backgroundColor: Option[TextColor] = None
+    foregroundColor: Option[Color] = None,
+    backgroundColor: Option[Color] = None
 )
 
 case class OverlayRow(
     plainText: String,
     selected: Boolean = false,
     cursorColumn: Option[Int] = None,
-    foregroundColor: Option[TextColor] = None,
-    backgroundColor: Option[TextColor] = None,
+    foregroundColor: Option[Color] = None,
+    backgroundColor: Option[Color] = None,
     segments: List[OverlaySegment] = Nil,
     layout: OverlayRowLayout = OverlayRowLayout.Plain
 )
@@ -76,9 +76,19 @@ object SurfaceContentResolver:
           )
         )
       case SurfaceContent.DirectoryListing(path, entries, selectedPath) =>
-        resolveDirectoryListing(rect, mode, path.getFileName.toString, entries.map(_.name), selectedPath.flatMap(p => Option(p.getFileName).map(_.toString)))
+        resolveDirectoryListing(
+          rect,
+          mode,
+          path.getFileName.toString,
+          entries.map(_.name),
+          selectedPath.flatMap(p => Option(p.getFileName).map(_.toString))
+        )
+      case SurfaceContent.DirectoryTree(tree, selectedPath) =>
+        resolveDirectoryTree(rect, mode, tree, selectedPath)
       case SurfaceContent.CommandPalette(runner) =>
         resolveCommandPalette(runner, rect, mode)
+      case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
+        resolveCommandPaletteSubmenu(runner, groupId, previewOnly, rect, mode)
       case SurfaceContent.ModalWorkflow(modal) =>
         resolveModalWorkflow(modal, rect, mode)
       case SurfaceContent.Terminal(buffer, cursor) =>
@@ -87,6 +97,12 @@ object SurfaceContentResolver:
         resolveOutline(rect, mode, symbols.map(symbol => (symbol.kind.toString, symbol.name)))
       case SurfaceContent.Diagnostics(issues) =>
         resolveDiagnostics(rect, mode, issues)
+      case SurfaceContent.ThemePicker(state) =>
+        resolveThemePicker(state, mode)
+      case SurfaceContent.FileSearch(state) =>
+        resolveFileSearch(state, rect, mode)
+      case SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
+        resolve(originalContent, cachedRect, mode)
 
   private def resolveModalWorkflow(
     modal: Modal,
@@ -110,15 +126,15 @@ object SurfaceContentResolver:
 
   private def modalLines(modal: Modal): List[String] =
     modal match
-      case Modal.GotoLine(input)      => List("goto-line", input)
-      case Modal.Find(query, _, _)    => List("find", query)
+      case Modal.GotoLine(input)   => List("goto-line", input)
+      case Modal.Find(query, _, _) => List("find", query)
       case Modal.FileWorkflow(workflow) =>
         List("file", workflow.filename, workflow.path)
       case Modal.ReplaceWorkflow(workflow) =>
         List("replace", workflow.findText, workflow.replacementText)
       case Modal.CloseWorkflow(workflow) =>
         List("unsaved changes", workflow.currentBufferLabel)
-      case Modal.Custom(name, input)  => List(name, input)
+      case Modal.Custom(name, input) => List(name, input)
 
   private def resolveReplaceWorkflow(
     workflow: ReplaceWorkflowState,
@@ -217,16 +233,18 @@ object SurfaceContentResolver:
       layout = OverlayRowLayout.Split
     )
 
-    val suggestionRows = workflow.suggestions.zipWithIndex.map { case (suggestion, index) =>
-      val suffix = if suggestion.isDirectory then "/" else ""
-      OverlayRow(
-        plainText = suggestion.value + suffix,
-        selected = index == workflow.selectedSuggestionIndex
-      )
+    val suggestionRows = workflow.suggestions.zipWithIndex.map {
+      case (suggestion, index) =>
+        val suffix = if suggestion.isDirectory then "/" else ""
+        OverlayRow(
+          plainText = suggestion.value + suffix,
+          selected = index == workflow.selectedSuggestionIndex
+        )
     }
 
     val footer =
-      workflow.statusMessage.map(OverlayRow(_))
+      workflow.statusMessage
+        .map(OverlayRow(_))
         .orElse(
           Option.when(workflow.confirmCreateDirectories && workflow.missingPathSegments.nonEmpty) {
             OverlayRow(s"Create directories: ${workflow.missingPathSegments.mkString(" / ")}")
@@ -249,29 +267,53 @@ object SurfaceContentResolver:
     else
       given CommandRegistry = CommandRegistry.withToggleUI
       val header =
-        if runner.searchTerm.isEmpty then
-          Some(categoryTabs(runner.activeCategory))
+        if runner.searchTerm.isEmpty then Some(categoryTabs(runner.activeCategory))
         else
-          Some(OverlayRow(
-            plainText = s"search: ${runner.searchTerm}",
-            cursorColumn = Some(s"search: ${runner.searchTerm}".length)
-          ))
+          Some(
+            OverlayRow(
+              plainText = s"search: ${runner.searchTerm}",
+              cursorColumn = Some(s"search: ${runner.searchTerm}".length)
+            )
+          )
 
-      val visibleItems = runner.visibleItems
-      val rows = visibleItems.zipWithIndex.map {
+      val allItems    = runner.visibleItems
+      val maxItemRows = math.max(1, rect.height - 4)
+      val offset =
+        if allItems.size <= maxItemRows then 0
+        else
+          val half = maxItemRows / 2
+          math.max(0, math.min(runner.selectedIndex - half, allItems.size - maxItemRows))
+
+      val windowItems           = allItems.slice(offset, offset + maxItemRows)
+      val adjustedSelectedIndex = runner.selectedIndex - offset
+
+      val rows = windowItems.zipWithIndex.map {
         case (CommandSurfaceItem.CommandItem(command), index) =>
           val prefix =
             if runner.searchTerm.isEmpty then ""
             else s"[${categoryLabel(command.category)}] "
           OverlayRow(
             plainText = s"$prefix${command.name} - ${command.description}",
-            selected = index == runner.selectedIndex
+            selected = index == adjustedSelectedIndex
           )
         case (option: CommandSurfaceItem.OptionItem, index) =>
-          optionRow(option, index == runner.selectedIndex)
+          optionRow(option, index == adjustedSelectedIndex)
+        case (item: CommandSurfaceItem.InputItem, index) =>
+          val editingText = if runner.editingItemId.contains(item.id) then Some(runner.editingText) else None
+          inputRow(item, index == adjustedSelectedIndex, editingText)
+        case (group: CommandSurfaceItem.GroupItem, index) =>
+          OverlayRow(
+            plainText = group.label,
+            selected = index == adjustedSelectedIndex,
+            segments = List(
+              OverlaySegment(group.label),
+              OverlaySegment(group.hint.getOrElse(""), tone = OverlayTone.Normal)
+            ).filterNot(_.text.isEmpty),
+            layout = OverlayRowLayout.Split
+          )
       }
       val footer =
-        if visibleItems.nonEmpty then Some(OverlayRow(s"${runner.selectedIndex + 1}/${visibleItems.length}"))
+        if allItems.nonEmpty then Some(OverlayRow(s"${runner.selectedIndex + 1}/${allItems.length}"))
         else None
 
       ResolvedSurfaceContent(
@@ -280,6 +322,46 @@ object SurfaceContentResolver:
         rows = rows,
         footer = footer
       )
+
+  private def resolveCommandPaletteSubmenu(
+    runner: com.serenity.command.CommandRunner,
+    groupId: String,
+    previewOnly: Boolean,
+    rect: LayoutRect,
+    mode: SurfaceRenderMode
+  ): ResolvedSurfaceContent =
+    val group = runner.settingsGroups.find(_.id == groupId)
+    val items = runner.submenuItems(groupId)
+    val submenuState = runner.activeSubmenu.filter(_.groupId == groupId)
+    val selectedIndex = submenuState.map(_.selectedIndex).getOrElse(0)
+    val rows = items.zipWithIndex.map {
+      case (option: CommandSurfaceItem.OptionItem, index) =>
+        optionRow(option, !previewOnly && index == selectedIndex)
+      case (item: CommandSurfaceItem.InputItem, index) =>
+        val editingText =
+          if !previewOnly then submenuState.filter(_.editingItemId.contains(item.id)).map(_.editingText)
+          else None
+        inputRow(item, !previewOnly && index == selectedIndex, editingText)
+      case (CommandSurfaceItem.CommandItem(command), index) =>
+        OverlayRow(
+          plainText = s"${command.name} - ${command.description}",
+          selected = !previewOnly && index == selectedIndex
+        )
+      case (group: CommandSurfaceItem.GroupItem, index) =>
+        OverlayRow(
+          plainText = group.label,
+          selected = !previewOnly && index == selectedIndex
+        )
+    }
+    val footer =
+      Option.when(items.nonEmpty)(OverlayRow(s"${selectedIndex + 1}/${items.length}"))
+
+    ResolvedSurfaceContent(
+      title = titleFor(mode, group.map(_.label).getOrElse("submenu")),
+      header = group.map(g => OverlayRow(g.label)),
+      rows = rows,
+      footer = footer
+    )
 
   private def categoryTabs(activeCategory: CommandCategory): OverlayRow =
     val categories = List(
@@ -310,13 +392,34 @@ object SurfaceContentResolver:
 
   private def optionRow(option: CommandSurfaceItem.OptionItem, selected: Boolean): OverlayRow =
     val rightSegments =
-      option.hint.toList.map(hint => OverlaySegment(hint, tone = OverlayTone.Muted)) :+
+      option.hint.toList.map(hint => OverlaySegment(hint, tone = OverlayTone.Normal)) :+
         OverlaySegment(option.selectedOption, selected = true)
 
     OverlayRow(
       plainText = s"${option.label}: ${option.hint.map(_ + " ").getOrElse("")}${option.selectedOption}",
       selected = selected,
       segments = OverlaySegment(option.label) :: rightSegments,
+      layout = OverlayRowLayout.Split
+    )
+
+  private def inputRow(
+    item: CommandSurfaceItem.InputItem,
+    selected: Boolean,
+    editingText: Option[String]
+  ): OverlayRow =
+    val displayText = editingText.getOrElse(item.currentValue)
+    val isError     = editingText.exists(item.isOutOfBounds)
+    val valueTone   = if isError then OverlayTone.Error else OverlayTone.Normal
+    val cursorCol   = editingText.map(_ => s"${item.label}: ${item.hint} ".length + displayText.length)
+    OverlayRow(
+      plainText = s"${item.label}: ${item.hint} $displayText",
+      selected = selected,
+      cursorColumn = cursorCol,
+      segments = List(
+        OverlaySegment(item.label),
+        OverlaySegment(item.hint, tone = OverlayTone.Normal),
+        OverlaySegment(displayText, tone = valueTone, selected = editingText.isDefined)
+      ),
       layout = OverlayRowLayout.Split
     )
 
@@ -349,6 +452,33 @@ object SurfaceContentResolver:
     ResolvedSurfaceContent(
       title = titleFor(mode, rootName),
       rows = lines.map(OverlayRow(_))
+    )
+
+  private def resolveDirectoryTree(
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    tree: com.serenity.ui.layout.DirectoryTreeData,
+    selectedPath: Option[java.nio.file.Path]
+  ): ResolvedSurfaceContent =
+    val visibleRows = com.serenity.ui.layout.DirectoryTreeData.visibleRows(tree)
+    val maxRows = math.max(1, rect.height - 2)
+    val rows = visibleRows.take(maxRows).map { row =>
+      val marker =
+        if row.isDirectory then
+          if row.isExpanded then "▾ "
+          else if row.isLoaded then "▸ "
+          else "▹ "
+        else ""
+      val indent = "  " * row.depth
+      OverlayRow(
+        plainText = s"$indent$marker${row.name}",
+        selected = selectedPath.contains(row.path)
+      )
+    }
+
+    ResolvedSurfaceContent(
+      title = titleFor(mode, tree.rootPath.getFileName.toString),
+      rows = rows
     )
 
   private def resolveTerminal(
@@ -392,7 +522,7 @@ object SurfaceContentResolver:
     mode: SurfaceRenderMode,
     issues: List[com.serenity.ui.layout.Diagnostic]
   ): ResolvedSurfaceContent =
-    val errorCount = issues.count(_.severity == com.serenity.ui.layout.DiagnosticSeverity.Error)
+    val errorCount   = issues.count(_.severity == com.serenity.ui.layout.DiagnosticSeverity.Error)
     val warningCount = issues.count(_.severity == com.serenity.ui.layout.DiagnosticSeverity.Warning)
     val infoCount = issues.count(issue =>
       issue.severity == com.serenity.ui.layout.DiagnosticSeverity.Info ||
@@ -409,3 +539,29 @@ object SurfaceContentResolver:
         List(s"${issues.length} issues", s"$errorCount error")
 
     ResolvedSurfaceContent(titleFor(mode, "diagnostics"), rows = shaped.map(OverlayRow(_)))
+
+  private def resolveThemePicker(state: ThemePickerState, mode: SurfaceRenderMode): ResolvedSurfaceContent =
+    val rows =
+      state.themes.zipWithIndex.map((name, idx) => OverlayRow(plainText = name, selected = idx == state.selectedIndex))
+    ResolvedSurfaceContent(titleFor(mode, "Theme"), rows = rows)
+
+  private def resolveFileSearch(
+    state: FileSearchState,
+    rect: LayoutRect,
+    mode: SurfaceRenderMode
+  ): ResolvedSurfaceContent =
+    val headerRow = OverlayRow(
+      plainText = if state.query.isEmpty then " " else state.query,
+      cursorColumn = Some(state.query.length)
+    )
+    val resultRows = state.results.take(rect.height - 2).zipWithIndex.map { (result, idx) =>
+      OverlayRow(
+        plainText = s"${result.bufferName}:${result.line + 1}  ${result.lineContent}",
+        selected = idx == state.selectedIndex
+      )
+    }
+    ResolvedSurfaceContent(
+      title = titleFor(mode, "Search"),
+      header = Some(headerRow),
+      rows = resultRows
+    )

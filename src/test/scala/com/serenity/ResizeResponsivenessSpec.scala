@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -26,7 +26,7 @@ class ResizeResponsivenessSpec extends AnyFlatSpec with Matchers:
       onResized = fastModeTriggered.set(true)
       
       // This simulates checkResize being called during input event processing
-      newSize = TerminalSize(100, 30)
+      newSize = ViewportSize(100, 30)
       _ <- RenderController.handleResize(Some(newSize), stateManager, onResized)
       
       triggered <- fastModeTriggered.get
@@ -36,7 +36,7 @@ class ResizeResponsivenessSpec extends AnyFlatSpec with Matchers:
       triggered shouldBe true
       
       // State should be updated with new terminal size
-      finalState.terminalSize shouldBe Some(newSize)
+      finalState.viewportSize shouldBe Some(newSize)
 
     program.unsafeRunSync()
   }

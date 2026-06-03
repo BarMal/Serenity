@@ -17,3 +17,4 @@ case object NewTab                   extends HotkeyEvent with GlobalAppEvent // 
 case object CloseTab                 extends HotkeyEvent with GlobalAppEvent // Ctrl+W
 case object NextTab                  extends HotkeyEvent with GlobalAppEvent // Ctrl+Tab
 case object PreviousTab              extends HotkeyEvent with GlobalAppEvent // Ctrl+Shift+Tab
+case object FileSearch               extends HotkeyEvent with GlobalAppEvent // Ctrl+Shift+F

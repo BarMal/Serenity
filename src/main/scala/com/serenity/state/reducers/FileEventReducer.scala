@@ -32,13 +32,13 @@ object FileEventReducer:
             ReducerResult.noEffects(state)
 
       case SaveAsFile =>
-        ReducerResult.noEffects(state)
+        ReducerResult.withEffect(state, AppEffect.RequestSaveAs)
 
       case OpenFile | OpenFileBrowser =>
         ReducerResult.withEffect(state, AppEffect.RequestOpenFile)
 
-      case LoadFile(_) =>
-        ReducerResult.noEffects(state)
+      case LoadFile(path) =>
+        ReducerResult.withEffect(state, AppEffect.DirectLoadFile(path))
 
   private def focusedBuffer(state: AppState): Option[Buffer] =
     state.focus match

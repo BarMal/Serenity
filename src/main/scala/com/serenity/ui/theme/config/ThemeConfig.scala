@@ -19,6 +19,7 @@ case class UiColors(
     menuItem: UiTokenConfig,
     panel: UiTokenConfig,
     error: UiTokenConfig,
+    warning: Option[UiTokenConfig] = None,
     border: String,
     muted: String,
     placeholder: String
@@ -27,6 +28,7 @@ case class UiColors(
 case class UiTokenConfig(
     foreground: String,
     background: String,
+    alpha: Option[Double] = None,
     style: StyleConfig = StyleConfig()
 ) derives ConfigReader
 
@@ -70,8 +72,9 @@ object ThemeConfig:
         cursor = "#F4D03F",
         highlighted = UiTokenConfig(foreground = "#0B0F14", background = "#5DADE2"),
         menuItem = UiTokenConfig(foreground = "#F5F7FA", background = "#1F2933"),
-        panel = UiTokenConfig(foreground = "#F5F7FA", background = "#111821"),
+        panel = UiTokenConfig(foreground = "#F5F7FA", background = "#111821", alpha = Some(0.90)),
         error = UiTokenConfig(foreground = "#FF6B6B", background = "#2B1215"),
+        warning = Some(UiTokenConfig(foreground = "#F0B429", background = "#2B2000")),
         border = "#2F3B4A",
         muted = "#7B8794",
         placeholder = "#52606D"
@@ -100,8 +103,9 @@ object ThemeConfig:
         cursor = "#0066CC",
         highlighted = UiTokenConfig(foreground = "#FDFDFD", background = "#0066CC"),
         menuItem = UiTokenConfig(foreground = "#102A43", background = "#D9E2EC"),
-        panel = UiTokenConfig(foreground = "#102A43", background = "#EFF3F8"),
+        panel = UiTokenConfig(foreground = "#102A43", background = "#EFF3F8", alpha = Some(0.90)),
         error = UiTokenConfig(foreground = "#B00020", background = "#FDECEC"),
+        warning = Some(UiTokenConfig(foreground = "#945802", background = "#FFFAEC")),
         border = "#BCCCDC",
         muted = "#61758A",
         placeholder = "#829AB1"

@@ -4,8 +4,8 @@ import com.serenity.keystroke.events.{ResizeEvent, UnhandledEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.reducers.{ReducerResult, SystemEventReducer}
 import com.serenity.keystroke.translators.TextEntryTranslator
-import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
-import com.googlecode.lanterna.input.{KeyStroke, KeyType}
+import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -15,13 +15,13 @@ class SystemEventReducerSpec extends AnyFlatSpec with Matchers:
 
   "SystemEventReducer" should "recalculate buffer viewport dimensions on resize" in {
     val initialState = com.serenity.state.models.AppState.initial
-    val newSize      = TerminalSize(120, 40)
+    val newSize      = ViewportSize(120, 40)
 
     val ReducerResult(updatedState, effects) =
       SystemEventReducer.reduce(ResizeEvent(newSize), initialState)
 
     effects shouldBe Nil
-    updatedState.terminalSize shouldBe Some(newSize)
+    updatedState.viewportSize shouldBe Some(newSize)
 
     val expectedLayout = LayoutEngine.calculateLayout(updatedState, newSize)
     val bufferId       = updatedState.bufferOrder.head
@@ -33,7 +33,7 @@ class SystemEventReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "leave unrelated system events as no-ops" in {
     val initialState = com.serenity.state.models.AppState.initial
-    val unhandled    = UnhandledEvent(new KeyStroke(KeyType.Unknown), new TextEntryTranslator())
+    val unhandled    = UnhandledEvent(KeyStrokeInfo(InputKey.Unknown, None, Set.empty), new TextEntryTranslator())
 
     val result = SystemEventReducer.reduce(unhandled, initialState)
 

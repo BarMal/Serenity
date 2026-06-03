@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.googlecode.lanterna.input.{KeyStroke, KeyType}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.SingleLineFormTranslator
 import org.scalatest.flatspec.AnyFlatSpec
@@ -11,15 +11,15 @@ class SingleLineFormTranslatorSpec extends AnyFlatSpec with Matchers:
   private val translator = new SingleLineFormTranslator()
 
   "SingleLineFormTranslator" should "treat enter as submit rather than newline" in {
-    translator.translate(new KeyStroke(KeyType.Enter)) shouldBe ModalSubmit
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)) shouldBe ModalSubmit
   }
 
   it should "use field navigation semantics for tab and reverse tab" in {
-    translator.translate(new KeyStroke(KeyType.Tab)) shouldBe ModalNextField
-    translator.translate(new KeyStroke(KeyType.ReverseTab)) shouldBe ModalPreviousField
+    translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set.empty)) shouldBe ModalNextField
+    translator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set.empty)) shouldBe ModalPreviousField
   }
 
   it should "preserve single-character entry and dismissal semantics" in {
-    translator.translate(new KeyStroke('a', false, false, false)) shouldBe ModalInsertChar('a')
-    translator.translate(new KeyStroke(KeyType.Escape)) shouldBe ModalDismiss
+    translator.translate(KeyStrokeInfo(InputKey.Character, Some('a'), Set.empty)) shouldBe ModalInsertChar('a')
+    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)) shouldBe ModalDismiss
   }

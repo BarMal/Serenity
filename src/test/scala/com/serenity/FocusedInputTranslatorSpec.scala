@@ -1,8 +1,9 @@
 package com.serenity
 
-import com.googlecode.lanterna.input.{KeyStroke, KeyType}
 import com.serenity.input.FocusedInputTranslator
-import com.serenity.keystroke.events.{Direction, ModalNextField, ModalSubmit, NewLine, PanelInputEvent, PeekInputEvent, RunnerSubmit, ToggleCommandRunner}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
+import com.serenity.command.CommandRunner
+import com.serenity.keystroke.events.{Direction, ModalNextField, ModalSubmit, NewLine, NextTab, PanelInputEvent, PeekInputEvent, PreviousTab, RunnerDismiss, RunnerNextCategory, RunnerPreviousCategory, RunnerSubmit, ToggleCommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
@@ -28,7 +29,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   "FocusedInputTranslator" should "treat Enter as newline in editor focus" in {
     val translator = FocusedInputTranslator.forState(editorState)
 
-    translator.translate(new KeyStroke(KeyType.Enter)) shouldBe NewLine
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)) shouldBe NewLine
   }
 
   it should "treat Enter as submit in command-runner focus while preserving global hotkeys" in {
@@ -44,8 +45,8 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     )
     val translator = FocusedInputTranslator.forState(commandRunnerState)
 
-    translator.translate(new KeyStroke(KeyType.Enter)) shouldBe RunnerSubmit
-    translator.translate(new KeyStroke('p', true, false, false)) shouldBe ToggleCommandRunner
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)) shouldBe RunnerSubmit
+    translator.translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl))) shouldBe ToggleCommandRunner
   }
 
   it should "treat Enter and Tab as modal form actions in modal focus" in {
@@ -63,8 +64,8 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     )
     val translator = FocusedInputTranslator.forState(modalState)
 
-    translator.translate(new KeyStroke(KeyType.Enter)) shouldBe ModalSubmit
-    translator.translate(new KeyStroke(KeyType.Tab)) shouldBe ModalNextField
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)) shouldBe ModalSubmit
+    translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set.empty)) shouldBe ModalNextField
   }
 
   it should "treat pinned panel focus as panel-local navigation and focus-return input" in {
@@ -81,8 +82,8 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     )
     val translator = FocusedInputTranslator.forState(pinnedState)
 
-    translator.translate(new KeyStroke(KeyType.ArrowUp)) shouldBe PanelInputEvent.Navigate(Direction.Up)
-    translator.translate(new KeyStroke('x', false, false, false)) shouldBe PanelInputEvent.ReturnFocus
+    translator.translate(KeyStrokeInfo(InputKey.ArrowUp, None, Set.empty)) shouldBe PanelInputEvent.Navigate(Direction.Up)
+    translator.translate(KeyStrokeInfo(InputKey.Character, Some('x'), Set.empty)) shouldBe PanelInputEvent.ReturnFocus
   }
 
   it should "treat floating peek focus as dismiss-oriented local input" in {
@@ -98,6 +99,83 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     )
     val translator = FocusedInputTranslator.forState(peekState)
 
-    translator.translate(new KeyStroke(KeyType.ArrowDown)) shouldBe PeekInputEvent.Navigate(Direction.Down)
-    translator.translate(new KeyStroke(KeyType.Enter)) shouldBe PeekInputEvent.Accept
+    translator.translate(KeyStrokeInfo(InputKey.ArrowDown, None, Set.empty)) shouldBe PeekInputEvent.Navigate(Direction.Down)
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)) shouldBe PeekInputEvent.Accept
+  }
+
+  it should "route Tab and Shift+Tab to command-runner category navigation" in {
+    val commandRunnerState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val translator = FocusedInputTranslator.forState(commandRunnerState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set.empty)) shouldBe RunnerNextCategory
+    translator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set.empty)) shouldBe RunnerPreviousCategory
+  }
+
+  it should "treat submenu focus as command-runner input rather than peek input" in {
+    val runner = CommandRunner.empty
+    val submenuState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("command-runner-submenu")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner-submenu"),
+          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val translator = FocusedInputTranslator.forState(submenuState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)) shouldBe RunnerSubmit
+    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)) shouldBe RunnerDismiss
+  }
+
+  it should "keep routing input to the command runner while its surfaces remain open" in {
+    val leakedFocusState = editorState.copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val translator = FocusedInputTranslator.forState(leakedFocusState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)) shouldBe RunnerDismiss
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)) shouldBe RunnerSubmit
+  }
+
+  it should "route Ctrl+Tab and Ctrl+Shift+Tab to pane navigation regardless of focus" in {
+    val commandRunnerState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val runnerTranslator = FocusedInputTranslator.forState(commandRunnerState)
+    val editorTranslator  = FocusedInputTranslator.forState(editorState)
+
+    runnerTranslator.translate(KeyStrokeInfo(InputKey.Tab, None, Set(Modifier.Ctrl))) shouldBe NextTab
+    editorTranslator.translate(KeyStrokeInfo(InputKey.Tab, None, Set(Modifier.Ctrl)))  shouldBe NextTab
+
+    runnerTranslator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set(Modifier.Ctrl))) shouldBe PreviousTab
+    editorTranslator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set(Modifier.Ctrl)))  shouldBe PreviousTab
   }

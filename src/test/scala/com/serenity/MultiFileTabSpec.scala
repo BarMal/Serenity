@@ -149,7 +149,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
   it should "handle tab switching with keyboard shortcuts" in new MultiFileFixture:
     // Given: Wide terminal to allow multiple panes
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
     initialState.layout.editorPanes should have size 1
     initialState.buffers should have size 1 // Initial buffer
@@ -216,8 +216,8 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
   it should "handle pane resizing with minimum width constraints" in new MultiFileFixture:
     // Given: Limited terminal width where only 1-2 panes can fit
-    val constrainedTerminal = com.serenity.ui.layout.TerminalSize(120, 24) // About 100 chars for editor
-    stateManager.updateState(_.copy(terminalSize = Some(constrainedTerminal))).unsafeRunSync()
+    val constrainedTerminal = com.serenity.ui.layout.ViewportSize(120, 24) // About 100 chars for editor
+    stateManager.updateState(_.copy(viewportSize = Some(constrainedTerminal))).unsafeRunSync()
     
     val initialState = stateManager.getCurrentState.unsafeRunSync()
     initialState.layout.editorPanes should have size 1
@@ -307,4 +307,4 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     val stateManager: StateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
-    val wideTerminal = com.serenity.ui.layout.TerminalSize(400, 24) // Wide enough for multiple panes
+    val wideTerminal = com.serenity.ui.layout.ViewportSize(400, 24) // Wide enough for multiple panes

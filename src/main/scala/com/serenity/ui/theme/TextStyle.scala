@@ -1,6 +1,6 @@
 package com.serenity.ui.theme
 
-import com.googlecode.lanterna.TextColor
+import java.awt.Color
 
 case class TextStyle(
     isBold: Boolean = false,
@@ -8,7 +8,6 @@ case class TextStyle(
     isUnderlined: Boolean = false
 ):
 
-  /** Combine this style with another, with the other style taking precedence for conflicting attributes */
   def combine(other: TextStyle): TextStyle =
     TextStyle(
       isBold = other.isBold || this.isBold,
@@ -26,6 +25,6 @@ object TextStyle:
 case class StyledText(
     content: String,
     style: TextStyle = TextStyle.normal,
-    foregroundColor: TextColor = new TextColor.RGB(255, 255, 255),
-    backgroundColor: TextColor = new TextColor.RGB(0, 0, 0)
+    foregroundColor: Color = Color.WHITE,
+    backgroundColor: Color = Color.BLACK
 )

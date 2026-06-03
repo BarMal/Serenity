@@ -1,0 +1,27 @@
+{
+  "jsonrpc": "2.0",
+  "method": "textDocument/publishDiagnostics",
+  "params": {
+    "uri": "file:///workspace/Foo.scala",
+    "diagnostics": [
+      {
+        "range": {
+          "start": { "line": 3, "character": 2 },
+          "end":   { "line": 3, "character": 12 }
+        },
+        "severity": 1,
+        "message":  "type mismatch: expected Int, found String",
+        "source":   "mock-lsp"
+      },
+      {
+        "range": {
+          "start": { "line": 7, "character": 0 },
+          "end":   { "line": 7, "character": 20 }
+        },
+        "severity": 2,
+        "message":  "unused import",
+        "source":   "mock-lsp"
+      }
+    ]
+  }
+}

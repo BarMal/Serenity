@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.keystroke.events.{NewTab, NextTab, PreviousTab}
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -22,7 +22,7 @@ class DebugTabBehaviorSpec extends AnyFlatSpec with Matchers:
     val stateManager = StateManager.apply(logger).unsafeRunSync()
     
     // Set narrow terminal size to test single-pane behavior
-    stateManager.updateState(_.copy(terminalSize = Some(TerminalSize(80, 24)))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(ViewportSize(80, 24)))).unsafeRunSync()
 
     // Initial state
     val initialState = stateManager.getCurrentState.unsafeRunSync()

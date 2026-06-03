@@ -1,6 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.state.models.{AppState, CursorPosition, Focus, PaneId, SurfaceContent, SurfacePlacement, SurfacePresentation, UiSurface}
+import com.serenity.state.models.*
 import com.serenity.ui.layout.PeekContent
 
 object PeekStateReducer:

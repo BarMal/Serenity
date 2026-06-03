@@ -33,8 +33,8 @@ class ConfigDrivenThemeIntegrationSpec extends AnyFlatSpec with Matchers:
     initialState.theme.name shouldBe "dark"
 
     // Verify theme properties
-    darkTheme.foregroundColor shouldBe a[com.googlecode.lanterna.TextColor.RGB]
-    darkTheme.backgroundColor shouldBe a[com.googlecode.lanterna.TextColor.RGB]
+    darkTheme.foregroundColor shouldBe a[java.awt.Color]
+    darkTheme.backgroundColor shouldBe a[java.awt.Color]
   }
 
   it should "switch between dark and light themes dynamically" in {

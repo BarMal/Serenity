@@ -7,7 +7,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -29,8 +29,8 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers:
       // Test Option 1: New Session
       stateManager1 <- StateManager.apply(logger)
       theme = Theme.default
-      terminalSize = TerminalSize(80, 24)
-      _ <- AppStartup.initializeState(stateManager1, theme, terminalSize)
+      viewportSize = ViewportSize(80, 24)
+      _ <- AppStartup.initializeState(stateManager1, theme, viewportSize)
       // Option 1 is selected by default, just press Enter
       _ <- stateManager1.applyEvent(Enter)
       newSessionState <- stateManager1.getCurrentState
@@ -44,7 +44,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers:
       
       // Test Option 2: Restore Session  
       stateManager2 <- StateManager.apply(logger)
-      _ <- AppStartup.initializeState(stateManager2, theme, terminalSize)
+      _ <- AppStartup.initializeState(stateManager2, theme, viewportSize)
       _ <- stateManager2.applyEvent(MoveDown) // Move to option 2
       _ <- stateManager2.applyEvent(Enter)
       restoreSessionState <- stateManager2.getCurrentState
@@ -58,15 +58,16 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers:
       
       // Test Option 3: Open File
       stateManager3 <- StateManager.apply(logger)
-      _ <- AppStartup.initializeState(stateManager3, theme, terminalSize)
+      _ <- AppStartup.initializeState(stateManager3, theme, viewportSize)
       _ <- stateManager3.applyEvent(MoveDown) // Move to option 2
       _ <- stateManager3.applyEvent(MoveDown) // Move to option 3
       _ <- stateManager3.applyEvent(Enter)
       openFileState <- stateManager3.getCurrentState
       
       _ = {
-        openFileState.startPageSurface shouldBe None
-        
+        // Startup page remains as the back-destination while the file modal is open
+        openFileState.startPageSurface should not be None
+
         // Should have file workflow modal open
         val hasFileWorkflow = openFileState.uiSurfaces.exists { surface =>
           surface.content match
@@ -77,7 +78,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers:
             case _ => false
         }
         hasFileWorkflow shouldBe true
-        
+
         openFileState.focus should matchPattern { case Focus.Surface(_) => }
       }
       
@@ -93,9 +94,9 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers:
       logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
       theme = Theme.default
-      terminalSize = TerminalSize(80, 24)
+      viewportSize = ViewportSize(80, 24)
       
-      _ <- AppStartup.initializeState(stateManager, theme, terminalSize)
+      _ <- AppStartup.initializeState(stateManager, theme, viewportSize)
       
       // Test full navigation cycle
       // Start at option 0

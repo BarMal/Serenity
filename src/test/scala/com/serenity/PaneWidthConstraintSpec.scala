@@ -24,8 +24,8 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
 
   it should "enforce minimum pane width of 50 characters by default" in new PaneConstraintFixture {
     // Given: Narrow terminal width that can only fit 1 pane at minimum width
-    val terminalSize = TerminalSize(80, 24) // About 70 chars editor area after UI elements
-    stateManager.updateState(_.copy(terminalSize = Some(terminalSize))).unsafeRunSync()
+    val viewportSize = ViewportSize(80, 24) // About 70 chars editor area after UI elements
+    stateManager.updateState(_.copy(viewportSize = Some(viewportSize))).unsafeRunSync()
     
     // When: Try to create multiple buffers
     stateManager.applyEvent(NewTab).unsafeRunSync() // Create 2nd buffer
@@ -45,15 +45,15 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     singlePane.bufferId.get shouldBe focusedBufferId
     
     // Verify the layout respects minimum width
-    val calculatedLayout = LayoutEngine.calculateLayout(finalState, terminalSize)
+    val calculatedLayout = LayoutEngine.calculateLayout(finalState, viewportSize)
     val paneLayout = calculatedLayout.editorPanelRect
     paneLayout.width should be >= defaultMinPaneWidth
   }
 
   it should "allow more panes when terminal is wider" in new PaneConstraintFixture {
     // Given: Wide terminal that can fit multiple panes at minimum width
-    val terminalSize = TerminalSize(200, 24) // About 170 chars editor area, can fit 3+ panes
-    stateManager.updateState(_.copy(terminalSize = Some(terminalSize))).unsafeRunSync()
+    val viewportSize = ViewportSize(200, 24) // About 170 chars editor area, can fit 3+ panes
+    stateManager.updateState(_.copy(viewportSize = Some(viewportSize))).unsafeRunSync()
     
     // When: Create multiple buffers
     (1 to 4).foreach(_ => stateManager.applyEvent(NewTab).unsafeRunSync())
@@ -74,7 +74,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     }
     
     // Verify each pane respects minimum width
-    val calculatedLayout = LayoutEngine.calculateLayout(finalState, terminalSize)
+    val calculatedLayout = LayoutEngine.calculateLayout(finalState, viewportSize)
     val paneLayouts = LayoutEngine.calculatePaneLayoutsWithMinWidth(finalState, calculatedLayout, defaultMinPaneWidth)
     
     paneLayouts.values.foreach { rect =>
@@ -85,12 +85,12 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
   it should "support configurable minimum pane width" in new PaneConstraintFixture {
     // Given: Custom minimum width of 30 characters
     val customMinWidth = 30
-    val terminalSize = TerminalSize(130, 24) // About 110 chars editor area
+    val viewportSize = ViewportSize(130, 24) // About 110 chars editor area
     
     // Configure custom minimum width
     stateManager.updateState(state => 
       state.copy(
-        terminalSize = Some(terminalSize),
+        viewportSize = Some(viewportSize),
         config = state.config.withMinimumPaneWidth(customMinWidth)
       )
     ).unsafeRunSync()
@@ -107,7 +107,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     finalState.layout.editorPanes.size should be >= 2
     
     // Verify custom minimum width is respected
-    val calculatedLayout = LayoutEngine.calculateLayout(finalState, terminalSize)
+    val calculatedLayout = LayoutEngine.calculateLayout(finalState, viewportSize)
     val paneLayouts = LayoutEngine.calculatePaneLayoutsWithMinWidth(finalState, calculatedLayout, customMinWidth)
     
     paneLayouts.values.foreach { rect =>
@@ -117,8 +117,8 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
 
   it should "assign focused buffer to visible pane when buffer switching occurs" in new PaneConstraintFixture {
     // Given: Terminal that can show 2 panes, with 4 buffers total
-    val terminalSize = TerminalSize(150, 24) // About 130 chars editor area, 2-3 panes possible
-    stateManager.updateState(_.copy(terminalSize = Some(terminalSize))).unsafeRunSync()
+    val viewportSize = ViewportSize(150, 24) // About 130 chars editor area, 2-3 panes possible
+    stateManager.updateState(_.copy(viewportSize = Some(viewportSize))).unsafeRunSync()
     
     // Create 4 buffers
     (1 to 3).foreach(_ => stateManager.applyEvent(NewTab).unsafeRunSync())
@@ -152,7 +152,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     focusedBufferInVisiblePane shouldBe true
     
     // Verify minimum width is still respected
-    val calculatedLayout = LayoutEngine.calculateLayout(stateOnLastBuffer, terminalSize)
+    val calculatedLayout = LayoutEngine.calculateLayout(stateOnLastBuffer, viewportSize)
     val paneLayouts = LayoutEngine.calculatePaneLayoutsWithMinWidth(stateOnLastBuffer, calculatedLayout, defaultMinPaneWidth)
     
     paneLayouts.values.foreach { rect =>
@@ -161,17 +161,17 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expand from one visible pane to multiple panes after widening a terminal that was narrow during tab creation" in new PaneConstraintFixture {
-    val narrowTerminal = TerminalSize(80, 24)
-    val wideTerminal   = TerminalSize(200, 24)
+    val narrowTerminal = ViewportSize(80, 24)
+    val wideTerminal   = ViewportSize(200, 24)
 
-    stateManager.updateState(_.copy(terminalSize = Some(narrowTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(narrowTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
 
     val narrowState = stateManager.getCurrentState.unsafeRunSync()
     narrowState.buffers should have size 2
     narrowState.layout.editorPanes should have size 1
 
-    stateManager.handleTerminalResize(wideTerminal).unsafeRunSync()
+    stateManager.handleViewportResize(wideTerminal).unsafeRunSync()
 
     val widenedState = stateManager.getCurrentState.unsafeRunSync()
     widenedState.layout.editorPanes.size should be >= 2
@@ -182,10 +182,10 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "shrink visible panes under narrow widths and restore them when widened again" in new PaneConstraintFixture {
-    val wideTerminal   = TerminalSize(200, 24)
-    val narrowTerminal = TerminalSize(80, 24)
+    val wideTerminal   = ViewportSize(200, 24)
+    val narrowTerminal = ViewportSize(80, 24)
 
-    stateManager.updateState(_.copy(terminalSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
 
     val wideState = stateManager.getCurrentState.unsafeRunSync()
@@ -199,7 +199,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
         .count(rect => rect.x >= wideLayout.editorPanelRect.x && rect.right <= wideLayout.editorPanelRect.right)
     visibleWidePanes.should(be >= 2)
 
-    stateManager.handleTerminalResize(narrowTerminal).unsafeRunSync()
+    stateManager.handleViewportResize(narrowTerminal).unsafeRunSync()
 
     val narrowState = stateManager.getCurrentState.unsafeRunSync()
     val narrowLayout = LayoutEngine.calculateLayout(narrowState, narrowTerminal)
@@ -210,7 +210,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
         .count(rect => rect.x >= narrowLayout.editorPanelRect.x && rect.right <= narrowLayout.editorPanelRect.right)
     visibleNarrowPanes.shouldBe(1)
 
-    stateManager.handleTerminalResize(wideTerminal).unsafeRunSync()
+    stateManager.handleViewportResize(wideTerminal).unsafeRunSync()
 
     val restoredState = stateManager.getCurrentState.unsafeRunSync()
     val restoredLayout = LayoutEngine.calculateLayout(restoredState, wideTerminal)

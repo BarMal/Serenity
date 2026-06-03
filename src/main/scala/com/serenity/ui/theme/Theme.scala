@@ -1,35 +1,35 @@
 package com.serenity.ui.theme
 
-import com.googlecode.lanterna.TextColor
+import java.awt.Color
 
 case class Theme(
     name: String,
-    foreground: TextColor,
-    background: TextColor,
-    cursor: TextColor,
+    foreground: Color,
+    background: Color,
+    cursor: Color,
     highlighted: ThemeColor,
     menuItem: ThemeColor,
     panel: ThemeColor,
     error: ThemeColor,
-    border: TextColor,
-    muted: TextColor,
-    placeholder: TextColor,
+    warning: ThemeColor,
+    border: Color,
+    muted: Color,
+    placeholder: Color,
     textStyle: TextStyle,
     syntaxColors: Map[SyntaxElement, ThemeColor]
 ):
-  /** Get the color configuration for a specific syntax element */
   def colorFor(element: SyntaxElement): ThemeColor =
     syntaxColors.getOrElse(element, ThemeColor(foreground, background, TextStyle.normal))
 
-  /** Backward-compatible accessors while callers are migrated to semantic names. */
-  def foregroundColor: TextColor = foreground
-  def backgroundColor: TextColor = background
-  def cursorColor: TextColor     = cursor
+  def foregroundColor: Color = foreground
+  def backgroundColor: Color = background
+  def cursorColor: Color     = cursor
 
 case class ThemeColor(
-    foreground: TextColor,
-    background: TextColor,
-    style: TextStyle = TextStyle.normal
+    foreground: Color,
+    background: Color,
+    style: TextStyle = TextStyle.normal,
+    alpha: Double = 1.0
 )
 
 object Theme:

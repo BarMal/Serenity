@@ -1,56 +1,73 @@
 package com.serenity.ui.renderer
 
-import com.googlecode.lanterna.graphics.TextGraphics
+import com.serenity.config.AppConfig
 import com.serenity.ui.theme.Theme
 
 object PinnedPanelRenderer:
 
   def render(
-    graphics: TextGraphics,
+    surface: RenderSurface,
     panel: TextPanelView,
-    theme: Theme
+    theme: Theme,
+    config: AppConfig
   ): Unit =
     val rect = panel.rect
 
-    graphics.setForegroundColor(theme.panel.foreground)
-    graphics.setBackgroundColor(theme.panel.background)
+    surface.setAlpha(SurfaceMaterials.panelAlpha(config, theme))
+    surface.setForegroundColor(theme.panel.foreground)
+    surface.setBackgroundColor(theme.panel.background)
 
-    for y <- rect.y until rect.bottom do
-      graphics.putString(rect.x, y, " " * rect.width)
+    for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
 
-    drawBorder(graphics, panel, theme)
-    drawTitle(graphics, panel)
-    drawLines(graphics, panel)
+    applyGlassSheen(surface, panel, theme, config)
+    drawBorder(surface, panel, theme)
+    drawTitle(surface, panel)
+    drawLines(surface, panel, theme)
 
-    graphics.setForegroundColor(theme.foreground)
-    graphics.setBackgroundColor(theme.background)
+    surface.setAlpha(1.0f)
+    surface.setForegroundColor(theme.foreground)
+    surface.setBackgroundColor(theme.background)
 
-  private def drawBorder(graphics: TextGraphics, panel: TextPanelView, theme: Theme): Unit =
+  private def drawBorder(surface: RenderSurface, panel: TextPanelView, theme: Theme): Unit =
     val rect = panel.rect
-
     if rect.width >= 2 && rect.height >= 2 then
-      graphics.setForegroundColor(theme.border)
-      graphics.setBackgroundColor(theme.panel.background)
-      graphics.putString(rect.x, rect.y, "+" + "-" * (rect.width - 2) + "+")
+      surface.strokeRoundRect(rect.x, rect.y, rect.width, rect.height, arcPx = 8, theme.border)
 
-      for y <- (rect.y + 1) until (rect.bottom - 1) do
-        graphics.putString(rect.x, y, "|")
-        graphics.putString(rect.right - 1, y, "|")
-
-      graphics.putString(rect.x, rect.bottom - 1, "+" + "-" * (rect.width - 2) + "+")
-
-  private def drawTitle(graphics: TextGraphics, panel: TextPanelView): Unit =
-    val rect = panel.rect
+  private def drawTitle(surface: RenderSurface, panel: TextPanelView): Unit =
+    val rect  = panel.rect
     val title = panel.title.take(math.max(0, rect.width - 2)).padTo(math.max(0, rect.width - 2), ' ')
-    if rect.width >= 2 then
-      CharacterRenderer.renderStringPlain(graphics, rect.x + 1, rect.y, title)
+    if rect.width >= 2 then CharacterRenderer.renderStringPlain(surface, rect.x + 1, rect.y, title)
 
-  private def drawLines(graphics: TextGraphics, panel: TextPanelView): Unit =
+  private def drawLines(surface: RenderSurface, panel: TextPanelView, theme: Theme): Unit =
     val rect        = panel.rect
     val maxLineSize = math.max(0, rect.width - 2)
     val maxLines    = math.max(0, rect.height - 2)
 
-    panel.lines.take(maxLines).zipWithIndex.foreach { case (line, index) =>
-      val padded = line.take(maxLineSize).padTo(maxLineSize, ' ')
-      CharacterRenderer.renderStringPlain(graphics, rect.x + 1, rect.y + 1 + index, padded)
+    panel.rows.take(maxLines).zipWithIndex.foreach {
+      case (row, index) =>
+        val padded = row.plainText.take(maxLineSize).padTo(maxLineSize, ' ')
+        if row.selected then
+          surface.setForegroundColor(theme.highlighted.foreground)
+          surface.setBackgroundColor(theme.highlighted.background)
+        else
+          surface.setForegroundColor(theme.panel.foreground)
+          surface.setBackgroundColor(theme.panel.background)
+        CharacterRenderer.renderStringPlain(surface, rect.x + 1, rect.y + 1 + index, padded)
+    }
+
+  private def applyGlassSheen(
+    surface: RenderSurface,
+    panel: TextPanelView,
+    theme: Theme,
+    config: AppConfig
+  ): Unit =
+    SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
+      val rect        = panel.rect
+      val sheenWidth  = math.max(0, rect.width - 2)
+      val sheenHeight = math.min(2, math.max(0, rect.height - 2))
+      if sheenWidth > 0 && sheenHeight > 0 then
+        surface.setBackgroundColor(sheenColor)
+        (0 until sheenHeight).foreach { rowOffset =>
+          CharacterRenderer.renderStringPlain(surface, rect.x + 1, rect.y + 1 + rowOffset, " " * sheenWidth)
+        }
     }

@@ -1,8 +1,6 @@
 package com.serenity
 
-import cats.effect.unsafe.implicits.global
-import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
-import com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal
+import com.serenity.animation.AnimationState
 import com.serenity.keystroke.events.{InsertChar, ToggleSyntaxHighlighting}
 import com.serenity.rope.Balance
 import com.serenity.state.components.ComponentResult
@@ -10,6 +8,7 @@ import com.serenity.state.components.EditorPaneComponent
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.renderer.CharacterRenderer
+import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -54,26 +53,17 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
   }
 
   "Tab character rendering" should "expand to proper width" in {
-    val virtualTerminal = new DefaultVirtualTerminal(com.googlecode.lanterna.TerminalSize.ONE)
-    virtualTerminal.setTerminalSize(com.googlecode.lanterna.TerminalSize(80, 24))
-    val screen   = new TerminalScreen(virtualTerminal)
-    val graphics = screen.newTextGraphics()
+    val surface = new MockRenderSurface(80, 24)
+    CharacterRenderer.renderStringPlain(surface, 0, 0, "a\tb")
 
-    // Test tab expansion with default 4-space width
-    // This should not throw an exception
-    CharacterRenderer.renderStringPlain(graphics, 0, 0, "a\tb")
-    // Tab expansion logic is tested within CharacterRenderer.renderStringPlain
+    surface.putStringCalls.map(_.s) shouldBe List("a", "   ", "b")
   }
 
   "Underscore character" should "render visibly" in {
-    val virtualTerminal = new DefaultVirtualTerminal(com.googlecode.lanterna.TerminalSize.ONE)
-    virtualTerminal.setTerminalSize(com.googlecode.lanterna.TerminalSize(80, 24))
-    val screen   = new TerminalScreen(virtualTerminal)
-    val graphics = screen.newTextGraphics()
+    val surface = new MockRenderSurface(80, 24)
+    CharacterRenderer.renderStringPlain(surface, 0, 0, "test_underscore")
 
-    // Test underscore rendering - should not throw an exception
-    CharacterRenderer.renderStringPlain(graphics, 0, 0, "test_underscore")
-    // Underscore rendering logic is tested within CharacterRenderer.renderStringPlain
+    surface.putStringCalls.map(_.s) shouldBe List("test_underscore")
   }
 
   "Default syntax highlighting" should "be off" in {
@@ -82,12 +72,65 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
   }
 
   "Character rendering" should "handle special cases" in {
-    val virtualTerminal = new DefaultVirtualTerminal(com.googlecode.lanterna.TerminalSize.ONE)
-    virtualTerminal.setTerminalSize(com.googlecode.lanterna.TerminalSize(80, 24))
-    val screen   = new TerminalScreen(virtualTerminal)
-    val graphics = screen.newTextGraphics()
+    val surface = new MockRenderSurface(80, 24)
+    CharacterRenderer.renderStringPlain(surface, 0, 0, "a_b\tc")
 
-    // Test various special characters - should not throw an exception
-    CharacterRenderer.renderStringPlain(graphics, 0, 0, "a_b\tc")
-    // Character rendering is tested within CharacterRenderer.renderStringPlain
+    surface.putStringCalls.map(_.s) shouldBe List("a_b", " ", "c")
+  }
+
+  it should "batch contiguous printable runs in plain rendering" in {
+    val surface = new MockRenderSurface(80, 24)
+
+    CharacterRenderer.renderStringPlain(surface, 0, 0, "abc")
+
+    surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "abc"))
+  }
+
+  it should "batch contiguous printable runs in animated plain rendering when cell colors match" in {
+    val surface = new MockRenderSurface(80, 24)
+
+    CharacterRenderer.renderStringWithAnimationPlain(
+      surface,
+      0,
+      0,
+      "abc",
+      Theme.default,
+      AnimationState.empty
+    )
+
+    surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "abc"))
+  }
+
+  it should "batch contiguous runs in syntax-highlighted rendering when the styled segment is uniform" in {
+    val surface = new MockRenderSurface(80, 24)
+
+    CharacterRenderer.renderStringWithAnimation(
+      surface,
+      0,
+      0,
+      "abc",
+      Theme.default,
+      AnimationState.empty,
+      syntaxHighlightingEnabled = true
+    )
+
+    surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "abc"))
+  }
+
+  it should "preserve a continuous run for proportional text even when a single buffer cell is animated" in {
+    val surface = new MockRenderSurface(80, 24)
+    val animated =
+      AnimationState.empty.addCharacterAnimation('l', 2, 0, Theme.default.background, Theme.default.foreground, steps = 4)
+
+    CharacterRenderer.renderStringWithAnimationPlain(
+      surface,
+      0,
+      0,
+      "hello",
+      Theme.default,
+      animated,
+      preserveContinuousRuns = true
+    )
+
+    surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "hello"))
   }

@@ -286,29 +286,27 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
     finalContent.count(_ == '\n') shouldBe 999 // 1000 lines = 999 newlines
 
   it should "support undo/redo operations" in new EditorTestFixture:
-    // Given: Buffer with initial content
     val bufferId = createBufferWithPane("Initial").getOrElse(fail("Could not create buffer"))
 
-    // When: Make changes
     applyEvent(InsertChar('!'))
     applyEvent(InsertChar('!'))
+    getBufferContent(bufferId) shouldBe "Initial!!"
 
-    // Undo changes
-    applyEvent(Undo)
-    applyEvent(Undo)
+    applyEvent(Undo) // undo the coalesced "!!" group
+    getBufferContent(bufferId) shouldBe "Initial"
 
-    // Then: Should return to initial state
-    pending // Implementation incomplete - undo/redo not implemented
+    applyEvent(Redo)
+    getBufferContent(bufferId) shouldBe "Initial!!"
 
   it should "support copy/paste operations" in new EditorTestFixture:
-    // Given: Buffer with text to copy
     val bufferId = createBufferWithPane("Hello World").getOrElse(fail("Could not create buffer"))
 
-    // When: Select text and copy, then paste elsewhere
-    // (Would involve text selection, copy, cursor positioning, paste)
+    applyEvent(Copy)
+    val stateAfterCopy = stateManager.getCurrentState.unsafeRunSync()
+    stateAfterCopy.clipboard shouldBe Some("Hello World")
 
-    // Then: Text should be duplicated in new location
-    pending // Implementation incomplete - clipboard operations not implemented
+    applyEvent(Paste)
+    getBufferContent(bufferId) shouldBe "Hello WorldHello World"
 
   trait EditorTestFixture:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]

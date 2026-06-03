@@ -142,7 +142,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       Files.deleteIfExists(tempRoot)
   }
 
-  it should "append a trailing separator when accepting a directory suggestion in the path field" in {
+  it should "append a trailing separator when accepting a directory suggestion in the path field with tab" in {
     val tempRoot   = Files.createTempDirectory("workflow-directory-accept")
     val projectDir = Files.createDirectory(tempRoot.resolve("project"))
 
@@ -159,12 +159,39 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       ).unsafeRunSync()
 
       stateManager.applyEvent(InsertChar('j')).unsafeRunSync()
-      stateManager.applyEvent(Enter).unsafeRunSync()
+      stateManager.applyEvent(TabKey).unsafeRunSync()
 
       val workflow = currentWorkflow(stateManager)
       workflow.path shouldBe projectDir.toString + java.io.File.separator
     finally
       Files.deleteIfExists(projectDir)
+      Files.deleteIfExists(tempRoot)
+  }
+
+  it should "accept a filename suggestion with tab in open workflow mode" in {
+    val tempRoot   = Files.createTempDirectory("workflow-file-accept")
+    val targetFile = tempRoot.resolve("notes.scala")
+    Files.writeString(targetFile, "val answer = 42")
+
+    try
+      val stateManager = createStateManager()
+      stateManager.showModal(
+        Modal.FileWorkflow(
+          FileWorkflowState(
+            mode = FileWorkflowMode.Open,
+            path = tempRoot.toString,
+            activeField = FileWorkflowField.Filename
+          )
+        )
+      ).unsafeRunSync()
+
+      stateManager.applyEvent(InsertChar('n')).unsafeRunSync()
+      stateManager.applyEvent(TabKey).unsafeRunSync()
+
+      val workflow = currentWorkflow(stateManager)
+      workflow.filename shouldBe "notes.scala"
+    finally
+      Files.deleteIfExists(targetFile)
       Files.deleteIfExists(tempRoot)
   }
 

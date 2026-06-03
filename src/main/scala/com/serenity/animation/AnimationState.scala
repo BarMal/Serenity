@@ -1,82 +1,81 @@
 package com.serenity.animation
 
-import com.googlecode.lanterna.TextColor
+import java.awt.Color
 
 /** Buffer coordinate key for character animations (column, line) */
 case class CharacterKey(column: Int, line: Int)
 
 /** Manages animations for all characters using buffer coordinates as keys */
 case class AnimationState(
-    animations: Map[CharacterKey, AnimatedCharacter] = Map.empty
+    animations: Map[CharacterKey, AnimatedCell] = Map.empty
 ):
 
-  /** Add a new character animation at the given buffer position (column, line) */
   def addCharacterAnimation(
     char: Char,
     x: Int,
     y: Int,
-    backgroundColor: TextColor,
-    foregroundColor: TextColor,
+    startColor: Color,
+    endColor: Color,
     steps: Int
   ): AnimationState =
-    val key = CharacterKey(x, y)
-    val animatedChar = AnimatedCharacter.fromInterpolation(
-      char = char,
-      startColor = backgroundColor,
-      endColor = foregroundColor,
-      steps = steps
-    )
-    copy(animations = animations + (key -> animatedChar))
+    val key  = CharacterKey(x, y)
+    val cell = AnimatedCell.fromForegroundInterpolation(char, startColor, endColor, steps)
+    copy(animations = animations + (key -> cell))
 
-  /** Add a completed character (no animation) at the given buffer position (column, line) */
-  def addCompletedCharacter(char: Char, x: Int, y: Int, color: TextColor): AnimationState =
-    val key           = CharacterKey(x, y)
-    val completedChar = AnimatedCharacter.completed(char, color)
-    copy(animations = animations + (key -> completedChar))
+  def addCompletedCharacter(char: Char, x: Int, y: Int, color: Color): AnimationState =
+    val key  = CharacterKey(x, y)
+    val cell = AnimatedCell.completed(char, color)
+    copy(animations = animations + (key -> cell))
 
-  /** Advance all animations by one step using list consumption */
+  /** Merge a pre-built map of cells into this state, overwriting any existing entries */
+  def mergeAnimations(incoming: Map[CharacterKey, AnimatedCell]): AnimationState =
+    copy(animations = animations ++ incoming)
+
+  /** Advance all animations by one step */
   def advanceAnimations(): AnimationState =
-    val advancedAnimations = animations.view.mapValues(_.advance()).toMap
-    copy(animations = advancedAnimations)
+    copy(animations = animations.view.mapValues(_.advance()).toMap)
 
   /** Advance all animations and automatically clean up completed ones */
   def advanceAllAnimations(): AnimationState =
     advanceAnimations().cleanupCompleted()
 
-  /** Mark all animations as completed (for theme changes) */
+  /** Mark all animations as completed (snap to end state) */
   def onThemeChange(): AnimationState =
-    val completedAnimations = animations.view.mapValues(_.complete()).toMap
-    copy(animations = completedAnimations)
+    copy(animations = animations.view.mapValues(_.complete()).toMap)
 
   /** Remove all completed animations from state */
   def cleanupCompleted(): AnimationState =
-    val activeAnimations = animations.filter((_, char) => !char.isComplete)
-    copy(animations = activeAnimations)
+    copy(animations = animations.filter((_, cell) => !cell.isComplete))
 
   /** Clear all animations */
   def clearAll(): AnimationState =
     copy(animations = Map.empty)
 
-  /** Get the color for a character at the given buffer position (column, line), if any */
-  def getCharacterColor(x: Int, y: Int): Option[TextColor] =
-    animations.get(CharacterKey(x, y)).map(_.currentColor)
-
-  /** Get the animated character at the given buffer position (column, line), if any */
-  def getCharacter(x: Int, y: Int): Option[AnimatedCharacter] =
+  /** Get the animated cell at the given buffer position, if any */
+  def getCell(x: Int, y: Int): Option[AnimatedCell] =
     animations.get(CharacterKey(x, y))
 
-  /** Check if there are any active animations */
+  /** Get the current animated foreground color at a buffer position, if an active animation exists */
+  def getCharacterColor(x: Int, y: Int): Option[Color] =
+    getCell(x, y).flatMap(_.currentForeground)
+
+  /** Get all animated cells for a given buffer line, keyed by column */
+  def getLineAnimations(line: Int): Map[Int, AnimatedCell] =
+    animations
+      .filter((key, _) => key.line == line)
+      .map((key, cell) => key.column -> cell)
+
+  /** Check if there are any active (non-complete) animations */
   def hasActiveAnimations: Boolean =
     animations.values.exists(!_.isComplete)
 
-  /** Get count of active (non-completed) animations */
+  /** Count of active (non-completed) animations */
   def activeAnimationCount: Int =
     animations.values.count(!_.isComplete)
 
-  /** Get all animation positions (as buffer coordinates) */
+  /** All animation positions as buffer coordinates */
   def allPositions: Set[CharacterKey] =
     animations.keySet
 
 object AnimationState:
-  /** Empty animation state with no active animations */
   val empty: AnimationState = AnimationState()

@@ -13,21 +13,25 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
   private val root = Paths.get("/repo")
   private val tree = DirectoryTreeData(
     rootPath = root,
+    expandedPaths = Set(root, root.resolve("src")),
     entries = Map(
       root -> List(
         DirEntry(root.resolve("src"), "src", isDirectory = true),
         DirEntry(root.resolve("test"), "test", isDirectory = true),
         DirEntry(root.resolve("build.sbt"), "build.sbt", isDirectory = false),
         DirEntry(root.resolve("project"), "project", isDirectory = true)
+      ),
+      root.resolve("src") -> List(
+        DirEntry(root.resolve("src").resolve("main"), "main", isDirectory = true),
+        DirEntry(root.resolve("src").resolve("Serenity.scala"), "Serenity.scala", isDirectory = false)
       )
     )
   )
 
   private val panel = UiSurface(
     id = SurfaceId("directory-tree"),
-    content = SurfaceContent.DirectoryListing(
-      root,
-      tree.entries(root),
+    content = SurfaceContent.DirectoryTree(
+      tree,
       Some(root.resolve("src"))
     ),
     presentation = SurfacePresentation.Pinned(PanelPosition.Left, 24)
@@ -67,28 +71,30 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     val view = PinnedPanelViewModel.resolve(panel, LayoutRect(0, 0, 60, 10))
 
     view.title shouldBe "repo"
-    view.lines shouldBe List("src | test | build.sbt | project")
+    view.rows.map(_.plainText) shouldBe List("▾ repo", "  ▾ src", "    ▹ main", "    Serenity.scala", "  ▹ test", "  build.sbt", "  ▹ project")
+    view.rows.count(_.selected) shouldBe 1
+    view.rows.find(_.selected).map(_.plainText) shouldBe Some("  ▾ src")
   }
 
   it should "shape directory trees for tall panel geometry" in {
     val view = PinnedPanelViewModel.resolve(panel, LayoutRect(0, 0, 18, 40))
 
     view.title shouldBe "repo"
-    view.lines shouldBe List("src", "test", "build.sbt", "project")
+    view.rows.map(_.plainText) shouldBe List("▾ repo", "  ▾ src", "    ▹ main", "    Serenity.scala", "  ▹ test", "  build.sbt", "  ▹ project")
   }
 
   it should "shape directory trees for square panel geometry" in {
     val view = PinnedPanelViewModel.resolve(panel, LayoutRect(0, 0, 24, 20))
 
     view.title shouldBe "repo"
-    view.lines shouldBe List("Selected: src", "src", "test", "build.sbt")
+    view.rows.map(_.plainText) shouldBe List("▾ repo", "  ▾ src", "    ▹ main", "    Serenity.scala", "  ▹ test", "  build.sbt", "  ▹ project")
   }
 
   it should "shape directory trees for compact panel geometry" in {
     val view = PinnedPanelViewModel.resolve(panel, LayoutRect(0, 0, 14, 4))
 
     view.title shouldBe "repo"
-    view.lines shouldBe List("4 entries")
+    view.rows.map(_.plainText) shouldBe List("▾ repo", "  ▾ src")
   }
 
   it should "shape terminal content differently for wide and compact geometry" in {
@@ -96,10 +102,10 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     val compact = PinnedPanelViewModel.resolve(terminalPanel, LayoutRect(0, 0, 14, 4))
 
     wide.title shouldBe "terminal"
-    wide.lines shouldBe List("sbt test", "compile", "run")
+    wide.rows.map(_.plainText) shouldBe List("sbt test", "compile", "run")
 
     compact.title shouldBe "terminal"
-    compact.lines shouldBe List("3 lines", "cursor 7")
+    compact.rows.map(_.plainText) shouldBe List("3 lines", "cursor 7")
   }
 
   it should "shape outline content differently for tall and wide geometry" in {
@@ -107,10 +113,10 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     val wide = PinnedPanelViewModel.resolve(outlinePanel, LayoutRect(0, 0, 60, 10))
 
     tall.title shouldBe "outline"
-    tall.lines shouldBe List("Class Serenity", "Method render", "Variable state")
+    tall.rows.map(_.plainText) shouldBe List("Class Serenity", "Method render", "Variable state")
 
     wide.title shouldBe "outline"
-    wide.lines shouldBe List("Serenity | render | state")
+    wide.rows.map(_.plainText) shouldBe List("Serenity | render | state")
   }
 
   it should "shape diagnostics content differently for wide and compact geometry" in {
@@ -118,9 +124,9 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     val compact = PinnedPanelViewModel.resolve(diagnosticsPanel, LayoutRect(0, 0, 14, 4))
 
     wide.title shouldBe "diagnostics"
-    wide.lines shouldBe List("1 error | 1 warning | 1 info")
+    wide.rows.map(_.plainText) shouldBe List("1 error | 1 warning | 1 info")
 
     compact.title shouldBe "diagnostics"
-    compact.lines shouldBe List("3 issues", "1 error")
+    compact.rows.map(_.plainText) shouldBe List("3 issues", "1 error")
   }
 end PinnedPanelViewModelSpec

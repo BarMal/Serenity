@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
+import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -34,7 +34,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val layout     = LayoutEngine.calculateLayout(finalState, TerminalSize(80, 24))
+    val layout     = LayoutEngine.calculateLayout(finalState, ViewportSize(80, 24))
     val panelRect  = layout.editorPanelRect
 
     // The fix should ensure that content is clipped to panel width regardless of viewport.visibleColumns
@@ -70,7 +70,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     val currentState = stateManager.getCurrentState.unsafeRunSync()
-    val layout       = LayoutEngine.calculateLayout(currentState, TerminalSize(80, 24))
+    val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
     val panelRect    = layout.editorPanelRect
 
     // Insert text longer than panel width
@@ -112,7 +112,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     val currentState = stateManager.getCurrentState.unsafeRunSync()
-    val layout       = LayoutEngine.calculateLayout(currentState, TerminalSize(80, 24))
+    val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
     val panelRect    = layout.editorPanelRect
 
     // Create very long text that exceeds both viewport and panel
@@ -156,7 +156,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     val currentState = stateManager.getCurrentState.unsafeRunSync()
-    val layout       = LayoutEngine.calculateLayout(currentState, TerminalSize(80, 24))
+    val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
     val panelRect    = layout.editorPanelRect
 
     // Create multiple long lines

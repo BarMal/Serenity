@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.googlecode.lanterna.TextColor
+import java.awt.Color
 import com.serenity.animation.{AnimationState, CharacterKey}
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{InsertChar, ScrollDown}
@@ -91,8 +91,8 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
       'a',
       3,
       2,
-      TextColor.ANSI.BLACK,
-      TextColor.ANSI.WHITE,
+      Color.BLACK,
+      Color.WHITE,
       5
     )
 

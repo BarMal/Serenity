@@ -1,6 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.state.models.{AppState, Focus, Modal, PaneId, SurfaceContent, SurfacePlacement, SurfacePresentation, UiSurface}
+import com.serenity.state.models.*
 
 object ModalStateReducer:
 

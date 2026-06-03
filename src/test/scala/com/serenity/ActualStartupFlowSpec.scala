@@ -7,7 +7,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -40,8 +40,8 @@ class ActualStartupFlowSpec extends AnyFlatSpec with Matchers:
       
       // 3. Initialize startup state (this should replace with startup page)
       theme = Theme.default
-      terminalSize = TerminalSize(80, 24)
-      initialState <- AppStartup.initializeState(stateManager, theme, terminalSize)
+      viewportSize = ViewportSize(80, 24)
+      initialState <- AppStartup.initializeState(stateManager, theme, viewportSize)
       
       // 4. Check final state
       _ = println(s"State after AppStartup.initializeState:")

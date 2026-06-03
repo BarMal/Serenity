@@ -143,20 +143,54 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     } shouldBe true
   }
 
-  it should "surface animation mode as an inline option row in settings browsing" in {
+  it should "surface animation settings as an expandable group in settings browsing" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry)
       .withActiveCategory(CommandCategory.Settings)
 
-    val animationItem = runner.visibleItems.collectFirst {
-      case option: CommandSurfaceItem.OptionItem if option.id == "animation-mode" => option
+    val animationGroup = runner.visibleItems.collectFirst {
+      case group: CommandSurfaceItem.GroupItem if group.id == "settings-animation" => group
     }.getOrElse(fail("Expected animation mode option item"))
 
-    animationItem.label shouldBe "Animation"
-    animationItem.options.map(_.label) shouldBe List("None", "Subtle", "Full")
-    animationItem.selectedOption shouldBe "Full"
+    animationGroup.label shouldBe "Animation"
+    animationGroup.children.map(_.id) should contain allOf ("animation-mode", "animation-duration", "animation-steps")
+  }
+
+  it should "surface appearance settings as an expandable group in settings browsing" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry)
+      .withActiveCategory(CommandCategory.Settings)
+
+    val appearanceGroup = runner.visibleItems.collectFirst {
+      case group: CommandSurfaceItem.GroupItem if group.id == "settings-appearance" => group
+    }.getOrElse(fail("Expected background style option item"))
+
+    appearanceGroup.label shouldBe "Appearance"
+    appearanceGroup.children.map(_.id) should contain allOf ("cursor-mode", "background-style", "blur-radius")
+  }
+
+  it should "group related settings into expandable submenu rows" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry)
+      .withActiveCategory(CommandCategory.Settings)
+
+    val groupItems = runner.visibleItems.collect {
+      case group: CommandSurfaceItem.GroupItem => group
+    }
+
+    groupItems.map(_.id) shouldBe List("settings-animation", "settings-appearance", "settings-typography")
+    groupItems.head.label shouldBe "Animation"
+    groupItems.head.children.map(_.id) should contain allOf ("animation-mode", "animation-duration", "animation-steps")
+    groupItems(1).label shouldBe "Appearance"
+    groupItems(1).children.map(_.id) should contain allOf ("cursor-mode", "background-style", "blur-radius")
+    groupItems(2).label shouldBe "Typography"
+    groupItems(2).children.map(_.id) should contain allOf ("code-font", "text-font", "ligatures", "font-size")
   }
 
   it should "handle selection navigation" in {

@@ -18,11 +18,17 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-  private def createManager(): SessionManager =
+  private def createManager(policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()): SessionManager =
     val tempDirectory = Files.createTempDirectory("session-manager-spec")
     val themeManager = AppThemeManager.create
     val logger = LoggerFactory[IO].getLogger(using LoggerName("SessionManagerSpec"))
-    SessionManager.create(tempDirectory, themeManager, logger)
+    SessionManager.create(tempDirectory, themeManager, logger, policy)
+
+  private def dirtyStateWithText(text: String): AppState =
+    val initial = AppState.initial
+    val bufferId = initial.bufferOrder.head
+    val buffer = Buffer.fromString(bufferId, text).copy(isDirty = true)
+    initial.copy(buffers = Map(bufferId -> buffer))
 
   private def stateWithText(text: String): AppState =
     val initial = AppState.initial
@@ -76,6 +82,75 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     yield
       existsAfterSave.shouldBe(true)
       existsAfterClear.shouldBe(false)
+
+    program.unsafeRunSync()
+  }
+
+  it should "not persist dirty buffer content when persistUnsavedBuffers is false" in {
+    val sessionManager = createManager(SessionManager.SessionPolicy(persistUnsavedBuffers = false))
+
+    val program = for
+      sessionId <- sessionManager.saveSessionAs("Draft", dirtyStateWithText("unsaved work"))
+      loaded    <- sessionManager.loadSession(sessionId)
+    yield
+      loaded.map(_.buffers.values.head.content.toString).shouldBe(Some(""))
+
+    program.unsafeRunSync()
+  }
+
+  it should "prune the oldest named sessions when maxSessionHistory is exceeded" in {
+    val sessionManager = createManager(SessionManager.SessionPolicy(maxSessionHistory = 2))
+
+    val program = for
+      _        <- sessionManager.saveSessionAs("First",  stateWithText("a"))
+      _        <- sessionManager.saveSessionAs("Second", stateWithText("b"))
+      _        <- sessionManager.saveSessionAs("Third",  stateWithText("c"))
+      sessions <- sessionManager.listSessions()
+    yield
+      sessions.map(_.displayName) shouldBe List("Second", "Third")
+
+    program.unsafeRunSync()
+  }
+
+  it should "round-trip content through saveSession and loadSession with no session ID" in {
+    val sessionManager = createManager()
+
+    val program = for
+      _      <- sessionManager.saveSession(stateWithText("current session content"))
+      loaded <- sessionManager.loadSession()
+    yield
+      loaded.map(_.buffers.values.head.content.toString) shouldBe Some("current session content")
+
+    program.unsafeRunSync()
+  }
+
+  it should "preserve config fields including blurRadius through full disk save/load" in {
+    val sessionManager = createManager()
+    import com.serenity.config.AppConfig
+
+    val state = AppState.initial.copy(config = AppConfig(blurRadius = 0.75f, showLineNumbers = false))
+
+    val program = for
+      _ <- sessionManager.saveSession(state)
+      loaded <- sessionManager.loadSession()
+    yield
+      loaded.map(_.config.blurRadius) shouldBe Some(0.75f)
+      loaded.map(_.config.showLineNumbers) shouldBe Some(false)
+
+    program.unsafeRunSync()
+  }
+
+  it should "never prune the current auto-save session regardless of maxSessionHistory" in {
+    val sessionManager = createManager(SessionManager.SessionPolicy(maxSessionHistory = 1))
+
+    val program = for
+      _            <- sessionManager.saveSession(stateWithText("auto"))
+      _            <- sessionManager.saveSessionAs("Named", stateWithText("named"))
+      sessions     <- sessionManager.listSessions()
+      currentExists <- sessionManager.sessionExists
+    yield
+      currentExists shouldBe true
+      sessions.exists(_.displayName == "Named") shouldBe true
 
     program.unsafeRunSync()
   }

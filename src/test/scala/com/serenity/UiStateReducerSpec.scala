@@ -70,7 +70,7 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     val pinned = PanelStateReducer.pin(content, PanelPosition.Left, 24, baseState)
     val pinnedSurface = pinned.state.uiSurfaces.find(_.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 24))
     pinnedSurface shouldBe defined
-    pinnedSurface.get.content shouldBe SurfaceContent.DirectoryListing(Paths.get("/tmp"), List.empty, None)
+    pinnedSurface.get.content shouldBe SurfaceContent.DirectoryTree(DirectoryTreeData(Paths.get("/tmp")), None)
 
     val focused = PanelStateReducer.focus(PanelPosition.Left, pinned.state)
     focused.state.focus shouldBe Focus.Surface(pinnedSurface.get.id)
@@ -103,7 +103,13 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     pinned.state.focus shouldBe Focus.Surface(pinnedSurface.get.id)
     pinnedSurface.get.id shouldBe surface.id
     pinnedSurface.get.content shouldBe
-      SurfaceContent.DirectoryListing(Paths.get("/repo"), List(DirEntry(Paths.get("/repo/src"), "src", true)), Some(Paths.get("/repo")))
+      SurfaceContent.DirectoryTree(
+        DirectoryTreeData(
+          Paths.get("/repo"),
+          entries = Map(Paths.get("/repo") -> List(DirEntry(Paths.get("/repo/src"), "src", true)))
+        ),
+        Some(Paths.get("/repo"))
+      )
   }
 
   it should "pin the active floating surface when it is pinnable" in {
@@ -129,7 +135,13 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     pinned.state.focus shouldBe Focus.Surface(pinnedSurface.get.id)
     pinnedSurface.get.id shouldBe surface.id
     pinnedSurface.get.content shouldBe
-      SurfaceContent.DirectoryListing(Paths.get("/repo"), List(DirEntry(Paths.get("/repo/src"), "src", true)), Some(Paths.get("/repo")))
+      SurfaceContent.DirectoryTree(
+        DirectoryTreeData(
+          Paths.get("/repo"),
+          entries = Map(Paths.get("/repo") -> List(DirEntry(Paths.get("/repo/src"), "src", true)))
+        ),
+        Some(Paths.get("/repo"))
+      )
   }
 
   it should "leave unsupported floating surfaces unpinned" in {

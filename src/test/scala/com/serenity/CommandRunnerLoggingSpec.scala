@@ -17,7 +17,7 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
       .withActiveCategory(CommandCategory.Settings)
 
     StateManager.describeCommandRunnerEvent(TabKey, runner).shouldBe(
-      "event=TabKey mode=browse category=Settings selected=option:animation-mode"
+      "event=TabKey mode=browse category=Settings selected=group:settings-animation"
     )
   }
 

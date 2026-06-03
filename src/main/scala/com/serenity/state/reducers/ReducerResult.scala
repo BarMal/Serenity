@@ -3,7 +3,9 @@ package com.serenity.state.reducers
 import java.nio.file.Path
 
 import com.serenity.command.Command
+import com.serenity.lsp.LspEffect
 import com.serenity.state.models.{AppState, BufferId, SurfaceId}
+import com.serenity.ui.layout.PanelPosition
 
 enum AppEffect:
   case CompleteQuit
@@ -13,10 +15,16 @@ enum AppEffect:
   case SaveBuffer(bufferId: BufferId)
   case SaveBufferAs(bufferId: BufferId, path: Path)
   case RequestOpenFile
+  case RequestSaveAs
+  case DirectLoadFile(path: Path)
+  case LoadPinnedDirectory(position: PanelPosition, path: Path)
+  case OpenThemePicker
+  case OpenFileSearch
   case RefreshFileWorkflow(surfaceId: SurfaceId)
   case SubmitFileWorkflow(surfaceId: SurfaceId)
   case SubmitReplaceWorkflow(surfaceId: SurfaceId)
   case SubmitCloseWorkflow(surfaceId: SurfaceId)
+  case EnqueueLspEffect(effect: LspEffect)
 
 case class ReducerResult(
     state: AppState,

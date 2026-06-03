@@ -1,6 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.keystroke.events.{ResizeEvent, SystemEvent}
+import com.serenity.keystroke.events.{LspEvent, ResizeEvent, SystemEvent}
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.LayoutEngine
 
@@ -23,10 +23,12 @@ object SystemEventReducer:
         ReducerResult.noEffects(
           state.copy(
             buffers = updatedBuffers,
-            terminalSize = Some(newSize)
+            viewportSize = Some(newSize)
           )
         )
 
+      case LspEvent.LspDiagnosticsReceived(uri, diagnostics) =>
+        ReducerResult.noEffects(state.copy(diagnostics = state.diagnostics + (uri -> diagnostics)))
+
       case _ =>
         ReducerResult.noEffects(state)
-

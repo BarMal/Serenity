@@ -1,10 +1,12 @@
 package com.serenity
 
+import java.awt.Color
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.googlecode.lanterna.TextColor
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.ui.layout.{Layout, ViewportSize}
+import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -47,7 +49,6 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
     val styledContent = ThemeManager.applyTheme(buffer.content, theme)
 
     styledContent should not be empty
-    // Should contain styled segments for different syntax elements
     styledContent.exists(_.element == SyntaxElement.Keyword) shouldBe true
     styledContent.exists(_.element == SyntaxElement.String) shouldBe true
   }
@@ -72,24 +73,20 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
     style3.isUnderlined shouldBe true
   }
 
-  "ThemeRenderer" should "render styled text with proper Lanterna formatting" in {
-    import com.googlecode.lanterna.graphics.TextGraphics
-    import com.googlecode.lanterna.screen.{Screen, TerminalScreen}
-    import com.serenity.ui.layout.Layout
-    import com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal
-
-    val virtualTerminal = new DefaultVirtualTerminal(com.googlecode.lanterna.TerminalSize.ONE)
-    virtualTerminal.setTerminalSize(com.googlecode.lanterna.TerminalSize(80, 24))
-    val screen   = new TerminalScreen(virtualTerminal)
-    val graphics = screen.newTextGraphics()
-
-    val styledText = StyledText(
-      "bold text",
-      TextStyle(isBold = true, isItalic = false, isUnderlined = false),
-      new TextColor.RGB(255, 255, 255)
+  "Renderer" should "render styled text without exceptions" in {
+    val bufferId    = BufferId(1)
+    val paneId      = PaneId(0)
+    val buffer      = Buffer.fromString(bufferId, "bold text")
+    val pane        = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = com.serenity.ui.layout.Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      )
     )
-
-    // Should not throw an exception
+    val surface = new MockRenderSurface(80, 24)
     noException should be thrownBy
-      ThemeRenderer.renderStyledText(graphics, 0, 0, styledText)
+      Renderer.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
   }

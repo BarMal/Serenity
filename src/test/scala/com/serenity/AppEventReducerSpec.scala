@@ -5,7 +5,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Focus, PaneId, SurfaceContent}
 import com.serenity.state.reducers.{AppEffect, AppEventReducer}
-import com.serenity.ui.layout.TerminalSize
+import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -63,7 +63,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     val stateWithBuffers = AppEventReducer
       .reduce(NewTab, AppState.initial, registry)
       .state
-      .copy(terminalSize = Some(TerminalSize(200, 24)))
+      .copy(viewportSize = Some(ViewportSize(200, 24)))
 
     val movedBack = AppEventReducer.reduce(PreviousTab, stateWithBuffers, registry).state
     movedBack.focusedBufferId shouldBe Some(com.serenity.state.models.BufferId(0))

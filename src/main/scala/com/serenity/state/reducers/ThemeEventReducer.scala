@@ -1,6 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.keystroke.events.{ListAvailableThemes, ReloadCurrentTheme, SwitchTheme, ThemeEvent}
+import com.serenity.keystroke.events.*
 import com.serenity.state.models.AppState
 
 object ThemeEventReducer:
@@ -12,4 +12,4 @@ object ThemeEventReducer:
       case ReloadCurrentTheme =>
         ReducerResult.withEffect(state, AppEffect.ReloadTheme(state.theme.name))
       case ListAvailableThemes =>
-        ReducerResult.noEffects(state)
+        ReducerResult.withEffect(state, AppEffect.OpenThemePicker)

@@ -1,11 +1,8 @@
 package com.serenity
 
-import com.googlecode.lanterna.screen.TerminalScreen
-import com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal
-import com.googlecode.lanterna.{TerminalPosition, TerminalSize as LanternaSize}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Layout, LayoutEngine, TerminalSize}
+import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -16,12 +13,6 @@ class PeekOverlayRenderingSpec extends AnyFlatSpec with Matchers:
 
   private val paneId   = PaneId(0)
   private val bufferId = BufferId(1)
-
-  private def screen(width: Int, height: Int): TerminalScreen =
-    val terminal = new DefaultVirtualTerminal(new LanternaSize(width, height))
-    val screen   = new TerminalScreen(terminal)
-    screen.startScreen()
-    screen
 
   private def stateWithPeek(text: String): AppState =
     val buffer = Buffer.fromString(
@@ -49,20 +40,18 @@ class PeekOverlayRenderingSpec extends AnyFlatSpec with Matchers:
     )
 
   "Renderer.render" should "paint quick-info peek content inside the above-cursor overlay rect" in {
-    val testScreen = screen(100, 30)
-    val state      = stateWithPeek("signature(value: Int)")
-    val layout     = LayoutEngine.calculateLayout(state, TerminalSize(100, 30))
-    val overlay    = layout.aboveCursorOverlayRect.getOrElse(fail("Expected above-cursor overlay rect"))
+    val surface = new MockRenderSurface(100, 30)
+    val state   = stateWithPeek("signature(value: Int)")
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val overlay = layout.aboveCursorOverlayRect.getOrElse(fail("Expected above-cursor overlay rect"))
 
-    Renderer.render(state, cursorVisible = false, testScreen)
+    Renderer.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
 
     val renderedText =
       (overlay.x + 1 until overlay.right - 1)
-        .map(x => testScreen.getBackCharacter(x, overlay.y + 1).getCharacter)
+        .map(x => surface.getChar(x, overlay.y + 1))
         .mkString
         .trim
 
     renderedText should include("signature(value: Int)")
-
-    testScreen.stopScreen()
   }

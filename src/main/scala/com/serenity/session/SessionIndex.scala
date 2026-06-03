@@ -1,7 +1,7 @@
 package com.serenity.session
 
-import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import io.circe.{Decoder, Encoder}
 
 case class SessionId(value: String)
 
@@ -20,6 +20,7 @@ case class SessionIndex(
     sessions: List[SessionMetadata],
     currentSessionId: Option[SessionId] = None
 ):
+
   def rename(sessionId: SessionId, newDisplayName: String, updatedAt: Long): SessionIndex =
     copy(
       sessions = sessions.map { metadata =>

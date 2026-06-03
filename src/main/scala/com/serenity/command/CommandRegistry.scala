@@ -2,6 +2,7 @@ package com.serenity.command
 
 import com.serenity.command.CommandSurfaceItem.CommandItem
 import com.serenity.state.manager.StateManager
+import com.serenity.ui.layout.PanelPosition
 
 /** Registry of all available commands */
 class CommandRegistry(private val commands: List[Command]):
@@ -29,7 +30,12 @@ class CommandRegistry(private val commands: List[Command]):
         .map(CommandItem(_))
 
     val optionItems =
-      if category == CommandCategory.Settings then List(CommandRunner.animationOptionItem(optionSelections))
+      if category == CommandCategory.Settings then
+        List(
+          CommandRunner.animationOptionItem(optionSelections),
+          CommandRunner.cursorModeOptionItem(optionSelections),
+          CommandRunner.backgroundStyleOptionItem(optionSelections)
+        )
       else Nil
 
     optionItems ++ commandItems
@@ -40,7 +46,11 @@ class CommandRegistry(private val commands: List[Command]):
     maxResults: Int = 50
   ): List[CommandSurfaceItem] =
     val commandItems = searchCommands(term, maxResults).map(CommandItem(_))
-    val optionItems = List(CommandRunner.animationOptionItem(optionSelections)).filter { item =>
+    val optionItems = List(
+      CommandRunner.animationOptionItem(optionSelections),
+      CommandRunner.cursorModeOptionItem(optionSelections),
+      CommandRunner.backgroundStyleOptionItem(optionSelections)
+    ).filter { item =>
       val lowerTerm = term.toLowerCase
       lowerTerm.isEmpty || item.searchText.toLowerCase.contains(lowerTerm)
     }
@@ -79,6 +89,24 @@ object CommandRegistry:
       "Toggle status gutter display on/off",
       CommandIntent.ToggleGutter,
       CommandCategory.View
+    ),
+    Command.typed(
+      "increase-font-size",
+      "Increase editor font size",
+      CommandIntent.IncreaseFontSize,
+      CommandCategory.Settings
+    ),
+    Command.typed(
+      "decrease-font-size",
+      "Decrease editor font size",
+      CommandIntent.DecreaseFontSize,
+      CommandCategory.Settings
+    ),
+    Command.typed(
+      "toggle-ligatures",
+      "Toggle editor ligatures on/off",
+      CommandIntent.ToggleLigatures,
+      CommandCategory.Settings
     )
   )
 
@@ -163,9 +191,93 @@ object CommandRegistry:
       CommandCategory.Settings
     ),
     Command.typed(
+      "theme-chooser",
+      "Choose theme with live preview",
+      CommandIntent.OpenThemeChooser,
+      CommandCategory.Settings
+    ),
+    Command.typed(
+      "reload-themes",
+      "Reload available themes from disk",
+      CommandIntent.ReloadThemes,
+      CommandCategory.Settings
+    ),
+    Command.typed(
+      "increase-font-size",
+      "Increase editor font size",
+      CommandIntent.IncreaseFontSize,
+      CommandCategory.Settings
+    ),
+    Command.typed(
+      "decrease-font-size",
+      "Decrease editor font size",
+      CommandIntent.DecreaseFontSize,
+      CommandCategory.Settings
+    ),
+    Command.typed(
+      "toggle-ligatures",
+      "Toggle editor ligatures on/off",
+      CommandIntent.ToggleLigatures,
+      CommandCategory.Settings
+    ),
+    Command.typed(
       "format",
       "Format current file",
       CommandIntent.FormatCurrentFile,
       CommandCategory.Edit
+    ),
+    Command.typed(
+      "pin-explorer",
+      "Pin explorer panel on the left",
+      CommandIntent.PinExplorerPanel,
+      CommandCategory.View
+    ),
+    Command.typed(
+      "pin-outline",
+      "Pin outline panel on the right",
+      CommandIntent.PinOutlinePanel,
+      CommandCategory.View
+    ),
+    Command.typed(
+      "pin-diagnostics",
+      "Pin diagnostics panel on the bottom",
+      CommandIntent.PinDiagnosticsPanel,
+      CommandCategory.View
+    ),
+    Command.typed(
+      "focus-left-panel",
+      "Focus the left pinned panel",
+      CommandIntent.FocusPanel(PanelPosition.Left),
+      CommandCategory.View
+    ),
+    Command.typed(
+      "focus-right-panel",
+      "Focus the right pinned panel",
+      CommandIntent.FocusPanel(PanelPosition.Right),
+      CommandCategory.View
+    ),
+    Command.typed(
+      "focus-bottom-panel",
+      "Focus the bottom pinned panel",
+      CommandIntent.FocusPanel(PanelPosition.Bottom),
+      CommandCategory.View
+    ),
+    Command.typed(
+      "unpin-left-panel",
+      "Unpin the left panel",
+      CommandIntent.UnpinPanel(PanelPosition.Left),
+      CommandCategory.View
+    ),
+    Command.typed(
+      "unpin-right-panel",
+      "Unpin the right panel",
+      CommandIntent.UnpinPanel(PanelPosition.Right),
+      CommandCategory.View
+    ),
+    Command.typed(
+      "unpin-bottom-panel",
+      "Unpin the bottom panel",
+      CommandIntent.UnpinPanel(PanelPosition.Bottom),
+      CommandCategory.View
     )
   )

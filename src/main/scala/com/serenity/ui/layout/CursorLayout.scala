@@ -45,9 +45,10 @@ object CursorLayout:
   ): Option[ScreenPosition] =
     val contentRect = contentRectForPane(paneRect)
 
-    calculateVisualPosition(cursor, rope, contentRect.width, viewport).map { case (visualLine, visualColumn) =>
-      ScreenPosition(
-        x = contentRect.x + visualColumn,
-        y = contentRect.y + (visualLine - viewport.topLine)
-      )
+    calculateVisualPosition(cursor, rope, contentRect.width, viewport).map {
+      case (visualLine, visualColumn) =>
+        ScreenPosition(
+          x = contentRect.x + visualColumn,
+          y = contentRect.y + (visualLine - viewport.topLine)
+        )
     }

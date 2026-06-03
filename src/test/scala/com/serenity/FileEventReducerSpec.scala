@@ -3,7 +3,7 @@ package com.serenity
 import java.nio.file.Paths
 
 import com.serenity.command.CommandRunner
-import com.serenity.keystroke.events.{OpenFile, SaveFile}
+import com.serenity.keystroke.events.{LoadFile, OpenFile, SaveAsFile, SaveFile}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, FileEventReducer}
@@ -78,4 +78,25 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
 
     result.state shouldBe AppState.empty
     result.effects shouldBe List(AppEffect.RequestOpenFile)
+  }
+
+  it should "emit a request-save-as effect for SaveAsFile" in {
+    val buffer = Buffer.fromString(BufferId(5), "content")
+    val state  = stateWithPaneBuffer(buffer)
+
+    val result = FileEventReducer.reduce(SaveAsFile, state)
+
+    result.state shouldBe state
+    result.effects shouldBe List(AppEffect.RequestSaveAs)
+  }
+
+  it should "emit a direct-load-file effect for LoadFile with a path" in {
+    val path   = Paths.get("some/file.txt")
+    val buffer = Buffer.fromString(BufferId(6), "existing content")
+    val state  = stateWithPaneBuffer(buffer)
+
+    val result = FileEventReducer.reduce(LoadFile(path), state)
+
+    result.state shouldBe state
+    result.effects shouldBe List(AppEffect.DirectLoadFile(path))
   }

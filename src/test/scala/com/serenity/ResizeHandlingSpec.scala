@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.ui.layout.{LayoutEngine, TerminalSize}
+import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -19,7 +19,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val newWidth  = 120
     val newHeight = 40
 
-    val resizeEvent = ResizeEvent(TerminalSize(newWidth, newHeight))
+    val resizeEvent = ResizeEvent(ViewportSize(newWidth, newHeight))
 
     resizeEvent.newSize.width shouldBe newWidth
     resizeEvent.newSize.height shouldBe newHeight
@@ -37,13 +37,13 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     // Get initial state and verify initial layout
     val initialState  = stateManager.getCurrentState.unsafeRunSync()
-    val initialLayout = LayoutEngine.calculateLayout(initialState, TerminalSize(80, 24))
+    val initialLayout = LayoutEngine.calculateLayout(initialState, ViewportSize(80, 24))
 
     initialLayout.editorPanelRect.width shouldBe 53
     initialLayout.editorPanelRect.height shouldBe 23
 
     // Apply resize event
-    val newSize     = TerminalSize(120, 40)
+    val newSize     = ViewportSize(120, 40)
     val resizeEvent = ResizeEvent(newSize)
     stateManager.applyEvent(resizeEvent).unsafeRunSync()
 
@@ -75,7 +75,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val paneId   = stateManager.createPane(Some(bufferId)).unsafeRunSync()
 
     // Start with narrow width (40 chars)
-    val initialSize  = TerminalSize(40, 20)
+    val initialSize  = ViewportSize(40, 20)
     val resizeEvent1 = ResizeEvent(initialSize)
     stateManager.applyEvent(resizeEvent1).unsafeRunSync()
 
@@ -83,7 +83,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val layout1 = LayoutEngine.calculateLayout(state1, initialSize)
 
     // Now resize to wider (120 chars)
-    val widerSize    = TerminalSize(120, 20)
+    val widerSize    = ViewportSize(120, 20)
     val resizeEvent2 = ResizeEvent(widerSize)
     stateManager.applyEvent(resizeEvent2).unsafeRunSync()
 
@@ -115,8 +115,8 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     initialColumns should be > 0
 
     // Simulate terminal resize detection
-    val newTerminalSize = TerminalSize(100, 30)
-    val resizeEvent     = ResizeEvent(newTerminalSize)
+    val newViewportSize = ViewportSize(100, 30)
+    val resizeEvent     = ResizeEvent(newViewportSize)
 
     // Apply the resize event
     stateManager.applyEvent(resizeEvent).unsafeRunSync()
@@ -124,7 +124,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     // State should now reflect the resize
     val resizedState = stateManager.getCurrentState.unsafeRunSync()
     val resizedBuffer = resizedState.buffers(resizedState.bufferOrder.head)
-    val resizedLayout = LayoutEngine.calculateLayout(resizedState, newTerminalSize)
+    val resizedLayout = LayoutEngine.calculateLayout(resizedState, newViewportSize)
     resizedBuffer.viewport.visibleLines.shouldBe(resizedLayout.editorPanelRect.height)
     resizedBuffer.viewport.visibleColumns.shouldBe(resizedLayout.editorPanelRect.width)
   }
@@ -145,7 +145,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     // Start with narrow terminal (40 chars wide)
-    val narrowSize   = TerminalSize(40, 20)
+    val narrowSize   = ViewportSize(40, 20)
     val resizeEvent1 = ResizeEvent(narrowSize)
     stateManager.applyEvent(resizeEvent1).unsafeRunSync()
 
@@ -153,7 +153,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val layoutAfterNarrow = LayoutEngine.calculateLayout(stateAfterNarrow, narrowSize)
 
     // Resize to wide terminal (120 chars wide)
-    val wideSize     = TerminalSize(120, 20)
+    val wideSize     = ViewportSize(120, 20)
     val resizeEvent2 = ResizeEvent(wideSize)
     stateManager.applyEvent(resizeEvent2).unsafeRunSync()
 

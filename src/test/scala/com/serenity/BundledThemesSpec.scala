@@ -15,8 +15,8 @@ class BundledThemesSpec extends AnyFlatSpec with Matchers:
     val darkTheme = manager.loadThemeFromResource("themes/dark.conf").unsafeRunSync()
 
     darkTheme.name shouldBe "dark"
-    darkTheme.foregroundColor shouldBe a[com.googlecode.lanterna.TextColor.RGB]
-    darkTheme.backgroundColor shouldBe a[com.googlecode.lanterna.TextColor.RGB]
+    darkTheme.foregroundColor shouldBe a[java.awt.Color]
+    darkTheme.backgroundColor shouldBe a[java.awt.Color]
 
     // Verify syntax highlighting colors are configured
     val keywordColor = darkTheme.colorFor(SyntaxElement.Keyword)
@@ -35,8 +35,8 @@ class BundledThemesSpec extends AnyFlatSpec with Matchers:
     val lightTheme = manager.loadThemeFromResource("themes/light.conf").unsafeRunSync()
 
     lightTheme.name shouldBe "light"
-    lightTheme.foregroundColor shouldBe a[com.googlecode.lanterna.TextColor.RGB]
-    lightTheme.backgroundColor shouldBe a[com.googlecode.lanterna.TextColor.RGB]
+    lightTheme.foregroundColor shouldBe a[java.awt.Color]
+    lightTheme.backgroundColor shouldBe a[java.awt.Color]
 
     // Verify syntax highlighting colors are configured
     val keywordColor = lightTheme.colorFor(SyntaxElement.Keyword)

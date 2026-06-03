@@ -75,7 +75,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
     updatedState.modalSurface shouldBe None
     updatedState.focus shouldBe Focus.EditorPane(paneId)
-    updatedState.findState shouldBe Some(FindState("needle", List(1, 3), 0))
+    updatedState.buffers(bufferId).findState shouldBe Some(FindState("needle", List(1, 3), 0))
     updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(1, 0)
   }
 
@@ -166,7 +166,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "move through path suggestions and accept the selected suggestion in file workflow mode" in {
+  it should "move through path suggestions and accept the selected suggestion in file workflow mode with tab" in {
     val initialWorkflow = FileWorkflowState(
       mode = FileWorkflowMode.Open,
       path = "/tmp",
@@ -194,7 +194,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val acceptedResult = ModalEventReducer.reduce(ModalType.FileWorkflow, Enter, moved)
+    val acceptedResult = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, moved)
     acceptedResult.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
     val accepted = acceptedResult.state
     accepted.modalSurface.map(_.content) shouldBe Some(
@@ -209,7 +209,64 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "queue file workflow submission when enter is pressed without an active suggestion to accept" in {
+  it should "queue file workflow submission when enter is pressed even if suggestions are present" in {
+    val initialWorkflow = FileWorkflowState(
+      mode = FileWorkflowMode.Open,
+      path = "/tmp",
+      activeField = FileWorkflowField.Path,
+      suggestions = List(
+        FileWorkflowSuggestion("/tmp/alpha", isDirectory = true)
+      )
+    )
+    val initialState = AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("file-workflow"),
+          SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow)),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("file-workflow"))
+    )
+
+    val result = ModalEventReducer.reduce(ModalType.FileWorkflow, Enter, initialState)
+
+    result.state shouldBe initialState
+    result.effects shouldBe List(AppEffect.SubmitFileWorkflow(SurfaceId("file-workflow")))
+  }
+
+  it should "accept the selected filename suggestion with tab in open workflow mode" in {
+    val initialWorkflow = FileWorkflowState(
+      mode = FileWorkflowMode.Open,
+      filename = "be",
+      path = "/tmp",
+      activeField = FileWorkflowField.Filename,
+      suggestions = List(
+        FileWorkflowSuggestion("beta.scala", isDirectory = false)
+      )
+    )
+    val initialState = AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("file-workflow"),
+          SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow)),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("file-workflow"))
+    )
+
+    val result = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, initialState)
+
+    result.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    result.state.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(
+        Modal.FileWorkflow(initialWorkflow.copy(filename = "beta.scala"))
+      )
+    )
+  }
+
+  it should "queue file workflow submission when enter is pressed without suggestions" in {
     val initialWorkflow = FileWorkflowState(
       mode = FileWorkflowMode.SaveAs,
       filename = "notes.scala",
