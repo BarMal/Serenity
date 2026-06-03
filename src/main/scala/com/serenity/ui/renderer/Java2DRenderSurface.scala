@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import java.awt.*
+import java.awt.font.FontRenderContext
 import java.awt.image.{BufferedImage, ConvolveOp, Kernel}
 import java.util.concurrent.atomic.AtomicReference
 
@@ -24,7 +25,13 @@ class Java2DRenderSurface(
   private val g: Graphics2D = image.createGraphics()
 
   g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+  g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
   g.setFont(font)
+
+  /** The FontRenderContext this surface uses for text layout. Exposed so that TextLayoutSnapshot and
+    * other measurement code can use the identical FRC, preventing cursor drift on proportional fonts.
+    */
+  val fontRenderContext: FontRenderContext = g.getFontRenderContext()
 
   private val fgRef = AtomicReference(Color.WHITE)
   private val bgRef = AtomicReference(Color.BLACK)
