@@ -26,7 +26,8 @@ case class TextVisualLine(
 case class TextLayoutSnapshot(
     visualLines: Vector[TextVisualLine],
     panelWidthPx: Int,
-    lineHeightPx: Int
+    lineHeightPx: Int,
+    isProportional: Boolean = false
 ):
   def xPxForCursor(cursor: com.serenity.state.models.CursorPosition): Option[Float] =
     visualLines.collectFirst {
@@ -89,9 +90,10 @@ object TextLayoutSnapshot:
     }
 
     TextLayoutSnapshot(
-      visualLines = visualLines,
-      panelWidthPx = math.max(1, panelWidthPx),
-      lineHeightPx = lineHeightPx
+      visualLines    = visualLines,
+      panelWidthPx   = math.max(1, panelWidthPx),
+      lineHeightPx   = lineHeightPx,
+      isProportional = !FontLoader.isMonospacedFont(font)
     )
 
   private def wrapLogicalLine(

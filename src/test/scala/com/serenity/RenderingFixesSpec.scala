@@ -117,20 +117,3 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
     surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "abc"))
   }
 
-  it should "preserve a continuous run for proportional text even when a single buffer cell is animated" in {
-    val surface = new MockRenderSurface(80, 24)
-    val animated =
-      AnimationState.empty.addCharacterAnimation('l', 2, 0, Theme.default.background, Theme.default.foreground, steps = 4)
-
-    CharacterRenderer.renderStringWithAnimationPlain(
-      surface,
-      0,
-      0,
-      "hello",
-      Theme.default,
-      animated,
-      preserveContinuousRuns = true
-    )
-
-    surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "hello"))
-  }

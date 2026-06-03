@@ -78,33 +78,17 @@ object CharacterRenderer:
     screenAnimations: AnimationState,
     syntaxHighlightingEnabled: Boolean = true,
     bufferLine: Int = 0,
-    bufferStartColumn: Int = 0,
-    preserveContinuousRuns: Boolean = false
+    bufferStartColumn: Int = 0
   ): Unit =
     if syntaxHighlightingEnabled then
       val styledTexts = com.serenity.ui.theme.ThemeManager.highlightLine(content, theme)
       renderStyledLineWithAnimation(
-        surface,
-        x,
-        y,
-        styledTexts,
-        theme,
-        screenAnimations,
-        bufferLine,
-        bufferStartColumn,
-        preserveContinuousRuns
+        surface, x, y, styledTexts, theme, screenAnimations, bufferLine, bufferStartColumn
       )
     else
       renderStringWithAnimationPlain(
-        surface,
-        x,
-        y,
-        content,
-        theme,
-        screenAnimations,
-        bufferLine = bufferLine,
-        bufferStartColumn = bufferStartColumn,
-        preserveContinuousRuns = preserveContinuousRuns
+        surface, x, y, content, theme, screenAnimations,
+        bufferLine = bufferLine, bufferStartColumn = bufferStartColumn
       )
 
   def renderStringWithAnimationPlain(
@@ -116,21 +100,72 @@ object CharacterRenderer:
     screenAnimations: AnimationState,
     tabWidth: Int = 4,
     bufferLine: Int = 0,
-    bufferStartColumn: Int = 0,
-    preserveContinuousRuns: Boolean = false
+    bufferStartColumn: Int = 0
   ): Unit =
     val collectedRuns = collectPlainRuns(x, content, tabWidth)
-    renderAnimatedRuns(
-      surface,
-      x,
-      y,
-      collectedRuns.runs,
-      theme,
-      screenAnimations,
-      bufferLine,
-      bufferStartColumn,
-      preserveContinuousRuns
-    )
+    renderAnimatedRuns(surface, x, y, collectedRuns.runs, theme, screenAnimations, bufferLine, bufferStartColumn)
+
+  /** Render a proportional-font visual line using pixel-precision caret stops.
+    *
+    * Groups consecutive characters that share the same effective fg/bg color into runs, then calls
+    * [[RenderSurface.drawRunPx]] for each run. Callers must set the surface font before this call.
+    *
+    * @param xOriginPx pixel X of the pane's left edge
+    * @param yPx       pixel Y of the top of this visual line
+    */
+  def renderProportionalLineWithAnimation(
+    surface: RenderSurface,
+    xOriginPx: Float,
+    yPx: Int,
+    lineHeightPx: Int,
+    ascent: Int,
+    visualLine: com.serenity.ui.layout.TextVisualLine,
+    theme: Theme,
+    animations: AnimationState
+  ): Unit =
+    val text = visualLine.text
+    if text.isEmpty then return
+
+    val stops = visualLine.caretStops
+
+    def stopXPx(localIndex: Int): Float =
+      stops.find(_.column == visualLine.startColumn + localIndex).map(_.xPx).getOrElse(0.0f)
+
+    var runStartXPx = 0.0f
+    var curFg       = theme.foreground
+    var curBg       = theme.background
+    val accText     = new StringBuilder()
+
+    def flush(endLocalIndex: Int): Unit =
+      if accText.nonEmpty then
+        val endXPx  = xOriginPx + stopXPx(endLocalIndex)
+        val widthPx = endXPx - runStartXPx
+        surface.setForegroundColor(curFg)
+        surface.setBackgroundColor(curBg)
+        surface.drawRunPx(runStartXPx, yPx, widthPx, lineHeightPx, accText.result())
+        accText.clear()
+
+    text.indices.foreach { i =>
+      val bufCol = visualLine.startColumn + i
+      val cell   = animations.getCell(bufCol, visualLine.bufferLine)
+      val fg     = cell.flatMap(_.currentForeground).getOrElse(theme.foreground)
+      val bg     = cell.flatMap(_.currentBackground).getOrElse(theme.background)
+
+      if accText.isEmpty then
+        runStartXPx = xOriginPx + stopXPx(i)
+        curFg       = fg
+        curBg       = bg
+        accText.append(text(i))
+      else if fg == curFg && bg == curBg then
+        accText.append(text(i))
+      else
+        flush(i)
+        runStartXPx = xOriginPx + stopXPx(i)
+        curFg       = fg
+        curBg       = bg
+        accText.append(text(i))
+    }
+    flush(text.length)
 
   private def renderStyledLineWithAnimation(
     surface: RenderSurface,
@@ -140,8 +175,7 @@ object CharacterRenderer:
     theme: Theme,
     screenAnimations: AnimationState,
     bufferLine: Int = 0,
-    bufferStartColumn: Int = 0,
-    preserveContinuousRuns: Boolean = false
+    bufferStartColumn: Int = 0
   ): Unit =
     styledTexts.foldLeft(x) { (currentX, styledText) =>
       val segmentTheme = theme.copy(
@@ -150,15 +184,8 @@ object CharacterRenderer:
       )
       val collectedRuns = collectPlainRuns(currentX, styledText.content, tabWidth = 4)
       renderAnimatedRuns(
-        surface,
-        currentX,
-        y,
-        collectedRuns.runs,
-        segmentTheme,
-        screenAnimations,
-        bufferLine,
-        bufferStartColumn + (currentX - x),
-        preserveContinuousRuns
+        surface, currentX, y, collectedRuns.runs, segmentTheme, screenAnimations,
+        bufferLine, bufferStartColumn + (currentX - x)
       )
       collectedRuns.endX
     }
@@ -210,22 +237,16 @@ object CharacterRenderer:
     theme: Theme,
     screenAnimations: AnimationState,
     bufferLine: Int,
-    bufferStartColumn: Int,
-    preserveContinuousRuns: Boolean
+    bufferStartColumn: Int
   ): Unit =
     runs.foreach { run =>
-      if preserveContinuousRuns then
-        surface.setForegroundColor(theme.foreground)
-        surface.setBackgroundColor(theme.background)
-        surface.putString(run.startX, y, run.content)
-      else
-        val grouped =
-          groupRunByEffectiveColors(run, screenOriginX, theme, screenAnimations, bufferLine, bufferStartColumn)
-        grouped.foreach { case (startX, text, foreground, background) =>
-          surface.setForegroundColor(foreground)
-          surface.setBackgroundColor(background)
-          surface.putString(startX, y, text)
-        }
+      val grouped =
+        groupRunByEffectiveColors(run, screenOriginX, theme, screenAnimations, bufferLine, bufferStartColumn)
+      grouped.foreach { case (startX, text, foreground, background) =>
+        surface.setForegroundColor(foreground)
+        surface.setBackgroundColor(background)
+        surface.putString(startX, y, text)
+      }
     }
 
   private def groupRunByEffectiveColors(

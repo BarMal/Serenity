@@ -123,5 +123,4 @@ object FontLoader:
   private def createLigatureAttributes(): java.util.Map[java.awt.font.TextAttribute, Any] =
     val attributes = new java.util.HashMap[java.awt.font.TextAttribute, Any]()
     attributes.put(java.awt.font.TextAttribute.LIGATURES, java.awt.font.TextAttribute.LIGATURES_ON)
-    attributes.put(java.awt.font.TextAttribute.KERNING, java.awt.font.TextAttribute.KERNING_ON)
     attributes

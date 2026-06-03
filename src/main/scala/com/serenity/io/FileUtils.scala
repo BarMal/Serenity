@@ -2,7 +2,7 @@ package com.serenity.io
 
 import java.nio.file.{Files, Path, Paths}
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 
 object FileUtils:
 
@@ -42,12 +42,14 @@ object FileUtils:
 
   /** List files in directory */
   def listFiles(directory: Path): IO[List[Path]] =
-    IO.blocking {
-      if !Files.exists(directory) || !Files.isDirectory(directory) then List.empty
-      else
-        import scala.jdk.CollectionConverters.*
-        Files.list(directory).toList.asScala.toList.sorted
-    }
+    if !Files.exists(directory) || !Files.isDirectory(directory) then IO.pure(List.empty)
+    else
+      Resource
+        .fromAutoCloseable(IO.blocking(Files.list(directory)))
+        .use(stream => IO.blocking {
+          import scala.jdk.CollectionConverters.*
+          stream.iterator().asScala.toList.sorted
+        })
 
   /** Get current working directory */
   def getCurrentDirectory: IO[Path] =

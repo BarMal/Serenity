@@ -196,44 +196,36 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveUp =>
-            val movementStart = selectionFocusOrCursor(buffer, cursor)
-            val preferredColumn = buffer.preferredColumn.getOrElse(movementStart.column)
-            val preferredXPx = preferredVisualXPx(buffer, currentState, movementStart)
-            val newCursor = moveVerticalByLayout(
-              movementStart,
-              buffer,
-              currentState,
-              preferredXPx,
-              direction = -1
-            ).getOrElse(moveUpVisualLine(movementStart, buffer.content, effectivePanelWidth(currentState), preferredColumn))
+            val movementStart             = selectionFocusOrCursor(buffer, cursor)
+            val preferredColumn           = buffer.preferredColumn.getOrElse(movementStart.column)
+            val (navSnap, navMetrics)     = navigationSnapshot(buffer, currentState)
+            val preferredXPx              = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, movementStart))
+            val newCursor                 = moveVerticalBySnapshot(movementStart, navSnap, preferredXPx, direction = -1)
+              .getOrElse(moveUpVisualLine(movementStart, buffer.content, effectivePanelWidth(currentState), preferredColumn))
             val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
             val updatedBuffer = buffer.copy(
-              cursors = newCursor :: buffer.cursors.tail,
-              selection = None,
+              cursors         = newCursor :: buffer.cursors.tail,
+              selection       = None,
               preferredColumn = Some(preferredColumn),
-              preferredXPx = Some(preferredXPx),
-              viewport = updatedViewport
+              preferredXPx    = Some(preferredXPx),
+              viewport        = updatedViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveDown =>
-            val movementStart = selectionFocusOrCursor(buffer, cursor)
-            val preferredColumn = buffer.preferredColumn.getOrElse(movementStart.column)
-            val preferredXPx = preferredVisualXPx(buffer, currentState, movementStart)
-            val newCursor = moveVerticalByLayout(
-              movementStart,
-              buffer,
-              currentState,
-              preferredXPx,
-              direction = 1
-            ).getOrElse(moveDownVisualLine(movementStart, buffer.content, effectivePanelWidth(currentState), preferredColumn))
+            val movementStart             = selectionFocusOrCursor(buffer, cursor)
+            val preferredColumn           = buffer.preferredColumn.getOrElse(movementStart.column)
+            val (navSnap, navMetrics)     = navigationSnapshot(buffer, currentState)
+            val preferredXPx              = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, movementStart))
+            val newCursor                 = moveVerticalBySnapshot(movementStart, navSnap, preferredXPx, direction = 1)
+              .getOrElse(moveDownVisualLine(movementStart, buffer.content, effectivePanelWidth(currentState), preferredColumn))
             val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
             val updatedBuffer = buffer.copy(
-              cursors = newCursor :: buffer.cursors.tail,
-              selection = None,
+              cursors         = newCursor :: buffer.cursors.tail,
+              selection       = None,
               preferredColumn = Some(preferredColumn),
-              preferredXPx = Some(preferredXPx),
-              viewport = updatedViewport
+              preferredXPx    = Some(preferredXPx),
+              viewport        = updatedViewport
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
@@ -891,6 +883,22 @@ object EditorEventReducer:
     val panelWidthPx = effectivePanelWidth(currentState) * CellMetrics.fromFont(font).charWidth
     val snapshot     = TextLayoutSnapshot.fromBuffer(buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0)), panelWidthPx, font)
     snapshot.moveVertical(cursor, direction, preferredXPx)
+
+  /** Compute the single shared snapshot + metrics for single-cursor vertical navigation.
+    * Both preferredXPx measurement and vertical movement use the same snapshot.
+    */
+  private def navigationSnapshot(buffer: Buffer, state: AppState): (TextLayoutSnapshot, CellMetrics) =
+    val font    = previewFontForBuffer(buffer, state.config.fontConfig)
+    val metrics = CellMetrics.fromFont(font)
+    val widthPx = effectivePanelWidth(state) * metrics.charWidth
+    val snap    = TextLayoutSnapshot.fromBuffer(buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0)), widthPx, font)
+    (snap, metrics)
+
+  private def measuredCursorXPxFrom(snap: TextLayoutSnapshot, metrics: CellMetrics, cursor: CursorPosition): Float =
+    snap.xPxForCursor(cursor).getOrElse(cursor.column.toFloat * metrics.charWidth.toFloat)
+
+  private def moveVerticalBySnapshot(cursor: CursorPosition, snap: TextLayoutSnapshot, preferredXPx: Float, direction: Int): Option[CursorPosition] =
+    snap.moveVertical(cursor, direction, preferredXPx)
 
   private def previewFontForBuffer(
     buffer: Buffer,

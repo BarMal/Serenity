@@ -5,7 +5,6 @@ import java.awt.Font
 import com.serenity.animation.ThemeInterpolator
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
-import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
 import org.slf4j.LoggerFactory
@@ -20,7 +19,9 @@ case class RenderContext(
     cellMetrics: CellMetrics
 ):
   def fontForBuffer(buffer: Buffer): java.awt.Font =
-    if buffer.language.exists(_ != LanguageId.Markdown) then codeFont else textFont
+    buffer.language match
+      case Some(LanguageId.Markdown) => textFont
+      case _                         => codeFont
 
 object Renderer:
   private val logger = LoggerFactory.getLogger("com.serenity.ui.renderer.Renderer")
@@ -127,17 +128,25 @@ object Renderer:
 
     val contentRect = LayoutRect(rect.x, rect.y + 1, rect.width, math.max(1, rect.height - 1))
 
+    // Compute snapshot once so renderBufferContent and renderCursors share the same layout.
+    val bufferSnapshot = buffer.map { buf =>
+      val bufferFont   = context.fontForBuffer(buf)
+      val panelWidthPx = contentRect.width * context.cellMetrics.charWidth
+      context.surface.setFont(bufferFont)
+      TextLayoutSnapshot.fromBuffer(buf, panelWidthPx, bufferFont)
+    }
+
     buffer match
       case Some(buf) if buf.content.weight == 0 && buf.isNewEmpty =>
         renderWelcomeText(contentRect, state.theme, context)
       case Some(buf) if buf.content.weight == 0 =>
         renderEmptyPane(contentRect, state.theme, context)
       case Some(buf) =>
-        renderBufferContent(pane, buf, contentRect, state, context)
+        renderBufferContent(pane, buf, contentRect, state, context, bufferSnapshot.get)
       case None =>
         renderEmptyPane(contentRect, state.theme, context)
 
-    buffer.foreach(buf => renderCursors(buf, contentRect, state.theme, context))
+    buffer.foreach(buf => renderCursors(buf, contentRect, state.theme, context, bufferSnapshot.get))
 
   private def renderBufferHeader(
     pane: EditorPane,
@@ -186,13 +195,12 @@ object Renderer:
     buffer: Buffer,
     rect: LayoutRect,
     state: AppState,
-    context: RenderContext
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
   ): Unit =
-    val bufferFont   = context.fontForBuffer(buffer)
-    val panelWidthPx = rect.width * context.cellMetrics.charWidth
-    context.surface.setFont(bufferFont)
-    val snapshot     = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, bufferFont)
-    val visualLines  = snapshot.visualLines
+    val visualLines = snapshot.visualLines
+    val xOriginPx   = context.cellMetrics.toPixelX(rect.x).toFloat
+    val ascent      = context.cellMetrics.ascent
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
@@ -209,18 +217,29 @@ object Renderer:
               screenY < rect.bottom &&
               screenX < rect.right
           then
-            CharacterRenderer.renderStringWithAnimation(
-              context.surface,
-              screenX,
-              screenY,
-              visualLine.text,
-              state.theme,
-              buffer.animations,
-              state.syntaxHighlightingEnabled,
-              bufferLine = visualLine.bufferLine,
-              bufferStartColumn = visualLine.startColumn,
-              preserveContinuousRuns = !FontLoader.isMonospacedFont(bufferFont)
-            )
+            if snapshot.isProportional then
+              CharacterRenderer.renderProportionalLineWithAnimation(
+                context.surface,
+                xOriginPx,
+                context.cellMetrics.toPixelY(screenY),
+                snapshot.lineHeightPx,
+                ascent,
+                visualLine,
+                state.theme,
+                buffer.animations
+              )
+            else
+              CharacterRenderer.renderStringWithAnimation(
+                context.surface,
+                screenX,
+                screenY,
+                visualLine.text,
+                state.theme,
+                buffer.animations,
+                state.syntaxHighlightingEnabled,
+                bufferLine = visualLine.bufferLine,
+                bufferStartColumn = visualLine.startColumn
+              )
 
             renderSelectionHighlights(
               context.surface,
@@ -351,10 +370,9 @@ object Renderer:
     buffer: Buffer,
     rect: LayoutRect,
     theme: Theme,
-    context: RenderContext
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
   ): Unit =
-    val bufferFont = context.fontForBuffer(buffer)
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, rect.width * context.cellMetrics.charWidth, bufferFont)
 
     buffer.cursors.foreach { cursor =>
       calculateCursorVisualPosition(cursor, snapshot) match

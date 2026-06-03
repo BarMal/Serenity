@@ -1245,6 +1245,15 @@ object StateManager:
             }
         case CommandIntent.StartupOpenFile =>
           openFileWorkflowModal(FileWorkflowMode.Open, state)
+        case CommandIntent.SetBufferLanguage(language) =>
+          state.focusedBufferId match
+            case Some(bufferId) =>
+              updateState { s =>
+                s.buffers.get(bufferId) match
+                  case Some(buf) => s.copy(buffers = s.buffers + (bufferId -> buf.copy(language = language)))
+                  case None      => s
+              }
+            case None => IO.unit
 
     // File operations
     def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit] =
@@ -1335,7 +1344,7 @@ object StateManager:
       yield ()
 
     private def loadPinnedDirectoryEffect(position: PanelPosition, path: Path): IO[Unit] =
-      for
+      (for
         fileEntries <- fileManager.getFileBrowser.listDirectory(path)
         dirEntries = fileEntries.map(entry =>
           DirEntry(entry.path, entry.name, entry.isDirectory)
@@ -1373,7 +1382,7 @@ object StateManager:
             .getOrElse(state)
           validateAndUpdateState(updated, state)
         }
-      yield ()
+      yield ()).handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load directory $path"))
 
     def selectFileInExplorer(filePath: String): IO[Unit] =
       val targetPath = Path.of(filePath)

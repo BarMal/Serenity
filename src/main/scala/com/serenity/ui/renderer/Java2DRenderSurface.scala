@@ -37,6 +37,13 @@ class Java2DRenderSurface(
   private val bgRef = AtomicReference(Color.BLACK)
 
   override def setFont(newFont: Font): Unit = g.setFont(newFont)
+
+  override def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, s: String): Unit =
+    g.setColor(bgRef.get())
+    g.fillRect(xPx.toInt, yPx, bgWidthPx.toInt.max(1), lineHeightPx)
+    if s.nonEmpty then
+      g.setColor(fgRef.get())
+      g.drawString(s, xPx, (yPx + metrics.ascent).toFloat)
   def setForegroundColor(color: Color): Unit = fgRef.set(color)
   def setBackgroundColor(color: Color): Unit = bgRef.set(color)
   def getBackgroundColor: Color              = bgRef.get()

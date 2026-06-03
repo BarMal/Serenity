@@ -2,6 +2,7 @@ package com.serenity.command
 
 import cats.effect.IO
 import com.serenity.config.{BackgroundStyle, CursorMode}
+import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.PanelPosition
 
@@ -58,6 +59,7 @@ enum CommandIntent:
   case StartupNewSession
   case StartupRestoreSession
   case StartupOpenFile
+  case SetBufferLanguage(language: Option[LanguageId])
   case Custom(run: AppState => IO[Unit])
 
 /** A command that can be executed in the command runner */

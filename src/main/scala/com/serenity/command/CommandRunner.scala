@@ -2,6 +2,7 @@ package com.serenity.command
 
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.{AppConfig, BackgroundStyle, CursorMode}
+import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.fonts.FontLoader
 
 case class CommandRunnerSubmenuState(
@@ -31,14 +32,15 @@ case class CommandRunner(
 
   def visibleItems: List[CommandSurfaceItem] =
     val commandItems = filteredCommands.map(CommandSurfaceItem.CommandItem(_))
-    val settingsItems =
+    if searchTerm.isEmpty then
       activeCategory match
-        case CommandCategory.Settings =>
-          val allSettings: List[CommandSurfaceItem] = settingsGroups
-          if searchTerm.isEmpty then allSettings
-          else allSettings.filter(_.searchText.toLowerCase.contains(searchTerm.toLowerCase))
-        case _ => Nil
-    settingsItems ++ commandItems
+        case CommandCategory.Settings => settingsGroups ++ commandItems
+        case _                        => commandItems
+    else
+      // Commands first so selectedIndex=0 always lands on a registered command.
+      // Matching settings groups are appended so they remain discoverable by scrolling.
+      val matchingGroups = settingsGroups.filter(_.searchText.toLowerCase.contains(searchTerm.toLowerCase))
+      commandItems ++ matchingGroups
 
   def selectedItem: Option[CommandSurfaceItem] =
     visibleItems.lift(selectedIndex)
@@ -99,6 +101,13 @@ case class CommandRunner(
         children = List(codeFontItem, textFontItem, ligaturesItem) ++ inputItems.filter(_.id == "font-size"),
         category = CommandCategory.Settings,
         hint = Some("Code, text, ligatures, size")
+      ),
+      CommandSurfaceItem.GroupItem(
+        id = "settings-language",
+        label = "Language",
+        children = CommandRunner.languageItems,
+        category = CommandCategory.Settings,
+        hint = Some("Set buffer language mode")
       )
     )
 
@@ -460,6 +469,17 @@ object CommandRunner:
 
   private def ligaturesIndex(enabled: Boolean): Int =
     if enabled then 0 else 1
+
+  private[command] val languageItems: List[CommandSurfaceItem] =
+    val plainText = CommandSurfaceItem.CommandItem(
+      Command.typed("lang-plain-text", "Plain Text", CommandIntent.SetBufferLanguage(None), CommandCategory.Settings)
+    )
+    val langItems = LanguageId.values.toList.sortBy(_.displayName).map { lang =>
+      CommandSurfaceItem.CommandItem(
+        Command.typed(s"lang-${lang.id}", lang.displayName, CommandIntent.SetBufferLanguage(Some(lang)), CommandCategory.Settings)
+      )
+    }
+    plainText :: langItems
 
   /** Empty/inactive command runner */
   def empty: CommandRunner = CommandRunner(

@@ -51,6 +51,14 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
         chars(py)(px) = char
         bgs(py)(px)   = currentBg
 
+  case class DrawRunPxCall(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, s: String)
+  private val drawRunPxCallsBuffer = scala.collection.mutable.ListBuffer.empty[DrawRunPxCall]
+
+  override def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, s: String): Unit =
+    drawRunPxCallsBuffer += DrawRunPxCall(xPx, yPx, bgWidthPx, lineHeightPx, s)
+
+  def drawRunPxCalls: List[DrawRunPxCall] = drawRunPxCallsBuffer.toList
+
   case class StrokeRoundRectCall(x: Int, y: Int, w: Int, h: Int, arcPx: Int, color: Color, strokeWidth: Float)
   private val strokeRoundRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[StrokeRoundRectCall]
   case class BlurRegionCall(x: Int, y: Int, width: Int, height: Int, radius: Float)
@@ -111,6 +119,7 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
     blurRegionCallsBuffer.clear()
     fillPixelRectCallsBuffer.clear()
     alphaCallsBuffer.clear()
+    drawRunPxCallsBuffer.clear()
     for y <- 0 until height; x <- 0 until width do
       chars(y)(x) = ' '
       fgs(y)(x)   = Color.WHITE

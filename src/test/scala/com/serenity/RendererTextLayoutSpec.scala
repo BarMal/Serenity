@@ -62,31 +62,29 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val font        = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
     val cellMetrics = CellMetrics.fromFont(font)
     val surface     = renderState("iW", CursorPosition(0, 1), font)
-    val textX       = firstNonSpaceColumn(surface, 1)
+    // Proportional text renders via drawRunPx, not putString.
+    val runCalls    = surface.drawRunPxCalls
     val cursorRects = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
 
-    textX should be >= 0
+    // At least one drawRunPx call should exist for the rendered content.
+    runCalls should not be empty
     cursorRects should have size 1
+    // The cursor caret must be narrower than a full cell width.
     cursorRects.head.widthPx should be < cellMetrics.charWidth
-    cursorRects.head.xPx should be > (textX * cellMetrics.charWidth)
+    // The cursor must be positioned after the first character (measured advance > 0).
+    cursorRects.head.xPx should be > runCalls.head.xPx.toInt
   }
 
-  it should "wrap pane content according to measured text width for proportional text" in {
-    val font        = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
-    val cellMetrics = CellMetrics.fromFont(font)
-    val viewport    = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 2, visibleLines = 4)
-    val surface     = renderState("WWW", CursorPosition(0, 3), font, viewport, viewportSize = ViewportSize(1, 6))
-    val row1X       = firstNonSpaceColumn(surface, 1)
-    val row2X       = firstNonSpaceColumn(surface, 2)
-    val row3X       = firstNonSpaceColumn(surface, 3)
-
-    row1X should be >= 0
-    row2X shouldBe row1X
-    row3X shouldBe row1X
-    surface.getChar(row1X, 1) shouldBe 'W'
-    surface.getChar(row2X, 2) shouldBe 'W'
-    surface.getChar(row3X, 3) shouldBe 'W'
-    cellMetrics.charWidth should be > 0
+  it should "render proportional text via drawRunPx with the full content" in {
+    val font    = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val surface = renderState("WWW", CursorPosition(0, 0), font)
+    // Proportional text must not go through putString.
+    surface.putStringCalls.map(_.s).mkString should not include "WWW"
+    // All drawRunPx runs together must account for the full text.
+    val renderedText = surface.drawRunPxCalls.map(_.s).mkString
+    renderedText should include ("WWW")
+    // Each drawRunPx call is positioned at a non-negative x coordinate.
+    surface.drawRunPxCalls.foreach(c => c.xPx should be >= 0.0f)
   }
 
   it should "render from the viewport left column when horizontally scrolled" in {
