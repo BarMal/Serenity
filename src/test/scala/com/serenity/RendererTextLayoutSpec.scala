@@ -58,18 +58,17 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
   private def firstNonSpaceColumn(surface: MockRenderSurface, row: Int): Int =
     (0 until surface.width).find(x => surface.getChar(x, row) != ' ').getOrElse(-1)
 
-  private def columnsWithBackground(surface: MockRenderSurface, row: Int, color: java.awt.Color): Vector[Int] =
-    (0 until surface.width).filter(x => surface.getBg(x, row) == color).toVector
-
   "Renderer.render" should "place a proportional-text cursor using measured advances rather than raw column count" in {
-    val font    = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
-    val surface = renderState("iW", CursorPosition(0, 1), font)
-    val textX   = firstNonSpaceColumn(surface, 1)
-    val cursorXs = columnsWithBackground(surface, 1, Theme.light.cursorColor)
+    val font        = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val cellMetrics = CellMetrics.fromFont(font)
+    val surface     = renderState("iW", CursorPosition(0, 1), font)
+    val textX       = firstNonSpaceColumn(surface, 1)
+    val cursorRects = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
 
     textX should be >= 0
-    cursorXs should have size 1
-    cursorXs.head shouldBe (textX - 1)
+    cursorRects should have size 1
+    cursorRects.head.widthPx should be < cellMetrics.charWidth
+    cursorRects.head.xPx should be > (textX * cellMetrics.charWidth)
   }
 
   it should "wrap pane content according to measured text width for proportional text" in {
@@ -88,4 +87,14 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     surface.getChar(row2X, 2) shouldBe 'W'
     surface.getChar(row3X, 3) shouldBe 'W'
     cellMetrics.charWidth should be > 0
+  }
+
+  it should "render from the viewport left column when horizontally scrolled" in {
+    val font     = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val viewport = Viewport(topLine = 0, leftColumn = 2, visibleColumns = 10, visibleLines = 4)
+    val surface  = renderState("abcdef", CursorPosition(0, 6), font, viewport)
+    val rowX     = firstNonSpaceColumn(surface, 1)
+
+    rowX should be >= 0
+    surface.getChar(rowX, 1) shouldBe 'c'
   }

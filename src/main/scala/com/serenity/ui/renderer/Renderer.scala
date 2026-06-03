@@ -4,6 +4,7 @@ import java.awt.Font
 
 import com.serenity.animation.ThemeInterpolator
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
 import org.slf4j.LoggerFactory
@@ -220,7 +221,8 @@ object Renderer:
               buffer.animations,
               state.syntaxHighlightingEnabled,
               bufferLine = visualLine.bufferLine,
-              bufferStartColumn = visualLine.startColumn
+              bufferStartColumn = visualLine.startColumn,
+              preserveContinuousRuns = !FontLoader.isMonospacedFont(context.font)
             )
 
             renderSelectionHighlights(
@@ -253,7 +255,7 @@ object Renderer:
     screenY: Int,
     theme: Theme
   ): Unit =
-    buffer.selection.foreach { selection =>
+    buffer.allSelections.foreach { selection =>
       selectionColumnsForLine(selection, visualLine).foreach { case (selectionStart, selectionEnd) =>
         (selectionStart until selectionEnd).foreach { bufferColumn =>
           val relativeColumn = bufferColumn - visualLine.startColumn
@@ -357,37 +359,35 @@ object Renderer:
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, rect.width * context.cellMetrics.charWidth, context.font)
 
     buffer.cursors.foreach { cursor =>
-      calculateCursorVisualPosition(cursor, snapshot, context.cellMetrics) match
-        case Some((visualLine, visualColumn)) =>
-          val screenY = rect.y + visualLine
-          val screenX = rect.x + visualColumn
-
-          if screenY >= rect.y && screenY < rect.bottom &&
-              screenX >= rect.x && screenX < rect.right &&
-              screenY >= 0 && screenY < context.surface.viewportHeight &&
-              screenX >= 0 && screenX < context.surface.viewportWidth
+      calculateCursorVisualPosition(cursor, snapshot) match
+        case Some((visualLine, xPx)) if context.cursorVisible =>
+          val screenYCell = rect.y + visualLine
+          if screenYCell >= rect.y && screenYCell < rect.bottom &&
+              screenYCell >= 0 && screenYCell < context.surface.viewportHeight
           then
-            if context.cursorVisible then
-              val effectiveCursorColor = context.cursorColorOverride.getOrElse(theme.cursor)
-              context.surface.setBackgroundColor(effectiveCursorColor)
-              context.surface.setForegroundColor(theme.background)
-              CharacterRenderer.renderChar(context.surface, screenX, screenY, ' ')
-              context.surface.setBackgroundColor(theme.background)
-              context.surface.setForegroundColor(theme.foreground)
-        case None => ()
+            val effectiveCursorColor = context.cursorColorOverride.getOrElse(theme.cursor)
+            val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
+            val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
+            val screenYPx            = context.cellMetrics.toPixelY(screenYCell)
+            context.surface.fillPixelRect(
+              screenXPx,
+              screenYPx,
+              caretWidthPx,
+              context.cellMetrics.lineHeight,
+              effectiveCursorColor
+            )
+        case _ => ()
     }
 
   private def calculateCursorVisualPosition(
     cursor: CursorPosition,
-    snapshot: TextLayoutSnapshot,
-    cellMetrics: CellMetrics
-  ): Option[(Int, Int)] =
+    snapshot: TextLayoutSnapshot
+  ): Option[(Int, Float)] =
     snapshot.visualLines.zipWithIndex.collectFirst {
       case (line, visualIndex)
           if line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn =>
-        val xPx        = line.xForColumn(cursor.column).getOrElse(line.widthPx)
-        val visualCell = math.max(0, math.round(xPx / cellMetrics.charWidth.toFloat))
-        (visualIndex, visualCell)
+        val xPx = line.xForColumn(cursor.column).getOrElse(line.widthPx)
+        (visualIndex, xPx)
     }
 
   private def renderFloatingPanels(state: AppState, context: RenderContext): Unit =
@@ -456,9 +456,11 @@ object Renderer:
         surface.setForegroundColor(state.theme.muted)
 
         surface.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height, ' ')
-
-        state.layout.editorPanes.foreach { (_, pane) =>
-          pane.bufferId.flatMap(state.buffers.get).foreach { buffer =>
+        state.layout.activeEditorPaneId
+          .flatMap(state.layout.editorPanes.get)
+          .flatMap(_.bufferId)
+          .flatMap(state.buffers.get)
+          .foreach { buffer =>
             val viewport     = buffer.viewport
             val startLine    = viewport.topLine
             val visibleLines = math.min(viewport.visibleLines, lineRect.height)
@@ -473,7 +475,6 @@ object Renderer:
                 surface.putString(lineRect.x, screenY, lineNumberText)
                 renderDiagnosticIndicator(surface, lineRect, screenY, bufferLineIndex, buffer, state)
           }
-        }
       }
 
   private def renderDiagnosticIndicator(

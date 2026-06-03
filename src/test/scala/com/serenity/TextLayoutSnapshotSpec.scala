@@ -6,7 +6,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, CursorPosition, Viewport}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.TextLayoutSnapshot
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
@@ -99,4 +99,34 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
 
     snapshot.moveVertical(secondLineEnd, direction = -1, preferredXPx = preferredXPx) shouldBe
       Some(CursorPosition(0, expectedCol))
+  }
+
+  it should "respect the viewport left column when deriving visible text" in {
+    val buffer = Buffer
+      .fromString(BufferId(6), "abcdef")
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 2, visibleColumns = 20, visibleLines = 2))
+    val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font)
+    val line     = snapshot.visualLines.head
+
+    line.text shouldBe "cdef"
+    line.startColumn shouldBe 2
+    line.endColumn shouldBe 6
+  }
+
+  it should "derive a measured left column for cursor visibility in proportional text" in {
+    val font = FontLoader.loadTextFont(
+      FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
+    ).unsafeRunSync()
+
+    val leftColumn = TextLayoutSnapshot.leftColumnForCursorVisibility(
+      lineText = "iiiiiiiiWW",
+      cursorColumn = 10,
+      visibleWidthPx = CellMetrics.fromFont(font).charWidth * 4,
+      font = font
+    )
+
+    leftColumn should be < 7
+    leftColumn should be >= 0
   }

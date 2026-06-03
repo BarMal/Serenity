@@ -5,6 +5,8 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
+import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -160,6 +162,40 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       lineNumbers shouldBe List("11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21")
       
     program.unsafeRunSync()
+  }
+
+  it should "render shared gutter line numbers from the active pane only" in {
+    val buffer1 = Buffer
+      .fromString(BufferId(1), (1 to 20).map(i => s"left $i").mkString("\n"))
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 10, visibleColumns = 20))
+    val buffer2 = Buffer
+      .fromString(BufferId(2), (1 to 20).map(i => s"right $i").mkString("\n"))
+      .copy(viewport = Viewport(topLine = 5, leftColumn = 0, visibleLines = 10, visibleColumns = 20))
+    val state = AppState.initial.copy(
+      buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
+      bufferOrder = List(buffer1.id, buffer2.id),
+      layout = com.serenity.ui.layout.Layout(
+        editorPanes = Map(
+          PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer1.id),
+          PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
+        ),
+        activeEditorPaneId = Some(PaneId(1)),
+        paneOrder = List(PaneId(0), PaneId(1))
+      ),
+      focus = Focus.EditorPane(PaneId(1)),
+      theme = Theme.light
+    )
+    val surface = new MockRenderSurface(80, 24)
+    val viewport = ViewportSize(80, 24)
+    val layout   = LayoutEngine.calculateLayout(state, viewport)
+    val lineRect = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
+
+    Renderer.render(state, cursorVisible = true, surface, viewport)
+
+    val firstRenderedLine =
+      (lineRect.x until lineRect.right).map(x => surface.getChar(x, lineRect.y)).mkString.trim
+
+    firstRenderedLine shouldBe "6"
   }
 
   it should "position gutter correctly below buffer header and use black background" in {

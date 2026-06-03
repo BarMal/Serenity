@@ -275,16 +275,16 @@ object ModalEventReducer:
                 val newTopLine  = math.max(0, firstLine - halfVisible)
                 val updatedBuffer = buffer.copy(
                   cursors = List(CursorPosition(firstLine, 0)),
-                  viewport = buffer.viewport.copy(topLine = newTopLine)
+                  viewport = buffer.viewport.copy(topLine = newTopLine),
+                  findState = Some(findState)
                 )
                 state.copy(
                   uiSurfaces = state.uiSurfaces.filterNot(isModalSurface),
-                  findState = Some(findState),
                   focus = Focus.EditorPane(paneId),
                   buffers = state.buffers + (buffer.id -> updatedBuffer)
                 )
               case None =>
-                state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface), findState = Some(findState))
+                state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface))
           case None =>
             state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface))
       case None =>

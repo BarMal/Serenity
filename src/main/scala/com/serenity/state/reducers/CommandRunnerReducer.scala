@@ -156,14 +156,12 @@ object CommandRunnerReducer:
           currentRunner(state) match
             case Some(runner) if runner.searchTerm.isEmpty && runner.editingItemId.isEmpty =>
               runner.selectedItem match
-                case Some(_: CommandSurfaceItem.OptionItem) =>
+                case Some(option: CommandSurfaceItem.OptionItem) =>
+                  val nextIndex = (option.selectedIndex - 1 + option.options.length) % option.options.length
+                  val nextOption = option.options(nextIndex)
                   val updatedRunner = runner.adjustSelectedOption(-1)
-                  val effects = updatedRunner.selectedItem match
-                    case Some(option: CommandSurfaceItem.OptionItem) =>
-                      option.selectedIntent.toList.map(intent =>
-                        AppEffect.ExecuteCommand(Command.typed(option.id, option.label, intent, option.category))
-                      )
-                    case _ => Nil
+                  val effects =
+                    List(AppEffect.ExecuteCommand(Command.typed(option.id, option.label, nextOption.intent, option.category)))
                   ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
                 case _ =>
                   ReducerResult.noEffects(state)
@@ -185,14 +183,12 @@ object CommandRunnerReducer:
           currentRunner(state) match
             case Some(runner) if runner.searchTerm.isEmpty && runner.editingItemId.isEmpty =>
               runner.selectedItem match
-                case Some(_: CommandSurfaceItem.OptionItem) =>
+                case Some(option: CommandSurfaceItem.OptionItem) =>
+                  val nextIndex = (option.selectedIndex + 1) % option.options.length
+                  val nextIntent = option.options(nextIndex).intent
                   val updatedRunner = runner.adjustSelectedOption(1)
-                  val effects = updatedRunner.selectedItem match
-                    case Some(option: CommandSurfaceItem.OptionItem) =>
-                      option.selectedIntent.toList.map(intent =>
-                        AppEffect.ExecuteCommand(Command.typed(option.id, option.label, intent, option.category))
-                      )
-                    case _ => Nil
+                  val effects =
+                    List(AppEffect.ExecuteCommand(Command.typed(option.id, option.label, nextIntent, option.category)))
                   ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
                 case _ =>
                   ReducerResult.noEffects(state)

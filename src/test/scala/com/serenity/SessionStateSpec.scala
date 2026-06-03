@@ -128,7 +128,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       .fromFile(BufferId(20), tempFile, "json round trip content")
       .copy(
         cursors = List(CursorPosition(3, 7)),
-        viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 24, visibleColumns = 80)
+        viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 24, visibleColumns = 80),
+        findState = Some(FindState("round", List(0, 5), 1))
       )
     val appState = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
@@ -138,7 +139,6 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         activeEditorPaneId = Some(PaneId(0))
       ),
       focus = Focus.EditorPane(PaneId(0)),
-      findState = Some(FindState("round", List(0, 5), 1)),
       nextBufferId = BufferId(21),
       nextPaneId = PaneId(1)
     )
@@ -155,7 +155,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restoredBuffer.cursors.head shouldBe CursorPosition(3, 7)
     restoredBuffer.viewport.topLine shouldBe 2
     restoredBuffer.viewport.leftColumn shouldBe 1
-    restored.findState shouldBe Some(FindState("round", List(0, 5), 1))
+    restoredBuffer.findState shouldBe Some(FindState("round", List(0, 5), 1))
   }
 
   it should "preserve config fields including blurRadius and backgroundStyle through JSON round trip" in {
@@ -251,4 +251,42 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restored.layout.activeEditorPaneId shouldBe Some(PaneId(1))
     restored.focus shouldBe Focus.EditorPane(PaneId(1))
     restored.bufferOrder shouldBe List(buffer1.id, buffer2.id)
+  }
+
+  it should "preserve distinct find state per buffer through round trip" in {
+    val file1 = Files.createTempFile("session-find-buffer-1", ".txt")
+    val file2 = Files.createTempFile("session-find-buffer-2", ".txt")
+    Files.writeString(file1, "apple banana cherry")
+    Files.writeString(file2, "dog elephant fox")
+
+    val buffer1 = Buffer
+      .fromFile(BufferId(40), file1, "apple banana cherry")
+      .copy(findState = Some(FindState("apple", List(0), 0)))
+    val buffer2 = Buffer
+      .fromFile(BufferId(41), file2, "dog elephant fox")
+      .copy(findState = Some(FindState("elephant", List(1), 0)))
+    val appState = AppState.initial.copy(
+      buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
+      bufferOrder = List(buffer1.id, buffer2.id),
+      layout = Layout(
+        editorPanes = Map(
+          PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer1.id),
+          PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
+        ),
+        activeEditorPaneId = Some(PaneId(1))
+      ),
+      focus = Focus.EditorPane(PaneId(1)),
+      nextBufferId = BufferId(42),
+      nextPaneId = PaneId(2)
+    )
+
+    val sessionState = SessionState.fromAppState(appState)
+    val decoded      = sessionState.asJson.as[SessionState]
+
+    decoded.isRight shouldBe true
+
+    val restored = SessionState.toAppState(decoded.toOption.get, Theme.default)
+
+    restored.buffers(buffer1.id).findState shouldBe Some(FindState("apple", List(0), 0))
+    restored.buffers(buffer2.id).findState shouldBe Some(FindState("elephant", List(1), 0))
   }

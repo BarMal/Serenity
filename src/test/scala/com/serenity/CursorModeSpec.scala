@@ -7,7 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.{CommandCategory, CommandIntent, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, BackgroundStyle, CursorMode}
-import com.serenity.keystroke.events.{MoveDown, MoveRight, TabKey, ToggleCommandRunner}
+import com.serenity.keystroke.events.{Enter, MoveDown, MoveRight, TabKey, ToggleCommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionState
 import com.serenity.session.given
@@ -59,7 +59,9 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
       isActive = true,
       activeCategory = CommandCategory.Settings
     )
-    runner.visibleItems.collect { case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o } should not be empty
+    runner.settingsGroups.flatMap(_.children).collect {
+      case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
+    } should not be empty
   }
 
   it should "offer Blink and Breathe choices on the cursor mode option" in {
@@ -67,7 +69,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
       isActive = true,
       activeCategory = CommandCategory.Settings
     )
-    val item = runner.visibleItems
+    val item = runner.settingsGroups.flatMap(_.children)
       .collectFirst { case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o }
       .get
     item.options.map(_.label) should contain allOf ("Blink", "Breathe")
@@ -75,14 +77,14 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
 
   it should "map Blink option to SetCursorMode(Blink) intent" in {
     val runner = CommandRunner.empty.copy(isActive = true, activeCategory = CommandCategory.Settings)
-    val item = runner.visibleItems
+    val item = runner.settingsGroups.flatMap(_.children)
       .collectFirst { case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o }.get
     item.options.find(_.label == "Blink").get.intent shouldBe CommandIntent.SetCursorMode(CursorMode.Blink)
   }
 
   it should "map Breathe option to SetCursorMode(Breathe) intent" in {
     val runner = CommandRunner.empty.copy(isActive = true, activeCategory = CommandCategory.Settings)
-    val item = runner.visibleItems
+    val item = runner.settingsGroups.flatMap(_.children)
       .collectFirst { case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o }.get
     item.options.find(_.label == "Breathe").get.intent shouldBe CommandIntent.SetCursorMode(CursorMode.Breathe)
   }
@@ -94,7 +96,8 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     // Open runner, navigate to Settings (4 tabs), move down to cursor mode option, press Right (Blink → Breathe)
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     for _ <- 1 to 4 do sm.applyEvent(TabKey).unsafeRunSync()
-    for _ <- 1 to 4 do sm.applyEvent(MoveDown).unsafeRunSync()
+    sm.applyEvent(MoveDown).unsafeRunSync()
+    sm.applyEvent(Enter).unsafeRunSync()
     sm.applyEvent(MoveRight).unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().config.cursorMode shouldBe CursorMode.Breathe
@@ -104,7 +107,8 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     val sm = makeStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     for _ <- 1 to 4 do sm.applyEvent(TabKey).unsafeRunSync()
-    for _ <- 1 to 4 do sm.applyEvent(MoveDown).unsafeRunSync()
+    sm.applyEvent(MoveDown).unsafeRunSync()
+    sm.applyEvent(Enter).unsafeRunSync()
     sm.applyEvent(MoveRight).unsafeRunSync()  // Blink → Breathe
     sm.applyEvent(MoveRight).unsafeRunSync()  // Breathe → Blink (wrap)
 
@@ -115,7 +119,9 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     val sm = makeStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     for _ <- 1 to 4 do sm.applyEvent(TabKey).unsafeRunSync()
-    for _ <- 1 to 5 do sm.applyEvent(MoveDown).unsafeRunSync()
+    sm.applyEvent(MoveDown).unsafeRunSync()
+    sm.applyEvent(Enter).unsafeRunSync()
+    sm.applyEvent(MoveDown).unsafeRunSync()
     sm.applyEvent(MoveRight).unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().config.backgroundStyle shouldBe BackgroundStyle.GlassLike

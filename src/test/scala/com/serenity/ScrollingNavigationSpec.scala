@@ -2,10 +2,15 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -80,6 +85,77 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       val pane = afterScrollState.layout.editorPanes(paneId)
       val buffer = pane.bufferId.flatMap(afterScrollState.buffers.get).get
       buffer.viewport.leftColumn should be >= (150 - 80) // Cursor should be visible
+
+    program.unsafeRunSync()
+  }
+
+  it should "use measured horizontal scrolling for proportional markdown lines" in {
+    val program = for
+      sm = makeStateManager()
+      _ <- sm.updateState(_.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
+      bufferId <- sm.createBuffer("iiiiiiiiWW")
+      state    <- sm.getCurrentState
+      paneId = state.layout.editorPanes.keys.head
+      _ <- sm.setBufferForPane(paneId, bufferId)
+      _ <- sm.updateState { current =>
+        current.copy(
+          buffers = current.buffers.updated(
+            bufferId,
+            current.buffers(bufferId).copy(language = Some(LanguageId.Markdown))
+          )
+        )
+      }
+      _ <- sm.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 4))
+      _ <- sm.setCursorPosition(paneId, 0, 10)
+      _ <- sm.ensureCursorVisible(paneId)
+      afterScrollState <- sm.getCurrentState
+    yield
+      val pane = afterScrollState.layout.editorPanes(paneId)
+      val buffer = pane.bufferId.flatMap(afterScrollState.buffers.get).get
+      buffer.viewport.leftColumn should be < 7
+      buffer.viewport.leftColumn should be >= 0
+
+    program.unsafeRunSync()
+  }
+
+  it should "use measured horizontal scrolling after deleting a proportional selection" in {
+    val program = for
+      sm = makeStateManager()
+      _ <- sm.updateState(_.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
+      bufferId <- sm.createBuffer("iiiiiiiiWW")
+      state    <- sm.getCurrentState
+      paneId = state.layout.editorPanes.keys.head
+      _ <- sm.setBufferForPane(paneId, bufferId)
+      _ <- sm.updateState { current =>
+        current.copy(
+          buffers = current.buffers.updated(
+            bufferId,
+            current.buffers(bufferId).copy(
+              language = Some(LanguageId.Markdown),
+              viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 4),
+              cursors = List(CursorPosition(0, 10)),
+              selection = Some(Selection(CursorPosition(0, 8), CursorPosition(0, 10)))
+            )
+          )
+        )
+      }
+      _ <- sm.applyEvent(DeleteBackward)
+      afterDeleteState <- sm.getCurrentState
+    yield
+      val buffer = afterDeleteState.buffers(bufferId)
+      val font = FontLoader.previewTextFont(
+        FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
+      )
+      val expectedLeftColumn = TextLayoutSnapshot.leftColumnForCursorVisibility(
+        lineText = buffer.content.getLine(0).getOrElse(""),
+        cursorColumn = 8,
+        visibleWidthPx = CellMetrics.fromFont(font).charWidth * 4,
+        font = font
+      )
+
+      buffer.content.collect() shouldBe "iiiiiiii"
+      buffer.cursors.head shouldBe CursorPosition(0, 8)
+      buffer.viewport.leftColumn shouldBe expectedLeftColumn
 
     program.unsafeRunSync()
   }

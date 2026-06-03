@@ -45,3 +45,39 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
 
     selectedCells should have size 5
   }
+
+  it should "highlight every active selection in the editor pane" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val first    = Selection(CursorPosition(0, 0), CursorPosition(0, 5))
+    val second   = Selection(CursorPosition(0, 11), CursorPosition(0, 16))
+    val buffer = Buffer
+      .fromString(bufferId, "alpha beta gamma")
+      .copy(
+        cursors = List(first.focus, second.focus),
+        selection = Some(first),
+        selections = List(first, second)
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
+    )
+
+    val surface = new MockRenderSurface(100, 30)
+
+    Renderer.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+
+    val highlightedLetters = for
+      x <- 0 until surface.width
+      if surface.getBg(x, 1) == state.theme.highlighted.background
+    yield surface.getChar(x, 1)
+
+    highlightedLetters.mkString shouldBe "alphagamma"
+  }

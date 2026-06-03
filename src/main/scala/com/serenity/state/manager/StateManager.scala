@@ -1037,9 +1037,11 @@ object StateManager:
                   val metrics    = CellMetrics.fromFont(font)
                   val panelWidthPx = paneRect.width * metrics.charWidth
                   val snapshot   = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font)
-                  val xPx        = ((click.col - paneRect.x).max(0) * metrics.charWidth).toFloat
+                  val xPx = click.pixelX match
+                    case Some(pixelX) => (pixelX - (paneRect.x * metrics.charWidth)).toFloat
+                    case None         => ((click.col - paneRect.x).max(0) * metrics.charWidth).toFloat
                   val clickedCursor = snapshot
-                    .cursorForVisualRowAndXPx(visualRow, xPx)
+                    .cursorForVisualRowAndXPx(visualRow, xPx.max(0.0f))
                     .orElse {
                       val bufferLine  = (vp.topLine + visualRow).max(0)
                       val bufferCol   = (vp.leftColumn + (click.col - paneRect.x)).max(0)
@@ -1434,11 +1436,11 @@ object StateManager:
               case Some(buffer) =>
                 val cursor   = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
                 val viewport = buffer.viewport
+                val font           = previewFontForBuffer(buffer, state.config.fontConfig)
+                val visibleWidthPx = viewport.visibleColumns * CellMetrics.fromFont(font).charWidth
+                val lineText       = buffer.content.getLine(cursor.line).getOrElse("")
                 val newLeftColumn =
-                  if cursor.column < viewport.leftColumn then cursor.column
-                  else if cursor.column >= viewport.leftColumn + viewport.visibleColumns then
-                    cursor.column - viewport.visibleColumns + 1
-                  else viewport.leftColumn
+                  TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)
                 val newTopLine =
                   if cursor.line < viewport.topLine then cursor.line
                   else if cursor.line >= viewport.topLine + viewport.visibleLines then

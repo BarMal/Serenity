@@ -37,7 +37,6 @@ case class AppState(
     focus: Focus,
     uiSurfaces: List[UiSurface] = List.empty,
     actionStack: List[AppAction] = Nil,
-    findState: Option[FindState] = None,
     viewportSize: Option[ViewportSize] = None,
     theme: Theme = Theme.default,
     config: AppConfig = AppConfig.default,

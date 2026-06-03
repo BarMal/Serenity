@@ -59,8 +59,12 @@ object AppEventReducer:
           content = SurfaceContent.CommandPalette(activatedRunner),
           presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
         )
+        val clearedSurfaces = stateWithId.uiSurfaces.filterNot { current =>
+          current.content.isInstanceOf[SurfaceContent.FileSearch] ||
+          current.content.isInstanceOf[SurfaceContent.ModalWorkflow]
+        }
         stateWithId.copy(
-          uiSurfaces = upsertSurface(stateWithId.uiSurfaces, surface),
+          uiSurfaces = upsertSurface(clearedSurfaces, surface),
           focus = Focus.Surface(surfaceId)
         )
 

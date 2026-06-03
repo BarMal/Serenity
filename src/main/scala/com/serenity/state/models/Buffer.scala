@@ -33,8 +33,18 @@ case class Buffer(
     selection: Option[Selection] = None,
     preferredColumn: Option[Int] = None,
     preferredXPx: Option[Float] = None,
-    viewport: Viewport = Viewport.default
-)
+    viewport: Viewport = Viewport.default,
+    findState: Option[FindState] = None,
+    selections: List[Selection] = Nil
+):
+  def allSelections: List[Selection] =
+    if selections.nonEmpty then selections else selection.toList
+
+  def primarySelection: Option[Selection] =
+    allSelections.headOption
+
+  def clearSelections: Buffer =
+    copy(selection = None, selections = Nil)
 
 object Buffer:
   def empty(id: BufferId)(using com.serenity.rope.Balance): Buffer =

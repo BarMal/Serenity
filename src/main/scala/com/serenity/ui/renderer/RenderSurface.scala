@@ -25,6 +25,14 @@ trait RenderSurface:
     strokeWidth: Float = 1.5f
   ): Unit = ()
 
+  def fillPixelRect(
+    xPx: Int,
+    yPx: Int,
+    widthPx: Int,
+    heightPx: Int,
+    color: Color
+  ): Unit = ()
+
   def hideCursor(): Unit
   def viewportWidth: Int
   def viewportHeight: Int

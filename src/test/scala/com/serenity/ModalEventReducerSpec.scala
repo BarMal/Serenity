@@ -75,7 +75,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
     updatedState.modalSurface shouldBe None
     updatedState.focus shouldBe Focus.EditorPane(paneId)
-    updatedState.findState shouldBe Some(FindState("needle", List(1, 3), 0))
+    updatedState.buffers(bufferId).findState shouldBe Some(FindState("needle", List(1, 3), 0))
     updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(1, 0)
   }
 

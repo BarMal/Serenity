@@ -113,6 +113,16 @@ class Java2DRenderSurface(
     g.drawRoundRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset, arcPx * 2, arcPx * 2)
     g.setStroke(savedStroke)
 
+  override def fillPixelRect(
+    xPx: Int,
+    yPx: Int,
+    widthPx: Int,
+    heightPx: Int,
+    color: Color
+  ): Unit =
+    g.setColor(color)
+    g.fillRect(xPx, yPx, widthPx.max(1), heightPx.max(1))
+
   def hideCursor(): Unit = ()
 
   def viewportWidth: Int  = image.getWidth / metrics.charWidth

@@ -34,7 +34,14 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
     new MouseAdapter:
       override def mouseClicked(e: MouseEvent): Unit =
         val currentMetrics = metrics()
-        mouseQueue.put(MouseClick(currentMetrics.toCol(e.getX), currentMetrics.toRow(e.getY)))
+        mouseQueue.put(
+          MouseClick(
+            currentMetrics.toCol(e.getX),
+            currentMetrics.toRow(e.getY),
+            pixelX = Some(e.getX),
+            pixelY = Some(e.getY)
+          )
+        )
   )
 
   def keyStrokeInfoStream: Stream[F, KeyStrokeInfo] =

@@ -78,11 +78,22 @@ object CharacterRenderer:
     screenAnimations: AnimationState,
     syntaxHighlightingEnabled: Boolean = true,
     bufferLine: Int = 0,
-    bufferStartColumn: Int = 0
+    bufferStartColumn: Int = 0,
+    preserveContinuousRuns: Boolean = false
   ): Unit =
     if syntaxHighlightingEnabled then
       val styledTexts = com.serenity.ui.theme.ThemeManager.highlightLine(content, theme)
-      renderStyledLineWithAnimation(surface, x, y, styledTexts, theme, screenAnimations, bufferLine, bufferStartColumn)
+      renderStyledLineWithAnimation(
+        surface,
+        x,
+        y,
+        styledTexts,
+        theme,
+        screenAnimations,
+        bufferLine,
+        bufferStartColumn,
+        preserveContinuousRuns
+      )
     else
       renderStringWithAnimationPlain(
         surface,
@@ -92,7 +103,8 @@ object CharacterRenderer:
         theme,
         screenAnimations,
         bufferLine = bufferLine,
-        bufferStartColumn = bufferStartColumn
+        bufferStartColumn = bufferStartColumn,
+        preserveContinuousRuns = preserveContinuousRuns
       )
 
   def renderStringWithAnimationPlain(
@@ -104,7 +116,8 @@ object CharacterRenderer:
     screenAnimations: AnimationState,
     tabWidth: Int = 4,
     bufferLine: Int = 0,
-    bufferStartColumn: Int = 0
+    bufferStartColumn: Int = 0,
+    preserveContinuousRuns: Boolean = false
   ): Unit =
     val collectedRuns = collectPlainRuns(x, content, tabWidth)
     renderAnimatedRuns(
@@ -115,7 +128,8 @@ object CharacterRenderer:
       theme,
       screenAnimations,
       bufferLine,
-      bufferStartColumn
+      bufferStartColumn,
+      preserveContinuousRuns
     )
 
   private def renderStyledLineWithAnimation(
@@ -126,7 +140,8 @@ object CharacterRenderer:
     theme: Theme,
     screenAnimations: AnimationState,
     bufferLine: Int = 0,
-    bufferStartColumn: Int = 0
+    bufferStartColumn: Int = 0,
+    preserveContinuousRuns: Boolean = false
   ): Unit =
     styledTexts.foldLeft(x) { (currentX, styledText) =>
       val segmentTheme = theme.copy(
@@ -142,7 +157,8 @@ object CharacterRenderer:
         segmentTheme,
         screenAnimations,
         bufferLine,
-        bufferStartColumn + (currentX - x)
+        bufferStartColumn + (currentX - x),
+        preserveContinuousRuns
       )
       collectedRuns.endX
     }
@@ -194,16 +210,22 @@ object CharacterRenderer:
     theme: Theme,
     screenAnimations: AnimationState,
     bufferLine: Int,
-    bufferStartColumn: Int
+    bufferStartColumn: Int,
+    preserveContinuousRuns: Boolean
   ): Unit =
     runs.foreach { run =>
-      val grouped =
-        groupRunByEffectiveColors(run, screenOriginX, theme, screenAnimations, bufferLine, bufferStartColumn)
-      grouped.foreach { case (startX, text, foreground, background) =>
-        surface.setForegroundColor(foreground)
-        surface.setBackgroundColor(background)
-        surface.putString(startX, y, text)
-      }
+      if preserveContinuousRuns then
+        surface.setForegroundColor(theme.foreground)
+        surface.setBackgroundColor(theme.background)
+        surface.putString(run.startX, y, run.content)
+      else
+        val grouped =
+          groupRunByEffectiveColors(run, screenOriginX, theme, screenAnimations, bufferLine, bufferStartColumn)
+        grouped.foreach { case (startX, text, foreground, background) =>
+          surface.setForegroundColor(foreground)
+          surface.setBackgroundColor(background)
+          surface.putString(startX, y, text)
+        }
     }
 
   private def groupRunByEffectiveColors(

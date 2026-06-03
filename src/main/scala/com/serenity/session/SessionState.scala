@@ -24,7 +24,6 @@ case class SessionState(
     bufferOrder: List[Int], // Use Int IDs instead of BufferId for serialization
     config: AppConfig,
     themeName: String, // Store theme name instead of full theme object
-    findState: Option[SessionFindState] = None,
     recentFiles: List[String] = Nil
 )
 
@@ -39,7 +38,8 @@ case class SessionBuffer(
     cursors: List[SessionCursorPosition],
     viewport: SessionViewport,
     // Persist buffer text so restore does not depend on disk reads
-    unsavedContent: Option[String] = None
+    unsavedContent: Option[String] = None,
+    findState: Option[SessionFindState] = None
 )
 
 /** Persistent layout information
@@ -91,7 +91,6 @@ object SessionState:
       bufferOrder = appState.bufferOrder.map(_.value),
       config = appState.config,
       themeName = appState.theme.name,
-      findState = appState.findState.map(SessionFindState.fromFindState),
       recentFiles = appState.recentFiles.map(_.toString)
     )
 
@@ -121,7 +120,6 @@ object SessionState:
       focus = focus,
       uiSurfaces = List.empty, // Never restore UI surfaces
       actionStack = Nil,       // Never restore action stack
-      findState = sessionState.findState.map(SessionFindState.toFindState),
       viewportSize = None, // Will be set when app starts
       theme = theme,
       config = sessionState.config,
@@ -144,7 +142,8 @@ object SessionBuffer:
       viewport = SessionViewport.fromViewport(buffer.viewport),
       unsavedContent =
         if persistUnsaved || (!buffer.isDirty && !buffer.isNewEmpty) then Some(buffer.content.toString)
-        else None
+        else None,
+      findState = buffer.findState.map(SessionFindState.fromFindState)
     )
 
   def toBuffer(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): Buffer =
@@ -159,7 +158,8 @@ object SessionBuffer:
       language = sessionBuffer.language.flatMap(LanguageId.fromString),
       isNewEmpty = sessionBuffer.isNewEmpty,
       cursors = sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition),
-      viewport = SessionViewport.toViewport(sessionBuffer.viewport)
+      viewport = SessionViewport.toViewport(sessionBuffer.viewport),
+      findState = sessionBuffer.findState.map(SessionFindState.toFindState)
     )
 
 object SessionLayout:

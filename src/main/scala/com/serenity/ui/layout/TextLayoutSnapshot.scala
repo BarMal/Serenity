@@ -5,6 +5,7 @@ import java.awt.font.{FontRenderContext, TextAttribute, TextHitInfo, TextLayout}
 import java.text.AttributedString
 
 import com.serenity.state.models.Buffer
+import com.serenity.ui.fonts.FontLoader
 
 case class TextCaretStop(column: Int, xPx: Float)
 
@@ -51,6 +52,21 @@ case class TextLayoutSnapshot(
 
 object TextLayoutSnapshot:
 
+  def leftColumnForCursorVisibility(
+    lineText: String,
+    cursorColumn: Int,
+    visibleWidthPx: Int,
+    font: Font
+  ): Int =
+    if lineText.isEmpty || visibleWidthPx <= 0 then 0
+    else
+      val frc        = new FontRenderContext(null, true, true)
+      val xs         = caretXs(lineText, font, frc)
+      val safeColumn = cursorColumn.max(0).min(lineText.length)
+      val cursorXPx  = xs.lift(safeColumn).getOrElse(xs.lastOption.getOrElse(0.0f))
+      val targetLeftXPx = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
+      xs.zipWithIndex.takeWhile { case (x, _) => x <= targetLeftXPx }.map(_._2).lastOption.getOrElse(0)
+
   def fromBuffer(
     buffer: Buffer,
     panelWidthPx: Int,
@@ -66,8 +82,10 @@ object TextLayoutSnapshot:
       )
 
     val visualLines = visibleLogicalLines.toVector.flatMap { lineIndex =>
-      val line = buffer.content.getLine(lineIndex).getOrElse("")
-      wrapLogicalLine(line, lineIndex, math.max(1, panelWidthPx), font, frc)
+      val rawLine      = buffer.content.getLine(lineIndex).getOrElse("")
+      val startColumn  = math.min(buffer.viewport.leftColumn, rawLine.length)
+      val visibleSlice = rawLine.drop(startColumn)
+      wrapLogicalLine(visibleSlice, lineIndex, math.max(1, panelWidthPx), font, frc, startColumn)
     }
 
     TextLayoutSnapshot(
@@ -81,19 +99,22 @@ object TextLayoutSnapshot:
     bufferLine: Int,
     panelWidthPx: Int,
     font: Font,
-    frc: FontRenderContext
+    frc: FontRenderContext,
+    baseColumn: Int = 0
   ): Vector[TextVisualLine] =
-    if line.isEmpty then Vector(shapeSegment("", bufferLine, 0, 0, font, frc))
+    if line.isEmpty then Vector(shapeSegment("", bufferLine, baseColumn, baseColumn, font, frc))
     else
       def loop(startColumn: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
         if startColumn >= line.length then acc
         else
           val remaining = line.substring(startColumn)
           val segmentLength = fittingSegmentLength(remaining, panelWidthPx, font, frc)
-          val endColumn     = startColumn + segmentLength
-          val segment       = line.substring(startColumn, endColumn)
-          val visualLine    = shapeSegment(segment, bufferLine, startColumn, endColumn, font, frc)
-          loop(endColumn, acc :+ visualLine)
+          val endColumnInSlice = startColumn + segmentLength
+          val segment          = line.substring(startColumn, endColumnInSlice)
+          val segmentStart     = baseColumn + startColumn
+          val segmentEnd       = baseColumn + endColumnInSlice
+          val visualLine       = shapeSegment(segment, bufferLine, segmentStart, segmentEnd, font, frc)
+          loop(endColumnInSlice, acc :+ visualLine)
 
       loop(0, Vector.empty)
 
@@ -130,6 +151,9 @@ object TextLayoutSnapshot:
 
   private def caretXs(text: String, font: Font, frc: FontRenderContext): Vector[Float] =
     if text.isEmpty then Vector(0.0f)
+    else if FontLoader.isMonospacedFont(font) then
+      val charWidth = CellMetrics.fromFont(font).charWidth.toFloat
+      Vector.tabulate(text.length + 1)(index => index * charWidth)
     else
       val attributed = AttributedString(text)
       attributed.addAttribute(TextAttribute.FONT, font)

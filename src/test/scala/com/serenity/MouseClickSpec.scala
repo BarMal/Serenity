@@ -3,10 +3,13 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.{MouseClick, ResizeEvent}
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.PaneId
-import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -115,4 +118,45 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
     val afterCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.headOption
     afterCursor shouldBe initialCursor
+  }
+
+  it should "use pixel-aware hit testing for proportional text when pixel coordinates are available" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    given org.typelevel.log4cats.Logger[IO] = org.typelevel.log4cats.slf4j.Slf4jLogger.getLogger[IO]
+
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("iW").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state.buffers(bufferId).copy(language = Some(LanguageId.Markdown))
+        )
+      )
+    }.unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    val state       = sm.getCurrentState.unsafeRunSync()
+    val layout      = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val font        = FontLoader.previewTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true))
+    val metrics     = CellMetrics.fromFont(font)
+    val panelWidthPx = paneRect.width * metrics.charWidth
+    val snapshot    = TextLayoutSnapshot.fromBuffer(state.buffers(bufferId), panelWidthPx, font)
+    val line        = snapshot.visualLines.head
+    val pixelX      = paneRect.x * metrics.charWidth + math.round(line.xForColumn(1).getOrElse(0.0f) + 1.0f)
+    val pixelY      = (paneRect.y + 1) * metrics.lineHeight
+
+    sm.applyEvent(
+      MouseClick(
+        col = paneRect.x,
+        row = paneRect.y + 1,
+        pixelX = Some(pixelX),
+        pixelY = Some(pixelY)
+      )
+    ).unsafeRunSync()
+
+    val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.cursors.headOption shouldBe Some(com.serenity.state.models.CursorPosition(0, 1))
   }

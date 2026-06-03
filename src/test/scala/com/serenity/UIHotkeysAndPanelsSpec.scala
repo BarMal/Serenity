@@ -29,6 +29,32 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       case Focus.Surface(id) => state.commandRunnerSurface.map(_.id) shouldBe Some(id)
       case _                 => fail("Expected focus on command runner surface")
 
+  it should "dismiss file search when opening command palette" in new UIFixture:
+    stateManager.applyEvent(FileSearch).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().fileSearchSurface shouldBe defined
+
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.fileSearchSurface shouldBe None
+    state.commandRunnerSurface shouldBe defined
+    state.focus match
+      case Focus.Surface(id) => state.commandRunnerSurface.map(_.id) shouldBe Some(id)
+      case _                 => fail("Expected focus on command runner surface")
+
+  it should "dismiss modal workflow when opening command palette" in new UIFixture:
+    stateManager.showModal(Modal.GotoLine("12")).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().modalSurface shouldBe defined
+
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.modalSurface shouldBe None
+    state.commandRunnerSurface shouldBe defined
+    state.focus match
+      case Focus.Surface(id) => state.commandRunnerSurface.map(_.id) shouldBe Some(id)
+      case _                 => fail("Expected focus on command runner surface")
+
   it should "close command palette on a second ToggleCommandRunner" in new UIFixture:
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()

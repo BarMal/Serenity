@@ -53,6 +53,9 @@ object FontLoader:
       config.enableLigatures
     )
 
+  def isMonospacedFont(font: Font): Boolean =
+    isMonospaced(font)
+
   /** Compatibility shim while the runtime moves to separate code/text fonts. */
   def loadMonaspaceNeon(config: FontConfig)(using logger: Logger[IO]): IO[List[Font]] =
     loadCodeFont(config).map(List(_))

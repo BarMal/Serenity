@@ -72,6 +72,19 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
 
     getClipboard shouldBe Some("pha\nbe")
 
+  it should "copy all active selections in order when multiple selections are present" in new ClipFixture:
+    setupBuffer("alpha beta gamma")
+    setSelections(
+      List(
+        Selection(CursorPosition(0, 0), CursorPosition(0, 5)),
+        Selection(CursorPosition(0, 11), CursorPosition(0, 16))
+      )
+    )
+
+    applyEvent(Copy)
+
+    getClipboard shouldBe Some("alpha\ngamma")
+
   behavior of "Paste"
 
   it should "insert clipboard content at the cursor position" in new ClipFixture:
@@ -166,6 +179,22 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     getCursor shouldBe CursorPosition(0, 2)
     getState.buffers(bufferId).selection shouldBe None
 
+  it should "cut all active selections when multiple selections are present" in new ClipFixture:
+    val bufferId = setupBuffer("alpha beta gamma")
+    setSelections(
+      List(
+        Selection(CursorPosition(0, 0), CursorPosition(0, 5)),
+        Selection(CursorPosition(0, 11), CursorPosition(0, 16))
+      )
+    )
+
+    applyEvent(Cut)
+
+    getClipboard shouldBe Some("alpha\ngamma")
+    getContent(bufferId) shouldBe " beta "
+    getState.buffers(bufferId).allSelections shouldBe Nil
+    getState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 6))
+
   it should "round-trip: cut then paste restores the line" in new ClipFixture:
     val bufferId = setupBuffer("original")
     setCursor(0, 0)
@@ -203,6 +232,21 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
             state.buffers(activeBufferId).copy(
               cursors = List(selection.start),
               selection = Some(selection)
+            )
+          )
+        )
+      }.unsafeRunSync()
+
+    def setSelections(selections: List[Selection]): Unit =
+      val primary = selections.head
+      stateManager.updateState { state =>
+        state.copy(
+          buffers = state.buffers.updated(
+            activeBufferId,
+            state.buffers(activeBufferId).copy(
+              cursors = selections.map(_.focus),
+              selection = Some(primary),
+              selections = selections
             )
           )
         )
