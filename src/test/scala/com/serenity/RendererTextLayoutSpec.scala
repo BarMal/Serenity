@@ -52,7 +52,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
 
     val surface     = new MockRenderSurface(viewportSize.width, viewportSize.height)
     val cellMetrics = CellMetrics.fromFont(font)
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, font, cellMetrics)
+    Renderer.render(state, cursorVisible = true, surface, viewportSize, font, font, cellMetrics, None)
     surface
 
   private def firstNonSpaceColumn(surface: MockRenderSurface, row: Int): Int =

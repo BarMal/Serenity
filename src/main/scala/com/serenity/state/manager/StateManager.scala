@@ -1003,7 +1003,7 @@ object StateManager:
 
     private def ensureCommandRunnerSurface(state: AppState): AppState =
       val registry = CommandRegistry.default
-      val runner   = CommandRunner.empty.activate(registry).withPreviousFocus(Focus.EditorPane(PaneId(0)))
+      val runner   = CommandRunner.empty.activate(registry, state.config)
       val (stateWithId, surfaceId) =
         state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
       val surface = UiSurface(
@@ -1012,9 +1012,8 @@ object StateManager:
         presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
       )
       stateWithId.copy(
-        uiSurfaces = stateWithId.uiSurfaces.filterNot(_.id == surfaceId) :+ surface,
-        focus = Focus.Surface(surfaceId)
-      )
+        uiSurfaces = stateWithId.uiSurfaces.filterNot(_.id == surfaceId) :+ surface
+      ).pushFocus(Focus.Surface(surfaceId))
 
     private def handleMouseClick(click: MouseClick, state: AppState): IO[Unit] =
       state.viewportSize match

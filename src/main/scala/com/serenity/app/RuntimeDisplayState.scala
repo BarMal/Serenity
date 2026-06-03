@@ -4,8 +4,6 @@ import java.awt.Font
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
-import com.serenity.lsp.config.LanguageId
-import com.serenity.state.models.AppState
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.CellMetrics
@@ -30,42 +28,27 @@ final class RuntimeDisplayState private (
   def textMetrics: CellMetrics =
     textMetricsRef.get()
 
-  def fontFor(state: AppState): Font =
-    if usesChromeTypography(state) || usesCodeTypography(state) then codeFont else textFont
-
-  def metricsFor(state: AppState): CellMetrics =
-    if usesChromeTypography(state) || usesCodeTypography(state) then codeMetrics else textMetrics
+  def primaryMetrics: CellMetrics =
+    codeMetricsRef.get()
 
   def update(config: FontConfig)(using logger: Logger[IO]): IO[Unit] =
     RuntimeDisplayState
       .load(config)
-      .map { snapshot =>
-        codeFontRef.set(snapshot.codeFont)
-        textFontRef.set(snapshot.textFont)
-        codeMetricsRef.set(snapshot.codeMetrics)
-        textMetricsRef.set(snapshot.textMetrics)
+      .flatMap { snapshot =>
+        if snapshot.codeMetrics.isValid && snapshot.textMetrics.isValid then
+          IO {
+            codeFontRef.set(snapshot.codeFont)
+            textFontRef.set(snapshot.textFont)
+            codeMetricsRef.set(snapshot.codeMetrics)
+            textMetricsRef.set(snapshot.textMetrics)
+          }
+        else
+          logger.warn(
+            s"Rejecting font config: invalid metrics " +
+              s"(code charWidth=${snapshot.codeMetrics.charWidth}, text charWidth=${snapshot.textMetrics.charWidth}). " +
+              s"Keeping previous fonts."
+          )
       }
-
-  private def usesCodeTypography(state: AppState): Boolean =
-    state.layout.activeEditorPaneId
-      .flatMap(state.layout.editorPanes.get)
-      .flatMap(_.bufferId)
-      .orElse(state.focusedBufferId)
-      .flatMap(state.buffers.get)
-      .flatMap(_.language)
-      .exists(RuntimeDisplayState.usesCodeTypography)
-
-  private def usesChromeTypography(state: AppState): Boolean =
-    state.activeSurface.exists { surface =>
-      surface.content match
-        case com.serenity.state.models.SurfaceContent.StartPage(_)                   => true
-        case com.serenity.state.models.SurfaceContent.CommandPalette(_)              => true
-        case com.serenity.state.models.SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
-        case com.serenity.state.models.SurfaceContent.ThemePicker(_)                 => true
-        case com.serenity.state.models.SurfaceContent.FileSearch(_)                  => true
-        case com.serenity.state.models.SurfaceContent.ModalWorkflow(_)               => true
-        case _                                                                       => false
-    }
 
 object RuntimeDisplayState:
 
@@ -96,6 +79,3 @@ object RuntimeDisplayState:
       codeMetrics = CellMetrics.fromFont(codeFont),
       textMetrics = CellMetrics.fromFont(textFont)
     )
-
-  private def usesCodeTypography(languageId: LanguageId): Boolean =
-    languageId != LanguageId.Markdown

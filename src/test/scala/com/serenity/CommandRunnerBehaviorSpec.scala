@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandRegistry, CommandRunner}
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.{CommandRunnerComponent, ComponentResult}
@@ -52,16 +53,16 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 
       runner.isActive shouldEqual true
       newState.focus shouldEqual Focus.Surface(SurfaceId("command-runner"))
-      runner.previousFocus shouldEqual Some(Focus.EditorPane(PaneId(1)))
+      newState.focusHistory should contain(Focus.EditorPane(PaneId(1)))
 
     it("should deactivate and restore previous focus when escaped"):
       val registry  = CommandRegistry.default
       val component = CommandRunnerComponent(registry)
       val activeRunner = CommandRunner.empty
-        .activate(registry)
-        .withPreviousFocus(Focus.EditorPane(PaneId(2)))
+        .activate(registry, AppConfig.default)
 
       val initialState = runnerState(registry, activeRunner, Focus.Surface(SurfaceId("command-runner")))
+        .copy(focusHistory = List(Focus.EditorPane(PaneId(2))))
 
       component.processEvent(Escape, initialState) match
         case ComponentResult.StateChange(update) =>
@@ -79,7 +80,7 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
       )
       val registry    = CommandRegistry(commands)
       val component   = CommandRunnerComponent(registry)
-      val initialState = runnerState(registry, CommandRunner.empty.activate(registry), Focus.Surface(SurfaceId("command-runner")))
+      val initialState = runnerState(registry, CommandRunner.empty.activate(registry, AppConfig.default), Focus.Surface(SurfaceId("command-runner")))
 
       runnerFrom(initialState).selectedIndex shouldEqual 0
       runnerFrom(initialState).selectedCommand.map(_.name) shouldEqual Some("first")
@@ -107,7 +108,7 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
       )
       val registry     = CommandRegistry(commands)
       val component    = CommandRunnerComponent(registry)
-      val initialState = runnerState(registry, CommandRunner.empty.activate(registry), Focus.Surface(SurfaceId("command-runner")))
+      val initialState = runnerState(registry, CommandRunner.empty.activate(registry, AppConfig.default), Focus.Surface(SurfaceId("command-runner")))
 
       component.processEvent(MoveUp, initialState) match
         case ComponentResult.StateChange(update) =>
@@ -125,7 +126,7 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
       )
       val registry     = CommandRegistry(commands)
       val component    = CommandRunnerComponent(registry)
-      val initialState = runnerState(registry, CommandRunner.empty.activate(registry), Focus.Surface(SurfaceId("command-runner")))
+      val initialState = runnerState(registry, CommandRunner.empty.activate(registry, AppConfig.default), Focus.Surface(SurfaceId("command-runner")))
 
       component.processEvent(InsertChar('s'), initialState) match
         case ComponentResult.StateChange(update) =>
@@ -146,8 +147,9 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
       )
       val registry = CommandRegistry(commands)
       val component = CommandRunnerComponent(registry)
-      val runner = CommandRunner.empty.activate(registry).withPreviousFocus(Focus.EditorPane(PaneId(1)))
+      val runner = CommandRunner.empty.activate(registry, AppConfig.default)
       val initialState = runnerState(registry, runner, Focus.Surface(SurfaceId("command-runner")))
+        .copy(focusHistory = List(Focus.EditorPane(PaneId(1))))
 
       component.processEvent(Enter, initialState) match
         case ComponentResult.Composite(List(ComponentResult.StateChange(update), ComponentResult.ExecuteCommand(command))) =>
@@ -163,7 +165,7 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
     it("should handle backspace in search term"):
       val registry   = CommandRegistry.default
       val component  = CommandRunnerComponent(registry)
-      val activeRunner = CommandRunner.empty.activate(registry).updateSearchTerm("test")(using registry)
+      val activeRunner = CommandRunner.empty.activate(registry, AppConfig.default).updateSearchTerm("test")(using registry)
       val initialState = runnerState(registry, activeRunner, Focus.Surface(SurfaceId("command-runner")))
 
       runnerFrom(initialState).searchTerm shouldEqual "test"

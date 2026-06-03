@@ -13,25 +13,18 @@ object ModalStateReducer:
     )
     ReducerResult.noEffects(
       stateWithId.copy(
-        uiSurfaces = stateWithId.uiSurfaces.filterNot(isModalSurface) :+ surface,
-        focus = Focus.Surface(surfaceId)
-      )
+        uiSurfaces = stateWithId.uiSurfaces.filterNot(isModalSurface) :+ surface
+      ).pushFocus(Focus.Surface(surfaceId))
     )
 
   def dismiss(state: AppState): ReducerResult =
     ReducerResult.noEffects(
       state.copy(
-        uiSurfaces = state.uiSurfaces.filterNot(isModalSurface),
-        focus = fallbackEditorFocus(state)
-      )
+        uiSurfaces = state.uiSurfaces.filterNot(isModalSurface)
+      ).popFocus
     )
 
   private def isModalSurface(surface: UiSurface): Boolean =
     surface.content match
       case SurfaceContent.ModalWorkflow(_) => true
       case _                               => false
-
-  private def fallbackEditorFocus(state: AppState): Focus =
-    state.layout.activeEditorPaneId match
-      case Some(paneId) => Focus.EditorPane(paneId)
-      case None         => Focus.EditorPane(PaneId(0))

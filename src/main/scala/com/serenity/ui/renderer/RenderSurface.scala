@@ -1,10 +1,11 @@
 package com.serenity.ui.renderer
 
-import java.awt.Color
+import java.awt.{Color, Font}
 
 import com.serenity.ui.theme.TextStyle
 
 trait RenderSurface:
+  def setFont(font: Font): Unit                = ()
   def setForegroundColor(color: Color): Unit
   def setBackgroundColor(color: Color): Unit
   def getBackgroundColor: Color

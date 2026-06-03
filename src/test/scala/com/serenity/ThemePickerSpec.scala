@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.command.{CommandRegistry, CommandRunner}
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.ThemePickerComponent
@@ -56,7 +57,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
         activeEditorPaneId = Some(PaneId(0))
       )
     )
-    val runner = CommandRunner.empty.activate(CommandRegistry.default)
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val (s1, runnerId) = base.allocateSurfaceId
     val runnerSurface = UiSurface(
       runnerId,

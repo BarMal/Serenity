@@ -4,16 +4,20 @@ package com.serenity.ui.layout
   * size. Derived from FontMetrics at startup and font changes only.
   */
 case class CellMetrics(charWidth: Int, lineHeight: Int, ascent: Int):
+  def isValid: Boolean = charWidth > 0 && lineHeight > 0
   def toPixelX(col: Int): Int = col * charWidth
   def toPixelY(row: Int): Int = row * lineHeight
-  def toCol(pixelX: Int): Int = pixelX / charWidth
-  def toRow(pixelY: Int): Int = pixelY / lineHeight
+  def toCol(pixelX: Int): Int = if charWidth > 0 then pixelX / charWidth else 0
+  def toRow(pixelY: Int): Int = if lineHeight > 0 then pixelY / lineHeight else 0
 
   /** Derive a ViewportSize in cell units from a pixel viewport. Fractional cells at the right/bottom edge are excluded
     * — those pixels stay background-filled.
     */
   def viewportSize(pixelWidth: Int, pixelHeight: Int): ViewportSize =
-    ViewportSize(pixelWidth / charWidth, pixelHeight / lineHeight)
+    ViewportSize(
+      if charWidth > 0 then pixelWidth / charWidth else 1,
+      if lineHeight > 0 then pixelHeight / lineHeight else 1
+    )
 
 object CellMetrics:
 
@@ -25,6 +29,6 @@ object CellMetrics:
     val g     = image.createGraphics()
     g.setFont(font)
     val fm     = g.getFontMetrics
-    val result = CellMetrics(fm.charWidth('M'), fm.getHeight, fm.getAscent)
+    val result = CellMetrics(math.max(1, fm.charWidth('M')), math.max(1, fm.getHeight), math.max(1, fm.getAscent))
     g.dispose()
     result

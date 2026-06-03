@@ -3,6 +3,7 @@ package com.serenity.ui.fonts
 import java.awt.{Font, GraphicsEnvironment, Toolkit}
 
 import cats.effect.IO
+import com.serenity.ui.layout.CellMetrics
 import org.typelevel.log4cats.Logger
 
 object FontLoader:
@@ -17,10 +18,10 @@ object FontLoader:
   )
 
   lazy val availableMonospaceFamilies: List[String] =
-    (BundledCodeFontFamily :: availableSystemFontFamilies.filter(isMonospacedFamily)).distinct
+    (BundledCodeFontFamily :: availableSystemFontFamilies.filter(f => isMonospacedFamily(f) && canRenderBasicText(f))).distinct
 
   lazy val availableTextFamilies: List[String] =
-    ((Font.SANS_SERIF :: availableSystemFontFamilies).filterNot(isMonospacedFamily)).distinct
+    ((Font.SANS_SERIF :: availableSystemFontFamilies).filterNot(isMonospacedFamily).filter(canRenderBasicText)).distinct
 
   def isMonospacedFamily(family: String): Boolean =
     if family == BundledCodeFontFamily then true
@@ -98,6 +99,13 @@ object FontLoader:
       .find(_ != BundledCodeFontFamily)
       .map(family => Font(family, Font.PLAIN, size.toInt).deriveFont(size))
       .getOrElse(Font(Font.MONOSPACED, Font.PLAIN, size.toInt).deriveFont(size))
+
+  private def canRenderBasicText(family: String): Boolean =
+    try
+      val font = Font(family, Font.PLAIN, 12)
+      font.canDisplayUpTo("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789") == -1
+        && CellMetrics.fromFont(font.deriveFont(12.0f)).isValid
+    catch case _: Exception => false
 
   private def isMonospaced(font: Font): Boolean =
     try

@@ -21,7 +21,6 @@ case class CommandRunner(
     filteredCommands: List[Command],
     activeCategory: CommandCategory = CommandCategory.All,
     optionSelections: Map[String, Int] = Map.empty,
-    previousFocus: Option[com.serenity.state.models.Focus] = None,
     inputItems: List[CommandSurfaceItem.InputItem] = List.empty,
     editingItemId: Option[String] = None,
     editingText: String = "",
@@ -210,7 +209,7 @@ case class CommandRunner(
       case None             => this
 
   /** Activate the command runner with given registry and config */
-  def activate(registry: CommandRegistry, config: AppConfig = AppConfig.default): CommandRunner =
+  def activate(registry: CommandRegistry, config: AppConfig): CommandRunner =
     copy(
       isActive = true,
       searchTerm = "",
@@ -236,7 +235,6 @@ case class CommandRunner(
       filteredCommands = List.empty,
       activeCategory = CommandCategory.All,
       optionSelections = Map.empty,
-      previousFocus = None,
       inputItems = List.empty,
       editingItemId = None,
       editingText = "",
@@ -281,8 +279,6 @@ case class CommandRunner(
   def hasMoreCommands: Boolean = visibleItems.length > 5
 
   /** Store the focus that should be restored when runner closes */
-  def withPreviousFocus(focus: com.serenity.state.models.Focus): CommandRunner =
-    copy(previousFocus = Some(focus))
 
 object CommandRunner:
 

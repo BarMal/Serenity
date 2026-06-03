@@ -21,12 +21,11 @@ object Main extends IOApp.Simple:
 
     for
       displayState <- RuntimeDisplayState.create(appConfig.fontConfig)
-      _ <- SwingWindow.resource(displayState.textMetrics, appConfig.windowChromeMode).use { swingWin =>
-        def syncDisplayMetrics(state: com.serenity.state.models.AppState): IO[java.awt.Font] =
+      _ <- SwingWindow.resource(displayState.primaryMetrics, appConfig.windowChromeMode).use { swingWin =>
+        def syncDisplayMetrics(): IO[Unit] =
           IO.blocking {
-            val metrics = displayState.metricsFor(state)
+            val metrics = displayState.primaryMetrics
             if swingWin.metrics != metrics then swingWin.updateMetrics(metrics)
-            displayState.fontFor(state)
           }
 
         AppRuntime.run(
@@ -36,17 +35,21 @@ object Main extends IOApp.Simple:
           checkResize = IO(swingWin.doResizeIfNecessary()),
           renderFull =
             (state, vis, cc) =>
-              syncDisplayMetrics(state).flatMap(font => IO.blocking(Renderer.render(state, vis, swingWin, font, cc))),
+              syncDisplayMetrics() >> IO.blocking(
+                Renderer.render(state, vis, swingWin, displayState.codeFont, displayState.textFont, cc)
+              ),
           renderCursorOnly =
             (state, vis, cc) =>
-              syncDisplayMetrics(state).flatMap(font => IO.blocking(Renderer.render(state, vis, swingWin, font, cc))),
+              syncDisplayMetrics() >> IO.blocking(
+                Renderer.render(state, vis, swingWin, displayState.codeFont, displayState.textFont, cc)
+              ),
           appConfig = appConfig,
           makeStateManager = Some(logger =>
             com.serenity.state.manager.StateManager.apply(
               logger,
               onFontConfigChanged = config =>
                 displayState.update(config) >>
-                  IO.blocking(swingWin.updateMetrics(displayState.textMetrics))
+                  IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics))
             )
           ),
           awaitExternalQuit = swingWin.awaitClose,

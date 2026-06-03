@@ -4,6 +4,7 @@ import java.nio.file.Paths
 
 import cats.effect.IO
 import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner}
+import com.serenity.config.AppConfig
 import com.serenity.state.models.{BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState, FileSearchResult, FileSearchState, FileWorkflowField, FileWorkflowMode, FileWorkflowState, FileWorkflowSuggestion, Modal, ReplaceWorkflowField, ReplaceWorkflowState, SurfaceContent, ThemePickerState}
 import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, LayoutRect}
 import com.serenity.ui.renderer.{OverlayRowLayout, OverlayTone, SurfaceContentResolver, SurfaceRenderMode}
@@ -83,7 +84,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       Command("replace", "Find and replace text", _ => IO.unit)
     )
     val registry = CommandRegistry(commands)
-    val runner = CommandRunner.empty.activate(registry).updateSearchTerm("open")(using registry)
+    val runner = CommandRunner.empty.activate(registry, AppConfig.default).updateSearchTerm("open")(using registry)
 
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),
@@ -106,7 +107,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
       .withSelectedItem("settings-animation")
 

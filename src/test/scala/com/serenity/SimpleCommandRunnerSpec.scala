@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import com.serenity.command.*
+import com.serenity.config.AppConfig
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -35,7 +36,7 @@ class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "activate with commands" in {
     val registry = CommandRegistry.default
-    val runner   = CommandRunner.empty.activate(registry)
+    val runner   = CommandRunner.empty.activate(registry, AppConfig.default)
 
     runner.isActive shouldBe true
     runner.filteredCommands should not be empty
@@ -45,7 +46,7 @@ class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
 
-    val runner  = CommandRunner.empty.activate(registry)
+    val runner  = CommandRunner.empty.activate(registry, AppConfig.default)
     val updated = runner.updateSearchTerm("save")
 
     updated.searchTerm shouldBe "save"

@@ -22,7 +22,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   private def stateWithRunner(theme: Theme, searchTerm: String, commands: List[Command]): AppState =
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .updateSearchTerm(searchTerm)(using registry)
     val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma").copy(
       cursors = List(CursorPosition(1, 2))
@@ -90,7 +90,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry(commands)
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
     val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma").copy(
       cursors = List(CursorPosition(1, 2))
@@ -253,7 +253,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
     val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma").copy(
       cursors = List(CursorPosition(1, 2))

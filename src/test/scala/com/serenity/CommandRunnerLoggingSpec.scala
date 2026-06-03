@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, CommandRunner}
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{InsertChar, TabKey}
 import com.serenity.state.manager.StateManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -13,7 +14,7 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.withToggleUI
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
     StateManager.describeCommandRunnerEvent(TabKey, runner).shouldBe(
@@ -25,7 +26,7 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.withToggleUI
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .updateSearchTerm("toggle")
 
     StateManager.describeCommandRunnerEvent(InsertChar('t'), runner).shouldBe(

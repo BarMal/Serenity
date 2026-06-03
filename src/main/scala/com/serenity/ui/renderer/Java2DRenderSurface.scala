@@ -36,6 +36,7 @@ class Java2DRenderSurface(
   private val fgRef = AtomicReference(Color.WHITE)
   private val bgRef = AtomicReference(Color.BLACK)
 
+  override def setFont(newFont: Font): Unit = g.setFont(newFont)
   def setForegroundColor(color: Color): Unit = fgRef.set(color)
   def setBackgroundColor(color: Color): Unit = bgRef.set(color)
   def getBackgroundColor: Color              = bgRef.get()

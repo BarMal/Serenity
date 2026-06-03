@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Font
 
 import com.serenity.animation.ThemeInterpolator
+import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
@@ -14,9 +15,12 @@ case class RenderContext(
     layout: CalculatedLayout,
     cursorVisible: Boolean = true,
     cursorColorOverride: Option[java.awt.Color] = None,
-    font: java.awt.Font,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
     cellMetrics: CellMetrics
-)
+):
+  def fontForBuffer(buffer: Buffer): java.awt.Font =
+    if buffer.language.exists(_ != LanguageId.Markdown) then codeFont else textFont
 
 object Renderer:
   private val logger = LoggerFactory.getLogger("com.serenity.ui.renderer.Renderer")
@@ -31,49 +35,39 @@ object Renderer:
     state: AppState,
     cursorVisible: Boolean,
     swingWin: com.serenity.ui.terminal.SwingWindow,
-    font: java.awt.Font
-  ): Unit =
-    render(state, cursorVisible, swingWin, font, None)
-
-  def render(
-    state: AppState,
-    cursorVisible: Boolean,
-    swingWin: com.serenity.ui.terminal.SwingWindow,
-    font: java.awt.Font,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
     cursorColor: Option[java.awt.Color]
   ): Unit =
     val state0       = withEffectiveTheme(state)
-    val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, font, swingWin.canvas, swingWin.onImageReady)
+    val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, codeFont, swingWin.canvas, swingWin.onImageReady)
     val viewportSize = swingWin.viewportSize
     val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
-    renderFrame(state0, cursorVisible, surface, viewportSize, layout, font, swingWin.metrics, cursorColor)
-
-  def render(state: AppState, cursorVisible: Boolean, surface: RenderSurface, viewportSize: ViewportSize): Unit =
-    val defaultFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    render(state, cursorVisible, surface, viewportSize, defaultFont, CellMetrics.fromFont(defaultFont), None)
+    renderFrame(state0, cursorVisible, surface, viewportSize, layout, codeFont, textFont, swingWin.metrics, cursorColor)
 
   def render(
     state: AppState,
     cursorVisible: Boolean,
     surface: RenderSurface,
     viewportSize: ViewportSize,
-    cursorColor: Option[java.awt.Color]
-  ): Unit =
-    val defaultFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    render(state, cursorVisible, surface, viewportSize, defaultFont, CellMetrics.fromFont(defaultFont), cursorColor)
-
-  def render(
-    state: AppState,
-    cursorVisible: Boolean,
-    surface: RenderSurface,
-    viewportSize: ViewportSize,
-    font: java.awt.Font,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
     cellMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color] = None
+    cursorColor: Option[java.awt.Color]
   ): Unit =
     val state0 = withEffectiveTheme(state)
     val layout = LayoutEngine.calculateLayout(state0, viewportSize)
-    renderFrame(state0, cursorVisible, surface, viewportSize, layout, font, cellMetrics, cursorColor)
+    renderFrame(state0, cursorVisible, surface, viewportSize, layout, codeFont, textFont, cellMetrics, cursorColor)
+
+  def render(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    cursorColor: Option[java.awt.Color] = None
+  ): Unit =
+    val defaultFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    render(state, cursorVisible, surface, viewportSize, defaultFont, defaultFont, CellMetrics.fromFont(defaultFont), cursorColor)
 
   private def renderFrame(
     state: AppState,
@@ -81,7 +75,8 @@ object Renderer:
     surface: RenderSurface,
     viewportSize: ViewportSize,
     layout: CalculatedLayout,
-    font: java.awt.Font,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
     cellMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color] = None
   ): Unit =
@@ -96,10 +91,10 @@ object Renderer:
     } match
       case Some(page) =>
         renderStartPage(page, surface, viewportSize, state.theme)
-        val floatContext = RenderContext(surface, layout, cursorVisible, cursorColor, font, cellMetrics)
+        val floatContext = RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, cellMetrics)
         renderFloatingPanels(state, floatContext)
       case None =>
-        val context = RenderContext(surface, layout, cursorVisible, cursorColor, font, cellMetrics)
+        val context = RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, cellMetrics)
         renderSpacerColumns(context)
         renderLineNumbers(state, context)
         renderGutter(state, context)
@@ -193,8 +188,10 @@ object Renderer:
     state: AppState,
     context: RenderContext
   ): Unit =
+    val bufferFont   = context.fontForBuffer(buffer)
     val panelWidthPx = rect.width * context.cellMetrics.charWidth
-    val snapshot     = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, context.font)
+    context.surface.setFont(bufferFont)
+    val snapshot     = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, bufferFont)
     val visualLines  = snapshot.visualLines
 
     visualLines.zipWithIndex.foreach {
@@ -222,7 +219,7 @@ object Renderer:
               state.syntaxHighlightingEnabled,
               bufferLine = visualLine.bufferLine,
               bufferStartColumn = visualLine.startColumn,
-              preserveContinuousRuns = !FontLoader.isMonospacedFont(context.font)
+              preserveContinuousRuns = !FontLoader.isMonospacedFont(bufferFont)
             )
 
             renderSelectionHighlights(
@@ -356,7 +353,8 @@ object Renderer:
     theme: Theme,
     context: RenderContext
   ): Unit =
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, rect.width * context.cellMetrics.charWidth, context.font)
+    val bufferFont = context.fontForBuffer(buffer)
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, rect.width * context.cellMetrics.charWidth, bufferFont)
 
     buffer.cursors.foreach { cursor =>
       calculateCursorVisualPosition(cursor, snapshot) match
@@ -391,6 +389,7 @@ object Renderer:
     }
 
   private def renderFloatingPanels(state: AppState, context: RenderContext): Unit =
+    context.surface.setFont(context.codeFont)
     val overlays = OverlayViewModel.fromState(state, context.layout)
 
     overlays.aboveCursor.foreach { overlay =>

@@ -20,6 +20,14 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
   private var currentFg: Color = Color.WHITE
   private var currentBg: Color = Color.BLACK
   private var currentAlpha: Float = 1.0f
+  private var currentFont: Option[Font] = None
+  private val setFontCallsBuffer = scala.collection.mutable.ListBuffer.empty[Font]
+
+  override def setFont(font: Font): Unit =
+    currentFont = Some(font)
+    setFontCallsBuffer += font
+
+  def setFontCalls: List[Font] = setFontCallsBuffer.toList
 
   def setForegroundColor(color: Color): Unit = currentFg = color
   def setBackgroundColor(color: Color): Unit = currentBg = color

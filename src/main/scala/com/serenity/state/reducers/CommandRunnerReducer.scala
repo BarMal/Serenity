@@ -56,9 +56,8 @@ object CommandRunnerReducer:
             case None =>
               currentRunner(state).flatMap(_.selectedItem) match
                 case Some(CommandSurfaceItem.CommandItem(command)) =>
-                  val previousFocus = currentRunner(state).flatMap(_.previousFocus).getOrElse(Focus.EditorPane(PaneId(0)))
                   ReducerResult(
-                    state = deactivate(state).copy(focus = previousFocus),
+                    state = deactivate(state),
                     effects = List(AppEffect.ExecuteCommand(command))
                   )
                 case Some(option: CommandSurfaceItem.OptionItem) =>
@@ -214,7 +213,6 @@ object CommandRunnerReducer:
   private def activate(state: AppState, registry: CommandRegistry): AppState =
     val activatedRunner = CommandRunner.empty
       .activate(registry, state.config)
-      .withPreviousFocus(state.focus)
     val (stateWithId, surfaceId) =
       state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
     val surface = UiSurface(
@@ -223,18 +221,15 @@ object CommandRunnerReducer:
       presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
     )
     stateWithId.copy(
-      uiSurfaces = upsertSurface(stateWithId.uiSurfaces, surface),
-      focus = Focus.Surface(surfaceId)
-    )
+      uiSurfaces = upsertSurface(stateWithId.uiSurfaces, surface)
+    ).pushFocus(Focus.Surface(surfaceId))
 
   private def deactivate(state: AppState): AppState =
-    val previousFocus = currentRunner(state).flatMap(_.previousFocus).getOrElse(Focus.EditorPane(PaneId(0)))
     state.copy(
       uiSurfaces = state.uiSurfaces.filterNot(surface =>
         surface.id == SubmenuSurfaceId || state.commandRunnerSurface.exists(_.id == surface.id)
-      ),
-      focus = previousFocus
-    )
+      )
+    ).popFocus
 
   private def currentRunner(state: AppState): Option[CommandRunner] =
     state.commandRunnerSurface.flatMap {
@@ -302,9 +297,8 @@ object CommandRunnerReducer:
               case None =>
                 ReducerResult.noEffects(state)
           case Some(CommandSurfaceItem.CommandItem(command)) =>
-            val previousFocus = currentRunner(state).flatMap(_.previousFocus).getOrElse(Focus.EditorPane(PaneId(0)))
             ReducerResult(
-              state = deactivate(state).copy(focus = previousFocus),
+              state = deactivate(state),
               effects = List(AppEffect.ExecuteCommand(command))
             )
           case _ =>

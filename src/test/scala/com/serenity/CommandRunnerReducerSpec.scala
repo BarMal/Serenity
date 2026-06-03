@@ -14,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
 class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
   private def activeState(registry: CommandRegistry): AppState =
-    val runner = CommandRunner.empty.activate(registry).withPreviousFocus(Focus.EditorPane(PaneId(2)))
+    val runner = CommandRunner.empty.activate(registry, AppConfig.default)
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -24,7 +24,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       buffers = Map.empty,
       layout = Layout.empty,
       focus = Focus.Surface(surface.id),
-      uiSurfaces = List(surface)
+      uiSurfaces = List(surface),
+      focusHistory = List(Focus.EditorPane(PaneId(2)))
     )
 
   "CommandRunnerReducer" should "ignore global activation events because activation is owned by the app reducer" in {
@@ -150,9 +151,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.File)
-      .withPreviousFocus(Focus.EditorPane(PaneId(2)))
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -183,12 +183,11 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
       .withSelectedItem("settings-animation")
       .enterSelectedGroup
       .copy(activeSubmenu = Some(com.serenity.command.CommandRunnerSubmenuState("settings-animation")))
-      .withPreviousFocus(Focus.EditorPane(PaneId(2)))
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -233,12 +232,11 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
       .withSelectedItem("settings-appearance")
       .enterSelectedGroup
       .copy(activeSubmenu = Some(com.serenity.command.CommandRunnerSubmenuState("settings-appearance", selectedIndex = 1)))
-      .withPreviousFocus(Focus.EditorPane(PaneId(2)))
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -278,9 +276,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
-      .withPreviousFocus(Focus.EditorPane(PaneId(2)))
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -304,9 +301,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
-      .withPreviousFocus(Focus.EditorPane(PaneId(2)))
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -392,7 +388,6 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val baseRunner = CommandRunner.empty
       .activate(registry, config)
       .withActiveCategory(CommandCategory.Settings)
-      .withPreviousFocus(Focus.EditorPane(PaneId(2)))
     val groupIndex = baseRunner.settingsGroups.find(_.id == groupId).map(_.children.indexWhere(_.id == itemId)).getOrElse(0)
     val runner = baseRunner
       .withSelectedItem(groupId)

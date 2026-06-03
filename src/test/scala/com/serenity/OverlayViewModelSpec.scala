@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.rope.Balance
 import com.serenity.command.{Command, CommandRegistry, CommandRunner}
+import com.serenity.config.AppConfig
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.OverlayViewModel
@@ -92,7 +93,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     )
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .updateSearchTerm("op")(using registry)
     val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
       cursors = List(CursorPosition(1, 2))
@@ -160,7 +161,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     )
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .updateSearchTerm("op")(using registry)
     val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
       cursors = List(CursorPosition(1, 2))
@@ -209,7 +210,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(com.serenity.command.CommandCategory.Settings)
     val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
       cursors = List(CursorPosition(1, 2))
@@ -250,7 +251,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(com.serenity.command.CommandCategory.Settings)
     val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
       cursors = List(CursorPosition(2, 2))

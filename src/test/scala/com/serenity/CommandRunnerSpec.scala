@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner, CommandSearcher, CommandSurfaceItem}
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.CommandRunnerComponent
@@ -116,7 +117,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
   it should "update search term and filter commands" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val runner            = CommandRunner.empty.activate(registry)
+    val runner            = CommandRunner.empty.activate(registry, AppConfig.default)
 
     val updated = runner.updateSearchTerm("save")
     updated.searchTerm shouldBe "save"
@@ -128,7 +129,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.File)
 
     runner.activeCategory shouldBe CommandCategory.File
@@ -147,7 +148,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
     val animationGroup = runner.visibleItems.collectFirst {
@@ -162,7 +163,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
     val appearanceGroup = runner.visibleItems.collectFirst {
@@ -177,7 +178,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
     val groupItems = runner.visibleItems.collect {
@@ -199,7 +200,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       Command("cmd2", "Command 2", _ => IO.unit),
       Command("cmd3", "Command 3", _ => IO.unit)
     )
-    val runner = CommandRunner.withCommands(commands).activate(CommandRegistry(commands))
+    val runner = CommandRunner.withCommands(commands).activate(CommandRegistry(commands), AppConfig.default)
 
     val movedDown = runner.moveSelection(1)
     movedDown.selectedIndex shouldBe 1
@@ -223,7 +224,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "handle search input" in {
     val component = new CommandRunnerComponent()
-    val activeState = stateWithRunner(CommandRunner.empty.activate(CommandRegistry.default))
+    val activeState = stateWithRunner(CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default))
 
     val result = component.processEvent(InsertChar('s'), activeState)
 
@@ -233,7 +234,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "handle escape to close runner" in {
     val component = new CommandRunnerComponent()
-    val activeState = stateWithRunner(CommandRunner.empty.activate(CommandRegistry.default))
+    val activeState = stateWithRunner(CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default))
 
     val result = component.processEvent(com.serenity.keystroke.events.Escape, activeState)
 
@@ -256,7 +257,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner
       .withCommands(List(testCommand))
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .updateSearchTerm("test")
     val activeState = stateWithRunner(runner)
 
