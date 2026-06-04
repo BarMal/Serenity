@@ -2,12 +2,11 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.rope.Balance
+import com.serenity.keystroke.events.{InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.keystroke.events.{ToggleCommandRunner, InsertChar}
-import com.serenity.ui.layout.{ViewportSize, LayoutEngine}
+import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}

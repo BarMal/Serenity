@@ -1,7 +1,8 @@
 package com.serenity
 
 import com.serenity.animation.AnimationState
-import com.serenity.keystroke.events.{InsertChar, ToggleSyntaxHighlighting}
+import com.serenity.keystroke.events.ToggleSyntaxHighlighting
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.components.ComponentResult
 import com.serenity.state.components.EditorPaneComponent
@@ -115,5 +116,40 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
     )
 
     surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "abc"))
+  }
+
+  it should "apply style hooks for syntax-highlighted keyword runs" in {
+    val surface = new MockRenderSurface(80, 24)
+
+    CharacterRenderer.renderStringWithAnimation(
+      surface,
+      0,
+      0,
+      "if",
+      Theme.default,
+      AnimationState.empty,
+      syntaxHighlightingEnabled = true
+    )
+
+    surface.styleCalls should contain(surface.StyleCall("enable", com.serenity.ui.theme.TextStyle.bold))
+    surface.styleCalls should contain(surface.StyleCall("disable", com.serenity.ui.theme.TextStyle.bold))
+  }
+
+  it should "apply underline style hooks for markdown link runs" in {
+    val surface = new MockRenderSurface(80, 24)
+
+    CharacterRenderer.renderStringWithAnimation(
+      surface,
+      0,
+      0,
+      "See [guide](docs.md)",
+      Theme.default,
+      AnimationState.empty,
+      syntaxHighlightingEnabled = true,
+      language = Some(LanguageId.Markdown)
+    )
+
+    surface.styleCalls should contain(surface.StyleCall("enable", com.serenity.ui.theme.TextStyle.underlined))
+    surface.styleCalls should contain(surface.StyleCall("disable", com.serenity.ui.theme.TextStyle.underlined))
   }
 

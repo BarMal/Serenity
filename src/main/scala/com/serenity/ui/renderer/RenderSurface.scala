@@ -1,11 +1,13 @@
 package com.serenity.ui.renderer
 
+import java.awt.font.FontRenderContext
 import java.awt.{Color, Font}
 
 import com.serenity.ui.theme.TextStyle
 
 trait RenderSurface:
   def setFont(font: Font): Unit                = ()
+  def fontRenderContext: Option[FontRenderContext] = None
   def setForegroundColor(color: Color): Unit
   def setBackgroundColor(color: Color): Unit
   def getBackgroundColor: Color
@@ -40,7 +42,7 @@ trait RenderSurface:
     * background color, then draws s at (xPx, yPx + ascent) with the current foreground color.
     * Callers set fg/bg colors before calling.
     */
-  def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, s: String): Unit = ()
+  def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit = ()
 
   def hideCursor(): Unit
   def viewportWidth: Int

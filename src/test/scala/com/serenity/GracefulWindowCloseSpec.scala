@@ -1,6 +1,6 @@
 package com.serenity
 
-import cats.effect.IO
+import cats.effect.{Deferred, IO}
 import cats.effect.unsafe.implicits.global
 import cats.syntax.parallel.*
 import com.serenity.keystroke.events.Quit
@@ -29,14 +29,16 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
     sm.createBuffer("").unsafeRunSync()
     sm.createPane().unsafeRunSync()
 
-    // Simulate window close: fires Quit event, same as Ctrl+Q
-    val program = (
-      sm.awaitQuit,
-      IO.sleep(50.millis) >> sm.applyEvent(Quit)
-    ).parMapN((_, _) => ())
+    val program = for
+      awaiting <- Deferred[IO, Unit]
+      _ <- (
+        awaiting.complete(()) >> sm.awaitQuit,
+        awaiting.get >> sm.applyEvent(Quit)
+      ).parMapN((_, _) => ())
+    yield ()
 
     // Should complete without timeout
-    program.unsafeRunTimed(2.seconds) shouldBe defined
+    program.unsafeRunTimed(2.seconds).shouldBe(defined)
   }
 
   it should "go through the close workflow when there are dirty buffers" in {
@@ -59,11 +61,14 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
     sm.createPane().unsafeRunSync()
     sm.updateBuffer(bufferId, "modified").unsafeRunSync()
 
-    val program = (
-      sm.awaitQuit,
-      IO.sleep(50.millis) >> sm.forceQuit()
-    ).parMapN((_, _) => ())
+    val program = for
+      awaiting <- Deferred[IO, Unit]
+      _ <- (
+        awaiting.complete(()) >> sm.awaitQuit,
+        awaiting.get >> sm.forceQuit()
+      ).parMapN((_, _) => ())
+    yield ()
 
-    program.unsafeRunTimed(2.seconds) shouldBe defined
+    program.unsafeRunTimed(2.seconds).shouldBe(defined)
     sm.getCurrentState.unsafeRunSync().buffers.get(bufferId).exists(_.isDirty) shouldBe true
   }

@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.rope.Balance
-import com.serenity.command.{Command, CommandRegistry, CommandRunner}
+import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner}
 import com.serenity.config.AppConfig
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
@@ -88,8 +88,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
 
   it should "derive an interactive command palette view with cursor and selected row metadata" in {
     val commands = List(
-      Command("open", "Open file", _ => cats.effect.IO.unit),
-      Command("close", "Close current file", _ => cats.effect.IO.unit)
+      Command.typed("open", "Open file", CommandIntent.OpenFile),
+      Command.typed("close", "Close current file", CommandIntent.CloseCurrentFile)
     )
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
@@ -123,7 +123,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlay.header.map(_.plainText) shouldBe Some("search: op")
     overlay.header.flatMap(_.cursorColumn) shouldBe Some("search: op".length)
     overlay.rows.exists(_.selected) shouldBe true
-    overlay.rows.map(_.plainText).head should include("open")
+    overlay.rows.map(_.plainText).head should include("Open")
     overlay.rows.map(_.plainText).head should include("Open file")
   }
 
@@ -157,7 +157,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
 
   it should "prefer the focused modal surface over earlier below-cursor floating surfaces" in {
     val commands = List(
-      Command("open", "Open file", _ => cats.effect.IO.unit)
+      Command.typed("open", "Open file", CommandIntent.OpenFile)
     )
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty

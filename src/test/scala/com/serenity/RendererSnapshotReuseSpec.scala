@@ -5,7 +5,7 @@ import java.awt.Font
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, Layout, LayoutEngine, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, Layout, LayoutEngine, TextLayoutSnapshot, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -43,21 +43,23 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
 
-    surface.putStringCalls.exists(_.s.contains("hello")) shouldBe true
-
     val cursorRects = surface.fillPixelRectCalls
     cursorRects should not be empty
 
     val layout      = LayoutEngine.calculateLayout(state, viewportSize)
     val paneLayouts = LayoutEngine.calculatePaneLayouts(state, layout)
     val paneRect    = paneLayouts(PaneId(0))
-    val expectedXPx = cellMetrics.toPixelX(paneRect.x) + 2 * cellMetrics.charWidth
+    val panelWidthPx = paneRect.width * cellMetrics.charWidth
+    val snapshot = TextLayoutSnapshot.fromBuffer(state.buffers(BufferId(1)), panelWidthPx, monoFont, surface.fontRenderContext.getOrElse(fail("missing frc")))
+    val expectedXPx = cellMetrics.toPixelX(paneRect.x) + math.round(
+      snapshot.xPxForCursor(CursorPosition(0, 2)).getOrElse(fail("missing cursor x"))
+    )
     cursorRects.last.xPx shouldBe expectedXPx
   }
 
-  it should "draw the content text via putString for a monospaced buffer" in {
+  it should "draw the content text via drawRunPx when measured code-font layout is required" in {
     val state   = buildState("hello", 0)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
-    surface.putStringCalls.exists(_.s.contains("hello")) shouldBe true
+    surface.drawRunPxCalls.exists(_.s.contains("hello")) shouldBe true
   }

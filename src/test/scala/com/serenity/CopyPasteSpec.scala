@@ -85,6 +85,14 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
 
     getClipboard shouldBe Some("alpha\ngamma")
 
+  it should "copy the current line for every distinct cursor line when multiple cursors are present" in new ClipFixture:
+    setupBuffer("alpha\nbeta\ngamma")
+    setCursors(List(CursorPosition(0, 1), CursorPosition(2, 3)))
+
+    applyEvent(Copy)
+
+    getClipboard shouldBe Some("alpha\ngamma")
+
   behavior of "Paste"
 
   it should "insert clipboard content at the cursor position" in new ClipFixture:
@@ -195,6 +203,16 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     getState.buffers(bufferId).allSelections shouldBe Nil
     getState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 6))
 
+  it should "cut the current line for every distinct cursor line when multiple cursors are present" in new ClipFixture:
+    val bufferId = setupBuffer("alpha\nbeta\ngamma\ndelta")
+    setCursors(List(CursorPosition(0, 1), CursorPosition(2, 2)))
+
+    applyEvent(Cut)
+
+    getClipboard shouldBe Some("alpha\ngamma")
+    getContent(bufferId) shouldBe "beta\ndelta"
+    getState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0), CursorPosition(1, 0))
+
   it should "round-trip: cut then paste restores the line" in new ClipFixture:
     val bufferId = setupBuffer("original")
     setCursor(0, 0)
@@ -247,6 +265,20 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
               cursors = selections.map(_.focus),
               selection = Some(primary),
               selections = selections
+            )
+          )
+        )
+      }.unsafeRunSync()
+
+    def setCursors(cursors: List[CursorPosition]): Unit =
+      stateManager.updateState { state =>
+        state.copy(
+          buffers = state.buffers.updated(
+            activeBufferId,
+            state.buffers(activeBufferId).copy(
+              cursors = cursors,
+              selection = None,
+              selections = Nil
             )
           )
         )

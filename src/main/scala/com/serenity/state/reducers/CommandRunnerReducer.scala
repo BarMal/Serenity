@@ -3,6 +3,7 @@ package com.serenity.state.reducers
 import com.serenity.command.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
+import com.serenity.text.TextEditing
 
 object CommandRunnerReducer:
   private val SubmenuSurfaceId = SurfaceId("command-runner-submenu")
@@ -55,6 +56,8 @@ object CommandRunnerReducer:
 
             case None =>
               currentRunner(state).flatMap(_.selectedItem) match
+                case Some(_: CommandSurfaceItem.InputItem) =>
+                  ReducerResult.noEffects(state)
                 case Some(CommandSurfaceItem.CommandItem(command)) =>
                   ReducerResult(
                     state = deactivate(state),
@@ -75,20 +78,33 @@ object CommandRunnerReducer:
 
       case RunnerInsertChar(char) =>
         if submenuHasFocus(state) then
-          currentRunner(state).flatMap(_.activeSubmenu.flatMap(_.editingItemId)) match
-            case Some(_) =>
-              val runner   = currentRunner(state).get
-              val submenu  = runner.activeSubmenu.get
-              val item     = runner.submenuItems(submenu.groupId).collectFirst {
+          currentRunner(state).flatMap(_.activeSubmenu) match
+            case Some(submenu) =>
+              val runner = currentRunner(state).get
+              val selectedInput =
+                submenu.selectedItem(runner.submenuItems(submenu.groupId)).collect { case input: CommandSurfaceItem.InputItem =>
+                  input
+                }
+              val activeInput = runner.submenuItems(submenu.groupId).collectFirst {
                 case input: CommandSurfaceItem.InputItem if submenu.editingItemId.contains(input.id) => input
-              }
-              val allowDot = item.exists(_.isDecimal) && !submenu.editingText.contains('.')
+              }.orElse(selectedInput)
+              val currentText = Option.when(submenu.editingItemId.nonEmpty)(submenu.editingText).getOrElse("")
+              val allowDot = activeInput.exists(_.isDecimal) && !currentText.contains('.')
               if char.isDigit || (char == '.' && allowDot) then
-                ReducerResult.noEffects(
-                  replaceRunner(state, r =>
-                    r.copy(activeSubmenu = r.activeSubmenu.map(s => s.copy(editingText = s.editingText + char)))
-                  )
-                )
+                activeInput match
+                  case Some(item) =>
+                    val nextText = if submenu.editingItemId.contains(item.id) then submenu.editingText + char else char.toString
+                    ReducerResult.noEffects(
+                      replaceRunner(state, r =>
+                        r.copy(
+                          activeSubmenu = r.activeSubmenu.map(s =>
+                            s.copy(editingItemId = Some(item.id), editingText = nextText)
+                          )
+                        )
+                      )
+                    )
+                  case None =>
+                    ReducerResult.noEffects(state)
               else ReducerResult.noEffects(state)
             case None =>
               ReducerResult.noEffects(state)
@@ -102,8 +118,21 @@ object CommandRunnerReducer:
                 ReducerResult.noEffects(replaceRunner(state, r => r.copy(editingText = r.editingText + char)))
               else ReducerResult.noEffects(state)
             case None =>
-              given CommandRegistry = registry
-              ReducerResult.noEffects(replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm + char)))
+              currentRunner(state).flatMap(_.selectedItem) match
+                case Some(item: CommandSurfaceItem.InputItem) =>
+                  val allowDot = item.isDecimal && char == '.'
+                  if char.isDigit || allowDot then
+                    ReducerResult.noEffects(
+                      replaceRunner(state, runner =>
+                        runner.copy(editingItemId = Some(item.id), editingText = char.toString)
+                      )
+                    )
+                  else ReducerResult.noEffects(state)
+                case _ =>
+                  given CommandRegistry = registry
+                  ReducerResult.noEffects(
+                    replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm + char))
+                  )
 
       case RunnerDeleteBackward =>
         if submenuHasFocus(state) then
@@ -127,6 +156,86 @@ object CommandRunnerReducer:
                 given CommandRegistry = registry
                 ReducerResult.noEffects(
                   replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm.dropRight(1)))
+                )
+              else ReducerResult.noEffects(state)
+
+      case RunnerDeleteForward =>
+        if submenuHasFocus(state) then
+          currentRunner(state).flatMap(_.activeSubmenu) match
+            case Some(submenu) if submenu.editingItemId.nonEmpty =>
+              ReducerResult.noEffects(state)
+            case _ =>
+              ReducerResult.noEffects(state)
+        else
+          currentRunner(state).flatMap(_.editingItemId) match
+            case Some(_) =>
+              ReducerResult.noEffects(state)
+            case None =>
+              ReducerResult.noEffects(state)
+
+      case RunnerDeleteWordBackward =>
+        if submenuHasFocus(state) then
+          currentRunner(state).flatMap(_.activeSubmenu) match
+            case Some(submenu) if submenu.editingItemId.nonEmpty && submenu.editingText.nonEmpty =>
+              ReducerResult.noEffects(
+                replaceRunner(state, r =>
+                  r.copy(
+                    activeSubmenu = r.activeSubmenu.map(s =>
+                      s.copy(editingText = TextEditing.deleteWordBackward(s.editingText))
+                    )
+                  )
+                )
+              )
+            case _ =>
+              ReducerResult.noEffects(state)
+        else
+          currentRunner(state).flatMap(_.editingItemId) match
+            case Some(_) =>
+              if currentRunner(state).exists(_.editingText.nonEmpty) then
+                ReducerResult.noEffects(
+                  replaceRunner(state, r => r.copy(editingText = TextEditing.deleteWordBackward(r.editingText)))
+                )
+              else ReducerResult.noEffects(state)
+            case None =>
+              if currentRunner(state).exists(_.searchTerm.nonEmpty) then
+                given CommandRegistry = registry
+                ReducerResult.noEffects(
+                  replaceRunner(state, runner =>
+                    runner.updateSearchTerm(TextEditing.deleteWordBackward(runner.searchTerm))
+                  )
+                )
+              else ReducerResult.noEffects(state)
+
+      case RunnerDeleteWordForward =>
+        if submenuHasFocus(state) then
+          currentRunner(state).flatMap(_.activeSubmenu) match
+            case Some(submenu) if submenu.editingItemId.nonEmpty && submenu.editingText.nonEmpty =>
+              ReducerResult.noEffects(
+                replaceRunner(state, r =>
+                  r.copy(
+                    activeSubmenu = r.activeSubmenu.map(s =>
+                      s.copy(editingText = TextEditing.deleteWordForward(s.editingText))
+                    )
+                  )
+                )
+              )
+            case _ =>
+              ReducerResult.noEffects(state)
+        else
+          currentRunner(state).flatMap(_.editingItemId) match
+            case Some(_) =>
+              if currentRunner(state).exists(_.editingText.nonEmpty) then
+                ReducerResult.noEffects(
+                  replaceRunner(state, r => r.copy(editingText = TextEditing.deleteWordForward(r.editingText)))
+                )
+              else ReducerResult.noEffects(state)
+            case None =>
+              if currentRunner(state).exists(_.searchTerm.nonEmpty) then
+                given CommandRegistry = registry
+                ReducerResult.noEffects(
+                  replaceRunner(state, runner =>
+                    runner.updateSearchTerm(TextEditing.deleteWordForward(runner.searchTerm))
+                  )
                 )
               else ReducerResult.noEffects(state)
 
@@ -275,7 +384,7 @@ object CommandRunnerReducer:
         val runner = currentRunner(state).get
         submenu.selectedItem(runner.submenuItems(submenu.groupId)) match
           case Some(_: CommandSurfaceItem.InputItem) if submenu.editingItemId.isEmpty =>
-            ReducerResult.noEffects(replaceRunner(state, _.beginSubmenuEditMode))
+            ReducerResult.noEffects(state)
           case Some(item: CommandSurfaceItem.InputItem) =>
             item.parse(submenu.editingText) match
               case Some(intent) =>

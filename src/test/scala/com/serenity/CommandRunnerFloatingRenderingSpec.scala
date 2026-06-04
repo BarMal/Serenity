@@ -1,23 +1,34 @@
 package com.serenity
 
+import java.awt.Font
+
 import cats.effect.IO
 import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
-import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, CommandRunner}
 import com.serenity.config.{AppConfig, BackgroundStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CursorLayout, Layout, LayoutEngine, ViewportSize}
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.{CellMetrics, CursorLayout, Layout, LayoutEngine, TextLayoutSnapshot, ViewportSize}
 import com.serenity.ui.renderer.{Renderer, SurfaceMaterials}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import cats.effect.unsafe.implicits.global
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
+  given Logger[IO] = Slf4jLogger.getLogger[IO]
 
   private val paneId   = PaneId(0)
   private val bufferId = BufferId(1)
+  private val codeFont = FontLoader
+    .loadCodeFont(FontLoader.FontConfig(codeFontFamily = FontLoader.BundledCodeFontFamily, enableLigatures = true))
+    .unsafeRunSync()
+  private val cellMetrics = CellMetrics.fromFont(codeFont)
 
   private def stateWithRunner(theme: Theme, searchTerm: String, commands: List[Command]): AppState =
     val registry = CommandRegistry(commands)
@@ -49,8 +60,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
   "Renderer.render" should "paint a themed command runner with descriptions, selection highlight, and visible search cursor" in {
     val commands = List(
-      Command("open", "Open file", _ => IO.unit),
-      Command("close", "Close current file", _ => IO.unit)
+      Command.typed("open", "Open file", CommandIntent.OpenFile),
+      Command.typed("close", "Close current file", CommandIntent.CloseCurrentFile)
     )
     val state   = stateWithRunner(Theme.light, "op", commands)
     val surface = new MockRenderSurface(100, 30)
@@ -61,7 +72,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .getOrElse(paneId, fail("Expected pane layout"))
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30), codeFont, Font(Font.SANS_SERIF, Font.PLAIN, 12), cellMetrics, None)
 
     val searchLine =
       (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 1)).mkString.trim
@@ -69,7 +80,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 2)).mkString.trim
 
     searchLine should include("search: op")
-    commandLine should include("open")
+    commandLine should include("Open")
     commandLine should include("Open file")
     overlay.width shouldBe contentRect.width
     overlay.x shouldBe contentRect.x
@@ -78,8 +89,9 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getBg(overlay.x + 1, overlay.y + 1) shouldBe state.theme.panel.background
     surface.getBg(overlay.x + 1, overlay.y + 2) shouldBe state.theme.highlighted.background
 
-    val cursorX = overlay.x + 1 + "search: op".length
-    surface.getBg(cursorX, overlay.y + 1) shouldBe state.theme.cursorColor
+    val caretXs = TextLayoutSnapshot.caretXsForText("search: op", codeFont, surface.fontRenderContext.getOrElse(fail("missing frc")))
+    val expectedCursorXPx = cellMetrics.toPixelX(overlay.x + 1) + math.round(caretXs.last)
+    surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorXPx
   }
 
   it should "render category tabs in browse mode and show grouped settings rows" in {
@@ -143,8 +155,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "keep the selected command highlighted while the overlay is animating" in {
     val commands = List(
-      Command("open", "Open file", _ => IO.unit),
-      Command("close", "Close current file", _ => IO.unit)
+      Command.typed("open", "Open file", CommandIntent.OpenFile),
+      Command.typed("close", "Close current file", CommandIntent.CloseCurrentFile)
     )
     val baseState = stateWithRunner(Theme.light, "op", commands)
     val surfaceId = SurfaceId("command-runner")
@@ -174,7 +186,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "draw the floating border with the rounded stroke even while animating" in {
-    val commands = List(Command("open", "Open file", _ => IO.unit))
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
     val baseState = stateWithRunner(Theme.light, "op", commands)
     val surfaceId = SurfaceId("command-runner")
     val animationState = AnimationState.empty.mergeAnimations(
@@ -202,7 +214,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "request backdrop blur for the floating overlay using the configured blur radius" in {
-    val commands = List(Command("open", "Open file", _ => IO.unit))
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
     val state = stateWithRunner(Theme.light, "op", commands).copy(
       config = AppConfig.default.withBlurRadius(0.6f)
     )
@@ -218,7 +230,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "skip backdrop blur for a solid overlay background style" in {
-    val commands = List(Command("open", "Open file", _ => IO.unit))
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
     val state = stateWithRunner(Theme.light, "op", commands).copy(
       config = AppConfig.default
         .withBlurRadius(0.6f)
@@ -232,7 +244,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "use a stronger blur radius for the glass-like overlay style" in {
-    val commands = List(Command("open", "Open file", _ => IO.unit))
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
     val state = stateWithRunner(Theme.light, "op", commands).copy(
       config = AppConfig.default
         .withBlurRadius(0.2f)

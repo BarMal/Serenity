@@ -39,6 +39,14 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
     font.getSize2D shouldBe 12.0f
   }
 
+  it should "preview the bundled code font with the same family used at runtime" in {
+    val config      = FontConfig(codeFontFamily = FontLoader.BundledCodeFontFamily, fontSize = 12.0f)
+    val runtimeFont = FontLoader.loadCodeFont(config).unsafeRunSync()
+    val previewFont = FontLoader.previewCodeFont(config)
+
+    previewFont.getFontName shouldBe runtimeFont.getFontName
+  }
+
   it should "load the configured text font family" in {
     val config = FontConfig(textFontFamily = Font.SANS_SERIF, fontSize = 12.0f)
     val font   = FontLoader.loadTextFont(config).unsafeRunSync()

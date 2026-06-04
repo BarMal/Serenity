@@ -21,7 +21,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     val result = AppEventReducer.reduce(Quit, initialState, registry)
 
     result.state shouldBe initialState
-    result.effects shouldBe List(AppEffect.CompleteQuit)
+    result.effects shouldBe List(AppEffect.CompleteQuit())
   }
 
   it should "toggle the command runner and restore focus via history" in {

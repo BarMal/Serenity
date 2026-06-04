@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.ThemePickerComponent
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, ReducerResult, ThemeEventReducer}
+import com.serenity.state.reducers.{AppEffect, ThemeEventReducer}
 import com.serenity.ui.layout.Layout
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -42,7 +42,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
 
   "ThemeEventReducer" should "emit OpenThemePicker for ListAvailableThemes" in {
     val result = ThemeEventReducer.reduce(ListAvailableThemes, AppState.empty)
-    result.effects shouldBe List(AppEffect.OpenThemePicker)
+    result.effects shouldBe List(AppEffect.OpenThemePicker())
     result.state shouldBe AppState.empty
   }
 

@@ -3,7 +3,6 @@ package com.serenity.ui.renderer
 import java.awt.Font
 
 import com.serenity.animation.ThemeInterpolator
-import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
@@ -16,12 +15,12 @@ case class RenderContext(
     cursorColorOverride: Option[java.awt.Color] = None,
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
-    cellMetrics: CellMetrics
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics
 ):
   def fontForBuffer(buffer: Buffer): java.awt.Font =
-    buffer.language match
-      case Some(LanguageId.Markdown) => textFont
-      case _                         => codeFont
+    if buffer.usesTextFont then textFont else codeFont
 
 object Renderer:
   private val logger = LoggerFactory.getLogger("com.serenity.ui.renderer.Renderer")
@@ -38,13 +37,27 @@ object Renderer:
     swingWin: com.serenity.ui.terminal.SwingWindow,
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color]
   ): Unit =
     val state0       = withEffectiveTheme(state)
     val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, codeFont, swingWin.canvas, swingWin.onImageReady)
     val viewportSize = swingWin.viewportSize
     val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
-    renderFrame(state0, cursorVisible, surface, viewportSize, layout, codeFont, textFont, swingWin.metrics, cursorColor)
+    renderFrame(
+      state0,
+      cursorVisible,
+      surface,
+      viewportSize,
+      layout,
+      codeFont,
+      textFont,
+      uiFont,
+      swingWin.metrics,
+      uiMetrics,
+      cursorColor
+    )
 
   def render(
     state: AppState,
@@ -56,9 +69,23 @@ object Renderer:
     cellMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color]
   ): Unit =
+    render(state, cursorVisible, surface, viewportSize, codeFont, textFont, codeFont, cellMetrics, cellMetrics, cursorColor)
+
+  def render(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics,
+    cursorColor: Option[java.awt.Color]
+  ): Unit =
     val state0 = withEffectiveTheme(state)
     val layout = LayoutEngine.calculateLayout(state0, viewportSize)
-    renderFrame(state0, cursorVisible, surface, viewportSize, layout, codeFont, textFont, cellMetrics, cursorColor)
+    renderFrame(state0, cursorVisible, surface, viewportSize, layout, codeFont, textFont, uiFont, cellMetrics, uiMetrics, cursorColor)
 
   def render(
     state: AppState,
@@ -78,7 +105,9 @@ object Renderer:
     layout: CalculatedLayout,
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
+    uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color] = None
   ): Unit =
     surface.hideCursor()
@@ -91,11 +120,11 @@ object Renderer:
         case _                              => None
     } match
       case Some(page) =>
-        renderStartPage(page, surface, viewportSize, state.theme)
-        val floatContext = RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, cellMetrics)
+        renderStartPage(page, surface, viewportSize, state.theme, uiFont)
+        val floatContext = RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
         renderFloatingPanels(state, floatContext)
       case None =>
-        val context = RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, cellMetrics)
+        val context = RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
         renderSpacerColumns(context)
         renderLineNumbers(state, context)
         renderGutter(state, context)
@@ -133,7 +162,12 @@ object Renderer:
       val bufferFont   = context.fontForBuffer(buf)
       val panelWidthPx = contentRect.width * context.cellMetrics.charWidth
       context.surface.setFont(bufferFont)
-      TextLayoutSnapshot.fromBuffer(buf, panelWidthPx, bufferFont)
+      TextLayoutSnapshot.fromBuffer(
+        buf,
+        panelWidthPx,
+        bufferFont,
+        context.surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+      )
     }
 
     buffer match
@@ -155,6 +189,7 @@ object Renderer:
     state: AppState,
     context: RenderContext
   ): Unit =
+    context.surface.setFont(context.uiFont)
     val surface  = context.surface
     val isActive = state.layout.activeEditorPaneId.contains(pane.id)
 
@@ -200,7 +235,6 @@ object Renderer:
   ): Unit =
     val visualLines = snapshot.visualLines
     val xOriginPx   = context.cellMetrics.toPixelX(rect.x).toFloat
-    val ascent      = context.cellMetrics.ascent
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
@@ -217,16 +251,18 @@ object Renderer:
               screenY < rect.bottom &&
               screenX < rect.right
           then
-            if snapshot.isProportional then
-              CharacterRenderer.renderProportionalLineWithAnimation(
+            if snapshot.usesMeasuredLayout then
+              CharacterRenderer.renderMeasuredLineWithAnimation(
                 context.surface,
                 xOriginPx,
                 context.cellMetrics.toPixelY(screenY),
                 snapshot.lineHeightPx,
-                ascent,
+                snapshot.ascentPx,
                 visualLine,
                 state.theme,
-                buffer.animations
+                buffer.animations,
+                state.syntaxHighlightingEnabled,
+                buffer.language
               )
             else
               CharacterRenderer.renderStringWithAnimation(
@@ -237,6 +273,7 @@ object Renderer:
                 state.theme,
                 buffer.animations,
                 state.syntaxHighlightingEnabled,
+                buffer.language,
                 bufferLine = visualLine.bufferLine,
                 bufferStartColumn = visualLine.startColumn
               )
@@ -247,7 +284,9 @@ object Renderer:
               visualLine,
               rect,
               screenY,
-              state.theme
+              state.theme,
+              context,
+              snapshot
             )
 
             val stringEnd = visualLine.startColumn + visualLine.text.length
@@ -269,22 +308,43 @@ object Renderer:
     visualLine: TextVisualLine,
     rect: LayoutRect,
     screenY: Int,
-    theme: Theme
+    theme: Theme,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
   ): Unit =
     buffer.allSelections.foreach { selection =>
       selectionColumnsForLine(selection, visualLine).foreach { case (selectionStart, selectionEnd) =>
-        (selectionStart until selectionEnd).foreach { bufferColumn =>
-          val relativeColumn = bufferColumn - visualLine.startColumn
-          val screenX        = rect.x + relativeColumn
-          if screenX >= rect.x && screenX < rect.right then
-            val charIndex = bufferColumn - visualLine.startColumn
-            val charToRender =
-              if charIndex >= 0 && charIndex < visualLine.text.length then visualLine.text.charAt(charIndex)
-              else ' '
+        if snapshot.usesMeasuredLayout then
+          val localStart = selectionStart - visualLine.startColumn
+          val localEnd   = selectionEnd - visualLine.startColumn
+          if localStart >= 0 && localStart < localEnd && localEnd <= visualLine.text.length then
+            val selectedText = visualLine.text.substring(localStart, localEnd)
+            val lineOriginPx = context.cellMetrics.toPixelX(rect.x).toFloat
+            val startXPx     = lineOriginPx + visualLine.xForColumn(selectionStart).getOrElse(visualLine.widthPx)
+            val endXPx       = lineOriginPx + visualLine.xForColumn(selectionEnd).getOrElse(visualLine.widthPx)
             surface.setForegroundColor(theme.highlighted.foreground)
             surface.setBackgroundColor(theme.highlighted.background)
-            CharacterRenderer.renderChar(surface, screenX, screenY, charToRender)
-        }
+            surface.drawRunPx(
+              startXPx,
+              context.cellMetrics.toPixelY(screenY),
+              endXPx - startXPx,
+              snapshot.lineHeightPx,
+              snapshot.ascentPx,
+              selectedText
+            )
+        else
+          (selectionStart until selectionEnd).foreach { bufferColumn =>
+            val relativeColumn = bufferColumn - visualLine.startColumn
+            val screenX        = rect.x + relativeColumn
+            if screenX >= rect.x && screenX < rect.right then
+              val charIndex = bufferColumn - visualLine.startColumn
+              val charToRender =
+                if charIndex >= 0 && charIndex < visualLine.text.length then visualLine.text.charAt(charIndex)
+                else ' '
+              surface.setForegroundColor(theme.highlighted.foreground)
+              surface.setBackgroundColor(theme.highlighted.background)
+              CharacterRenderer.renderChar(surface, screenX, screenY, charToRender)
+          }
       }
     }
 
@@ -336,8 +396,10 @@ object Renderer:
     page: StartupPage,
     surface: RenderSurface,
     viewportSize: ViewportSize,
-    theme: Theme
+    theme: Theme,
+    uiFont: java.awt.Font
   ): Unit =
+    surface.setFont(uiFont)
     val lines  = page.renderLines
     val startY = (viewportSize.height - lines.size) / 2
 
@@ -389,7 +451,7 @@ object Renderer:
               screenXPx,
               screenYPx,
               caretWidthPx,
-              context.cellMetrics.lineHeight,
+              if snapshot.usesMeasuredLayout then snapshot.lineHeightPx else context.cellMetrics.lineHeight,
               effectiveCursorColor
             )
         case _ => ()
@@ -407,7 +469,7 @@ object Renderer:
     }
 
   private def renderFloatingPanels(state: AppState, context: RenderContext): Unit =
-    context.surface.setFont(context.codeFont)
+    context.surface.setFont(context.uiFont)
     val overlays = OverlayViewModel.fromState(state, context.layout)
 
     overlays.aboveCursor.foreach { overlay =>
@@ -421,7 +483,15 @@ object Renderer:
           overlay.rect.height,
           blurRadius
         )
-      TextOverlayRenderer.render(context.surface, overlay, state.theme, state.config, context.cursorVisible)
+      TextOverlayRenderer.render(
+        context.surface,
+        overlay,
+        state.theme,
+        state.config,
+        context.cursorVisible,
+        context.uiFont,
+        context.uiMetrics
+      )
     }
     val belowOverlays = if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
     belowOverlays.foreach { overlay =>
@@ -435,12 +505,21 @@ object Renderer:
           overlay.rect.height,
           blurRadius
         )
-      TextOverlayRenderer.render(context.surface, overlay, state.theme, state.config, context.cursorVisible)
+      TextOverlayRenderer.render(
+        context.surface,
+        overlay,
+        state.theme,
+        state.config,
+        context.cursorVisible,
+        context.uiFont,
+        context.uiMetrics
+      )
     }
 
     context.layout.floatingPanelRect.foreach(rect => renderFloatingPanelPlaceholder(rect, state.theme, context))
 
   private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =
+    context.surface.setFont(context.uiFont)
     PinnedPanelViewModel
       .fromLayout(context.layout, state.uiSurfaces)
       .foreach { panel =>
@@ -466,6 +545,7 @@ object Renderer:
 
   private def renderLineNumbers(state: AppState, context: RenderContext): Unit =
     if state.config.showLineNumbers then
+      context.surface.setFont(context.uiFont)
       context.layout.lineNumberRect foreach { lineRect =>
         val surface = context.surface
 
@@ -520,6 +600,7 @@ object Renderer:
 
   private def renderGutter(state: AppState, context: RenderContext): Unit =
     if state.config.showGutter then
+      context.surface.setFont(context.uiFont)
       context.layout.gutterRect foreach { gutterRect =>
         val surface = context.surface
 

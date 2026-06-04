@@ -1,8 +1,6 @@
 package com.serenity
 
-import cats.effect.IO
-import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandRegistry, CommandRunner}
+import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner}
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
@@ -74,9 +72,9 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 
     it("should navigate up and down through command list"):
       val commands = List(
-        Command("first", "First command", _ => IO.unit),
-        Command("second", "Second command", _ => IO.unit),
-        Command("third", "Third command", _ => IO.unit)
+        Command.typed("first", "First command", CommandIntent.ToggleTheme),
+        Command.typed("second", "Second command", CommandIntent.ToggleLineNumbers),
+        Command.typed("third", "Third command", CommandIntent.ToggleGutter)
       )
       val registry    = CommandRegistry(commands)
       val component   = CommandRunnerComponent(registry)
@@ -103,8 +101,8 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 
     it("should wrap navigation at boundaries"):
       val commands = List(
-        Command("first", "First command", _ => IO.unit),
-        Command("second", "Second command", _ => IO.unit)
+        Command.typed("first", "First command", CommandIntent.ToggleTheme),
+        Command.typed("second", "Second command", CommandIntent.ToggleLineNumbers)
       )
       val registry     = CommandRegistry(commands)
       val component    = CommandRunnerComponent(registry)
@@ -120,9 +118,9 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 
     it("should filter commands when typing"):
       val commands = List(
-        Command("save", "Save file", _ => IO.unit),
-        Command("search", "Search text", _ => IO.unit),
-        Command("open", "Open file", _ => IO.unit)
+        Command.typed("save", "Save file", CommandIntent.SaveCurrentFile),
+        Command.typed("search", "Search text", CommandIntent.FindInCurrentFile),
+        Command.typed("open", "Open file", CommandIntent.OpenFile)
       )
       val registry     = CommandRegistry(commands)
       val component    = CommandRunnerComponent(registry)
@@ -141,9 +139,8 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
           fail("Expected state change")
 
     it("should execute selected command when enter is pressed"):
-      var executionCalled = false
       val commands = List(
-        Command("test", "Test command", _ => IO { executionCalled = true })
+        Command.typed("test", "Test command", CommandIntent.ToggleLineNumbers)
       )
       val registry = CommandRegistry(commands)
       val component = CommandRunnerComponent(registry)
@@ -154,9 +151,8 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
       component.processEvent(Enter, initialState) match
         case ComponentResult.Composite(List(ComponentResult.StateChange(update), ComponentResult.ExecuteCommand(command))) =>
           val newState = update(initialState)
-          command.execute(newState).unsafeRunSync()
 
-          executionCalled shouldEqual true
+          command.intent shouldEqual CommandIntent.ToggleLineNumbers
           newState.commandRunnerSurface shouldBe None
           newState.focus shouldEqual Focus.EditorPane(PaneId(1))
         case _ =>

@@ -21,6 +21,7 @@ enum WindowChromeMode:
 case class AppConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
     syntaxHighlightingEnabled: Boolean = false,
+    hotkeyConfig: HotkeyConfig = HotkeyConfig(),
     fontConfig: FontConfig = FontConfig(),
     minimumPaneWidth: Int = 50,
     showLineNumbers: Boolean = true,
@@ -41,6 +42,12 @@ case class AppConfig(
   /** Create a new config with syntax highlighting toggled */
   def withSyntaxHighlighting(enabled: Boolean): AppConfig =
     copy(syntaxHighlightingEnabled = enabled)
+
+  def withHotkeyConfig(config: HotkeyConfig): AppConfig =
+    copy(hotkeyConfig = config)
+
+  def withHotkeyOverride(action: HotkeyAction, binding: String): AppConfig =
+    copy(hotkeyConfig = hotkeyConfig.withBinding(action, binding))
 
   /** Create a new config with font configuration */
   def withFontConfig(config: FontConfig): AppConfig =

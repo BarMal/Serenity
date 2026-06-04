@@ -2,11 +2,11 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{MouseClick, ResizeEvent}
+import com.serenity.keystroke.events.{MouseClick, MouseDrag, MousePress, ResizeEvent}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.PaneId
+import com.serenity.state.models.{CursorPosition, PaneId, Selection}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, ViewportSize}
@@ -38,6 +38,14 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("aaaa\nbbbb\ncccc\ndddd").unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+        )
+      )
+    }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
     // Click at (18, 3): bufferLine = topLine(0) + (3-1) = 2, bufferCol = leftCol(0) + (18-15) = 3
@@ -52,6 +60,14 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+        )
+      )
+    }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
     // Click at (15, 1): first cell of content area → bufferLine=0, bufferCol=0
@@ -66,6 +82,14 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hi\nworld").unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+        )
+      )
+    }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
     // Click at (35, 1): bufferLine=0, bufferCol = 35-15 = 20, "hi" length=2 → clamp to 2
@@ -159,4 +183,171 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
     buffer.cursors.headOption shouldBe Some(com.serenity.state.models.CursorPosition(0, 1))
+  }
+
+  it should "create a selection while dragging inside an editor pane" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("alpha\nbravo\ncharlie").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+        )
+      )
+    }.unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    val state   = sm.getCurrentState.unsafeRunSync()
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+
+    sm.applyEvent(MousePress(paneRect.x + 1, paneRect.y + 1)).unsafeRunSync()
+    sm.applyEvent(MouseDrag(paneRect.x + 3, paneRect.y + 2)).unsafeRunSync()
+
+    val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.cursors.headOption shouldBe Some(CursorPosition(1, 3))
+    buffer.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
+    buffer.selections shouldBe Nil
+  }
+
+  it should "start a new drag selection from the latest press instead of reusing an old anchor" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("alpha\nbravo\ncharlie").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+        )
+      )
+    }.unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    val state   = sm.getCurrentState.unsafeRunSync()
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+
+    sm.applyEvent(MousePress(paneRect.x + 1, paneRect.y + 1)).unsafeRunSync()
+    sm.applyEvent(MouseDrag(paneRect.x + 3, paneRect.y + 2)).unsafeRunSync()
+    sm.applyEvent(MousePress(paneRect.x + 2, paneRect.y + 2)).unsafeRunSync()
+    sm.applyEvent(MouseDrag(paneRect.x + 5, paneRect.y + 2)).unsafeRunSync()
+
+    val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.cursors.headOption shouldBe Some(CursorPosition(1, 5))
+    buffer.selection shouldBe Some(Selection(CursorPosition(1, 2), CursorPosition(1, 5)))
+    buffer.selections shouldBe Nil
+  }
+
+  it should "select the clicked word on double click" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("alpha beta gamma").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+        )
+      )
+    }.unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    val state   = sm.getCurrentState.unsafeRunSync()
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+
+    sm.applyEvent(MouseClick(paneRect.x + 7, paneRect.y + 1, clickCount = 2)).unsafeRunSync()
+
+    val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.cursors.headOption shouldBe Some(CursorPosition(0, 10))
+    buffer.selection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
+    buffer.selections shouldBe Nil
+  }
+
+  it should "select the clicked line on triple click" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("alpha\nbeta gamma\ncharlie").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+        )
+      )
+    }.unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    val state    = sm.getCurrentState.unsafeRunSync()
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+
+    sm.applyEvent(MouseClick(paneRect.x + 2, paneRect.y + 2, clickCount = 3)).unsafeRunSync()
+
+    val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.cursors.headOption shouldBe Some(CursorPosition(1, 10))
+    buffer.selection shouldBe Some(Selection(CursorPosition(1, 0), CursorPosition(1, 10)))
+    buffer.selections shouldBe Nil
+  }
+
+  it should "extend the current selection from the existing anchor on shift-click" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("alpha\nbeta gamma\ncharlie").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state.buffers(bufferId).copy(
+            language = Some(LanguageId.Scala),
+            cursors = List(CursorPosition(0, 2))
+          )
+        )
+      )
+    }.unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    val state    = sm.getCurrentState.unsafeRunSync()
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+
+    sm.applyEvent(MouseClick(paneRect.x + 4, paneRect.y + 2, shiftDown = true)).unsafeRunSync()
+
+    val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.cursors.headOption shouldBe Some(CursorPosition(1, 4))
+    buffer.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(1, 4)))
+    buffer.selections shouldBe Nil
+  }
+
+  it should "preserve the original anchor while extending with shift-drag" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("alpha\nbeta gamma\ncharlie").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state.buffers(bufferId).copy(
+            language = Some(LanguageId.Scala),
+            cursors = List(CursorPosition(0, 2))
+          )
+        )
+      )
+    }.unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    val state    = sm.getCurrentState.unsafeRunSync()
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+
+    sm.applyEvent(MousePress(paneRect.x + 4, paneRect.y + 2, shiftDown = true)).unsafeRunSync()
+    sm.applyEvent(MouseDrag(paneRect.x + 5, paneRect.y + 3, shiftDown = true)).unsafeRunSync()
+
+    val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.cursors.headOption shouldBe Some(CursorPosition(2, 5))
+    buffer.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(2, 5)))
+    buffer.selections shouldBe Nil
   }

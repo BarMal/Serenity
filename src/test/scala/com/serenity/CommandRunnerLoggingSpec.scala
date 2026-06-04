@@ -1,6 +1,5 @@
 package com.serenity
 
-import cats.effect.IO
 import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, CommandRunner}
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{InsertChar, TabKey}
@@ -47,11 +46,11 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "describe custom commands clearly" in {
-    val command = Command("custom", "Run custom action", _ => IO.unit)
+  it should "describe typed command intents without special casing" in {
+    val command = Command.typed("custom", "Run custom action", CommandIntent.OpenFile)
 
     StateManager.describeCommandExecution(command).shouldBe(
-      "command=custom category=Edit intent=Custom"
+      "command=custom category=Edit intent=OpenFile"
     )
   }
 end CommandRunnerLoggingSpec

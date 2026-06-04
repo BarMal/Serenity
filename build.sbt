@@ -13,7 +13,11 @@ Compile / run / fork := true
 
 lazy val root = (project in file("."))
   .settings(
-    name := "Serenity"
+    name := "Serenity",
+    Test / testOptions ++= Seq(
+      Tests.Setup(() => System.setProperty("serenity.test.ephemeralSessions", "true")),
+      Tests.Cleanup(() => System.clearProperty("serenity.test.ephemeralSessions"))
+    )
   )
 
 libraryDependencies ++= Seq(

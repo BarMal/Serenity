@@ -4,8 +4,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, FileSearchComponent}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, AppEventReducer, ReducerResult}
-import com.serenity.ui.layout.Layout
+import com.serenity.state.reducers.{AppEffect, AppEventReducer}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -62,7 +61,7 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
   "AppEventReducer" should "emit OpenFileSearch for FileSearch event" in {
     import com.serenity.command.CommandRegistry
     val result = AppEventReducer.reduce(FileSearch, AppState.initial, CommandRegistry.default)
-    result.effects shouldBe List(AppEffect.OpenFileSearch)
+    result.effects shouldBe List(AppEffect.OpenFileSearch())
   }
 
   // ── FileSearchComponent ───────────────────────────────────────────────────
@@ -139,6 +138,17 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       case ComponentResult.StateChange(f) =>
         f(state).fileSearchSurface.map(_.content) match
           case Some(SurfaceContent.FileSearch(fs)) => fs.query shouldBe ""
+          case other => fail(s"Expected FileSearch surface, got $other")
+      case other => fail(s"Expected StateChange, got $other")
+  }
+
+  it should "remove the previous word on DeleteWordBackward" in {
+    val (state, _) = stateWithSearchSurface("alpha beta")
+    val result = component.processEvent(DeleteWordBackward, state)
+    result match
+      case ComponentResult.StateChange(f) =>
+        f(state).fileSearchSurface.map(_.content) match
+          case Some(SurfaceContent.FileSearch(fs)) => fs.query shouldBe "alpha "
           case other => fail(s"Expected FileSearch surface, got $other")
       case other => fail(s"Expected StateChange, got $other")
   }

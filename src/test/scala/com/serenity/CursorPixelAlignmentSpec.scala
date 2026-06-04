@@ -36,7 +36,7 @@ class CursorPixelAlignmentSpec extends AnyFlatSpec with Matchers:
     val image       = new BufferedImage(100, 100, BufferedImage.TYPE_INT_ARGB)
     val surface     = new Java2DRenderSurface(image, cellMetrics, proportionalFont, _ => ())
 
-    surface.fontRenderContext.usesFractionalMetrics() shouldBe true
+    surface.fontRenderContext.getOrElse(fail("missing FontRenderContext")).usesFractionalMetrics() shouldBe true
   }
 
   "TextLayoutSnapshot caret stops" should
@@ -52,7 +52,7 @@ class CursorPixelAlignmentSpec extends AnyFlatSpec with Matchers:
     // Get the FRC that Java2DRenderSurface actually uses at runtime.
     val testImage = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB)
     val surface   = new Java2DRenderSurface(testImage, cellMetrics, font, _ => ())
-    val rendererFRC = surface.fontRenderContext
+    val rendererFRC = surface.fontRenderContext.getOrElse(fail("missing FontRenderContext"))
 
     // Measure column 14 using the renderer's FRC.
     val attributed = new AttributedString(text)
@@ -69,5 +69,31 @@ class CursorPixelAlignmentSpec extends AnyFlatSpec with Matchers:
       .xForColumn(cursorColumn)
       .getOrElse(fail(s"no caret stop at column $cursorColumn"))
 
+    snapshotX shouldBe rendererX +- 0.5f
+  }
+
+  it should "measure the default bundled code font with the renderer FontRenderContext when precise layout is required" in {
+    val font        = FontLoader.loadCodeFont(FontConfig()).unsafeRunSync()
+    val cellMetrics = CellMetrics.fromFont(font)
+    val text        = "iiiiiiiiiiiiiiii"
+    val cursorColumn = 14
+
+    val testImage    = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB)
+    val surface      = new Java2DRenderSurface(testImage, cellMetrics, font, _ => ())
+    val rendererFRC  = surface.fontRenderContext.getOrElse(fail("missing FontRenderContext"))
+    val attributed   = new AttributedString(text)
+    attributed.addAttribute(TextAttribute.FONT, font)
+    val layout       = new TextLayout(attributed.getIterator, rendererFRC)
+    val rendererX    = layout.getCaretInfo(TextHitInfo.leading(cursorColumn))(0)
+    val buffer       = Buffer
+      .fromString(BufferId(100), text)
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 30, visibleLines = 2))
+    val snapshot     = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font, rendererFRC)
+    val snapshotLine = snapshot.visualLines.head
+    val snapshotX    = snapshotLine
+      .xForColumn(cursorColumn)
+      .getOrElse(fail(s"no caret stop at column $cursorColumn"))
+
+    snapshot.usesMeasuredLayout shouldBe true
     snapshotX shouldBe rendererX +- 0.5f
   }

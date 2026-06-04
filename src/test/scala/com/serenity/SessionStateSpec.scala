@@ -166,6 +166,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
           codeFontFamily = "Monospaced",
           textFontFamily = "SansSerif",
           fontSize = 15.0f,
+          uiFontSize = 13.0f,
           enableLigatures = false
         ),
         blurRadius = 0.42f,
@@ -184,6 +185,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.fontConfig.codeFontFamily shouldBe "Monospaced"
     decoded.config.fontConfig.textFontFamily shouldBe "SansSerif"
     decoded.config.fontConfig.fontSize shouldBe 15.0f
+    decoded.config.fontConfig.uiFontSize shouldBe 13.0f
     decoded.config.fontConfig.enableLigatures shouldBe false
     decoded.config.showLineNumbers shouldBe false
     decoded.config.showGutter shouldBe false

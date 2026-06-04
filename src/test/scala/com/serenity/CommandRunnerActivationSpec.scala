@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
-import com.serenity.state.models.{PaneId, SurfaceContent}
+import com.serenity.state.models.SurfaceContent
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

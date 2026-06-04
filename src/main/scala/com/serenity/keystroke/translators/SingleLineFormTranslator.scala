@@ -11,7 +11,12 @@ class SingleLineFormTranslator extends Translator[ModalInputEvent]:
     case KeyStrokeInfo(InputKey.Character, Some(char), modifiers)
         if modifiers.isEmpty || modifiers == Set(Modifier.Shift) =>
       ModalInsertChar(char)
+    case KeyStrokeInfo(InputKey.Backspace, _, modifiers) if modifiers.contains(Modifier.Ctrl) =>
+      ModalDeleteWordBackward
+    case KeyStrokeInfo(InputKey.Delete, _, modifiers) if modifiers.contains(Modifier.Ctrl) =>
+      ModalDeleteWordForward
     case KeyStrokeInfo(InputKey.Backspace, _, _) => ModalDeleteBackward
+    case KeyStrokeInfo(InputKey.Delete, _, _)    => ModalDeleteForward
     case KeyStrokeInfo(InputKey.Tab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
       ModalNextField
     case KeyStrokeInfo(InputKey.ReverseTab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>

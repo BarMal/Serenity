@@ -158,10 +158,10 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     val gutterCommand  = registry.findCommand("toggle-gutter").get
 
     lineCommand.name shouldBe "toggle-line-numbers"
+    lineCommand.label shouldBe "Toggle Line Numbers"
     lineCommand.description should include("line numbers")
-    lineCommand.description.toLowerCase should include("toggle")
 
     gutterCommand.name shouldBe "toggle-gutter"
+    gutterCommand.label shouldBe "Toggle Gutter"
     gutterCommand.description should include("gutter")
-    gutterCommand.description.toLowerCase should include("toggle")
   }

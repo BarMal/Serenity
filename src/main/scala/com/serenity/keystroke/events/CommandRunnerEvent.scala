@@ -4,6 +4,9 @@ trait CommandRunnerEvent extends Event
 
 case class RunnerInsertChar(char: Char)         extends CommandRunnerEvent
 case object RunnerDeleteBackward                extends CommandRunnerEvent
+case object RunnerDeleteForward                 extends CommandRunnerEvent
+case object RunnerDeleteWordBackward            extends CommandRunnerEvent
+case object RunnerDeleteWordForward             extends CommandRunnerEvent
 case class RunnerNavigate(direction: Direction) extends CommandRunnerEvent
 case object RunnerNextCategory                  extends CommandRunnerEvent
 case object RunnerPreviousCategory              extends CommandRunnerEvent
@@ -16,6 +19,9 @@ object CommandRunnerEvent:
     event match
       case InsertChar(char)                => Some(RunnerInsertChar(char))
       case DeleteBackward                  => Some(RunnerDeleteBackward)
+      case DeleteForward                   => Some(RunnerDeleteForward)
+      case DeleteWordBackward              => Some(RunnerDeleteWordBackward)
+      case DeleteWordForward               => Some(RunnerDeleteWordForward)
       case MoveUp                          => Some(RunnerNavigate(Direction.Up))
       case MoveDown                        => Some(RunnerNavigate(Direction.Down))
       case MoveLeft                        => Some(RunnerNavigate(Direction.Left))

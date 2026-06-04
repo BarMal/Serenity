@@ -1,7 +1,7 @@
 import cats.effect.*
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.{AppRuntime, RuntimeDisplayState}
-import com.serenity.config.AppConfig
+import com.serenity.config.ConfigManager
 import com.serenity.input.SwingInputHandler
 import com.serenity.rope.Balance
 import com.serenity.ui.renderer.Renderer
@@ -17,7 +17,7 @@ object Main extends IOApp.Simple:
 
   def run: IO[Unit] =
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
-    val appConfig                                   = AppConfig.default
+    val appConfig                                   = ConfigManager.loadConfig()
 
     for
       displayState <- RuntimeDisplayState.create(appConfig.fontConfig)
@@ -36,12 +36,30 @@ object Main extends IOApp.Simple:
           renderFull =
             (state, vis, cc) =>
               syncDisplayMetrics() >> IO.blocking(
-                Renderer.render(state, vis, swingWin, displayState.codeFont, displayState.textFont, cc)
+                Renderer.render(
+                  state,
+                  vis,
+                  swingWin,
+                  displayState.codeFont,
+                  displayState.textFont,
+                  displayState.uiFont,
+                  displayState.uiMetrics,
+                  cc
+                )
               ),
           renderCursorOnly =
             (state, vis, cc) =>
               syncDisplayMetrics() >> IO.blocking(
-                Renderer.render(state, vis, swingWin, displayState.codeFont, displayState.textFont, cc)
+                Renderer.render(
+                  state,
+                  vis,
+                  swingWin,
+                  displayState.codeFont,
+                  displayState.textFont,
+                  displayState.uiFont,
+                  displayState.uiMetrics,
+                  cc
+                )
               ),
           appConfig = appConfig,
           makeStateManager = Some(logger =>

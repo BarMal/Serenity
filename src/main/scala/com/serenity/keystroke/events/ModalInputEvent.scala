@@ -4,6 +4,9 @@ trait ModalInputEvent extends Event
 
 case class ModalInsertChar(char: Char)         extends ModalInputEvent
 case object ModalDeleteBackward                extends ModalInputEvent
+case object ModalDeleteForward                 extends ModalInputEvent
+case object ModalDeleteWordBackward            extends ModalInputEvent
+case object ModalDeleteWordForward             extends ModalInputEvent
 case class ModalNavigate(direction: Direction) extends ModalInputEvent
 case object ModalNextField                     extends ModalInputEvent
 case object ModalPreviousField                 extends ModalInputEvent
@@ -16,6 +19,9 @@ object ModalInputEvent:
     event match
       case InsertChar(char)            => Some(ModalInsertChar(char))
       case DeleteBackward              => Some(ModalDeleteBackward)
+      case DeleteForward               => Some(ModalDeleteForward)
+      case DeleteWordBackward          => Some(ModalDeleteWordBackward)
+      case DeleteWordForward           => Some(ModalDeleteWordForward)
       case MoveUp                      => Some(ModalNavigate(Direction.Up))
       case MoveDown                    => Some(ModalNavigate(Direction.Down))
       case MoveLeft                    => Some(ModalNavigate(Direction.Left))

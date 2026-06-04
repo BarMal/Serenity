@@ -19,23 +19,33 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
     LoggerFactory[IO].getLogger(using LoggerName("RuntimeDisplayStateSpec"))
 
   "RuntimeDisplayState" should "derive cell metrics from the current runtime font" in {
-    val runtime = RuntimeDisplayState.create(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val runtime = RuntimeDisplayState.create(FontConfig(fontSize = 12.0f, uiFontSize = 14.0f)).unsafeRunSync()
 
     runtime.codeMetrics shouldBe CellMetrics.fromFont(runtime.codeFont)
     runtime.textMetrics shouldBe CellMetrics.fromFont(runtime.textFont)
+    runtime.uiMetrics shouldBe CellMetrics.fromFont(runtime.uiFont)
   }
 
   it should "refresh both runtime fonts and metrics when the font config changes" in {
-    val runtime        = RuntimeDisplayState.create(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val runtime            = RuntimeDisplayState.create(FontConfig(fontSize = 12.0f, uiFontSize = 14.0f)).unsafeRunSync()
     val originalCodeFont   = runtime.codeFont
     val originalCodeMetric = runtime.codeMetrics
 
-    runtime.update(FontConfig(codeFontFamily = "Monospaced", textFontFamily = "SansSerif", fontSize = 18.0f)).unsafeRunSync()
+    runtime.update(
+      FontConfig(
+        codeFontFamily = "Monospaced",
+        textFontFamily = "SansSerif",
+        fontSize = 18.0f,
+        uiFontSize = 16.0f
+      )
+    ).unsafeRunSync()
 
     runtime.codeFont.getSize2D shouldBe 18.0f
     runtime.textFont.getSize2D shouldBe 18.0f
+    runtime.uiFont.getSize2D shouldBe 16.0f
     runtime.codeMetrics shouldBe CellMetrics.fromFont(runtime.codeFont)
     runtime.textMetrics shouldBe CellMetrics.fromFont(runtime.textFont)
+    runtime.uiMetrics shouldBe CellMetrics.fromFont(runtime.uiFont)
     runtime.codeFont.getSize2D should not be originalCodeFont.getSize2D
     runtime.codeMetrics should not be originalCodeMetric
   }
@@ -71,13 +81,15 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "always produce valid metrics after update" in {
-    val runtime = RuntimeDisplayState.create(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val runtime = RuntimeDisplayState.create(FontConfig(fontSize = 12.0f, uiFontSize = 14.0f)).unsafeRunSync()
 
     runtime.codeMetrics.isValid shouldBe true
     runtime.textMetrics.isValid shouldBe true
+    runtime.uiMetrics.isValid shouldBe true
 
-    runtime.update(FontConfig(codeFontFamily = "Monospaced", fontSize = 18.0f)).unsafeRunSync()
+    runtime.update(FontConfig(codeFontFamily = "Monospaced", fontSize = 18.0f, uiFontSize = 15.0f)).unsafeRunSync()
 
     runtime.codeMetrics.isValid shouldBe true
     runtime.textMetrics.isValid shouldBe true
+    runtime.uiMetrics.isValid shouldBe true
   }

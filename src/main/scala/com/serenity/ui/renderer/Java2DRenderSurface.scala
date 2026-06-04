@@ -1,9 +1,11 @@
 package com.serenity.ui.renderer
 
 import java.awt.*
-import java.awt.font.FontRenderContext
+import java.awt.font.{FontRenderContext, TextAttribute}
 import java.awt.image.{BufferedImage, ConvolveOp, Kernel}
 import java.util.concurrent.atomic.AtomicReference
+
+import scala.jdk.CollectionConverters.*
 
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.TextStyle
@@ -31,19 +33,24 @@ class Java2DRenderSurface(
   /** The FontRenderContext this surface uses for text layout. Exposed so that TextLayoutSnapshot and
     * other measurement code can use the identical FRC, preventing cursor drift on proportional fonts.
     */
-  val fontRenderContext: FontRenderContext = g.getFontRenderContext()
+  private val renderContext: FontRenderContext = g.getFontRenderContext()
 
   private val fgRef = AtomicReference(Color.WHITE)
   private val bgRef = AtomicReference(Color.BLACK)
+  private val baseFontRef = AtomicReference(font)
 
-  override def setFont(newFont: Font): Unit = g.setFont(newFont)
+  override def setFont(newFont: Font): Unit =
+    baseFontRef.set(newFont)
+    g.setFont(newFont)
 
-  override def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, s: String): Unit =
+  override def fontRenderContext: Option[FontRenderContext] = Some(renderContext)
+
+  override def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit =
     g.setColor(bgRef.get())
     g.fillRect(xPx.toInt, yPx, bgWidthPx.toInt.max(1), lineHeightPx)
     if s.nonEmpty then
       g.setColor(fgRef.get())
-      g.drawString(s, xPx, (yPx + metrics.ascent).toFloat)
+      g.drawString(s, xPx, (yPx + ascentPx).toFloat)
   def setForegroundColor(color: Color): Unit = fgRef.set(color)
   def setBackgroundColor(color: Color): Unit = bgRef.set(color)
   def getBackgroundColor: Color              = bgRef.get()
@@ -75,14 +82,18 @@ class Java2DRenderSurface(
       }
 
   def enableStyle(style: TextStyle): Unit =
-    val derived = font.deriveFont(
+    val styled = baseFontRef.get().deriveFont(
       (if style.isBold then java.awt.Font.BOLD else 0) |
         (if style.isItalic then java.awt.Font.ITALIC else 0)
     )
+    val derived =
+      if style.isUnderlined then
+        styled.deriveFont(Map(TextAttribute.UNDERLINE -> TextAttribute.UNDERLINE_ON).asJava)
+      else styled
     g.setFont(derived)
 
   def disableStyle(style: TextStyle): Unit =
-    g.setFont(font)
+    g.setFont(baseFontRef.get())
 
   override def setAlpha(alpha: Float): Unit =
     g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha.max(0f).min(1f)))

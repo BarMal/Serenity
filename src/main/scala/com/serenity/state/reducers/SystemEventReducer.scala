@@ -1,8 +1,8 @@
 package com.serenity.state.reducers
 
-import com.serenity.keystroke.events.{LspEvent, ResizeEvent, SystemEvent}
-import com.serenity.state.models.AppState
-import com.serenity.ui.layout.LayoutEngine
+import com.serenity.keystroke.events.{ExplorerEvent, LspEvent, ResizeEvent, SystemEvent}
+import com.serenity.state.models.{AppState, SurfaceContent, SurfacePresentation}
+import com.serenity.ui.layout.{DirectoryTreeData, LayoutEngine, PanelContent, PanelPosition}
 
 object SystemEventReducer:
 
@@ -30,5 +30,54 @@ object SystemEventReducer:
       case LspEvent.LspDiagnosticsReceived(uri, diagnostics) =>
         ReducerResult.noEffects(state.copy(diagnostics = state.diagnostics + (uri -> diagnostics)))
 
+      case ExplorerEvent.RootDirectoryLoaded(position, rootPath, size, entries, selectedPath) =>
+        val tree = DirectoryTreeData(rootPath, entries = Map(rootPath -> entries))
+        PanelStateReducer.pin(
+          PanelContent.DirectoryTree(tree, selectedPath),
+          position,
+          size,
+          state
+        )
+
+      case ExplorerEvent.DirectoryLoaded(position, path, entries) =>
+        ReducerResult.noEffects(updatePinnedDirectoryTree(state, position, path, entries))
+
       case _ =>
         ReducerResult.noEffects(state)
+
+  private def updatePinnedDirectoryTree(
+    state: AppState,
+    position: PanelPosition,
+    path: java.nio.file.Path,
+    entries: List[com.serenity.ui.layout.DirEntry]
+  ): AppState =
+    state.pinnedSurfaces
+      .find {
+        _.presentation match
+          case SurfacePresentation.Pinned(pos, _) if pos == position => true
+          case _                                                     => false
+      }
+      .map { surface =>
+        val updatedSurface = surface.content match
+          case SurfaceContent.DirectoryTree(tree, selectedPath) =>
+            val nextSelected =
+              if selectedPath.contains(path) || selectedPath.isEmpty then Some(path)
+              else selectedPath
+            surface.copy(
+              content = SurfaceContent.DirectoryTree(
+                tree.copy(
+                  expandedPaths = tree.expandedPaths + path,
+                  entries = tree.entries + (path -> entries)
+                ),
+                nextSelected
+              )
+            )
+          case _ =>
+            val tree = DirectoryTreeData(
+              rootPath = path,
+              entries = Map(path -> entries)
+            )
+            surface.copy(content = SurfaceContent.DirectoryTree(tree, Some(path)))
+        state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
+      }
+      .getOrElse(state)

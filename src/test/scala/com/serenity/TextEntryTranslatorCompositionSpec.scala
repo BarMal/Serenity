@@ -1,5 +1,6 @@
 package com.serenity
 
+import com.serenity.config.{AppConfig, HotkeyAction}
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -44,4 +45,17 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
 
     selectAll shouldBe SelectAll
     selectAll.isInstanceOf[EditorEvent] shouldBe true
+  }
+
+  it should "respect configured global hotkey overrides" in {
+    val customConfig = AppConfig.default.withHotkeyOverride(
+      HotkeyAction.ToggleCommandRunner,
+      "ctrl+k"
+    )
+    val customTranslator = new TextEntryTranslator(customConfig)
+
+    customTranslator.translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl))) shouldBe ToggleCommandRunner
+    customTranslator.translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl))).isInstanceOf[
+      UnhandledEvent[?]
+    ] shouldBe true
   }

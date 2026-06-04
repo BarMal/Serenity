@@ -11,7 +11,12 @@ class CommandRunnerTranslator extends Translator[CommandRunnerEvent]:
     case KeyStrokeInfo(InputKey.Character, Some(char), modifiers)
         if modifiers.isEmpty || modifiers == Set(Modifier.Shift) =>
       RunnerInsertChar(char)
+    case KeyStrokeInfo(InputKey.Backspace, _, modifiers) if modifiers.contains(Modifier.Ctrl) =>
+      RunnerDeleteWordBackward
+    case KeyStrokeInfo(InputKey.Delete, _, modifiers) if modifiers.contains(Modifier.Ctrl) =>
+      RunnerDeleteWordForward
     case KeyStrokeInfo(InputKey.Backspace, _, _) => RunnerDeleteBackward
+    case KeyStrokeInfo(InputKey.Delete, _, _)    => RunnerDeleteForward
     case KeyStrokeInfo(InputKey.Tab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
       RunnerNextCategory
     case KeyStrokeInfo(InputKey.ReverseTab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>

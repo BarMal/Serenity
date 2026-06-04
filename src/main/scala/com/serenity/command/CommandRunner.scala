@@ -37,10 +37,10 @@ case class CommandRunner(
         case CommandCategory.Settings => settingsGroups ++ commandItems
         case _                        => commandItems
     else
-      // Commands first so selectedIndex=0 always lands on a registered command.
-      // Matching settings groups are appended so they remain discoverable by scrolling.
-      val matchingGroups = settingsGroups.filter(_.searchText.toLowerCase.contains(searchTerm.toLowerCase))
-      commandItems ++ matchingGroups
+      val (strongCommandMatches, remainingCommandMatches) = commandItems.partition(item =>
+        CommandRunner.isStrongCommandMatch(item.command, searchTerm)
+      )
+      strongCommandMatches ++ matchingSettingsGroups(searchTerm) ++ remainingCommandMatches
 
   def selectedItem: Option[CommandSurfaceItem] =
     visibleItems.lift(selectedIndex)
@@ -86,28 +86,30 @@ case class CommandRunner(
           item.id == "animation-duration" || item.id == "animation-steps"
         ),
         category = CommandCategory.Settings,
-        hint = Some("Mode, timing, steps")
+        hint = Some("Style, duration, steps")
       ),
       CommandSurfaceItem.GroupItem(
         id = "settings-appearance",
         label = "Appearance",
         children = List(cursorModeItem, backgroundStyleItem) ++ inputItems.filter(_.id == "blur-radius"),
         category = CommandCategory.Settings,
-        hint = Some("Cursor, background, blur")
+        hint = Some("Cursor, background style, blur")
       ),
       CommandSurfaceItem.GroupItem(
         id = "settings-typography",
         label = "Typography",
-        children = List(codeFontItem, textFontItem, ligaturesItem) ++ inputItems.filter(_.id == "font-size"),
+        children = List(codeFontItem, textFontItem, ligaturesItem) ++ inputItems.filter(item =>
+          item.id == "buffer-font-size" || item.id == "ui-font-size"
+        ),
         category = CommandCategory.Settings,
-        hint = Some("Code, text, ligatures, size")
+        hint = Some("Code font, text font, ligature shaping, buffer size, UI size")
       ),
       CommandSurfaceItem.GroupItem(
         id = "settings-language",
         label = "Language",
         children = CommandRunner.languageItems,
         category = CommandCategory.Settings,
-        hint = Some("Set buffer language mode")
+        hint = Some("Set the current buffer language mode")
       )
     )
 
@@ -287,9 +289,20 @@ case class CommandRunner(
   /** Check if there are more commands beyond visible ones */
   def hasMoreCommands: Boolean = visibleItems.length > 5
 
+  private def matchingSettingsGroups(term: String): List[CommandSurfaceItem.GroupItem] =
+    val lowerTerm = term.toLowerCase
+    if lowerTerm.length < 3 then Nil
+    else settingsGroups.filter(_.searchText.toLowerCase.contains(lowerTerm))
+
   /** Store the focus that should be restored when runner closes */
 
 object CommandRunner:
+
+  private def isStrongCommandMatch(command: Command, term: String): Boolean =
+    val lowerTerm   = term.toLowerCase
+    val nameLower   = command.name.toLowerCase
+    val labelLower  = command.label.toLowerCase
+    nameLower.startsWith(lowerTerm) || labelLower.startsWith(lowerTerm)
 
   private[command] def defaultOptionSelections(config: AppConfig): Map[String, Int] =
     Map(
@@ -304,14 +317,14 @@ object CommandRunner:
   private[command] def cursorModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "cursor-mode",
-      label = "Cursor Mode",
+      label = "Cursor Style",
       options = List(
         CommandOption("Blink", CommandIntent.SetCursorMode(CursorMode.Blink)),
         CommandOption("Breathe", CommandIntent.SetCursorMode(CursorMode.Breathe))
       ),
       selectedIndex = optionSelections.getOrElse("cursor-mode", 0),
       category = CommandCategory.Settings,
-      hint = Some("Style")
+      hint = Some("Blink or breathe")
     )
 
   private[command] def backgroundStyleOptionItem(
@@ -319,7 +332,7 @@ object CommandRunner:
   ): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "background-style",
-      label = "Background",
+      label = "Background Style",
       options = List(
         CommandOption("Solid", CommandIntent.SetBackgroundStyle(BackgroundStyle.Solid)),
         CommandOption("Transparent", CommandIntent.SetBackgroundStyle(BackgroundStyle.Transparent)),
@@ -328,13 +341,13 @@ object CommandRunner:
       ),
       selectedIndex = optionSelections.getOrElse("background-style", 2),
       category = CommandCategory.Settings,
-      hint = Some("Style")
+      hint = Some("Solid, transparent, frosted, or glass")
     )
 
   private[command] def animationOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "animation-mode",
-      label = "Animation",
+      label = "Animation Style",
       options = List(
         CommandOption("None", CommandIntent.SetAnimationMode(AnimationMode.None)),
         CommandOption("Subtle", CommandIntent.SetAnimationMode(AnimationMode.Subtle)),
@@ -342,7 +355,7 @@ object CommandRunner:
       ),
       selectedIndex = optionSelections.getOrElse("animation-mode", 2),
       category = CommandCategory.Settings,
-      hint = Some("Mode")
+      hint = Some("None, subtle, or full")
     )
 
   private[command] def codeFontOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -354,7 +367,7 @@ object CommandRunner:
       },
       selectedIndex = optionSelections.getOrElse("code-font", 0),
       category = CommandCategory.Settings,
-      hint = Some("Monospace")
+      hint = Some("Used in code buffers")
     )
 
   private[command] def textFontOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -366,33 +379,34 @@ object CommandRunner:
       },
       selectedIndex = optionSelections.getOrElse("text-font", 0),
       category = CommandCategory.Settings,
-      hint = Some("Proportional")
+      hint = Some("Used in prose buffers")
     )
 
   private[command] def ligaturesOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "ligatures",
-      label = "Ligatures",
+      label = "Ligature Shaping",
       options = List(
         CommandOption("On", CommandIntent.SetLigatures(true)),
         CommandOption("Off", CommandIntent.SetLigatures(false))
       ),
       selectedIndex = optionSelections.getOrElse("ligatures", 0),
       category = CommandCategory.Settings,
-      hint = Some("Text shaping")
+      hint = Some("Enable or disable glyph ligatures")
     )
 
   private[command] def buildInputItems(config: AppConfig): List[CommandSurfaceItem.InputItem] =
     val durationValue = config.characterAnimation.map(_.durationMs.toString).getOrElse("0")
     val stepsValue    = config.characterAnimation.map(_.steps.toString).getOrElse("0")
     val blurValue     = config.blurRadius.toString
-    val fontSizeValue = config.fontConfig.fontSize.toString
+    val bufferFontSizeValue = config.fontConfig.fontSize.toString
+    val uiFontSizeValue     = config.fontConfig.uiFontSize.toString
 
     List(
       CommandSurfaceItem.InputItem(
         id = "animation-duration",
-        label = "Anim Duration",
-        hint = "ms (0–10000)",
+        label = "Animation Duration",
+        hint = "Milliseconds (0-10000)",
         currentValue = durationValue,
         isDecimal = false,
         parse = text =>
@@ -403,8 +417,8 @@ object CommandRunner:
       ),
       CommandSurfaceItem.InputItem(
         id = "animation-steps",
-        label = "Anim Steps",
-        hint = "(0–100)",
+        label = "Animation Steps",
+        hint = "Steps (0-100)",
         currentValue = stepsValue,
         isDecimal = false,
         parse = text =>
@@ -416,7 +430,7 @@ object CommandRunner:
       CommandSurfaceItem.InputItem(
         id = "blur-radius",
         label = "Blur Radius",
-        hint = "(0.0–1.0)",
+        hint = "Strength (0.0-1.0)",
         currentValue = blurValue,
         isDecimal = true,
         parse = text =>
@@ -426,15 +440,27 @@ object CommandRunner:
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
-        id = "font-size",
-        label = "Font Size",
-        hint = "(8.0-48.0)",
-        currentValue = fontSizeValue,
+        id = "buffer-font-size",
+        label = "Buffer Font Size",
+        hint = "Points (8.0-48.0)",
+        currentValue = bufferFontSizeValue,
         isDecimal = true,
         parse = text =>
           text.toFloatOption
             .filter(v => v >= 8.0f && v <= 48.0f)
             .map(CommandIntent.SetFontSize(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "ui-font-size",
+        label = "UI Font Size",
+        hint = "Points (8.0-48.0)",
+        currentValue = uiFontSizeValue,
+        isDecimal = true,
+        parse = text =>
+          text.toFloatOption
+            .filter(v => v >= 8.0f && v <= 48.0f)
+            .map(CommandIntent.SetUiFontSize(_)),
         category = CommandCategory.Settings
       )
     )
@@ -472,11 +498,23 @@ object CommandRunner:
 
   private[command] val languageItems: List[CommandSurfaceItem] =
     val plainText = CommandSurfaceItem.CommandItem(
-      Command.typed("lang-plain-text", "Plain Text", CommandIntent.SetBufferLanguage(None), CommandCategory.Settings)
+      Command.typed(
+        "lang-plain-text",
+        "Use plain text mode for the current buffer.",
+        CommandIntent.SetBufferLanguage(None),
+        CommandCategory.Settings,
+        label = "Plain Text"
+      )
     )
     val langItems = LanguageId.values.toList.sortBy(_.displayName).map { lang =>
       CommandSurfaceItem.CommandItem(
-        Command.typed(s"lang-${lang.id}", lang.displayName, CommandIntent.SetBufferLanguage(Some(lang)), CommandCategory.Settings)
+        Command.typed(
+          s"lang-${lang.id}",
+          s"Use ${lang.displayName} mode for the current buffer.",
+          CommandIntent.SetBufferLanguage(Some(lang)),
+          CommandCategory.Settings,
+          label = lang.displayName
+        )
       )
     }
     plainText :: langItems

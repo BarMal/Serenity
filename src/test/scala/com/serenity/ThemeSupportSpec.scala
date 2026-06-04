@@ -1,11 +1,9 @@
 package com.serenity
 
-import java.awt.Color
-import cats.effect.IO
-import cats.effect.unsafe.implicits.global
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Layout, ViewportSize}
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -51,6 +49,36 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
     styledContent should not be empty
     styledContent.exists(_.element == SyntaxElement.Keyword) shouldBe true
     styledContent.exists(_.element == SyntaxElement.String) shouldBe true
+  }
+
+  it should "highlight markdown headings and list markers with markdown-aware styles" in {
+    val theme = Theme.dark
+
+    val heading = ThemeManager.highlightLine("# Heading", theme, Some(LanguageId.Markdown))
+    heading.head.content shouldBe "# "
+    heading.head.style.isBold shouldBe true
+    heading(1).content shouldBe "Heading"
+    heading(1).style.isBold shouldBe true
+
+    val listItem = ThemeManager.highlightLine("- item", theme, Some(LanguageId.Markdown))
+    listItem.head.content shouldBe "- "
+    listItem.head.style.isBold shouldBe true
+    listItem(1).content shouldBe "item"
+  }
+
+  it should "highlight markdown links and blockquotes with markdown-aware styles" in {
+    val theme = Theme.dark
+
+    val link = ThemeManager.highlightLine("See [guide](docs.md)", theme, Some(LanguageId.Markdown))
+    link.map(_.content) shouldBe List("See ", "[", "guide", "](", "docs.md", ")")
+    link(2).style.isUnderlined shouldBe true
+    link(4).style.isUnderlined shouldBe true
+
+    val quote = ThemeManager.highlightLine("> quoted", theme, Some(LanguageId.Markdown))
+    quote.head.content shouldBe "> "
+    quote.head.style.isItalic shouldBe true
+    quote(1).content shouldBe "quoted"
+    quote(1).style.isItalic shouldBe true
   }
 
   "StyledText" should "combine content with styling information" in {

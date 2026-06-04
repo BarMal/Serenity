@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.keystroke.events.{MoveDown, MoveUp}
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
@@ -18,11 +19,16 @@ class EditorEventSnapshotSpec extends AnyFlatSpec with Matchers:
   private val paneId   = PaneId(0)
   private val bufferId = BufferId(1)
 
-  private def stateWith(content: String, cursor: CursorPosition): AppState =
+  private def stateWith(
+    content: String,
+    cursor: CursorPosition,
+    language: Option[LanguageId] = Some(LanguageId.Scala)
+  ): AppState =
     val buffer = Buffer
       .fromString(bufferId, content)
       .copy(
-        cursors  = List(cursor),
+        cursors = List(cursor),
+        language = language,
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 10)
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)

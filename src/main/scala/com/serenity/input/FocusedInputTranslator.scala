@@ -6,7 +6,6 @@ import com.serenity.state.models.{AppState, SurfaceContent}
 
 object FocusedInputTranslator:
 
-  private val globalTranslator        = new GlobalHotkeyTranslator()
   private val editorTranslator        = new EditorInputTranslator()
   private val commandRunnerTranslator = new CommandRunnerTranslator()
   private val formTranslator          = new SingleLineFormTranslator()
@@ -34,4 +33,4 @@ object FocusedInputTranslator:
         case None =>
           editorTranslator
 
-    CompositeTranslator(globalTranslator, localTranslator)
+    CompositeTranslator(new GlobalHotkeyTranslator(state.config), localTranslator)

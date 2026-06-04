@@ -3,7 +3,9 @@ package com.serenity.ui.renderer
 import java.awt.Color
 
 import com.serenity.animation.AnimationState
+import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.theme.Theme
+import com.serenity.ui.theme.{StyledText, TextStyle}
 
 object CharacterRenderer:
 
@@ -77,11 +79,12 @@ object CharacterRenderer:
     theme: Theme,
     screenAnimations: AnimationState,
     syntaxHighlightingEnabled: Boolean = true,
+    language: Option[LanguageId] = None,
     bufferLine: Int = 0,
     bufferStartColumn: Int = 0
   ): Unit =
     if syntaxHighlightingEnabled then
-      val styledTexts = com.serenity.ui.theme.ThemeManager.highlightLine(content, theme)
+      val styledTexts = com.serenity.ui.theme.ThemeManager.highlightLine(content, theme, language)
       renderStyledLineWithAnimation(
         surface, x, y, styledTexts, theme, screenAnimations, bufferLine, bufferStartColumn
       )
@@ -105,7 +108,7 @@ object CharacterRenderer:
     val collectedRuns = collectPlainRuns(x, content, tabWidth)
     renderAnimatedRuns(surface, x, y, collectedRuns.runs, theme, screenAnimations, bufferLine, bufferStartColumn)
 
-  /** Render a proportional-font visual line using pixel-precision caret stops.
+  /** Render a visual line using pixel-precision caret stops.
     *
     * Groups consecutive characters that share the same effective fg/bg color into runs, then calls
     * [[RenderSurface.drawRunPx]] for each run. Callers must set the surface font before this call.
@@ -113,20 +116,25 @@ object CharacterRenderer:
     * @param xOriginPx pixel X of the pane's left edge
     * @param yPx       pixel Y of the top of this visual line
     */
-  def renderProportionalLineWithAnimation(
+  def renderMeasuredLineWithAnimation(
     surface: RenderSurface,
     xOriginPx: Float,
     yPx: Int,
     lineHeightPx: Int,
-    ascent: Int,
+    ascentPx: Int,
     visualLine: com.serenity.ui.layout.TextVisualLine,
     theme: Theme,
-    animations: AnimationState
+    animations: AnimationState,
+    syntaxHighlightingEnabled: Boolean = false,
+    language: Option[LanguageId] = None
   ): Unit =
     val text = visualLine.text
     if text.isEmpty then return
 
     val stops = visualLine.caretStops
+    val styledSegments =
+      if syntaxHighlightingEnabled then com.serenity.ui.theme.ThemeManager.highlightLine(text, theme, language)
+      else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
 
     def stopXPx(localIndex: Int): Float =
       stops.find(_.column == visualLine.startColumn + localIndex).map(_.xPx).getOrElse(0.0f)
@@ -134,6 +142,7 @@ object CharacterRenderer:
     var runStartXPx = 0.0f
     var curFg       = theme.foreground
     var curBg       = theme.background
+    var curStyle    = TextStyle.normal
     val accText     = new StringBuilder()
 
     def flush(endLocalIndex: Int): Unit =
@@ -142,28 +151,38 @@ object CharacterRenderer:
         val widthPx = endXPx - runStartXPx
         surface.setForegroundColor(curFg)
         surface.setBackgroundColor(curBg)
-        surface.drawRunPx(runStartXPx, yPx, widthPx, lineHeightPx, accText.result())
+        withStyle(surface, curStyle) {
+          surface.drawRunPx(runStartXPx, yPx, widthPx, lineHeightPx, ascentPx, accText.result())
+        }
         accText.clear()
 
-    text.indices.foreach { i =>
-      val bufCol = visualLine.startColumn + i
-      val cell   = animations.getCell(bufCol, visualLine.bufferLine)
-      val fg     = cell.flatMap(_.currentForeground).getOrElse(theme.foreground)
-      val bg     = cell.flatMap(_.currentBackground).getOrElse(theme.background)
+    var localIndex = 0
+    styledSegments.foreach { segment =>
+      segment.content.foreach { char =>
+        val bufCol = visualLine.startColumn + localIndex
+        val cell   = animations.getCell(bufCol, visualLine.bufferLine)
+        val fg     = cell.flatMap(_.currentForeground).getOrElse(segment.foregroundColor)
+        val bg     = cell.flatMap(_.currentBackground).getOrElse(segment.backgroundColor)
+        val style  = segment.style
 
-      if accText.isEmpty then
-        runStartXPx = xOriginPx + stopXPx(i)
-        curFg       = fg
-        curBg       = bg
-        accText.append(text(i))
-      else if fg == curFg && bg == curBg then
-        accText.append(text(i))
-      else
-        flush(i)
-        runStartXPx = xOriginPx + stopXPx(i)
-        curFg       = fg
-        curBg       = bg
-        accText.append(text(i))
+        if accText.isEmpty then
+          runStartXPx = xOriginPx + stopXPx(localIndex)
+          curFg       = fg
+          curBg       = bg
+          curStyle    = style
+          accText.append(char)
+        else if fg == curFg && bg == curBg && style == curStyle then
+          accText.append(char)
+        else
+          flush(localIndex)
+          runStartXPx = xOriginPx + stopXPx(localIndex)
+          curFg       = fg
+          curBg       = bg
+          curStyle    = style
+          accText.append(char)
+
+        localIndex += 1
+      }
     }
     flush(text.length)
 
@@ -183,12 +202,19 @@ object CharacterRenderer:
         background = styledText.backgroundColor
       )
       val collectedRuns = collectPlainRuns(currentX, styledText.content, tabWidth = 4)
-      renderAnimatedRuns(
-        surface, currentX, y, collectedRuns.runs, segmentTheme, screenAnimations,
-        bufferLine, bufferStartColumn + (currentX - x)
-      )
+      withStyle(surface, styledText.style) {
+        renderAnimatedRuns(
+          surface, currentX, y, collectedRuns.runs, segmentTheme, screenAnimations,
+          bufferLine, bufferStartColumn + (currentX - x)
+        )
+      }
       collectedRuns.endX
     }
+
+  private def withStyle(surface: RenderSurface, style: TextStyle)(render: => Unit): Unit =
+    surface.enableStyle(style)
+    try render
+    finally surface.disableStyle(style)
 
   private def collectPlainRuns(
     startX: Int,

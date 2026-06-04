@@ -7,7 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.{Enter, InsertChar, TabKey}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{BufferId, FileWorkflowField, FileWorkflowMode, FileWorkflowState, Modal, SurfaceContent}
+import com.serenity.state.models.{BufferId, FileWorkflowField, FileWorkflowMode, FileWorkflowState, Modal, OpenFileWorkflowState, SaveAsFileWorkflowState, SurfaceContent}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -50,6 +50,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       stateManager.applyEvent(InsertChar('r')).unsafeRunSync()
 
       val workflow = currentWorkflow(stateManager)
+      workflow shouldBe a[OpenFileWorkflowState]
       workflow.path shouldBe tempRoot.resolve("pr").toString
       workflow.suggestions.map(_.value) should contain(projectDir.toString)
       workflow.selectedSuggestionIndex shouldBe 0
@@ -86,6 +87,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       stateManager.applyEvent(TabKey).unsafeRunSync()
 
       val refreshed = currentWorkflow(stateManager)
+      refreshed shouldBe a[SaveAsFileWorkflowState]
       refreshed.missingPathSegments shouldBe List("new", "nested")
       refreshed.confirmCreateDirectories shouldBe false
 

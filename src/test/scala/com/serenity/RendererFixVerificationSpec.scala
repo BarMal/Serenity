@@ -3,9 +3,9 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -32,6 +32,14 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.updateState { current =>
+      current.copy(
+        buffers = current.buffers.updated(
+          bufferId,
+          current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+        )
+      )
+    }.unsafeRunSync()
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val layout     = LayoutEngine.calculateLayout(finalState, ViewportSize(80, 24))
@@ -68,6 +76,14 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.updateState { current =>
+      current.copy(
+        buffers = current.buffers.updated(
+          bufferId,
+          current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+        )
+      )
+    }.unsafeRunSync()
 
     val currentState = stateManager.getCurrentState.unsafeRunSync()
     val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
@@ -110,6 +126,14 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.updateState { current =>
+      current.copy(
+        buffers = current.buffers.updated(
+          bufferId,
+          current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+        )
+      )
+    }.unsafeRunSync()
 
     val currentState = stateManager.getCurrentState.unsafeRunSync()
     val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
@@ -154,6 +178,14 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.updateState { current =>
+      current.copy(
+        buffers = current.buffers.updated(
+          bufferId,
+          current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+        )
+      )
+    }.unsafeRunSync()
 
     val currentState = stateManager.getCurrentState.unsafeRunSync()
     val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))

@@ -1,8 +1,8 @@
 package com.serenity
 
-import com.serenity.keystroke.events.{Direction, Enter, InsertChar, ModalNavigate, ReverseTabKey, TabKey}
+import com.serenity.keystroke.events.{DeleteWordBackward, Direction, Enter, InsertChar, ModalNavigate, ReverseTabKey, TabKey}
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState, CursorPosition, FileWorkflowField, FileWorkflowMode, FileWorkflowState, FileWorkflowSuggestion, FindState, Focus, Modal, ModalType, PaneId, ReplaceWorkflowField, ReplaceWorkflowState, SurfaceContent, SurfaceId, SurfacePlacement, SurfacePresentation, UiSurface}
+import com.serenity.state.models.{AppState, BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState, CursorPosition, FileWorkflowField, FileWorkflowMode, FileWorkflowState, FileWorkflowSuggestion, FindState, Focus, Modal, ModalType, OpenFileWorkflowState, PaneId, ReplaceWorkflowAction, ReplaceWorkflowField, ReplaceWorkflowScope, ReplaceWorkflowState, SaveAsFileWorkflowState, SurfaceContent, SurfaceId, SurfacePlacement, SurfacePresentation, UiSurface}
 import com.serenity.state.reducers.{AppEffect, ModalEventReducer}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -79,6 +79,23 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(1, 0)
   }
 
+  it should "delete the previous word in find mode" in {
+    val initialState = AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("find"),
+          SurfaceContent.ModalWorkflow(Modal.Find("alpha beta", Nil, 0)),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("find"))
+    )
+
+    val updatedState = ModalEventReducer.reduce(ModalType.Find, DeleteWordBackward, initialState).state
+
+    updatedState.modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("alpha ", Nil, 0)))
+  }
+
   it should "update filename and path fields independently in file workflow mode" in {
     val initialState = AppState.initial.copy(
       uiSurfaces = List(
@@ -98,6 +115,16 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val withFilenameResult = ModalEventReducer.reduce(ModalType.FileWorkflow, InsertChar('n'), initialState)
     withFilenameResult.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
     val withFilename = withFilenameResult.state
+    withFilename.modalSurface.flatMap {
+      _.content match
+        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow)
+        case _                                                          => None
+    } shouldBe defined
+    withFilename.modalSurface.flatMap {
+      _.content match
+        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow)
+        case _                                                          => None
+    }.get shouldBe a[SaveAsFileWorkflowState]
     withFilename.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.FileWorkflow(
@@ -146,6 +173,16 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val pathFocusedResult = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, initialState)
     pathFocusedResult.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
     val pathFocused = pathFocusedResult.state
+    pathFocused.modalSurface.flatMap {
+      _.content match
+        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow)
+        case _                                                          => None
+    } shouldBe defined
+    pathFocused.modalSurface.flatMap {
+      _.content match
+        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow)
+        case _                                                          => None
+    }.get shouldBe a[OpenFileWorkflowState]
     pathFocused.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.FileWorkflow(
@@ -167,8 +204,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "move through path suggestions and accept the selected suggestion in file workflow mode with tab" in {
-    val initialWorkflow = FileWorkflowState(
-      mode = FileWorkflowMode.Open,
+    val initialWorkflow = OpenFileWorkflowState(
       path = "/tmp",
       activeField = FileWorkflowField.Path,
       suggestions = List(
@@ -210,8 +246,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "queue file workflow submission when enter is pressed even if suggestions are present" in {
-    val initialWorkflow = FileWorkflowState(
-      mode = FileWorkflowMode.Open,
+    val initialWorkflow = OpenFileWorkflowState(
       path = "/tmp",
       activeField = FileWorkflowField.Path,
       suggestions = List(
@@ -236,8 +271,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "accept the selected filename suggestion with tab in open workflow mode" in {
-    val initialWorkflow = FileWorkflowState(
-      mode = FileWorkflowMode.Open,
+    val initialWorkflow = OpenFileWorkflowState(
       filename = "be",
       path = "/tmp",
       activeField = FileWorkflowField.Filename,
@@ -267,8 +301,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "queue file workflow submission when enter is pressed without suggestions" in {
-    val initialWorkflow = FileWorkflowState(
-      mode = FileWorkflowMode.SaveAs,
+    val initialWorkflow = SaveAsFileWorkflowState(
       filename = "notes.scala",
       path = "/tmp/project"
     )
@@ -289,7 +322,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     result.effects shouldBe List(AppEffect.SubmitFileWorkflow(SurfaceId("file-workflow")))
   }
 
-  it should "edit replace workflow fields, switch active field, and queue submission" in {
+  it should "edit replace workflow fields, switch action and scope, and queue submission" in {
     val initialWorkflow = ReplaceWorkflowState()
     val initialState = AppState.initial.copy(
       uiSurfaces = List(
@@ -333,8 +366,45 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val submitted = ModalEventReducer.reduce(ModalType.ReplaceWorkflow, Enter, withReplacement)
-    submitted.state shouldBe withReplacement
+    val withReplaceNext = ModalEventReducer.reduce(
+      ModalType.ReplaceWorkflow,
+      ModalNavigate(Direction.Left),
+      withReplacement
+    ).state
+    withReplaceNext.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(
+        Modal.ReplaceWorkflow(
+          initialWorkflow.copy(
+            findText = "n",
+            replacementText = "x",
+            activeField = ReplaceWorkflowField.ReplaceWith,
+            selectedAction = ReplaceWorkflowAction.ReplaceNext
+          )
+        )
+      )
+    )
+
+    val withSelectionScope = ModalEventReducer.reduce(
+      ModalType.ReplaceWorkflow,
+      ModalNavigate(Direction.Down),
+      withReplaceNext
+    ).state
+    withSelectionScope.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(
+        Modal.ReplaceWorkflow(
+          initialWorkflow.copy(
+            findText = "n",
+            replacementText = "x",
+            activeField = ReplaceWorkflowField.ReplaceWith,
+            selectedAction = ReplaceWorkflowAction.ReplaceNext,
+            selectedScope = ReplaceWorkflowScope.Selection
+          )
+        )
+      )
+    )
+
+    val submitted = ModalEventReducer.reduce(ModalType.ReplaceWorkflow, Enter, withSelectionScope)
+    submitted.state shouldBe withSelectionScope
     submitted.effects shouldBe List(AppEffect.SubmitReplaceWorkflow(SurfaceId("replace-workflow")))
   }
 

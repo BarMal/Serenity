@@ -33,11 +33,11 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
       backgroundSteps = List(bg)
     )))
 
-  "CharacterRenderer.renderProportionalLineWithAnimation" should
+  "CharacterRenderer.renderMeasuredLineWithAnimation" should
     "produce a single drawRunPx call when all chars share the theme color" in {
     val surface = new MockRenderSurface(200, 24)
-    CharacterRenderer.renderProportionalLineWithAnimation(
-      surface, xOriginPx = 0.0f, yPx = 0, lineHeightPx = 14, ascent = 10,
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      surface, xOriginPx = 0.0f, yPx = 0, lineHeightPx = 14, ascentPx = 10,
       makeVisualLine(), Theme.light, AnimationState.empty
     )
     val calls = surface.drawRunPxCalls
@@ -50,8 +50,8 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
   it should "split into three calls when the middle char has a different animation color" in {
     val surface = new MockRenderSurface(200, 24)
     val color   = Color(200, 100, 50)
-    CharacterRenderer.renderProportionalLineWithAnimation(
-      surface, xOriginPx = 0.0f, yPx = 0, lineHeightPx = 14, ascent = 10,
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      surface, xOriginPx = 0.0f, yPx = 0, lineHeightPx = 14, ascentPx = 10,
       makeVisualLine(), Theme.light, animWithMiddleChar(color, color)
     )
     val calls = surface.drawRunPxCalls
@@ -69,8 +69,8 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
 
   it should "shift all xPx values by xOriginPx" in {
     val surface = new MockRenderSurface(200, 24)
-    CharacterRenderer.renderProportionalLineWithAnimation(
-      surface, xOriginPx = 8.0f, yPx = 0, lineHeightPx = 14, ascent = 10,
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      surface, xOriginPx = 8.0f, yPx = 0, lineHeightPx = 14, ascentPx = 10,
       makeVisualLine(), Theme.light, AnimationState.empty
     )
     surface.drawRunPxCalls.head.xPx shouldBe 8.0f +- 0.001f
