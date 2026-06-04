@@ -1,7 +1,7 @@
 package com.serenity
 
-import cats.effect.IO
 import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, CommandRunner}
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{InsertChar, TabKey}
 import com.serenity.state.manager.StateManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -13,7 +13,7 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.withToggleUI
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
     StateManager.describeCommandRunnerEvent(TabKey, runner).shouldBe(
@@ -25,7 +25,7 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.withToggleUI
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .updateSearchTerm("toggle")
 
     StateManager.describeCommandRunnerEvent(InsertChar('t'), runner).shouldBe(
@@ -46,11 +46,11 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "describe custom commands clearly" in {
-    val command = Command("custom", "Run custom action", _ => IO.unit)
+  it should "describe typed command intents without special casing" in {
+    val command = Command.typed("custom", "Run custom action", CommandIntent.OpenFile)
 
     StateManager.describeCommandExecution(command).shouldBe(
-      "command=custom category=Edit intent=Custom"
+      "command=custom category=Edit intent=OpenFile"
     )
   }
 end CommandRunnerLoggingSpec

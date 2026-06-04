@@ -21,6 +21,8 @@ case class Selection(anchor: CursorPosition, focus: CursorPosition):
   def end: CursorPosition =
     if start == anchor then focus else anchor
 
+case class VerticalCursorState(cursor: CursorPosition, preferredColumn: Int, preferredXPx: Float)
+
 case class Buffer(
     id: BufferId,
     content: Rope,
@@ -33,10 +35,14 @@ case class Buffer(
     selection: Option[Selection] = None,
     preferredColumn: Option[Int] = None,
     preferredXPx: Option[Float] = None,
+    multiCursorVerticalStates: List[VerticalCursorState] = Nil,
     viewport: Viewport = Viewport.default,
     findState: Option[FindState] = None,
     selections: List[Selection] = Nil
 ):
+  def usesTextFont: Boolean =
+    language.isEmpty || language.contains(LanguageId.Markdown)
+
   def allSelections: List[Selection] =
     if selections.nonEmpty then selections else selection.toList
 

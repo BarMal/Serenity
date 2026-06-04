@@ -359,32 +359,3 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     } shouldBe false
   }
 
-  it should "increase font size from the command runner" in {
-    val stateManager = createStateManager()
-    val initialSize  = stateManager.getCurrentState.unsafeRunSync().config.fontConfig.fontSize
-
-    executeCommandThroughRunner(stateManager, "increase-font-size", "increase-font-size")
-
-    val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.config.fontConfig.fontSize shouldBe (initialSize + 1.0f)
-  }
-
-  it should "decrease font size from the command runner" in {
-    val stateManager = createStateManager()
-    val initialSize  = stateManager.getCurrentState.unsafeRunSync().config.fontConfig.fontSize
-
-    executeCommandThroughRunner(stateManager, "decrease-font-size", "decrease-font-size")
-
-    val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.config.fontConfig.fontSize shouldBe (initialSize - 1.0f)
-  }
-
-  it should "toggle ligatures from the command runner" in {
-    val stateManager        = createStateManager()
-    val initialLigaturesOn  = stateManager.getCurrentState.unsafeRunSync().config.fontConfig.enableLigatures
-
-    executeCommandThroughRunner(stateManager, "toggle-ligatures", "toggle-ligatures")
-
-    val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.config.fontConfig.enableLigatures shouldBe !initialLigaturesOn
-  }

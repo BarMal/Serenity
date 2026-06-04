@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.keystroke.events.{NewTab, NextTab, PreviousTab}
+import com.serenity.keystroke.events.NewTab
 import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

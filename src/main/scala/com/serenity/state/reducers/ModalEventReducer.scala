@@ -2,6 +2,7 @@ package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
+import com.serenity.text.TextEditing
 
 object ModalEventReducer:
 
@@ -36,6 +37,18 @@ object ModalEventReducer:
           case Some((surface, Modal.GotoLine(input))) if input.nonEmpty =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.GotoLine(input.dropRight(1))))
           case _ => ReducerResult.noEffects(currentState)
+      case ModalDeleteForward =>
+        ReducerResult.noEffects(currentState)
+      case ModalDeleteWordBackward =>
+        currentModal(currentState) match
+          case Some((surface, Modal.GotoLine(input))) =>
+            ReducerResult.noEffects(updateModal(currentState, surface, Modal.GotoLine(TextEditing.deleteWordBackward(input))))
+          case _ => ReducerResult.noEffects(currentState)
+      case ModalDeleteWordForward =>
+        currentModal(currentState) match
+          case Some((surface, Modal.GotoLine(input))) =>
+            ReducerResult.noEffects(updateModal(currentState, surface, Modal.GotoLine(TextEditing.deleteWordForward(input))))
+          case _ => ReducerResult.noEffects(currentState)
       case ModalSubmit =>
         currentModal(currentState) match
           case Some((_, Modal.GotoLine(input))) =>
@@ -61,6 +74,22 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.Find(query, results, idx))) if query.nonEmpty =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.Find(query.dropRight(1), results, idx)))
+          case _ => ReducerResult.noEffects(currentState)
+      case ModalDeleteForward =>
+        ReducerResult.noEffects(currentState)
+      case ModalDeleteWordBackward =>
+        currentModal(currentState) match
+          case Some((surface, Modal.Find(query, results, idx))) =>
+            ReducerResult.noEffects(
+              updateModal(currentState, surface, Modal.Find(TextEditing.deleteWordBackward(query), results, idx))
+            )
+          case _ => ReducerResult.noEffects(currentState)
+      case ModalDeleteWordForward =>
+        currentModal(currentState) match
+          case Some((surface, Modal.Find(query, results, idx))) =>
+            ReducerResult.noEffects(
+              updateModal(currentState, surface, Modal.Find(TextEditing.deleteWordForward(query), results, idx))
+            )
           case _ => ReducerResult.noEffects(currentState)
       case ModalSubmit =>
         currentModal(currentState) match
@@ -105,6 +134,33 @@ object ModalEventReducer:
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
               updateModal(currentState, surface, Modal.FileWorkflow(workflow.deleteFromActiveField)),
+              AppEffect.RefreshFileWorkflow(surface.id)
+            )
+          case _ =>
+            ReducerResult.noEffects(currentState)
+      case ModalDeleteForward =>
+        currentModal(currentState) match
+          case Some((surface, Modal.FileWorkflow(workflow))) =>
+            ReducerResult.withEffect(
+              updateModal(currentState, surface, Modal.FileWorkflow(workflow.deleteForwardFromActiveField)),
+              AppEffect.RefreshFileWorkflow(surface.id)
+            )
+          case _ =>
+            ReducerResult.noEffects(currentState)
+      case ModalDeleteWordBackward =>
+        currentModal(currentState) match
+          case Some((surface, Modal.FileWorkflow(workflow))) =>
+            ReducerResult.withEffect(
+              updateModal(currentState, surface, Modal.FileWorkflow(workflow.deleteWordBackwardFromActiveField)),
+              AppEffect.RefreshFileWorkflow(surface.id)
+            )
+          case _ =>
+            ReducerResult.noEffects(currentState)
+      case ModalDeleteWordForward =>
+        currentModal(currentState) match
+          case Some((surface, Modal.FileWorkflow(workflow))) =>
+            ReducerResult.withEffect(
+              updateModal(currentState, surface, Modal.FileWorkflow(workflow.deleteWordForwardFromActiveField)),
               AppEffect.RefreshFileWorkflow(surface.id)
             )
           case _ =>
@@ -198,6 +254,30 @@ object ModalEventReducer:
             )
           case _ =>
             ReducerResult.noEffects(currentState)
+      case ModalDeleteForward =>
+        currentModal(currentState) match
+          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+            ReducerResult.noEffects(
+              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.deleteForwardFromActiveField))
+            )
+          case _ =>
+            ReducerResult.noEffects(currentState)
+      case ModalDeleteWordBackward =>
+        currentModal(currentState) match
+          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+            ReducerResult.noEffects(
+              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.deleteWordBackwardFromActiveField))
+            )
+          case _ =>
+            ReducerResult.noEffects(currentState)
+      case ModalDeleteWordForward =>
+        currentModal(currentState) match
+          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+            ReducerResult.noEffects(
+              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.deleteWordForwardFromActiveField))
+            )
+          case _ =>
+            ReducerResult.noEffects(currentState)
       case ModalNextField =>
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
@@ -211,6 +291,38 @@ object ModalEventReducer:
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
               updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.switchField(-1)))
+            )
+          case _ =>
+            ReducerResult.noEffects(currentState)
+      case ModalNavigate(Direction.Left) =>
+        currentModal(currentState) match
+          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+            ReducerResult.noEffects(
+              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.moveAction(-1)))
+            )
+          case _ =>
+            ReducerResult.noEffects(currentState)
+      case ModalNavigate(Direction.Right) =>
+        currentModal(currentState) match
+          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+            ReducerResult.noEffects(
+              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.moveAction(1)))
+            )
+          case _ =>
+            ReducerResult.noEffects(currentState)
+      case ModalNavigate(Direction.Up) =>
+        currentModal(currentState) match
+          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+            ReducerResult.noEffects(
+              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.moveScope(-1)))
+            )
+          case _ =>
+            ReducerResult.noEffects(currentState)
+      case ModalNavigate(Direction.Down) =>
+        currentModal(currentState) match
+          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+            ReducerResult.noEffects(
+              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.moveScope(1)))
             )
           case _ =>
             ReducerResult.noEffects(currentState)

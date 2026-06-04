@@ -32,10 +32,10 @@ object FileEventReducer:
             ReducerResult.noEffects(state)
 
       case SaveAsFile =>
-        ReducerResult.withEffect(state, AppEffect.RequestSaveAs)
+        ReducerResult.withEffect(state, AppEffect.RequestSaveAs())
 
       case OpenFile | OpenFileBrowser =>
-        ReducerResult.withEffect(state, AppEffect.RequestOpenFile)
+        ReducerResult.withEffect(state, AppEffect.RequestOpenFile())
 
       case LoadFile(path) =>
         ReducerResult.withEffect(state, AppEffect.DirectLoadFile(path))

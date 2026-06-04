@@ -2,9 +2,9 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
-import com.serenity.keystroke.events.{Event, ResizeEvent, UnhandledEvent}
-import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import com.serenity.keystroke.events.{Event, UnhandledEvent}
+import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.layout.ViewportSize

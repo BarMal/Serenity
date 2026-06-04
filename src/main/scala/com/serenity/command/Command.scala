@@ -1,8 +1,7 @@
 package com.serenity.command
 
-import cats.effect.IO
 import com.serenity.config.{BackgroundStyle, CursorMode}
-import com.serenity.state.models.AppState
+import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.layout.PanelPosition
 
 enum AnimationMode:
@@ -51,6 +50,7 @@ enum CommandIntent:
   case IncreaseFontSize
   case DecreaseFontSize
   case SetFontSize(size: Float)
+  case SetUiFontSize(size: Float)
   case SetCodeFontFamily(family: String)
   case SetTextFontFamily(family: String)
   case SetLigatures(enabled: Boolean)
@@ -58,42 +58,35 @@ enum CommandIntent:
   case StartupNewSession
   case StartupRestoreSession
   case StartupOpenFile
-  case Custom(run: AppState => IO[Unit])
+  case SetBufferLanguage(language: Option[LanguageId])
 
 /** A command that can be executed in the command runner */
 case class Command private (
     name: String,
+    label: String,
     description: String,
     intent: CommandIntent,
     category: CommandCategory = CommandCategory.Edit
-):
-
-  /** Execute this command directly when it carries a custom effect. */
-  def execute(state: AppState): IO[Unit] =
-    intent match
-      case CommandIntent.Custom(run) => run(state)
-      case _                         => IO.unit
-
-  /** Compatibility accessor while callers move off raw command closures. */
-  def action: AppState => IO[Unit] =
-    execute
+)
 
 object Command:
-
-  def apply(
-    name: String,
-    description: String,
-    action: AppState => IO[Unit]
-  ): Command =
-    Command(name, description, CommandIntent.Custom(action), CommandCategory.Edit)
 
   def typed(
     name: String,
     description: String,
     intent: CommandIntent,
-    category: CommandCategory = CommandCategory.Edit
+    category: CommandCategory = CommandCategory.Edit,
+    label: String = ""
   ): Command =
-    Command(name, description, intent, category)
+    Command(name, Option(label).filter(_.nonEmpty).getOrElse(Command.defaultLabel(name)), description, intent, category)
+
+  private def defaultLabel(name: String): String =
+    name
+      .split("[-_ ]+")
+      .toList
+      .filter(_.nonEmpty)
+      .map(word => word.head.toUpper + word.drop(1))
+      .mkString(" ")
 
 case class CommandOption(
     label: String,
@@ -110,7 +103,7 @@ object CommandSurfaceItem:
   case class CommandItem(command: Command) extends CommandSurfaceItem:
     override def id: String                = command.name
     override def category: CommandCategory = command.category
-    override def searchText: String        = s"${command.name} ${command.description}"
+    override def searchText: String        = s"${command.name} ${command.label} ${command.description}"
 
   case class OptionItem(
       id: String,
@@ -188,11 +181,15 @@ class CommandSearcher(commands: List[Command]):
 
   /** Calculate relevance score for a command based on search term */
   private def calculateRelevance(command: Command, term: String): Double =
-    val nameLower = command.name.toLowerCase
-    val descLower = command.description.toLowerCase
+    val nameLower  = command.name.toLowerCase
+    val labelLower = command.label.toLowerCase
+    val descLower  = command.description.toLowerCase
 
     if nameLower == term then 100.0
+    else if labelLower == term then 95.0
     else if nameLower.startsWith(term) then 80.0
+    else if labelLower.startsWith(term) then 75.0
     else if nameLower.contains(term) then 60.0
+    else if labelLower.contains(term) then 55.0
     else if descLower.contains(term) then 40.0
     else 0.0

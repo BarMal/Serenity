@@ -3,6 +3,8 @@ package com.serenity.ui.renderer
 import java.awt.Color
 
 import com.serenity.config.AppConfig
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 import com.serenity.ui.theme.Theme
 
 object TextOverlayRenderer:
@@ -12,7 +14,9 @@ object TextOverlayRenderer:
     overlay: TextOverlayView,
     theme: Theme,
     config: AppConfig,
-    cursorVisible: Boolean
+    cursorVisible: Boolean,
+    font: java.awt.Font,
+    cellMetrics: CellMetrics
   ): Unit =
     val rect = overlay.rect
 
@@ -39,7 +43,7 @@ object TextOverlayRenderer:
 
     val animated = overlay.animationState.animations.nonEmpty
     drawBorder(surface, overlay, theme)
-    drawContent(surface, overlay, theme, cursorVisible, rowColors, animated)
+    drawContent(surface, overlay, theme, cursorVisible, rowColors, animated, font, cellMetrics)
 
     surface.setAlpha(1.0f)
     surface.setForegroundColor(theme.foreground)
@@ -60,7 +64,9 @@ object TextOverlayRenderer:
     theme: Theme,
     cursorVisible: Boolean,
     rowColors: Int => (Color, Color),
-    animated: Boolean
+    animated: Boolean,
+    font: java.awt.Font,
+    cellMetrics: CellMetrics
   ): Unit =
     val rect        = overlay.rect
     val maxLineSize = math.max(0, rect.width - 2)
@@ -82,7 +88,9 @@ object TextOverlayRenderer:
           cursorVisible,
           defaultForeground = animFg,
           defaultBackground = animBg,
-          isAnimating = animated
+          isAnimating = animated,
+          font = font,
+          cellMetrics = cellMetrics
         )
     }
 
@@ -96,42 +104,69 @@ object TextOverlayRenderer:
     cursorVisible: Boolean,
     defaultForeground: Color = null,
     defaultBackground: Color = null,
-    isAnimating: Boolean = false
+    isAnimating: Boolean = false,
+    font: java.awt.Font,
+    cellMetrics: CellMetrics
   ): Unit =
+    val rowView = scrolledRowView(row, width)
     val baseFg = if defaultForeground != null then defaultForeground else theme.panel.foreground
     val baseBg = if defaultBackground != null then defaultBackground else theme.panel.background
     val rowBackground =
-      row.backgroundColor.getOrElse(
-        if row.selected then theme.highlighted.background else baseBg
+      rowView.row.backgroundColor.getOrElse(
+        if rowView.row.selected then theme.highlighted.background else baseBg
       )
     val rowForeground =
-      row.foregroundColor.getOrElse(
-        if row.selected then theme.highlighted.foreground else baseFg
+      rowView.row.foregroundColor.getOrElse(
+        if rowView.row.selected then theme.highlighted.foreground else baseFg
       )
 
     surface.setForegroundColor(rowForeground)
     surface.setBackgroundColor(rowBackground)
     CharacterRenderer.renderStringPlain(surface, x, y, " " * width)
 
-    row.layout match
+    rowView.row.layout match
       case OverlayRowLayout.Plain =>
-        CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
+        CharacterRenderer.renderStringPlain(surface, x, y, rowView.row.plainText.take(width))
       case OverlayRowLayout.Distributed =>
-        renderDistributedRow(surface, x, y, width, row, theme, rowForeground, rowBackground, isAnimating)
+        renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, isAnimating)
       case OverlayRowLayout.Split =>
-        renderSplitRow(surface, x, y, width, row, theme, rowForeground, rowBackground, isAnimating)
+        renderSplitRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, isAnimating)
 
     if cursorVisible then
-      row.cursorColumn.foreach { cursorColumn =>
-        if cursorColumn >= 0 && cursorColumn < width then
+      rowView.row.cursorColumn.foreach { cursorColumn =>
+        if rowView.row.layout == OverlayRowLayout.Plain && shouldUseMeasuredCursor(font, surface) then
+          renderMeasuredCursor(surface, x, y, rowView.row, cursorColumn, theme, font, cellMetrics)
+        else if cursorColumn >= 0 && cursorColumn < width then
           val cursorX = x + cursorColumn
           val cursorChar =
-            if cursorColumn < row.plainText.length then row.plainText.charAt(cursorColumn)
+            if cursorColumn < rowView.row.plainText.length then rowView.row.plainText.charAt(cursorColumn)
             else ' '
           surface.setForegroundColor(theme.background)
           surface.setBackgroundColor(theme.cursor)
           CharacterRenderer.renderChar(surface, cursorX, y, cursorChar)
       }
+
+  private case class OverlayRowView(row: OverlayRow)
+
+  private def scrolledRowView(row: OverlayRow, width: Int): OverlayRowView =
+    val scrollOffset =
+      row.cursorColumn match
+        case Some(cursorColumn) if row.plainText.length > width =>
+          math.max(0, math.min(cursorColumn - width + 1, row.plainText.length - width))
+        case _ =>
+          0
+
+    if scrollOffset == 0 then OverlayRowView(row)
+    else
+      val visibleText = row.plainText.slice(scrollOffset, scrollOffset + width)
+      OverlayRowView(
+        row.copy(
+          plainText = visibleText,
+          cursorColumn = row.cursorColumn.map(_ - scrollOffset).filter(_ >= 0),
+          segments = Nil,
+          layout = OverlayRowLayout.Plain
+        )
+      )
 
   private def renderDistributedRow(
     surface: RenderSurface,
@@ -276,6 +311,27 @@ object TextOverlayRenderer:
       surface.setForegroundColor(segmentForeground)
       surface.setBackgroundColor(segmentBackground)
       CharacterRenderer.renderStringPlain(surface, x, y, segmentText.take(width))
+
+  private def shouldUseMeasuredCursor(font: java.awt.Font, surface: RenderSurface): Boolean =
+    FontLoader.ligaturesEnabled(font) || !FontLoader.isMonospacedFont(font) || surface.fontRenderContext.nonEmpty
+
+  private def renderMeasuredCursor(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    row: OverlayRow,
+    cursorColumn: Int,
+    theme: Theme,
+    font: java.awt.Font,
+    cellMetrics: CellMetrics
+  ): Unit =
+    val frc = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+    val caretXs = TextLayoutSnapshot.caretXsForText(row.plainText, font, frc)
+    val safeColumn = cursorColumn.max(0).min(caretXs.length - 1)
+    val xPx = cellMetrics.toPixelX(x) + math.round(caretXs(safeColumn))
+    val yPx = cellMetrics.toPixelY(y)
+    val caretWidthPx = math.max(2, math.round(cellMetrics.charWidth * 0.12f))
+    surface.fillPixelRect(xPx, yPx, caretWidthPx, cellMetrics.lineHeight, theme.cursor)
 
   private def applyGlassSheen(
     surface: RenderSurface,

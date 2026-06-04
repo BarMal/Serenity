@@ -1,11 +1,12 @@
 package com.serenity
 
 import com.serenity.command.{CommandRegistry, CommandRunner}
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.ThemePickerComponent
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, ReducerResult, ThemeEventReducer}
+import com.serenity.state.reducers.{AppEffect, ThemeEventReducer}
 import com.serenity.ui.layout.Layout
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -41,7 +42,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
 
   "ThemeEventReducer" should "emit OpenThemePicker for ListAvailableThemes" in {
     val result = ThemeEventReducer.reduce(ListAvailableThemes, AppState.empty)
-    result.effects shouldBe List(AppEffect.OpenThemePicker)
+    result.effects shouldBe List(AppEffect.OpenThemePicker())
     result.state shouldBe AppState.empty
   }
 
@@ -56,7 +57,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
         activeEditorPaneId = Some(PaneId(0))
       )
     )
-    val runner = CommandRunner.empty.activate(CommandRegistry.default)
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val (s1, runnerId) = base.allocateSurfaceId
     val runnerSurface = UiSurface(
       runnerId,

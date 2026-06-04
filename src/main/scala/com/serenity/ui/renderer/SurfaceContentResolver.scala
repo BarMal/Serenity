@@ -129,7 +129,7 @@ object SurfaceContentResolver:
       case Modal.GotoLine(input)   => List("goto-line", input)
       case Modal.Find(query, _, _) => List("find", query)
       case Modal.FileWorkflow(workflow) =>
-        List("file", workflow.filename, workflow.path)
+        List(workflow.operationLabel, workflow.filename, workflow.path)
       case Modal.ReplaceWorkflow(workflow) =>
         List("replace", workflow.findText, workflow.replacementText)
       case Modal.CloseWorkflow(workflow) =>
@@ -160,10 +160,28 @@ object SurfaceContentResolver:
       layout = OverlayRowLayout.Split
     )
 
+    val actionRow = OverlayRow(
+      plainText = "Replace Next Replace All",
+      segments = List(
+        OverlaySegment("Replace Next", selected = workflow.selectedAction == ReplaceWorkflowAction.ReplaceNext),
+        OverlaySegment("Replace All", selected = workflow.selectedAction == ReplaceWorkflowAction.ReplaceAll)
+      ),
+      layout = OverlayRowLayout.Distributed
+    )
+
+    val scopeRow = OverlayRow(
+      plainText = "Current Buffer Selection",
+      segments = List(
+        OverlaySegment("Current Buffer", selected = workflow.selectedScope == ReplaceWorkflowScope.CurrentBuffer),
+        OverlaySegment("Selection", selected = workflow.selectedScope == ReplaceWorkflowScope.Selection)
+      ),
+      layout = OverlayRowLayout.Distributed
+    )
+
     ResolvedSurfaceContent(
       title = titleFor(mode, "replace"),
       header = Some(OverlayRow("replace")),
-      rows = List(findRow, replaceRow),
+      rows = List(findRow, replaceRow, actionRow, scopeRow),
       footer = workflow.statusMessage.map(OverlayRow(_))
     )
 
@@ -195,10 +213,7 @@ object SurfaceContentResolver:
     rect: LayoutRect,
     mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
-    val operationLabel =
-      workflow.mode match
-        case FileWorkflowMode.Open   => "open"
-        case FileWorkflowMode.SaveAs => "save-as"
+    val operationLabel = workflow.operationLabel
 
     val filenameRow = OverlayRow(
       plainText = s"Filename ${workflow.filename}",
@@ -293,7 +308,7 @@ object SurfaceContentResolver:
             if runner.searchTerm.isEmpty then ""
             else s"[${categoryLabel(command.category)}] "
           OverlayRow(
-            plainText = s"$prefix${command.name} - ${command.description}",
+            plainText = s"$prefix${command.label} - ${command.description}",
             selected = index == adjustedSelectedIndex
           )
         case (option: CommandSurfaceItem.OptionItem, index) =>
@@ -334,23 +349,31 @@ object SurfaceContentResolver:
     val items = runner.submenuItems(groupId)
     val submenuState = runner.activeSubmenu.filter(_.groupId == groupId)
     val selectedIndex = submenuState.map(_.selectedIndex).getOrElse(0)
-    val rows = items.zipWithIndex.map {
+    val maxItemRows = math.max(1, rect.height - 4)
+    val offset =
+      if items.size <= maxItemRows then 0
+      else
+        val half = maxItemRows / 2
+        math.max(0, math.min(selectedIndex - half, items.size - maxItemRows))
+    val windowItems           = items.slice(offset, offset + maxItemRows)
+    val adjustedSelectedIndex = selectedIndex - offset
+    val rows = windowItems.zipWithIndex.map {
       case (option: CommandSurfaceItem.OptionItem, index) =>
-        optionRow(option, !previewOnly && index == selectedIndex)
+        optionRow(option, !previewOnly && index == adjustedSelectedIndex)
       case (item: CommandSurfaceItem.InputItem, index) =>
         val editingText =
           if !previewOnly then submenuState.filter(_.editingItemId.contains(item.id)).map(_.editingText)
           else None
-        inputRow(item, !previewOnly && index == selectedIndex, editingText)
+        inputRow(item, !previewOnly && index == adjustedSelectedIndex, editingText)
       case (CommandSurfaceItem.CommandItem(command), index) =>
         OverlayRow(
-          plainText = s"${command.name} - ${command.description}",
-          selected = !previewOnly && index == selectedIndex
+          plainText = s"${command.label} - ${command.description}",
+          selected = !previewOnly && index == adjustedSelectedIndex
         )
       case (group: CommandSurfaceItem.GroupItem, index) =>
         OverlayRow(
           plainText = group.label,
-          selected = !previewOnly && index == selectedIndex
+          selected = !previewOnly && index == adjustedSelectedIndex
         )
     }
     val footer =

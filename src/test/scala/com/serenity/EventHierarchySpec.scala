@@ -13,6 +13,10 @@ class EventHierarchySpec extends AnyFlatSpec with Matchers:
 
     DeleteBackward.isInstanceOf[EditorEvent] shouldBe true
     DeleteBackward.isInstanceOf[DeletionEvent] shouldBe true
+    DeleteWordBackward.isInstanceOf[EditorEvent] shouldBe true
+    DeleteWordBackward.isInstanceOf[DeletionEvent] shouldBe true
+    DeleteWordForward.isInstanceOf[EditorEvent] shouldBe true
+    DeleteWordForward.isInstanceOf[DeletionEvent] shouldBe true
 
     MoveLeft.isInstanceOf[EditorEvent] shouldBe true
     MoveLeft.isInstanceOf[NavigationEvent] shouldBe true

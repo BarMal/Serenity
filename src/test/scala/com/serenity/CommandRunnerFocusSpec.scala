@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{Enter, Escape, MoveDown, TabKey, ToggleCommandRunner}
+import com.serenity.keystroke.events.{Enter, Escape, InsertChar, MoveDown, TabKey, ToggleCommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{Focus, PaneId, SurfaceContent, SurfaceId}
@@ -62,7 +62,7 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     afterFirstEscape.focus shouldBe Focus.Surface(afterFirstEscape.commandRunnerSurface.get.id)
 
     stateManager.applyEvent(Enter).unsafeRunSync()
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('9')).unsafeRunSync()
     currentRunner(stateManager).activeSubmenu.flatMap(_.editingItemId) shouldBe Some("animation-duration")
 
     stateManager.applyEvent(Escape).unsafeRunSync()

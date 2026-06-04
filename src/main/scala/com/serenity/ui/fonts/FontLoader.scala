@@ -3,6 +3,7 @@ package com.serenity.ui.fonts
 import java.awt.{Font, GraphicsEnvironment, Toolkit}
 
 import cats.effect.IO
+import com.serenity.ui.layout.CellMetrics
 import org.typelevel.log4cats.Logger
 
 object FontLoader:
@@ -13,14 +14,15 @@ object FontLoader:
       codeFontFamily: String = BundledCodeFontFamily,
       textFontFamily: String = Font.SANS_SERIF,
       fontSize: Float = 12.0f,
+      uiFontSize: Float = 12.0f,
       enableLigatures: Boolean = true
   )
 
   lazy val availableMonospaceFamilies: List[String] =
-    (BundledCodeFontFamily :: availableSystemFontFamilies.filter(isMonospacedFamily)).distinct
+    (BundledCodeFontFamily :: availableSystemFontFamilies.filter(f => isMonospacedFamily(f) && canRenderBasicText(f))).distinct
 
   lazy val availableTextFamilies: List[String] =
-    ((Font.SANS_SERIF :: availableSystemFontFamilies).filterNot(isMonospacedFamily)).distinct
+    ((Font.SANS_SERIF :: availableSystemFontFamilies).filterNot(isMonospacedFamily).filter(canRenderBasicText)).distinct
 
   def isMonospacedFamily(family: String): Boolean =
     if family == BundledCodeFontFamily then true
@@ -41,9 +43,12 @@ object FontLoader:
   def loadTextFont(config: FontConfig)(using Logger[IO]): IO[Font] =
     IO.pure(previewTextFont(config))
 
+  def loadUiFont(config: FontConfig)(using Logger[IO]): IO[Font] =
+    IO.pure(previewUiFont(config))
+
   def previewCodeFont(config: FontConfig): Font =
     val base =
-      if config.codeFontFamily == BundledCodeFontFamily then defaultSystemMonospace(config.fontSize)
+      if config.codeFontFamily == BundledCodeFontFamily then bundledMonospace(config.fontSize).getOrElse(defaultSystemMonospace(config.fontSize))
       else Font(config.codeFontFamily, Font.PLAIN, config.fontSize.toInt).deriveFont(config.fontSize)
     applyFontFeatures(base, config.enableLigatures)
 
@@ -53,8 +58,17 @@ object FontLoader:
       config.enableLigatures
     )
 
+  def previewUiFont(config: FontConfig): Font =
+    val base =
+      if config.codeFontFamily == BundledCodeFontFamily then bundledMonospace(config.uiFontSize).getOrElse(defaultSystemMonospace(config.uiFontSize))
+      else Font(config.codeFontFamily, Font.PLAIN, config.uiFontSize.toInt).deriveFont(config.uiFontSize)
+    applyFontFeatures(base, config.enableLigatures)
+
   def isMonospacedFont(font: Font): Boolean =
     isMonospaced(font)
+
+  def ligaturesEnabled(font: Font): Boolean =
+    Option(font.getAttributes.get(java.awt.font.TextAttribute.LIGATURES)).contains(java.awt.font.TextAttribute.LIGATURES_ON)
 
   /** Compatibility shim while the runtime moves to separate code/text fonts. */
   def loadMonaspaceNeon(config: FontConfig)(using logger: Logger[IO]): IO[List[Font]] =
@@ -64,14 +78,7 @@ object FontLoader:
     GraphicsEnvironment.getLocalGraphicsEnvironment.getAvailableFontFamilyNames.toList.sorted
 
   private def loadBundledMonospace(size: Float)(using Logger[IO]): IO[Font] =
-    loadBundledFonts(size).map(_.headOption.getOrElse(defaultSystemMonospace(size)))
-
-  private def loadBundledFonts(size: Float)(using Logger[IO]): IO[List[Font]] =
-    for
-      regularFont <- loadFontFromResource("/fonts/MonaspaceNeon-Regular.otf", size)
-      boldFont    <- loadFontFromResource("/fonts/MonaspaceNeon-Bold.otf", size)
-      varFont     <- loadVariableFont(size)
-    yield List(varFont, regularFont, boldFont).flatten
+    IO.pure(bundledMonospace(size).getOrElse(defaultSystemMonospace(size)))
 
   private def loadFontFromResource(resourcePath: String, size: Float): IO[Option[Font]] =
     IO.blocking {
@@ -93,11 +100,34 @@ object FontLoader:
       }
     }
 
+  private def bundledMonospace(size: Float): Option[Font] =
+    bundledFontBase.map(_.deriveFont(size))
+
+  private lazy val bundledFontBase: Option[Font] =
+    loadBundledFontBase("/fonts/MonaspaceNeonVarVF[wght,wdth,slnt].ttf")
+      .orElse(loadBundledFontBase("/fonts/MonaspaceNeon-Regular.otf"))
+      .orElse(loadBundledFontBase("/fonts/MonaspaceNeon-Bold.otf"))
+
+  private def loadBundledFontBase(resourcePath: String): Option[Font] =
+    Option(getClass.getResourceAsStream(resourcePath)).flatMap { stream =>
+      try
+        Some(Font.createFont(Font.TRUETYPE_FONT, stream))
+      catch case _: Exception => None
+      finally stream.close()
+    }
+
   private def defaultSystemMonospace(size: Float): Font =
     availableMonospaceFamilies
       .find(_ != BundledCodeFontFamily)
       .map(family => Font(family, Font.PLAIN, size.toInt).deriveFont(size))
       .getOrElse(Font(Font.MONOSPACED, Font.PLAIN, size.toInt).deriveFont(size))
+
+  private def canRenderBasicText(family: String): Boolean =
+    try
+      val font = Font(family, Font.PLAIN, 12)
+      font.canDisplayUpTo("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789") == -1
+        && CellMetrics.fromFont(font.deriveFont(12.0f)).isValid
+    catch case _: Exception => false
 
   private def isMonospaced(font: Font): Boolean =
     try
@@ -115,5 +145,4 @@ object FontLoader:
   private def createLigatureAttributes(): java.util.Map[java.awt.font.TextAttribute, Any] =
     val attributes = new java.util.HashMap[java.awt.font.TextAttribute, Any]()
     attributes.put(java.awt.font.TextAttribute.LIGATURES, java.awt.font.TextAttribute.LIGATURES_ON)
-    attributes.put(java.awt.font.TextAttribute.KERNING, java.awt.font.TextAttribute.KERNING_ON)
     attributes

@@ -4,7 +4,7 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{LoadFile, Quit}
+import com.serenity.keystroke.events.{Enter, InsertChar, LoadFile, MoveDown, Quit, ToggleCommandRunner}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -23,6 +23,18 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
   private def makeStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("LspQueueSpec"))
     StateManager.apply(logger).unsafeRunSync()
+
+  private def executeCommandThroughRunner(stateManager: StateManager, searchTerm: String): Unit =
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+  private def setBufferLanguageThroughRunner(stateManager: StateManager, searchTerm: String, submenuIndex: Int): Unit =
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    (0 until submenuIndex).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
 
   "lspEffectStream" should "emit FileOpened when a Scala file is loaded" in {
     val sm       = makeStateManager()
@@ -105,6 +117,32 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
         .unsafeRunSync()
 
       effects shouldBe empty
+    finally
+      Files.deleteIfExists(tempFile)
+      sm.applyEvent(Quit).unsafeRunSync()
+  }
+
+  it should "rebind the LSP stream when the buffer language changes" in {
+    val sm       = makeStateManager()
+    val tempFile = Files.createTempFile("test-lsp-rebind", ".scala")
+    Files.writeString(tempFile, "object Baz")
+    try
+      sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
+
+      sm.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync() should have size 1
+
+      setBufferLanguageThroughRunner(sm, "lang-markdown", submenuIndex = 13)
+
+      val effects = sm.lspEffectStream
+        .take(2)
+        .timeout(2.seconds)
+        .compile
+        .toList
+        .unsafeRunSync()
+
+      effects should have size 2
+      effects.head shouldBe LspEffect.FileClosed(tempFile.toUri.toString, LanguageId.Scala)
+      effects(1) shouldBe LspEffect.FileOpened(tempFile.toUri.toString, LanguageId.Markdown, "object Baz")
     finally
       Files.deleteIfExists(tempFile)
       sm.applyEvent(Quit).unsafeRunSync()

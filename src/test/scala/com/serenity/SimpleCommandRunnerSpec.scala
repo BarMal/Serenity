@@ -1,23 +1,22 @@
 package com.serenity
 
-import cats.effect.IO
 import com.serenity.command.*
-import com.serenity.state.models.*
+import com.serenity.config.AppConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   "Command" should "have name and description" in {
-    val cmd = com.serenity.command.Command("test", "Test command", (_: AppState) => IO.unit)
+    val cmd = com.serenity.command.Command.typed("test", "Test command", CommandIntent.ToggleTheme)
     cmd.name shouldBe "test"
     cmd.description shouldBe "Test command"
   }
 
   "CommandSearcher" should "find commands by name" in {
     val commands = List(
-      com.serenity.command.Command("save", "Save file", (_: AppState) => IO.unit),
-      com.serenity.command.Command("open", "Open file", (_: AppState) => IO.unit)
+      com.serenity.command.Command.typed("save", "Save file", CommandIntent.SaveCurrentFile),
+      com.serenity.command.Command.typed("open", "Open file", CommandIntent.OpenFile)
     )
     val searcher = new CommandSearcher(commands)
 
@@ -35,7 +34,7 @@ class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "activate with commands" in {
     val registry = CommandRegistry.default
-    val runner   = CommandRunner.empty.activate(registry)
+    val runner   = CommandRunner.empty.activate(registry, AppConfig.default)
 
     runner.isActive shouldBe true
     runner.filteredCommands should not be empty
@@ -45,7 +44,7 @@ class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
 
-    val runner  = CommandRunner.empty.activate(registry)
+    val runner  = CommandRunner.empty.activate(registry, AppConfig.default)
     val updated = runner.updateSearchTerm("save")
 
     updated.searchTerm shouldBe "save"
@@ -54,9 +53,9 @@ class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "move selection correctly" in {
     val commands = List(
-      com.serenity.command.Command("cmd1", "Command 1", (_: AppState) => IO.unit),
-      com.serenity.command.Command("cmd2", "Command 2", (_: AppState) => IO.unit),
-      com.serenity.command.Command("cmd3", "Command 3", (_: AppState) => IO.unit)
+      com.serenity.command.Command.typed("cmd1", "Command 1", CommandIntent.ToggleTheme),
+      com.serenity.command.Command.typed("cmd2", "Command 2", CommandIntent.ToggleLineNumbers),
+      com.serenity.command.Command.typed("cmd3", "Command 3", CommandIntent.ToggleGutter)
     )
     val runner = CommandRunner.withCommands(commands)
 

@@ -7,3 +7,4 @@ import fs2.Stream
 trait InputHandler[F[_]]:
   def keyStrokeInfoStream: Stream[F, KeyStrokeInfo]
   def eventStream: Stream[F, Event]
+  def shutdown: F[Unit]

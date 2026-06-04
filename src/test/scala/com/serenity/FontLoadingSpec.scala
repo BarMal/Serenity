@@ -5,6 +5,7 @@ import java.awt.Font
 import cats.effect.IO
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
@@ -38,6 +39,14 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
     font.getSize2D shouldBe 12.0f
   }
 
+  it should "preview the bundled code font with the same family used at runtime" in {
+    val config      = FontConfig(codeFontFamily = FontLoader.BundledCodeFontFamily, fontSize = 12.0f)
+    val runtimeFont = FontLoader.loadCodeFont(config).unsafeRunSync()
+    val previewFont = FontLoader.previewCodeFont(config)
+
+    previewFont.getFontName shouldBe runtimeFont.getFontName
+  }
+
   it should "load the configured text font family" in {
     val config = FontConfig(textFontFamily = Font.SANS_SERIF, fontSize = 12.0f)
     val font   = FontLoader.loadTextFont(config).unsafeRunSync()
@@ -53,4 +62,46 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
 
     Option(font.getAttributes.get(java.awt.font.TextAttribute.LIGATURES)) shouldBe
       Some(java.awt.font.TextAttribute.LIGATURES_ON)
+  }
+
+  it should "only include monospaced families that can render basic ASCII" in {
+    val testString = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    FontLoader.availableMonospaceFamilies.foreach { family =>
+      if family != FontLoader.BundledCodeFontFamily then
+        val font = Font(family, Font.PLAIN, 12)
+        withClue(s"Font family '$family' cannot render basic ASCII: ") {
+          font.canDisplayUpTo(testString) shouldBe -1
+        }
+    }
+  }
+
+  it should "only include monospaced families that produce valid CellMetrics" in {
+    FontLoader.availableMonospaceFamilies.foreach { family =>
+      if family != FontLoader.BundledCodeFontFamily then
+        val font    = Font(family, Font.PLAIN, 12).deriveFont(12.0f)
+        val metrics = CellMetrics.fromFont(font)
+        withClue(s"Font family '$family' produces invalid metrics: ") {
+          metrics.isValid shouldBe true
+        }
+    }
+  }
+
+  it should "only include text families that can render basic ASCII" in {
+    val testString = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    FontLoader.availableTextFamilies.foreach { family =>
+      val font = Font(family, Font.PLAIN, 12)
+      withClue(s"Font family '$family' cannot render basic ASCII: ") {
+        font.canDisplayUpTo(testString) shouldBe -1
+      }
+    }
+  }
+
+  it should "only include text families that produce valid CellMetrics" in {
+    FontLoader.availableTextFamilies.foreach { family =>
+      val font    = Font(family, Font.PLAIN, 12).deriveFont(12.0f)
+      val metrics = CellMetrics.fromFont(font)
+      withClue(s"Font family '$family' produces invalid metrics: ") {
+        metrics.isValid shouldBe true
+      }
+    }
   }

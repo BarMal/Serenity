@@ -56,6 +56,13 @@ object ConfigManager:
                   config.withSyntaxHighlighting(false)
                 case _ =>
                   config // Unknown value, keep current config
+            case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
+              HotkeyAction.values
+                .find(action => s"hotkey.${action.configKey}" == hotkeyKey)
+                .flatMap(action =>
+                  HotkeyTrigger.parse(value.trim).map(trigger => config.withHotkeyConfig(config.hotkeyConfig.withBinding(action, trigger)))
+                )
+                .getOrElse(config)
             case _ =>
               config // Unknown key, ignore
         case _ =>
@@ -77,6 +84,10 @@ object ConfigManager:
        |
        |# Syntax highlighting: true, false
        |syntax.highlighting = ${config.syntaxHighlightingEnabled}
+       |
+       |# Hotkey overrides
+       |hotkey.command_palette = ${config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render}
+       |hotkey.file_search = ${config.hotkeyConfig.bindingsFor(HotkeyAction.FileSearch).head.render}
        |""".stripMargin
 
   /** Save configuration to file */
@@ -113,6 +124,10 @@ object ConfigManager:
                           |
                           |# Syntax highlighting: true, false
                           |syntax.highlighting = false
+                          |
+                          |# Hotkey overrides
+                          |hotkey.command_palette = ctrl+p
+                          |hotkey.file_search = ctrl+shift+f
                           |""".stripMargin
 
       Files.write(Paths.get(path), sampleConfig.getBytes)

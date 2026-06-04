@@ -2,9 +2,10 @@ package com.serenity.input
 
 import java.awt.event.*
 import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.atomic.AtomicBoolean
 
 import cats.effect.{Concurrent, Sync}
-import com.serenity.keystroke.events.{Event, MouseClick}
+import com.serenity.keystroke.events.{Event, MouseClick, MouseDrag, MousePress}
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.ui.layout.CellMetrics
 import fs2.Stream
@@ -21,25 +22,61 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
     metrics: () => CellMetrics
 ) extends InputHandler[F]:
 
-  private val infoQueue  = new LinkedBlockingQueue[KeyStrokeInfo]()
-  private val mouseQueue = new LinkedBlockingQueue[Event]()
+  private val infoQueue    = new LinkedBlockingQueue[Option[KeyStrokeInfo]]()
+  private val mouseQueue   = new LinkedBlockingQueue[Option[Event]]()
+  private val shutdownFlag = new AtomicBoolean(false)
+
+  private def enqueueInput(info: KeyStrokeInfo): Unit =
+    if !shutdownFlag.get() then infoQueue.put(Some(info))
+
+  private def enqueueMouse(event: Event): Unit =
+    if !shutdownFlag.get() then mouseQueue.put(Some(event))
 
   component.addKeyListener(new KeyAdapter:
     override def keyTyped(e: KeyEvent): Unit =
-      translateTyped(e).foreach(infoQueue.put)
+      translateTyped(e).foreach(enqueueInput)
     override def keyPressed(e: KeyEvent): Unit =
-      translatePressed(e).foreach(infoQueue.put))
+      translatePressed(e).foreach(enqueueInput))
 
   component.addMouseListener(
     new MouseAdapter:
+      override def mousePressed(e: MouseEvent): Unit =
+        val currentMetrics = metrics()
+        enqueueMouse(
+          MousePress(
+            currentMetrics.toCol(e.getX),
+            currentMetrics.toRow(e.getY),
+            pixelX = Some(e.getX),
+            pixelY = Some(e.getY),
+            shiftDown = e.isShiftDown
+          )
+        )
+
       override def mouseClicked(e: MouseEvent): Unit =
         val currentMetrics = metrics()
-        mouseQueue.put(
+        enqueueMouse(
           MouseClick(
             currentMetrics.toCol(e.getX),
             currentMetrics.toRow(e.getY),
             pixelX = Some(e.getX),
-            pixelY = Some(e.getY)
+            pixelY = Some(e.getY),
+            clickCount = e.getClickCount,
+            shiftDown = e.isShiftDown
+          )
+        )
+  )
+
+  component.addMouseMotionListener(
+    new MouseMotionAdapter:
+      override def mouseDragged(e: MouseEvent): Unit =
+        val currentMetrics = metrics()
+        enqueueMouse(
+          MouseDrag(
+            currentMetrics.toCol(e.getX),
+            currentMetrics.toRow(e.getY),
+            pixelX = Some(e.getX),
+            pixelY = Some(e.getY),
+            shiftDown = e.isShiftDown
           )
         )
   )
@@ -47,13 +84,20 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   def keyStrokeInfoStream: Stream[F, KeyStrokeInfo] =
     Stream
       .repeatEval(Sync[F].blocking(infoQueue.take()))
-      .filter(_ != null)
+      .unNoneTerminate
 
   private def mouseStream: Stream[F, Event] =
-    Stream.repeatEval(Sync[F].blocking(mouseQueue.take()))
+    Stream.repeatEval(Sync[F].blocking(mouseQueue.take())).unNoneTerminate
 
   def eventStream: Stream[F, Event] =
     inputRouter.eventStream(keyStrokeInfoStream).merge(mouseStream)
+
+  def shutdown: F[Unit] =
+    Sync[F].blocking {
+      if shutdownFlag.compareAndSet(false, true) then
+        infoQueue.offer(None)
+        mouseQueue.offer(None)
+    }
 
   private def mods(e: KeyEvent): Set[Modifier] =
     Set(

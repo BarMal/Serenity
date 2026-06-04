@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.{Direction, PanelInputEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, PinnedPanelComponent}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, ReducerResult}
+import com.serenity.state.reducers.{AppEffect, ExplorerEffect, FileEffect, ReducerResult}
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -131,7 +131,9 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
     val component = PinnedPanelComponent(PanelPosition.Left)
 
     component.processEvent(PanelInputEvent.Activate, state) shouldBe
-      ComponentResult.ReducerUpdate(ReducerResult.withEffect(state, AppEffect.DirectLoadFile(selectedFile)))
+      ComponentResult.ReducerUpdate(
+        ReducerResult.withEffect(state, AppEffect.File(FileEffect.DirectLoadFile(selectedFile)))
+      )
   }
 
   it should "emit a load-directory effect when activating a selected directory in the explorer panel" in {
@@ -157,7 +159,10 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
 
     component.processEvent(PanelInputEvent.Activate, state) match
       case ComponentResult.ReducerUpdate(result) =>
-        result shouldBe ReducerResult.withEffect(state, AppEffect.LoadPinnedDirectory(PanelPosition.Left, selectedDir))
+        result shouldBe ReducerResult.withEffect(
+          state,
+          AppEffect.Explorer(ExplorerEffect.LoadDirectory(PanelPosition.Left, selectedDir))
+        )
       case other =>
         fail(s"Expected ReducerUpdate, got $other")
   }

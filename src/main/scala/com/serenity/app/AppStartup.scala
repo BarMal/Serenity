@@ -1,5 +1,6 @@
 package com.serenity.app
 
+import com.serenity.config.AppConfig
 import cats.effect.IO
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -26,7 +27,8 @@ object AppStartup:
   def startPageState(
     stateManager: StateManager,
     theme: Theme,
-    initialViewportSize: ViewportSize
+    initialViewportSize: ViewportSize,
+    appConfig: AppConfig = AppConfig.default
   ): IO[AppState] =
     for
       sessionExists <- stateManager.sessionExists
@@ -35,6 +37,7 @@ object AppStartup:
       val startPageSurfaceId = SurfaceId("surface-0")
       AppState.empty.copy(
         focus = Focus.Surface(startPageSurfaceId),
+        config = appConfig,
         uiSurfaces = List(
           UiSurface(
             id = startPageSurfaceId,
@@ -51,10 +54,11 @@ object AppStartup:
   def initializeState(
     stateManager: StateManager,
     theme: Theme,
-    initialViewportSize: ViewportSize
+    initialViewportSize: ViewportSize,
+    appConfig: AppConfig = AppConfig.default
   ): IO[AppState] =
     for
-      startState <- startPageState(stateManager, theme, initialViewportSize)
+      startState <- startPageState(stateManager, theme, initialViewportSize, appConfig)
       _          <- stateManager.updateState(_ => startState)
       state      <- stateManager.getCurrentState
     yield state

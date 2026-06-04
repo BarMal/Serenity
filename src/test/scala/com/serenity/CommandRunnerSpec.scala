@@ -1,8 +1,7 @@
 package com.serenity
 
-import cats.effect.IO
-import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner, CommandSearcher, CommandSurfaceItem}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, CommandRunner, CommandSearcher, CommandSurfaceItem}
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.CommandRunnerComponent
@@ -34,6 +33,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     commands should not be empty
     commands.exists(_.name == "save") shouldBe true
     commands.exists(_.name == "open") shouldBe true
+    registry.findCommand("open").map(_.label) shouldBe Some("Open File")
   }
 
   it should "search commands by partial name" in {
@@ -52,12 +52,19 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     fileCommands.exists(_.description.toLowerCase.contains("file")) shouldBe true
   }
 
+  it should "search commands by human-facing label" in {
+    val registry       = CommandRegistry.default
+    val saveAsCommands = registry.searchCommands("save as")
+
+    saveAsCommands.map(_.name) should contain("save-as")
+  }
+
   "CommandSearcher" should "filter commands based on search term" in {
     val commands = List(
-      Command("save", "Save current file", _ => IO.unit),
-      Command("save-as", "Save file with new name", _ => IO.unit),
-      Command("open", "Open file", _ => IO.unit),
-      Command("quit", "Quit application", _ => IO.unit)
+      Command.typed("save", "Save current file", CommandIntent.SaveCurrentFile),
+      Command.typed("save-as", "Save file with new name", CommandIntent.SaveCurrentFileAs),
+      Command.typed("open", "Open file", CommandIntent.OpenFile),
+      Command.typed("quit", "Quit application", CommandIntent.QuitApp)
     )
 
     val searcher = new CommandSearcher(commands)
@@ -73,9 +80,9 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "return commands in relevance order" in {
     val commands = List(
-      Command("save", "Save current file", _ => IO.unit),
-      Command("save-as", "Save file with new name", _ => IO.unit),
-      Command("auto-save", "Enable auto save", _ => IO.unit)
+      Command.typed("save", "Save current file", CommandIntent.SaveCurrentFile),
+      Command.typed("save-as", "Save file with new name", CommandIntent.SaveCurrentFileAs),
+      Command.typed("auto-save", "Enable auto save", CommandIntent.ToggleLineNumbers)
     )
 
     val searcher = new CommandSearcher(commands)
@@ -86,7 +93,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "limit results to specified count" in {
-    val commands = (1 to 10).map(i => Command(s"cmd$i", s"Command $i", _ => IO.unit)).toList
+    val commands = (1 to 10).map(i => Command.typed(s"cmd$i", s"Command $i", CommandIntent.ToggleTheme)).toList
     val searcher = new CommandSearcher(commands)
 
     val results = searcher.search("cmd", maxResults = 5)
@@ -104,6 +111,15 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     settingsCommands.exists(_.name == "toggle-theme") shouldBe true
   }
 
+  it should "omit redundant top-level typography toggle commands" in {
+    val registry     = CommandRegistry.default
+    val commandNames = registry.getAllCommands.map(_.name)
+
+    commandNames should not contain "increase-font-size"
+    commandNames should not contain "decrease-font-size"
+    commandNames should not contain "toggle-ligatures"
+  }
+
   "CommandRunner state" should "initialize with empty search and no selection" in {
     val runner = CommandRunner.empty
 
@@ -116,7 +132,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
   it should "update search term and filter commands" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val runner            = CommandRunner.empty.activate(registry)
+    val runner            = CommandRunner.empty.activate(registry, AppConfig.default)
 
     val updated = runner.updateSearchTerm("save")
     updated.searchTerm shouldBe "save"
@@ -128,7 +144,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.File)
 
     runner.activeCategory shouldBe CommandCategory.File
@@ -147,7 +163,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
     val animationGroup = runner.visibleItems.collectFirst {
@@ -162,7 +178,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
     val appearanceGroup = runner.visibleItems.collectFirst {
@@ -177,29 +193,55 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
     val groupItems = runner.visibleItems.collect {
       case group: CommandSurfaceItem.GroupItem => group
     }
 
-    groupItems.map(_.id) shouldBe List("settings-animation", "settings-appearance", "settings-typography")
+    groupItems.map(_.id) shouldBe List("settings-animation", "settings-appearance", "settings-typography", "settings-language")
     groupItems.head.label shouldBe "Animation"
     groupItems.head.children.map(_.id) should contain allOf ("animation-mode", "animation-duration", "animation-steps")
     groupItems(1).label shouldBe "Appearance"
     groupItems(1).children.map(_.id) should contain allOf ("cursor-mode", "background-style", "blur-radius")
     groupItems(2).label shouldBe "Typography"
-    groupItems(2).children.map(_.id) should contain allOf ("code-font", "text-font", "ligatures", "font-size")
+    groupItems(2).children.map(_.id) should contain allOf ("code-font", "text-font", "ligatures", "buffer-font-size", "ui-font-size")
+    groupItems(3).label shouldBe "Language"
+    groupItems(3).children.map(_.id) should contain ("lang-plain-text")
+  }
+
+  it should "surface typography settings groups ahead of command matches when searching font-related terms" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("font")
+
+    runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-typography")
+    runner.visibleItems.exists {
+      case group: CommandSurfaceItem.GroupItem => group.id == "settings-typography"
+      case _                                   => false
+    } shouldBe true
+  }
+
+  it should "keep strong command matches ahead of settings groups during search" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("new")
+
+    runner.visibleItems.headOption.map(_.id) shouldBe Some("new")
   }
 
   it should "handle selection navigation" in {
     val commands = List(
-      Command("cmd1", "Command 1", _ => IO.unit),
-      Command("cmd2", "Command 2", _ => IO.unit),
-      Command("cmd3", "Command 3", _ => IO.unit)
+      Command.typed("cmd1", "Command 1", CommandIntent.ToggleTheme),
+      Command.typed("cmd2", "Command 2", CommandIntent.ToggleLineNumbers),
+      Command.typed("cmd3", "Command 3", CommandIntent.ToggleGutter)
     )
-    val runner = CommandRunner.withCommands(commands).activate(CommandRegistry(commands))
+    val runner = CommandRunner.withCommands(commands).activate(CommandRegistry(commands), AppConfig.default)
 
     val movedDown = runner.moveSelection(1)
     movedDown.selectedIndex shouldBe 1
@@ -223,7 +265,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "handle search input" in {
     val component = new CommandRunnerComponent()
-    val activeState = stateWithRunner(CommandRunner.empty.activate(CommandRegistry.default))
+    val activeState = stateWithRunner(CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default))
 
     val result = component.processEvent(InsertChar('s'), activeState)
 
@@ -233,7 +275,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "handle escape to close runner" in {
     val component = new CommandRunnerComponent()
-    val activeState = stateWithRunner(CommandRunner.empty.activate(CommandRegistry.default))
+    val activeState = stateWithRunner(CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default))
 
     val result = component.processEvent(com.serenity.keystroke.events.Escape, activeState)
 
@@ -242,34 +284,24 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle enter to execute selected command" in {
-    val executed = collection.mutable.Buffer[String]()
-    val testCommand = Command(
-      "test",
-      "Test command",
-      state =>
-        executed += "executed"
-        IO.unit
-    )
+    val testCommand = Command.typed("test", "Test command", CommandIntent.ToggleLineNumbers)
 
     val component         = new CommandRunnerComponent()
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner
       .withCommands(List(testCommand))
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .updateSearchTerm("test")
     val activeState = stateWithRunner(runner)
 
     val result = component.processEvent(Enter, activeState)
 
     result shouldNot be(ComponentResult.noChange)
-    // Command should be executed (tested separately for IO effects)
   }
 
-  "Command execution" should "handle IO effects properly" in {
-    var executed    = false
-    val testCommand = Command("test", "Test command", _ => IO { executed = true })
+  "Command model" should "carry typed intents without a custom execution escape hatch" in {
+    val testCommand = Command.typed("test", "Test command", CommandIntent.ToggleLineNumbers)
 
-    testCommand.action(AppState.empty).unsafeRunSync()
-    executed shouldBe true
+    testCommand.intent shouldBe CommandIntent.ToggleLineNumbers
   }

@@ -304,16 +304,16 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     cursorMode                <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
     windowChromeMode          <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(WindowChromeMode.Native)
   yield AppConfig(
-    characterAnimation,
-    syntaxHighlightingEnabled,
-    fontConfig,
-    minimumPaneWidth,
-    showLineNumbers,
-    showGutter,
-    blurRadius,
-    backgroundStyle,
-    cursorMode,
-    windowChromeMode
+    characterAnimation = characterAnimation,
+    syntaxHighlightingEnabled = syntaxHighlightingEnabled,
+    fontConfig = fontConfig,
+    minimumPaneWidth = minimumPaneWidth,
+    showLineNumbers = showLineNumbers,
+    showGutter = showGutter,
+    blurRadius = blurRadius,
+    backgroundStyle = backgroundStyle,
+    cursorMode = cursorMode,
+    windowChromeMode = windowChromeMode
   )
 }
 

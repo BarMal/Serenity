@@ -1,13 +1,10 @@
 package com.serenity
 
-import cats.effect.IO
-import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
-import com.serenity.keystroke.events.{InsertChar, TabKey, TextEntryEvent}
+import com.serenity.keystroke.events.{InsertChar, TabKey}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.components.ComponentResult
-import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.renderer.Renderer

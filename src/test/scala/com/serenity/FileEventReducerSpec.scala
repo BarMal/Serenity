@@ -3,6 +3,7 @@ package com.serenity
 import java.nio.file.Paths
 
 import com.serenity.command.CommandRunner
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{LoadFile, OpenFile, SaveAsFile, SaveFile}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -51,7 +52,7 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
       uiSurfaces = List(
         UiSurface(
           SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(CommandRunner.empty.activate(com.serenity.command.CommandRegistry.default)),
+          SurfaceContent.CommandPalette(CommandRunner.empty.activate(com.serenity.command.CommandRegistry.default, AppConfig.default)),
           SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
         )
       )
@@ -77,7 +78,7 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
     val result = FileEventReducer.reduce(OpenFile, AppState.empty)
 
     result.state shouldBe AppState.empty
-    result.effects shouldBe List(AppEffect.RequestOpenFile)
+    result.effects shouldBe List(AppEffect.RequestOpenFile())
   }
 
   it should "emit a request-save-as effect for SaveAsFile" in {
@@ -87,7 +88,7 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
     val result = FileEventReducer.reduce(SaveAsFile, state)
 
     result.state shouldBe state
-    result.effects shouldBe List(AppEffect.RequestSaveAs)
+    result.effects shouldBe List(AppEffect.RequestSaveAs())
   }
 
   it should "emit a direct-load-file effect for LoadFile with a path" in {

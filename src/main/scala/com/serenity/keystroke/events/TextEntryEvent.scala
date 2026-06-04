@@ -15,6 +15,8 @@ trait ModalRequestEvent extends TextEntryEvent
 case class InsertChar(char: Char) extends TextInputEvent
 case object DeleteBackward        extends DeletionEvent
 case object DeleteForward         extends DeletionEvent
+case object DeleteWordBackward    extends DeletionEvent
+case object DeleteWordForward     extends DeletionEvent
 case object MoveLeft              extends NavigationEvent
 case object MoveRight             extends NavigationEvent
 case object MoveUp                extends NavigationEvent

@@ -130,3 +130,21 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     leftColumn should be < 7
     leftColumn should be >= 0
   }
+
+  it should "redistribute collapsed caret stops inside ligature clusters so repeated punctuation remains navigable" in {
+    val buffer = Buffer
+      .fromString(BufferId(7), "...")
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2))
+    val font = FontLoader.loadCodeFont(
+      FontConfig(codeFontFamily = FontLoader.BundledCodeFontFamily, fontSize = 12.0f, enableLigatures = true)
+    ).unsafeRunSync()
+
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font)
+    val xs       = snapshot.visualLines.head.caretStops.map(_.xPx)
+
+    xs should have size 4
+    xs.sliding(2).forall {
+      case Vector(a, b) => b > a
+      case _            => true
+    } shouldBe true
+  }

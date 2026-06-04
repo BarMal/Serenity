@@ -2,9 +2,9 @@ package com.serenity
 
 import java.nio.file.Paths
 
-import cats.effect.IO
-import com.serenity.command.{Command, CommandCategory, CommandRegistry, CommandRunner}
-import com.serenity.state.models.{BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState, FileSearchResult, FileSearchState, FileWorkflowField, FileWorkflowMode, FileWorkflowState, FileWorkflowSuggestion, Modal, ReplaceWorkflowField, ReplaceWorkflowState, SurfaceContent, ThemePickerState}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, CommandRunner, CommandRunnerSubmenuState}
+import com.serenity.config.AppConfig
+import com.serenity.state.models.{BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState, FileSearchResult, FileSearchState, FileWorkflowField, FileWorkflowMode, FileWorkflowState, FileWorkflowSuggestion, Modal, ReplaceWorkflowAction, ReplaceWorkflowField, ReplaceWorkflowScope, ReplaceWorkflowState, SurfaceContent, ThemePickerState}
 import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, LayoutRect}
 import com.serenity.ui.renderer.{OverlayRowLayout, OverlayTone, SurfaceContentResolver, SurfaceRenderMode}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -75,15 +75,15 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
   it should "resolve command palettes into search chrome, highlighted rows, and scroll metadata once typing begins" in {
     val commands = List(
-      Command("open", "Open file", _ => IO.unit),
-      Command("close", "Close current file", _ => IO.unit),
-      Command("save", "Save current file", _ => IO.unit),
-      Command("format", "Format current file", _ => IO.unit),
-      Command("find", "Find text in file", _ => IO.unit),
-      Command("replace", "Find and replace text", _ => IO.unit)
+      Command.typed("open", "Open file", CommandIntent.OpenFile),
+      Command.typed("close", "Close current file", CommandIntent.CloseCurrentFile),
+      Command.typed("save", "Save current file", CommandIntent.SaveCurrentFile),
+      Command.typed("format", "Format current file", CommandIntent.FormatCurrentFile),
+      Command.typed("find", "Find text in file", CommandIntent.FindInCurrentFile),
+      Command.typed("replace", "Find and replace text", CommandIntent.ReplaceInCurrentFile)
     )
     val registry = CommandRegistry(commands)
-    val runner = CommandRunner.empty.activate(registry).updateSearchTerm("open")(using registry)
+    val runner = CommandRunner.empty.activate(registry, AppConfig.default).updateSearchTerm("open")(using registry)
 
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),
@@ -97,7 +97,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.rows.exists(_.selected) shouldBe true
     floating.rows.map(_.plainText).head should include("[Edit]")
     floating.rows should have size 1
-    floating.rows.exists(_.plainText.contains("open")) shouldBe true
+    floating.rows.exists(_.plainText.contains("Open")) shouldBe true
     floating.rows.exists(_.plainText.contains("Open file")) shouldBe true
     floating.footer.map(_.plainText) shouldBe Some("1/1")
   }
@@ -106,7 +106,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
       .withSelectedItem("settings-animation")
 
@@ -128,7 +128,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     optionRow.plainText should not include "["
     optionRow.segments should have size 2
     optionRow.segments.head.text shouldBe "Animation"
-    optionRow.segments(1).text shouldBe "Mode, timing, steps"
+    optionRow.segments(1).text shouldBe "Style, duration, steps"
     optionRow.segments(1).tone shouldBe OverlayTone.Normal
   }
 
@@ -142,6 +142,29 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.header shouldBe None
     resolved.rows shouldBe Nil
     resolved.footer shouldBe None
+  }
+
+  it should "scroll long submenus so the selected language stays visible" in {
+    val registry = CommandRegistry.default
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-language", selectedIndex = 10)))
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPaletteSubmenu(runner, "settings-language", previewOnly = false),
+      LayoutRect(0, 0, 40, 8),
+      SurfaceRenderMode.Floating
+    )
+
+    floating.rows.map(_.plainText) shouldBe List(
+      "JSON - Use JSON mode for the current buffer.",
+      "Java - Use Java mode for the current buffer.",
+      "JavaScript - Use JavaScript mode for the current buffer.",
+      "Kotlin - Use Kotlin mode for the current buffer."
+    )
+    floating.rows.count(_.selected) shouldBe 1
+    floating.rows.find(_.selected).map(_.plainText) shouldBe Some("JavaScript - Use JavaScript mode for the current buffer.")
+    floating.footer.map(_.plainText) shouldBe Some("11/23")
   }
 
   it should "resolve file workflow modals into field rows, suggestion rows, and a directory confirmation footer" in {
@@ -231,6 +254,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       findText = "needle",
       replacementText = "thread",
       activeField = ReplaceWorkflowField.ReplaceWith,
+      selectedAction = ReplaceWorkflowAction.ReplaceNext,
+      selectedScope = ReplaceWorkflowScope.Selection,
       statusMessage = Some("3 matches will be replaced")
     )
 
@@ -241,7 +266,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     floating.header.map(_.plainText) shouldBe Some("replace")
-    floating.rows should have size 2
+    floating.rows should have size 4
 
     val findRow = floating.rows.head
     findRow.layout shouldBe OverlayRowLayout.Split
@@ -254,6 +279,16 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     replaceRow.segments.head.text shouldBe "Replace"
     replaceRow.segments.last.text shouldBe "thread"
     replaceRow.selected shouldBe true
+
+    val actionRow = floating.rows(2)
+    actionRow.layout shouldBe OverlayRowLayout.Distributed
+    actionRow.segments.map(_.text) shouldBe List("Replace Next", "Replace All")
+    actionRow.segments.find(_.selected).map(_.text) shouldBe Some("Replace Next")
+
+    val scopeRow = floating.rows(3)
+    scopeRow.layout shouldBe OverlayRowLayout.Distributed
+    scopeRow.segments.map(_.text) shouldBe List("Current Buffer", "Selection")
+    scopeRow.segments.find(_.selected).map(_.text) shouldBe Some("Selection")
 
     floating.footer.map(_.plainText) shouldBe Some("3 matches will be replaced")
   }

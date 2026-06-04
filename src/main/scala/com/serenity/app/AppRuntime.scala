@@ -36,9 +36,9 @@ object AppRuntime:
       _ <- logger.info("Starting Serenity text editor")
       themeManager = com.serenity.ui.theme.config.AppThemeManager.create
       defaultTheme <- themeManager.initializeWithTheme()
-      stateManager <- makeStateManager.getOrElse(logger => StateManager.apply(logger))(logger)
-      initialState <- AppStartup.initializeState(stateManager, defaultTheme, initialViewportSize)
-      inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator)
+      stateManager <- makeStateManager.getOrElse(logger => StateManager.apply(logger, initialConfig = appConfig))(logger)
+      initialState <- AppStartup.initializeState(stateManager, defaultTheme, initialViewportSize, appConfig)
+      inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
       systemClipboard = SystemClipboard.awt[IO]
       inputHandler = makeInputHandler(inputRouter)
       _             <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
@@ -110,6 +110,8 @@ object AppRuntime:
         def renderLoop: Stream[IO, Unit] = idlePhase ++ fastPhase ++ renderLoop
 
         val quitSignal = stateManager.awaitQuit.attempt
+        val shutdownInputHandler =
+          stateManager.awaitQuit >> inputHandler.shutdown
         (
           inputHandler.eventStream
             .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
@@ -124,8 +126,9 @@ object AppRuntime:
             awaitExternalQuit >> stateManager.forceQuit(),
             stateManager.awaitQuit
           ).void,
+          shutdownInputHandler,
           LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger)
-        ).parMapN((_, _, _, _, _, _) => ())
+        ).parMapN((_, _, _, _, _, _, _) => ())
       _ <- logger.info("Serenity editor shutdown complete")
     yield ()
 

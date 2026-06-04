@@ -47,7 +47,8 @@ case class AppState(
     surfaceAnimations: Map[SurfaceId, SurfaceAnimationState] = Map.empty,
     clipboard: Option[String] = None, // not persisted between sessions
     recentFiles: List[java.nio.file.Path] = Nil,
-    diagnostics: Map[String, List[Diagnostic]] = Map.empty
+    diagnostics: Map[String, List[Diagnostic]] = Map.empty,
+    focusHistory: List[Focus] = List.empty
 ):
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled
@@ -131,6 +132,24 @@ case class AppState(
   def allocateSurfaceId: (AppState, SurfaceId) =
     val surfaceId = SurfaceId(s"surface-$nextSurfaceId")
     (copy(nextSurfaceId = nextSurfaceId + 1), surfaceId)
+
+  def pushFocus(newFocus: Focus): AppState =
+    val deduplicated = focusHistory.filterNot(_ == focus)
+    copy(focus = newFocus, focusHistory = focus :: deduplicated)
+
+  def popFocus: AppState =
+    focusHistory match
+      case head :: tail =>
+        head match
+          case Focus.Surface(sid) if surfaceById(sid).isEmpty =>
+            copy(focusHistory = tail).popFocus
+          case validFocus =>
+            copy(focus = validFocus, focusHistory = tail)
+      case Nil =>
+        val fallback = layout.activeEditorPaneId
+          .map(Focus.EditorPane(_))
+          .getOrElse(Focus.EditorPane(PaneId(0)))
+        copy(focus = fallback)
 
   /** Get the currently focused buffer ID, if any */
   def focusedBufferId: Option[BufferId] =

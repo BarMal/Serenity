@@ -74,6 +74,14 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       state    <- sm.getCurrentState
       paneId = state.layout.editorPanes.keys.head
       _ <- sm.setBufferForPane(paneId, bufferId)
+      _ <- sm.updateState { current =>
+        current.copy(
+          buffers = current.buffers.updated(
+            bufferId,
+            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          )
+        )
+      }
       _ <- sm.setCursorPosition(paneId, 0, 150)
       _ <- sm.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
       

@@ -4,8 +4,6 @@ import java.awt.Font
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
-import com.serenity.lsp.config.LanguageId
-import com.serenity.state.models.AppState
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.CellMetrics
@@ -14,8 +12,10 @@ import org.typelevel.log4cats.Logger
 final class RuntimeDisplayState private (
     codeFontRef: AtomicReference[Font],
     textFontRef: AtomicReference[Font],
+    uiFontRef: AtomicReference[Font],
     codeMetricsRef: AtomicReference[CellMetrics],
-    textMetricsRef: AtomicReference[CellMetrics]
+    textMetricsRef: AtomicReference[CellMetrics],
+    uiMetricsRef: AtomicReference[CellMetrics]
 ):
 
   def codeFont: Font =
@@ -24,56 +24,51 @@ final class RuntimeDisplayState private (
   def textFont: Font =
     textFontRef.get()
 
+  def uiFont: Font =
+    uiFontRef.get()
+
   def codeMetrics: CellMetrics =
     codeMetricsRef.get()
 
   def textMetrics: CellMetrics =
     textMetricsRef.get()
 
-  def fontFor(state: AppState): Font =
-    if usesChromeTypography(state) || usesCodeTypography(state) then codeFont else textFont
+  def uiMetrics: CellMetrics =
+    uiMetricsRef.get()
 
-  def metricsFor(state: AppState): CellMetrics =
-    if usesChromeTypography(state) || usesCodeTypography(state) then codeMetrics else textMetrics
+  def primaryMetrics: CellMetrics =
+    codeMetricsRef.get()
 
   def update(config: FontConfig)(using logger: Logger[IO]): IO[Unit] =
     RuntimeDisplayState
       .load(config)
-      .map { snapshot =>
-        codeFontRef.set(snapshot.codeFont)
-        textFontRef.set(snapshot.textFont)
-        codeMetricsRef.set(snapshot.codeMetrics)
-        textMetricsRef.set(snapshot.textMetrics)
+      .flatMap { snapshot =>
+        if snapshot.codeMetrics.isValid && snapshot.textMetrics.isValid && snapshot.uiMetrics.isValid then
+          IO {
+            codeFontRef.set(snapshot.codeFont)
+            textFontRef.set(snapshot.textFont)
+            uiFontRef.set(snapshot.uiFont)
+            codeMetricsRef.set(snapshot.codeMetrics)
+            textMetricsRef.set(snapshot.textMetrics)
+            uiMetricsRef.set(snapshot.uiMetrics)
+          }
+        else
+          logger.warn(
+            s"Rejecting font config: invalid metrics " +
+              s"(code charWidth=${snapshot.codeMetrics.charWidth}, text charWidth=${snapshot.textMetrics.charWidth}, ui charWidth=${snapshot.uiMetrics.charWidth}). " +
+              s"Keeping previous fonts."
+          )
       }
-
-  private def usesCodeTypography(state: AppState): Boolean =
-    state.layout.activeEditorPaneId
-      .flatMap(state.layout.editorPanes.get)
-      .flatMap(_.bufferId)
-      .orElse(state.focusedBufferId)
-      .flatMap(state.buffers.get)
-      .flatMap(_.language)
-      .exists(RuntimeDisplayState.usesCodeTypography)
-
-  private def usesChromeTypography(state: AppState): Boolean =
-    state.activeSurface.exists { surface =>
-      surface.content match
-        case com.serenity.state.models.SurfaceContent.StartPage(_)                   => true
-        case com.serenity.state.models.SurfaceContent.CommandPalette(_)              => true
-        case com.serenity.state.models.SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
-        case com.serenity.state.models.SurfaceContent.ThemePicker(_)                 => true
-        case com.serenity.state.models.SurfaceContent.FileSearch(_)                  => true
-        case com.serenity.state.models.SurfaceContent.ModalWorkflow(_)               => true
-        case _                                                                       => false
-    }
 
 object RuntimeDisplayState:
 
   private case class Snapshot(
       codeFont: Font,
       textFont: Font,
+      uiFont: Font,
       codeMetrics: CellMetrics,
-      textMetrics: CellMetrics
+      textMetrics: CellMetrics,
+      uiMetrics: CellMetrics
   )
 
   def create(config: FontConfig)(using logger: Logger[IO]): IO[RuntimeDisplayState] =
@@ -81,8 +76,10 @@ object RuntimeDisplayState:
       new RuntimeDisplayState(
         new AtomicReference(snapshot.codeFont),
         new AtomicReference(snapshot.textFont),
+        new AtomicReference(snapshot.uiFont),
         new AtomicReference(snapshot.codeMetrics),
-        new AtomicReference(snapshot.textMetrics)
+        new AtomicReference(snapshot.textMetrics),
+        new AtomicReference(snapshot.uiMetrics)
       )
     }
 
@@ -90,12 +87,12 @@ object RuntimeDisplayState:
     for
       codeFont <- FontLoader.loadCodeFont(config)
       textFont <- FontLoader.loadTextFont(config)
+      uiFont   <- FontLoader.loadUiFont(config)
     yield Snapshot(
       codeFont = codeFont,
       textFont = textFont,
+      uiFont = uiFont,
       codeMetrics = CellMetrics.fromFont(codeFont),
-      textMetrics = CellMetrics.fromFont(textFont)
+      textMetrics = CellMetrics.fromFont(textFont),
+      uiMetrics = CellMetrics.fromFont(uiFont)
     )
-
-  private def usesCodeTypography(languageId: LanguageId): Boolean =
-    languageId != LanguageId.Markdown

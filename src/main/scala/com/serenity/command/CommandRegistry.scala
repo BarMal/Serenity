@@ -80,33 +80,17 @@ object CommandRegistry:
   private def toggleUICommands: List[Command] = List(
     Command.typed(
       "toggle-line-numbers",
-      "Toggle line numbers display on/off",
+      "Show or hide line numbers.",
       CommandIntent.ToggleLineNumbers,
-      CommandCategory.View
+      CommandCategory.View,
+      label = "Toggle Line Numbers"
     ),
     Command.typed(
       "toggle-gutter",
-      "Toggle status gutter display on/off",
+      "Show or hide the status gutter.",
       CommandIntent.ToggleGutter,
-      CommandCategory.View
-    ),
-    Command.typed(
-      "increase-font-size",
-      "Increase editor font size",
-      CommandIntent.IncreaseFontSize,
-      CommandCategory.Settings
-    ),
-    Command.typed(
-      "decrease-font-size",
-      "Decrease editor font size",
-      CommandIntent.DecreaseFontSize,
-      CommandCategory.Settings
-    ),
-    Command.typed(
-      "toggle-ligatures",
-      "Toggle editor ligatures on/off",
-      CommandIntent.ToggleLigatures,
-      CommandCategory.Settings
+      CommandCategory.View,
+      label = "Toggle Gutter"
     )
   )
 
@@ -114,170 +98,177 @@ object CommandRegistry:
   private def defaultCommands: List[Command] = List(
     Command.typed(
       "save",
-      "Save current file",
+      "Save the current file.",
       CommandIntent.SaveCurrentFile,
-      CommandCategory.File
+      CommandCategory.File,
+      label = "Save"
     ),
     Command.typed(
       "save-as",
-      "Save file with new name",
+      "Save the current file under a new name.",
       CommandIntent.SaveCurrentFileAs,
-      CommandCategory.File
+      CommandCategory.File,
+      label = "Save As"
     ),
     Command.typed(
       "open",
-      "Open file",
+      "Open a file.",
       CommandIntent.OpenFile,
-      CommandCategory.File
+      CommandCategory.File,
+      label = "Open File"
     ),
     Command.typed(
       "quit",
-      "Quit application",
+      "Quit the application.",
       CommandIntent.QuitApp,
-      CommandCategory.File
+      CommandCategory.File,
+      label = "Quit"
     ),
     Command.typed(
       "new",
-      "Create new file",
+      "Create a new file.",
       CommandIntent.NewFile,
-      CommandCategory.File
+      CommandCategory.File,
+      label = "New File"
     ),
     Command.typed(
       "close",
-      "Close current file",
+      "Close the current file.",
       CommandIntent.CloseCurrentFile,
-      CommandCategory.File
+      CommandCategory.File,
+      label = "Close File"
     ),
     Command.typed(
       "close-all",
-      "Close all files",
+      "Close all files.",
       CommandIntent.CloseAll,
-      CommandCategory.File
+      CommandCategory.File,
+      label = "Close All Files"
     ),
     Command.typed(
       "close-others",
-      "Close all files except the current one",
+      "Close every file except the current one.",
       CommandIntent.CloseOthers,
-      CommandCategory.File
+      CommandCategory.File,
+      label = "Close Other Files"
     ),
     Command.typed(
       "find",
-      "Find text in file",
+      "Find text in the current file.",
       CommandIntent.FindInCurrentFile,
-      CommandCategory.Edit
+      CommandCategory.Edit,
+      label = "Find"
     ),
     Command.typed(
       "replace",
-      "Find and replace text",
+      "Find and replace text in the current file.",
       CommandIntent.ReplaceInCurrentFile,
-      CommandCategory.Edit
+      CommandCategory.Edit,
+      label = "Replace"
     ),
     Command.typed(
       "goto-line",
-      "Go to specific line number",
+      "Go to a specific line number.",
       CommandIntent.OpenGotoLine,
-      CommandCategory.Edit
+      CommandCategory.Edit,
+      label = "Go to Line"
     ),
     Command.typed(
       "toggle-theme",
-      "Switch between light and dark theme",
+      "Switch between the light and dark themes.",
       CommandIntent.ToggleTheme,
-      CommandCategory.Settings
+      CommandCategory.Settings,
+      label = "Toggle Theme"
     ),
     Command.typed(
       "reload-theme",
-      "Reload theme configuration",
+      "Reload the current theme configuration.",
       CommandIntent.ReloadTheme,
-      CommandCategory.Settings
+      CommandCategory.Settings,
+      label = "Reload Theme"
     ),
     Command.typed(
       "theme-chooser",
-      "Choose theme with live preview",
+      "Choose a theme with live preview.",
       CommandIntent.OpenThemeChooser,
-      CommandCategory.Settings
+      CommandCategory.Settings,
+      label = "Open Theme Chooser"
     ),
     Command.typed(
       "reload-themes",
-      "Reload available themes from disk",
+      "Reload available themes from disk.",
       CommandIntent.ReloadThemes,
-      CommandCategory.Settings
-    ),
-    Command.typed(
-      "increase-font-size",
-      "Increase editor font size",
-      CommandIntent.IncreaseFontSize,
-      CommandCategory.Settings
-    ),
-    Command.typed(
-      "decrease-font-size",
-      "Decrease editor font size",
-      CommandIntent.DecreaseFontSize,
-      CommandCategory.Settings
-    ),
-    Command.typed(
-      "toggle-ligatures",
-      "Toggle editor ligatures on/off",
-      CommandIntent.ToggleLigatures,
-      CommandCategory.Settings
+      CommandCategory.Settings,
+      label = "Reload Theme List"
     ),
     Command.typed(
       "format",
-      "Format current file",
+      "Format the current file.",
       CommandIntent.FormatCurrentFile,
-      CommandCategory.Edit
+      CommandCategory.Edit,
+      label = "Format File"
     ),
     Command.typed(
       "pin-explorer",
-      "Pin explorer panel on the left",
+      "Pin the explorer panel on the left.",
       CommandIntent.PinExplorerPanel,
-      CommandCategory.View
+      CommandCategory.View,
+      label = "Pin Explorer Panel"
     ),
     Command.typed(
       "pin-outline",
-      "Pin outline panel on the right",
+      "Pin the outline panel on the right.",
       CommandIntent.PinOutlinePanel,
-      CommandCategory.View
+      CommandCategory.View,
+      label = "Pin Outline Panel"
     ),
     Command.typed(
       "pin-diagnostics",
-      "Pin diagnostics panel on the bottom",
+      "Pin the diagnostics panel at the bottom.",
       CommandIntent.PinDiagnosticsPanel,
-      CommandCategory.View
+      CommandCategory.View,
+      label = "Pin Diagnostics Panel"
     ),
     Command.typed(
       "focus-left-panel",
-      "Focus the left pinned panel",
+      "Focus the left pinned panel.",
       CommandIntent.FocusPanel(PanelPosition.Left),
-      CommandCategory.View
+      CommandCategory.View,
+      label = "Focus Left Panel"
     ),
     Command.typed(
       "focus-right-panel",
-      "Focus the right pinned panel",
+      "Focus the right pinned panel.",
       CommandIntent.FocusPanel(PanelPosition.Right),
-      CommandCategory.View
+      CommandCategory.View,
+      label = "Focus Right Panel"
     ),
     Command.typed(
       "focus-bottom-panel",
-      "Focus the bottom pinned panel",
+      "Focus the bottom pinned panel.",
       CommandIntent.FocusPanel(PanelPosition.Bottom),
-      CommandCategory.View
+      CommandCategory.View,
+      label = "Focus Bottom Panel"
     ),
     Command.typed(
       "unpin-left-panel",
-      "Unpin the left panel",
+      "Unpin the left panel.",
       CommandIntent.UnpinPanel(PanelPosition.Left),
-      CommandCategory.View
+      CommandCategory.View,
+      label = "Unpin Left Panel"
     ),
     Command.typed(
       "unpin-right-panel",
-      "Unpin the right panel",
+      "Unpin the right panel.",
       CommandIntent.UnpinPanel(PanelPosition.Right),
-      CommandCategory.View
+      CommandCategory.View,
+      label = "Unpin Right Panel"
     ),
     Command.typed(
       "unpin-bottom-panel",
-      "Unpin the bottom panel",
+      "Unpin the bottom panel.",
       CommandIntent.UnpinPanel(PanelPosition.Bottom),
-      CommandCategory.View
+      CommandCategory.View,
+      label = "Unpin Bottom Panel"
     )
   )

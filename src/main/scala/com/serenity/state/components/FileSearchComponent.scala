@@ -2,6 +2,7 @@ package com.serenity.state.components
 
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
+import com.serenity.text.TextEditing
 
 class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
 
@@ -20,6 +21,12 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
               case ModalDeleteBackward =>
                 val newQuery = if searchState.query.isEmpty then "" else searchState.query.dropRight(1)
                 ComponentResult.updateState(_ => updateQuery(state, surface, newQuery))
+              case ModalDeleteForward =>
+                ComponentResult.updateState(_ => updateQuery(state, surface, searchState.query))
+              case ModalDeleteWordBackward =>
+                ComponentResult.updateState(_ => updateQuery(state, surface, TextEditing.deleteWordBackward(searchState.query)))
+              case ModalDeleteWordForward =>
+                ComponentResult.updateState(_ => updateQuery(state, surface, TextEditing.deleteWordForward(searchState.query)))
               case ModalNavigate(Direction.Up) =>
                 ComponentResult.updateState(_ => updateSelection(state, surface, searchState, -1))
               case ModalNavigate(Direction.Down) =>

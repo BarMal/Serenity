@@ -1,7 +1,8 @@
 package com.serenity
 
 import com.serenity.rope.Balance
-import com.serenity.command.{Command, CommandRegistry, CommandRunner}
+import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner}
+import com.serenity.config.AppConfig
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.OverlayViewModel
@@ -87,12 +88,12 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
 
   it should "derive an interactive command palette view with cursor and selected row metadata" in {
     val commands = List(
-      Command("open", "Open file", _ => cats.effect.IO.unit),
-      Command("close", "Close current file", _ => cats.effect.IO.unit)
+      Command.typed("open", "Open file", CommandIntent.OpenFile),
+      Command.typed("close", "Close current file", CommandIntent.CloseCurrentFile)
     )
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .updateSearchTerm("op")(using registry)
     val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
       cursors = List(CursorPosition(1, 2))
@@ -122,7 +123,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlay.header.map(_.plainText) shouldBe Some("search: op")
     overlay.header.flatMap(_.cursorColumn) shouldBe Some("search: op".length)
     overlay.rows.exists(_.selected) shouldBe true
-    overlay.rows.map(_.plainText).head should include("open")
+    overlay.rows.map(_.plainText).head should include("Open")
     overlay.rows.map(_.plainText).head should include("Open file")
   }
 
@@ -156,11 +157,11 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
 
   it should "prefer the focused modal surface over earlier below-cursor floating surfaces" in {
     val commands = List(
-      Command("open", "Open file", _ => cats.effect.IO.unit)
+      Command.typed("open", "Open file", CommandIntent.OpenFile)
     )
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .updateSearchTerm("op")(using registry)
     val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
       cursors = List(CursorPosition(1, 2))
@@ -209,7 +210,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(com.serenity.command.CommandCategory.Settings)
     val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
       cursors = List(CursorPosition(1, 2))
@@ -250,7 +251,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry)
+      .activate(registry, AppConfig.default)
       .withActiveCategory(com.serenity.command.CommandCategory.Settings)
     val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
       cursors = List(CursorPosition(2, 2))

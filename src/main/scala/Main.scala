@@ -1,7 +1,7 @@
 import cats.effect.*
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.{AppRuntime, RuntimeDisplayState}
-import com.serenity.config.AppConfig
+import com.serenity.config.ConfigManager
 import com.serenity.input.SwingInputHandler
 import com.serenity.rope.Balance
 import com.serenity.ui.renderer.Renderer
@@ -17,16 +17,15 @@ object Main extends IOApp.Simple:
 
   def run: IO[Unit] =
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
-    val appConfig                                   = AppConfig.default
+    val appConfig                                   = ConfigManager.loadConfig()
 
     for
       displayState <- RuntimeDisplayState.create(appConfig.fontConfig)
-      _ <- SwingWindow.resource(displayState.textMetrics, appConfig.windowChromeMode).use { swingWin =>
-        def syncDisplayMetrics(state: com.serenity.state.models.AppState): IO[java.awt.Font] =
+      _ <- SwingWindow.resource(displayState.primaryMetrics, appConfig.windowChromeMode).use { swingWin =>
+        def syncDisplayMetrics(): IO[Unit] =
           IO.blocking {
-            val metrics = displayState.metricsFor(state)
+            val metrics = displayState.primaryMetrics
             if swingWin.metrics != metrics then swingWin.updateMetrics(metrics)
-            displayState.fontFor(state)
           }
 
         AppRuntime.run(
@@ -36,17 +35,39 @@ object Main extends IOApp.Simple:
           checkResize = IO(swingWin.doResizeIfNecessary()),
           renderFull =
             (state, vis, cc) =>
-              syncDisplayMetrics(state).flatMap(font => IO.blocking(Renderer.render(state, vis, swingWin, font, cc))),
+              syncDisplayMetrics() >> IO.blocking(
+                Renderer.render(
+                  state,
+                  vis,
+                  swingWin,
+                  displayState.codeFont,
+                  displayState.textFont,
+                  displayState.uiFont,
+                  displayState.uiMetrics,
+                  cc
+                )
+              ),
           renderCursorOnly =
             (state, vis, cc) =>
-              syncDisplayMetrics(state).flatMap(font => IO.blocking(Renderer.render(state, vis, swingWin, font, cc))),
+              syncDisplayMetrics() >> IO.blocking(
+                Renderer.render(
+                  state,
+                  vis,
+                  swingWin,
+                  displayState.codeFont,
+                  displayState.textFont,
+                  displayState.uiFont,
+                  displayState.uiMetrics,
+                  cc
+                )
+              ),
           appConfig = appConfig,
           makeStateManager = Some(logger =>
             com.serenity.state.manager.StateManager.apply(
               logger,
               onFontConfigChanged = config =>
                 displayState.update(config) >>
-                  IO.blocking(swingWin.updateMetrics(displayState.textMetrics))
+                  IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics))
             )
           ),
           awaitExternalQuit = swingWin.awaitClose,

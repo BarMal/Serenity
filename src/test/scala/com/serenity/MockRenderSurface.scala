@@ -2,9 +2,11 @@ package com.serenity
 
 import java.awt.Color
 import java.awt.Font
+import java.awt.font.FontRenderContext
 import com.serenity.ui.renderer.RenderSurface
 import com.serenity.ui.theme.TextStyle
 import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.layout.TextLayoutSnapshot
 
 /** In-memory RenderSurface for renderer tests. Records putString calls so assertions can inspect
   * what was drawn at each (x, y) position.
@@ -20,6 +22,19 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
   private var currentFg: Color = Color.WHITE
   private var currentBg: Color = Color.BLACK
   private var currentAlpha: Float = 1.0f
+  private var currentFont: Option[Font] = None
+  private val setFontCallsBuffer = scala.collection.mutable.ListBuffer.empty[Font]
+  case class StyleCall(action: String, style: TextStyle)
+  private val styleCallsBuffer = scala.collection.mutable.ListBuffer.empty[StyleCall]
+
+  override def setFont(font: Font): Unit =
+    currentFont = Some(font)
+    setFontCallsBuffer += font
+
+  override def fontRenderContext: Option[FontRenderContext] =
+    Some(TextLayoutSnapshot.defaultFontRenderContext())
+
+  def setFontCalls: List[Font] = setFontCallsBuffer.toList
 
   def setForegroundColor(color: Color): Unit = currentFg = color
   def setBackgroundColor(color: Color): Unit = currentBg = color
@@ -42,6 +57,40 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
       if py >= 0 && py < height && px >= 0 && px < width then
         chars(py)(px) = char
         bgs(py)(px)   = currentBg
+
+  case class DrawRunPxCall(
+      xPx: Float,
+      yPx: Int,
+      bgWidthPx: Float,
+      lineHeightPx: Int,
+      ascentPx: Int,
+      s: String,
+      foreground: Color,
+      background: Color
+  )
+  private val drawRunPxCallsBuffer = scala.collection.mutable.ListBuffer.empty[DrawRunPxCall]
+
+  override def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit =
+    drawRunPxCallsBuffer += DrawRunPxCall(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, s, currentFg, currentBg)
+    val metrics = currentFont.map(CellMetrics.fromFont).getOrElse(CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12)))
+    val startX  = math.floor(xPx / metrics.charWidth.toDouble).toInt
+    val endX    = math.max(startX + s.length, startX + 1)
+    val row     = math.floor(yPx / metrics.lineHeight.toDouble).toInt
+
+    if row >= 0 && row < height then
+      (startX until endX).foreach { x =>
+        if x >= 0 && x < width then
+          bgs(row)(x) = currentBg
+      }
+
+      s.zipWithIndex.foreach { case (char, index) =>
+        val x = startX + index
+        if x >= 0 && x < width then
+          chars(row)(x) = char
+          fgs(row)(x)   = currentFg
+      }
+
+  def drawRunPxCalls: List[DrawRunPxCall] = drawRunPxCallsBuffer.toList
 
   case class StrokeRoundRectCall(x: Int, y: Int, w: Int, h: Int, arcPx: Int, color: Color, strokeWidth: Float)
   private val strokeRoundRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[StrokeRoundRectCall]
@@ -72,12 +121,13 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
   def alphaCalls: List[Float]           = alphaCallsBuffer.toList
   def putStringCalls: List[PutStringCall] = putStringCallsBuffer.toList
 
-  def enableStyle(style: TextStyle): Unit  = ()
-  def disableStyle(style: TextStyle): Unit = ()
+  def enableStyle(style: TextStyle): Unit  = styleCallsBuffer += StyleCall("enable", style)
+  def disableStyle(style: TextStyle): Unit = styleCallsBuffer += StyleCall("disable", style)
   def hideCursor(): Unit                   = ()
   def viewportWidth: Int                   = width
   def viewportHeight: Int                  = height
   def flush(): Unit                        = ()
+  def styleCalls: List[StyleCall]          = styleCallsBuffer.toList
 
   def getChar(x: Int, y: Int): Char =
     if y >= 0 && y < height && x >= 0 && x < width then chars(y)(x) else ' '
@@ -103,6 +153,8 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
     blurRegionCallsBuffer.clear()
     fillPixelRectCallsBuffer.clear()
     alphaCallsBuffer.clear()
+    drawRunPxCallsBuffer.clear()
+    styleCallsBuffer.clear()
     for y <- 0 until height; x <- 0 until width do
       chars(y)(x) = ' '
       fgs(y)(x)   = Color.WHITE

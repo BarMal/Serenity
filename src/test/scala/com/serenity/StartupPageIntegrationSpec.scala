@@ -4,7 +4,6 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
 import com.serenity.keystroke.events.*
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
@@ -12,11 +11,9 @@ import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+import org.typelevel.log4cats.LoggerFactory
 
-class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers:
-
-  given Balance = Balance.default
+class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   behavior of "Startup Page Integration"
 
@@ -24,8 +21,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- createStateManagerIO("StartupPageIntegrationSpec")
       theme = Theme.default
       viewportSize = ViewportSize(80, 24)
       
@@ -81,8 +77,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger)
+      stateManager <- createStateManagerIO("StartupPageIntegrationSpec")
       theme = Theme.default
       viewportSize = ViewportSize(80, 24)
       

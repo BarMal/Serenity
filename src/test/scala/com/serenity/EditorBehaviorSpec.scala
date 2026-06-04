@@ -366,6 +366,108 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     val afterSecondDown = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.head
     afterSecondDown shouldBe CursorPosition(2, expectedCol)
 
+  it should "preserve each multi-cursor measured visual x through proportional text lines" in new EditorFixture:
+    val bufferId = stateManager.createBuffer("iiiiiiii\nW\nWWWWWWWW").unsafeRunSync()
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId   = state.layout.editorPanes.keys.head
+    val fontConfig = FontConfig(
+      textFontFamily = "SansSerif",
+      fontSize = 12.0f,
+      enableLigatures = true
+    )
+
+    stateManager.updateState(
+      _.copy(
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withFontConfig(fontConfig)
+      )
+    ).unsafeRunSync()
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.updateState { current =>
+      current.copy(
+        buffers = current.buffers.updated(
+          bufferId,
+          current.buffers(bufferId).copy(
+            language = Some(LanguageId.Markdown),
+            cursors = List(CursorPosition(0, 4), CursorPosition(0, 8))
+          )
+        )
+      )
+    }.unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    val font = FontLoader.loadTextFont(fontConfig).unsafeRunSync()
+    val currentState = stateManager.getCurrentState.unsafeRunSync()
+    val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
+    val panelWidthPx = layout.editorPanelRect.width * CellMetrics.fromFont(font).charWidth
+    val snapshot = TextLayoutSnapshot.fromBuffer(
+      currentState.buffers(bufferId),
+      panelWidthPx,
+      font
+    )
+    val initialCursors = List(CursorPosition(0, 4), CursorPosition(0, 8))
+    val expectedCursors = initialCursors.map { cursor =>
+      val preferredXPx = snapshot.xPxForCursor(cursor).getOrElse(fail(s"missing caret x for $cursor"))
+      val afterFirstDown = snapshot.moveVertical(cursor, 1, preferredXPx).getOrElse(fail(s"missing first move for $cursor"))
+      snapshot.moveVertical(afterFirstDown, 1, preferredXPx).getOrElse(fail(s"missing second move for $cursor"))
+    }.distinct.sortBy(cursor => (cursor.line, cursor.column))
+
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+
+    val finalCursors = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors
+    finalCursors shouldBe expectedCursors
+
+  it should "clear in-flight multi-cursor vertical state when an explicit single cursor is set" in new EditorFixture:
+    val bufferId = stateManager.createBuffer("abcdef\nxy\nabcdef").unsafeRunSync()
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId   = state.layout.editorPanes.keys.head
+
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.updateState { current =>
+      current.copy(
+        buffers = current.buffers.updated(
+          bufferId,
+          current.buffers(bufferId).copy(
+            cursors = List(CursorPosition(0, 3), CursorPosition(0, 4))
+          )
+        )
+      )
+    }.unsafeRunSync()
+
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+
+    val finalBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    finalBuffer.cursors shouldBe List(CursorPosition(1, 0))
+
+  it should "clear in-flight multi-cursor vertical state when a single-cursor edit takes over" in new EditorFixture:
+    val bufferId = stateManager.createBuffer("abcdef\nxy\nabcdef").unsafeRunSync()
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId   = state.layout.editorPanes.keys.head
+
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.updateState { current =>
+      current.copy(
+        buffers = current.buffers.updated(
+          bufferId,
+          current.buffers(bufferId).copy(
+            cursors = List(CursorPosition(0, 3), CursorPosition(0, 4))
+          )
+        )
+      )
+    }.unsafeRunSync()
+
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(MoveLeft).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+
+    val finalBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    finalBuffer.cursors shouldBe List(CursorPosition(2, 1))
+
   it should "handle undo/redo operations correctly" in new EditorFixture:
     // TODO: Implement Undo/Redo events and state management
     // Given: Buffer with initial content

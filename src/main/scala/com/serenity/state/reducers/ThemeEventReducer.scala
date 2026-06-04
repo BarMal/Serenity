@@ -12,4 +12,4 @@ object ThemeEventReducer:
       case ReloadCurrentTheme =>
         ReducerResult.withEffect(state, AppEffect.ReloadTheme(state.theme.name))
       case ListAvailableThemes =>
-        ReducerResult.withEffect(state, AppEffect.OpenThemePicker)
+        ReducerResult.withEffect(state, AppEffect.OpenThemePicker())
