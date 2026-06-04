@@ -3,6 +3,8 @@ package com.serenity.ui.renderer
 import java.awt.Font
 
 import com.serenity.animation.ThemeInterpolator
+import com.serenity.lsp.config.LanguageId
+import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
@@ -235,12 +237,22 @@ object Renderer:
   ): Unit =
     val visualLines = snapshot.visualLines
     val xOriginPx   = context.cellMetrics.toPixelX(rect.x).toFloat
+    val rawMarkdownLines =
+      if buffer.language.contains(LanguageId.Markdown) then
+        val lines = (0 until buffer.content.lineCount).toVector.map(line => buffer.content.getLine(line).getOrElse(""))
+        MarkdownBlockLens.activeBlockLineSet(lines, buffer.cursors.headOption.map(_.line))
+      else Set.empty[Int]
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
         if screenLineIndex < rect.height then
           val screenY = rect.y + screenLineIndex
           val screenX = rect.x
+          val rendersRawMarkdown = rawMarkdownLines.contains(visualLine.bufferLine)
+          val effectiveLanguage =
+            if rendersRawMarkdown then None else buffer.language
+          val effectiveSyntaxHighlighting =
+            state.syntaxHighlightingEnabled && !rendersRawMarkdown
 
           context.surface.setForegroundColor(state.theme.foreground)
 
@@ -261,8 +273,8 @@ object Renderer:
                 visualLine,
                 state.theme,
                 buffer.animations,
-                state.syntaxHighlightingEnabled,
-                buffer.language
+                effectiveSyntaxHighlighting,
+                effectiveLanguage
               )
             else
               CharacterRenderer.renderStringWithAnimation(
@@ -272,8 +284,8 @@ object Renderer:
                 visualLine.text,
                 state.theme,
                 buffer.animations,
-                state.syntaxHighlightingEnabled,
-                buffer.language,
+                effectiveSyntaxHighlighting,
+                effectiveLanguage,
                 bufferLine = visualLine.bufferLine,
                 bufferStartColumn = visualLine.startColumn
               )

@@ -26,6 +26,7 @@ Priority labels used here:
 - `[x]` Markdown editor rendering now has structural styling for headings, list markers, blockquotes, inline code, and links, including underline-capable style propagation through the renderer.[22][23][37]
 - `[x]` Global hotkeys now support config-backed overrides, and runtime startup now actually boots from `ConfigManager.loadConfig()` rather than always using `AppConfig.default`.[12][13][46][47][48]
 - `[x]` Focused keymaps are now configurable through config-backed editor, command-runner, modal, panel, and peek binding groups, and trigger parsing now covers non-character keys such as enter, escape, arrows, home/end, and page navigation.[12][13][46][47][49]
+- `[x]` Markdown block-lens rendering now keeps the active Markdown block as raw source while surrounding Markdown lines use Markdown presentation styling. Renderer capabilities and limitations are documented separately.[19][22][37][50]
 
 ## 1. Core Editor Model
 
@@ -54,7 +55,7 @@ Priority labels used here:
 - `[x]` Markdown buffers participate in LSP server resolution through the built-in Marksman mapping, and buffer-language changes refresh the LSP binding for file-backed buffers.[36][42][43][44]
 - `[x]` Markdown and plain-text buffers use the text-font rendering path rather than the code-font path.[2][37][38]
 - `[x]` Markdown/prose layout uses measured caret stops, proportional wrapping, proportional selection rendering, and pixel-aware cursor placement where appropriate.[19][37][39]
-- `[~][P0]` Markdown rendering is still editor-first rather than preview-first. The editor now applies markdown-aware styling for headings, list markers, blockquotes, inline code, and links, but there is still no separate preview surface or richer renderer for tables, rendered blocks, or document-preview presentation.[19][22][23][32][37]
+- `[~][P0]` Markdown rendering is still editor-first rather than preview-first. The editor now applies markdown-aware styling for headings, list markers, blockquotes, inline code, and links, and block-lens rendering keeps the active Markdown block raw while surrounding lines use presentation styling. There is still no separate preview surface or richer renderer for rendered tables, images, mixed heading sizes, or document-preview presentation.[19][22][23][32][37][50]
 - `[~][P1]` Markdown editing has the language/runtime plumbing it needs, but there is no markdown-specific command surface yet for preview toggles, structured block operations, or document-style editing affordances.[17][32][36]
 
 ## 5. Sessions, Startup, And Restoration
@@ -144,7 +145,7 @@ Priority labels used here:
 - `[~]` Finish true multi-cursor editing semantics across the remaining primary-cursor branches. Distinct-cursor whole-line copy/cut, overlapping word-delete parity, tab/delete-forward coverage, repeated vertical preferred-column / preferred-x preservation, and explicit select-all/find/modal-open semantics are now implemented; the remaining gap is broader parity across the rest of the single-cursor command set.[3][45]
 - `[~]` Expand the find/replace family into a fuller workflow with clearer single-step and all-step behavior. `Replace Next` and `Replace All` now support both current-buffer and active-selection scope; the remaining gaps are broader result management and larger-scope workflows.[3][8]
 - `[x]` Add richer mouse-driven text editing. Click placement, range extension, drag selection, double-click word selection, and triple-click line selection are now implemented.[14][15]
-- `[~]` Continue the markdown direction intentionally. Editor-side structural styling now exists for headings, list markers, blockquotes, inline code, and links; the remaining decision is whether to stop at richer editor semantics or add preview/document presentation behavior.[19][22][23][32][37]
+- `[~]` Continue the markdown direction intentionally. Editor-side structural styling and block-lens raw-source editing now exist; the remaining decision is whether to add a separate preview/document presentation behavior beyond the current same-metric editor lens.[19][22][23][32][37][50]
 - `[~]` Continue the keymap direction beyond the new config-backed focused bindings. The runtime now supports editor/modal/panel/overlay-local overrides in addition to global hotkeys; the remaining gap is a user-facing keymap editing surface and any broader remapping of higher-level commands.[12][13][40][46][47][49]
 
 ### P1: UX Polish
@@ -165,7 +166,7 @@ Priority labels used here:
 
 - Strongest implemented areas today: rope-backed editing, session restore/save, typography/layout correctness, nested command-runner overlays, theming/animation, and pinned-panel basics.[1][5][11][17][19][27]
 - Biggest current gaps remain: fully finished multi-cursor editing, richer find/replace workflows, fuller keymap configurability beyond the current global override layer, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][46][47]
-- Biggest current gaps remain: fully finished multi-cursor editing, richer find/replace workflows, a user-facing keymap editing surface beyond the new config-backed bindings, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][40][46][47][49]
+- Biggest current gaps remain: fully finished multi-cursor editing, richer find/replace workflows, a user-facing keymap editing surface beyond the new config-backed bindings, richer Markdown preview/document rendering beyond the same-metric block lens, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][40][46][47][49][50]
 - Recommended implementation order from here: finish editing fundamentals first, then polish workflow/UX, then deepen IDE behavior.[3][14][17][30][33]
 
 ## Sources
@@ -219,3 +220,4 @@ Priority labels used here:
 [47] `src/main/scala/com/serenity/keystroke/translators/TextHotkeyConverters.scala`
 [48] `src/main/scala/Main.scala`
 [49] `src/main/scala/com/serenity/config/FocusedKeymapConfig.scala`
+[50] `docs/renderer-capabilities.md`
