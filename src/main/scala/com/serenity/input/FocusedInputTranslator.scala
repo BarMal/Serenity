@@ -6,13 +6,12 @@ import com.serenity.state.models.{AppState, SurfaceContent}
 
 object FocusedInputTranslator:
 
-  private val editorTranslator        = new EditorInputTranslator()
-  private val commandRunnerTranslator = new CommandRunnerTranslator()
-  private val formTranslator          = new SingleLineFormTranslator()
-  private val pinnedPanelTranslator   = new PinnedPanelTranslator()
-  private val peekOverlayTranslator   = new PeekOverlayTranslator()
-
   def forState(state: AppState): Translator[Event] =
+    val editorTranslator        = new EditorInputTranslator(state.config)
+    val commandRunnerTranslator = new CommandRunnerTranslator(state.config)
+    val formTranslator          = new SingleLineFormTranslator(state.config)
+    val pinnedPanelTranslator   = new PinnedPanelTranslator(state.config)
+    val peekOverlayTranslator   = new PeekOverlayTranslator(state.config)
     val localTranslator =
       if state.hasCommandRunnerDomain then commandRunnerTranslator
       else

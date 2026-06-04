@@ -1,23 +1,16 @@
 package com.serenity.keystroke.translators
 
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.PeekInputEvent.*
-import com.serenity.keystroke.events.{Direction, PeekInputEvent}
+import com.serenity.keystroke.events.PeekInputEvent
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 
-class PeekOverlayTranslator extends Translator[PeekInputEvent]:
+class PeekOverlayTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[PeekInputEvent]:
 
-  override def converters = List(DirectionalKeyConverter.arrowKeys(Navigate.apply), peekConverter)
+  override def converters = List(LocalKeymapConverters.converter(appConfig.focusedKeymapConfig.peek.bindings), peekCharacterConverter)
 
-  private val peekConverter: PartialFunction[KeyStrokeInfo, PeekInputEvent] = {
+  private val peekCharacterConverter: PartialFunction[KeyStrokeInfo, PeekInputEvent] = {
     case KeyStrokeInfo(InputKey.Character, Some(_), modifiers)
         if modifiers.isEmpty || modifiers == Set(Modifier.Shift) =>
       OtherInput
-    case KeyStrokeInfo(InputKey.Backspace, _, _) => OtherInput
-    case KeyStrokeInfo(InputKey.Delete, _, _)    => OtherInput
-    case KeyStrokeInfo(InputKey.Tab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
-      OtherInput
-    case KeyStrokeInfo(InputKey.ReverseTab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
-      OtherInput
-    case KeyStrokeInfo(InputKey.Escape, _, _) => Dismiss
-    case KeyStrokeInfo(InputKey.Enter, _, _)  => Accept
   }

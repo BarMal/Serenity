@@ -62,6 +62,30 @@ case class HotkeyTrigger(
         case InputKey.Character => character.map(_.toString).getOrElse("")
         case InputKey.Tab       => "tab"
         case InputKey.ReverseTab => "reverse-tab"
+        case InputKey.Enter     => "enter"
+        case InputKey.Backspace => "backspace"
+        case InputKey.Delete    => "delete"
+        case InputKey.Escape    => "escape"
+        case InputKey.ArrowUp   => "up"
+        case InputKey.ArrowDown => "down"
+        case InputKey.ArrowLeft => "left"
+        case InputKey.ArrowRight => "right"
+        case InputKey.Home      => "home"
+        case InputKey.End       => "end"
+        case InputKey.PageUp    => "pageup"
+        case InputKey.PageDown  => "pagedown"
+        case InputKey.F1        => "f1"
+        case InputKey.F2        => "f2"
+        case InputKey.F3        => "f3"
+        case InputKey.F4        => "f4"
+        case InputKey.F5        => "f5"
+        case InputKey.F6        => "f6"
+        case InputKey.F7        => "f7"
+        case InputKey.F8        => "f8"
+        case InputKey.F9        => "f9"
+        case InputKey.F10       => "f10"
+        case InputKey.F11       => "f11"
+        case InputKey.F12       => "f12"
         case InputKey.EOF       => "eof"
         case other              => other.toString.toLowerCase
     (modifierParts :+ keyPart).mkString("+")
@@ -84,10 +108,58 @@ object HotkeyTrigger:
     keyParts match
       case key :: Nil =>
         key match
+          case "enter" =>
+            Some(HotkeyTrigger(InputKey.Enter, None, modifiers))
+          case "backspace" =>
+            Some(HotkeyTrigger(InputKey.Backspace, None, modifiers))
+          case "delete" =>
+            Some(HotkeyTrigger(InputKey.Delete, None, modifiers))
+          case "escape" =>
+            Some(HotkeyTrigger(InputKey.Escape, None, modifiers))
           case "tab" =>
             Some(HotkeyTrigger(InputKey.Tab, None, modifiers))
           case "reverse-tab" | "reverse_tab" =>
             Some(HotkeyTrigger(InputKey.ReverseTab, None, modifiers))
+          case "up" | "arrowup" =>
+            Some(HotkeyTrigger(InputKey.ArrowUp, None, modifiers))
+          case "down" | "arrowdown" =>
+            Some(HotkeyTrigger(InputKey.ArrowDown, None, modifiers))
+          case "left" | "arrowleft" =>
+            Some(HotkeyTrigger(InputKey.ArrowLeft, None, modifiers))
+          case "right" | "arrowright" =>
+            Some(HotkeyTrigger(InputKey.ArrowRight, None, modifiers))
+          case "home" =>
+            Some(HotkeyTrigger(InputKey.Home, None, modifiers))
+          case "end" =>
+            Some(HotkeyTrigger(InputKey.End, None, modifiers))
+          case "pageup" | "page_up" =>
+            Some(HotkeyTrigger(InputKey.PageUp, None, modifiers))
+          case "pagedown" | "page_down" =>
+            Some(HotkeyTrigger(InputKey.PageDown, None, modifiers))
+          case "f1" =>
+            Some(HotkeyTrigger(InputKey.F1, None, modifiers))
+          case "f2" =>
+            Some(HotkeyTrigger(InputKey.F2, None, modifiers))
+          case "f3" =>
+            Some(HotkeyTrigger(InputKey.F3, None, modifiers))
+          case "f4" =>
+            Some(HotkeyTrigger(InputKey.F4, None, modifiers))
+          case "f5" =>
+            Some(HotkeyTrigger(InputKey.F5, None, modifiers))
+          case "f6" =>
+            Some(HotkeyTrigger(InputKey.F6, None, modifiers))
+          case "f7" =>
+            Some(HotkeyTrigger(InputKey.F7, None, modifiers))
+          case "f8" =>
+            Some(HotkeyTrigger(InputKey.F8, None, modifiers))
+          case "f9" =>
+            Some(HotkeyTrigger(InputKey.F9, None, modifiers))
+          case "f10" =>
+            Some(HotkeyTrigger(InputKey.F10, None, modifiers))
+          case "f11" =>
+            Some(HotkeyTrigger(InputKey.F11, None, modifiers))
+          case "f12" =>
+            Some(HotkeyTrigger(InputKey.F12, None, modifiers))
           case "eof" =>
             Some(HotkeyTrigger(InputKey.EOF, None, modifiers))
           case single if single.length == 1 =>

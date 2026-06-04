@@ -1,23 +1,16 @@
 package com.serenity.keystroke.translators
 
-import com.serenity.keystroke.events.PanelInputEvent.{Activate, Navigate, ReturnFocus}
-import com.serenity.keystroke.events.{Direction, PanelInputEvent}
+import com.serenity.config.AppConfig
+import com.serenity.keystroke.events.PanelInputEvent.ReturnFocus
+import com.serenity.keystroke.events.PanelInputEvent
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 
-class PinnedPanelTranslator extends Translator[PanelInputEvent]:
+class PinnedPanelTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[PanelInputEvent]:
 
-  override def converters = List(DirectionalKeyConverter.arrowKeys(Navigate.apply), panelConverter)
+  override def converters = List(LocalKeymapConverters.converter(appConfig.focusedKeymapConfig.panel.bindings), panelCharacterConverter)
 
-  private val panelConverter: PartialFunction[KeyStrokeInfo, PanelInputEvent] = {
+  private val panelCharacterConverter: PartialFunction[KeyStrokeInfo, PanelInputEvent] = {
     case KeyStrokeInfo(InputKey.Character, Some(_), modifiers)
         if modifiers.isEmpty || modifiers == Set(Modifier.Shift) =>
       ReturnFocus
-    case KeyStrokeInfo(InputKey.Backspace, _, _) => ReturnFocus
-    case KeyStrokeInfo(InputKey.Delete, _, _)    => ReturnFocus
-    case KeyStrokeInfo(InputKey.Tab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
-      ReturnFocus
-    case KeyStrokeInfo(InputKey.ReverseTab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
-      ReturnFocus
-    case KeyStrokeInfo(InputKey.Escape, _, _) => ReturnFocus
-    case KeyStrokeInfo(InputKey.Enter, _, _)  => Activate
   }

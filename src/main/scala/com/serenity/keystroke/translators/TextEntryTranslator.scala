@@ -8,7 +8,7 @@ class TextEntryTranslator(appConfig: AppConfig = AppConfig.default) extends Tran
 
   private val delegate = CompositeTranslator(
     new GlobalHotkeyTranslator(appConfig),
-    new EditorInputTranslator()
+    new EditorInputTranslator(appConfig)
   )
 
   override def converters: List[PartialFunction[KeyStrokeInfo, Event]] =

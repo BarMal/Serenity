@@ -3,8 +3,8 @@ package com.serenity
 import com.serenity.input.FocusedInputTranslator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.command.CommandRunner
-import com.serenity.config.HotkeyAction
-import com.serenity.keystroke.events.{DeleteWordBackward, DeleteWordForward, Direction, ModalDeleteWordBackward, ModalDeleteWordForward, ModalNextField, ModalSubmit, MoveToEndOfFile, MoveToStartOfFile, NewLine, NextTab, PageDown, PageUp, PanelInputEvent, PeekInputEvent, PreviousTab, RunnerDeleteWordBackward, RunnerDeleteWordForward, RunnerDismiss, RunnerNextCategory, RunnerPreviousCategory, RunnerSubmit, ToggleCommandRunner}
+import com.serenity.config.{CommandRunnerKeyAction, HotkeyAction, ModalKeyAction, PanelKeyAction, PeekKeyAction}
+import com.serenity.keystroke.events.{DeleteWordBackward, DeleteWordForward, Direction, ModalDeleteWordBackward, ModalDeleteWordForward, ModalDismiss, ModalNextField, ModalSubmit, MoveToEndOfFile, MoveToStartOfFile, NewLine, NextTab, PageDown, PageUp, PanelInputEvent, PeekInputEvent, PreviousTab, RunnerDeleteWordBackward, RunnerDeleteWordForward, RunnerDismiss, RunnerNextCategory, RunnerPreviousCategory, RunnerSubmit, ToggleCommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
@@ -224,4 +224,87 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     translator.translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl))).isInstanceOf[
       com.serenity.keystroke.events.UnhandledEvent[?]
     ] shouldBe true
+  }
+
+  it should "respect configured command-runner keymap overrides" in {
+    val commandRunnerState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      config = editorState.config.withCommandRunnerKeyOverride(CommandRunnerKeyAction.Submit, "ctrl+enter")
+    )
+    val translator = FocusedInputTranslator.forState(commandRunnerState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)).isInstanceOf[
+      com.serenity.keystroke.events.UnhandledEvent[?]
+    ] shouldBe true
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set(Modifier.Ctrl))) shouldBe RunnerSubmit
+  }
+
+  it should "respect configured modal keymap overrides" in {
+    val modalState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("file-modal")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("file-modal"),
+          SurfaceContent.ModalWorkflow(
+            Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open))
+          ),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      config = editorState.config.withModalKeyOverride(ModalKeyAction.Dismiss, "ctrl+escape")
+    )
+    val translator = FocusedInputTranslator.forState(modalState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)).isInstanceOf[
+      com.serenity.keystroke.events.UnhandledEvent[?]
+    ] shouldBe true
+    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set(Modifier.Ctrl))) shouldBe ModalDismiss
+  }
+
+  it should "respect configured panel keymap overrides" in {
+    val panelState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("left-panel")),
+      uiSurfaces = List(
+        UiSurface.fromPanelContent(
+          SurfaceId("left-panel"),
+          PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/repo")), None),
+          PanelPosition.Left,
+          24
+        )
+      ),
+      config = editorState.config.withPanelKeyOverride(PanelKeyAction.Activate, "ctrl+enter")
+    )
+    val translator = FocusedInputTranslator.forState(panelState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)).isInstanceOf[
+      com.serenity.keystroke.events.UnhandledEvent[?]
+    ] shouldBe true
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set(Modifier.Ctrl))) shouldBe PanelInputEvent.Activate
+  }
+
+  it should "respect configured peek keymap overrides" in {
+    val peekState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("peek")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("peek"),
+          SurfaceContent.QuickInfo("map"),
+          SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
+        )
+      ),
+      config = editorState.config.withPeekKeyOverride(PeekKeyAction.Dismiss, "ctrl+escape")
+    )
+    val translator = FocusedInputTranslator.forState(peekState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)).isInstanceOf[
+      com.serenity.keystroke.events.UnhandledEvent[?]
+    ] shouldBe true
+    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set(Modifier.Ctrl))) shouldBe PeekInputEvent.Dismiss
   }

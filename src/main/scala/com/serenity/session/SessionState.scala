@@ -5,7 +5,7 @@ import java.nio.file.Path
 import scala.concurrent.duration.FiniteDuration
 
 import com.serenity.animation.AnimationConfig
-import com.serenity.config.{AppConfig, BackgroundStyle, CursorMode, WindowChromeMode}
+import com.serenity.config.{AppConfig, BackgroundStyle, CursorMode, FocusedKeymapConfig, HotkeyConfig, WindowChromeMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -295,6 +295,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
   for
     characterAnimation        <- cursor.get[Option[AnimationConfig]]("characterAnimation")
     syntaxHighlightingEnabled <- cursor.get[Boolean]("syntaxHighlightingEnabled")
+    hotkeyConfig              <- cursor.getOrElse[HotkeyConfig]("hotkeyConfig")(HotkeyConfig())
+    focusedKeymapConfig       <- cursor.getOrElse[FocusedKeymapConfig]("focusedKeymapConfig")(FocusedKeymapConfig())
     fontConfig                <- cursor.get[FontConfig]("fontConfig")
     minimumPaneWidth          <- cursor.get[Int]("minimumPaneWidth")
     showLineNumbers           <- cursor.get[Boolean]("showLineNumbers")
@@ -306,6 +308,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
   yield AppConfig(
     characterAnimation = characterAnimation,
     syntaxHighlightingEnabled = syntaxHighlightingEnabled,
+    hotkeyConfig = hotkeyConfig,
+    focusedKeymapConfig = focusedKeymapConfig,
     fontConfig = fontConfig,
     minimumPaneWidth = minimumPaneWidth,
     showLineNumbers = showLineNumbers,

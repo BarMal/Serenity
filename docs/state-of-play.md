@@ -25,6 +25,7 @@ Priority labels used here:
 - `[x]` `StateManager` has been split into composed pipeline/facade traits instead of remaining one monolithic implementation file.[34][35][36]
 - `[x]` Markdown editor rendering now has structural styling for headings, list markers, blockquotes, inline code, and links, including underline-capable style propagation through the renderer.[22][23][37]
 - `[x]` Global hotkeys now support config-backed overrides, and runtime startup now actually boots from `ConfigManager.loadConfig()` rather than always using `AppConfig.default`.[12][13][46][47][48]
+- `[x]` Focused keymaps are now configurable through config-backed editor, command-runner, modal, panel, and peek binding groups, and trigger parsing now covers non-character keys such as enter, escape, arrows, home/end, and page navigation.[12][13][46][47][49]
 
 ## 1. Core Editor Model
 
@@ -67,7 +68,7 @@ Priority labels used here:
 
 - `[x]` There is a stable hotkey layer for common editor operations, command runner toggle, file search, and tab navigation.[12]
 - `[x]` Focus-aware input routing now cleanly distinguishes editor, modal, command-runner, submenu, panel, and peek input behavior.[40][41]
-- `[~][P0]` Key mappings are now partially user-configurable. Global hotkeys such as command palette, file search, save, quit, tab navigation, and clipboard actions can be overridden through config-backed bindings, but the broader input system is still not a complete user-editable keymap surface for every editor, modal, and panel-local action.[12][13][46][47]
+- `[~][P0]` Key mappings are now broadly config-driven across the focused input surfaces. Global hotkeys plus editor, command-runner, modal, panel, and peek-local bindings can all be overridden through config-backed bindings, but there is still no user-facing keymap editor in the command runner and the binding model is still limited to existing actions rather than an open-ended command surface.[12][13][40][46][47][49]
 
 ## 7. Command Runner And Floating Surfaces
 
@@ -144,7 +145,7 @@ Priority labels used here:
 - `[~]` Expand the find/replace family into a fuller workflow with clearer single-step and all-step behavior. `Replace Next` and `Replace All` now support both current-buffer and active-selection scope; the remaining gaps are broader result management and larger-scope workflows.[3][8]
 - `[x]` Add richer mouse-driven text editing. Click placement, range extension, drag selection, double-click word selection, and triple-click line selection are now implemented.[14][15]
 - `[~]` Continue the markdown direction intentionally. Editor-side structural styling now exists for headings, list markers, blockquotes, inline code, and links; the remaining decision is whether to stop at richer editor semantics or add preview/document presentation behavior.[19][22][23][32][37]
-- `[~]` Continue expanding key binding configurability beyond the current global-hotkey override layer into fuller editor/modal/panel-local keymap control.[12][13][46][47]
+- `[~]` Continue the keymap direction beyond the new config-backed focused bindings. The runtime now supports editor/modal/panel/overlay-local overrides in addition to global hotkeys; the remaining gap is a user-facing keymap editing surface and any broader remapping of higher-level commands.[12][13][40][46][47][49]
 
 ### P1: UX Polish
 
@@ -164,6 +165,7 @@ Priority labels used here:
 
 - Strongest implemented areas today: rope-backed editing, session restore/save, typography/layout correctness, nested command-runner overlays, theming/animation, and pinned-panel basics.[1][5][11][17][19][27]
 - Biggest current gaps remain: fully finished multi-cursor editing, richer find/replace workflows, fuller keymap configurability beyond the current global override layer, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][46][47]
+- Biggest current gaps remain: fully finished multi-cursor editing, richer find/replace workflows, a user-facing keymap editing surface beyond the new config-backed bindings, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][40][46][47][49]
 - Recommended implementation order from here: finish editing fundamentals first, then polish workflow/UX, then deepen IDE behavior.[3][14][17][30][33]
 
 ## Sources
@@ -216,3 +218,4 @@ Priority labels used here:
 [46] `src/main/scala/com/serenity/config/HotkeyConfig.scala`
 [47] `src/main/scala/com/serenity/keystroke/translators/TextHotkeyConverters.scala`
 [48] `src/main/scala/Main.scala`
+[49] `src/main/scala/com/serenity/config/FocusedKeymapConfig.scala`

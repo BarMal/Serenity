@@ -63,6 +63,31 @@ object ConfigManager:
                   HotkeyTrigger.parse(value.trim).map(trigger => config.withHotkeyConfig(config.hotkeyConfig.withBinding(action, trigger)))
                 )
                 .getOrElse(config)
+            case keymapKey if keymapKey.startsWith("keymap.editor.") =>
+              EditorKeyAction.values
+                .find(action => s"keymap.editor.${action.configKey}" == keymapKey)
+                .map(action => config.withEditorKeyOverride(action, value.trim))
+                .getOrElse(config)
+            case keymapKey if keymapKey.startsWith("keymap.command_runner.") =>
+              CommandRunnerKeyAction.values
+                .find(action => s"keymap.command_runner.${action.configKey}" == keymapKey)
+                .map(action => config.withCommandRunnerKeyOverride(action, value.trim))
+                .getOrElse(config)
+            case keymapKey if keymapKey.startsWith("keymap.modal.") =>
+              ModalKeyAction.values
+                .find(action => s"keymap.modal.${action.configKey}" == keymapKey)
+                .map(action => config.withModalKeyOverride(action, value.trim))
+                .getOrElse(config)
+            case keymapKey if keymapKey.startsWith("keymap.panel.") =>
+              PanelKeyAction.values
+                .find(action => s"keymap.panel.${action.configKey}" == keymapKey)
+                .map(action => config.withPanelKeyOverride(action, value.trim))
+                .getOrElse(config)
+            case keymapKey if keymapKey.startsWith("keymap.peek.") =>
+              PeekKeyAction.values
+                .find(action => s"keymap.peek.${action.configKey}" == keymapKey)
+                .map(action => config.withPeekKeyOverride(action, value.trim))
+                .getOrElse(config)
             case _ =>
               config // Unknown key, ignore
         case _ =>
@@ -88,6 +113,11 @@ object ConfigManager:
        |# Hotkey overrides
        |hotkey.command_palette = ${config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render}
        |hotkey.file_search = ${config.hotkeyConfig.bindingsFor(HotkeyAction.FileSearch).head.render}
+       |
+       |# Focused keymap overrides
+       |keymap.editor.page_down = ${config.focusedKeymapConfig.editor.bindingsFor(EditorKeyAction.PageDown).head.render}
+       |keymap.command_runner.submit = ${config.focusedKeymapConfig.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit).head.render}
+       |keymap.modal.dismiss = ${config.focusedKeymapConfig.modal.bindingsFor(ModalKeyAction.Dismiss).head.render}
        |""".stripMargin
 
   /** Save configuration to file */
@@ -128,6 +158,11 @@ object ConfigManager:
                           |# Hotkey overrides
                           |hotkey.command_palette = ctrl+p
                           |hotkey.file_search = ctrl+shift+f
+                          |
+                          |# Focused keymap overrides
+                          |keymap.editor.page_down = pagedown
+                          |keymap.command_runner.submit = enter
+                          |keymap.modal.dismiss = escape
                           |""".stripMargin
 
       Files.write(Paths.get(path), sampleConfig.getBytes)
