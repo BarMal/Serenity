@@ -1,3 +1,6 @@
+import sbtassembly.AssemblyPlugin.autoImport.*
+import sbtassembly.MergeStrategy
+
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
 ThisBuild / scalaVersion := "3.8.3"
@@ -14,6 +17,19 @@ Compile / run / fork := true
 lazy val root = (project in file("."))
   .settings(
     name := "Serenity",
+    Compile / mainClass := Some("Main"),
+    assembly / mainClass := Some("Main"),
+    assembly / assemblyJarName := "Serenity.jar",
+    assembly / assemblyMergeStrategy := {
+      case PathList("META-INF", xs @ _*) =>
+        xs.map(_.toLowerCase) match {
+          case "manifest.mf" :: Nil => MergeStrategy.discard
+          case "index.list" :: Nil  => MergeStrategy.discard
+          case "dependencies" :: Nil => MergeStrategy.discard
+          case _ => MergeStrategy.discard
+        }
+      case x => (assembly / assemblyMergeStrategy).value(x)
+    },
     Test / testOptions ++= Seq(
       Tests.Setup(() => System.setProperty("serenity.test.ephemeralSessions", "true")),
       Tests.Cleanup(() => System.clearProperty("serenity.test.ephemeralSessions"))
