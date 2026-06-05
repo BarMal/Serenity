@@ -9,10 +9,19 @@ case class CommandRunnerSubmenuState(
     groupId: String,
     selectedIndex: Int = 0,
     editingItemId: Option[String] = None,
-    editingText: String = ""
+    editingText: String = "",
+    searchTerm: String = ""
 ):
   def selectedItem(items: List[CommandSurfaceItem]): Option[CommandSurfaceItem] =
     items.lift(selectedIndex)
+
+  def filteredItems(items: List[CommandSurfaceItem]): List[CommandSurfaceItem] =
+    val lowerTerm = searchTerm.trim.toLowerCase
+    if lowerTerm.isEmpty then items
+    else items.filter(_.searchText.toLowerCase.contains(lowerTerm))
+
+  def selectedItemFromAll(items: List[CommandSurfaceItem]): Option[CommandSurfaceItem] =
+    selectedItem(filteredItems(items))
 
 /** State for the command runner overlay */
 case class CommandRunner(
@@ -146,12 +155,12 @@ case class CommandRunner(
     settingsGroups.find(_.id == groupId).map(_.children).getOrElse(Nil)
 
   def focusedSubmenuItems: List[CommandSurfaceItem] =
-    activeSubmenu.toList.flatMap(submenu => submenuItems(submenu.groupId))
+    activeSubmenu.toList.flatMap(submenu => submenu.filteredItems(submenuItems(submenu.groupId)))
 
   def moveSubmenuSelection(delta: Int): CommandRunner =
     activeSubmenu match
       case Some(submenu) =>
-        val items = submenuItems(submenu.groupId)
+        val items = submenu.filteredItems(submenuItems(submenu.groupId))
         if items.isEmpty then this
         else
           val itemCount     = items.size
@@ -166,7 +175,7 @@ case class CommandRunner(
   def beginSubmenuEditMode: CommandRunner =
     activeSubmenu match
       case Some(submenu) =>
-        submenu.selectedItem(submenuItems(submenu.groupId)) match
+        submenu.selectedItemFromAll(submenuItems(submenu.groupId)) match
           case Some(item: CommandSurfaceItem.InputItem) =>
             copy(activeSubmenu = Some(submenu.copy(editingItemId = Some(item.id), editingText = item.currentValue)))
           case _ =>
@@ -177,7 +186,7 @@ case class CommandRunner(
   def adjustSelectedSubmenuOption(delta: Int): CommandRunner =
     activeSubmenu match
       case Some(submenu) =>
-        submenu.selectedItem(submenuItems(submenu.groupId)) match
+        submenu.selectedItemFromAll(submenuItems(submenu.groupId)) match
           case Some(option: CommandSurfaceItem.OptionItem) =>
             val updatedOption = option.moveSelection(delta)
             copy(optionSelections = optionSelections + (option.id -> updatedOption.selectedIndex))
@@ -267,11 +276,19 @@ case class CommandRunner(
   def normalizeSubmenuEditMode: CommandRunner =
     activeSubmenu match
       case Some(submenu) =>
-        submenu.selectedItem(submenuItems(submenu.groupId)) match
+        submenu.selectedItemFromAll(submenuItems(submenu.groupId)) match
           case Some(item: CommandSurfaceItem.InputItem) if submenu.editingItemId.contains(item.id) =>
             this
           case _ =>
             copy(activeSubmenu = Some(submenu.copy(editingItemId = None, editingText = "")))
+      case None =>
+        this
+
+  def updateSubmenuSearch(term: String): CommandRunner =
+    activeSubmenu match
+      case Some(submenu) =>
+        val updated = submenu.copy(searchTerm = term, selectedIndex = 0, editingItemId = None, editingText = "")
+        copy(activeSubmenu = Some(updated))
       case None =>
         this
 

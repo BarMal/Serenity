@@ -1,6 +1,6 @@
 # Serenity State Of Play
 
-Generated on 2026-06-04 against the current branch state.
+Generated on 2026-06-05 against the current branch state.
 
 This document now serves two purposes:
 - a current implementation status report
@@ -27,6 +27,7 @@ Priority labels used here:
 - `[x]` Global hotkeys now support config-backed overrides, and runtime startup now actually boots from `ConfigManager.loadConfig()` rather than always using `AppConfig.default`.[12][13][46][47][48]
 - `[x]` Focused keymaps are now configurable through config-backed editor, command-runner, modal, panel, and peek binding groups, and trigger parsing now covers non-character keys such as enter, escape, arrows, home/end, and page navigation.[12][13][46][47][49]
 - `[x]` Markdown block-lens rendering now keeps the active Markdown block as raw source while surrounding Markdown lines use Markdown presentation styling. Renderer capabilities and limitations are documented separately.[19][22][37][50]
+- `[x]` Focused command-runner submenus are now searchable. Typing in a submenu filters its rows, navigation and submission use the filtered result set, `Escape` clears the submenu search before leaving, and submenu heights/counts reflect filtered rows.[17][32][40][51][52]
 
 ## 1. Core Editor Model
 
@@ -78,7 +79,8 @@ Priority labels used here:
 - `[x]` The command runner exposes settings for animation mode, cursor mode, background style, code font, text font, ligature shaping, blur radius, animation timing, animation steps, buffer font size, UI font size, and buffer language.[16][17][40]
 - `[x]` Text-entry rows in the command runner support immediate typing, cancel/restore semantics, and word deletion.[17][40][41]
 - `[x]` Long language/settings submenus now scroll so the selected item stays visible.[32]
-- `[~][P1]` The command runner is now a strong unified settings/command surface, but it is still not a complete universal shell for every subsystem in the product vision.[7][17][32]
+- `[x]` Focused submenus are searchable from the keyboard, so long lists such as the language submenu can be narrowed in place before submitting a selection.[17][32][40][51][52]
+- `[~][P1]` The command runner is now a strong unified settings/command surface with nested, scrollable, searchable submenus, but it is still not a complete universal shell for every subsystem in the product vision.[7][17][32][40]
 
 ## 8. Fonts, Typography, And Content-Aware Layout
 
@@ -153,7 +155,7 @@ Priority labels used here:
 - `[ ]` Add panel presets / workspace presets.[30][31]
 - `[ ]` Support multiple panels per side rather than single replacement per side.[30][31]
 - `[ ]` Add interface density / minimal-vs-maximal UI modes if still desired.[16][17][30]
-- `[ ]` Revisit the command runner as a broader unified control surface once the editing fundamentals are settled.[17][32]
+- `[~]` Revisit the command runner as a broader unified control surface once the editing fundamentals are settled. Nested settings, scrolling, text-entry rows, focused submenu search, and typed command execution are now in place; the remaining gap is breadth across every subsystem rather than command-runner mechanics.[7][17][32][40][51][52]
 - `[ ]` Add hover affordances and context-menu style mouse workflows if those are still desired as part of broader UI polish.[14][15]
 
 ### P2: IDE Features
@@ -165,7 +167,6 @@ Priority labels used here:
 ## Summary
 
 - Strongest implemented areas today: rope-backed editing, session restore/save, typography/layout correctness, nested command-runner overlays, theming/animation, and pinned-panel basics.[1][5][11][17][19][27]
-- Biggest current gaps remain: fully finished multi-cursor editing, richer find/replace workflows, fuller keymap configurability beyond the current global override layer, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][46][47]
 - Biggest current gaps remain: fully finished multi-cursor editing, richer find/replace workflows, a user-facing keymap editing surface beyond the new config-backed bindings, richer Markdown preview/document rendering beyond the same-metric block lens, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][40][46][47][49][50]
 - Recommended implementation order from here: finish editing fundamentals first, then polish workflow/UX, then deepen IDE behavior.[3][14][17][30][33]
 
@@ -221,3 +222,5 @@ Priority labels used here:
 [48] `src/main/scala/Main.scala`
 [49] `src/main/scala/com/serenity/config/FocusedKeymapConfig.scala`
 [50] `docs/renderer-capabilities.md`
+[51] `src/test/scala/com/serenity/CommandRunnerReducerSpec.scala`
+[52] `src/test/scala/com/serenity/SurfaceContentResolverSpec.scala`

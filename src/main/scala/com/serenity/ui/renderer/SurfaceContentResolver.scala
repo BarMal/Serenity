@@ -346,8 +346,9 @@ object SurfaceContentResolver:
     mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
     val group = runner.settingsGroups.find(_.id == groupId)
-    val items = runner.submenuItems(groupId)
     val submenuState = runner.activeSubmenu.filter(_.groupId == groupId)
+    val allItems = runner.submenuItems(groupId)
+    val items = submenuState.map(_.filteredItems(allItems)).getOrElse(allItems)
     val selectedIndex = submenuState.map(_.selectedIndex).getOrElse(0)
     val maxItemRows = math.max(1, rect.height - 4)
     val offset =
@@ -381,7 +382,16 @@ object SurfaceContentResolver:
 
     ResolvedSurfaceContent(
       title = titleFor(mode, group.map(_.label).getOrElse("submenu")),
-      header = group.map(g => OverlayRow(g.label)),
+      header = group.map { g =>
+        submenuState.filter(_.searchTerm.nonEmpty) match
+          case Some(submenu) =>
+            OverlayRow(
+              plainText = s"${g.label} search: ${submenu.searchTerm}",
+              cursorColumn = Some(s"${g.label} search: ${submenu.searchTerm}".length)
+            )
+          case None =>
+            OverlayRow(g.label)
+      },
       rows = rows,
       footer = footer
     )
