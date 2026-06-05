@@ -1,6 +1,6 @@
 # Serenity State Of Play
 
-Generated on 2026-06-04 against the current branch state.
+Generated on 2026-06-05 against the current branch state.
 
 This document now serves two purposes:
 - a current implementation status report
@@ -25,6 +25,9 @@ Priority labels used here:
 - `[x]` `StateManager` has been split into composed pipeline/facade traits instead of remaining one monolithic implementation file.[34][35][36]
 - `[x]` Markdown editor rendering now has structural styling for headings, list markers, blockquotes, inline code, and links, including underline-capable style propagation through the renderer.[22][23][37]
 - `[x]` Global hotkeys now support config-backed overrides, and runtime startup now actually boots from `ConfigManager.loadConfig()` rather than always using `AppConfig.default`.[12][13][46][47][48]
+- `[x]` Focused keymaps are now configurable through config-backed editor, command-runner, modal, panel, and peek binding groups, and trigger parsing now covers non-character keys such as enter, escape, arrows, home/end, and page navigation.[12][13][46][47][49]
+- `[x]` Markdown block-lens rendering now keeps the active Markdown block as raw source while surrounding Markdown lines use Markdown presentation styling. Renderer capabilities and limitations are documented separately.[19][22][37][50]
+- `[x]` Focused command-runner submenus are now searchable. Typing in a submenu filters its rows, navigation and submission use the filtered result set, `Escape` clears the submenu search before leaving, and submenu heights/counts reflect filtered rows.[17][32][40][51][52]
 
 ## 1. Core Editor Model
 
@@ -53,7 +56,7 @@ Priority labels used here:
 - `[x]` Markdown buffers participate in LSP server resolution through the built-in Marksman mapping, and buffer-language changes refresh the LSP binding for file-backed buffers.[36][42][43][44]
 - `[x]` Markdown and plain-text buffers use the text-font rendering path rather than the code-font path.[2][37][38]
 - `[x]` Markdown/prose layout uses measured caret stops, proportional wrapping, proportional selection rendering, and pixel-aware cursor placement where appropriate.[19][37][39]
-- `[~][P0]` Markdown rendering is still editor-first rather than preview-first. The editor now applies markdown-aware styling for headings, list markers, blockquotes, inline code, and links, but there is still no separate preview surface or richer renderer for tables, rendered blocks, or document-preview presentation.[19][22][23][32][37]
+- `[~][P0]` Markdown rendering is still editor-first rather than preview-first. The editor now applies markdown-aware styling for headings, list markers, blockquotes, inline code, and links, and block-lens rendering keeps the active Markdown block raw while surrounding lines use presentation styling. There is still no separate preview surface or richer renderer for rendered tables, images, mixed heading sizes, or document-preview presentation.[19][22][23][32][37][50]
 - `[~][P1]` Markdown editing has the language/runtime plumbing it needs, but there is no markdown-specific command surface yet for preview toggles, structured block operations, or document-style editing affordances.[17][32][36]
 
 ## 5. Sessions, Startup, And Restoration
@@ -67,7 +70,7 @@ Priority labels used here:
 
 - `[x]` There is a stable hotkey layer for common editor operations, command runner toggle, file search, and tab navigation.[12]
 - `[x]` Focus-aware input routing now cleanly distinguishes editor, modal, command-runner, submenu, panel, and peek input behavior.[40][41]
-- `[~][P0]` Key mappings are now partially user-configurable. Global hotkeys such as command palette, file search, save, quit, tab navigation, and clipboard actions can be overridden through config-backed bindings, but the broader input system is still not a complete user-editable keymap surface for every editor, modal, and panel-local action.[12][13][46][47]
+- `[~][P0]` Key mappings are now broadly config-driven across the focused input surfaces. Global hotkeys plus editor, command-runner, modal, panel, and peek-local bindings can all be overridden through config-backed bindings, but there is still no user-facing keymap editor in the command runner and the binding model is still limited to existing actions rather than an open-ended command surface.[12][13][40][46][47][49]
 
 ## 7. Command Runner And Floating Surfaces
 
@@ -76,7 +79,8 @@ Priority labels used here:
 - `[x]` The command runner exposes settings for animation mode, cursor mode, background style, code font, text font, ligature shaping, blur radius, animation timing, animation steps, buffer font size, UI font size, and buffer language.[16][17][40]
 - `[x]` Text-entry rows in the command runner support immediate typing, cancel/restore semantics, and word deletion.[17][40][41]
 - `[x]` Long language/settings submenus now scroll so the selected item stays visible.[32]
-- `[~][P1]` The command runner is now a strong unified settings/command surface, but it is still not a complete universal shell for every subsystem in the product vision.[7][17][32]
+- `[x]` Focused submenus are searchable from the keyboard, so long lists such as the language submenu can be narrowed in place before submitting a selection.[17][32][40][51][52]
+- `[~][P1]` The command runner is now a strong unified settings/command surface with nested, scrollable, searchable submenus, but it is still not a complete universal shell for every subsystem in the product vision.[7][17][32][40]
 
 ## 8. Fonts, Typography, And Content-Aware Layout
 
@@ -143,15 +147,15 @@ Priority labels used here:
 - `[~]` Finish true multi-cursor editing semantics across the remaining primary-cursor branches. Distinct-cursor whole-line copy/cut, overlapping word-delete parity, tab/delete-forward coverage, repeated vertical preferred-column / preferred-x preservation, and explicit select-all/find/modal-open semantics are now implemented; the remaining gap is broader parity across the rest of the single-cursor command set.[3][45]
 - `[~]` Expand the find/replace family into a fuller workflow with clearer single-step and all-step behavior. `Replace Next` and `Replace All` now support both current-buffer and active-selection scope; the remaining gaps are broader result management and larger-scope workflows.[3][8]
 - `[x]` Add richer mouse-driven text editing. Click placement, range extension, drag selection, double-click word selection, and triple-click line selection are now implemented.[14][15]
-- `[~]` Continue the markdown direction intentionally. Editor-side structural styling now exists for headings, list markers, blockquotes, inline code, and links; the remaining decision is whether to stop at richer editor semantics or add preview/document presentation behavior.[19][22][23][32][37]
-- `[~]` Continue expanding key binding configurability beyond the current global-hotkey override layer into fuller editor/modal/panel-local keymap control.[12][13][46][47]
+- `[~]` Continue the markdown direction intentionally. Editor-side structural styling and block-lens raw-source editing now exist; the remaining decision is whether to add a separate preview/document presentation behavior beyond the current same-metric editor lens.[19][22][23][32][37][50]
+- `[~]` Continue the keymap direction beyond the new config-backed focused bindings. The runtime now supports editor/modal/panel/overlay-local overrides in addition to global hotkeys; the remaining gap is a user-facing keymap editing surface and any broader remapping of higher-level commands.[12][13][40][46][47][49]
 
 ### P1: UX Polish
 
 - `[ ]` Add panel presets / workspace presets.[30][31]
 - `[ ]` Support multiple panels per side rather than single replacement per side.[30][31]
 - `[ ]` Add interface density / minimal-vs-maximal UI modes if still desired.[16][17][30]
-- `[ ]` Revisit the command runner as a broader unified control surface once the editing fundamentals are settled.[17][32]
+- `[~]` Revisit the command runner as a broader unified control surface once the editing fundamentals are settled. Nested settings, scrolling, text-entry rows, focused submenu search, and typed command execution are now in place; the remaining gap is breadth across every subsystem rather than command-runner mechanics.[7][17][32][40][51][52]
 - `[ ]` Add hover affordances and context-menu style mouse workflows if those are still desired as part of broader UI polish.[14][15]
 
 ### P2: IDE Features
@@ -163,7 +167,7 @@ Priority labels used here:
 ## Summary
 
 - Strongest implemented areas today: rope-backed editing, session restore/save, typography/layout correctness, nested command-runner overlays, theming/animation, and pinned-panel basics.[1][5][11][17][19][27]
-- Biggest current gaps remain: fully finished multi-cursor editing, richer find/replace workflows, fuller keymap configurability beyond the current global override layer, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][46][47]
+- Biggest current gaps remain: fully finished multi-cursor editing, richer find/replace workflows, a user-facing keymap editing surface beyond the new config-backed bindings, richer Markdown preview/document rendering beyond the same-metric block lens, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][40][46][47][49][50]
 - Recommended implementation order from here: finish editing fundamentals first, then polish workflow/UX, then deepen IDE behavior.[3][14][17][30][33]
 
 ## Sources
@@ -216,3 +220,7 @@ Priority labels used here:
 [46] `src/main/scala/com/serenity/config/HotkeyConfig.scala`
 [47] `src/main/scala/com/serenity/keystroke/translators/TextHotkeyConverters.scala`
 [48] `src/main/scala/Main.scala`
+[49] `src/main/scala/com/serenity/config/FocusedKeymapConfig.scala`
+[50] `docs/renderer-capabilities.md`
+[51] `src/test/scala/com/serenity/CommandRunnerReducerSpec.scala`
+[52] `src/test/scala/com/serenity/SurfaceContentResolverSpec.scala`

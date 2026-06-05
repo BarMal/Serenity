@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.config.{AppConfig, HotkeyAction}
+import com.serenity.config.{AppConfig, EditorKeyAction, HotkeyAction}
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -56,6 +56,19 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
 
     customTranslator.translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl))) shouldBe ToggleCommandRunner
     customTranslator.translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl))).isInstanceOf[
+      UnhandledEvent[?]
+    ] shouldBe true
+  }
+
+  it should "respect configured editor-local keymap overrides" in {
+    val customConfig = AppConfig.default.withEditorKeyOverride(
+      EditorKeyAction.PageDown,
+      "ctrl+j"
+    )
+    val customTranslator = new TextEntryTranslator(customConfig)
+
+    customTranslator.translate(KeyStrokeInfo(InputKey.Character, Some('j'), Set(Modifier.Ctrl))) shouldBe PageDown
+    customTranslator.translate(KeyStrokeInfo(InputKey.PageDown, None, Set.empty)).isInstanceOf[
       UnhandledEvent[?]
     ] shouldBe true
   }

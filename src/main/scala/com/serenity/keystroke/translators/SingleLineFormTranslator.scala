@@ -1,26 +1,15 @@
 package com.serenity.keystroke.translators
 
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 
-class SingleLineFormTranslator extends Translator[ModalInputEvent]:
+class SingleLineFormTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[ModalInputEvent]:
 
-  override def converters = List(DirectionalKeyConverter.arrowKeys(ModalNavigate.apply), singleLineFormConverter)
+  override def converters = List(LocalKeymapConverters.converter(appConfig.focusedKeymapConfig.modal.bindings), singleLineFormCharacterConverter)
 
-  private val singleLineFormConverter: PartialFunction[KeyStrokeInfo, ModalInputEvent] = {
+  private val singleLineFormCharacterConverter: PartialFunction[KeyStrokeInfo, ModalInputEvent] = {
     case KeyStrokeInfo(InputKey.Character, Some(char), modifiers)
         if modifiers.isEmpty || modifiers == Set(Modifier.Shift) =>
       ModalInsertChar(char)
-    case KeyStrokeInfo(InputKey.Backspace, _, modifiers) if modifiers.contains(Modifier.Ctrl) =>
-      ModalDeleteWordBackward
-    case KeyStrokeInfo(InputKey.Delete, _, modifiers) if modifiers.contains(Modifier.Ctrl) =>
-      ModalDeleteWordForward
-    case KeyStrokeInfo(InputKey.Backspace, _, _) => ModalDeleteBackward
-    case KeyStrokeInfo(InputKey.Delete, _, _)    => ModalDeleteForward
-    case KeyStrokeInfo(InputKey.Tab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
-      ModalNextField
-    case KeyStrokeInfo(InputKey.ReverseTab, _, modifiers) if !modifiers.contains(Modifier.Ctrl) =>
-      ModalPreviousField
-    case KeyStrokeInfo(InputKey.Enter, _, _)  => ModalSubmit
-    case KeyStrokeInfo(InputKey.Escape, _, _) => ModalDismiss
   }

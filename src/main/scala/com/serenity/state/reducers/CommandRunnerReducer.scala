@@ -26,6 +26,8 @@ object CommandRunnerReducer:
       case RunnerDismiss =>
         if submenuEditing(state) then
           ReducerResult.noEffects(clearSubmenuEditMode(state))
+        else if submenuSearching(state) then
+          ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch("")))
         else if submenuHasFocus(state) then
           ReducerResult.noEffects(replaceRunner(state, _.exitSubmenuToPreview))
         else if rootEditing(state) then
@@ -81,11 +83,12 @@ object CommandRunnerReducer:
           currentRunner(state).flatMap(_.activeSubmenu) match
             case Some(submenu) =>
               val runner = currentRunner(state).get
+              val allItems = runner.submenuItems(submenu.groupId)
               val selectedInput =
-                submenu.selectedItem(runner.submenuItems(submenu.groupId)).collect { case input: CommandSurfaceItem.InputItem =>
+                submenu.selectedItemFromAll(allItems).collect { case input: CommandSurfaceItem.InputItem =>
                   input
                 }
-              val activeInput = runner.submenuItems(submenu.groupId).collectFirst {
+              val activeInput = allItems.collectFirst {
                 case input: CommandSurfaceItem.InputItem if submenu.editingItemId.contains(input.id) => input
               }.orElse(selectedInput)
               val currentText = Option.when(submenu.editingItemId.nonEmpty)(submenu.editingText).getOrElse("")
@@ -104,7 +107,9 @@ object CommandRunnerReducer:
                       )
                     )
                   case None =>
-                    ReducerResult.noEffects(state)
+                    ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(submenu.searchTerm + char)))
+              else if submenu.editingItemId.isEmpty then
+                ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(submenu.searchTerm + char)))
               else ReducerResult.noEffects(state)
             case None =>
               ReducerResult.noEffects(state)
@@ -143,6 +148,8 @@ object CommandRunnerReducer:
                   r.copy(activeSubmenu = r.activeSubmenu.map(s => s.copy(editingText = s.editingText.dropRight(1))))
                 )
               )
+            case Some(submenu) if submenu.searchTerm.nonEmpty =>
+              ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(submenu.searchTerm.dropRight(1))))
             case _ =>
               ReducerResult.noEffects(state)
         else
@@ -186,6 +193,10 @@ object CommandRunnerReducer:
                   )
                 )
               )
+            case Some(submenu) if submenu.searchTerm.nonEmpty =>
+              ReducerResult.noEffects(
+                replaceRunner(state, _.updateSubmenuSearch(TextEditing.deleteWordBackward(submenu.searchTerm)))
+              )
             case _ =>
               ReducerResult.noEffects(state)
         else
@@ -218,6 +229,10 @@ object CommandRunnerReducer:
                     )
                   )
                 )
+              )
+            case Some(submenu) if submenu.searchTerm.nonEmpty =>
+              ReducerResult.noEffects(
+                replaceRunner(state, _.updateSubmenuSearch(TextEditing.deleteWordForward(submenu.searchTerm)))
               )
             case _ =>
               ReducerResult.noEffects(state)
@@ -353,6 +368,9 @@ object CommandRunnerReducer:
   private def submenuEditing(state: AppState): Boolean =
     currentRunner(state).flatMap(_.activeSubmenu.flatMap(_.editingItemId)).nonEmpty
 
+  private def submenuSearching(state: AppState): Boolean =
+    currentRunner(state).flatMap(_.activeSubmenu).exists(_.searchTerm.nonEmpty)
+
   private def rootEditing(state: AppState): Boolean =
     currentRunner(state).flatMap(_.editingItemId).nonEmpty
 
@@ -366,7 +384,7 @@ object CommandRunnerReducer:
 
   private def submenuSelectedOption(runner: CommandRunner): Option[CommandSurfaceItem.OptionItem] =
     runner.activeSubmenu.flatMap { submenu =>
-      submenu.selectedItem(runner.submenuItems(submenu.groupId)).collect { case option: CommandSurfaceItem.OptionItem =>
+      submenu.selectedItemFromAll(runner.submenuItems(submenu.groupId)).collect { case option: CommandSurfaceItem.OptionItem =>
         option
       }
     }
@@ -382,7 +400,7 @@ object CommandRunnerReducer:
     currentRunner(state).flatMap(_.activeSubmenu) match
       case Some(submenu) =>
         val runner = currentRunner(state).get
-        submenu.selectedItem(runner.submenuItems(submenu.groupId)) match
+        submenu.selectedItemFromAll(runner.submenuItems(submenu.groupId)) match
           case Some(_: CommandSurfaceItem.InputItem) if submenu.editingItemId.isEmpty =>
             ReducerResult.noEffects(state)
           case Some(item: CommandSurfaceItem.InputItem) =>

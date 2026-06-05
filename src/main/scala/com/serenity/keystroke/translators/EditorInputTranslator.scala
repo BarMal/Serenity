@@ -1,11 +1,11 @@
 package com.serenity.keystroke.translators
 
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.TextEntryEvent
 
-class EditorInputTranslator extends Translator[TextEntryEvent]:
+class EditorInputTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[TextEntryEvent]:
 
   override def converters = List(
-    TextCharacterConverters.characterConverter,
-    TextNavigationConverters.navigationConverter,
-    TextDeletionConverters.deletionConverter
+    LocalKeymapConverters.converter(appConfig.focusedKeymapConfig.editor.bindings),
+    TextCharacterConverters.characterConverter
   )

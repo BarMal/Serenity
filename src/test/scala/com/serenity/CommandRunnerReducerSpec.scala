@@ -370,6 +370,40 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       Some("animation-steps")
   }
 
+  it should "filter focused submenu items while typing and submit the filtered selection" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-language", "lang-plain-text")
+
+    val searched = List('j', 'a', 'v', 'a').foldLeft(state) { (s, char) =>
+      CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state
+    }
+    val runner = runnerFrom(searched)
+
+    runner.activeSubmenu.map(_.searchTerm) shouldBe Some("java")
+    runner.focusedSubmenuItems.collect {
+      case CommandSurfaceItem.CommandItem(command) => command.label
+    } shouldBe List("Java", "JavaScript")
+
+    val submitted = CommandRunnerReducer.reduce(RunnerSubmit, searched, registry)
+    submitted.effects.collectFirst {
+      case AppEffect.ExecuteCommand(command) => command.intent
+    } shouldBe Some(CommandIntent.SetBufferLanguage(Some(com.serenity.lsp.config.LanguageId.Java)))
+  }
+
+  it should "clear submenu search with escape before leaving the submenu" in {
+    val registry = CommandRegistry.default
+    val searched = List('j', 'a').foldLeft(settingsStateOnItem("settings-language", "lang-plain-text")) { (s, char) =>
+      CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state
+    }
+
+    val cleared = CommandRunnerReducer.reduce(RunnerDismiss, searched, registry)
+    val runner  = runnerFrom(cleared.state)
+
+    runner.activeSubmenu.map(_.searchTerm) shouldBe Some("")
+    cleared.state.commandRunnerSubmenuSurface shouldBe defined
+    cleared.state.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+  }
+
   it should "discard in-progress submenu edit text when exiting and re-entering the group" in {
     val registry = CommandRegistry.default
     val editingState = List('5').foldLeft(

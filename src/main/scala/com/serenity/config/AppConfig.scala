@@ -22,6 +22,7 @@ case class AppConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
     syntaxHighlightingEnabled: Boolean = false,
     hotkeyConfig: HotkeyConfig = HotkeyConfig(),
+    focusedKeymapConfig: FocusedKeymapConfig = FocusedKeymapConfig(),
     fontConfig: FontConfig = FontConfig(),
     minimumPaneWidth: Int = 50,
     showLineNumbers: Boolean = true,
@@ -48,6 +49,24 @@ case class AppConfig(
 
   def withHotkeyOverride(action: HotkeyAction, binding: String): AppConfig =
     copy(hotkeyConfig = hotkeyConfig.withBinding(action, binding))
+
+  def withFocusedKeymapConfig(config: FocusedKeymapConfig): AppConfig =
+    copy(focusedKeymapConfig = config)
+
+  def withEditorKeyOverride(action: EditorKeyAction, binding: String): AppConfig =
+    copy(focusedKeymapConfig = focusedKeymapConfig.withEditorBinding(action, binding))
+
+  def withCommandRunnerKeyOverride(action: CommandRunnerKeyAction, binding: String): AppConfig =
+    copy(focusedKeymapConfig = focusedKeymapConfig.withCommandRunnerBinding(action, binding))
+
+  def withModalKeyOverride(action: ModalKeyAction, binding: String): AppConfig =
+    copy(focusedKeymapConfig = focusedKeymapConfig.withModalBinding(action, binding))
+
+  def withPanelKeyOverride(action: PanelKeyAction, binding: String): AppConfig =
+    copy(focusedKeymapConfig = focusedKeymapConfig.withPanelBinding(action, binding))
+
+  def withPeekKeyOverride(action: PeekKeyAction, binding: String): AppConfig =
+    copy(focusedKeymapConfig = focusedKeymapConfig.withPeekBinding(action, binding))
 
   /** Create a new config with font configuration */
   def withFontConfig(config: FontConfig): AppConfig =

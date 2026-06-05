@@ -307,7 +307,11 @@ object LayoutEngine:
       case SurfaceContent.CommandPalette(_) | SurfaceContent.ThemePicker(_) | SurfaceContent.FileSearch(_) =>
         math.min(8, math.max(4, maxHeight - 1))
       case SurfaceContent.CommandPaletteSubmenu(runner, groupId, _) =>
-        val itemCount = runner.submenuItems(groupId).size
+        val allItems = runner.submenuItems(groupId)
+        val itemCount = runner.activeSubmenu
+          .filter(_.groupId == groupId)
+          .map(_.filteredItems(allItems).size)
+          .getOrElse(allItems.size)
         math.min(8, math.max(4, itemCount + 3))
       case SurfaceContent.ModalWorkflow(modal) =>
         modal match

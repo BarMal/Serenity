@@ -167,6 +167,27 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.footer.map(_.plainText) shouldBe Some("11/23")
   }
 
+  it should "render focused submenu search text and filtered results" in {
+    val registry = CommandRegistry.default
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-language", searchTerm = "java")))
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPaletteSubmenu(runner, "settings-language", previewOnly = false),
+      LayoutRect(0, 0, 40, 8),
+      SurfaceRenderMode.Floating
+    )
+
+    floating.header.map(_.plainText) shouldBe Some("Language search: java")
+    floating.rows.map(_.plainText) shouldBe List(
+      "Java - Use Java mode for the current buffer.",
+      "JavaScript - Use JavaScript mode for the current buffer."
+    )
+    floating.rows.headOption.map(_.selected) shouldBe Some(true)
+    floating.footer.map(_.plainText) shouldBe Some("1/2")
+  }
+
   it should "resolve file workflow modals into field rows, suggestion rows, and a directory confirmation footer" in {
     val workflow = FileWorkflowState(
       mode = FileWorkflowMode.SaveAs,
