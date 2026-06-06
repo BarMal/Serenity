@@ -13,8 +13,8 @@ import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Verifies that a buffer with language=Markdown (triggering textFont which is proportional) renders
-  * via drawRunPx, while a code buffer renders via putString.
+/** Verifies that a buffer with language=Markdown (triggering textFont which is proportional) renders via drawRunPx,
+  * while a code buffer renders via putString.
   */
 class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
 
@@ -31,13 +31,13 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer   = Buffer.fromString(bufferId, content).copy(language = language)
     val pane     = EditorPane.withBuffer(paneId, bufferId)
     AppState.initial.copy(
-      buffers     = Map(bufferId -> buffer),
+      buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
       layout = Layout(
-        editorPanes        = Map(paneId -> pane),
+        editorPanes = Map(paneId -> pane),
         activeEditorPaneId = Some(paneId)
       ),
-      theme  = Theme.light,
+      theme = Theme.light,
       config = AppConfig.default.withLineNumbers(false).withGutter(false)
     )
 
@@ -60,8 +60,8 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "use drawRunPx for a ligature-enabled code font that requires measured layout" in {
-    val state          = buildState("->")
-    val ligatureAttrs  = new java.util.HashMap[TextAttribute, Any]()
+    val state         = buildState("->")
+    val ligatureAttrs = new java.util.HashMap[TextAttribute, Any]()
     ligatureAttrs.put(TextAttribute.LIGATURES, TextAttribute.LIGATURES_ON)
     val ligatureFont   = monoFont.deriveFont(ligatureAttrs)
     val ligatureMetric = CellMetrics.fromFont(ligatureFont)
@@ -96,13 +96,13 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers     = Map(bufferId -> buffer),
+      buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
       layout = Layout(
-        editorPanes        = Map(paneId -> pane),
+        editorPanes = Map(paneId -> pane),
         activeEditorPaneId = Some(paneId)
       ),
-      theme  = Theme.light,
+      theme = Theme.light,
       config = AppConfig.default.withLineNumbers(false).withGutter(false)
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)

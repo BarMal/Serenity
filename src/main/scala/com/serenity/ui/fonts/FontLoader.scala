@@ -19,10 +19,12 @@ object FontLoader:
   )
 
   lazy val availableMonospaceFamilies: List[String] =
-    (BundledCodeFontFamily :: availableSystemFontFamilies.filter(f => isMonospacedFamily(f) && canRenderBasicText(f))).distinct
+    (BundledCodeFontFamily :: availableSystemFontFamilies.filter(f =>
+      isMonospacedFamily(f) && canRenderBasicText(f)
+    )).distinct
 
   lazy val availableTextFamilies: List[String] =
-    ((Font.SANS_SERIF :: availableSystemFontFamilies).filterNot(isMonospacedFamily).filter(canRenderBasicText)).distinct
+    (Font.SANS_SERIF :: availableSystemFontFamilies).filterNot(isMonospacedFamily).filter(canRenderBasicText).distinct
 
   def isMonospacedFamily(family: String): Boolean =
     if family == BundledCodeFontFamily then true
@@ -48,7 +50,8 @@ object FontLoader:
 
   def previewCodeFont(config: FontConfig): Font =
     val base =
-      if config.codeFontFamily == BundledCodeFontFamily then bundledMonospace(config.fontSize).getOrElse(defaultSystemMonospace(config.fontSize))
+      if config.codeFontFamily == BundledCodeFontFamily then
+        bundledMonospace(config.fontSize).getOrElse(defaultSystemMonospace(config.fontSize))
       else Font(config.codeFontFamily, Font.PLAIN, config.fontSize.toInt).deriveFont(config.fontSize)
     applyFontFeatures(base, config.enableLigatures)
 
@@ -60,7 +63,8 @@ object FontLoader:
 
   def previewUiFont(config: FontConfig): Font =
     val base =
-      if config.codeFontFamily == BundledCodeFontFamily then bundledMonospace(config.uiFontSize).getOrElse(defaultSystemMonospace(config.uiFontSize))
+      if config.codeFontFamily == BundledCodeFontFamily then
+        bundledMonospace(config.uiFontSize).getOrElse(defaultSystemMonospace(config.uiFontSize))
       else Font(config.codeFontFamily, Font.PLAIN, config.uiFontSize.toInt).deriveFont(config.uiFontSize)
     applyFontFeatures(base, config.enableLigatures)
 
@@ -68,7 +72,8 @@ object FontLoader:
     isMonospaced(font)
 
   def ligaturesEnabled(font: Font): Boolean =
-    Option(font.getAttributes.get(java.awt.font.TextAttribute.LIGATURES)).contains(java.awt.font.TextAttribute.LIGATURES_ON)
+    Option(font.getAttributes.get(java.awt.font.TextAttribute.LIGATURES))
+      .contains(java.awt.font.TextAttribute.LIGATURES_ON)
 
   /** Compatibility shim while the runtime moves to separate code/text fonts. */
   def loadMonaspaceNeon(config: FontConfig)(using logger: Logger[IO]): IO[List[Font]] =
@@ -83,8 +88,7 @@ object FontLoader:
   private def loadFontFromResource(resourcePath: String, size: Float): IO[Option[Font]] =
     IO.blocking {
       Option(getClass.getResourceAsStream(resourcePath)).flatMap { stream =>
-        try
-          Some(Font.createFont(Font.TRUETYPE_FONT, stream).deriveFont(size))
+        try Some(Font.createFont(Font.TRUETYPE_FONT, stream).deriveFont(size))
         catch case _: Exception => None
         finally stream.close()
       }
@@ -93,8 +97,7 @@ object FontLoader:
   private def loadVariableFont(size: Float): IO[Option[Font]] =
     IO.blocking {
       Option(getClass.getResourceAsStream("/fonts/MonaspaceNeonVarVF[wght,wdth,slnt].ttf")).flatMap { stream =>
-        try
-          Some(Font.createFont(Font.TRUETYPE_FONT, stream).deriveFont(size))
+        try Some(Font.createFont(Font.TRUETYPE_FONT, stream).deriveFont(size))
         catch case _: Exception => None
         finally stream.close()
       }
@@ -110,8 +113,7 @@ object FontLoader:
 
   private def loadBundledFontBase(resourcePath: String): Option[Font] =
     Option(getClass.getResourceAsStream(resourcePath)).flatMap { stream =>
-      try
-        Some(Font.createFont(Font.TRUETYPE_FONT, stream))
+      try Some(Font.createFont(Font.TRUETYPE_FONT, stream))
       catch case _: Exception => None
       finally stream.close()
     }
@@ -126,7 +128,7 @@ object FontLoader:
     try
       val font = Font(family, Font.PLAIN, 12)
       font.canDisplayUpTo("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789") == -1
-        && CellMetrics.fromFont(font.deriveFont(12.0f)).isValid
+      && CellMetrics.fromFont(font.deriveFont(12.0f)).isValid
     catch case _: Exception => false
 
   private def isMonospaced(font: Font): Boolean =

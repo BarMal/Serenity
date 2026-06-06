@@ -2,19 +2,10 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{Direction, Enter, InsertChar, ModalNavigate, MoveLeft, TabKey, ToggleCommandRunner}
+import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{
-  BufferId,
-  CursorPosition,
-  Focus,
-  Modal,
-  ReplaceWorkflowScope,
-  ReplaceWorkflowState,
-  Selection,
-  SurfaceContent
-}
+import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -26,7 +17,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("ReplaceWorkflowStateManagerSpec"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("ReplaceWorkflowStateManagerSpec"))
     StateManager.apply(logger).unsafeRunSync()
 
   private def executeCommandThroughRunner(
@@ -35,13 +26,14 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     expectedCommandName: String
   ): Unit =
     val beforeOpen = stateManager.getCurrentState.unsafeRunSync()
-    if beforeOpen.commandRunnerSurface.flatMap {
-        _.content match
-          case SurfaceContent.CommandPalette(runner) => Some(runner.isActive)
-          case _                                     => None
-      }.getOrElse(false) == false
-    then
-      stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    if beforeOpen.commandRunnerSurface
+          .flatMap {
+            _.content match
+              case SurfaceContent.CommandPalette(runner) => Some(runner.isActive)
+              case _                                     => None
+          }
+          .getOrElse(false) == false
+    then stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
@@ -55,14 +47,18 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   "Replace workflow" should "replace all matches in the focused buffer and dismiss the modal" in {
     val stateManager = createStateManager()
-    val bufferId = BufferId(0)
+    val bufferId     = BufferId(0)
 
-    stateManager.updateState { state =>
-      val buffer = state.buffers(bufferId).copy(
-        content = com.serenity.rope.Rope("needle one\nneedle two\nkeep")
-      )
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
-    }.unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("needle one\nneedle two\nkeep")
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "replace", "replace")
 
@@ -90,14 +86,18 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "replace the next match and keep the modal open for repeated replacement" in {
     val stateManager = createStateManager()
-    val bufferId = BufferId(0)
+    val bufferId     = BufferId(0)
 
-    stateManager.updateState { state =>
-      val buffer = state.buffers(bufferId).copy(
-        content = com.serenity.rope.Rope("needle one\nneedle two\nkeep")
-      )
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
-    }.unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("needle one\nneedle two\nkeep")
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "replace", "replace")
 
@@ -152,18 +152,22 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
 
-    stateManager.updateState { state =>
-      val buffer = state.buffers(bufferId).copy(
-        content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three"),
-        selection = Some(
-          Selection(
-            CursorPosition(1, 0),
-            CursorPosition(1, "needle two".length)
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three"),
+            selection = Some(
+              Selection(
+                CursorPosition(1, 0),
+                CursorPosition(1, "needle two".length)
+              )
+            )
           )
-        )
-      )
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
-    }.unsafeRunSync()
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "replace", "replace")
 
@@ -198,18 +202,22 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
 
-    stateManager.updateState { state =>
-      val buffer = state.buffers(bufferId).copy(
-        content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three"),
-        selection = Some(
-          Selection(
-            CursorPosition(1, 0),
-            CursorPosition(2, "needle three".length)
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three"),
+            selection = Some(
+              Selection(
+                CursorPosition(1, 0),
+                CursorPosition(2, "needle three".length)
+              )
+            )
           )
-        )
-      )
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
-    }.unsafeRunSync()
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "replace", "replace")
 

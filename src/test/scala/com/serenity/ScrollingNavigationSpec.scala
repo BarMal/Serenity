@@ -22,14 +22,14 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
   private def makeStateManager(): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     StateManager.apply(logger)(using balance, LoggerFactory[IO]).unsafeRunSync()
 
   behavior of "Scrolling and Navigation in Editor Panes"
 
   it should "handle vertical scrolling in large files" in {
     val program = for
-      sm = makeStateManager()
+      sm <- IO(makeStateManager())
       // Given: Large file with many lines
       largeContent = (1 to 1000).map(i => s"Line $i with some content").mkString("\n")
       bufferId <- sm.createBuffer(largeContent)
@@ -38,22 +38,22 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       _ <- sm.setBufferForPane(paneId, bufferId)
       _ <- sm.setCursorPosition(paneId, 0, 0)
       _ <- sm.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
-      
+
       // When: Scroll down with Page Down
-      _ <- sm.applyEvent(PageDown)
+      _                  <- sm.applyEvent(PageDown)
       afterPageDownState <- sm.getCurrentState
-      
+
       // When: Scroll down more with Ctrl+End (go to end of file)
-      _ <- sm.applyEvent(MoveToEndOfFile)
+      _             <- sm.applyEvent(MoveToEndOfFile)
       afterEndState <- sm.getCurrentState
     yield
       // Then: Viewport should move down after PageDown
-      val pane1 = afterPageDownState.layout.editorPanes(paneId)
+      val pane1   = afterPageDownState.layout.editorPanes(paneId)
       val buffer1 = pane1.bufferId.flatMap(afterPageDownState.buffers.get).get
       buffer1.viewport.topLine should be > 0
-      
+
       // Then: Should be at end of file after MoveToEndOfFile
-      val pane2 = afterEndState.layout.editorPanes(paneId)
+      val pane2   = afterEndState.layout.editorPanes(paneId)
       val buffer2 = pane2.bufferId.flatMap(afterEndState.buffers.get).get
       buffer2.cursors.head.line shouldBe 999            // Last line (0-indexed)
       buffer2.viewport.topLine should be >= (1000 - 25) // Viewport shows last lines
@@ -63,7 +63,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "handle horizontal scrolling in wide lines" in {
     val program = for
-      sm = makeStateManager()
+      sm <- IO(makeStateManager())
       // Given: File with very long lines
       wideContent = List(
         "A" * 200, // 200 character line
@@ -84,13 +84,13 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       }
       _ <- sm.setCursorPosition(paneId, 0, 150)
       _ <- sm.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
-      
+
       // When: Scroll horizontally to bring cursor into view
-      _ <- sm.ensureCursorVisible(paneId)
+      _                <- sm.ensureCursorVisible(paneId)
       afterScrollState <- sm.getCurrentState
     yield
       // Then: Viewport should scroll horizontally
-      val pane = afterScrollState.layout.editorPanes(paneId)
+      val pane   = afterScrollState.layout.editorPanes(paneId)
       val buffer = pane.bufferId.flatMap(afterScrollState.buffers.get).get
       buffer.viewport.leftColumn should be >= (150 - 80) // Cursor should be visible
 
@@ -99,8 +99,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "use measured horizontal scrolling for proportional markdown lines" in {
     val program = for
-      sm = makeStateManager()
-      _ <- sm.updateState(_.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
+      sm       <- IO(makeStateManager())
+      _        <- sm.updateState(_.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
       bufferId <- sm.createBuffer("iiiiiiiiWW")
       state    <- sm.getCurrentState
       paneId = state.layout.editorPanes.keys.head
@@ -118,7 +118,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       _ <- sm.ensureCursorVisible(paneId)
       afterScrollState <- sm.getCurrentState
     yield
-      val pane = afterScrollState.layout.editorPanes(paneId)
+      val pane   = afterScrollState.layout.editorPanes(paneId)
       val buffer = pane.bufferId.flatMap(afterScrollState.buffers.get).get
       buffer.viewport.leftColumn should be < 7
       buffer.viewport.leftColumn should be >= 0
@@ -128,8 +128,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "use measured horizontal scrolling after deleting a proportional selection" in {
     val program = for
-      sm = makeStateManager()
-      _ <- sm.updateState(_.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
+      sm       <- IO(makeStateManager())
+      _        <- sm.updateState(_.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
       bufferId <- sm.createBuffer("iiiiiiiiWW")
       state    <- sm.getCurrentState
       paneId = state.layout.editorPanes.keys.head
@@ -138,16 +138,18 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
         current.copy(
           buffers = current.buffers.updated(
             bufferId,
-            current.buffers(bufferId).copy(
-              language = Some(LanguageId.Markdown),
-              viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 4),
-              cursors = List(CursorPosition(0, 10)),
-              selection = Some(Selection(CursorPosition(0, 8), CursorPosition(0, 10)))
-            )
+            current
+              .buffers(bufferId)
+              .copy(
+                language = Some(LanguageId.Markdown),
+                viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 4),
+                cursors = List(CursorPosition(0, 10)),
+                selection = Some(Selection(CursorPosition(0, 8), CursorPosition(0, 10)))
+              )
           )
         )
       }
-      _ <- sm.applyEvent(DeleteBackward)
+      _                <- sm.applyEvent(DeleteBackward)
       afterDeleteState <- sm.getCurrentState
     yield
       val buffer = afterDeleteState.buffers(bufferId)
@@ -177,7 +179,9 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val paneId = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
-    stateManager.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80)).unsafeRunSync()
+    stateManager
+      .setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
+      .unsafeRunSync()
 
     // When: Mouse wheel scroll down (3 lines)
     stateManager.applyEvent(ScrollDown(3)).unsafeRunSync()
@@ -206,7 +210,9 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val paneId = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
-    stateManager.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80)).unsafeRunSync()
+    stateManager
+      .setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
+      .unsafeRunSync()
 
     // When: Initiate smooth scroll to line 30
     stateManager.smoothScrollTo(paneId, 30).unsafeRunSync()
@@ -245,13 +251,15 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val paneId = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
-    stateManager.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80)).unsafeRunSync()
+    stateManager
+      .setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
+      .unsafeRunSync()
 
     // When: Open goto line dialog (Ctrl+G)
     stateManager.applyEvent(OpenGotoLine).unsafeRunSync()
 
     // Then: Modal should be open
-    val modalState = stateManager.getCurrentState.unsafeRunSync()
+    val modalState   = stateManager.getCurrentState.unsafeRunSync()
     val modalSurface = modalState.modalSurface
     modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.GotoLine("")))
     modalState.focus shouldBe Focus.Surface(modalSurface.get.id)
@@ -263,7 +271,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Should jump to line 250
     val afterGotoState = stateManager.getCurrentState.unsafeRunSync()
     afterGotoState.modalSurface shouldBe None
-    val pane = afterGotoState.layout.editorPanes(paneId)
+    val pane   = afterGotoState.layout.editorPanes(paneId)
     val buffer = pane.bufferId.flatMap(afterGotoState.buffers.get).get
     buffer.cursors.head.line shouldBe 249           // 0-indexed, so line 250 = index 249
     buffer.viewport.topLine should be >= (249 - 12) // Center line in viewport
@@ -283,7 +291,9 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val paneId = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
-    stateManager.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80)).unsafeRunSync()
+    stateManager
+      .setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
+      .unsafeRunSync()
 
     // When: Open find dialog (Ctrl+F)
     stateManager.applyEvent(OpenFind).unsafeRunSync()
@@ -334,8 +344,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     val defaultViewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80)
     stateManager.setViewport(pane1, defaultViewport).unsafeRunSync()
-    stateManager.setViewport(pane2, defaultViewport).unsafeRunSync()  // ← Set buffer viewport correctly
-    stateManager.setPaneProperties(pane2, _.copy(syncedScrolling = true)).unsafeRunSync()  // ← Only set syncedScrolling
+    stateManager.setViewport(pane2, defaultViewport).unsafeRunSync() // ← Set buffer viewport correctly
+    stateManager.setPaneProperties(pane2, _.copy(syncedScrolling = true)).unsafeRunSync() // ← Only set syncedScrolling
 
     // When: Scroll in first pane
     stateManager.switchToPane(pane1).unsafeRunSync()
@@ -360,10 +370,15 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val paneId = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
-    stateManager.setPaneProperties(paneId, _.copy(
-      viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80),
-      minimapVisible = true
-    )).unsafeRunSync()
+    stateManager
+      .setPaneProperties(
+        paneId,
+        _.copy(
+          viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80),
+          minimapVisible = true
+        )
+      )
+      .unsafeRunSync()
 
     // When: Click on minimap (simulate click at 50% down)
     val targetLine = 500 // Middle of file
@@ -385,7 +400,9 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val paneId = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
-    stateManager.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80)).unsafeRunSync()
+    stateManager
+      .setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
+      .unsafeRunSync()
 
     // When: Try to scroll beyond file bounds
     stateManager.applyEvent(ScrollDown(100)).unsafeRunSync() // Way more than file has
@@ -408,7 +425,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
   trait ScrollFixture:
 
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+
     val stateManager: StateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()

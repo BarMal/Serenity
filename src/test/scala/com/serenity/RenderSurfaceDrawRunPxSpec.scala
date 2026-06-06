@@ -11,11 +11,11 @@ class RenderSurfaceDrawRunPxSpec extends AnyFlatSpec with Matchers:
 
     val calls = surface.drawRunPxCalls
     calls should have size 1
-    calls.head.xPx       shouldBe 10.5f
+    calls.head.xPx shouldBe 10.5f
     calls.head.bgWidthPx shouldBe 15.0f
-    calls.head.yPx       shouldBe 20
-    calls.head.ascentPx  shouldBe 11
-    calls.head.s         shouldBe "Hi"
+    calls.head.yPx shouldBe 20
+    calls.head.ascentPx shouldBe 11
+    calls.head.s shouldBe "Hi"
   }
 
   it should "record xPx as a Float, not rounded to a cell boundary" in {

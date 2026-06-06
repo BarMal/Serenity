@@ -2,12 +2,13 @@ package com.serenity
 
 import java.awt.Color
 
+import _root_.io.circe.syntax.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.AnimationConfig
-import com.serenity.command.{CommandCategory, CommandIntent, CommandRunner, CommandSurfaceItem}
+import com.serenity.command.*
 import com.serenity.config.{AppConfig, BackgroundStyle, CursorMode}
-import com.serenity.keystroke.events.{Enter, MoveDown, MoveRight, TabKey, ToggleCommandRunner}
+import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.session.SessionState
 import com.serenity.session.given
@@ -16,7 +17,6 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
-import _root_.io.circe.syntax.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -24,7 +24,7 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class CursorModeSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def makeStateManager(): StateManager =
@@ -69,7 +69,8 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
       isActive = true,
       activeCategory = CommandCategory.Settings
     )
-    val item = runner.settingsGroups.flatMap(_.children)
+    val item = runner.settingsGroups
+      .flatMap(_.children)
       .collectFirst { case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o }
       .get
     item.options.map(_.label) should contain allOf ("Blink", "Breathe")
@@ -77,15 +78,19 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
 
   it should "map Blink option to SetCursorMode(Blink) intent" in {
     val runner = CommandRunner.empty.copy(isActive = true, activeCategory = CommandCategory.Settings)
-    val item = runner.settingsGroups.flatMap(_.children)
-      .collectFirst { case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o }.get
+    val item = runner.settingsGroups
+      .flatMap(_.children)
+      .collectFirst { case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o }
+      .get
     item.options.find(_.label == "Blink").get.intent shouldBe CommandIntent.SetCursorMode(CursorMode.Blink)
   }
 
   it should "map Breathe option to SetCursorMode(Breathe) intent" in {
     val runner = CommandRunner.empty.copy(isActive = true, activeCategory = CommandCategory.Settings)
-    val item = runner.settingsGroups.flatMap(_.children)
-      .collectFirst { case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o }.get
+    val item = runner.settingsGroups
+      .flatMap(_.children)
+      .collectFirst { case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o }
+      .get
     item.options.find(_.label == "Breathe").get.intent shouldBe CommandIntent.SetCursorMode(CursorMode.Breathe)
   }
 
@@ -109,8 +114,8 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     for _ <- 1 to 4 do sm.applyEvent(TabKey).unsafeRunSync()
     sm.applyEvent(MoveDown).unsafeRunSync()
     sm.applyEvent(Enter).unsafeRunSync()
-    sm.applyEvent(MoveRight).unsafeRunSync()  // Blink → Breathe
-    sm.applyEvent(MoveRight).unsafeRunSync()  // Breathe → Blink (wrap)
+    sm.applyEvent(MoveRight).unsafeRunSync() // Blink → Breathe
+    sm.applyEvent(MoveRight).unsafeRunSync() // Breathe → Blink (wrap)
 
     sm.getCurrentState.unsafeRunSync().config.cursorMode shouldBe CursorMode.Blink
   }
@@ -131,10 +136,10 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
 
   "AppConfig JSON decoder" should "default cursorMode to Blink when key is missing" in {
     import _root_.io.circe.Encoder
-    val enc = summon[Encoder[AppConfig]]
-    val dec = summon[_root_.io.circe.Decoder[AppConfig]]
+    val enc                   = summon[Encoder[AppConfig]]
+    val dec                   = summon[_root_.io.circe.Decoder[AppConfig]]
     val jsonWithoutCursorMode = enc(AppConfig.default).mapObject(_.remove("cursorMode"))
-    val decoded = jsonWithoutCursorMode.as[AppConfig](using dec)
+    val decoded               = jsonWithoutCursorMode.as[AppConfig](using dec)
     decoded.isRight shouldBe true
     decoded.toOption.get.cursorMode shouldBe CursorMode.Blink
   }
@@ -187,4 +192,4 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   private def cursorScreenPos(state: AppState): (Int, Int) =
     val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
     val paneRect = LayoutEngine.calculatePaneLayouts(state, layout).get(PaneId(0)).get
-    (paneRect.x, paneRect.y + 1)  // header row at paneRect.y, content starts at +1
+    (paneRect.x, paneRect.y + 1) // header row at paneRect.y, content starts at +1

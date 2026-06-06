@@ -19,15 +19,15 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
   it should "transition focus between editor panes correctly" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       // Given: Multiple panes
       buffer1 <- stateManager.createBuffer("First buffer")
       buffer2 <- stateManager.createBuffer("Second buffer")
-      pane2 <- stateManager.createPane(Some(buffer2))
+      pane2   <- stateManager.createPane(Some(buffer2))
 
       // When: Switch focus between panes
       _ <- stateManager.switchToPane(pane2)
@@ -52,13 +52,13 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
   it should "handle modal state transitions" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       // Given: Initial state with active pane
-      bufferId <- stateManager.createBuffer("Some content")
+      bufferId     <- stateManager.createBuffer("Some content")
       initialState <- stateManager.getCurrentState
       paneId = initialState.layout.editorPanes.keys.head
 
@@ -69,8 +69,8 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       // Then: Focus should be on the modal surface
       modalState <- stateManager.getCurrentState
       modalSurface = modalState.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(modal))
-      _ = modalSurface shouldBe defined
-      _ = modalState.focus shouldBe Focus.Surface(modalSurface.get.id)
+      _            = modalSurface shouldBe defined
+      _            = modalState.focus shouldBe Focus.Surface(modalSurface.get.id)
 
       // When: Dismiss modal
       _ <- stateManager.dismissModal()
@@ -86,11 +86,11 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
   it should "handle peek overlay state transitions" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       // Given: Active pane with cursor position
       bufferId <- stateManager.createBuffer("Content")
       cursor = CursorPosition(0, 3)
@@ -107,14 +107,16 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
       // Then: Focus should be on the peek surface
       peekState <- stateManager.getCurrentState
-      peekSurface = peekState.uiSurfaces.find(_.content == SurfaceContent.DirectoryListing(
-        java.nio.file.Paths.get("/test"),
-        List(
-          DirEntry(java.nio.file.Paths.get("/test/file1.txt"), "file1.txt", false),
-          DirEntry(java.nio.file.Paths.get("/test/file2.txt"), "file2.txt", false)
-        ),
-        None
-      ))
+      peekSurface = peekState.uiSurfaces.find(
+        _.content == SurfaceContent.DirectoryListing(
+          java.nio.file.Paths.get("/test"),
+          List(
+            DirEntry(java.nio.file.Paths.get("/test/file1.txt"), "file1.txt", false),
+            DirEntry(java.nio.file.Paths.get("/test/file2.txt"), "file2.txt", false)
+          ),
+          None
+        )
+      )
       _ = peekSurface shouldBe defined
       _ = peekState.focus shouldBe Focus.Surface(peekSurface.get.id)
       _ = peekSurface.get.presentation shouldBe SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
@@ -124,20 +126,19 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
       // Then: Focus should return to editor pane
       finalState <- stateManager.getCurrentState
-    yield
-      finalState.focus match
-        case Focus.EditorPane(_) =>
-          finalState.uiSurfaces.exists {
-            _.content == SurfaceContent.DirectoryListing(
-              java.nio.file.Paths.get("/test"),
-              List(
-                DirEntry(java.nio.file.Paths.get("/test/file1.txt"), "file1.txt", false),
-                DirEntry(java.nio.file.Paths.get("/test/file2.txt"), "file2.txt", false)
-              ),
-              None
-            )
-          } shouldBe false
-        case other               => fail(s"Expected EditorPane focus, got $other")
+    yield finalState.focus match
+      case Focus.EditorPane(_) =>
+        finalState.uiSurfaces.exists {
+          _.content == SurfaceContent.DirectoryListing(
+            java.nio.file.Paths.get("/test"),
+            List(
+              DirEntry(java.nio.file.Paths.get("/test/file1.txt"), "file1.txt", false),
+              DirEntry(java.nio.file.Paths.get("/test/file2.txt"), "file2.txt", false)
+            ),
+            None
+          )
+        } shouldBe false
+      case other => fail(s"Expected EditorPane focus, got $other")
 
     program.unsafeRunSync()
   }
@@ -250,7 +251,6 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     val afterCreateState = stateManager.getCurrentState.unsafeRunSync()
     afterCreateState.isValid shouldBe true
 
-
   it should "handle state recovery from invalid transitions gracefully" in new StateFixture:
     // Given: Valid initial state
     val bufferId   = stateManager.createBuffer("Content").unsafeRunSync()
@@ -271,7 +271,8 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
   trait StateFixture:
 
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+
     val stateManager: StateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()

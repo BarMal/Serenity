@@ -94,11 +94,10 @@ object PanelStateReducer:
         )
       case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_) | SurfaceContent.Diagnostics(_) =>
         Some(surface.copy(presentation = SurfacePresentation.Pinned(position, 30), dismissOnMove = false))
-      case SurfaceContent.StartPage(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) |
-          SurfaceContent.ThemePicker(_) |
-          SurfaceContent.FileSearch(_) | SurfaceContent.ModalWorkflow(_) | SurfaceContent.QuickInfo(_) |
-          SurfaceContent.FilePreview(_, _) | SurfaceContent.SymbolDefinition(_, _) |
-          SurfaceContent.GhostOverlay(_, _) =>
+      case SurfaceContent.StartPage(_) | SurfaceContent.CommandPalette(_) |
+          SurfaceContent.CommandPaletteSubmenu(_, _, _) | SurfaceContent.ThemePicker(_) | SurfaceContent.FileSearch(_) |
+          SurfaceContent.ModalWorkflow(_) | SurfaceContent.QuickInfo(_) | SurfaceContent.FilePreview(_, _) |
+          SurfaceContent.SymbolDefinition(_, _) | SurfaceContent.GhostOverlay(_, _) =>
         None
 
   private def replaceSurface(surfaces: List[UiSurface], updated: UiSurface): List[UiSurface] =

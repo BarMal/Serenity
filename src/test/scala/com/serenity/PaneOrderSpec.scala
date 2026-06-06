@@ -31,9 +31,9 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
     sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, pane1, pane2)
 
   it should "insert a new pane immediately after the specified pane" in new PaneFixture:
-    val pane1     = sm.createPane().unsafeRunSync()
-    val pane2     = sm.createPane().unsafeRunSync()
-    val newPane   = sm.createPaneAfter(pane0).unsafeRunSync()
+    val pane1   = sm.createPane().unsafeRunSync()
+    val pane2   = sm.createPane().unsafeRunSync()
+    val newPane = sm.createPaneAfter(pane0).unsafeRunSync()
     sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, newPane, pane1, pane2)
 
   it should "insert after the last pane when afterPaneId is the last pane" in new PaneFixture:
@@ -53,8 +53,8 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
     sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, pane2)
 
   it should "insert splitPaneHorizontal result immediately after the split pane" in new PaneFixture:
-    val pane1    = sm.createPane().unsafeRunSync()
-    val split    = sm.splitPaneHorizontal(pane0).unsafeRunSync()
+    val pane1 = sm.createPane().unsafeRunSync()
+    val split = sm.splitPaneHorizontal(pane0).unsafeRunSync()
     sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, split, pane1)
 
 end PaneOrderSpec

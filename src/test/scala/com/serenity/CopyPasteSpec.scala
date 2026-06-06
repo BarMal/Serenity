@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.util.concurrent.atomic.AtomicReference
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
@@ -99,7 +101,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     val bufferId = setupBuffer("world")
     setCursor(0, 0)
 
-    getState  // warm up
+    getState // warm up
     stateManager.updateState(_.copy(clipboard = Some("hello "))).unsafeRunSync()
     applyEvent(Paste)
 
@@ -224,65 +226,79 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     getContent(bufferId) shouldBe "original"
 
   trait ClipFixture:
+
     val stateManager: StateManager = StateManager
       .apply(LoggerFactory[IO].getLogger(using LoggerName("CopyPasteSpec")))
       .unsafeRunSync()
 
-    private var activePaneId: PaneId  = PaneId(0)
-    private var activeBufferId: BufferId = BufferId(0)
+    private val activePaneId   = AtomicReference[PaneId](PaneId(0))
+    private val activeBufferId = AtomicReference[BufferId](BufferId(0))
 
     def setupBuffer(content: String): BufferId =
       val bufferId = stateManager.createBuffer(content).unsafeRunSync()
       val state    = stateManager.getCurrentState.unsafeRunSync()
-      activePaneId   = state.layout.editorPanes.keys.head
-      activeBufferId = bufferId
-      stateManager.setBufferForPane(activePaneId, bufferId).unsafeRunSync()
+      val paneId   = state.layout.editorPanes.keys.head
+      activePaneId.set(paneId)
+      activeBufferId.set(bufferId)
+      stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
       bufferId
 
     def setCursor(line: Int, col: Int): Unit =
-      stateManager.setCursorPosition(activePaneId, line, col).unsafeRunSync()
+      stateManager.setCursorPosition(activePaneId.get(), line, col).unsafeRunSync()
 
     def setSelection(selection: Selection): Unit =
-      stateManager.updateState { state =>
-        state.copy(
-          buffers = state.buffers.updated(
-            activeBufferId,
-            state.buffers(activeBufferId).copy(
-              cursors = List(selection.start),
-              selection = Some(selection)
+      stateManager
+        .updateState { state =>
+          state.copy(
+            buffers = state.buffers.updated(
+              activeBufferId.get(),
+              state
+                .buffers(activeBufferId.get())
+                .copy(
+                  cursors = List(selection.start),
+                  selection = Some(selection)
+                )
             )
           )
-        )
-      }.unsafeRunSync()
+        }
+        .unsafeRunSync()
 
     def setSelections(selections: List[Selection]): Unit =
       val primary = selections.head
-      stateManager.updateState { state =>
-        state.copy(
-          buffers = state.buffers.updated(
-            activeBufferId,
-            state.buffers(activeBufferId).copy(
-              cursors = selections.map(_.focus),
-              selection = Some(primary),
-              selections = selections
+      stateManager
+        .updateState { state =>
+          state.copy(
+            buffers = state.buffers.updated(
+              activeBufferId.get(),
+              state
+                .buffers(activeBufferId.get())
+                .copy(
+                  cursors = selections.map(_.focus),
+                  selection = Some(primary),
+                  selections = selections
+                )
             )
           )
-        )
-      }.unsafeRunSync()
+        }
+        .unsafeRunSync()
 
     def setCursors(cursors: List[CursorPosition]): Unit =
-      stateManager.updateState { state =>
-        state.copy(
-          buffers = state.buffers.updated(
-            activeBufferId,
-            state.buffers(activeBufferId).copy(
-              cursors = cursors,
-              selection = None,
-              selections = Nil
+      stateManager
+        .updateState { state =>
+          state.copy(
+            buffers = state.buffers.updated(
+              activeBufferId.get(),
+              state
+                .buffers(activeBufferId.get())
+                .copy(
+                  cursors = cursors,
+                  selection = None,
+                  selections = Nil
+                )
             )
           )
-        )
-      }.unsafeRunSync()
+        }
+        .unsafeRunSync()
 
     def applyEvent(event: Event): Unit =
       stateManager.applyEvent(event).unsafeRunSync()

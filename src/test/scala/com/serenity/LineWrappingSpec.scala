@@ -30,29 +30,29 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
   it should "wrap long single line text within panel width while preserving buffer content" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       bufferId <- stateManager.createBuffer("")
-      state <- stateManager.getCurrentState
+      state    <- stateManager.getCurrentState
       paneId = state.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // Get panel width for wrapping calculations
       currentState <- stateManager.getCurrentState
-      layout = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
+      layout     = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
       panelWidth = layout.editorPanelRect.width
 
       // Create text longer than panel width but shorter than 2 lines
-      longText = "The quick brown fox jumps over the lazy dog and continues running through the forest."
+      longText     = "The quick brown fox jumps over the lazy dog and continues running through the forest."
       insertEvents = longText.map(char => InsertChar(char)).toList
       _ <- insertEvents.traverse(event => stateManager.applyEvent(event))
 
       finalState <- stateManager.getCurrentState
       buffer = finalState.buffers(bufferId)
-      pane = finalState.layout.editorPanes(paneId)
+      pane   = finalState.layout.editorPanes(paneId)
     yield
       // Buffer content should be exactly the original text (no artificial line breaks)
       buffer.content.collect() shouldBe longText
@@ -71,7 +71,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
   it should "handle cursor navigation across wrapped visual lines" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -121,7 +121,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
   it should "adjust viewport size dynamically based on terminal size changes" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -163,7 +163,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
   it should "handle multiple paragraphs with wrapped lines correctly" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -212,7 +212,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
   it should "scroll viewport to keep cursor visible when navigating wrapped lines" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -234,11 +234,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       longSentence.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
       stateManager.applyEvent(NewLine).unsafeRunSync()
 
-    val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val finalPane  = finalState.layout.editorPanes(paneId)
+    val finalState  = stateManager.getCurrentState.unsafeRunSync()
+    val finalPane   = finalState.layout.editorPanes(paneId)
     val finalBuffer = finalPane.bufferId.flatMap(finalState.buffers.get).get
-    val cursor     = finalBuffer.cursors.head
-    val viewport   = finalBuffer.viewport
+    val cursor      = finalBuffer.cursors.head
+    val viewport    = finalBuffer.viewport
 
     // Cursor should be at end of content
     cursor.line shouldBe totalLines
@@ -255,7 +255,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
   it should "dynamically update viewport dimensions based on terminal size" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -306,7 +306,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
   it should "preserve exact cursor position during window resize operations" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -357,7 +357,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
   it should "navigate up and down through visual lines correctly" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -415,7 +415,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
   it should "navigate across multiple buffer lines with wrapped content" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -446,7 +446,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     buffer.content.lineCount shouldBe 2
 
     // Position cursor at end of content
-    val endPane = finalState.layout.editorPanes(paneId)
+    val endPane   = finalState.layout.editorPanes(paneId)
     val endBuffer = endPane.bufferId.flatMap(finalState.buffers.get).get
     val endCursor = endBuffer.cursors.head
     endCursor.line shouldBe 1 // Second buffer line

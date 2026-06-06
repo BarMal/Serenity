@@ -42,12 +42,16 @@ object ModalEventReducer:
       case ModalDeleteWordBackward =>
         currentModal(currentState) match
           case Some((surface, Modal.GotoLine(input))) =>
-            ReducerResult.noEffects(updateModal(currentState, surface, Modal.GotoLine(TextEditing.deleteWordBackward(input))))
+            ReducerResult.noEffects(
+              updateModal(currentState, surface, Modal.GotoLine(TextEditing.deleteWordBackward(input)))
+            )
           case _ => ReducerResult.noEffects(currentState)
       case ModalDeleteWordForward =>
         currentModal(currentState) match
           case Some((surface, Modal.GotoLine(input))) =>
-            ReducerResult.noEffects(updateModal(currentState, surface, Modal.GotoLine(TextEditing.deleteWordForward(input))))
+            ReducerResult.noEffects(
+              updateModal(currentState, surface, Modal.GotoLine(TextEditing.deleteWordForward(input)))
+            )
           case _ => ReducerResult.noEffects(currentState)
       case ModalSubmit =>
         currentModal(currentState) match

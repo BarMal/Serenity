@@ -1,14 +1,13 @@
 package com.serenity
 
-import com.serenity.input.FocusedInputTranslator
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.command.CommandRunner
-import com.serenity.config.{CommandRunnerKeyAction, HotkeyAction, ModalKeyAction, PanelKeyAction, PeekKeyAction}
-import com.serenity.keystroke.events.{DeleteWordBackward, DeleteWordForward, Direction, ModalDeleteWordBackward, ModalDeleteWordForward, ModalDismiss, ModalNextField, ModalSubmit, MoveToEndOfFile, MoveToStartOfFile, NewLine, NextTab, PageDown, PageUp, PanelInputEvent, PeekInputEvent, PreviousTab, RunnerDeleteWordBackward, RunnerDeleteWordForward, RunnerDismiss, RunnerNextCategory, RunnerPreviousCategory, RunnerSubmit, ToggleCommandRunner}
+import com.serenity.config.*
+import com.serenity.input.FocusedInputTranslator
+import com.serenity.keystroke.events.*
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
-import com.serenity.ui.layout.Layout
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -101,7 +100,9 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     )
     val translator = FocusedInputTranslator.forState(pinnedState)
 
-    translator.translate(KeyStrokeInfo(InputKey.ArrowUp, None, Set.empty)) shouldBe PanelInputEvent.Navigate(Direction.Up)
+    translator.translate(KeyStrokeInfo(InputKey.ArrowUp, None, Set.empty)) shouldBe PanelInputEvent.Navigate(
+      Direction.Up
+    )
     translator.translate(KeyStrokeInfo(InputKey.Character, Some('x'), Set.empty)) shouldBe PanelInputEvent.ReturnFocus
   }
 
@@ -118,7 +119,9 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     )
     val translator = FocusedInputTranslator.forState(peekState)
 
-    translator.translate(KeyStrokeInfo(InputKey.ArrowDown, None, Set.empty)) shouldBe PeekInputEvent.Navigate(Direction.Down)
+    translator.translate(KeyStrokeInfo(InputKey.ArrowDown, None, Set.empty)) shouldBe PeekInputEvent.Navigate(
+      Direction.Down
+    )
     translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)) shouldBe PeekInputEvent.Accept
   }
 
@@ -192,13 +195,13 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
       )
     )
     val runnerTranslator = FocusedInputTranslator.forState(commandRunnerState)
-    val editorTranslator  = FocusedInputTranslator.forState(editorState)
+    val editorTranslator = FocusedInputTranslator.forState(editorState)
 
     runnerTranslator.translate(KeyStrokeInfo(InputKey.Tab, None, Set(Modifier.Ctrl))) shouldBe NextTab
-    editorTranslator.translate(KeyStrokeInfo(InputKey.Tab, None, Set(Modifier.Ctrl)))  shouldBe NextTab
+    editorTranslator.translate(KeyStrokeInfo(InputKey.Tab, None, Set(Modifier.Ctrl))) shouldBe NextTab
 
     runnerTranslator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set(Modifier.Ctrl))) shouldBe PreviousTab
-    editorTranslator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set(Modifier.Ctrl)))  shouldBe PreviousTab
+    editorTranslator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set(Modifier.Ctrl))) shouldBe PreviousTab
   }
 
   it should "respect configured global hotkey overrides in focused routing" in {
@@ -221,9 +224,11 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     val translator = FocusedInputTranslator.forState(configuredState)
 
     translator.translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl))) shouldBe ToggleCommandRunner
-    translator.translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl))).isInstanceOf[
-      com.serenity.keystroke.events.UnhandledEvent[?]
-    ] shouldBe true
+    translator
+      .translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl)))
+      .isInstanceOf[
+        com.serenity.keystroke.events.UnhandledEvent[?]
+      ] shouldBe true
   }
 
   it should "respect configured command-runner keymap overrides" in {
@@ -240,9 +245,11 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     )
     val translator = FocusedInputTranslator.forState(commandRunnerState)
 
-    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)).isInstanceOf[
-      com.serenity.keystroke.events.UnhandledEvent[?]
-    ] shouldBe true
+    translator
+      .translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty))
+      .isInstanceOf[
+        com.serenity.keystroke.events.UnhandledEvent[?]
+      ] shouldBe true
     translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set(Modifier.Ctrl))) shouldBe RunnerSubmit
   }
 
@@ -262,9 +269,11 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     )
     val translator = FocusedInputTranslator.forState(modalState)
 
-    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)).isInstanceOf[
-      com.serenity.keystroke.events.UnhandledEvent[?]
-    ] shouldBe true
+    translator
+      .translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty))
+      .isInstanceOf[
+        com.serenity.keystroke.events.UnhandledEvent[?]
+      ] shouldBe true
     translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set(Modifier.Ctrl))) shouldBe ModalDismiss
   }
 
@@ -283,9 +292,11 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     )
     val translator = FocusedInputTranslator.forState(panelState)
 
-    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)).isInstanceOf[
-      com.serenity.keystroke.events.UnhandledEvent[?]
-    ] shouldBe true
+    translator
+      .translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty))
+      .isInstanceOf[
+        com.serenity.keystroke.events.UnhandledEvent[?]
+      ] shouldBe true
     translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set(Modifier.Ctrl))) shouldBe PanelInputEvent.Activate
   }
 
@@ -303,8 +314,10 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     )
     val translator = FocusedInputTranslator.forState(peekState)
 
-    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)).isInstanceOf[
-      com.serenity.keystroke.events.UnhandledEvent[?]
-    ] shouldBe true
+    translator
+      .translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty))
+      .isInstanceOf[
+        com.serenity.keystroke.events.UnhandledEvent[?]
+      ] shouldBe true
     translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set(Modifier.Ctrl))) shouldBe PeekInputEvent.Dismiss
   }

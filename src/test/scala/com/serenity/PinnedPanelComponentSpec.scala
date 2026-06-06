@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.{Direction, PanelInputEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, PinnedPanelComponent}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, ExplorerEffect, FileEffect, ReducerResult}
+import com.serenity.state.reducers.*
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -45,7 +45,9 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
 
     val component = PinnedPanelComponent(PanelPosition.Left)
 
-    component.processEvent(PanelInputEvent.ReturnFocus, state).shouldBe(ComponentResult.FocusTransfer(Focus.EditorPane(paneId)))
+    component
+      .processEvent(PanelInputEvent.ReturnFocus, state)
+      .shouldBe(ComponentResult.FocusTransfer(Focus.EditorPane(paneId)))
   }
 
   it should "keep navigation local to the pinned panel" in {
@@ -110,7 +112,7 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "emit a direct-load effect when activating a selected file in the explorer panel" in {
-    val root = Paths.get("/repo")
+    val root         = Paths.get("/repo")
     val selectedFile = root.resolve("build.sbt")
     val surface = UiSurface(
       id = SurfaceId("left-panel"),
@@ -137,7 +139,7 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "emit a load-directory effect when activating a selected directory in the explorer panel" in {
-    val root = Paths.get("/repo")
+    val root        = Paths.get("/repo")
     val selectedDir = root.resolve("src")
     val surface = UiSurface(
       id = SurfaceId("left-panel"),
@@ -177,7 +179,7 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
           root,
           expandedPaths = Set(selectedDir),
           entries = Map(
-            root -> List(DirEntry(selectedDir, "src", isDirectory = true)),
+            root        -> List(DirEntry(selectedDir, "src", isDirectory = true)),
             selectedDir -> List(DirEntry(selectedDir.resolve("Main.scala"), "Main.scala", isDirectory = false))
           )
         ),
@@ -200,7 +202,7 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
             root,
             expandedPaths = Set.empty,
             entries = Map(
-              root -> List(DirEntry(selectedDir, "src", isDirectory = true)),
+              root        -> List(DirEntry(selectedDir, "src", isDirectory = true)),
               selectedDir -> List(DirEntry(selectedDir.resolve("Main.scala"), "Main.scala", isDirectory = false))
             )
           ),

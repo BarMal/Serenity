@@ -1,6 +1,7 @@
 package com.serenity.animation
 
 import java.awt.Color
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -72,25 +73,24 @@ class ListBasedAnimationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle rapid overlapping animations" in {
-    var state = AnimationState.empty
+    val state = AnimationState.empty
       .addCharacterAnimation('a', 0, 0, black, white, 6)
       .addCharacterAnimation('b', 1, 0, black, white, 6)
       .addCharacterAnimation('c', 2, 0, black, white, 6)
 
     state.activeAnimationCount shouldEqual 3
 
-    var current = state
-    (1 to 3).foreach { _ => current = current.advanceAllAnimations() }
-    current.activeAnimationCount shouldEqual 3
+    val partiallyAdvanced = (1 to 3).foldLeft(state)((current, _) => current.advanceAllAnimations())
+    partiallyAdvanced.activeAnimationCount shouldEqual 3
 
-    (1 to 3).foreach { _ => current = current.advanceAnimations() }
-    current.activeAnimationCount shouldEqual 0
+    val completed = (1 to 3).foldLeft(partiallyAdvanced)((current, _) => current.advanceAnimations())
+    completed.activeAnimationCount shouldEqual 0
 
-    current.getCell(0, 0) should be(defined)
-    current.getCell(1, 0) should be(defined)
-    current.getCell(2, 0) should be(defined)
+    completed.getCell(0, 0) should be(defined)
+    completed.getCell(1, 0) should be(defined)
+    completed.getCell(2, 0) should be(defined)
 
-    val cleanedUp = current.cleanupCompleted()
+    val cleanedUp = completed.cleanupCompleted()
     cleanedUp.getCell(0, 0) should be(empty)
     cleanedUp.getCell(1, 0) should be(empty)
     cleanedUp.getCell(2, 0) should be(empty)

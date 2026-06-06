@@ -1,7 +1,8 @@
 package com.serenity.animation
 
 import java.awt.Color
-import com.serenity.ui.theme.{Theme, ThemeColor, TextStyle, SyntaxElement}
+
+import com.serenity.ui.theme.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -14,19 +15,19 @@ class ThemeInterpolatorSpec extends AnyFlatSpec with Matchers:
 
   private def makeTheme(fg: Color, bg: Color): Theme =
     Theme(
-      name        = "test",
-      foreground  = fg,
-      background  = bg,
-      cursor      = fg,
+      name = "test",
+      foreground = fg,
+      background = bg,
+      cursor = fg,
       highlighted = ThemeColor(fg, bg),
-      menuItem    = ThemeColor(fg, bg),
-      panel       = ThemeColor(fg, bg),
-      error       = ThemeColor(fg, bg),
-      warning     = ThemeColor(fg, bg),
-      border      = fg,
-      muted       = bg,
+      menuItem = ThemeColor(fg, bg),
+      panel = ThemeColor(fg, bg),
+      error = ThemeColor(fg, bg),
+      warning = ThemeColor(fg, bg),
+      border = fg,
+      muted = bg,
       placeholder = bg,
-      textStyle   = TextStyle.normal,
+      textStyle = TextStyle.normal,
       syntaxColors = Map(SyntaxElement.Keyword -> ThemeColor(fg, bg))
     )
 
@@ -51,8 +52,8 @@ class ThemeInterpolatorSpec extends AnyFlatSpec with Matchers:
 
   it should "return midpoint colors at t=0.5" in {
     val result = ThemeInterpolator.blend(fromTheme, toTheme, 0.5)
-    result.foreground.getRed  shouldEqual 127 +- 2
-    result.background.getRed  shouldEqual 127 +- 2
+    result.foreground.getRed shouldEqual 127 +- 2
+    result.background.getRed shouldEqual 127 +- 2
     result.panel.foreground.getRed shouldEqual 127 +- 2
   }
 

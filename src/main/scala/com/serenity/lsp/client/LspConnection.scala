@@ -77,10 +77,8 @@ class LspConnection private (
               case None    => (pending, IO.unit)
           }.flatten
         case None => IO.unit
-    else if LspProtocol.isNotification(json) then
-      notifQueue.offer(Some(json))
-    else
-      IO.unit
+    else if LspProtocol.isNotification(json) then notifQueue.offer(Some(json))
+    else IO.unit
 
   private[lsp] def takeOutgoing: IO[Option[Json]] =
     sendQueue.take
@@ -98,8 +96,8 @@ class LspConnection private (
 object LspConnection:
 
   private case class ConnectionFibers(
-    writer: Fiber[IO, Throwable, Unit],
-    reader: Fiber[IO, Throwable, Unit]
+      writer: Fiber[IO, Throwable, Unit],
+      reader: Fiber[IO, Throwable, Unit]
   )
 
   private[lsp] def create(
@@ -123,8 +121,8 @@ object LspConnection:
   ): Resource[IO, LspConnection] =
     for
       conn <- Resource.eval(create(languageId, logger))
-      in   = new BufferedInputStream(rawIn)
-      out  = new BufferedOutputStream(rawOut)
+      in  = new BufferedInputStream(rawIn)
+      out = new BufferedOutputStream(rawOut)
       _ <- Resource.make {
         for
           writerFiber <- conn.outgoingMessages

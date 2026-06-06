@@ -20,8 +20,8 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "return the correct selected result by index" in {
-    val r0 = FileSearchResult(BufferId(0), "foo.txt", 3, "hello world")
-    val r1 = FileSearchResult(BufferId(1), "bar.txt", 7, "hello there")
+    val r0    = FileSearchResult(BufferId(0), "foo.txt", 3, "hello world")
+    val r1    = FileSearchResult(BufferId(1), "bar.txt", 7, "hello there")
     val state = FileSearchState("hello", List(r0, r1), 1)
     state.selectedResult shouldBe Some(r1)
   }
@@ -70,9 +70,9 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
     query: String = "",
     results: List[FileSearchResult] = Nil
   ): (AppState, SurfaceId) =
-    val base = AppState.initial
+    val base            = AppState.initial
     val (s1, surfaceId) = base.allocateSurfaceId
-    val searchState = FileSearchState(query, results, 0)
+    val searchState     = FileSearchState(query, results, 0)
     val surface = UiSurface(
       surfaceId,
       SurfaceContent.FileSearch(searchState),
@@ -85,15 +85,15 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
     (finalState, surfaceId)
 
   private def stateWithSearchAndBuffer(query: String, bufferContent: String): (AppState, SurfaceId, BufferId) =
-    val base = AppState.initial
+    val base     = AppState.initial
     val bufferId = BufferId(0)
     val updatedBuffers = base.buffers.get(bufferId).fold(base.buffers) { buf =>
       import com.serenity.rope.Rope
       base.buffers + (bufferId -> buf.copy(content = Rope(bufferContent)))
     }
-    val withContent = base.copy(buffers = updatedBuffers)
+    val withContent     = base.copy(buffers = updatedBuffers)
     val (s1, surfaceId) = withContent.allocateSurfaceId
-    val searchState = FileSearchState(query, Nil, 0)
+    val searchState     = FileSearchState(query, Nil, 0)
     val surface = UiSurface(
       surfaceId,
       SurfaceContent.FileSearch(searchState),
@@ -109,7 +109,7 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
 
   "FileSearchComponent" should "append a char to query and update results on InsertChar" in {
     val (state, _) = stateWithSearchSurface("hel")
-    val result = component.processEvent(InsertChar('p'), state)
+    val result     = component.processEvent(InsertChar('p'), state)
     result match
       case ComponentResult.StateChange(f) =>
         val newState = f(state)
@@ -122,34 +122,34 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
 
   it should "remove the last char on DeleteBackward" in {
     val (state, _) = stateWithSearchSurface("hello")
-    val result = component.processEvent(DeleteBackward, state)
+    val result     = component.processEvent(DeleteBackward, state)
     result match
       case ComponentResult.StateChange(f) =>
         f(state).fileSearchSurface.map(_.content) match
           case Some(SurfaceContent.FileSearch(fs)) => fs.query shouldBe "hell"
-          case other => fail(s"Expected FileSearch surface, got $other")
+          case other                               => fail(s"Expected FileSearch surface, got $other")
       case other => fail(s"Expected StateChange, got $other")
   }
 
   it should "not change query on DeleteBackward when query is empty" in {
     val (state, _) = stateWithSearchSurface("")
-    val result = component.processEvent(DeleteBackward, state)
+    val result     = component.processEvent(DeleteBackward, state)
     result match
       case ComponentResult.StateChange(f) =>
         f(state).fileSearchSurface.map(_.content) match
           case Some(SurfaceContent.FileSearch(fs)) => fs.query shouldBe ""
-          case other => fail(s"Expected FileSearch surface, got $other")
+          case other                               => fail(s"Expected FileSearch surface, got $other")
       case other => fail(s"Expected StateChange, got $other")
   }
 
   it should "remove the previous word on DeleteWordBackward" in {
     val (state, _) = stateWithSearchSurface("alpha beta")
-    val result = component.processEvent(DeleteWordBackward, state)
+    val result     = component.processEvent(DeleteWordBackward, state)
     result match
       case ComponentResult.StateChange(f) =>
         f(state).fileSearchSurface.map(_.content) match
           case Some(SurfaceContent.FileSearch(fs)) => fs.query shouldBe "alpha "
-          case other => fail(s"Expected FileSearch surface, got $other")
+          case other                               => fail(s"Expected FileSearch surface, got $other")
       case other => fail(s"Expected StateChange, got $other")
   }
 
@@ -159,12 +159,12 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       FileSearchResult(BufferId(0), "a.txt", 1, "y")
     )
     val (state, _) = stateWithSearchSurface("x", results)
-    val result = component.processEvent(MoveDown, state)
+    val result     = component.processEvent(MoveDown, state)
     result match
       case ComponentResult.StateChange(f) =>
         f(state).fileSearchSurface.map(_.content) match
           case Some(SurfaceContent.FileSearch(fs)) => fs.selectedIndex shouldBe 1
-          case other => fail(s"Expected FileSearch surface, got $other")
+          case other                               => fail(s"Expected FileSearch surface, got $other")
       case other => fail(s"Expected StateChange, got $other")
   }
 
@@ -176,8 +176,7 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
     val (base, surfaceId) = stateWithSearchSurface("x", results)
     val stateAtIdx1 = base.copy(
       uiSurfaces = base.uiSurfaces.map { s =>
-        if s.id == surfaceId then
-          s.copy(content = SurfaceContent.FileSearch(FileSearchState("x", results, 1)))
+        if s.id == surfaceId then s.copy(content = SurfaceContent.FileSearch(FileSearchState("x", results, 1)))
         else s
       }
     )
@@ -186,13 +185,13 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       case ComponentResult.StateChange(f) =>
         f(stateAtIdx1).fileSearchSurface.map(_.content) match
           case Some(SurfaceContent.FileSearch(fs)) => fs.selectedIndex shouldBe 0
-          case other => fail(s"Expected FileSearch surface, got $other")
+          case other                               => fail(s"Expected FileSearch surface, got $other")
       case other => fail(s"Expected StateChange, got $other")
   }
 
   it should "dismiss without navigation on Escape" in {
     val (state, _) = stateWithSearchSurface("hello")
-    val result = component.processEvent(Escape, state)
+    val result     = component.processEvent(Escape, state)
     result match
       case ComponentResult.StateChange(f) =>
         val newState = f(state)
@@ -202,10 +201,10 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "navigate to the selected result and dismiss on Enter" in {
-    val bufferId = BufferId(0)
-    val results = List(FileSearchResult(bufferId, "main.txt", 5, "selected line"))
+    val bufferId   = BufferId(0)
+    val results    = List(FileSearchResult(bufferId, "main.txt", 5, "selected line"))
     val (state, _) = stateWithSearchSurface("sel", results)
-    val result = component.processEvent(Enter, state)
+    val result     = component.processEvent(Enter, state)
     result match
       case ComponentResult.StateChange(f) =>
         val newState = f(state)
@@ -217,7 +216,7 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
 
   it should "just dismiss on Enter when no result is selected" in {
     val (state, _) = stateWithSearchSurface("")
-    val result = component.processEvent(Enter, state)
+    val result     = component.processEvent(Enter, state)
     result match
       case ComponentResult.StateChange(f) =>
         val newState = f(state)
@@ -229,9 +228,9 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
     val (state, _) = stateWithSearchAndBuffer("hello", "line one\nhello world\nline three")._1 match
       case s => (s, ())
     // Type 'h' — searches all buffers
-    val typed = stateWithSearchAndBuffer("h", "hello world\nno match\nhello there")
+    val typed                       = stateWithSearchAndBuffer("h", "hello world\nno match\nhello there")
     val (searchState, surfaceId, _) = typed
-    val result = component.processEvent(InsertChar('i'), searchState)
+    val result                      = component.processEvent(InsertChar('i'), searchState)
     result match
       case ComponentResult.StateChange(f) =>
         val newState = f(searchState)

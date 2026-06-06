@@ -20,17 +20,17 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
 
   it should "handle typical programming workflow: typing function definition" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       // Given: Empty buffer ready for input
-      bufferId <- stateManager.createBuffer("")
+      bufferId     <- stateManager.createBuffer("")
       initialState <- stateManager.getCurrentState
       paneId = initialState.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
-      
+
       // When: Type a function definition with typical keystrokes
       functionSequence = List(
         // Type "def hello"
@@ -76,10 +76,12 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
       buffer = finalState.buffers(bufferId)
       expected = """def hello(): String =
   "Hello"""".replace("\r\n", "\n")
-      
+
       // Cursor should be at end
       pane = finalState.layout.editorPanes(paneId)
-      paneBuffer <- finalState.buffers.get(bufferId).fold(IO.raiseError[Buffer](new RuntimeException("Buffer not found")))(IO.pure)
+      paneBuffer <- finalState.buffers
+        .get(bufferId)
+        .fold(IO.raiseError[Buffer](new RuntimeException("Buffer not found")))(IO.pure)
     yield
       buffer.content.collect() shouldBe expected
       paneBuffer.cursors.head.line shouldBe 1
@@ -90,13 +92,13 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
 
   it should "handle text editing workflow: writing and correcting mistakes" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       // Given: Buffer with some text
-      bufferId <- stateManager.createBuffer("The quik brown fox")
+      bufferId     <- stateManager.createBuffer("The quik brown fox")
       initialState <- stateManager.getCurrentState
       paneId = initialState.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -123,32 +125,31 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
       // Then: Text should be corrected
       finalState <- stateManager.getCurrentState
       buffer = finalState.buffers(bufferId)
-    yield
-      buffer.content.collect() shouldBe "The quick brown fox"
+    yield buffer.content.collect() shouldBe "The quick brown fox"
 
     program.unsafeRunSync()
   }
 
   it should "handle navigation and editing in multiline text" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       // Given: Multiline buffer
       initialText = """Line 1
 Line 2
 Line 3
 Line 4"""
-      bufferId <- stateManager.createBuffer(initialText)
+      bufferId     <- stateManager.createBuffer(initialText)
       initialState <- stateManager.getCurrentState
       paneId = initialState.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // Position cursor at end of initial content
-      lines = initialText.split("\n", -1)
-      lastLine = lines.length - 1
+      lines      = initialText.split("\n", -1)
+      lastLine   = lines.length - 1
       lastColumn = if lines.nonEmpty then lines.last.length else 0
       _ <- stateManager.setCursorPosition(paneId, lastLine, lastColumn)
 
@@ -195,21 +196,20 @@ Line 4"""
 Line 2!
 * Line 3
 Final line""".replace("\r\n", "\n")
-    yield
-      buffer.content.collect() shouldBe expected
+    yield buffer.content.collect() shouldBe expected
 
     program.unsafeRunSync()
   }
 
   it should "handle word-level operations and boundary navigation" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       // Given: Text with multiple words
-      bufferId <- stateManager.createBuffer("Hello world this is a test")
+      bufferId     <- stateManager.createBuffer("Hello world this is a test")
       initialState <- stateManager.getCurrentState
       paneId = initialState.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -247,21 +247,20 @@ Final line""".replace("\r\n", "\n")
       // Then: Should have modified text
       finalState <- stateManager.getCurrentState
       buffer = finalState.buffers(bufferId)
-    yield
-      buffer.content.collect() shouldBe "Hello beautiful this is a test!"
+    yield buffer.content.collect() shouldBe "Hello beautiful this is a test!"
 
     program.unsafeRunSync()
   }
 
   it should "handle rapid insertion and deletion sequences" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       // Given: Empty buffer
-      bufferId <- stateManager.createBuffer("")
+      bufferId     <- stateManager.createBuffer("")
       initialState <- stateManager.getCurrentState
       paneId = initialState.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -303,21 +302,20 @@ Final line""".replace("\r\n", "\n")
       // Then: Should have final corrected text
       finalState <- stateManager.getCurrentState
       buffer = finalState.buffers(bufferId)
-    yield
-      buffer.content.collect() shouldBe "Typing quickly now"
+    yield buffer.content.collect() shouldBe "Typing quickly now"
 
     program.unsafeRunSync()
   }
 
   it should "handle line manipulation operations" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       // Given: Single line of text
-      bufferId <- stateManager.createBuffer("Single line")
+      bufferId     <- stateManager.createBuffer("Single line")
       initialState <- stateManager.getCurrentState
       paneId = initialState.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -366,21 +364,20 @@ Final line""".replace("\r\n", "\n")
       expected = """The Single line
 Second line
 Third""".replace("\r\n", "\n")
-    yield
-      buffer.content.collect() shouldBe expected
+    yield buffer.content.collect() shouldBe expected
 
     program.unsafeRunSync()
   }
 
   it should "handle edge case navigation at document boundaries" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       // Given: Small text
-      bufferId <- stateManager.createBuffer("AB\nCD")
+      bufferId     <- stateManager.createBuffer("AB\nCD")
       initialState <- stateManager.getCurrentState
       paneId = initialState.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -412,8 +409,10 @@ Third""".replace("\r\n", "\n")
       // Then: Should handle boundaries gracefully
       finalState <- stateManager.getCurrentState
       buffer = finalState.buffers(bufferId)
-      pane = finalState.layout.editorPanes(paneId)
-      paneBuffer <- finalState.buffers.get(bufferId).fold(IO.raiseError[Buffer](new RuntimeException("Buffer not found")))(IO.pure)
+      pane   = finalState.layout.editorPanes(paneId)
+      paneBuffer <- finalState.buffers
+        .get(bufferId)
+        .fold(IO.raiseError[Buffer](new RuntimeException("Buffer not found")))(IO.pure)
     yield
       buffer.content.collect() shouldBe "AB\nCDE"
       // Cursor should be at end
@@ -425,13 +424,13 @@ Third""".replace("\r\n", "\n")
 
   it should "handle backspace at line boundaries" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       // Given: Multiline text
-      bufferId <- stateManager.createBuffer("First\nSecond\nThird")
+      bufferId     <- stateManager.createBuffer("First\nSecond\nThird")
       initialState <- stateManager.getCurrentState
       paneId = initialState.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -451,21 +450,20 @@ Third""".replace("\r\n", "\n")
       // Then: Lines should be joined
       finalState <- stateManager.getCurrentState
       buffer = finalState.buffers(bufferId)
-    yield
-      buffer.content.collect() shouldBe "First & Second\nThird"
+    yield buffer.content.collect() shouldBe "First & Second\nThird"
 
     program.unsafeRunSync()
   }
 
   it should "handle state consistency during complex edit sequences" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       // Given: Buffer with content
-      bufferId <- stateManager.createBuffer("Initial state")
+      bufferId     <- stateManager.createBuffer("Initial state")
       initialState <- stateManager.getCurrentState
       paneId = initialState.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -516,8 +514,7 @@ Third""".replace("\r\n", "\n")
       expected = """* Initial state
 Line 2 (middle)
 Line 3""".replace("\r\n", "\n")
-    yield
-      buffer.content.collect() shouldBe expected
+    yield buffer.content.collect() shouldBe expected
 
     program.unsafeRunSync()
   }
@@ -525,7 +522,8 @@ Line 3""".replace("\r\n", "\n")
   trait KeystrokeFixture:
 
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+
     val stateManager: StateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()

@@ -31,7 +31,7 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     )
 
   "ModalStateReducer" should "show and dismiss modals while preserving editor focus fallback" in {
-    val shown = ModalStateReducer.show(Modal.GotoLine("12"), baseState)
+    val shown        = ModalStateReducer.show(Modal.GotoLine("12"), baseState)
     val modalSurface = shown.state.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("12")))
 
     modalSurface shouldBe defined
@@ -44,20 +44,24 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "track custom modal names through focus typing" in {
     val shown = ModalStateReducer.show(Modal.Custom("signature-help", "map("), baseState)
-    val modalSurface = shown.state.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(Modal.Custom("signature-help", "map(")))
+    val modalSurface =
+      shown.state.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(Modal.Custom("signature-help", "map(")))
 
     modalSurface shouldBe defined
     shown.state.focus shouldBe Focus.Surface(modalSurface.get.id)
   }
 
   "PeekStateReducer" should "show and dismiss peek overlays while preserving editor focus fallback" in {
-    val overlay = PeekContent.QuickInfo("signature")
-    val shown   = PeekStateReducer.show(overlay, CursorPosition(3, 4), baseState)
+    val overlay     = PeekContent.QuickInfo("signature")
+    val shown       = PeekStateReducer.show(overlay, CursorPosition(3, 4), baseState)
     val peekSurface = shown.state.uiSurfaces.find(_.content == SurfaceContent.QuickInfo("signature"))
 
     peekSurface shouldBe defined
     shown.state.focus shouldBe Focus.Surface(peekSurface.get.id)
-    peekSurface.get.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(3, 4)), SurfacePlacement.AboveCursor)
+    peekSurface.get.presentation shouldBe SurfacePresentation.Floating(
+      Some(CursorPosition(3, 4)),
+      SurfacePlacement.AboveCursor
+    )
 
     val dismissed = PeekStateReducer.dismiss(shown.state)
     dismissed.state.uiSurfaces.exists(_.content == SurfaceContent.QuickInfo("signature")) shouldBe false
@@ -68,7 +72,8 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     val content = PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/tmp")), None)
 
     val pinned = PanelStateReducer.pin(content, PanelPosition.Left, 24, baseState)
-    val pinnedSurface = pinned.state.uiSurfaces.find(_.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 24))
+    val pinnedSurface =
+      pinned.state.uiSurfaces.find(_.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 24))
     pinnedSurface shouldBe defined
     pinnedSurface.get.content shouldBe SurfaceContent.DirectoryTree(DirectoryTreeData(Paths.get("/tmp")), None)
 
@@ -76,7 +81,9 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     focused.state.focus shouldBe Focus.Surface(pinnedSurface.get.id)
 
     val unpinned = PanelStateReducer.unpin(PanelPosition.Left, focused.state)
-    unpinned.state.uiSurfaces.exists(_.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 24)) shouldBe false
+    unpinned.state.uiSurfaces.exists(
+      _.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 24)
+    ) shouldBe false
     unpinned.state.focus shouldBe Focus.EditorPane(paneId)
   }
 
@@ -98,7 +105,8 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
 
     val pinned = PanelStateReducer.pinPeekOverlay(PanelPosition.Right, peekState)
 
-    val pinnedSurface = pinned.state.uiSurfaces.find(_.presentation == SurfacePresentation.Pinned(PanelPosition.Right, 30))
+    val pinnedSurface =
+      pinned.state.uiSurfaces.find(_.presentation == SurfacePresentation.Pinned(PanelPosition.Right, 30))
     pinnedSurface shouldBe defined
     pinned.state.focus shouldBe Focus.Surface(pinnedSurface.get.id)
     pinnedSurface.get.id shouldBe surface.id
@@ -130,7 +138,8 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
 
     val pinned = PanelStateReducer.pinActiveFloatingSurface(PanelPosition.Left, floatingState)
 
-    val pinnedSurface = pinned.state.uiSurfaces.find(_.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 30))
+    val pinnedSurface =
+      pinned.state.uiSurfaces.find(_.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 30))
     pinnedSurface shouldBe defined
     pinned.state.focus shouldBe Focus.Surface(pinnedSurface.get.id)
     pinnedSurface.get.id shouldBe surface.id

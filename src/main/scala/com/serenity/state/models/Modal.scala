@@ -226,8 +226,8 @@ case class OpenFileWorkflowState(
     confirmCreateDirectories: Boolean = false,
     statusMessage: Option[String] = None
 ) extends FileWorkflowState:
-  val mode: FileWorkflowMode              = FileWorkflowMode.Open
-  val operationLabel: String              = "open"
+  val mode: FileWorkflowMode               = FileWorkflowMode.Open
+  val operationLabel: String               = "open"
   val supportsFilenameSuggestions: Boolean = true
 
   protected def rebuild(
@@ -261,8 +261,8 @@ case class SaveAsFileWorkflowState(
     confirmCreateDirectories: Boolean = false,
     statusMessage: Option[String] = None
 ) extends FileWorkflowState:
-  val mode: FileWorkflowMode              = FileWorkflowMode.SaveAs
-  val operationLabel: String              = "save-as"
+  val mode: FileWorkflowMode               = FileWorkflowMode.SaveAs
+  val operationLabel: String               = "save-as"
   val supportsFilenameSuggestions: Boolean = false
 
   protected def rebuild(
@@ -287,6 +287,7 @@ case class SaveAsFileWorkflowState(
     )
 
 object FileWorkflowState:
+
   def apply(
     mode: FileWorkflowMode,
     filename: String = "",

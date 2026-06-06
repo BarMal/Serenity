@@ -1,9 +1,7 @@
 package com.serenity
 
-import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
-import com.serenity.state.components.ComponentResult
 import com.serenity.state.components.EditorPaneComponent
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -185,7 +183,7 @@ let anotherOldName = oldName * 2;"""
   it should "integrate rope operations with editor component processing" in new RopeIntegrationFixture:
     // Given: Editor state with buffer
     val initialText = "Hello world"
-    val buffer      = Buffer(BufferId(1), Rope(initialText), isDirty = false, filePath = None).copy(
+    val buffer = Buffer(BufferId(1), Rope(initialText), isDirty = false, filePath = None).copy(
       cursors = List(CursorPosition(0, 6)), // Position at "world"
       viewport = Viewport(0, 0, 80, 24)
     )

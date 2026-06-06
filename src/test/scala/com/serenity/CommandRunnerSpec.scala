@@ -1,11 +1,10 @@
 package com.serenity
 
-import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, CommandRunner, CommandSearcher, CommandSurfaceItem}
+import com.serenity.command.*
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
-import com.serenity.state.components.CommandRunnerComponent
-import com.serenity.state.components.ComponentResult
+import com.serenity.state.components.{CommandRunnerComponent, ComponentResult}
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -103,7 +102,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
   it should "browse commands by category when search is empty" in {
     val registry = CommandRegistry.default
 
-    val fileCommands = registry.commandsForCategory(CommandCategory.File)
+    val fileCommands     = registry.commandsForCategory(CommandCategory.File)
     val settingsCommands = registry.commandsForCategory(CommandCategory.Settings)
 
     fileCommands should not be empty
@@ -149,7 +148,9 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     runner.activeCategory shouldBe CommandCategory.File
     runner.visibleItems should not be empty
-    runner.visibleItems.collect { case CommandSurfaceItem.CommandItem(command) => command.category }.distinct shouldBe List(CommandCategory.File)
+    runner.visibleItems.collect {
+      case CommandSurfaceItem.CommandItem(command) => command.category
+    }.distinct shouldBe List(CommandCategory.File)
 
     val searched = runner.updateSearchTerm("theme")
     searched.searchTerm shouldBe "theme"
@@ -166,9 +167,11 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
-    val animationGroup = runner.visibleItems.collectFirst {
-      case group: CommandSurfaceItem.GroupItem if group.id == "settings-animation" => group
-    }.getOrElse(fail("Expected animation mode option item"))
+    val animationGroup = runner.visibleItems
+      .collectFirst {
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-animation" => group
+      }
+      .getOrElse(fail("Expected animation mode option item"))
 
     animationGroup.label shouldBe "Animation"
     animationGroup.children.map(_.id) should contain allOf ("animation-mode", "animation-duration", "animation-steps")
@@ -181,9 +184,11 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
-    val appearanceGroup = runner.visibleItems.collectFirst {
-      case group: CommandSurfaceItem.GroupItem if group.id == "settings-appearance" => group
-    }.getOrElse(fail("Expected background style option item"))
+    val appearanceGroup = runner.visibleItems
+      .collectFirst {
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-appearance" => group
+      }
+      .getOrElse(fail("Expected background style option item"))
 
     appearanceGroup.label shouldBe "Appearance"
     appearanceGroup.children.map(_.id) should contain allOf ("cursor-mode", "background-style", "blur-radius")
@@ -196,19 +201,19 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
-    val groupItems = runner.visibleItems.collect {
-      case group: CommandSurfaceItem.GroupItem => group
-    }
+    val groupItems = runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group }
 
-    groupItems.map(_.id) shouldBe List("settings-animation", "settings-appearance", "settings-typography", "settings-language")
+    groupItems
+      .map(_.id) shouldBe List("settings-animation", "settings-appearance", "settings-typography", "settings-language")
     groupItems.head.label shouldBe "Animation"
     groupItems.head.children.map(_.id) should contain allOf ("animation-mode", "animation-duration", "animation-steps")
     groupItems(1).label shouldBe "Appearance"
     groupItems(1).children.map(_.id) should contain allOf ("cursor-mode", "background-style", "blur-radius")
     groupItems(2).label shouldBe "Typography"
-    groupItems(2).children.map(_.id) should contain allOf ("code-font", "text-font", "ligatures", "buffer-font-size", "ui-font-size")
+    groupItems(2).children
+      .map(_.id) should contain allOf ("code-font", "text-font", "ligatures", "buffer-font-size", "ui-font-size")
     groupItems(3).label shouldBe "Language"
-    groupItems(3).children.map(_.id) should contain ("lang-plain-text")
+    groupItems(3).children.map(_.id) should contain("lang-plain-text")
   }
 
   it should "surface typography settings groups ahead of command matches when searching font-related terms" in {
@@ -264,7 +269,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle search input" in {
-    val component = new CommandRunnerComponent()
+    val component   = new CommandRunnerComponent()
     val activeState = stateWithRunner(CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default))
 
     val result = component.processEvent(InsertChar('s'), activeState)
@@ -274,7 +279,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle escape to close runner" in {
-    val component = new CommandRunnerComponent()
+    val component   = new CommandRunnerComponent()
     val activeState = stateWithRunner(CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default))
 
     val result = component.processEvent(com.serenity.keystroke.events.Escape, activeState)

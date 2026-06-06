@@ -1,9 +1,9 @@
 package com.serenity
 
 import com.serenity.config.{AppConfig, EditorKeyAction, HotkeyAction}
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -20,8 +20,8 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "prioritize tab hotkeys ahead of plain tab insertion" in {
-    val ctrlTab       = translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set(Modifier.Ctrl)))
-    val plainTab      = translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set.empty))
+    val ctrlTab        = translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set(Modifier.Ctrl)))
+    val plainTab       = translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set.empty))
     val ctrlReverseTab = translator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set(Modifier.Ctrl)))
 
     ctrlTab shouldBe NextTab
@@ -54,10 +54,14 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
     )
     val customTranslator = new TextEntryTranslator(customConfig)
 
-    customTranslator.translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl))) shouldBe ToggleCommandRunner
-    customTranslator.translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl))).isInstanceOf[
-      UnhandledEvent[?]
-    ] shouldBe true
+    customTranslator.translate(
+      KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl))
+    ) shouldBe ToggleCommandRunner
+    customTranslator
+      .translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl)))
+      .isInstanceOf[
+        UnhandledEvent[?]
+      ] shouldBe true
   }
 
   it should "respect configured editor-local keymap overrides" in {
@@ -68,7 +72,9 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
     val customTranslator = new TextEntryTranslator(customConfig)
 
     customTranslator.translate(KeyStrokeInfo(InputKey.Character, Some('j'), Set(Modifier.Ctrl))) shouldBe PageDown
-    customTranslator.translate(KeyStrokeInfo(InputKey.PageDown, None, Set.empty)).isInstanceOf[
-      UnhandledEvent[?]
-    ] shouldBe true
+    customTranslator
+      .translate(KeyStrokeInfo(InputKey.PageDown, None, Set.empty))
+      .isInstanceOf[
+        UnhandledEvent[?]
+      ] shouldBe true
   }

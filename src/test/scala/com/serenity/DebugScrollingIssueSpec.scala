@@ -16,45 +16,45 @@ class DebugScrollingIssueSpec extends AnyFlatSpec with Matchers:
 
   "Debug Horizontal Scrolling Issue" should "trace exactly what happens during character insertion and horizontal scrolling" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Debug"))
-    val stateManager = StateManager.apply(logger).unsafeRunSync()
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Debug"))
+    val stateManager        = StateManager.apply(logger).unsafeRunSync()
 
     // Create empty buffer
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
-    val state = stateManager.getCurrentState.unsafeRunSync()
-    val paneId = state.layout.editorPanes.keys.head
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    
-    println(s"=== HORIZONTAL SCROLLING DEBUG ===")
+
+    println("=== HORIZONTAL SCROLLING DEBUG ===")
     println(s"BufferId: $bufferId, PaneId: $paneId")
-    
-    val initialState = stateManager.getCurrentState.unsafeRunSync()
+
+    val initialState  = stateManager.getCurrentState.unsafeRunSync()
     val initialBuffer = initialState.buffers(bufferId)
     println(s"Initial buffer viewport: ${initialBuffer.viewport}")
     println(s"Initial cursor: ${initialBuffer.cursors.head}")
-    
+
     // Insert long text like the failing test
     val alphabet = "abcdefghijklmnopqrstuvwxyz"
     val longText = alphabet * 5 // 130 characters
-    
+
     println(s"=== INSERTING ${longText.length} CHARACTERS ===")
-    longText.zipWithIndex.foreach { case (char, idx) => 
-      stateManager.applyEvent(InsertChar(char)).unsafeRunSync()
-      if (idx % 10 == 9) {  // Print every 10th character
-        val currentState = stateManager.getCurrentState.unsafeRunSync()
-        val buffer = currentState.buffers(bufferId)
-        println(s"After ${idx + 1} chars: cursor=${buffer.cursors.head}, viewport=${buffer.viewport}")
-      }
+    longText.zipWithIndex.foreach {
+      case (char, idx) =>
+        stateManager.applyEvent(InsertChar(char)).unsafeRunSync()
+        if idx % 10 == 9 then // Print every 10th character
+          val currentState = stateManager.getCurrentState.unsafeRunSync()
+          val buffer       = currentState.buffers(bufferId)
+          println(s"After ${idx + 1} chars: cursor=${buffer.cursors.head}, viewport=${buffer.viewport}")
     }
-    
-    val finalState = stateManager.getCurrentState.unsafeRunSync()
+
+    val finalState  = stateManager.getCurrentState.unsafeRunSync()
     val finalBuffer = finalState.buffers(bufferId)
-    
-    println(s"=== FINAL STATE ===")
+
+    println("=== FINAL STATE ===")
     println(s"Final cursor: ${finalBuffer.cursors.head}")
     println(s"Final viewport: ${finalBuffer.viewport}")
     println(s"Expected leftColumn > 0, Actual: ${finalBuffer.viewport.leftColumn}")
-    
+
     // The assertion that should pass
     finalBuffer.viewport.leftColumn should be > 0
   }

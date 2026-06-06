@@ -1,7 +1,9 @@
 package com.serenity
 
-import cats.effect.{Deferred, IO}
+import scala.concurrent.duration.*
+
 import cats.effect.unsafe.implicits.global
+import cats.effect.{Deferred, IO}
 import cats.syntax.parallel.*
 import com.serenity.keystroke.events.Quit
 import com.serenity.rope.Balance
@@ -11,16 +13,14 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-import scala.concurrent.duration.*
-
 class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance         = Balance.default
   private val ciTimeout = 15.seconds
 
   private def makeStateManager() =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()

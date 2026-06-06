@@ -14,7 +14,7 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class ConfigDrivenThemeIntegrationSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def createStateManager(): StateManager =
@@ -40,9 +40,11 @@ class ConfigDrivenThemeIntegrationSpec extends AnyFlatSpec with Matchers:
   it should "switch between dark and light themes dynamically" in {
     val stateManager = createStateManager()
 
-    stateManager.updateState(_.copy(theme = AppThemeManager.create.initializeWithTheme("dark").unsafeRunSync())).unsafeRunSync()
+    stateManager
+      .updateState(_.copy(theme = AppThemeManager.create.initializeWithTheme("dark").unsafeRunSync()))
+      .unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    val darkTheme = initialState.theme
+    val darkTheme    = initialState.theme
 
     stateManager.applyEvent(SwitchTheme("light")).unsafeRunSync()
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
@@ -54,7 +56,9 @@ class ConfigDrivenThemeIntegrationSpec extends AnyFlatSpec with Matchers:
 
   it should "support theme reloading" in {
     val stateManager = createStateManager()
-    stateManager.updateState(_.copy(theme = AppThemeManager.create.initializeWithTheme("dark").unsafeRunSync())).unsafeRunSync()
+    stateManager
+      .updateState(_.copy(theme = AppThemeManager.create.initializeWithTheme("dark").unsafeRunSync()))
+      .unsafeRunSync()
 
     stateManager.applyEvent(ReloadCurrentTheme).unsafeRunSync()
 

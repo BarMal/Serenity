@@ -2,9 +2,9 @@ package com.serenity
 
 import com.serenity.config.{AppConfig, BackgroundStyle}
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, SurfaceContent, SurfaceId, SurfacePresentation, UiSurface}
-import com.serenity.ui.layout.{Diagnostic, DiagnosticSeverity, LayoutRect, Location, PanelPosition, ViewportSize}
-import com.serenity.ui.renderer.{PinnedPanelRenderer, Renderer, TextPanelRow, TextPanelView}
+import com.serenity.state.models.*
+import com.serenity.ui.layout.*
+import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -60,9 +60,9 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val surface = new MockRenderSurface(100, 30)
-    val viewport = ViewportSize(100, 30)
-    val layout = com.serenity.ui.layout.LayoutEngine.calculateLayout(state, viewport)
+    val surface   = new MockRenderSurface(100, 30)
+    val viewport  = ViewportSize(100, 30)
+    val layout    = com.serenity.ui.layout.LayoutEngine.calculateLayout(state, viewport)
     val panelRect = layout.pinnedPanelRects.getOrElse(PanelPosition.Right, fail("Expected right pinned panel rect"))
 
     Renderer.render(state, cursorVisible = true, surface, viewport)

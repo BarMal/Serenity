@@ -1,8 +1,8 @@
 package com.serenity
 
-import com.serenity.rope.Balance
-import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner}
+import com.serenity.command.*
 import com.serenity.config.AppConfig
+import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.OverlayViewModel
@@ -17,10 +17,12 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   private val bufferId = BufferId(1)
 
   private def stateWithQuickInfo(text: String): AppState =
-    val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
-      cursors = List(CursorPosition(1, 2))
-    )
-    val pane   = EditorPane.withBuffer(paneId, bufferId)
+    val buffer = Buffer
+      .fromString(bufferId, "one\ntwo\nthree")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
 
     AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -55,11 +57,13 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "derive a below-cursor modal overlay view from unified floating surfaces" in {
-    val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
-      cursors = List(CursorPosition(1, 2))
-    )
-    val pane   = EditorPane.withBuffer(paneId, bufferId)
-    val state  = AppState.initial.copy(
+    val buffer = Buffer
+      .fromString(bufferId, "one\ntwo\nthree")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
       layout = Layout(
@@ -95,11 +99,13 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .updateSearchTerm("op")(using registry)
-    val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
-      cursors = List(CursorPosition(1, 2))
-    )
-    val pane   = EditorPane.withBuffer(paneId, bufferId)
-    val state  = AppState.initial.copy(
+    val buffer = Buffer
+      .fromString(bufferId, "one\ntwo\nthree")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
       layout = Layout(
@@ -118,7 +124,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
 
     val overlays = OverlayViewModel.fromState(state, layout)
-    val overlay = overlays.belowCursor.getOrElse(fail("Expected command runner overlay"))
+    val overlay  = overlays.belowCursor.getOrElse(fail("Expected command runner overlay"))
 
     overlay.header.map(_.plainText) shouldBe Some("search: op")
     overlay.header.flatMap(_.cursorColumn) shouldBe Some("search: op".length)
@@ -128,11 +134,13 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "skip inactive command palettes so closed overlays do not linger" in {
-    val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
-      cursors = List(CursorPosition(1, 2))
-    )
-    val pane   = EditorPane.withBuffer(paneId, bufferId)
-    val state  = AppState.initial.copy(
+    val buffer = Buffer
+      .fromString(bufferId, "one\ntwo\nthree")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
       layout = Layout(
@@ -163,9 +171,11 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .updateSearchTerm("op")(using registry)
-    val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
-      cursors = List(CursorPosition(1, 2))
-    )
+    val buffer = Buffer
+      .fromString(bufferId, "one\ntwo\nthree")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -199,7 +209,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
 
     val overlays = OverlayViewModel.fromState(state, layout)
-    val overlay = overlays.belowCursor.getOrElse(fail("Expected focused modal overlay"))
+    val overlay  = overlays.belowCursor.getOrElse(fail("Expected focused modal overlay"))
 
     overlay.rows.exists(_.plainText.startsWith("Filename")) shouldBe true
     overlay.rows.exists(_.plainText.startsWith("Path")) shouldBe true
@@ -207,14 +217,16 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "stack the command runner and submenu preview beneath the cursor" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withActiveCategory(com.serenity.command.CommandCategory.Settings)
-    val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
-      cursors = List(CursorPosition(1, 2))
-    )
+    val buffer = Buffer
+      .fromString(bufferId, "one\ntwo\nthree")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -248,14 +260,16 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "collapse the parent runner to one content row when there is not enough vertical space for both panels" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withActiveCategory(com.serenity.command.CommandCategory.Settings)
-    val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(
-      cursors = List(CursorPosition(2, 2))
-    )
+    val buffer = Buffer
+      .fromString(bufferId, "one\ntwo\nthree")
+      .copy(
+        cursors = List(CursorPosition(2, 2))
+      )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -278,7 +292,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val layout = LayoutEngine.calculateLayout(state, ViewportSize(60, 8))
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(60, 8))
     val overlays = OverlayViewModel.fromState(state, layout)
     val stack    = overlays.belowCursorStack
 

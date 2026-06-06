@@ -4,7 +4,7 @@ import java.nio.file.Paths
 
 import com.serenity.command.CommandRunner
 import com.serenity.config.AppConfig
-import com.serenity.keystroke.events.{LoadFile, OpenFile, SaveAsFile, SaveFile}
+import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, FileEventReducer}
@@ -52,7 +52,9 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
       uiSurfaces = List(
         UiSurface(
           SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(CommandRunner.empty.activate(com.serenity.command.CommandRegistry.default, AppConfig.default)),
+          SurfaceContent.CommandPalette(
+            CommandRunner.empty.activate(com.serenity.command.CommandRegistry.default, AppConfig.default)
+          ),
           SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
         )
       )

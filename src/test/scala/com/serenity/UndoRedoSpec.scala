@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.util.concurrent.atomic.AtomicReference
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
@@ -13,8 +15,8 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
-  given Balance            = Balance.default
-  given LoggerFactory[IO]  = Slf4jFactory.create[IO]
+  given Balance           = Balance.default
+  given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   behavior of "Undo"
 
@@ -122,10 +124,10 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
   it should "support multiple undo levels across mixed operations" in new UndoFixture:
     val bufferId = setupBuffer("")
 
-    applyEvent(InsertChar('a'))   // group 1
-    applyEvent(InsertChar('b'))   // group 1 (coalesced)
-    applyEvent(DeleteBackward)    // atomic
-    applyEvent(InsertChar('c'))   // group 2
+    applyEvent(InsertChar('a')) // group 1
+    applyEvent(InsertChar('b')) // group 1 (coalesced)
+    applyEvent(DeleteBackward)  // atomic
+    applyEvent(InsertChar('c')) // group 2
     getContent(bufferId) shouldBe "ac"
 
     applyEvent(Undo) // undo group 2 → "a"
@@ -165,27 +167,29 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     getContent(bufferId1) shouldBe "pane one"
 
   trait UndoFixture:
+
     val stateManager: StateManager = StateManager
       .apply(LoggerFactory[IO].getLogger(using LoggerName("UndoRedoSpec")))
       .unsafeRunSync()
 
-    private var currentPaneId: PaneId = PaneId(0)
+    private val currentPaneId = AtomicReference[PaneId](PaneId(0))
 
     def setupBuffer(content: String): BufferId =
       val bufferId = stateManager.createBuffer(content).unsafeRunSync()
       val state    = stateManager.getCurrentState.unsafeRunSync()
-      currentPaneId = state.layout.editorPanes.keys.head
-      stateManager.setBufferForPane(currentPaneId, bufferId).unsafeRunSync()
+      val paneId   = state.layout.editorPanes.keys.head
+      currentPaneId.set(paneId)
+      stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
       if content.nonEmpty then
         stateManager
-          .setCursorPosition(currentPaneId, 0, content.length)
+          .setCursorPosition(paneId, 0, content.length)
           .unsafeRunSync()
       bufferId
 
     def setupAnotherBuffer(content: String): BufferId =
-      val bufferId = stateManager.createBuffer(content).unsafeRunSync()
+      val bufferId  = stateManager.createBuffer(content).unsafeRunSync()
       val newPaneId = stateManager.createPane(Some(bufferId)).unsafeRunSync()
-      currentPaneId = newPaneId
+      currentPaneId.set(newPaneId)
       if content.nonEmpty then
         stateManager
           .setCursorPosition(newPaneId, 0, content.length)
@@ -193,7 +197,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
       stateManager.switchToPane(newPaneId).unsafeRunSync()
       bufferId
 
-    def getPaneId: PaneId = currentPaneId
+    def getPaneId: PaneId = currentPaneId.get()
 
     def applyEvent(event: Event): Unit =
       stateManager.applyEvent(event).unsafeRunSync()

@@ -36,14 +36,14 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
     // Given: Text with a typo
     val bufferId = createBufferWithPane("Hello, wrold!").getOrElse(fail("Could not create buffer"))
 
-    // When: Fix "wrold" to "world" by correcting the transposition 
+    // When: Fix "wrold" to "world" by correcting the transposition
     // Delete "ro" and retype as "or"
-    applyEvent(MoveLeft) // Before '!'
-    applyEvent(MoveLeft) // Before 'd' 
-    applyEvent(MoveLeft) // Before 'l'
-    applyEvent(MoveLeft) // Before 'o'
+    applyEvent(MoveLeft)       // Before '!'
+    applyEvent(MoveLeft)       // Before 'd'
+    applyEvent(MoveLeft)       // Before 'l'
+    applyEvent(MoveLeft)       // Before 'o'
     applyEvent(DeleteBackward) // Delete 'r'
-    applyEvent(DeleteForward) // Delete 'o'
+    applyEvent(DeleteForward)  // Delete 'o'
     applyEvent(InsertChar('o'))
     applyEvent(InsertChar('r'))
 
@@ -115,7 +115,7 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
 
     // Then: Text should be modified at correct positions
     val finalContent = getBufferContent(bufferId)
-    finalContent should include("*World!")  // Should have both insertions on the "World" line
+    finalContent should include("*World!") // Should have both insertions on the "World" line
 
   behavior of "Text Editor - Deletion Operations"
 
@@ -140,7 +140,7 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
     val bufferId = createBufferWithPane("Hello World").getOrElse(fail("Could not create buffer"))
 
     // When: Position cursor at the beginning and delete forward
-    applyEvent(MoveToStart) // Move to beginning of text
+    applyEvent(MoveToStart)   // Move to beginning of text
     applyEvent(DeleteForward) // Delete 'H'
     applyEvent(DeleteForward) // Delete 'e'
 
@@ -202,17 +202,17 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
     val bufferId = createBufferWithPane("The quick brown fox").getOrElse(fail("Could not create buffer"))
 
     // When: Replace "quick" with "slow" by positioning cursor and using deletion/insertion
-    applyEvent(MoveToStart)     // Go to beginning
-    applyEvent(MoveRight)       // 'h'
-    applyEvent(MoveRight)       // 'e'
-    applyEvent(MoveRight)       // ' '
-    applyEvent(MoveRight)       // move to 'q'
+    applyEvent(MoveToStart) // Go to beginning
+    applyEvent(MoveRight)   // 'h'
+    applyEvent(MoveRight)   // 'e'
+    applyEvent(MoveRight)   // ' '
+    applyEvent(MoveRight)   // move to 'q'
     // Delete "quick" (5 characters)
-    applyEvent(DeleteForward)   // 'q'
-    applyEvent(DeleteForward)   // 'u'
-    applyEvent(DeleteForward)   // 'i'
-    applyEvent(DeleteForward)   // 'c'
-    applyEvent(DeleteForward)   // 'k'
+    applyEvent(DeleteForward) // 'q'
+    applyEvent(DeleteForward) // 'u'
+    applyEvent(DeleteForward) // 'i'
+    applyEvent(DeleteForward) // 'c'
+    applyEvent(DeleteForward) // 'k'
     // Insert "slow"
     applyEvent(InsertChar('s'))
     applyEvent(InsertChar('l'))
@@ -321,14 +321,14 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
         val state    = stateManager.getCurrentState.unsafeRunSync()
         val paneId   = state.layout.editorPanes.keys.head // Get default pane
         stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-        
+
         // Position cursor at the end of the content
         if content.nonEmpty then
-          val lines = content.split('\n')
-          val lastLineIndex = lines.length - 1
+          val lines          = content.split('\n')
+          val lastLineIndex  = lines.length - 1
           val lastLineLength = lines.last.length
           stateManager.setCursorPosition(paneId, lastLineIndex, lastLineLength).unsafeRunSync()
-          
+
         Some(bufferId)
       catch case _: Exception => None
 

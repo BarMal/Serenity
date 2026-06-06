@@ -71,7 +71,18 @@ object Renderer:
     cellMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color]
   ): Unit =
-    render(state, cursorVisible, surface, viewportSize, codeFont, textFont, codeFont, cellMetrics, cellMetrics, cursorColor)
+    render(
+      state,
+      cursorVisible,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      codeFont,
+      cellMetrics,
+      cellMetrics,
+      cursorColor
+    )
 
   def render(
     state: AppState,
@@ -87,7 +98,19 @@ object Renderer:
   ): Unit =
     val state0 = withEffectiveTheme(state)
     val layout = LayoutEngine.calculateLayout(state0, viewportSize)
-    renderFrame(state0, cursorVisible, surface, viewportSize, layout, codeFont, textFont, uiFont, cellMetrics, uiMetrics, cursorColor)
+    renderFrame(
+      state0,
+      cursorVisible,
+      surface,
+      viewportSize,
+      layout,
+      codeFont,
+      textFont,
+      uiFont,
+      cellMetrics,
+      uiMetrics,
+      cursorColor
+    )
 
   def render(
     state: AppState,
@@ -97,7 +120,16 @@ object Renderer:
     cursorColor: Option[java.awt.Color] = None
   ): Unit =
     val defaultFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    render(state, cursorVisible, surface, viewportSize, defaultFont, defaultFont, CellMetrics.fromFont(defaultFont), cursorColor)
+    render(
+      state,
+      cursorVisible,
+      surface,
+      viewportSize,
+      defaultFont,
+      defaultFont,
+      CellMetrics.fromFont(defaultFont),
+      cursorColor
+    )
 
   private def renderFrame(
     state: AppState,
@@ -123,10 +155,12 @@ object Renderer:
     } match
       case Some(page) =>
         renderStartPage(page, surface, viewportSize, state.theme, uiFont)
-        val floatContext = RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
+        val floatContext =
+          RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
         renderFloatingPanels(state, floatContext)
       case None =>
-        val context = RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
+        val context =
+          RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
         renderSpacerColumns(context)
         renderLineNumbers(state, context)
         renderGutter(state, context)
@@ -246,8 +280,8 @@ object Renderer:
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
         if screenLineIndex < rect.height then
-          val screenY = rect.y + screenLineIndex
-          val screenX = rect.x
+          val screenY            = rect.y + screenLineIndex
+          val screenX            = rect.x
           val rendersRawMarkdown = rawMarkdownLines.contains(visualLine.bufferLine)
           val effectiveLanguage =
             if rendersRawMarkdown then None else buffer.language
@@ -325,38 +359,39 @@ object Renderer:
     snapshot: TextLayoutSnapshot
   ): Unit =
     buffer.allSelections.foreach { selection =>
-      selectionColumnsForLine(selection, visualLine).foreach { case (selectionStart, selectionEnd) =>
-        if snapshot.usesMeasuredLayout then
-          val localStart = selectionStart - visualLine.startColumn
-          val localEnd   = selectionEnd - visualLine.startColumn
-          if localStart >= 0 && localStart < localEnd && localEnd <= visualLine.text.length then
-            val selectedText = visualLine.text.substring(localStart, localEnd)
-            val lineOriginPx = context.cellMetrics.toPixelX(rect.x).toFloat
-            val startXPx     = lineOriginPx + visualLine.xForColumn(selectionStart).getOrElse(visualLine.widthPx)
-            val endXPx       = lineOriginPx + visualLine.xForColumn(selectionEnd).getOrElse(visualLine.widthPx)
-            surface.setForegroundColor(theme.highlighted.foreground)
-            surface.setBackgroundColor(theme.highlighted.background)
-            surface.drawRunPx(
-              startXPx,
-              context.cellMetrics.toPixelY(screenY),
-              endXPx - startXPx,
-              snapshot.lineHeightPx,
-              snapshot.ascentPx,
-              selectedText
-            )
-        else
-          (selectionStart until selectionEnd).foreach { bufferColumn =>
-            val relativeColumn = bufferColumn - visualLine.startColumn
-            val screenX        = rect.x + relativeColumn
-            if screenX >= rect.x && screenX < rect.right then
-              val charIndex = bufferColumn - visualLine.startColumn
-              val charToRender =
-                if charIndex >= 0 && charIndex < visualLine.text.length then visualLine.text.charAt(charIndex)
-                else ' '
+      selectionColumnsForLine(selection, visualLine).foreach {
+        case (selectionStart, selectionEnd) =>
+          if snapshot.usesMeasuredLayout then
+            val localStart = selectionStart - visualLine.startColumn
+            val localEnd   = selectionEnd - visualLine.startColumn
+            if localStart >= 0 && localStart < localEnd && localEnd <= visualLine.text.length then
+              val selectedText = visualLine.text.substring(localStart, localEnd)
+              val lineOriginPx = context.cellMetrics.toPixelX(rect.x).toFloat
+              val startXPx     = lineOriginPx + visualLine.xForColumn(selectionStart).getOrElse(visualLine.widthPx)
+              val endXPx       = lineOriginPx + visualLine.xForColumn(selectionEnd).getOrElse(visualLine.widthPx)
               surface.setForegroundColor(theme.highlighted.foreground)
               surface.setBackgroundColor(theme.highlighted.background)
-              CharacterRenderer.renderChar(surface, screenX, screenY, charToRender)
-          }
+              surface.drawRunPx(
+                startXPx,
+                context.cellMetrics.toPixelY(screenY),
+                endXPx - startXPx,
+                snapshot.lineHeightPx,
+                snapshot.ascentPx,
+                selectedText
+              )
+          else
+            (selectionStart until selectionEnd).foreach { bufferColumn =>
+              val relativeColumn = bufferColumn - visualLine.startColumn
+              val screenX        = rect.x + relativeColumn
+              if screenX >= rect.x && screenX < rect.right then
+                val charIndex = bufferColumn - visualLine.startColumn
+                val charToRender =
+                  if charIndex >= 0 && charIndex < visualLine.text.length then visualLine.text.charAt(charIndex)
+                  else ' '
+                surface.setForegroundColor(theme.highlighted.foreground)
+                surface.setBackgroundColor(theme.highlighted.background)
+                CharacterRenderer.renderChar(surface, screenX, screenY, charToRender)
+            }
       }
     }
 
@@ -505,7 +540,8 @@ object Renderer:
         context.uiMetrics
       )
     }
-    val belowOverlays = if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
+    val belowOverlays =
+      if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
     belowOverlays.foreach { overlay =>
       logger.info(s"[OVERLAY RENDERED] placement=BelowCursor rect=${overlay.rect} title=${overlay.title.getOrElse("")}")
       val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)

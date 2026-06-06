@@ -30,37 +30,39 @@ object Main extends IOApp.Simple:
 
         AppRuntime.run(
           initialViewportSize = swingWin.viewportSize,
-          makeInputHandler =
-            router => new SwingInputHandler[IO, com.serenity.keystroke.events.Event](swingWin.canvas, router, () => swingWin.metrics),
+          makeInputHandler = router =>
+            new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
+              swingWin.canvas,
+              router,
+              () => swingWin.metrics
+            ),
           checkResize = IO(swingWin.doResizeIfNecessary()),
-          renderFull =
-            (state, vis, cc) =>
-              syncDisplayMetrics() >> IO.blocking(
-                Renderer.render(
-                  state,
-                  vis,
-                  swingWin,
-                  displayState.codeFont,
-                  displayState.textFont,
-                  displayState.uiFont,
-                  displayState.uiMetrics,
-                  cc
-                )
-              ),
-          renderCursorOnly =
-            (state, vis, cc) =>
-              syncDisplayMetrics() >> IO.blocking(
-                Renderer.render(
-                  state,
-                  vis,
-                  swingWin,
-                  displayState.codeFont,
-                  displayState.textFont,
-                  displayState.uiFont,
-                  displayState.uiMetrics,
-                  cc
-                )
-              ),
+          renderFull = (state, vis, cc) =>
+            syncDisplayMetrics() >> IO.blocking(
+              Renderer.render(
+                state,
+                vis,
+                swingWin,
+                displayState.codeFont,
+                displayState.textFont,
+                displayState.uiFont,
+                displayState.uiMetrics,
+                cc
+              )
+            ),
+          renderCursorOnly = (state, vis, cc) =>
+            syncDisplayMetrics() >> IO.blocking(
+              Renderer.render(
+                state,
+                vis,
+                swingWin,
+                displayState.codeFont,
+                displayState.textFont,
+                displayState.uiFont,
+                displayState.uiMetrics,
+                cc
+              )
+            ),
           appConfig = appConfig,
           makeStateManager = Some(logger =>
             com.serenity.state.manager.StateManager.apply(

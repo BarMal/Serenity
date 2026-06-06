@@ -341,8 +341,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         val panelFg  = s.theme.panel.foreground
         val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
         val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
-        val bgSteps = RgbInterpolator.interpolateRgba(panelBg, transpBg, steps)
-        val fgSteps = RgbInterpolator.interpolateRgba(panelFg, transpFg, steps)
+        val bgSteps  = RgbInterpolator.interpolateRgba(panelBg, transpBg, steps)
+        val fgSteps  = RgbInterpolator.interpolateRgba(panelFg, transpFg, steps)
         CharacterKey(0, rowOffset) -> AnimatedCell(
           content = None,
           foregroundSteps = fgSteps,
@@ -488,9 +488,11 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       content = SurfaceContent.CommandPalette(runner),
       presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
     )
-    stateWithId.copy(
-      uiSurfaces = stateWithId.uiSurfaces.filterNot(_.id == surfaceId) :+ surface
-    ).pushFocus(Focus.Surface(surfaceId))
+    stateWithId
+      .copy(
+        uiSurfaces = stateWithId.uiSurfaces.filterNot(_.id == surfaceId) :+ surface
+      )
+      .pushFocus(Focus.Surface(surfaceId))
 
   private def handleMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Unit] =
     resolveMouseTarget(click, state).fold(cats.effect.IO.unit) { (paneId, buffer, clickedCursor) =>
@@ -554,7 +556,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       stateRef.update { s =>
         s.buffers.get(buffer.id) match
           case Some(current) =>
-            val anchor = current.primarySelection.map(_.anchor).orElse(current.cursors.headOption).getOrElse(draggedCursor)
+            val anchor =
+              current.primarySelection.map(_.anchor).orElse(current.cursors.headOption).getOrElse(draggedCursor)
             val selection =
               Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
             s.copy(
@@ -615,20 +618,25 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           case None => None
 
   private def wordSelectionAtCursor(buffer: Buffer, cursor: CursorPosition): Option[Selection] =
-    val text         = buffer.content.collect()
+    val text          = buffer.content.collect()
     val clickedOffset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+    def wordEndFrom(offset: Int): Int =
+      if offset < text.length && !text.charAt(offset).isWhitespace then wordEndFrom(offset + 1)
+      else offset
+
     if text.isEmpty then None
     else
       val probeOffset =
         if clickedOffset >= text.length then text.length - 1
-        else if text.charAt(clickedOffset).isWhitespace && clickedOffset > 0 && !text.charAt(clickedOffset - 1).isWhitespace
+        else if text.charAt(clickedOffset).isWhitespace && clickedOffset > 0 && !text
+              .charAt(clickedOffset - 1)
+              .isWhitespace
         then clickedOffset - 1
         else clickedOffset
       if probeOffset < 0 || text.charAt(probeOffset).isWhitespace then None
       else
         val start = TextEditing.previousWordBoundary(text, probeOffset)
-        var end   = probeOffset
-        while end < text.length && !text.charAt(end).isWhitespace do end += 1
+        val end   = wordEndFrom(probeOffset)
         Some(
           Selection(
             offsetToCursorPosition(buffer.content, start),

@@ -16,8 +16,8 @@ private[manager] trait StateManagerViewportBehavior extends StateManagerSurfaceF
         case Some(pane) =>
           pane.bufferId.flatMap(state.buffers.get) match
             case Some(buffer) =>
-              val cursor   = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
-              val viewport = buffer.viewport
+              val cursor         = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+              val viewport       = buffer.viewport
               val font           = previewFontForBuffer(buffer, state.config.fontConfig)
               val visibleWidthPx = viewport.visibleColumns * CellMetrics.fromFont(font).charWidth
               val lineText       = buffer.content.getLine(cursor.line).getOrElse("")

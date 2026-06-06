@@ -3,31 +3,33 @@ package com.serenity
 import java.awt.Font
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
-import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, CommandRunner}
+import com.serenity.command.*
 import com.serenity.config.{AppConfig, BackgroundStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, CursorLayout, Layout, LayoutEngine, TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{Renderer, SurfaceMaterials}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import cats.effect.unsafe.implicits.global
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance    = Balance.default
   given Logger[IO] = Slf4jLogger.getLogger[IO]
 
   private val paneId   = PaneId(0)
   private val bufferId = BufferId(1)
+
   private val codeFont = FontLoader
     .loadCodeFont(FontLoader.FontConfig(codeFontFamily = FontLoader.BundledCodeFontFamily, enableLigatures = true))
     .unsafeRunSync()
+
   private val cellMetrics = CellMetrics.fromFont(codeFont)
 
   private def stateWithRunner(theme: Theme, searchTerm: String, commands: List[Command]): AppState =
@@ -35,9 +37,11 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .updateSearchTerm(searchTerm)(using registry)
-    val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma").copy(
-      cursors = List(CursorPosition(1, 2))
-    )
+    val buffer = Buffer
+      .fromString(bufferId, "alpha\nbeta\ngamma")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
     AppState.initial.copy(
@@ -72,7 +76,16 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .getOrElse(paneId, fail("Expected pane layout"))
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30), codeFont, Font(Font.SANS_SERIF, Font.PLAIN, 12), cellMetrics, None)
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      codeFont,
+      Font(Font.SANS_SERIF, Font.PLAIN, 12),
+      cellMetrics,
+      None
+    )
 
     val searchLine =
       (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 1)).mkString.trim
@@ -89,7 +102,11 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getBg(overlay.x + 1, overlay.y + 1) shouldBe state.theme.panel.background
     surface.getBg(overlay.x + 1, overlay.y + 2) shouldBe state.theme.highlighted.background
 
-    val caretXs = TextLayoutSnapshot.caretXsForText("search: op", codeFont, surface.fontRenderContext.getOrElse(fail("missing frc")))
+    val caretXs = TextLayoutSnapshot.caretXsForText(
+      "search: op",
+      codeFont,
+      surface.fontRenderContext.getOrElse(fail("missing frc"))
+    )
     val expectedCursorXPx = cellMetrics.toPixelX(overlay.x + 1) + math.round(caretXs.last)
     surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorXPx
   }
@@ -97,16 +114,22 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   it should "render category tabs in browse mode and show grouped settings rows" in {
     val commands = List(
       Command.typed("open", "Open file", com.serenity.command.CommandIntent.OpenFile),
-      Command.typed("toggle-theme", "Switch between light and dark theme", com.serenity.command.CommandIntent.ToggleTheme)
+      Command.typed(
+        "toggle-theme",
+        "Switch between light and dark theme",
+        com.serenity.command.CommandIntent.ToggleTheme
+      )
     )
-    val registry = CommandRegistry(commands)
+    val registry          = CommandRegistry(commands)
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
-    val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma").copy(
-      cursors = List(CursorPosition(1, 2))
-    )
+    val buffer = Buffer
+      .fromString(bufferId, "alpha\nbeta\ngamma")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -186,7 +209,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "draw the floating border with the rounded stroke even while animating" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands  = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
     val baseState = stateWithRunner(Theme.light, "op", commands)
     val surfaceId = SurfaceId("command-runner")
     val animationState = AnimationState.empty.mergeAnimations(
@@ -262,14 +285,16 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render a ghost submenu preview beneath the main command runner with reduced alpha" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
-    val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma").copy(
-      cursors = List(CursorPosition(1, 2))
-    )
+    val buffer = Buffer
+      .fromString(bufferId, "alpha\nbeta\ngamma")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),

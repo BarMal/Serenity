@@ -1,7 +1,7 @@
 package com.serenity.state.core
 
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, BufferId, Focus, PaneId}
+import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -35,7 +35,8 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
     val withThreeBuffers = EditorState.openNewTab(
       EditorState.openNewTab(AppState.initial.copy(viewportSize = Some(ViewportSize(200, 24))))
     )
-    val focusedFirst = EditorState.focusBuffer(EditorState.rebalancePanes(withThreeBuffers, Some(BufferId(0))), BufferId(0))
+    val focusedFirst =
+      EditorState.focusBuffer(EditorState.rebalancePanes(withThreeBuffers, Some(BufferId(0))), BufferId(0))
 
     val updatedState = EditorState.navigateToNextBuffer(focusedFirst)
 

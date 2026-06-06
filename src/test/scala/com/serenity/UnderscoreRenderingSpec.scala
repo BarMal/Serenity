@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
+import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

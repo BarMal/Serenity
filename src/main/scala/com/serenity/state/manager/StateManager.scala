@@ -6,16 +6,16 @@ import cats.effect.std.Queue
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.animation.{AnimatedCell, CharacterKey, RgbInterpolator}
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
+import com.serenity.config.AppConfig
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
-import com.serenity.config.AppConfig
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{PanelContent, PanelPosition, PeekContent, ViewportSize}
+import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
@@ -120,8 +120,8 @@ object StateManager:
     val themeManager = AppThemeManager.create
     for
       resolvedSessionRootOverride <- resolveSessionRootOverride(sessionRootOverride)
-      stateRef <- Ref.of[IO, AppState](AppState.initial.copy(config = initialConfig))
-      undoRef  <- Ref.of[IO, UndoState](UndoState())
+      stateRef                    <- Ref.of[IO, AppState](AppState.initial.copy(config = initialConfig))
+      undoRef                     <- Ref.of[IO, UndoState](UndoState())
       themeNamesRef <- themeManager.listAvailableThemes
         .handleErrorWith(_ => IO.pure(Nil))
         .flatMap(Ref.of[IO, List[String]])
@@ -179,10 +179,12 @@ object StateManager:
         .fromQueueUnterminated(lspQueue)
         .interruptWhen(Stream.eval(quitSignal.get).as(true))
 
-    protected val fileManager        = new FileManager()
-    protected val sessionManager     = sessionRootOverride
+    protected val fileManager = new FileManager()
+
+    protected val sessionManager = sessionRootOverride
       .map(root => SessionManager.create(root, themeManager, logger, policy))
       .getOrElse(SessionManager.create(themeManager, logger, policy))
+
     protected val sessionPersistence = new SessionPersistence(sessionManager, policy, logger)
 
     // Session persistence operations

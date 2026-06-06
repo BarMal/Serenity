@@ -1,9 +1,8 @@
 package com.serenity.config
 
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import io.circe.syntax.given
 import io.circe.{Decoder, Encoder}
-
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 
 enum HotkeyAction:
   case Save
@@ -59,43 +58,44 @@ case class HotkeyTrigger(
       ).flatten
     val keyPart =
       keyType match
-        case InputKey.Character => character.map(_.toString).getOrElse("")
-        case InputKey.Tab       => "tab"
+        case InputKey.Character  => character.map(_.toString).getOrElse("")
+        case InputKey.Tab        => "tab"
         case InputKey.ReverseTab => "reverse-tab"
-        case InputKey.Enter     => "enter"
-        case InputKey.Backspace => "backspace"
-        case InputKey.Delete    => "delete"
-        case InputKey.Escape    => "escape"
-        case InputKey.ArrowUp   => "up"
-        case InputKey.ArrowDown => "down"
-        case InputKey.ArrowLeft => "left"
+        case InputKey.Enter      => "enter"
+        case InputKey.Backspace  => "backspace"
+        case InputKey.Delete     => "delete"
+        case InputKey.Escape     => "escape"
+        case InputKey.ArrowUp    => "up"
+        case InputKey.ArrowDown  => "down"
+        case InputKey.ArrowLeft  => "left"
         case InputKey.ArrowRight => "right"
-        case InputKey.Home      => "home"
-        case InputKey.End       => "end"
-        case InputKey.PageUp    => "pageup"
-        case InputKey.PageDown  => "pagedown"
-        case InputKey.F1        => "f1"
-        case InputKey.F2        => "f2"
-        case InputKey.F3        => "f3"
-        case InputKey.F4        => "f4"
-        case InputKey.F5        => "f5"
-        case InputKey.F6        => "f6"
-        case InputKey.F7        => "f7"
-        case InputKey.F8        => "f8"
-        case InputKey.F9        => "f9"
-        case InputKey.F10       => "f10"
-        case InputKey.F11       => "f11"
-        case InputKey.F12       => "f12"
-        case InputKey.EOF       => "eof"
-        case other              => other.toString.toLowerCase
+        case InputKey.Home       => "home"
+        case InputKey.End        => "end"
+        case InputKey.PageUp     => "pageup"
+        case InputKey.PageDown   => "pagedown"
+        case InputKey.F1         => "f1"
+        case InputKey.F2         => "f2"
+        case InputKey.F3         => "f3"
+        case InputKey.F4         => "f4"
+        case InputKey.F5         => "f5"
+        case InputKey.F6         => "f6"
+        case InputKey.F7         => "f7"
+        case InputKey.F8         => "f8"
+        case InputKey.F9         => "f9"
+        case InputKey.F10        => "f10"
+        case InputKey.F11        => "f11"
+        case InputKey.F12        => "f12"
+        case InputKey.EOF        => "eof"
+        case other               => other.toString.toLowerCase
     (modifierParts :+ keyPart).mkString("+")
 
 object HotkeyTrigger:
+
   def parse(input: String): Option[HotkeyTrigger] =
     val parts = input.trim.toLowerCase.split("\\+").toList.map(_.trim).filter(_.nonEmpty)
     val (modifierParts, keyParts) = parts.partition {
       case "ctrl" | "alt" | "shift" => true
-      case _                         => false
+      case _                        => false
     }
 
     val modifiers = modifierParts.foldLeft(Set.empty[Modifier]) {
@@ -182,17 +182,18 @@ case class HotkeyConfig(
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
 object HotkeyConfig:
+
   val defaultBindings: Map[HotkeyAction, List[HotkeyTrigger]] = Map(
     HotkeyAction.Save -> List(HotkeyTrigger(InputKey.Character, Some('s'), Set(Modifier.Ctrl))),
     HotkeyAction.Quit -> List(
       HotkeyTrigger(InputKey.Character, Some('q'), Set(Modifier.Ctrl)),
       HotkeyTrigger(InputKey.EOF, None, Set.empty)
     ),
-    HotkeyAction.Undo -> List(HotkeyTrigger(InputKey.Character, Some('z'), Set(Modifier.Ctrl))),
-    HotkeyAction.Redo -> List(HotkeyTrigger(InputKey.Character, Some('y'), Set(Modifier.Ctrl))),
-    HotkeyAction.Copy -> List(HotkeyTrigger(InputKey.Character, Some('c'), Set(Modifier.Ctrl))),
-    HotkeyAction.Paste -> List(HotkeyTrigger(InputKey.Character, Some('v'), Set(Modifier.Ctrl))),
-    HotkeyAction.Cut -> List(HotkeyTrigger(InputKey.Character, Some('x'), Set(Modifier.Ctrl))),
+    HotkeyAction.Undo      -> List(HotkeyTrigger(InputKey.Character, Some('z'), Set(Modifier.Ctrl))),
+    HotkeyAction.Redo      -> List(HotkeyTrigger(InputKey.Character, Some('y'), Set(Modifier.Ctrl))),
+    HotkeyAction.Copy      -> List(HotkeyTrigger(InputKey.Character, Some('c'), Set(Modifier.Ctrl))),
+    HotkeyAction.Paste     -> List(HotkeyTrigger(InputKey.Character, Some('v'), Set(Modifier.Ctrl))),
+    HotkeyAction.Cut       -> List(HotkeyTrigger(InputKey.Character, Some('x'), Set(Modifier.Ctrl))),
     HotkeyAction.SelectAll -> List(HotkeyTrigger(InputKey.Character, Some('a'), Set(Modifier.Ctrl))),
     HotkeyAction.ToggleSyntaxHighlighting -> List(
       HotkeyTrigger(InputKey.Character, Some('h'), Set(Modifier.Ctrl))
@@ -201,7 +202,7 @@ object HotkeyConfig:
     HotkeyAction.ToggleCommandRunner -> List(
       HotkeyTrigger(InputKey.Character, Some('p'), Set(Modifier.Ctrl))
     ),
-    HotkeyAction.NewTab -> List(HotkeyTrigger(InputKey.Character, Some('t'), Set(Modifier.Ctrl))),
+    HotkeyAction.NewTab   -> List(HotkeyTrigger(InputKey.Character, Some('t'), Set(Modifier.Ctrl))),
     HotkeyAction.CloseTab -> List(HotkeyTrigger(InputKey.Character, Some('w'), Set(Modifier.Ctrl))),
     HotkeyAction.FileSearch -> List(
       HotkeyTrigger(InputKey.Character, Some('f'), Set(Modifier.Ctrl, Modifier.Shift))
@@ -214,23 +215,23 @@ object HotkeyConfig:
   )
 
   given Encoder[HotkeyAction] = Encoder.encodeString.contramap(_.configKey)
+
   given Decoder[HotkeyAction] = Decoder.decodeString.emap { key =>
     HotkeyAction.values.find(_.configKey == key).toRight(s"Unknown hotkey action: $key")
   }
 
   given Encoder[InputKey] = Encoder.encodeString.contramap(_.toString)
-  given Decoder[InputKey] = Decoder.decodeString.emap { key =>
-    InputKey.values.find(_.toString == key).toRight(s"Unknown input key: $key")
-  }
+  given Decoder[InputKey] =
+    Decoder.decodeString.emap(key => InputKey.values.find(_.toString == key).toRight(s"Unknown input key: $key"))
 
   given Encoder[Modifier] = Encoder.encodeString.contramap(_.toString)
-  given Decoder[Modifier] = Decoder.decodeString.emap { key =>
-    Modifier.values.find(_.toString == key).toRight(s"Unknown modifier: $key")
-  }
+  given Decoder[Modifier] =
+    Decoder.decodeString.emap(key => Modifier.values.find(_.toString == key).toRight(s"Unknown modifier: $key"))
 
   given Encoder[HotkeyTrigger] = Encoder.forProduct3("keyType", "character", "modifiers")(trigger =>
     (trigger.keyType, trigger.character, trigger.modifiers)
   )
+
   given Decoder[HotkeyTrigger] = Decoder.forProduct3("keyType", "character", "modifiers")(HotkeyTrigger.apply)
 
   given Encoder[HotkeyConfig] = Encoder.instance { config =>

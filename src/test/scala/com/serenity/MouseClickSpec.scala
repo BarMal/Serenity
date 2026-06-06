@@ -2,14 +2,14 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{MouseClick, MouseDrag, MousePress, ResizeEvent}
+import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{CursorPosition, PaneId, Selection}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -21,7 +21,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   private def makeStateManager() =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -145,7 +145,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "use pixel-aware hit testing for proportional text when pixel coordinates are available" in {
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    given LoggerFactory[IO]                 = Slf4jFactory.create[IO]
     given org.typelevel.log4cats.Logger[IO] = org.typelevel.log4cats.slf4j.Slf4jLogger.getLogger[IO]
 
     val sm       = makeStateManager()
@@ -161,16 +161,17 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    val state       = sm.getCurrentState.unsafeRunSync()
-    val layout      = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
-    val font        = FontLoader.previewTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true))
-    val metrics     = CellMetrics.fromFont(font)
+    val state    = sm.getCurrentState.unsafeRunSync()
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val font =
+      FontLoader.previewTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true))
+    val metrics      = CellMetrics.fromFont(font)
     val panelWidthPx = paneRect.width * metrics.charWidth
-    val snapshot    = TextLayoutSnapshot.fromBuffer(state.buffers(bufferId), panelWidthPx, font)
-    val line        = snapshot.visualLines.head
-    val pixelX      = paneRect.x * metrics.charWidth + math.round(line.xForColumn(1).getOrElse(0.0f) + 1.0f)
-    val pixelY      = (paneRect.y + 1) * metrics.lineHeight
+    val snapshot     = TextLayoutSnapshot.fromBuffer(state.buffers(bufferId), panelWidthPx, font)
+    val line         = snapshot.visualLines.head
+    val pixelX       = paneRect.x * metrics.charWidth + math.round(line.xForColumn(1).getOrElse(0.0f) + 1.0f)
+    val pixelY       = (paneRect.y + 1) * metrics.lineHeight
 
     sm.applyEvent(
       MouseClick(
@@ -199,8 +200,8 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    val state   = sm.getCurrentState.unsafeRunSync()
-    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val state    = sm.getCurrentState.unsafeRunSync()
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
     val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
 
     sm.applyEvent(MousePress(paneRect.x + 1, paneRect.y + 1)).unsafeRunSync()
@@ -226,8 +227,8 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    val state   = sm.getCurrentState.unsafeRunSync()
-    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val state    = sm.getCurrentState.unsafeRunSync()
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
     val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
 
     sm.applyEvent(MousePress(paneRect.x + 1, paneRect.y + 1)).unsafeRunSync()
@@ -255,8 +256,8 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    val state   = sm.getCurrentState.unsafeRunSync()
-    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val state    = sm.getCurrentState.unsafeRunSync()
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
     val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
 
     sm.applyEvent(MouseClick(paneRect.x + 7, paneRect.y + 1, clickCount = 2)).unsafeRunSync()
@@ -301,10 +302,12 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(
-            language = Some(LanguageId.Scala),
-            cursors = List(CursorPosition(0, 2))
-          )
+          state
+            .buffers(bufferId)
+            .copy(
+              language = Some(LanguageId.Scala),
+              cursors = List(CursorPosition(0, 2))
+            )
         )
       )
     }.unsafeRunSync()
@@ -330,10 +333,12 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(
-            language = Some(LanguageId.Scala),
-            cursors = List(CursorPosition(0, 2))
-          )
+          state
+            .buffers(bufferId)
+            .copy(
+              language = Some(LanguageId.Scala),
+              cursors = List(CursorPosition(0, 2))
+            )
         )
       )
     }.unsafeRunSync()

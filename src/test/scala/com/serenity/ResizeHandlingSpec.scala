@@ -28,7 +28,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
   it should "trigger layout recalculation when applied to state manager" in {
     // Create state manager with initial buffer and pane
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -63,7 +63,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "handle text wrapping recalculation on resize" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -101,14 +101,14 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "detect resize from terminal input" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
     // Initial state - has default viewport dimensions
-    val initialState = stateManager.getCurrentState.unsafeRunSync()
-    val activeBuffer = initialState.buffers(initialState.bufferOrder.head)
+    val initialState   = stateManager.getCurrentState.unsafeRunSync()
+    val activeBuffer   = initialState.buffers(initialState.bufferOrder.head)
     val initialLines   = activeBuffer.viewport.visibleLines
     val initialColumns = activeBuffer.viewport.visibleColumns
     initialLines should be > 0
@@ -122,7 +122,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(resizeEvent).unsafeRunSync()
 
     // State should now reflect the resize
-    val resizedState = stateManager.getCurrentState.unsafeRunSync()
+    val resizedState  = stateManager.getCurrentState.unsafeRunSync()
     val resizedBuffer = resizedState.buffers(resizedState.bufferOrder.head)
     val resizedLayout = LayoutEngine.calculateLayout(resizedState, newViewportSize)
     resizedBuffer.viewport.visibleLines.shouldBe(resizedLayout.editorPanelRect.height)
@@ -131,7 +131,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "recalculate text wrapping when terminal width changes" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()

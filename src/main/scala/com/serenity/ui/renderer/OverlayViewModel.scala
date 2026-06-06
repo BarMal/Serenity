@@ -101,15 +101,18 @@ object OverlayViewModel:
     selectedSurface
 
   private def preferredBelowCursorSurfaces(state: AppState, layout: CalculatedLayout): List[TextOverlayView] =
-    layout.belowCursorOverlayStack.flatMap { case (surfaceId, rect) =>
-      state.surfaceById(surfaceId).flatMap(surface =>
-        buildView(
-          surface,
-          state,
-          Some(rect),
-          collapsed = layout.collapsedFloatingSurfaceIds.contains(surfaceId)
-        )
-      )
+    layout.belowCursorOverlayStack.flatMap {
+      case (surfaceId, rect) =>
+        state
+          .surfaceById(surfaceId)
+          .flatMap(surface =>
+            buildView(
+              surface,
+              state,
+              Some(rect),
+              collapsed = layout.collapsedFloatingSurfaceIds.contains(surfaceId)
+            )
+          )
     }
 
   private def contentView(

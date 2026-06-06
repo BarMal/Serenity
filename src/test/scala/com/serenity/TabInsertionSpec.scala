@@ -1,9 +1,8 @@
 package com.serenity
 
-import cats.effect.IO
-import com.serenity.keystroke.events.{InsertChar, TabKey, TextEntryEvent}
+import com.serenity.keystroke.events.{InsertChar, TabKey}
 import com.serenity.keystroke.translators.TextEntryTranslator
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.state.components.ComponentResult
 import com.serenity.ui.layout.Layout
 import org.scalatest.flatspec.AnyFlatSpec

@@ -52,6 +52,7 @@ enum AppEffect:
   case LspQueue(effect: LspQueueEffect)
 
 object AppEffect:
+
   object CompleteQuit:
     def apply(): AppEffect = AppEffect.Lifecycle(LifecycleEffect.CompleteQuit)
 
@@ -139,7 +140,7 @@ object AppEffect:
     def unapply(effect: AppEffect): Option[(PanelPosition, Path)] =
       effect match
         case AppEffect.Explorer(ExplorerEffect.LoadDirectory(position, path)) => Some((position, path))
-        case _                                                                 => None
+        case _                                                                => None
 
   object OpenThemePicker:
     def apply(): AppEffect =

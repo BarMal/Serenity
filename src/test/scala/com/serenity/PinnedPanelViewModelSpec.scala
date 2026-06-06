@@ -2,7 +2,7 @@ package com.serenity
 
 import java.nio.file.Paths
 
-import com.serenity.state.models.{SurfaceContent, SurfaceId, SurfacePresentation, UiSurface}
+import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.PinnedPanelViewModel
 import org.scalatest.flatspec.AnyFlatSpec
@@ -11,6 +11,7 @@ import org.scalatest.matchers.should.Matchers
 class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
 
   private val root = Paths.get("/repo")
+
   private val tree = DirectoryTreeData(
     rootPath = root,
     expandedPaths = Set(root, root.resolve("src")),
@@ -71,7 +72,15 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     val view = PinnedPanelViewModel.resolve(panel, LayoutRect(0, 0, 60, 10))
 
     view.title shouldBe "repo"
-    view.rows.map(_.plainText) shouldBe List("▾ repo", "  ▾ src", "    ▹ main", "    Serenity.scala", "  ▹ test", "  build.sbt", "  ▹ project")
+    view.rows.map(_.plainText) shouldBe List(
+      "▾ repo",
+      "  ▾ src",
+      "    ▹ main",
+      "    Serenity.scala",
+      "  ▹ test",
+      "  build.sbt",
+      "  ▹ project"
+    )
     view.rows.count(_.selected) shouldBe 1
     view.rows.find(_.selected).map(_.plainText) shouldBe Some("  ▾ src")
   }
@@ -80,14 +89,30 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     val view = PinnedPanelViewModel.resolve(panel, LayoutRect(0, 0, 18, 40))
 
     view.title shouldBe "repo"
-    view.rows.map(_.plainText) shouldBe List("▾ repo", "  ▾ src", "    ▹ main", "    Serenity.scala", "  ▹ test", "  build.sbt", "  ▹ project")
+    view.rows.map(_.plainText) shouldBe List(
+      "▾ repo",
+      "  ▾ src",
+      "    ▹ main",
+      "    Serenity.scala",
+      "  ▹ test",
+      "  build.sbt",
+      "  ▹ project"
+    )
   }
 
   it should "shape directory trees for square panel geometry" in {
     val view = PinnedPanelViewModel.resolve(panel, LayoutRect(0, 0, 24, 20))
 
     view.title shouldBe "repo"
-    view.rows.map(_.plainText) shouldBe List("▾ repo", "  ▾ src", "    ▹ main", "    Serenity.scala", "  ▹ test", "  build.sbt", "  ▹ project")
+    view.rows.map(_.plainText) shouldBe List(
+      "▾ repo",
+      "  ▾ src",
+      "    ▹ main",
+      "    Serenity.scala",
+      "  ▹ test",
+      "  build.sbt",
+      "  ▹ project"
+    )
   }
 
   it should "shape directory trees for compact panel geometry" in {
@@ -98,7 +123,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "shape terminal content differently for wide and compact geometry" in {
-    val wide = PinnedPanelViewModel.resolve(terminalPanel, LayoutRect(0, 0, 60, 8))
+    val wide    = PinnedPanelViewModel.resolve(terminalPanel, LayoutRect(0, 0, 60, 8))
     val compact = PinnedPanelViewModel.resolve(terminalPanel, LayoutRect(0, 0, 14, 4))
 
     wide.title shouldBe "terminal"
@@ -120,7 +145,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "shape diagnostics content differently for wide and compact geometry" in {
-    val wide = PinnedPanelViewModel.resolve(diagnosticsPanel, LayoutRect(0, 0, 60, 10))
+    val wide    = PinnedPanelViewModel.resolve(diagnosticsPanel, LayoutRect(0, 0, 60, 10))
     val compact = PinnedPanelViewModel.resolve(diagnosticsPanel, LayoutRect(0, 0, 14, 4))
 
     wide.title shouldBe "diagnostics"

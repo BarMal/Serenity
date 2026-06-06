@@ -3,6 +3,7 @@ package com.serenity
 import java.awt.Font
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.CellMetrics
@@ -10,7 +11,6 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import cats.effect.unsafe.implicits.global
 
 class FontLoadingSpec extends AnyFlatSpec with Matchers:
 
@@ -75,7 +75,7 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
     }
   }
 
-  it should "only include monospaced families that produce valid CellMetrics" in {
+  it should "only include monospaced families that produce valid CellMetrics" in
     FontLoader.availableMonospaceFamilies.foreach { family =>
       if family != FontLoader.BundledCodeFontFamily then
         val font    = Font(family, Font.PLAIN, 12).deriveFont(12.0f)
@@ -84,7 +84,6 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
           metrics.isValid shouldBe true
         }
     }
-  }
 
   it should "only include text families that can render basic ASCII" in {
     val testString = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
@@ -96,7 +95,7 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
     }
   }
 
-  it should "only include text families that produce valid CellMetrics" in {
+  it should "only include text families that produce valid CellMetrics" in
     FontLoader.availableTextFamilies.foreach { family =>
       val font    = Font(family, Font.PLAIN, 12).deriveFont(12.0f)
       val metrics = CellMetrics.fromFont(font)
@@ -104,4 +103,3 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
         metrics.isValid shouldBe true
       }
     }
-  }

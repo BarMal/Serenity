@@ -31,8 +31,8 @@ class StartupPageDismissSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    
+
     val result = component.processEvent(Escape, state)
-    
+
     result shouldBe ComponentResult.Dismiss
   }

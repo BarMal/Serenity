@@ -1,8 +1,8 @@
 package com.serenity.ui.layout
 
-import java.awt.{Font, RenderingHints}
-import java.awt.font.{FontRenderContext, TextAttribute, TextHitInfo, TextLayout}
+import java.awt.font.*
 import java.awt.image.BufferedImage
+import java.awt.{Font, RenderingHints}
 import java.text.AttributedString
 
 import com.serenity.state.models.Buffer
@@ -32,9 +32,11 @@ case class TextLayoutSnapshot(
     isProportional: Boolean = false,
     usesMeasuredLayout: Boolean = false
 ):
+
   def xPxForCursor(cursor: com.serenity.state.models.CursorPosition): Option[Float] =
     visualLines.collectFirst {
-      case line if line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn =>
+      case line
+          if line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn =>
         line.xForColumn(cursor.column).getOrElse(line.widthPx)
     }
 
@@ -48,11 +50,13 @@ case class TextLayoutSnapshot(
     direction: Int,
     preferredXPx: Float
   ): Option[com.serenity.state.models.CursorPosition] =
-    visualLines.zipWithIndex.collectFirst {
-      case (line, index)
-          if line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn =>
-        index + direction
-    }.flatMap(targetRow => cursorForVisualRowAndXPx(targetRow, preferredXPx))
+    visualLines.zipWithIndex
+      .collectFirst {
+        case (line, index)
+            if line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn =>
+          index + direction
+      }
+      .flatMap(targetRow => cursorForVisualRowAndXPx(targetRow, preferredXPx))
 
 object TextLayoutSnapshot:
 
@@ -75,9 +79,9 @@ object TextLayoutSnapshot:
     else
       val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
       val xs             = caretXs(lineText, font, fontRenderContext, measuredLayout)
-      val safeColumn = cursorColumn.max(0).min(lineText.length)
-      val cursorXPx  = xs.lift(safeColumn).getOrElse(xs.lastOption.getOrElse(0.0f))
-      val targetLeftXPx = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
+      val safeColumn     = cursorColumn.max(0).min(lineText.length)
+      val cursorXPx      = xs.lift(safeColumn).getOrElse(xs.lastOption.getOrElse(0.0f))
+      val targetLeftXPx  = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
       xs.zipWithIndex.takeWhile { case (x, _) => x <= targetLeftXPx }.map(_._2).lastOption.getOrElse(0)
 
   def fromBuffer(
@@ -114,11 +118,11 @@ object TextLayoutSnapshot:
     }
 
     TextLayoutSnapshot(
-      visualLines        = visualLines,
-      panelWidthPx       = math.max(1, panelWidthPx),
-      lineHeightPx       = lineHeightPx,
-      ascentPx           = ascentPx,
-      isProportional     = !FontLoader.isMonospacedFont(font),
+      visualLines = visualLines,
+      panelWidthPx = math.max(1, panelWidthPx),
+      lineHeightPx = lineHeightPx,
+      ascentPx = ascentPx,
+      isProportional = !FontLoader.isMonospacedFont(font),
       usesMeasuredLayout = measuredLayout
     )
 
@@ -136,8 +140,8 @@ object TextLayoutSnapshot:
       def loop(startColumn: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
         if startColumn >= line.length then acc
         else
-          val remaining = line.substring(startColumn)
-          val segmentLength = fittingSegmentLength(remaining, panelWidthPx, font, frc, measuredLayout)
+          val remaining        = line.substring(startColumn)
+          val segmentLength    = fittingSegmentLength(remaining, panelWidthPx, font, frc, measuredLayout)
           val endColumnInSlice = startColumn + segmentLength
           val segment          = line.substring(startColumn, endColumnInSlice)
           val segmentStart     = baseColumn + startColumn
@@ -175,8 +179,9 @@ object TextLayoutSnapshot:
       endColumn = endColumn,
       text = text,
       widthPx = xs.lastOption.getOrElse(0.0f),
-      caretStops = xs.zipWithIndex.map { case (x, index) =>
-        TextCaretStop(startColumn + index, x)
+      caretStops = xs.zipWithIndex.map {
+        case (x, index) =>
+          TextCaretStop(startColumn + index, x)
       }.toVector
     )
 
@@ -190,9 +195,7 @@ object TextLayoutSnapshot:
       attributed.addAttribute(TextAttribute.FONT, font)
       val layout = TextLayout(attributed.getIterator, frc)
       val leadingCarets =
-        (0 until text.length).toVector.map { index =>
-          layout.getCaretInfo(TextHitInfo.leading(index))(0)
-        }
+        (0 until text.length).toVector.map(index => layout.getCaretInfo(TextHitInfo.leading(index))(0))
       normalizeCollapsedCarets(leadingCarets :+ layout.getAdvance)
 
   private def shouldUseMeasuredLayout(font: Font, frc: FontRenderContext): Boolean =
@@ -212,32 +215,35 @@ object TextLayoutSnapshot:
   private def normalizeCollapsedCarets(rawXs: Vector[Float]): Vector[Float] =
     if rawXs.length < 3 then rawXs
     else
-      val normalized = rawXs.toArray
-      val epsilon    = 0.01f
-      var index      = 1
+      val epsilon = 0.01f
 
-      while index < normalized.length - 1 do
-        val plateauValue = normalized(index)
-        if math.abs(normalized(index + 1) - plateauValue) <= epsilon then
-          var plateauEnd = index + 1
-          while plateauEnd + 1 < normalized.length && math.abs(normalized(plateauEnd + 1) - plateauValue) <= epsilon do
-            plateauEnd += 1
+      def plateauEndFrom(xs: Vector[Float], plateauValue: Float, index: Int): Int =
+        if index + 1 < xs.length && math.abs(xs(index + 1) - plateauValue) <= epsilon then
+          plateauEndFrom(xs, plateauValue, index + 1)
+        else index
 
-          val plateauStart = index - 1
-          val startX       = normalized(plateauStart)
-          val endX         = normalized(plateauEnd)
-          val segmentCount = plateauEnd - plateauStart
+      def normalizePlateau(xs: Vector[Float], plateauStart: Int, plateauEnd: Int): Vector[Float] =
+        val startX       = xs(plateauStart)
+        val endX         = xs(plateauEnd)
+        val segmentCount = plateauEnd - plateauStart
 
-          if endX > startX && segmentCount > 0 then
-            val step = (endX - startX) / segmentCount.toFloat
-            (plateauStart + 1 to plateauEnd).foreach { pointIndex =>
-              normalized(pointIndex) = startX + step * (pointIndex - plateauStart)
-            }
+        if endX > startX && segmentCount > 0 then
+          val step = (endX - startX) / segmentCount.toFloat
+          (plateauStart + 1 to plateauEnd).foldLeft(xs) { (acc, pointIndex) =>
+            acc.updated(pointIndex, startX + step * (pointIndex - plateauStart))
+          }
+        else xs
 
-          index = plateauEnd + 1
-        else index += 1
+      def loop(xs: Vector[Float], index: Int): Vector[Float] =
+        if index >= xs.length - 1 then xs
+        else
+          val plateauValue = xs(index)
+          if math.abs(xs(index + 1) - plateauValue) <= epsilon then
+            val plateauEnd = plateauEndFrom(xs, plateauValue, index + 1)
+            loop(normalizePlateau(xs, index - 1, plateauEnd), plateauEnd + 1)
+          else loop(xs, index + 1)
 
-      normalized.toVector
+      loop(rawXs, 1)
 
   def defaultFontRenderContext(): FontRenderContext =
     val image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)

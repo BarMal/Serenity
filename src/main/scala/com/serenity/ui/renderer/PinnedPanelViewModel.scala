@@ -27,7 +27,8 @@ object PinnedPanelViewModel:
 
   def resolve(surface: UiSurface, rect: LayoutRect): TextPanelView =
     val resolved = SurfaceContentResolver.resolve(surface.content, rect, SurfaceRenderMode.Pinned)
-    val rows = resolved.header.toList.map(toPanelRow) ++ resolved.rows.map(toPanelRow) ++ resolved.footer.toList.map(toPanelRow)
+    val rows =
+      resolved.header.toList.map(toPanelRow) ++ resolved.rows.map(toPanelRow) ++ resolved.footer.toList.map(toPanelRow)
     TextPanelView(
       rect = rect,
       title = resolved.title.getOrElse(""),

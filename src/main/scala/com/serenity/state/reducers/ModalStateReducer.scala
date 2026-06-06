@@ -12,16 +12,20 @@ object ModalStateReducer:
       presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
     )
     ReducerResult.noEffects(
-      stateWithId.copy(
-        uiSurfaces = stateWithId.uiSurfaces.filterNot(isModalSurface) :+ surface
-      ).pushFocus(Focus.Surface(surfaceId))
+      stateWithId
+        .copy(
+          uiSurfaces = stateWithId.uiSurfaces.filterNot(isModalSurface) :+ surface
+        )
+        .pushFocus(Focus.Surface(surfaceId))
     )
 
   def dismiss(state: AppState): ReducerResult =
     ReducerResult.noEffects(
-      state.copy(
-        uiSurfaces = state.uiSurfaces.filterNot(isModalSurface)
-      ).popFocus
+      state
+        .copy(
+          uiSurfaces = state.uiSurfaces.filterNot(isModalSurface)
+        )
+        .popFocus
     )
 
   private def isModalSurface(surface: UiSurface): Boolean =

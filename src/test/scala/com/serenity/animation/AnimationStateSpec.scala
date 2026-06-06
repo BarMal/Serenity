@@ -1,6 +1,7 @@
 package com.serenity.animation
 
 import java.awt.Color
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -22,12 +23,12 @@ class AnimationStateSpec extends AnyFlatSpec with Matchers:
   it should "add character animation" in {
     val state = AnimationState.empty
     val newState = state.addCharacterAnimation(
-      char            = 'a',
-      x               = 5,
-      y               = 10,
-      startColor      = black,
-      endColor        = white,
-      steps           = 3
+      char = 'a',
+      x = 5,
+      y = 10,
+      startColor = black,
+      endColor = white,
+      steps = 3
     )
 
     newState.getCell(5, 10) should be(defined)

@@ -160,7 +160,7 @@ private[manager] trait StateManagerEditorFacadeBehavior extends StateManagerEven
         case Some(pane) =>
           pane.bufferId.flatMap(state.buffers.get) match
             case Some(buffer) =>
-              val newCursor     = CursorPosition(line, column)
+              val newCursor = CursorPosition(line, column)
               val updatedBuffer = buffer.copy(
                 cursors = List(newCursor),
                 preferredColumn = Some(column),

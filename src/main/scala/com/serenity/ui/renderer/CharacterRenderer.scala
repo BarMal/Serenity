@@ -4,13 +4,29 @@ import java.awt.Color
 
 import com.serenity.animation.AnimationState
 import com.serenity.lsp.config.LanguageId
-import com.serenity.ui.theme.Theme
-import com.serenity.ui.theme.{StyledText, TextStyle}
+import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 
 object CharacterRenderer:
 
   private case class TextRun(startX: Int, content: String)
   private case class CollectedRuns(runs: List[TextRun], endX: Int)
+
+  private case class MeasuredGlyph(
+      char: Char,
+      localIndex: Int,
+      foreground: Color,
+      background: Color,
+      style: TextStyle
+  )
+
+  private case class MeasuredRun(
+      startXPx: Float,
+      startLocalIndex: Int,
+      foreground: Color,
+      background: Color,
+      style: TextStyle,
+      content: String
+  )
 
   def renderString(
     surface: RenderSurface,
@@ -86,12 +102,25 @@ object CharacterRenderer:
     if syntaxHighlightingEnabled then
       val styledTexts = com.serenity.ui.theme.ThemeManager.highlightLine(content, theme, language)
       renderStyledLineWithAnimation(
-        surface, x, y, styledTexts, theme, screenAnimations, bufferLine, bufferStartColumn
+        surface,
+        x,
+        y,
+        styledTexts,
+        theme,
+        screenAnimations,
+        bufferLine,
+        bufferStartColumn
       )
     else
       renderStringWithAnimationPlain(
-        surface, x, y, content, theme, screenAnimations,
-        bufferLine = bufferLine, bufferStartColumn = bufferStartColumn
+        surface,
+        x,
+        y,
+        content,
+        theme,
+        screenAnimations,
+        bufferLine = bufferLine,
+        bufferStartColumn = bufferStartColumn
       )
 
   def renderStringWithAnimationPlain(
@@ -113,8 +142,10 @@ object CharacterRenderer:
     * Groups consecutive characters that share the same effective fg/bg color into runs, then calls
     * [[RenderSurface.drawRunPx]] for each run. Callers must set the surface font before this call.
     *
-    * @param xOriginPx pixel X of the pane's left edge
-    * @param yPx       pixel Y of the top of this visual line
+    * @param xOriginPx
+    *   pixel X of the pane's left edge
+    * @param yPx
+    *   pixel Y of the top of this visual line
     */
   def renderMeasuredLineWithAnimation(
     surface: RenderSurface,
@@ -129,62 +160,64 @@ object CharacterRenderer:
     language: Option[LanguageId] = None
   ): Unit =
     val text = visualLine.text
-    if text.isEmpty then return
+    if text.nonEmpty then
+      val stops = visualLine.caretStops
+      val styledSegments =
+        if syntaxHighlightingEnabled then com.serenity.ui.theme.ThemeManager.highlightLine(text, theme, language)
+        else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
 
-    val stops = visualLine.caretStops
-    val styledSegments =
-      if syntaxHighlightingEnabled then com.serenity.ui.theme.ThemeManager.highlightLine(text, theme, language)
-      else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
+      def stopXPx(localIndex: Int): Float =
+        stops.find(_.column == visualLine.startColumn + localIndex).map(_.xPx).getOrElse(0.0f)
 
-    def stopXPx(localIndex: Int): Float =
-      stops.find(_.column == visualLine.startColumn + localIndex).map(_.xPx).getOrElse(0.0f)
+      val glyphs =
+        styledSegments
+          .foldLeft((Vector.empty[MeasuredGlyph], 0)) {
+            case ((acc, localIndex), segment) =>
+              val segmentGlyphs = segment.content.zipWithIndex.map {
+                case (char, offset) =>
+                  val glyphIndex = localIndex + offset
+                  val bufCol     = visualLine.startColumn + glyphIndex
+                  val cell       = animations.getCell(bufCol, visualLine.bufferLine)
+                  MeasuredGlyph(
+                    char,
+                    glyphIndex,
+                    cell.flatMap(_.currentForeground).getOrElse(segment.foregroundColor),
+                    cell.flatMap(_.currentBackground).getOrElse(segment.backgroundColor),
+                    segment.style
+                  )
+              }
+              (acc ++ segmentGlyphs, localIndex + segment.content.length)
+          }
+          ._1
 
-    var runStartXPx = 0.0f
-    var curFg       = theme.foreground
-    var curBg       = theme.background
-    var curStyle    = TextStyle.normal
-    val accText     = new StringBuilder()
-
-    def flush(endLocalIndex: Int): Unit =
-      if accText.nonEmpty then
-        val endXPx  = xOriginPx + stopXPx(endLocalIndex)
-        val widthPx = endXPx - runStartXPx
-        surface.setForegroundColor(curFg)
-        surface.setBackgroundColor(curBg)
-        withStyle(surface, curStyle) {
-          surface.drawRunPx(runStartXPx, yPx, widthPx, lineHeightPx, ascentPx, accText.result())
-        }
-        accText.clear()
-
-    var localIndex = 0
-    styledSegments.foreach { segment =>
-      segment.content.foreach { char =>
-        val bufCol = visualLine.startColumn + localIndex
-        val cell   = animations.getCell(bufCol, visualLine.bufferLine)
-        val fg     = cell.flatMap(_.currentForeground).getOrElse(segment.foregroundColor)
-        val bg     = cell.flatMap(_.currentBackground).getOrElse(segment.backgroundColor)
-        val style  = segment.style
-
-        if accText.isEmpty then
-          runStartXPx = xOriginPx + stopXPx(localIndex)
-          curFg       = fg
-          curBg       = bg
-          curStyle    = style
-          accText.append(char)
-        else if fg == curFg && bg == curBg && style == curStyle then
-          accText.append(char)
-        else
-          flush(localIndex)
-          runStartXPx = xOriginPx + stopXPx(localIndex)
-          curFg       = fg
-          curBg       = bg
-          curStyle    = style
-          accText.append(char)
-
-        localIndex += 1
+      val runs = glyphs.foldLeft(Vector.empty[MeasuredRun]) { (acc, glyph) =>
+        acc.lastOption match
+          case Some(last)
+              if last.foreground == glyph.foreground &&
+                last.background == glyph.background &&
+                last.style == glyph.style =>
+            acc.updated(acc.length - 1, last.copy(content = last.content + glyph.char))
+          case _ =>
+            acc :+ MeasuredRun(
+              xOriginPx + stopXPx(glyph.localIndex),
+              glyph.localIndex,
+              glyph.foreground,
+              glyph.background,
+              glyph.style,
+              glyph.char.toString
+            )
       }
-    }
-    flush(text.length)
+
+      runs.foreach { run =>
+        val endLocalIndex = run.startLocalIndex + run.content.length
+        val endXPx        = xOriginPx + stopXPx(endLocalIndex)
+        val widthPx       = endXPx - run.startXPx
+        surface.setForegroundColor(run.foreground)
+        surface.setBackgroundColor(run.background)
+        withStyle(surface, run.style) {
+          surface.drawRunPx(run.startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.content)
+        }
+      }
 
   private def renderStyledLineWithAnimation(
     surface: RenderSurface,
@@ -204,8 +237,14 @@ object CharacterRenderer:
       val collectedRuns = collectPlainRuns(currentX, styledText.content, tabWidth = 4)
       withStyle(surface, styledText.style) {
         renderAnimatedRuns(
-          surface, currentX, y, collectedRuns.runs, segmentTheme, screenAnimations,
-          bufferLine, bufferStartColumn + (currentX - x)
+          surface,
+          currentX,
+          y,
+          collectedRuns.runs,
+          segmentTheme,
+          screenAnimations,
+          bufferLine,
+          bufferStartColumn + (currentX - x)
         )
       }
       collectedRuns.endX
@@ -221,36 +260,40 @@ object CharacterRenderer:
     content: String,
     tabWidth: Int
   ): CollectedRuns =
-    val runs          = scala.collection.mutable.ListBuffer.empty[TextRun]
-    val currentText   = StringBuilder()
-    var currentStartX = startX
-    var currentX      = startX
+    case class CollectState(runs: Vector[TextRun], currentText: String, currentStartX: Int, currentX: Int)
 
-    def flushCurrent(): Unit =
-      if currentText.nonEmpty then
-        runs += TextRun(currentStartX, currentText.result())
-        currentText.clear()
+    def flushCurrent(state: CollectState): CollectState =
+      if state.currentText.nonEmpty then
+        state.copy(
+          runs = state.runs :+ TextRun(state.currentStartX, state.currentText),
+          currentText = ""
+        )
+      else state
 
-    content.foreach { char =>
+    val finalState = content.foldLeft(CollectState(Vector.empty, "", startX, startX)) { (state, char) =>
       char match
         case '\t' =>
-          flushCurrent()
-          val spacesToAdd = tabWidth - (currentX % tabWidth)
-          val tabSpaces   = " " * spacesToAdd
-          runs += TextRun(currentX, tabSpaces)
-          currentX += spacesToAdd
-          currentStartX = currentX
+          val flushed     = flushCurrent(state)
+          val spacesToAdd = tabWidth - (flushed.currentX % tabWidth)
+          flushed.copy(
+            runs = flushed.runs :+ TextRun(flushed.currentX, " " * spacesToAdd),
+            currentStartX = flushed.currentX + spacesToAdd,
+            currentX = flushed.currentX + spacesToAdd
+          )
         case c if isVisibleChar(c) =>
-          if currentText.isEmpty then currentStartX = currentX
-          currentText.append(c)
-          currentX += 1
+          val start = if state.currentText.isEmpty then state.currentX else state.currentStartX
+          state.copy(
+            currentText = state.currentText + c,
+            currentStartX = start,
+            currentX = state.currentX + 1
+          )
         case _ =>
-          flushCurrent()
-          currentStartX = currentX
+          val flushed = flushCurrent(state)
+          flushed.copy(currentStartX = flushed.currentX)
     }
 
-    flushCurrent()
-    CollectedRuns(runs.toList, currentX)
+    val flushed = flushCurrent(finalState)
+    CollectedRuns(flushed.runs.toList, flushed.currentX)
 
   private def flushPlainRuns(surface: RenderSurface, y: Int, runs: List[TextRun]): Unit =
     runs.foreach(run => surface.putString(run.startX, y, run.content))
@@ -268,10 +311,11 @@ object CharacterRenderer:
     runs.foreach { run =>
       val grouped =
         groupRunByEffectiveColors(run, screenOriginX, theme, screenAnimations, bufferLine, bufferStartColumn)
-      grouped.foreach { case (startX, text, foreground, background) =>
-        surface.setForegroundColor(foreground)
-        surface.setBackgroundColor(background)
-        surface.putString(startX, y, text)
+      grouped.foreach {
+        case (startX, text, foreground, background) =>
+          surface.setForegroundColor(foreground)
+          surface.setBackgroundColor(background)
+          surface.putString(startX, y, text)
       }
     }
 
@@ -283,44 +327,23 @@ object CharacterRenderer:
     bufferLine: Int,
     bufferStartColumn: Int
   ): List[(Int, String, Color, Color)] =
-    val groups = scala.collection.mutable.ListBuffer.empty[(Int, String, Color, Color)]
-    val text   = run.content
+    case class ColorGroup(startX: Int, text: String, foreground: Color, background: Color)
 
-    if text.nonEmpty then
-      var currentText       = StringBuilder()
-      var currentStartX     = run.startX
-      var currentForeground = theme.foreground
-      var currentBackground = theme.background
-
-      def flushCurrent(): Unit =
-        if currentText.nonEmpty then
-          groups += ((currentStartX, currentText.result(), currentForeground, currentBackground))
-          currentText.clear()
-
-      text.zipWithIndex.foreach { case (char, index) =>
+    val groups = run.content.zipWithIndex.foldLeft(Vector.empty[ColorGroup]) {
+      case (acc, (char, index)) =>
         val bufferColumn = bufferStartColumn + (run.startX - screenOriginX) + index
         val cell         = screenAnimations.getCell(bufferColumn, bufferLine)
         val foreground   = cell.flatMap(_.currentForeground).getOrElse(theme.foreground)
         val background   = cell.flatMap(_.currentBackground).getOrElse(theme.background)
 
-        if currentText.isEmpty then
-          currentStartX = run.startX + index
-          currentForeground = foreground
-          currentBackground = background
-          currentText.append(char)
-        else if foreground == currentForeground && background == currentBackground then
-          currentText.append(char)
-        else
-          flushCurrent()
-          currentStartX = run.startX + index
-          currentForeground = foreground
-          currentBackground = background
-          currentText.append(char)
-      }
+        acc.lastOption match
+          case Some(last) if last.foreground == foreground && last.background == background =>
+            acc.updated(acc.length - 1, last.copy(text = last.text + char))
+          case _ =>
+            acc :+ ColorGroup(run.startX + index, char.toString, foreground, background)
+    }
 
-      flushCurrent()
-
-    groups.toList
+    groups.map(group => (group.startX, group.text, group.foreground, group.background)).toList
 
   private def renderCharAtPosition(
     surface: RenderSurface,

@@ -120,9 +120,8 @@ object LayoutEngine:
         case _                                                             => false
     }
     val belowSurfaces = orderedBelowCursorSurfaces(state)
-    val aboveCursorOverlayStack = aboveSurfaces.flatMap(surface =>
-      calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface.id -> _)
-    )
+    val aboveCursorOverlayStack =
+      aboveSurfaces.flatMap(surface => calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface.id -> _))
     val belowLayout = calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
 
     baseLayout.copy(
@@ -226,8 +225,8 @@ object LayoutEngine:
       )
 
   private case class BelowOverlayLayout(
-    stack: List[(SurfaceId, LayoutRect)],
-    collapsedSurfaceIds: Set[SurfaceId]
+      stack: List[(SurfaceId, LayoutRect)],
+      collapsedSurfaceIds: Set[SurfaceId]
   )
 
   private def orderedBelowCursorSurfaces(state: AppState): List[UiSurface] =
@@ -262,7 +261,7 @@ object LayoutEngine:
     else
       surfaces match
         case main :: submenu :: _ =>
-          val mainRectOpt = calculateFloatingSurfaceRect(main, state, paneLayouts)
+          val mainRectOpt        = calculateFloatingSurfaceRect(main, state, paneLayouts)
           val submenuBaseRectOpt = calculateFloatingSurfaceRect(submenu, state, paneLayouts)
           (mainRectOpt, submenuBaseRectOpt) match
             case (Some(mainRect), Some(submenuRect)) =>
@@ -273,11 +272,11 @@ object LayoutEngine:
                 .map(CursorLayout.contentRectForPane)
                 .map(_.bottom)
                 .getOrElse(mainRect.bottom + submenuRect.height + gapRows)
-              val totalHeight = mainRect.height + gapRows + submenuRect.height
-              val shouldCollapse = mainRect.y + totalHeight > availableBottom
-              val adjustedMainHeight = if shouldCollapse then collapsedHeight else mainRect.height
-              val adjustedMainRect   = mainRect.copy(height = adjustedMainHeight)
-              val remainingHeight    = math.max(3, availableBottom - adjustedMainRect.bottom - gapRows)
+              val totalHeight           = mainRect.height + gapRows + submenuRect.height
+              val shouldCollapse        = mainRect.y + totalHeight > availableBottom
+              val adjustedMainHeight    = if shouldCollapse then collapsedHeight else mainRect.height
+              val adjustedMainRect      = mainRect.copy(height = adjustedMainHeight)
+              val remainingHeight       = math.max(3, availableBottom - adjustedMainRect.bottom - gapRows)
               val adjustedSubmenuHeight = math.min(submenuRect.height, remainingHeight)
               val adjustedSubmenuRect = submenuRect.copy(
                 y = adjustedMainRect.bottom + gapRows,

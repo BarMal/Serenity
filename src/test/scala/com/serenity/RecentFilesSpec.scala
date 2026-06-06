@@ -2,7 +2,6 @@ package com.serenity
 
 import java.nio.file.{Files, Path}
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.session.SessionState
 import com.serenity.state.manager.StateManager
@@ -14,9 +13,9 @@ import org.scalatest.matchers.should.Matchers
 class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   trait RecentFilesFixture:
-    val sm: StateManager    = createStateManager("RecentFilesSpec")
-    val initialBufferId     = sm.getCurrentState.unsafeRunSync().bufferOrder.head
-    val tmpDir              = Files.createTempDirectory("recent-files-spec")
+    val sm: StateManager = createStateManager("RecentFilesSpec")
+    val initialBufferId  = sm.getCurrentState.unsafeRunSync().bufferOrder.head
+    val tmpDir           = Files.createTempDirectory("recent-files-spec")
 
     def tmpFile(name: String): Path =
       tmpDir.resolve(name)
@@ -61,8 +60,8 @@ class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSup
       Files.deleteIfExists(tmpDir)
 
   it should "round-trip recentFiles through SessionState serialization" in:
-    val paths = List(Path.of("/workspace/foo.scala"), Path.of("/workspace/bar.scala"))
-    val state = AppState.initial.copy(recentFiles = paths)
+    val paths   = List(Path.of("/workspace/foo.scala"), Path.of("/workspace/bar.scala"))
+    val state   = AppState.initial.copy(recentFiles = paths)
     val session = SessionState.fromAppState(state)
     session.recentFiles shouldBe paths.map(_.toString)
     val restored = SessionState.toAppState(session, Theme.default)

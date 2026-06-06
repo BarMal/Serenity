@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.util.concurrent.atomic.AtomicReference
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.input.{ClipboardEventSync, SystemClipboard}
@@ -9,8 +11,8 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
 
@@ -44,6 +46,7 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
     clipboard.snapshot shouldBe Some("copied line")
 
   trait ClipboardFixture:
+
     val stateManager: StateManager = StateManager
       .apply(LoggerFactory[IO].getLogger(using LoggerName("ClipboardEventSyncSpec")))
       .unsafeRunSync()
@@ -64,18 +67,18 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
       stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).content.collect()
 
   final class TestClipboard extends SystemClipboard[IO]:
-    private var current: Option[String] = None
+    private val current = AtomicReference[Option[String]](None)
 
     def seed(text: String): Unit =
-      current = Some(text)
+      current.set(Some(text))
 
     def snapshot: Option[String] =
-      current
+      current.get()
 
     override def readText: IO[Option[String]] =
-      IO.pure(current)
+      IO.pure(current.get())
 
     override def writeText(text: String): IO[Unit] =
       IO {
-        current = Some(text)
+        current.set(Some(text))
       }

@@ -6,12 +6,12 @@ import com.serenity.keystroke.events.Event
 
 object LocalKeymapConverters:
 
-  def converter[A <: KeymapEventAction[E], E <: Event](bindings: Map[A, List[HotkeyTrigger]]): PartialFunction[KeyStrokeInfo, E] =
+  def converter[A <: KeymapEventAction[E], E <: Event](
+    bindings: Map[A, List[HotkeyTrigger]]
+  ): PartialFunction[KeyStrokeInfo, E] =
     new PartialFunction[KeyStrokeInfo, E]:
       private val flattened =
-        bindings.toList.flatMap { (action, triggers) =>
-          triggers.map(_ -> action.event)
-        }
+        bindings.toList.flatMap((action, triggers) => triggers.map(_ -> action.event))
 
       override def isDefinedAt(info: KeyStrokeInfo): Boolean =
         flattened.exists { case (trigger, _) => trigger.matches(info) }

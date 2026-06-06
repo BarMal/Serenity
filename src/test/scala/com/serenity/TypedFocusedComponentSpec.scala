@@ -33,7 +33,9 @@ class TypedFocusedComponentSpec extends AnyFlatSpec with Matchers:
   it should "fall back when an event does not decode" in {
     val component = TestComponent()
 
-    component.processEvent(OtherEvent, AppState.initial).shouldBe(
-      ComponentResult.FocusTransfer(Focus.EditorPane(PaneId(7)))
-    )
+    component
+      .processEvent(OtherEvent, AppState.initial)
+      .shouldBe(
+        ComponentResult.FocusTransfer(Focus.EditorPane(PaneId(7)))
+      )
   }

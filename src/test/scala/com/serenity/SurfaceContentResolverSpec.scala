@@ -2,22 +2,24 @@ package com.serenity
 
 import java.nio.file.Paths
 
-import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, CommandRunner, CommandRunnerSubmenuState}
+import com.serenity.command.*
 import com.serenity.config.AppConfig
-import com.serenity.state.models.{BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState, FileSearchResult, FileSearchState, FileWorkflowField, FileWorkflowMode, FileWorkflowState, FileWorkflowSuggestion, Modal, ReplaceWorkflowAction, ReplaceWorkflowField, ReplaceWorkflowScope, ReplaceWorkflowState, SurfaceContent, ThemePickerState}
+import com.serenity.state.models.*
 import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, LayoutRect}
-import com.serenity.ui.renderer.{OverlayRowLayout, OverlayTone, SurfaceContentResolver, SurfaceRenderMode}
+import com.serenity.ui.renderer.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
   private val root = Paths.get("/repo")
+
   private val entries = List(
     DirEntry(root.resolve("src"), "src", isDirectory = true),
     DirEntry(root.resolve("test"), "test", isDirectory = true),
     DirEntry(root.resolve("build.sbt"), "build.sbt", isDirectory = false)
   )
+
   private val tree = DirectoryTreeData(
     rootPath = root,
     expandedPaths = Set(root, root.resolve("src")),
@@ -83,7 +85,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       Command.typed("replace", "Find and replace text", CommandIntent.ReplaceInCurrentFile)
     )
     val registry = CommandRegistry(commands)
-    val runner = CommandRunner.empty.activate(registry, AppConfig.default).updateSearchTerm("open")(using registry)
+    val runner   = CommandRunner.empty.activate(registry, AppConfig.default).updateSearchTerm("open")(using registry)
 
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),
@@ -103,7 +105,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "resolve browse mode into distributed category tabs and grouped settings rows without bracket markers" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
@@ -163,7 +165,9 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       "Kotlin - Use Kotlin mode for the current buffer."
     )
     floating.rows.count(_.selected) shouldBe 1
-    floating.rows.find(_.selected).map(_.plainText) shouldBe Some("JavaScript - Use JavaScript mode for the current buffer.")
+    floating.rows.find(_.selected).map(_.plainText) shouldBe Some(
+      "JavaScript - Use JavaScript mode for the current buffer."
+    )
     floating.footer.map(_.plainText) shouldBe Some("11/23")
   }
 

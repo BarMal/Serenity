@@ -12,10 +12,9 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-/** Verifies that detecting a terminal resize triggers a full render cycle (fast mode), not just
-  * a cursor-only render. The root cause of the bug: checkResize in Main.scala applied the resize
-  * event but never set fastMode = true, so the idle phase kept doing cursor-only renders at 500ms
-  * intervals until the next keypress.
+/** Verifies that detecting a terminal resize triggers a full render cycle (fast mode), not just a cursor-only render.
+  * The root cause of the bug: checkResize in Main.scala applied the resize event but never set fastMode = true, so the
+  * idle phase kept doing cursor-only renders at 500ms intervals until the next keypress.
   */
 class ResizeRenderTriggerSpec extends AnyFlatSpec with Matchers:
 

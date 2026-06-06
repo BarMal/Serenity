@@ -2,6 +2,7 @@ package com.serenity
 
 import java.nio.file.Files
 
+import _root_.io.circe.syntax.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.{AppConfig, BackgroundStyle, WindowChromeMode}
 import com.serenity.rope.Balance
@@ -10,7 +11,6 @@ import com.serenity.session.given
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.Theme
-import _root_.io.circe.syntax.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -89,7 +89,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       nextPaneId = PaneId(1)
     )
 
-    val sessionState = SessionState.fromAppState(appState, persistUnsaved = false)
+    val sessionState  = SessionState.fromAppState(appState, persistUnsaved = false)
     val sessionBuffer = sessionState.buffers.find(_.id == buffer.id.value).get
 
     sessionBuffer.unsavedContent shouldBe None
@@ -113,7 +113,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       nextPaneId = PaneId(1)
     )
 
-    val sessionState = SessionState.fromAppState(appState, persistUnsaved = false)
+    val sessionState  = SessionState.fromAppState(appState, persistUnsaved = false)
     val sessionBuffer = sessionState.buffers.find(_.id == buffer.id.value).get
 
     sessionBuffer.unsavedContent shouldBe Some("saved on disk")
@@ -195,7 +195,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
   it should "default backgroundStyle to Frosted when loading older JSON without the field" in {
     val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
-    val configObject = originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutBackgroundStyle =
       originalJson.mapObject(
         _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("backgroundStyle")))
@@ -209,7 +210,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
   it should "default windowChromeMode to Native when loading older JSON without the field" in {
     val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
-    val configObject = originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutWindowChromeMode =
       originalJson.mapObject(
         _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("windowChromeMode")))

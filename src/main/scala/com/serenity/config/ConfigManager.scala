@@ -60,7 +60,9 @@ object ConfigManager:
               HotkeyAction.values
                 .find(action => s"hotkey.${action.configKey}" == hotkeyKey)
                 .flatMap(action =>
-                  HotkeyTrigger.parse(value.trim).map(trigger => config.withHotkeyConfig(config.hotkeyConfig.withBinding(action, trigger)))
+                  HotkeyTrigger
+                    .parse(value.trim)
+                    .map(trigger => config.withHotkeyConfig(config.hotkeyConfig.withBinding(action, trigger)))
                 )
                 .getOrElse(config)
             case keymapKey if keymapKey.startsWith("keymap.editor.") =>

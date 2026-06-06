@@ -16,17 +16,19 @@ object SystemClipboard:
 
   def awt[F[_] : Sync]: SystemClipboard[F] = new SystemClipboard[F]:
     override def readText: F[Option[String]] =
-      Sync[F].blocking {
-        val clipboard = Toolkit.getDefaultToolkit.getSystemClipboard
-        if clipboard.isDataFlavorAvailable(DataFlavor.stringFlavor) then
-          Option(clipboard.getData(DataFlavor.stringFlavor)).map(_.toString)
-        else None
-      }.handleError(_ => None)
+      Sync[F]
+        .blocking {
+          val clipboard = Toolkit.getDefaultToolkit.getSystemClipboard
+          if clipboard.isDataFlavorAvailable(DataFlavor.stringFlavor) then
+            Option(clipboard.getData(DataFlavor.stringFlavor)).map(_.toString)
+          else None
+        }
+        .handleError(_ => None)
 
     override def writeText(text: String): F[Unit] =
-      Sync[F].blocking {
-        val clipboard = Toolkit.getDefaultToolkit.getSystemClipboard
-        clipboard.setContents(StringSelection(text), null)
-      }.handleErrorWith {
-        case NonFatal(_) => Sync[F].unit
-      }
+      Sync[F]
+        .blocking {
+          val clipboard = Toolkit.getDefaultToolkit.getSystemClipboard
+          clipboard.setContents(StringSelection(text), null)
+        }
+        .handleErrorWith { case NonFatal(_) => Sync[F].unit }

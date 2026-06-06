@@ -102,10 +102,10 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
   }
 
   "Renderer" should "render styled text without exceptions" in {
-    val bufferId    = BufferId(1)
-    val paneId      = PaneId(0)
-    val buffer      = Buffer.fromString(bufferId, "bold text")
-    val pane        = EditorPane.withBuffer(paneId, bufferId)
+    val bufferId = BufferId(1)
+    val paneId   = PaneId(0)
+    val buffer   = Buffer.fromString(bufferId, "bold text")
+    val pane     = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),

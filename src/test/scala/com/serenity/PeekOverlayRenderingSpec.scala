@@ -15,11 +15,13 @@ class PeekOverlayRenderingSpec extends AnyFlatSpec with Matchers:
   private val bufferId = BufferId(1)
 
   private def stateWithPeek(text: String): AppState =
-    val buffer = Buffer.fromString(
-      bufferId,
-      List.fill(10)("abcdefghijklmnopqrstuvwxyz").mkString("\n")
-    ).copy(cursors = List(CursorPosition(4, 12)))
-    val pane   = EditorPane.withBuffer(paneId, bufferId)
+    val buffer = Buffer
+      .fromString(
+        bufferId,
+        List.fill(10)("abcdefghijklmnopqrstuvwxyz").mkString("\n")
+      )
+      .copy(cursors = List(CursorPosition(4, 12)))
+    val pane = EditorPane.withBuffer(paneId, bufferId)
 
     AppState.initial.copy(
       buffers = Map(bufferId -> buffer),

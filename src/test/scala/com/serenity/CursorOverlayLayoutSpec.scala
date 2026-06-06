@@ -1,9 +1,9 @@
 package com.serenity
 
+import com.serenity.command.CommandRunner
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.command.CommandRunner
-import com.serenity.ui.layout.{CursorLayout, Layout, LayoutEngine, ViewportSize}
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -15,11 +15,13 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   private val bufferId = BufferId(1)
 
   private def baseState(cursor: CursorPosition = CursorPosition(6, 18)): AppState =
-    val buffer = Buffer.fromString(
-      bufferId,
-      List.fill(20)("abcdefghijklmnopqrstuvwxyz").mkString("\n")
-    ).copy(cursors = List(cursor))
-    val pane   = EditorPane.withBuffer(paneId, bufferId)
+    val buffer = Buffer
+      .fromString(
+        bufferId,
+        List.fill(20)("abcdefghijklmnopqrstuvwxyz").mkString("\n")
+      )
+      .copy(cursors = List(cursor))
+    val pane = EditorPane.withBuffer(paneId, bufferId)
 
     AppState.initial.copy(
       buffers = Map(bufferId -> buffer),

@@ -48,7 +48,7 @@ class PinnedPanelComponent(
     activeDirectorySurface(currentState).flatMap { surface =>
       surface.content match
         case com.serenity.state.models.SurfaceContent.DirectoryTree(tree, selectedPath) =>
-          val visibleRows = DirectoryTreeData.visibleRows(tree)
+          val visibleRows   = DirectoryTreeData.visibleRows(tree)
           val selectedIndex = selectedIndexFor(visibleRows, selectedPath)
           val delta = direction match
             case Direction.Up   => -1
@@ -87,13 +87,19 @@ class PinnedPanelComponent(
                   ComponentResult.reducerResult(
                     ReducerResult.withEffect(currentState, AppEffect.LoadPinnedDirectory(position, row.path))
                   )
-              else ComponentResult.reducerResult(ReducerResult.withEffect(currentState, AppEffect.DirectLoadFile(row.path)))
+              else
+                ComponentResult.reducerResult(
+                  ReducerResult.withEffect(currentState, AppEffect.DirectLoadFile(row.path))
+                )
             }
         case _ =>
           None
     }
 
-  private def parentDirectoryNavigation(currentState: AppState, surface: com.serenity.state.models.UiSurface): Option[ComponentResult] =
+  private def parentDirectoryNavigation(
+    currentState: AppState,
+    surface: com.serenity.state.models.UiSurface
+  ): Option[ComponentResult] =
     surface.content match
       case com.serenity.state.models.SurfaceContent.DirectoryTree(tree, selectedPath) =>
         selectedPath.flatMap(path => collapseOrSelectParent(surface, tree, path))

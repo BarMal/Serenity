@@ -2,6 +2,8 @@ package com.serenity
 
 import java.awt.Font
 
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -12,14 +14,12 @@ import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import cats.effect.IO
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import cats.effect.unsafe.implicits.global
 
 class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance    = Balance.default
   given Logger[IO] = Slf4jLogger.getLogger[IO]
 
   private def renderState(
@@ -59,7 +59,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     (0 until surface.width).find(x => surface.getChar(x, row) != ' ').getOrElse(-1)
 
   "Renderer.render" should "place a proportional-text cursor using measured advances rather than raw column count" in {
-    val font        = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val font = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
     val cellMetrics = CellMetrics.fromFont(font)
     val surface     = renderState("iW", CursorPosition(0, 1), font)
     // Proportional text renders via drawRunPx, not putString.
@@ -82,7 +82,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     surface.putStringCalls.map(_.s).mkString should not include "WWW"
     // All drawRunPx runs together must account for the full text.
     val renderedText = surface.drawRunPxCalls.map(_.s).mkString
-    renderedText should include ("WWW")
+    renderedText should include("WWW")
     // Each drawRunPx call is positioned at a non-negative x coordinate.
     surface.drawRunPxCalls.foreach(c => c.xPx should be >= 0.0f)
   }

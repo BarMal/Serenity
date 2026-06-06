@@ -1,9 +1,6 @@
 package com.serenity
 
-import java.time.Instant
-
 import com.serenity.state.models.*
-import com.serenity.ui.layout.Layout
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
 

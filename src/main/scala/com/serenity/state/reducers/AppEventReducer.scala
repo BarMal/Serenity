@@ -41,11 +41,13 @@ object AppEventReducer:
   private def toggleCommandRunner(state: AppState, registry: CommandRegistry): AppState =
     state.commandRunnerSurface.flatMap(asCommandRunner) match
       case Some((surface, runner)) if runner.isActive =>
-        state.copy(
-          uiSurfaces = state.uiSurfaces.filterNot { current =>
-            current.id == surface.id || current.content.isInstanceOf[SurfaceContent.CommandPaletteSubmenu]
-          }
-        ).popFocus
+        state
+          .copy(
+            uiSurfaces = state.uiSurfaces.filterNot { current =>
+              current.id == surface.id || current.content.isInstanceOf[SurfaceContent.CommandPaletteSubmenu]
+            }
+          )
+          .popFocus
       case _ =>
         val activatedRunner = CommandRunner.empty
           .activate(registry, state.config)
@@ -60,9 +62,11 @@ object AppEventReducer:
           current.content.isInstanceOf[SurfaceContent.FileSearch] ||
           current.content.isInstanceOf[SurfaceContent.ModalWorkflow]
         }
-        stateWithId.copy(
-          uiSurfaces = upsertSurface(clearedSurfaces, surface)
-        ).pushFocus(Focus.Surface(surfaceId))
+        stateWithId
+          .copy(
+            uiSurfaces = upsertSurface(clearedSurfaces, surface)
+          )
+          .pushFocus(Focus.Surface(surfaceId))
 
   private def closeTabState(state: AppState, registry: CommandRegistry)(using com.serenity.rope.Balance): AppState =
     val closedState = EditorState.closeFocusedTab(state)

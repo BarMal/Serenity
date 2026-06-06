@@ -89,13 +89,11 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
     stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 10).unsafeRunSync()
 
-    val state     = stateManager.getCurrentState.unsafeRunSync()
-    val pinned    = state.pinnedSurfaces
+    val state  = stateManager.getCurrentState.unsafeRunSync()
+    val pinned = state.pinnedSurfaces
     pinned should have size 2
 
-    val positions = pinned.collect {
-      case UiSurface(_, _, SurfacePresentation.Pinned(pos, _), _) => pos
-    }
+    val positions = pinned.collect { case UiSurface(_, _, SurfacePresentation.Pinned(pos, _), _) => pos }
     positions should contain(PanelPosition.Right)
     positions should contain(PanelPosition.Bottom)
 
@@ -119,7 +117,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     pinned should have size 1
     pinned.head.presentation match
       case SurfacePresentation.Pinned(PanelPosition.Right, size) => size shouldBe 50
-      case other => fail(s"Expected Pinned(Right, 50), got $other")
+      case other                                                 => fail(s"Expected Pinned(Right, 50), got $other")
 
   it should "do nothing when resizing a position with no panel" in new UIFixture:
     stateManager.resizePinnedPanel(PanelPosition.Left, 40).unsafeRunSync()
@@ -155,6 +153,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
   trait UIFixture:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+
     val stateManager: StateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()

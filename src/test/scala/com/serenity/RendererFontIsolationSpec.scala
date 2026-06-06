@@ -7,7 +7,7 @@ import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, Layout, LayoutEngine, LayoutRect, TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -21,9 +21,9 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
   private val uiFont      = Font(Font.SANS_SERIF, Font.BOLD, 16)
   private val cellMetrics = CellMetrics.fromFont(codeFont)
 
-  private val paneId   = PaneId(0)
-  private val bufferId = BufferId(1)
-  private val text     = "iiiiii"
+  private val paneId    = PaneId(0)
+  private val bufferId  = BufferId(1)
+  private val text      = "iiiiii"
   private val cursorCol = 3
 
   private def stateWithRunnerAndBuffer(language: Option[LanguageId]): AppState =
@@ -35,7 +35,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       )
     val pane   = EditorPane.withBuffer(paneId, bufferId)
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
-    val base   = AppState.initial.copy(
+    val base = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
       layout = Layout(
@@ -67,13 +67,21 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(80, 24)
     val viewportSize = ViewportSize(80, 24)
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize,
-      codeFont, textFont, cellMetrics, Some(cursorColor))
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      cellMetrics,
+      Some(cursorColor)
+    )
 
-    val buffer      = state.buffers(bufferId)
-    val layout      = LayoutEngine.calculateLayout(state, viewportSize)
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
-    val contentRect = LayoutRect(paneRect.x, paneRect.y + 1, paneRect.width, math.max(1, paneRect.height - 1))
+    val buffer       = state.buffers(bufferId)
+    val layout       = LayoutEngine.calculateLayout(state, viewportSize)
+    val paneRect     = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val contentRect  = LayoutRect(paneRect.x, paneRect.y + 1, paneRect.width, math.max(1, paneRect.height - 1))
     val panelWidthPx = contentRect.width * cellMetrics.charWidth
 
     val textSnapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, textFont)
@@ -82,7 +90,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
 
     val codeSnapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, codeFont)
     val codeXPx      = codeSnapshot.xPxForCursor(CursorPosition(0, cursorCol)).getOrElse(fail("no code caret stop"))
-    val codeExpected  = cellMetrics.toPixelX(contentRect.x) + math.round(codeXPx)
+    val codeExpected = cellMetrics.toPixelX(contentRect.x) + math.round(codeXPx)
 
     expectedXPx should not be codeExpected
 
@@ -96,8 +104,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(80, 24)
     val viewportSize = ViewportSize(80, 24)
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize,
-      codeFont, textFont, cellMetrics, None)
+    Renderer.render(state, cursorVisible = true, surface, viewportSize, codeFont, textFont, cellMetrics, None)
 
     surface.setFontCalls should contain(textFont)
   }
@@ -107,8 +114,18 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(80, 24)
     val viewportSize = ViewportSize(80, 24)
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize,
-      codeFont, textFont, uiFont, cellMetrics, CellMetrics.fromFont(uiFont), None)
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      uiFont,
+      cellMetrics,
+      CellMetrics.fromFont(uiFont),
+      None
+    )
 
     surface.setFontCalls should contain(uiFont)
     surface.setFontCalls.last shouldBe uiFont
@@ -120,8 +137,16 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(80, 24)
     val viewportSize = ViewportSize(80, 24)
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize,
-      codeFont, textFont, cellMetrics, Some(cursorColor))
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      cellMetrics,
+      Some(cursorColor)
+    )
 
     val buffer       = state.buffers(bufferId)
     val layout       = LayoutEngine.calculateLayout(state, viewportSize)

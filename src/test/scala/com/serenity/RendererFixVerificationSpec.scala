@@ -23,7 +23,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
 
   it should "now have matching visibleColumns and panel width after viewport adjustment" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -32,14 +32,16 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.updateState { current =>
-      current.copy(
-        buffers = current.buffers.updated(
-          bufferId,
-          current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+    stateManager
+      .updateState { current =>
+        current.copy(
+          buffers = current.buffers.updated(
+            bufferId,
+            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          )
         )
-      )
-    }.unsafeRunSync()
+      }
+      .unsafeRunSync()
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val layout     = LayoutEngine.calculateLayout(finalState, ViewportSize(80, 24))
@@ -67,7 +69,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
 
   it should "handle content longer than panel width without visual overflow" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -76,14 +78,16 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.updateState { current =>
-      current.copy(
-        buffers = current.buffers.updated(
-          bufferId,
-          current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+    stateManager
+      .updateState { current =>
+        current.copy(
+          buffers = current.buffers.updated(
+            bufferId,
+            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          )
         )
-      )
-    }.unsafeRunSync()
+      }
+      .unsafeRunSync()
 
     val currentState = stateManager.getCurrentState.unsafeRunSync()
     val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
@@ -117,7 +121,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
 
   it should "correctly position viewport for very long text" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -126,14 +130,16 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.updateState { current =>
-      current.copy(
-        buffers = current.buffers.updated(
-          bufferId,
-          current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+    stateManager
+      .updateState { current =>
+        current.copy(
+          buffers = current.buffers.updated(
+            bufferId,
+            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          )
         )
-      )
-    }.unsafeRunSync()
+      }
+      .unsafeRunSync()
 
     val currentState = stateManager.getCurrentState.unsafeRunSync()
     val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
@@ -169,7 +175,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
 
   it should "properly handle multi-line text with horizontal scrolling" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -178,14 +184,16 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.updateState { current =>
-      current.copy(
-        buffers = current.buffers.updated(
-          bufferId,
-          current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+    stateManager
+      .updateState { current =>
+        current.copy(
+          buffers = current.buffers.updated(
+            bufferId,
+            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          )
         )
-      )
-    }.unsafeRunSync()
+      }
+      .unsafeRunSync()
 
     val currentState = stateManager.getCurrentState.unsafeRunSync()
     val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))

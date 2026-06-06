@@ -3,7 +3,7 @@ package com.serenity.lsp
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.LspEvent
-import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
+import com.serenity.lsp.model.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -16,19 +16,19 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
-  given Balance            = Balance.default
+  given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def diag(line: Int, severity: DiagnosticSeverity): Diagnostic =
     Diagnostic(
-      range    = LspRange(LspPosition(line, 0), LspPosition(line, 10)),
+      range = LspRange(LspPosition(line, 0), LspPosition(line, 10)),
       severity = Some(severity),
-      message  = s"diagnostic at line $line"
+      message = s"diagnostic at line $line"
     )
 
   "SystemEventReducer" should "store diagnostics from LspDiagnosticsReceived" in {
     given Balance = Balance.default
-    val state = AppState.initial
+    val state     = AppState.initial
 
     val uri   = "file:///foo/Bar.scala"
     val diags = List(diag(0, DiagnosticSeverity.Error), diag(5, DiagnosticSeverity.Warning))
@@ -42,7 +42,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "replace diagnostics for the same URI" in {
     given Balance = Balance.default
-    val uri   = "file:///foo/Bar.scala"
+    val uri       = "file:///foo/Bar.scala"
     val state = AppState.initial.copy(
       diagnostics = Map(uri -> List(diag(0, DiagnosticSeverity.Error)))
     )
@@ -56,7 +56,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "clear diagnostics when an empty list is received" in {
     given Balance = Balance.default
-    val uri   = "file:///foo/Bar.scala"
+    val uri       = "file:///foo/Bar.scala"
     val state = AppState.initial.copy(
       diagnostics = Map(uri -> List(diag(0, DiagnosticSeverity.Error)))
     )
@@ -67,7 +67,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   "Theme" should "have error and warning colors" in {
     val theme = Theme.dark
-    theme.error.foreground   should not be null
+    theme.error.foreground should not be null
     theme.warning.foreground should not be null
     theme.warning.foreground should not be theme.error.foreground
   }

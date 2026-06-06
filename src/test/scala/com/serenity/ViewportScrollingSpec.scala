@@ -22,7 +22,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
   it should "scroll right when cursor moves beyond visible columns" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -31,14 +31,16 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.updateState { current =>
-      current.copy(
-        buffers = current.buffers.updated(
-          bufferId,
-          current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+    stateManager
+      .updateState { current =>
+        current.copy(
+          buffers = current.buffers.updated(
+            bufferId,
+            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          )
         )
-      )
-    }.unsafeRunSync()
+      }
+      .unsafeRunSync()
 
     // Get initial viewport settings
     val initialState   = stateManager.getCurrentState.unsafeRunSync()
@@ -68,7 +70,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
   it should "scroll left when cursor moves back to left edge" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -77,14 +79,16 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.updateState { current =>
-      current.copy(
-        buffers = current.buffers.updated(
-          bufferId,
-          current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+    stateManager
+      .updateState { current =>
+        current.copy(
+          buffers = current.buffers.updated(
+            bufferId,
+            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          )
         )
-      )
-    }.unsafeRunSync()
+      }
+      .unsafeRunSync()
 
     // Create long text and move cursor to the end
     val longText = "x" * 100
@@ -110,7 +114,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
   it should "scroll down when cursor moves beyond visible lines" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -152,7 +156,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
   it should "preserve all text content regardless of viewport position" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -187,7 +191,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
   it should "handle rapid scrolling movements without losing content" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
