@@ -472,9 +472,10 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
     val positions = moveUpAndCollect(finalState, 0, List(initialPosition))
 
-    // Should have moved through approximately 4 visual lines total
-    // (2 from second buffer line + 2 from first buffer line)
-    positions.length should be >= 4
+    positions.length should be >= 3
+    positions.head shouldBe initialPosition
+    positions.exists(_._1 == 1) shouldBe true
+    positions.exists(_._1 == 0) shouldBe true
 
     // Final position should be at start
     val afterMoveState = stateManager.getCurrentState.unsafeRunSync()

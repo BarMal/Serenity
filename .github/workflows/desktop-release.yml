@@ -49,12 +49,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist
-          cp target/scala-*/Serenity.jar dist/Serenity.jar
+          mkdir -p package-input dist
+          cp target/scala-*/Serenity.jar package-input/Serenity.jar
+          cp package-input/Serenity.jar dist/Serenity.jar
           jpackage \
             --type app-image \
             --name Serenity \
-            --input dist \
+            --input package-input \
             --main-jar Serenity.jar \
             --main-class Main \
             --dest dist
