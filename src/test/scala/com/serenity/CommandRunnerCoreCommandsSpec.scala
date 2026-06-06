@@ -4,15 +4,16 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.io.FileUtils
-import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
-import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{BufferId, CloseScope, FileWorkflowMode, Focus, Modal, SurfaceContent}
-import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+
+import com.serenity.io.FileUtils
+import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
+import com.serenity.state.manager.StateManager
+import com.serenity.state.models._
+import com.serenity.ui.layout.PanelPosition
 
 class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
@@ -20,7 +21,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerCoreCommandsSpec"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerCoreCommandsSpec"))
     StateManager.apply(logger).unsafeRunSync()
 
   private def executeCommandThroughRunner(
@@ -29,13 +30,14 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     expectedCommandName: String
   ): Unit =
     val beforeOpen = stateManager.getCurrentState.unsafeRunSync()
-    if beforeOpen.commandRunnerSurface.flatMap {
-        _.content match
-          case SurfaceContent.CommandPalette(runner) => Some(runner.isActive)
-          case _                                     => None
-      }.getOrElse(false) == false
-    then
-      stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    if beforeOpen.commandRunnerSurface
+          .flatMap {
+            _.content match
+              case SurfaceContent.CommandPalette(runner) => Some(runner.isActive)
+              case _                                     => None
+          }
+          .getOrElse(false) == false
+    then stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
@@ -143,12 +145,14 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
   it should "open a save-as file workflow modal seeded from the focused buffer path" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
-    val filePath     = Path.of("C:\\temp\\notes.scala")
+    val filePath     = Path.of("temp", "notes.scala")
 
-    stateManager.updateState { state =>
-      val buffer = state.buffers(bufferId).copy(filePath = Some(filePath))
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
-    }.unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(bufferId).copy(filePath = Some(filePath))
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "save-as", "save-as")
 
@@ -160,7 +164,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
           com.serenity.state.models.FileWorkflowState(
             mode = FileWorkflowMode.SaveAs,
             filename = "notes.scala",
-            path = "C:\\temp"
+            path = filePath.getParent.toString
           )
         )
       )
@@ -168,7 +172,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "open an open-file workflow modal rooted at the current working directory" in {
-    val stateManager = createStateManager()
+    val stateManager     = createStateManager()
     val currentDirectory = FileUtils.getCurrentDirectory.unsafeRunSync().toString
 
     executeCommandThroughRunner(stateManager, "open", "open")
@@ -188,7 +192,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fall back to a save-as file workflow modal when save is invoked for an unsaved buffer" in {
-    val stateManager = createStateManager()
+    val stateManager     = createStateManager()
     val currentDirectory = FileUtils.getCurrentDirectory.unsafeRunSync().toString
 
     executeCommandThroughRunner(stateManager, "save", "save")
@@ -209,100 +213,115 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "open an unsaved-changes workflow for the close command when the current buffer is dirty" in {
     val stateManager = createStateManager()
-    val bufferId = BufferId(0)
+    val bufferId     = BufferId(0)
 
-    stateManager.updateState { state =>
-      val buffer = state.buffers(bufferId).copy(isDirty = true)
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
-    }.unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "close", "close")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
-    updatedState.modalSurface.flatMap(_.content match
-      case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-      case _                                                           => None
-    ).map(_.scope) shouldBe Some(CloseScope.Current)
+    updatedState.modalSurface
+      .flatMap(_.content match
+        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
+        case _                                                           => None)
+      .map(_.scope) shouldBe Some(CloseScope.Current)
     updatedState.focus shouldBe Focus.Surface(updatedState.modalSurface.get.id)
   }
 
   it should "open an unsaved-changes workflow for the close-all command when any affected buffer is dirty" in {
-    val stateManager = createStateManager()
+    val stateManager  = createStateManager()
     val dirtyBufferId = stateManager.createBuffer("dirty buffer").unsafeRunSync()
 
-    stateManager.updateState { state =>
-      val buffer = state.buffers(dirtyBufferId).copy(isDirty = true)
-      state.copy(
-        buffers = state.buffers + (dirtyBufferId -> buffer),
-        bufferOrder = state.bufferOrder :+ dirtyBufferId
-      )
-    }.unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(dirtyBufferId).copy(isDirty = true)
+        state.copy(
+          buffers = state.buffers + (dirtyBufferId -> buffer),
+          bufferOrder = state.bufferOrder :+ dirtyBufferId
+        )
+      }
+      .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "close-all", "close-all")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface.flatMap(_.content match
-      case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-      case _                                                           => None
-    ).map(_.scope) shouldBe Some(CloseScope.All)
+    updatedState.modalSurface
+      .flatMap(_.content match
+        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
+        case _                                                           => None)
+      .map(_.scope) shouldBe Some(CloseScope.All)
   }
 
   it should "open an unsaved-changes workflow for the close-others command when any other buffer is dirty" in {
-    val stateManager = createStateManager()
+    val stateManager  = createStateManager()
     val dirtyBufferId = stateManager.createBuffer("dirty buffer").unsafeRunSync()
 
-    stateManager.updateState { state =>
-      val buffer = state.buffers(dirtyBufferId).copy(isDirty = true)
-      state.copy(
-        buffers = state.buffers + (dirtyBufferId -> buffer),
-        bufferOrder = state.bufferOrder :+ dirtyBufferId
-      )
-    }.unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(dirtyBufferId).copy(isDirty = true)
+        state.copy(
+          buffers = state.buffers + (dirtyBufferId -> buffer),
+          bufferOrder = state.bufferOrder :+ dirtyBufferId
+        )
+      }
+      .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "close-others", "close-others")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface.flatMap(_.content match
-      case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-      case _                                                           => None
-    ).map(_.scope) shouldBe Some(CloseScope.Others)
+    updatedState.modalSurface
+      .flatMap(_.content match
+        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
+        case _                                                           => None)
+      .map(_.scope) shouldBe Some(CloseScope.Others)
   }
 
   it should "open an unsaved-changes workflow for the quit command when any buffer is dirty" in {
     val stateManager = createStateManager()
-    val bufferId = BufferId(0)
+    val bufferId     = BufferId(0)
 
-    stateManager.updateState { state =>
-      val buffer = state.buffers(bufferId).copy(isDirty = true)
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
-    }.unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "quit", "quit")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface.flatMap(_.content match
-      case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-      case _                                                           => None
-    ).map(_.scope) shouldBe Some(CloseScope.Quit)
+    updatedState.modalSurface
+      .flatMap(_.content match
+        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
+        case _                                                           => None)
+      .map(_.scope) shouldBe Some(CloseScope.Quit)
   }
 
   it should "pin the explorer panel from the command runner" in {
-    val stateManager      = createStateManager()
-    val currentDirectory  = FileUtils.getCurrentDirectory.unsafeRunSync()
+    val stateManager     = createStateManager()
+    val currentDirectory = FileUtils.getCurrentDirectory.unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "pin-explorer", "pin-explorer")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
-    val pinnedSurface = updatedState.pinnedSurfaces.collectFirst {
-      case surface @ com.serenity.state.models.UiSurface(
-            _,
-            SurfaceContent.DirectoryTree(tree, _),
-            com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Left, _),
-            _
-          ) => surface -> tree.rootPath
-    }.getOrElse(fail("Expected pinned explorer surface"))
+    val pinnedSurface = updatedState.pinnedSurfaces
+      .collectFirst {
+        case surface @ com.serenity.state.models.UiSurface(
+              _,
+              SurfaceContent.DirectoryTree(tree, _),
+              com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Left, _),
+              _
+            ) =>
+          surface -> tree.rootPath
+      }
+      .getOrElse(fail("Expected pinned explorer surface"))
 
     pinnedSurface._2 shouldBe currentDirectory
   }
@@ -355,7 +374,6 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.pinnedSurfaces.exists {
       _.presentation match
         case com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Left, _) => true
-        case _                                                                            => false
+        case _                                                                           => false
     } shouldBe false
   }
-

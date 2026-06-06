@@ -28,6 +28,7 @@ lazy val root = (project in file("."))
           case "dependencies" :: Nil => MergeStrategy.discard
           case _ => MergeStrategy.discard
         }
+      case PathList("module-info.class") => MergeStrategy.discard
       case x => (assembly / assemblyMergeStrategy).value(x)
     },
     Test / testOptions ++= Seq(
