@@ -90,6 +90,41 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlay.rect shouldBe layout.belowCursorOverlayRect.get
   }
 
+  it should "derive a focused find overlay view beneath the active cursor" in {
+    val buffer = Buffer
+      .fromString(bufferId, "one\ntwo\nthree")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.Surface(SurfaceId("find")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("find"),
+          SurfaceContent.ModalWorkflow(Modal.Find("two", List(1), 0)),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
+
+    val overlays = OverlayViewModel.fromState(state, layout)
+    val overlay  = overlays.belowCursor.getOrElse(fail("Expected find overlay"))
+
+    overlay.header.map(_.plainText) shouldBe Some("find")
+    overlay.rows.map(_.plainText) shouldBe List("Find two")
+    overlay.rows.head.cursorColumn shouldBe Some("Find two".length)
+    overlay.footer.map(_.plainText) shouldBe Some("1 match, 1/1")
+    overlay.rect shouldBe layout.belowCursorOverlayRect.get
+  }
+
   it should "derive an interactive command palette view with cursor and selected row metadata" in {
     val commands = List(
       Command.typed("open", "Open file", CommandIntent.OpenFile),

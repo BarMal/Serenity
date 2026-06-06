@@ -13,31 +13,35 @@ object TextEditing:
   def previousWordBoundary(text: String, cursor: Int): Int =
     val idx = clamp(cursor, text.length)
     if idx > 0 && text.charAt(idx - 1).isWhitespace then
-      scanBackwardNonWhitespace(scanBackwardWhitespace(idx, text), text)
-    else scanBackwardNonWhitespace(idx, text)
+      scanBackwardNonWhitespaceStart(text, scanBackwardWhitespaceStart(text, idx))
+    else scanBackwardNonWhitespaceStart(text, idx)
 
   def nextWordBoundary(text: String, cursor: Int): Int =
     val length = text.length
     val idx    = clamp(cursor, length)
     if idx < length && text.charAt(idx).isWhitespace then
-      scanForwardNonWhitespace(scanForwardWhitespace(idx, text), text)
-    else scanForwardWhitespace(scanForwardNonWhitespace(idx, text), text)
+      scanForwardNonWhitespaceEnd(text, scanForwardWhitespaceEnd(text, idx))
+    else scanForwardWhitespaceEnd(text, scanForwardNonWhitespaceEnd(text, idx))
 
   private def clamp(cursor: Int, length: Int): Int =
     math.max(0, math.min(cursor, length))
 
-  private def scanBackwardWhitespace(index: Int, text: String): Int =
-    if index > 0 && text.charAt(index - 1).isWhitespace then scanBackwardWhitespace(index - 1, text)
-    else index
+  @annotation.tailrec
+  private def scanBackwardWhitespaceStart(text: String, idx: Int): Int =
+    if idx > 0 && text.charAt(idx - 1).isWhitespace then scanBackwardWhitespaceStart(text, idx - 1)
+    else idx
 
-  private def scanBackwardNonWhitespace(index: Int, text: String): Int =
-    if index > 0 && !text.charAt(index - 1).isWhitespace then scanBackwardNonWhitespace(index - 1, text)
-    else index
+  @annotation.tailrec
+  private def scanBackwardNonWhitespaceStart(text: String, idx: Int): Int =
+    if idx > 0 && !text.charAt(idx - 1).isWhitespace then scanBackwardNonWhitespaceStart(text, idx - 1)
+    else idx
 
-  private def scanForwardWhitespace(index: Int, text: String): Int =
-    if index < text.length && text.charAt(index).isWhitespace then scanForwardWhitespace(index + 1, text)
-    else index
+  @annotation.tailrec
+  private def scanForwardWhitespaceEnd(text: String, idx: Int): Int =
+    if idx < text.length && text.charAt(idx).isWhitespace then scanForwardWhitespaceEnd(text, idx + 1)
+    else idx
 
-  private def scanForwardNonWhitespace(index: Int, text: String): Int =
-    if index < text.length && !text.charAt(index).isWhitespace then scanForwardNonWhitespace(index + 1, text)
-    else index
+  @annotation.tailrec
+  private def scanForwardNonWhitespaceEnd(text: String, idx: Int): Int =
+    if idx < text.length && !text.charAt(idx).isWhitespace then scanForwardNonWhitespaceEnd(text, idx + 1)
+    else idx

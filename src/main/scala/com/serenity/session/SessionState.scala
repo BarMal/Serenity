@@ -1,5 +1,6 @@
 package com.serenity.session
 
+import java.awt.Font
 import java.nio.file.Path
 
 import scala.concurrent.duration.FiniteDuration
@@ -261,7 +262,26 @@ given Encoder[AnimationConfig] = deriveEncoder
 given Decoder[AnimationConfig] = deriveDecoder
 
 given Encoder[FontConfig] = deriveEncoder
-given Decoder[FontConfig] = deriveDecoder
+
+given Decoder[FontConfig] = Decoder.instance { cursor =>
+  for
+    codeFontFamily <- cursor.getOrElse[String]("codeFontFamily")(FontConfig().codeFontFamily)
+    textFontFamily <- cursor.getOrElse[String]("textFontFamily")(FontConfig().textFontFamily)
+    uiFontFamily   <- cursor.getOrElse[String]("uiFontFamily")(Font.SANS_SERIF)
+    fontSize       <- cursor.getOrElse[Float]("fontSize")(FontConfig().fontSize)
+    uiFontSize     <- cursor.getOrElse[Float]("uiFontSize")(FontConfig().uiFontSize)
+    enableLigatures <- cursor.getOrElse[Boolean]("enableLigatures")(
+      FontConfig().enableLigatures
+    )
+  yield FontConfig(
+    codeFontFamily = codeFontFamily,
+    textFontFamily = textFontFamily,
+    uiFontFamily = uiFontFamily,
+    fontSize = fontSize,
+    uiFontSize = uiFontSize,
+    enableLigatures = enableLigatures
+  )
+}
 
 given Encoder[CursorMode] = Encoder.encodeString.contramap(_.toString)
 

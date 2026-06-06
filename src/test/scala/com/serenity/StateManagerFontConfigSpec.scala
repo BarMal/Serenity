@@ -41,7 +41,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
   "StateManager" should "invoke the runtime font callback when changing buffer font size from typography settings" in {
     val observed = AtomicReference[List[FontConfig]](Nil)
     val stateManager =
-      createStateManager("StateManagerFontConfigSpec", config => IO { observed.updateAndGet(_ :+ config); () })
+      createStateManager("StateManagerFontConfigSpec", config => IO(observed.updateAndGet(_ :+ config)))
 
     openTypographySubmenu(stateManager)
     stateManager.applyEvent(MoveDown).unsafeRunSync()
@@ -57,7 +57,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
   it should "invoke the runtime font callback when changing UI font size from typography settings" in {
     val observed = AtomicReference[List[FontConfig]](Nil)
     val stateManager =
-      createStateManager("StateManagerFontConfigSpec", config => IO { observed.updateAndGet(_ :+ config); () })
+      createStateManager("StateManagerFontConfigSpec", config => IO(observed.updateAndGet(_ :+ config)))
 
     openTypographySubmenu(stateManager)
     stateManager.applyEvent(MoveDown).unsafeRunSync()
@@ -74,7 +74,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
   it should "invoke the runtime font callback when changing ligature shaping from typography settings" in {
     val observed = AtomicReference[List[FontConfig]](Nil)
     val stateManager =
-      createStateManager("StateManagerFontConfigSpec", config => IO { observed.updateAndGet(_ :+ config); () })
+      createStateManager("StateManagerFontConfigSpec", config => IO(observed.updateAndGet(_ :+ config)))
 
     openTypographySubmenu(stateManager)
     stateManager.applyEvent(MoveDown).unsafeRunSync()

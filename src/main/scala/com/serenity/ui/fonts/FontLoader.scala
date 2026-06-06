@@ -13,6 +13,7 @@ object FontLoader:
   case class FontConfig(
       codeFontFamily: String = BundledCodeFontFamily,
       textFontFamily: String = Font.SANS_SERIF,
+      uiFontFamily: String = Font.SANS_SERIF,
       fontSize: Float = 12.0f,
       uiFontSize: Float = 12.0f,
       enableLigatures: Boolean = true
@@ -62,11 +63,7 @@ object FontLoader:
     )
 
   def previewUiFont(config: FontConfig): Font =
-    val base =
-      if config.codeFontFamily == BundledCodeFontFamily then
-        bundledMonospace(config.uiFontSize).getOrElse(defaultSystemMonospace(config.uiFontSize))
-      else Font(config.codeFontFamily, Font.PLAIN, config.uiFontSize.toInt).deriveFont(config.uiFontSize)
-    applyFontFeatures(base, config.enableLigatures)
+    Font(config.uiFontFamily, Font.PLAIN, config.uiFontSize.toInt).deriveFont(config.uiFontSize)
 
   def isMonospacedFont(font: Font): Boolean =
     isMonospaced(font)

@@ -9,7 +9,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.components.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
-import com.serenity.state.undo.{HistoryEntry, PendingGroup}
+import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, PendingGroup}
 import com.serenity.text.TextEditing
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -76,35 +76,32 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     focusedBufferAndPane(prevState) match
       case None => cats.effect.IO.unit
       case Some((bufferId, paneId, buffer)) =>
-        val beforeContent = buffer.content
-        val beforeCursor  = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
-        event match
-          case InsertChar(_) | TabKey =>
-            undoRef.update { undo =>
-              val sameGroup = undo.pendingGroup.exists(g => g.bufferId == bufferId && g.paneId == paneId)
-              if sameGroup then undo.clearRedo
-              else
-                val flushed  = undo.flushPendingGroup(beforeContent, beforeCursor)
-                val newGroup = PendingGroup(bufferId, paneId, beforeContent, beforeCursor)
-                flushed.copy(pendingGroup = Some(newGroup), redoStack = Nil)
-            }
-          case DeleteBackward | DeleteForward | NewLine | Enter =>
-            undoRef.update { undo =>
-              val flushed = undo.flushPendingGroup(beforeContent, beforeCursor)
-              val entry   = HistoryEntry(bufferId, paneId, beforeContent, beforeCursor)
-              flushed.copy(undoStack = entry :: flushed.undoStack, redoStack = Nil)
-            }
-          case _ => cats.effect.IO.unit
+        stateRef.get.flatMap { currentState =>
+          currentState.buffers.get(bufferId) match
+            case Some(currentBuffer) if isUndoableContentMutation(event) && bufferChanged(buffer, currentBuffer) =>
+              val beforeSnapshot = BufferSnapshot.fromBuffer(buffer)
+              event match
+                case InsertChar(_) | TabKey =>
+                  undoRef.update { undo =>
+                    val sameGroup = undo.pendingGroup.exists(g => g.bufferId == bufferId && g.paneId == paneId)
+                    if sameGroup then undo.clearRedo
+                    else
+                      val flushed  = undo.flushPendingGroup
+                      val newGroup = PendingGroup(bufferId, paneId, beforeSnapshot)
+                      flushed.copy(pendingGroup = Some(newGroup), redoStack = Nil)
+                  }
+                case _ =>
+                  undoRef.update { undo =>
+                    val flushed = undo.flushPendingGroup
+                    val entry   = HistoryEntry(bufferId, paneId, beforeSnapshot)
+                    flushed.copy(undoStack = entry :: flushed.undoStack, redoStack = Nil)
+                  }
+            case _ => cats.effect.IO.unit
+        }
 
   private def applyUndo(prevState: AppState): cats.effect.IO[Unit] =
     undoRef.get.flatMap { undo =>
-      val flushed = undo.pendingGroup match
-        case None => undo
-        case Some(group) =>
-          focusedBufferAndPane(prevState).fold(undo) { (_, _, buffer) =>
-            val cur = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
-            undo.flushPendingGroup(buffer.content, cur)
-          }
+      val flushed = undo.flushPendingGroup
       flushed.undoStack match
         case Nil => cats.effect.IO.unit
         case entry :: rest =>
@@ -112,16 +109,9 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
             state.buffers.get(entry.bufferId) match
               case None => cats.effect.IO.unit
               case Some(current) =>
-                val currentCursor = current.cursors.headOption.getOrElse(CursorPosition(0, 0))
-                val redoEntry     = HistoryEntry(entry.bufferId, entry.paneId, current.content, currentCursor)
-                val restoredBuffer = current.copy(
-                  content = entry.content,
-                  cursors = List(entry.cursor),
-                  isDirty = true,
-                  viewport = adjustViewportForUndoCursor(current.viewport, entry.cursor),
-                  multiCursorVerticalStates = Nil
-                )
-                val snappedState = snapFocusToPane(state, entry.paneId)
+                val redoEntry      = HistoryEntry(entry.bufferId, entry.paneId, BufferSnapshot.fromBuffer(current))
+                val restoredBuffer = entry.snapshot.restoreInto(current)
+                val snappedState   = snapFocusToPane(state, entry.paneId)
                 undoRef.set(flushed.copy(undoStack = rest, redoStack = redoEntry :: flushed.redoStack)) >>
                   validateAndUpdateState(
                     snappedState.copy(buffers = snappedState.buffers + (entry.bufferId -> restoredBuffer)),
@@ -139,16 +129,9 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
             state.buffers.get(entry.bufferId) match
               case None => cats.effect.IO.unit
               case Some(current) =>
-                val currentCursor = current.cursors.headOption.getOrElse(CursorPosition(0, 0))
-                val undoEntry     = HistoryEntry(entry.bufferId, entry.paneId, current.content, currentCursor)
-                val restoredBuffer = current.copy(
-                  content = entry.content,
-                  cursors = List(entry.cursor),
-                  isDirty = true,
-                  viewport = adjustViewportForUndoCursor(current.viewport, entry.cursor),
-                  multiCursorVerticalStates = Nil
-                )
-                val snappedState = snapFocusToPane(state, entry.paneId)
+                val undoEntry      = HistoryEntry(entry.bufferId, entry.paneId, BufferSnapshot.fromBuffer(current))
+                val restoredBuffer = entry.snapshot.restoreInto(current)
+                val snappedState   = snapFocusToPane(state, entry.paneId)
                 undoRef.set(undo.copy(undoStack = undoEntry :: undo.undoStack, redoStack = rest)) >>
                   validateAndUpdateState(
                     snappedState.copy(buffers = snappedState.buffers + (entry.bufferId -> restoredBuffer)),
@@ -165,6 +148,19 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         }
       case _ => None
 
+  private def isUndoableContentMutation(event: Event): Boolean =
+    event match
+      case InsertChar(_) | TabKey | ReverseTabKey | DeleteBackward | DeleteForward | DeleteWordBackward |
+          DeleteWordForward | NewLine | Enter | Paste | Cut =>
+        true
+      case _ => false
+
+  private def bufferChanged(before: Buffer, after: Buffer): Boolean =
+    before.content != after.content ||
+      before.cursors != after.cursors ||
+      before.selection != after.selection ||
+      before.selections != after.selections
+
   private def snapFocusToPane(state: AppState, paneId: PaneId): AppState =
     if state.focus == Focus.EditorPane(paneId) then state
     else
@@ -172,11 +168,6 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         focus = Focus.EditorPane(paneId),
         layout = state.layout.copy(activeEditorPaneId = Some(paneId))
       )
-
-  private def adjustViewportForUndoCursor(viewport: Viewport, cursor: CursorPosition): Viewport =
-    val half       = viewport.visibleLines / 2
-    val newTopLine = math.max(0, cursor.line - half)
-    viewport.copy(topLine = newTopLine)
 
   protected def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
     normalizeCommandRunnerFocus(newState).validated match
@@ -620,10 +611,6 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
   private def wordSelectionAtCursor(buffer: Buffer, cursor: CursorPosition): Option[Selection] =
     val text          = buffer.content.collect()
     val clickedOffset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-    def wordEndFrom(offset: Int): Int =
-      if offset < text.length && !text.charAt(offset).isWhitespace then wordEndFrom(offset + 1)
-      else offset
-
     if text.isEmpty then None
     else
       val probeOffset =
@@ -636,7 +623,11 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       if probeOffset < 0 || text.charAt(probeOffset).isWhitespace then None
       else
         val start = TextEditing.previousWordBoundary(text, probeOffset)
-        val end   = wordEndFrom(probeOffset)
+        @annotation.tailrec
+        def wordEndFrom(offset: Int): Int =
+          if offset < text.length && !text.charAt(offset).isWhitespace then wordEndFrom(offset + 1)
+          else offset
+        val end = wordEndFrom(probeOffset)
         Some(
           Selection(
             offsetToCursorPosition(buffer.content, start),

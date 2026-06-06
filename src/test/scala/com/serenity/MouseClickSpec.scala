@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{CursorPosition, PaneId, Selection}
+import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
@@ -354,5 +354,77 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
     buffer.cursors.headOption shouldBe Some(CursorPosition(2, 5))
     buffer.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(2, 5)))
+    buffer.selections shouldBe Nil
+  }
+
+  it should "collapse multi-cursor state to the clicked cursor" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("alpha\nbeta\ngamma").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state
+            .buffers(bufferId)
+            .copy(
+              language = Some(LanguageId.Scala),
+              cursors = List(CursorPosition(0, 1), CursorPosition(2, 3)),
+              multiCursorVerticalStates = List(
+                VerticalCursorState(CursorPosition(0, 1), 1, 1.0f),
+                VerticalCursorState(CursorPosition(2, 3), 3, 3.0f)
+              )
+            )
+        )
+      )
+    }.unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    val state    = sm.getCurrentState.unsafeRunSync()
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+
+    sm.applyEvent(MouseClick(paneRect.x + 2, paneRect.y + 2)).unsafeRunSync()
+
+    val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.cursors shouldBe List(CursorPosition(1, 2))
+    buffer.selection shouldBe None
+    buffer.selections shouldBe Nil
+    buffer.multiCursorVerticalStates shouldBe Nil
+  }
+
+  it should "collapse multi-selection state to a single drag selection" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("alpha\nbeta\ngamma").unsafeRunSync()
+    val first    = Selection(CursorPosition(0, 0), CursorPosition(0, 2))
+    val second   = Selection(CursorPosition(2, 0), CursorPosition(2, 2))
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state
+            .buffers(bufferId)
+            .copy(
+              language = Some(LanguageId.Scala),
+              cursors = List(first.focus, second.focus),
+              selection = Some(first),
+              selections = List(first, second)
+            )
+        )
+      )
+    }.unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    val state    = sm.getCurrentState.unsafeRunSync()
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+
+    sm.applyEvent(MousePress(paneRect.x + 1, paneRect.y + 1)).unsafeRunSync()
+    sm.applyEvent(MouseDrag(paneRect.x + 3, paneRect.y + 2)).unsafeRunSync()
+
+    val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.cursors shouldBe List(CursorPosition(1, 3))
+    buffer.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
     buffer.selections shouldBe Nil
   }

@@ -7,6 +7,7 @@ import com.serenity.io.FileUtils
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
+import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
 
 private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeSupport:
   this: StateManager =>
@@ -240,8 +241,25 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
                       findText = workflow.findText,
                       replacementText = workflow.replacementText
                     )
-                  val updatedBuffer = buffer.copy(content = updatedContent, isDirty = true)
-                  stateRef.update { current =>
+                  val cursorOffset =
+                    finalCursorOffsetAfterReplacements(
+                      matches,
+                      workflow.findText.length,
+                      workflow.replacementText.length
+                    )
+                  val newCursor = cursorPositionForOffset(updatedContent.collect(), cursorOffset)
+                  val updatedBuffer = buffer.copy(
+                    content = updatedContent,
+                    isDirty = true,
+                    isNewEmpty = false,
+                    cursors = List(newCursor),
+                    selection = None,
+                    selections = Nil,
+                    preferredColumn = Some(newCursor.column),
+                    preferredXPx = None,
+                    findState = None
+                  )
+                  recordWorkflowUndo(state, bufferId, buffer) >> stateRef.update { current =>
                     val updatedState = current.copy(
                       buffers = current.buffers + (bufferId -> updatedBuffer),
                       uiSurfaces = current.uiSurfaces.filterNot(_.id == surfaceId)
@@ -292,16 +310,33 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
                     .insert(startOffset, workflow.replacementText)
                   val cursorOffset = startOffset + workflow.replacementText.length
                   val newCursor    = cursorPositionForOffset(updatedContent.collect(), cursorOffset)
+                  val replacementSelection =
+                    workflow.selectedScope match
+                      case ReplaceWorkflowScope.Selection =>
+                        buffer.primarySelection.map(selection =>
+                          adjustSelectionAfterReplacement(
+                            buffer = buffer,
+                            updatedText = updatedContent.collect(),
+                            selection = selection,
+                            startOffset = startOffset,
+                            endOffset = endOffset,
+                            replacementLength = workflow.replacementText.length
+                          )
+                        )
+                      case ReplaceWorkflowScope.CurrentBuffer =>
+                        None
                   val updatedBuffer = buffer.copy(
                     content = updatedContent,
                     isDirty = true,
+                    isNewEmpty = false,
                     cursors = List(newCursor),
-                    selection = None,
+                    selection = replacementSelection,
                     selections = Nil,
                     preferredColumn = Some(newCursor.column),
-                    preferredXPx = None
+                    preferredXPx = None,
+                    findState = None
                   )
-                  stateRef.update { current =>
+                  recordWorkflowUndo(state, bufferId, buffer) >> stateRef.update { current =>
                     current.copy(buffers = current.buffers + (bufferId -> updatedBuffer))
                   } >> updateReplaceWorkflowSurface(
                     surfaceId,
@@ -540,6 +575,52 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
     matchOffsets.sorted.reverse.foldLeft(rope) { (current, offset) =>
       current.delete(offset, offset + findText.length).insert(offset, replacementText)
     }
+
+  private def finalCursorOffsetAfterReplacements(
+    matchOffsets: List[Int],
+    findLength: Int,
+    replacementLength: Int
+  ): Int =
+    matchOffsets.sorted
+      .foldLeft((0, 0)) {
+        case ((shift, _), offset) =>
+          val replacementEnd = offset + shift + replacementLength
+          val nextShift      = shift + replacementLength - findLength
+          (nextShift, replacementEnd)
+      }
+      ._2
+
+  private def adjustSelectionAfterReplacement(
+    buffer: Buffer,
+    updatedText: String,
+    selection: Selection,
+    startOffset: Int,
+    endOffset: Int,
+    replacementLength: Int
+  ): Selection =
+    val oldText = buffer.content.collect()
+    val delta   = replacementLength - (endOffset - startOffset)
+
+    def adjust(cursor: CursorPosition): CursorPosition =
+      val oldOffset = offsetForCursor(oldText, cursor)
+      val newOffset =
+        if oldOffset <= startOffset then oldOffset
+        else if oldOffset >= endOffset then oldOffset + delta
+        else startOffset + replacementLength
+      cursorPositionForOffset(updatedText, newOffset)
+
+    Selection(adjust(selection.anchor), adjust(selection.focus))
+
+  private def recordWorkflowUndo(bufferState: AppState, bufferId: BufferId, buffer: Buffer): IO[Unit] =
+    bufferState.layout.activeEditorPaneId match
+      case Some(paneId) =>
+        undoRef.update { undo =>
+          val flushed = undo.flushPendingGroup
+          val entry   = HistoryEntry(bufferId, paneId, BufferSnapshot.fromBuffer(buffer))
+          flushed.copy(undoStack = entry :: flushed.undoStack, redoStack = Nil)
+        }
+      case None =>
+        IO.unit
 
   private def offsetForCursor(text: String, cursor: CursorPosition): Int =
     val linesBefore = text.split("\n", -1).take(cursor.line)

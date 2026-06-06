@@ -42,6 +42,32 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     dismissed.state.focus shouldBe Focus.EditorPane(paneId)
   }
 
+  it should "anchor find and replace modals below the active cursor" in {
+    val bufferId = BufferId(1)
+    val cursor   = CursorPosition(0, 3)
+    val state = baseState.copy(
+      buffers = baseState.buffers.updated(
+        bufferId,
+        baseState.buffers(bufferId).copy(cursors = List(cursor))
+      )
+    )
+
+    val findShown    = ModalStateReducer.show(Modal.Find("", Nil, 0), state).state
+    val findSurface  = findShown.modalSurface.getOrElse(fail("Expected find modal surface"))
+    val replaceShown = ModalStateReducer.show(Modal.ReplaceWorkflow(ReplaceWorkflowState()), state).state
+    val replaceSurface =
+      replaceShown.modalSurface.getOrElse(fail("Expected replace modal surface"))
+
+    findSurface.presentation shouldBe SurfacePresentation.Floating(
+      Some(cursor),
+      SurfacePlacement.BelowCursor
+    )
+    replaceSurface.presentation shouldBe SurfacePresentation.Floating(
+      Some(cursor),
+      SurfacePlacement.BelowCursor
+    )
+  }
+
   it should "track custom modal names through focus typing" in {
     val shown = ModalStateReducer.show(Modal.Custom("signature-help", "map("), baseState)
     val modalSurface =

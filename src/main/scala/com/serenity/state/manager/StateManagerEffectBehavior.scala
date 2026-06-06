@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.IO
+
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
 import com.serenity.io.{FileEntry, FileUtils}
@@ -146,7 +147,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.CloseCurrentFile =>
         beginCloseAction(CloseScope.Current, state)
       case CommandIntent.FindInCurrentFile =>
-        updateState(current => ModalStateReducer.show(Modal.Find("", Nil, 0), current).state)
+        updateState(current => ModalStateReducer.show(findModalForState(current), current).state)
       case CommandIntent.ReplaceInCurrentFile =>
         updateState(current => ModalStateReducer.show(Modal.ReplaceWorkflow(ReplaceWorkflowState()), current).state)
       case CommandIntent.OpenGotoLine =>
@@ -380,6 +381,39 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId as $path"))
         case None =>
           logger.debug(s"[FILE] Buffer $bufferId not found for save as")
+    }
+
+  private def findModalForState(state: AppState): Modal =
+    activeEditorBufferId(state)
+      .flatMap(state.buffers.get)
+      .flatMap { buffer =>
+        buffer.findState match
+          case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
+            val matches   = findMatches(buffer, query)
+            val safeIndex = wrapFindIndex(currentIndex, matches.length)
+            Some(Modal.Find(query, matches.map(_.line), safeIndex))
+          case _ =>
+            None
+      }
+      .getOrElse(Modal.Find("", Nil, 0))
+
+  private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
+    if query.isEmpty then Nil
+    else
+      val text = buffer.content.collect()
+      buffer.content.searchAll(query).map(offset => cursorPositionForOffset(text, offset))
+
+  private def wrapFindIndex(index: Int, resultCount: Int): Int =
+    if resultCount <= 0 then 0
+    else
+      val raw = index % resultCount
+      if raw < 0 then raw + resultCount else raw
+
+  private def cursorPositionForOffset(text: String, offset: Int): CursorPosition =
+    val clamped = math.max(0, math.min(offset, text.length))
+    text.take(clamped).foldLeft(CursorPosition(0, 0)) { (cursor, char) =>
+      if char == '\n' then CursorPosition(cursor.line + 1, 0)
+      else cursor.copy(column = cursor.column + 1)
     }
 
   protected def toggleThemeEffect(state: AppState): IO[Unit] =

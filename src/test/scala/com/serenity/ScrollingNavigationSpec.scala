@@ -2,6 +2,11 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
@@ -11,10 +16,6 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
@@ -29,14 +30,14 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "handle vertical scrolling in large files" in {
     val program = for
-      sm <- IO(makeStateManager())
+      sm <- IO.pure(makeStateManager())
       // Given: Large file with many lines
-      largeContent = (1 to 1000).map(i => s"Line $i with some content").mkString("\n")
-      bufferId <- sm.createBuffer(largeContent)
-      state    <- sm.getCurrentState
-      paneId = state.layout.editorPanes.keys.head
-      _ <- sm.setBufferForPane(paneId, bufferId)
-      _ <- sm.setCursorPosition(paneId, 0, 0)
+      largeContent <- IO.pure((1 to 1000).map(i => s"Line $i with some content").mkString("\n"))
+      bufferId     <- sm.createBuffer(largeContent)
+      state        <- sm.getCurrentState
+      paneId       <- IO.pure(state.layout.editorPanes.keys.head)
+      _            <- sm.setBufferForPane(paneId, bufferId)
+      _            <- sm.setCursorPosition(paneId, 0, 0)
       _ <- sm.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
 
       // When: Scroll down with Page Down
@@ -63,17 +64,19 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "handle horizontal scrolling in wide lines" in {
     val program = for
-      sm <- IO(makeStateManager())
+      sm <- IO.pure(makeStateManager())
       // Given: File with very long lines
-      wideContent = List(
-        "A" * 200, // 200 character line
-        "B" * 150,
-        "C" * 300
-      ).mkString("\n")
+      wideContent <- IO.pure(
+        List(
+          "A" * 200, // 200 character line
+          "B" * 150,
+          "C" * 300
+        ).mkString("\n")
+      )
       bufferId <- sm.createBuffer(wideContent)
       state    <- sm.getCurrentState
-      paneId = state.layout.editorPanes.keys.head
-      _ <- sm.setBufferForPane(paneId, bufferId)
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      _        <- sm.setBufferForPane(paneId, bufferId)
       _ <- sm.updateState { current =>
         current.copy(
           buffers = current.buffers.updated(
@@ -99,12 +102,12 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "use measured horizontal scrolling for proportional markdown lines" in {
     val program = for
-      sm       <- IO(makeStateManager())
+      sm       <- IO.pure(makeStateManager())
       _        <- sm.updateState(_.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
       bufferId <- sm.createBuffer("iiiiiiiiWW")
       state    <- sm.getCurrentState
-      paneId = state.layout.editorPanes.keys.head
-      _ <- sm.setBufferForPane(paneId, bufferId)
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      _        <- sm.setBufferForPane(paneId, bufferId)
       _ <- sm.updateState { current =>
         current.copy(
           buffers = current.buffers.updated(
@@ -128,12 +131,12 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "use measured horizontal scrolling after deleting a proportional selection" in {
     val program = for
-      sm       <- IO(makeStateManager())
+      sm       <- IO.pure(makeStateManager())
       _        <- sm.updateState(_.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
       bufferId <- sm.createBuffer("iiiiiiiiWW")
       state    <- sm.getCurrentState
-      paneId = state.layout.editorPanes.keys.head
-      _ <- sm.setBufferForPane(paneId, bufferId)
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      _        <- sm.setBufferForPane(paneId, bufferId)
       _ <- sm.updateState { current =>
         current.copy(
           buffers = current.buffers.updated(
@@ -300,9 +303,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Type search term
     "SPECIAL_MARKER".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.applyEvent(Enter).unsafeRunSync()
 
-    // Then: Should scroll to first occurrence (line 50)
+    // Then: Live find should scroll to first occurrence (line 50)
     val afterFindState = stateManager.getCurrentState.unsafeRunSync()
     val pane1          = afterFindState.layout.editorPanes(paneId)
     val buffer1        = pane1.bufferId.flatMap(afterFindState.buffers.get).get
@@ -310,8 +312,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     buffer1.viewport.topLine should be >= (49 - 12) // Should be visible
     buffer1.viewport.topLine should be <= 49
 
-    // When: Find next (F3)
-    stateManager.applyEvent(FindNext).unsafeRunSync()
+    // When: Enter advances within the open find overlay
+    stateManager.applyEvent(Enter).unsafeRunSync()
 
     // Then: Should scroll to next occurrence (line 100)
     val afterNextState = stateManager.getCurrentState.unsafeRunSync()
@@ -319,7 +321,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val buffer2        = pane2.bufferId.flatMap(afterNextState.buffers.get).get
     buffer2.cursors.head.line shouldBe 99 // Line 100 (0-indexed)
 
-    // When: Find next again
+    // When: Find next again while the overlay remains open
     stateManager.applyEvent(FindNext).unsafeRunSync()
 
     // Then: Should scroll to line 150

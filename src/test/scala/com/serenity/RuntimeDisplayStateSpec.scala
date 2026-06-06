@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.awt.Font
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.RuntimeDisplayState
@@ -86,6 +88,39 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     runtime.primaryMetrics shouldBe metricsA
+  }
+
+  it should "keep UI font family independent from code and text font family changes" in {
+    val runtime = RuntimeDisplayState
+      .create(
+        FontConfig(
+          codeFontFamily = Font.MONOSPACED,
+          textFontFamily = Font.SERIF,
+          uiFontFamily = Font.SANS_SERIF,
+          fontSize = 14.0f,
+          uiFontSize = 12.0f
+        )
+      )
+      .unsafeRunSync()
+    val originalUiFont    = runtime.uiFont
+    val originalUiMetrics = runtime.uiMetrics
+
+    runtime
+      .update(
+        FontConfig(
+          codeFontFamily = Font.DIALOG_INPUT,
+          textFontFamily = Font.DIALOG,
+          uiFontFamily = Font.SANS_SERIF,
+          fontSize = 18.0f,
+          uiFontSize = 12.0f
+        )
+      )
+      .unsafeRunSync()
+
+    runtime.codeFont.getFamily should not be originalUiFont.getFamily
+    runtime.textFont.getFamily should not be originalUiFont.getFamily
+    runtime.uiFont.getFamily shouldBe originalUiFont.getFamily
+    runtime.uiMetrics shouldBe originalUiMetrics
   }
 
   it should "always produce valid metrics after update" in {

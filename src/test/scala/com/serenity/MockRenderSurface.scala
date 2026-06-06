@@ -82,10 +82,11 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
       currentFg.get(),
       currentBg.get()
     )
-    val metrics = currentFont
-      .get()
-      .map(CellMetrics.fromFont)
-      .getOrElse(CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12)))
+    val metrics =
+      currentFont
+        .get()
+        .map(CellMetrics.fromFont)
+        .getOrElse(CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12)))
     val startX = math.floor(xPx / metrics.charWidth.toDouble).toInt
     val endX   = math.max(startX + s.length, startX + 1)
     val row    = math.floor(yPx / metrics.lineHeight.toDouble).toInt

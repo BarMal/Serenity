@@ -38,7 +38,7 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
     val frame2 = frame1.advanceAnimations()
     frame2.activeAnimationCount shouldEqual 5
 
-    val currentFrame = (1 to animConfig.steps).foldLeft(frame2)((state, _) => state.advanceAnimations())
+    val currentFrame = (1 to animConfig.steps).foldLeft(frame2)((frame, _) => frame.advanceAnimations())
 
     currentFrame.activeAnimationCount shouldEqual 0
 
@@ -56,12 +56,11 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
     val animState = AnimationState.empty
       .addCharacterAnimation('a', 0, 0, black, white, 6)
       .addCharacterAnimation('b', 1, 0, black, white, 6)
-      .advanceAnimations()
-      .advanceAnimations()
 
-    animState.hasActiveAnimations should be(true)
+    val advancedState = animState.advanceAnimations().advanceAnimations()
+    advancedState.hasActiveAnimations should be(true)
 
-    val themeChangedState = animState.onThemeChange()
+    val themeChangedState = advancedState.onThemeChange()
 
     themeChangedState.getCell(0, 0).get.isComplete should be(true)
     themeChangedState.getCell(1, 0).get.isComplete should be(true)
@@ -112,13 +111,13 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
   it should "support character modification during animation" in {
     val animState = AnimationState.empty
       .addCharacterAnimation('x', 5, 5, black, white, 6)
-      .advanceAnimations()
-      .advanceAnimations()
-    animState.getCell(5, 5).get.isComplete should be(false)
 
-    val updatedState = animState.addCharacterAnimation('y', 5, 5, black, red, 3)
+    val advancedState = animState.advanceAnimations().advanceAnimations()
+    advancedState.getCell(5, 5).get.isComplete should be(false)
 
-    val cell = updatedState.getCell(5, 5).get
+    val modifiedState = advancedState.addCharacterAnimation('y', 5, 5, black, red, 3)
+
+    val cell = modifiedState.getCell(5, 5).get
     cell.content shouldEqual Some('y')
     cell.isComplete should be(false)
   }

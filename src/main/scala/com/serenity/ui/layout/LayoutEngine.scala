@@ -316,10 +316,13 @@ object LayoutEngine:
         modal match
           case Modal.FileWorkflow(workflow) =>
             math.max(8, math.min(12, workflow.suggestions.take(4).size + 6))
-          case Modal.ReplaceWorkflow(_) => 5
-          case Modal.CloseWorkflow(_)   => 4
-          case Modal.Custom(_, _)       => 4
-          case _                        => 3
+          case Modal.ReplaceWorkflow(workflow) =>
+            if workflow.statusMessage.nonEmpty then 8 else 7
+          case Modal.Find(_, resultLines, _) =>
+            if resultLines.nonEmpty then 5 else 4
+          case Modal.CloseWorkflow(_) => 4
+          case Modal.Custom(_, _)     => 4
+          case _                      => 3
       case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_) | SurfaceContent.Diagnostics(_) =>
         math.min(8, math.max(4, maxHeight - 1))
       case SurfaceContent.GhostOverlay(_, cachedRect) =>

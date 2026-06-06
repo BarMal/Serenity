@@ -4,15 +4,16 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+
 import com.serenity.io.FileUtils
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.PanelPosition
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
@@ -81,6 +82,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "open the find modal for the find command" in {
     val stateManager = createStateManager()
+    val cursor       = CursorPosition(0, 0)
 
     executeCommandThroughRunner(stateManager, "find", "find")
 
@@ -89,11 +91,45 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     updatedState.commandRunnerSurface shouldBe None
     modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("", Nil, 0)))
+    modalSurface.map(_.presentation) shouldBe Some(
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    )
+    updatedState.focus shouldBe Focus.Surface(modalSurface.get.id)
+  }
+
+  it should "open the find modal from the command runner with the active buffer's existing query" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha\nbeta\nalpha"),
+            cursors = List(CursorPosition(2, 0)),
+            findState = Some(FindState("alpha", List(0, 2), 1))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "find", "find")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    val modalSurface = updatedState.modalSurface
+
+    updatedState.commandRunnerSurface shouldBe None
+    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("alpha", List(0, 2), 1)))
+    modalSurface.map(_.presentation) shouldBe Some(
+      SurfacePresentation.Floating(Some(CursorPosition(2, 0)), SurfacePlacement.BelowCursor)
+    )
     updatedState.focus shouldBe Focus.Surface(modalSurface.get.id)
   }
 
   it should "open the replace modal for the replace command" in {
     val stateManager = createStateManager()
+    val cursor       = CursorPosition(0, 0)
 
     executeCommandThroughRunner(stateManager, "replace", "replace")
 
@@ -107,6 +143,9 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
           com.serenity.state.models.ReplaceWorkflowState()
         )
       )
+    )
+    modalSurface.map(_.presentation) shouldBe Some(
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
     )
     updatedState.focus shouldBe Focus.Surface(modalSurface.get.id)
   }
@@ -144,7 +183,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
   it should "open a save-as file workflow modal seeded from the focused buffer path" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
-    val filePath     = Path.of("temp", "notes.scala")
+    val filePath     = Path.of("C:\\temp\\notes.scala")
 
     stateManager
       .updateState { state =>
@@ -163,7 +202,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
           com.serenity.state.models.FileWorkflowState(
             mode = FileWorkflowMode.SaveAs,
             filename = "notes.scala",
-            path = filePath.getParent.toString
+            path = "C:\\temp"
           )
         )
       )

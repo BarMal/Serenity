@@ -148,6 +148,94 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     applyEvent(Redo) // redo group 2 → "ac"
     getContent(bufferId) shouldBe "ac"
 
+  behavior of "Multi-cursor undo/redo"
+
+  it should "undo and redo a grouped multi-cursor insertion with the full cursor set" in new UndoFixture:
+    val bufferId = setupBuffer("abcd")
+    setCursors(bufferId, List(CursorPosition(0, 1), CursorPosition(0, 3)))
+
+    applyEvent(InsertChar('X'))
+    applyEvent(InsertChar('Y'))
+    getContent(bufferId) shouldBe "aXYbcXYd"
+    getCursors(bufferId) shouldBe List(CursorPosition(0, 3), CursorPosition(0, 7))
+
+    applyEvent(Undo)
+    getContent(bufferId) shouldBe "abcd"
+    getCursors(bufferId) shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
+
+    applyEvent(Redo)
+    getContent(bufferId) shouldBe "aXYbcXYd"
+    getCursors(bufferId) shouldBe List(CursorPosition(0, 3), CursorPosition(0, 7))
+
+  it should "undo and redo a multi-cursor newline insertion with all cursors restored" in new UndoFixture:
+    val bufferId = setupBuffer("abcd")
+    setCursors(bufferId, List(CursorPosition(0, 1), CursorPosition(0, 3)))
+
+    applyEvent(NewLine)
+    getContent(bufferId) shouldBe "a\nbc\nd"
+    getCursors(bufferId) shouldBe List(CursorPosition(1, 0), CursorPosition(2, 0))
+
+    applyEvent(Undo)
+    getContent(bufferId) shouldBe "abcd"
+    getCursors(bufferId) shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
+
+    applyEvent(Redo)
+    getContent(bufferId) shouldBe "a\nbc\nd"
+    getCursors(bufferId) shouldBe List(CursorPosition(1, 0), CursorPosition(2, 0))
+
+  it should "undo and redo multi-cursor paste as an atomic edit" in new UndoFixture:
+    val bufferId = setupBuffer("ab")
+    setCursors(bufferId, List(CursorPosition(0, 0), CursorPosition(0, 2)))
+    setClipboard("Z")
+
+    applyEvent(Paste)
+    getContent(bufferId) shouldBe "ZabZ"
+    getCursors(bufferId) shouldBe List(CursorPosition(0, 1), CursorPosition(0, 4))
+
+    applyEvent(Undo)
+    getContent(bufferId) shouldBe "ab"
+    getCursors(bufferId) shouldBe List(CursorPosition(0, 0), CursorPosition(0, 2))
+
+    applyEvent(Redo)
+    getContent(bufferId) shouldBe "ZabZ"
+    getCursors(bufferId) shouldBe List(CursorPosition(0, 1), CursorPosition(0, 4))
+
+  it should "undo and redo multi-selection replacement with selections restored on undo" in new UndoFixture:
+    val bufferId = setupBuffer("alpha beta gamma")
+    val first    = Selection(CursorPosition(0, 0), CursorPosition(0, 5))
+    val second   = Selection(CursorPosition(0, 11), CursorPosition(0, 16))
+    setSelections(bufferId, List(first, second))
+
+    applyEvent(InsertChar('X'))
+    getContent(bufferId) shouldBe "X beta X"
+    getCursors(bufferId) shouldBe List(CursorPosition(0, 1), CursorPosition(0, 8))
+
+    applyEvent(Undo)
+    getContent(bufferId) shouldBe "alpha beta gamma"
+    getCursors(bufferId) shouldBe List(CursorPosition(0, 5), CursorPosition(0, 16))
+    getState.buffers(bufferId).allSelections shouldBe List(first, second)
+
+    applyEvent(Redo)
+    getContent(bufferId) shouldBe "X beta X"
+    getCursors(bufferId) shouldBe List(CursorPosition(0, 1), CursorPosition(0, 8))
+    getState.buffers(bufferId).allSelections shouldBe Nil
+
+  it should "undo and redo multi-cursor cut with the full cursor set" in new UndoFixture:
+    val bufferId = setupBuffer("alpha\nbeta\ngamma\ndelta")
+    setCursors(bufferId, List(CursorPosition(0, 1), CursorPosition(2, 2)))
+
+    applyEvent(Cut)
+    getContent(bufferId) shouldBe "beta\ndelta"
+    getCursors(bufferId) shouldBe List(CursorPosition(0, 0), CursorPosition(1, 0))
+
+    applyEvent(Undo)
+    getContent(bufferId) shouldBe "alpha\nbeta\ngamma\ndelta"
+    getCursors(bufferId) shouldBe List(CursorPosition(0, 1), CursorPosition(2, 2))
+
+    applyEvent(Redo)
+    getContent(bufferId) shouldBe "beta\ndelta"
+    getCursors(bufferId) shouldBe List(CursorPosition(0, 0), CursorPosition(1, 0))
+
   behavior of "Cross-pane undo"
 
   it should "snap focus to the pane where the edit happened when undoing" in new UndoFixture:
@@ -177,12 +265,11 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     def setupBuffer(content: String): BufferId =
       val bufferId = stateManager.createBuffer(content).unsafeRunSync()
       val state    = stateManager.getCurrentState.unsafeRunSync()
-      val paneId   = state.layout.editorPanes.keys.head
-      currentPaneId.set(paneId)
-      stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+      currentPaneId.set(state.layout.editorPanes.keys.head)
+      stateManager.setBufferForPane(currentPaneId.get(), bufferId).unsafeRunSync()
       if content.nonEmpty then
         stateManager
-          .setCursorPosition(paneId, 0, content.length)
+          .setCursorPosition(currentPaneId.get(), 0, content.length)
           .unsafeRunSync()
       bufferId
 
@@ -210,3 +297,39 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
     def getCursor: CursorPosition =
       getState.activeCursorPosition.getOrElse(CursorPosition(0, 0))
+
+    def getCursors(bufferId: BufferId): List[CursorPosition] =
+      getState.buffers(bufferId).cursors
+
+    def setCursors(bufferId: BufferId, cursors: List[CursorPosition]): Unit =
+      stateManager
+        .updateState { state =>
+          state.copy(
+            buffers = state.buffers.updated(
+              bufferId,
+              state.buffers(bufferId).copy(cursors = cursors, selection = None, selections = Nil)
+            )
+          )
+        }
+        .unsafeRunSync()
+
+    def setSelections(bufferId: BufferId, selections: List[Selection]): Unit =
+      stateManager
+        .updateState { state =>
+          state.copy(
+            buffers = state.buffers.updated(
+              bufferId,
+              state
+                .buffers(bufferId)
+                .copy(
+                  cursors = selections.map(_.focus),
+                  selection = selections.headOption,
+                  selections = selections
+                )
+            )
+          )
+        }
+        .unsafeRunSync()
+
+    def setClipboard(text: String): Unit =
+      stateManager.updateState(_.copy(clipboard = Some(text))).unsafeRunSync()

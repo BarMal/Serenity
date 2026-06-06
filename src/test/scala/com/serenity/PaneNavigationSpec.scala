@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.*
+import com.serenity.keystroke.events.{NewTab, NextTab, PreviousTab}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -20,13 +20,6 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
     val logger                      = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager                = StateManager.apply(logger).unsafeRunSync()
     val wideTerminal                = com.serenity.ui.layout.ViewportSize(400, 24) // Wide enough for multiple panes
-
-    def navigateUntilFocused(targetBufferId: BufferId, event: Event, remainingAttempts: Int = 20): Unit =
-      if stateManager.getCurrentState.unsafeRunSync().focusedBufferId.contains(targetBufferId) then ()
-      else
-        if remainingAttempts <= 0 then fail(s"Could not focus buffer $targetBufferId")
-        stateManager.applyEvent(event).unsafeRunSync()
-        navigateUntilFocused(targetBufferId, event, remainingAttempts - 1)
 
   it should "cycle forward through buffers with Ctrl+Tab (NextTab)" in new NavigationFixture:
     // Given: Wide terminal to allow multiple panes, then create three buffers
@@ -158,7 +151,13 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Navigate to Buffer 1 (second buffer in order)
     // Start from current position (Buffer 3), navigate to Buffer 1
-    navigateUntilFocused(bufferIds(1), PreviousTab)
+    @annotation.tailrec
+    def navigatePreviousUntil(targetBufferId: BufferId): Unit =
+      if stateManager.getCurrentState.unsafeRunSync().focusedBufferId.get != targetBufferId then
+        stateManager.applyEvent(PreviousTab).unsafeRunSync()
+        navigatePreviousUntil(targetBufferId)
+
+    navigatePreviousUntil(bufferIds(1))
     val stateOnBuffer1 = stateManager.getCurrentState.unsafeRunSync()
     stateOnBuffer1.focusedBufferId.get shouldBe bufferIds(1)
 
