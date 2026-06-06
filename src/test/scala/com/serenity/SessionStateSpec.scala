@@ -1,5 +1,6 @@
 package com.serenity
 
+import java.awt.Font
 import java.nio.file.Files
 
 import _root_.io.circe.syntax.*
@@ -165,6 +166,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         fontConfig = com.serenity.ui.fonts.FontLoader.FontConfig(
           codeFontFamily = "Monospaced",
           textFontFamily = "SansSerif",
+          uiFontFamily = "Dialog",
           fontSize = 15.0f,
           uiFontSize = 13.0f,
           enableLigatures = false
@@ -184,6 +186,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.windowChromeMode shouldBe WindowChromeMode.Custom
     decoded.config.fontConfig.codeFontFamily shouldBe "Monospaced"
     decoded.config.fontConfig.textFontFamily shouldBe "SansSerif"
+    decoded.config.fontConfig.uiFontFamily shouldBe "Dialog"
     decoded.config.fontConfig.fontSize shouldBe 15.0f
     decoded.config.fontConfig.uiFontSize shouldBe 13.0f
     decoded.config.fontConfig.enableLigatures shouldBe false
@@ -221,6 +224,30 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.windowChromeMode shouldBe WindowChromeMode.Native
+  }
+
+  it should "default uiFontFamily to SansSerif when loading older JSON without the field" in {
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val fontConfigObject = configObject("fontConfig").flatMap(_.asObject).getOrElse(fail("Expected fontConfig object"))
+    val jsonWithoutUiFontFamily =
+      originalJson.mapObject(
+        _.add(
+          "config",
+          _root_.io.circe.Json.fromJsonObject(
+            configObject.add(
+              "fontConfig",
+              _root_.io.circe.Json.fromJsonObject(fontConfigObject.remove("uiFontFamily"))
+            )
+          )
+        )
+      )
+
+    val decoded = jsonWithoutUiFontFamily.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.fontConfig.uiFontFamily shouldBe Font.SANS_SERIF
   }
 
   it should "survive a multi-pane multi-buffer layout round trip" in {

@@ -55,6 +55,33 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
     font.getSize2D shouldBe 12.0f
   }
 
+  it should "load the UI font from its own family rather than code or text font families" in {
+    val config = FontConfig(
+      codeFontFamily = Font.MONOSPACED,
+      textFontFamily = Font.SERIF,
+      uiFontFamily = Font.SANS_SERIF,
+      fontSize = 17.0f,
+      uiFontSize = 13.0f
+    )
+
+    val font = FontLoader.loadUiFont(config).unsafeRunSync()
+
+    font.getFamily shouldBe Font.SANS_SERIF
+    font.getSize2D shouldBe 13.0f
+  }
+
+  it should "keep the UI font stable when only the code font family changes" in {
+    val before = FontLoader.previewUiFont(
+      FontConfig(codeFontFamily = Font.MONOSPACED, textFontFamily = Font.SERIF, uiFontFamily = Font.SANS_SERIF)
+    )
+    val after = FontLoader.previewUiFont(
+      FontConfig(codeFontFamily = Font.DIALOG_INPUT, textFontFamily = Font.SERIF, uiFontFamily = Font.SANS_SERIF)
+    )
+
+    after.getFamily shouldBe before.getFamily
+    after.getSize2D shouldBe before.getSize2D
+  }
+
   it should "apply ligature attributes when enabled" in {
     val font = FontLoader
       .loadTextFont(FontConfig(textFontFamily = Font.SANS_SERIF, enableLigatures = true))

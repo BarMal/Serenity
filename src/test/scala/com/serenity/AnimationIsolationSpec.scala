@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{Event, InsertChar, NewTab}
+import com.serenity.keystroke.events.{InsertChar, NewTab}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -21,12 +21,14 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     val stateManager                = StateManager.apply(logger).unsafeRunSync()
     val wideTerminal                = com.serenity.ui.layout.ViewportSize(400, 24) // Wide enough for multiple panes
 
-    def navigateUntilFocused(targetBufferId: BufferId, event: Event, remainingAttempts: Int = 20): Unit =
-      if stateManager.getCurrentState.unsafeRunSync().focusedBufferId.contains(targetBufferId) then ()
-      else
-        if remainingAttempts <= 0 then fail(s"Could not focus buffer $targetBufferId")
+    @annotation.tailrec
+    final def navigateUntilFocused(
+      targetBufferId: BufferId,
+      event: com.serenity.keystroke.events.Event
+    ): Unit =
+      if stateManager.getCurrentState.unsafeRunSync().focusedBufferId.get != targetBufferId then
         stateManager.applyEvent(event).unsafeRunSync()
-        navigateUntilFocused(targetBufferId, event, remainingAttempts - 1)
+        navigateUntilFocused(targetBufferId, event)
 
   it should "isolate animations to focused buffer only" in new AnimationFixture:
     // Given: Wide terminal to allow multiple panes, then two buffers

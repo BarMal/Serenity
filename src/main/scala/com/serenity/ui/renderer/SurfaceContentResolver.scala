@@ -114,6 +114,8 @@ object SurfaceContentResolver:
         resolveFileWorkflow(workflow, rect, mode)
       case Modal.ReplaceWorkflow(workflow) =>
         resolveReplaceWorkflow(workflow, mode)
+      case Modal.Find(query, resultLines, currentIndex) =>
+        resolveFindWorkflow(query, resultLines, currentIndex, mode)
       case Modal.CloseWorkflow(workflow) =>
         resolveCloseWorkflow(workflow, mode)
       case _ =>
@@ -135,6 +137,40 @@ object SurfaceContentResolver:
       case Modal.CloseWorkflow(workflow) =>
         List("unsaved changes", workflow.currentBufferLabel)
       case Modal.Custom(name, input) => List(name, input)
+
+  private def resolveFindWorkflow(
+    query: String,
+    resultLines: List[Int],
+    currentIndex: Int,
+    mode: SurfaceRenderMode
+  ): ResolvedSurfaceContent =
+    val queryLabel = "Find"
+    val queryText  = s"$queryLabel $query"
+    val queryRow = OverlayRow(
+      plainText = queryText,
+      selected = true,
+      cursorColumn = Some(queryText.length),
+      segments = List(
+        OverlaySegment(queryLabel),
+        OverlaySegment(query, selected = true)
+      ),
+      layout = OverlayRowLayout.Split
+    )
+
+    val footer = Option.when(resultLines.nonEmpty) {
+      val safeIndex = currentIndex.max(0).min(resultLines.length - 1)
+      val matchLabel =
+        if resultLines.length == 1 then "match"
+        else "matches"
+      OverlayRow(s"${resultLines.length} $matchLabel, ${safeIndex + 1}/${resultLines.length}")
+    }
+
+    ResolvedSurfaceContent(
+      title = titleFor(mode, "find"),
+      header = Some(OverlayRow("find")),
+      rows = List(queryRow),
+      footer = footer
+    )
 
   private def resolveReplaceWorkflow(
     workflow: ReplaceWorkflowState,

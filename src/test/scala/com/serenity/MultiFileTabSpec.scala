@@ -258,6 +258,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     // Navigation should work to access all buffers regardless of pane count
     val allBufferIds = stateWith4Buffers.bufferOrder
 
+    // Navigate through all buffers to ensure they're accessible
     val visitedBuffers = (1 until allBufferIds.size).foldLeft(Set(focusedBufferId)) { (visited, _) =>
       stateManager.applyEvent(NextTab).unsafeRunSync()
       val state = stateManager.getCurrentState.unsafeRunSync()

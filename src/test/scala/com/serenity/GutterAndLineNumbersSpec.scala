@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
@@ -25,6 +26,34 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
   behavior of "Gutter Display"
+
+  it should "show the active buffer language in the rendered gutter" in {
+    val buffer = Buffer
+      .fromString(BufferId(1), "# Heading")
+      .copy(language = Some(LanguageId.Markdown))
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.EditorPane(PaneId(0)),
+      theme = Theme.light
+    )
+    val surface  = new MockRenderSurface(80, 24)
+    val viewport = ViewportSize(80, 24)
+    val layout   = LayoutEngine.calculateLayout(state, viewport)
+    val gutter   = layout.gutterRect.getOrElse(fail("Expected gutter rect"))
+
+    Renderer.render(state, cursorVisible = true, surface, viewport)
+
+    val renderedGutter =
+      (gutter.x until gutter.right).map(x => surface.getChar(x, gutter.y)).mkString
+
+    renderedGutter should include("Language: Markdown")
+  }
 
   it should "show current cursor position and buffer path when gutter is enabled" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]

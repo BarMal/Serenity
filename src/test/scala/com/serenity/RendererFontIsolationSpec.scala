@@ -131,6 +131,17 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     surface.setFontCalls.last shouldBe uiFont
   }
 
+  it should "use a stable UI font for overlays when the compatibility render overload is used" in {
+    val state        = stateWithRunnerAndMarkdownBuffer
+    val surface      = new MockRenderSurface(80, 24)
+    val viewportSize = ViewportSize(80, 24)
+
+    Renderer.render(state, cursorVisible = true, surface, viewportSize, codeFont, textFont, cellMetrics, None)
+
+    surface.setFontCalls.last.getFamily shouldBe Font.SANS_SERIF
+    surface.setFontCalls.last.getFamily should not be codeFont.getFamily
+  }
+
   it should "use the text font for a plain-text buffer even when the command runner is active" in {
     val state        = stateWithRunnerAndPlainTextBuffer
     val cursorColor  = java.awt.Color.RED

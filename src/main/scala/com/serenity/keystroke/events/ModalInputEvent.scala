@@ -11,6 +11,7 @@ case class ModalNavigate(direction: Direction) extends ModalInputEvent
 case object ModalNextField                     extends ModalInputEvent
 case object ModalPreviousField                 extends ModalInputEvent
 case object ModalSubmit                        extends ModalInputEvent
+case object ModalFindNext                      extends ModalInputEvent
 case object ModalDismiss                       extends ModalInputEvent
 
 object ModalInputEvent:
@@ -29,6 +30,7 @@ object ModalInputEvent:
       case TabKey                      => Some(ModalNextField)
       case ReverseTabKey               => Some(ModalPreviousField)
       case Enter | NewLine             => Some(ModalSubmit)
+      case FindNext                    => Some(ModalFindNext)
       case Escape                      => Some(ModalDismiss)
       case modalEvent: ModalInputEvent => Some(modalEvent)
       case _                           => None

@@ -87,6 +87,103 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     surface.drawRunPxCalls.foreach(c => c.xPx should be >= 0.0f)
   }
 
+  it should "render every active cursor in proportional text layout" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val font     = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val buffer = Buffer
+      .fromString(bufferId, "iW")
+      .copy(
+        language = Some(com.serenity.lsp.config.LanguageId.Markdown),
+        cursors = List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2))
+      )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default.withLineNumbers(false).withGutter(false)
+    )
+    val surface     = new MockRenderSurface(100, 30)
+    val cellMetrics = CellMetrics.fromFont(font)
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30), font, font, cellMetrics, None)
+
+    val cursorRects = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
+    cursorRects should have size 3
+    cursorRects.map(_.xPx).distinct should have size 3
+  }
+
+  it should "blink only the primary cursor when multiple cursors are active" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val font     = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val buffer = Buffer
+      .fromString(bufferId, "iW")
+      .copy(
+        language = Some(com.serenity.lsp.config.LanguageId.Markdown),
+        cursors = List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2))
+      )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default.withLineNumbers(false).withGutter(false)
+    )
+    val cellMetrics    = CellMetrics.fromFont(font)
+    val visibleSurface = new MockRenderSurface(100, 30)
+    val hiddenSurface  = new MockRenderSurface(100, 30)
+
+    Renderer.render(state, cursorVisible = true, visibleSurface, ViewportSize(100, 30), font, font, cellMetrics, None)
+    Renderer.render(state, cursorVisible = false, hiddenSurface, ViewportSize(100, 30), font, font, cellMetrics, None)
+
+    val visibleCursorRects = visibleSurface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
+    val hiddenCursorRects  = hiddenSurface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
+
+    visibleCursorRects should have size 3
+    hiddenCursorRects should have size 2
+    hiddenCursorRects.map(_.xPx) shouldBe visibleCursorRects.drop(1).map(_.xPx)
+  }
+
+  it should "hide the only cursor during the hidden blink phase" in {
+    val font     = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val surface  = renderState("iW", CursorPosition(0, 1), font)
+    val blinkOff = renderState("iW", CursorPosition(0, 1), font)
+
+    surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor) should have size 1
+    blinkOff.clear()
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val buffer = Buffer
+      .fromString(bufferId, "iW")
+      .copy(
+        language = Some(com.serenity.lsp.config.LanguageId.Markdown),
+        cursors = List(CursorPosition(0, 1))
+      )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default.withLineNumbers(false).withGutter(false)
+    )
+    val cellMetrics = CellMetrics.fromFont(font)
+
+    Renderer.render(state, cursorVisible = false, blinkOff, ViewportSize(100, 30), font, font, cellMetrics, None)
+
+    blinkOff.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor) shouldBe empty
+  }
+
   it should "render from the viewport left column when horizontally scrolled" in {
     val font     = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val viewport = Viewport(topLine = 0, leftColumn = 2, visibleColumns = 10, visibleLines = 4)

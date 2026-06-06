@@ -28,11 +28,11 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
 
   "Character animation" should "store at buffer coordinates, not screen coordinates" in {
     val program = for
-      sm       <- IO(makeStateManager())
+      sm       <- IO.pure(makeStateManager())
       _        <- sm.updateState(_.copy(config = AppConfig.withTestAnimations))
       bufferId <- sm.createBuffer("Hello")
       state    <- sm.getCurrentState
-      paneId = state.layout.editorPanes.keys.head
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
       _        <- sm.setBufferForPane(paneId, bufferId)
       _        <- sm.setCursorPosition(paneId, 0, 5)
       _        <- sm.applyEvent(InsertChar('a'))
@@ -47,11 +47,11 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
 
   it should "remain stable after viewport scrolling" in {
     val program = for
-      sm       <- IO(makeStateManager())
-      _        <- sm.updateState(_.copy(config = AppConfig.withTestAnimations))
-      bufferId <- sm.createNewEmptyBuffer()
-      state    <- sm.getCurrentState
-      paneId = state.layout.editorPanes.keys.head
+      sm               <- IO.pure(makeStateManager())
+      _                <- sm.updateState(_.copy(config = AppConfig.withTestAnimations))
+      bufferId         <- sm.createNewEmptyBuffer()
+      state            <- sm.getCurrentState
+      paneId           <- IO.pure(state.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
       _                <- sm.applyEvent(InsertChar('a'))
       stateAfterType   <- sm.getCurrentState
@@ -69,11 +69,11 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
 
   it should "key multi-line content at the correct buffer line" in {
     val program = for
-      sm       <- IO(makeStateManager())
+      sm       <- IO.pure(makeStateManager())
       _        <- sm.updateState(_.copy(config = AppConfig.withTestAnimations))
       bufferId <- sm.createBuffer("line one\nline two")
       state    <- sm.getCurrentState
-      paneId = state.layout.editorPanes.keys.head
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
       _        <- sm.setBufferForPane(paneId, bufferId)
       _        <- sm.setCursorPosition(paneId, 1, 3)
       _        <- sm.applyEvent(InsertChar('X'))

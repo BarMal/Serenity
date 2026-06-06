@@ -80,17 +80,17 @@ class ListBasedAnimationSpec extends AnyFlatSpec with Matchers:
 
     state.activeAnimationCount shouldEqual 3
 
-    val partiallyAdvanced = (1 to 3).foldLeft(state)((current, _) => current.advanceAllAnimations())
-    partiallyAdvanced.activeAnimationCount shouldEqual 3
+    val activeCurrent = (1 to 3).foldLeft(state)((current, _) => current.advanceAllAnimations())
+    activeCurrent.activeAnimationCount shouldEqual 3
 
-    val completed = (1 to 3).foldLeft(partiallyAdvanced)((current, _) => current.advanceAnimations())
-    completed.activeAnimationCount shouldEqual 0
+    val current = (1 to 3).foldLeft(activeCurrent)((current, _) => current.advanceAnimations())
+    current.activeAnimationCount shouldEqual 0
 
-    completed.getCell(0, 0) should be(defined)
-    completed.getCell(1, 0) should be(defined)
-    completed.getCell(2, 0) should be(defined)
+    current.getCell(0, 0) should be(defined)
+    current.getCell(1, 0) should be(defined)
+    current.getCell(2, 0) should be(defined)
 
-    val cleanedUp = completed.cleanupCompleted()
+    val cleanedUp = current.cleanupCompleted()
     cleanedUp.getCell(0, 0) should be(empty)
     cleanedUp.getCell(1, 0) should be(empty)
     cleanedUp.getCell(2, 0) should be(empty)
