@@ -17,9 +17,11 @@ class UiSurfaceSpec extends AnyFlatSpec with Matchers:
   private val bufferId = BufferId(1)
 
   private def baseState(cursor: CursorPosition = CursorPosition(4, 9)): AppState =
-    val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma").copy(
-      cursors = List(cursor)
-    )
+    val buffer = Buffer
+      .fromString(bufferId, "alpha\nbeta\ngamma")
+      .copy(
+        cursors = List(cursor)
+      )
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
     AppState.initial.copy(

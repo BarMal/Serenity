@@ -38,9 +38,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
           Option.when(line.nonEmpty)((y, line))
         }
 
-      val startPage       = state.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+      val startPage         = state.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       val fullExpectedLines = startPage.renderLines
-      val expectedLines   = fullExpectedLines.filter(_.nonEmpty)
+      val expectedLines     = fullExpectedLines.filter(_.nonEmpty)
 
       renderedLines.map(_._2) should contain allElementsOf expectedLines
 
@@ -60,8 +60,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       bufferId     <- stateManager.createBuffer("Welcome to Serenity!")
       state        <- stateManager.getCurrentState
       paneId = state.layout.editorPanes.keys.head
-      _            <- stateManager.setBufferForPane(paneId, bufferId)
-      finalState   <- stateManager.getCurrentState
+      _          <- stateManager.setBufferForPane(paneId, bufferId)
+      finalState <- stateManager.getCurrentState
     yield
       val buffer = finalState.buffers(bufferId)
       buffer.content.collect() shouldBe "Welcome to Serenity!"
@@ -80,8 +80,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       bufferId     <- stateManager.createBuffer("Hello")
       state        <- stateManager.getCurrentState
       paneId = state.layout.editorPanes.keys.head
-      _            <- stateManager.setBufferForPane(paneId, bufferId)
-      finalState   <- stateManager.getCurrentState
+      _          <- stateManager.setBufferForPane(paneId, bufferId)
+      finalState <- stateManager.getCurrentState
     yield
       val buffer = finalState.buffers(bufferId)
       buffer.cursors.size shouldBe 1
@@ -103,10 +103,10 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       bufferId     <- stateManager.createBuffer("")
       state        <- stateManager.getCurrentState
       paneId = state.layout.editorPanes.keys.head
-      _            <- stateManager.setBufferForPane(paneId, bufferId)
+      _ <- stateManager.setBufferForPane(paneId, bufferId)
       longText = "x" * 100
-      _            <- longText.toList.traverse(char => stateManager.applyEvent(InsertChar(char)))
-      finalState   <- stateManager.getCurrentState
+      _          <- longText.toList.traverse(char => stateManager.applyEvent(InsertChar(char)))
+      finalState <- stateManager.getCurrentState
     yield
       val buffer = finalState.buffers(bufferId)
       val cursor = buffer.cursors.head
@@ -126,17 +126,19 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       bufferId     <- stateManager.createBuffer("")
       state        <- stateManager.getCurrentState
       paneId = state.layout.editorPanes.keys.head
-      _            <- stateManager.setBufferForPane(paneId, bufferId)
+      _ <- stateManager.setBufferForPane(paneId, bufferId)
       panelWidth = 50
-      longText = "a" * (panelWidth + 20)
-      _            <- longText.toList.traverse(char => stateManager.applyEvent(InsertChar(char)))
-      finalState   <- stateManager.getCurrentState
+      longText   = "a" * (panelWidth + 20)
+      _          <- longText.toList.traverse(char => stateManager.applyEvent(InsertChar(char)))
+      finalState <- stateManager.getCurrentState
     yield
       val buffer   = finalState.buffers(bufferId)
       val cursor   = buffer.cursors.head
       val viewport = buffer.viewport
       cursor.column shouldBe longText.length
-      info(s"Cursor at column ${cursor.column}, viewport left=${viewport.leftColumn}, visible=${viewport.visibleColumns}")
+      info(
+        s"Cursor at column ${cursor.column}, viewport left=${viewport.leftColumn}, visible=${viewport.visibleColumns}"
+      )
 
     program.unsafeRunSync()
   }
@@ -150,10 +152,11 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       bufferId     <- stateManager.createBuffer("")
       state        <- stateManager.getCurrentState
       paneId = state.layout.editorPanes.keys.head
-      _            <- stateManager.setBufferForPane(paneId, bufferId)
-      testText = "The quick brown fox jumps over the lazy dog. This is a long sentence that extends beyond normal panel boundaries."
-      _            <- testText.toList.traverse(char => stateManager.applyEvent(InsertChar(char)))
-      finalState   <- stateManager.getCurrentState
+      _ <- stateManager.setBufferForPane(paneId, bufferId)
+      testText =
+        "The quick brown fox jumps over the lazy dog. This is a long sentence that extends beyond normal panel boundaries."
+      _          <- testText.toList.traverse(char => stateManager.applyEvent(InsertChar(char)))
+      finalState <- stateManager.getCurrentState
     yield
       val buffer = finalState.buffers(bufferId)
       buffer.content.collect() shouldBe testText

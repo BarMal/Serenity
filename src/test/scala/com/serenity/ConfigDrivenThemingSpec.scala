@@ -1,14 +1,12 @@
 package com.serenity
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.Files
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.ui.theme.config.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import pureconfig.*
-import pureconfig.generic.derivation.default.*
 
 class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
 
@@ -207,12 +205,18 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
         placeholder = "#52606D"
       ),
       syntax = SyntaxColors(
-        keyword = SyntaxElementConfig("#5DADE2", Some("#0B0F14"), StyleConfig(bold = true, italic = false, underline = false)),
-        string = SyntaxElementConfig("#58D68D", Some("#0B0F14"), StyleConfig(bold = false, italic = false, underline = false)),
-        comment = SyntaxElementConfig("#808080", Some("#0B0F14"), StyleConfig(bold = false, italic = true, underline = false)),
-        number = SyntaxElementConfig("#F39C12", Some("#0B0F14"), StyleConfig(bold = false, italic = false, underline = false)),
-        operator = SyntaxElementConfig("#E74C3C", Some("#0B0F14"), StyleConfig(bold = false, italic = false, underline = false)),
-        identifier = SyntaxElementConfig("#FFFFFF", Some("#0B0F14"), StyleConfig(bold = false, italic = false, underline = false))
+        keyword =
+          SyntaxElementConfig("#5DADE2", Some("#0B0F14"), StyleConfig(bold = true, italic = false, underline = false)),
+        string =
+          SyntaxElementConfig("#58D68D", Some("#0B0F14"), StyleConfig(bold = false, italic = false, underline = false)),
+        comment =
+          SyntaxElementConfig("#808080", Some("#0B0F14"), StyleConfig(bold = false, italic = true, underline = false)),
+        number =
+          SyntaxElementConfig("#F39C12", Some("#0B0F14"), StyleConfig(bold = false, italic = false, underline = false)),
+        operator =
+          SyntaxElementConfig("#E74C3C", Some("#0B0F14"), StyleConfig(bold = false, italic = false, underline = false)),
+        identifier =
+          SyntaxElementConfig("#FFFFFF", Some("#0B0F14"), StyleConfig(bold = false, italic = false, underline = false))
       )
     )
 

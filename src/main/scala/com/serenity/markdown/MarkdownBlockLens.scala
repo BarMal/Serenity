@@ -26,7 +26,7 @@ object MarkdownBlockLens:
     }
     fenceIndices.grouped(2).collectFirst {
       case Vector(start, end) if activeLine >= start && activeLine <= end => start to end
-      case Vector(start) if activeLine >= start                          => start to (lines.length - 1)
+      case Vector(start) if activeLine >= start                           => start to (lines.length - 1)
     }
 
   private def tableBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
@@ -68,10 +68,10 @@ object MarkdownBlockLens:
   private def isParagraphLine(line: String): Boolean =
     val trimmed = line.trim
     trimmed.nonEmpty &&
-      !isFenceLine(line) &&
-      !isTableLine(line) &&
-      !isListLikeLine(line) &&
-      !isBlockQuoteLine(line)
+    !isFenceLine(line) &&
+    !isTableLine(line) &&
+    !isListLikeLine(line) &&
+    !isBlockQuoteLine(line)
 
   private def isListLikeLine(line: String): Boolean =
     val trimmed = line.trim

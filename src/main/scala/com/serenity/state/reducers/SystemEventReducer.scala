@@ -1,8 +1,8 @@
 package com.serenity.state.reducers
 
-import com.serenity.keystroke.events.{ExplorerEvent, LspEvent, ResizeEvent, SystemEvent}
+import com.serenity.keystroke.events.*
 import com.serenity.state.models.{AppState, SurfaceContent, SurfacePresentation}
-import com.serenity.ui.layout.{DirectoryTreeData, LayoutEngine, PanelContent, PanelPosition}
+import com.serenity.ui.layout.*
 
 object SystemEventReducer:
 

@@ -4,10 +4,10 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{CloseTab, Enter, Quit, TabKey, ToggleCommandRunner}
+import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{BufferId, CloseScope, Focus, Modal, SurfaceContent}
+import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -15,7 +15,7 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def createStateManager(): StateManager =
@@ -28,13 +28,14 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     expectedCommandName: String
   ): Unit =
     val beforeOpen = stateManager.getCurrentState.unsafeRunSync()
-    if beforeOpen.commandRunnerSurface.flatMap {
-        _.content match
-          case SurfaceContent.CommandPalette(runner) => Some(runner.isActive)
-          case _                                     => None
-      }.getOrElse(false) == false
-    then
-      stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    if beforeOpen.commandRunnerSurface
+          .flatMap {
+            _.content match
+              case SurfaceContent.CommandPalette(runner) => Some(runner.isActive)
+              case _                                     => None
+          }
+          .getOrElse(false) == false
+    then stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     searchTerm.foreach(char => stateManager.applyEvent(com.serenity.keystroke.events.InsertChar(char)).unsafeRunSync())
 
@@ -47,20 +48,26 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(Enter).unsafeRunSync()
 
   private def currentCloseWorkflow(stateManager: StateManager) =
-    stateManager.getCurrentState.unsafeRunSync().modalSurface.flatMap {
-      _.content match
-        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-        case _                                                           => None
-    }.getOrElse(fail("Expected active close workflow modal"))
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .modalSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
+          case _                                                           => None
+      }
+      .getOrElse(fail("Expected active close workflow modal"))
 
   "Close workflow" should "discard and close the current dirty buffer" in {
     val stateManager = createStateManager()
-    val bufferId = BufferId(0)
+    val bufferId     = BufferId(0)
 
-    stateManager.updateState { state =>
-      val buffer = state.buffers(bufferId).copy(isDirty = true)
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
-    }.unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "close", "close")
     stateManager.applyEvent(TabKey).unsafeRunSync()
@@ -73,12 +80,14 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "cancel the close workflow without closing the dirty buffer" in {
     val stateManager = createStateManager()
-    val bufferId = BufferId(0)
+    val bufferId     = BufferId(0)
 
-    stateManager.updateState { state =>
-      val buffer = state.buffers(bufferId).copy(isDirty = true)
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
-    }.unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "close", "close")
     stateManager.applyEvent(TabKey).unsafeRunSync()
@@ -87,7 +96,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface shouldBe None
-    updatedState.buffers should contain key(bufferId)
+    updatedState.buffers should contain key bufferId
     updatedState.buffers(bufferId).isDirty shouldBe true
     updatedState.focus shouldBe Focus.EditorPane(updatedState.layout.activeEditorPaneId.get)
   }
@@ -99,14 +108,18 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager.updateState { state =>
-        val buffer = state.buffers(bufferId).copy(
-          content = com.serenity.rope.Rope("object Notes"),
-          filePath = Some(targetFile),
-          isDirty = true
-        )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
-      }.unsafeRunSync()
+      stateManager
+        .updateState { state =>
+          val buffer = state
+            .buffers(bufferId)
+            .copy(
+              content = com.serenity.rope.Rope("object Notes"),
+              filePath = Some(targetFile),
+              isDirty = true
+            )
+          state.copy(buffers = state.buffers + (bufferId -> buffer))
+        }
+        .unsafeRunSync()
 
       executeCommandThroughRunner(stateManager, "close", "close")
       stateManager.applyEvent(Enter).unsafeRunSync()
@@ -128,40 +141,48 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager.updateState { state =>
-        val buffer = state.buffers(bufferId).copy(
-          content = com.serenity.rope.Rope("object Notes"),
-          isDirty = true
-        )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
-      }.unsafeRunSync()
+      stateManager
+        .updateState { state =>
+          val buffer = state
+            .buffers(bufferId)
+            .copy(
+              content = com.serenity.rope.Rope("object Notes"),
+              isDirty = true
+            )
+          state.copy(buffers = state.buffers + (bufferId -> buffer))
+        }
+        .unsafeRunSync()
 
       executeCommandThroughRunner(stateManager, "close", "close")
       stateManager.applyEvent(Enter).unsafeRunSync()
 
-      stateManager.getCurrentState.unsafeRunSync().modalSurface.flatMap(_.content match
-        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow.mode)
-        case _                                                          => None
-      ) shouldBe Some(com.serenity.state.models.FileWorkflowMode.SaveAs)
+      stateManager.getCurrentState
+        .unsafeRunSync()
+        .modalSurface
+        .flatMap(_.content match
+          case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow.mode)
+          case _ => None) shouldBe Some(com.serenity.state.models.FileWorkflowMode.SaveAs)
 
-      stateManager.updateState { state =>
-        state.modalSurface match
-          case Some(surface) =>
-            state.copy(
-              uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ surface.copy(
-                content = SurfaceContent.ModalWorkflow(
-                  Modal.FileWorkflow(
-                    com.serenity.state.models.FileWorkflowState(
-                      mode = com.serenity.state.models.FileWorkflowMode.SaveAs,
-                      filename = "notes.scala",
-                      path = targetDir.toString
+      stateManager
+        .updateState { state =>
+          state.modalSurface match
+            case Some(surface) =>
+              state.copy(
+                uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ surface.copy(
+                  content = SurfaceContent.ModalWorkflow(
+                    Modal.FileWorkflow(
+                      com.serenity.state.models.FileWorkflowState(
+                        mode = com.serenity.state.models.FileWorkflowMode.SaveAs,
+                        filename = "notes.scala",
+                        path = targetDir.toString
+                      )
                     )
                   )
                 )
               )
-            )
-          case None => state
-      }.unsafeRunSync()
+            case None => state
+        }
+        .unsafeRunSync()
 
       stateManager.applyEvent(Enter).unsafeRunSync()
       stateManager.applyEvent(Enter).unsafeRunSync()
@@ -177,17 +198,19 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "open sequential unsaved-changes prompts for close-all" in {
-    val stateManager = createStateManager()
+    val stateManager   = createStateManager()
     val secondBufferId = stateManager.createBuffer("second").unsafeRunSync()
 
-    stateManager.updateState { state =>
-      val first = state.buffers(BufferId(0)).copy(isDirty = true)
-      val second = state.buffers(secondBufferId).copy(isDirty = true)
-      state.copy(
-        buffers = state.buffers + (BufferId(0) -> first) + (secondBufferId -> second),
-        bufferOrder = state.bufferOrder :+ secondBufferId
-      )
-    }.unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val first  = state.buffers(BufferId(0)).copy(isDirty = true)
+        val second = state.buffers(secondBufferId).copy(isDirty = true)
+        state.copy(
+          buffers = state.buffers + (BufferId(0) -> first) + (secondBufferId -> second),
+          bufferOrder = state.bufferOrder :+ secondBufferId
+        )
+      }
+      .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "close-all", "close-all")
     currentCloseWorkflow(stateManager).scope shouldBe CloseScope.All
@@ -202,12 +225,14 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "open the unsaved-changes workflow from the close-tab hotkey" in {
     val stateManager = createStateManager()
-    val bufferId = BufferId(0)
+    val bufferId     = BufferId(0)
 
-    stateManager.updateState { state =>
-      val buffer = state.buffers(bufferId).copy(isDirty = true)
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
-    }.unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
 
     stateManager.applyEvent(CloseTab).unsafeRunSync()
 
@@ -216,12 +241,14 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "open the unsaved-changes workflow from the quit hotkey when any buffer is dirty" in {
     val stateManager = createStateManager()
-    val bufferId = BufferId(0)
+    val bufferId     = BufferId(0)
 
-    stateManager.updateState { state =>
-      val buffer = state.buffers(bufferId).copy(isDirty = true)
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
-    }.unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
 
     stateManager.applyEvent(Quit).unsafeRunSync()
 

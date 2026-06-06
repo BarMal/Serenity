@@ -57,14 +57,14 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
         activeEditorPaneId = Some(PaneId(0))
       )
     )
-    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    val runner         = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val (s1, runnerId) = base.allocateSurfaceId
     val runnerSurface = UiSurface(
       runnerId,
       SurfaceContent.CommandPalette(runner),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
-    val pickerState = ThemePickerState(themes, selectedIndex, originalTheme = "dark")
+    val pickerState    = ThemePickerState(themes, selectedIndex, originalTheme = "dark")
     val (s2, pickerId) = s1.allocateSurfaceId
     val pickerSurface = UiSurface(
       pickerId,
@@ -86,7 +86,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
 
     val reducerResult = result match
       case com.serenity.state.components.ComponentResult.ReducerUpdate(r) => r
-      case other => fail(s"Expected ReducerUpdate, got $other")
+      case other                                                          => fail(s"Expected ReducerUpdate, got $other")
 
     reducerResult.effects shouldBe List(AppEffect.SwitchTheme("light"))
     reducerResult.state.themePickerSurface.map(_.content) shouldBe
@@ -100,7 +100,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
 
     val reducerResult = result match
       case com.serenity.state.components.ComponentResult.ReducerUpdate(r) => r
-      case other => fail(s"Expected ReducerUpdate, got $other")
+      case other                                                          => fail(s"Expected ReducerUpdate, got $other")
 
     reducerResult.effects shouldBe List(AppEffect.SwitchTheme("mocha"))
     reducerResult.state.themePickerSurface.map(_.content) shouldBe
@@ -114,7 +114,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
 
     val newState = result match
       case com.serenity.state.components.ComponentResult.StateChange(f) => f(state)
-      case other => fail(s"Expected StateChange, got $other")
+      case other                                                        => fail(s"Expected StateChange, got $other")
 
     newState.themePickerSurface shouldBe None
     newState.focus shouldBe Focus.Surface(runnerId)
@@ -127,7 +127,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
 
     val reducerResult = result match
       case com.serenity.state.components.ComponentResult.ReducerUpdate(r) => r
-      case other => fail(s"Expected ReducerUpdate, got $other")
+      case other                                                          => fail(s"Expected ReducerUpdate, got $other")
 
     reducerResult.effects shouldBe List(AppEffect.SwitchTheme("dark"))
     reducerResult.state.themePickerSurface shouldBe None
@@ -136,6 +136,6 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
 
   it should "do nothing for unrecognised events" in {
     val (state, _, _) = stateWithPickerAndRunner(selectedIndex = 0)
-    val result = component.processEvent(InsertChar('x'), state)
+    val result        = component.processEvent(InsertChar('x'), state)
     result shouldBe com.serenity.state.components.ComponentResult.NoChange
   }

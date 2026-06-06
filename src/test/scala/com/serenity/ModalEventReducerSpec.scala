@@ -1,8 +1,8 @@
 package com.serenity
 
-import com.serenity.keystroke.events.{DeleteWordBackward, Direction, Enter, InsertChar, ModalNavigate, ReverseTabKey, TabKey}
+import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState, CursorPosition, FileWorkflowField, FileWorkflowMode, FileWorkflowState, FileWorkflowSuggestion, FindState, Focus, Modal, ModalType, OpenFileWorkflowState, PaneId, ReplaceWorkflowAction, ReplaceWorkflowField, ReplaceWorkflowScope, ReplaceWorkflowState, SaveAsFileWorkflowState, SurfaceContent, SurfaceId, SurfacePlacement, SurfacePresentation, UiSurface}
+import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalEventReducer}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -136,7 +136,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val withPathFieldFocusResult = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, withFilename)
     withPathFieldFocusResult.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
     val withPathFieldFocus = withPathFieldFocusResult.state
-    val withPathResult = ModalEventReducer.reduce(ModalType.FileWorkflow, InsertChar('/'), withPathFieldFocus)
+    val withPathResult     = ModalEventReducer.reduce(ModalType.FileWorkflow, InsertChar('/'), withPathFieldFocus)
     withPathResult.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
     val withPath = withPathResult.state
 
@@ -353,7 +353,8 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val withReplacement = ModalEventReducer.reduce(ModalType.ReplaceWorkflow, InsertChar('x'), withReplacementField).state
+    val withReplacement =
+      ModalEventReducer.reduce(ModalType.ReplaceWorkflow, InsertChar('x'), withReplacementField).state
     withReplacement.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.ReplaceWorkflow(
@@ -366,11 +367,13 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val withReplaceNext = ModalEventReducer.reduce(
-      ModalType.ReplaceWorkflow,
-      ModalNavigate(Direction.Left),
-      withReplacement
-    ).state
+    val withReplaceNext = ModalEventReducer
+      .reduce(
+        ModalType.ReplaceWorkflow,
+        ModalNavigate(Direction.Left),
+        withReplacement
+      )
+      .state
     withReplaceNext.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.ReplaceWorkflow(
@@ -384,11 +387,13 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val withSelectionScope = ModalEventReducer.reduce(
-      ModalType.ReplaceWorkflow,
-      ModalNavigate(Direction.Down),
-      withReplaceNext
-    ).state
+    val withSelectionScope = ModalEventReducer
+      .reduce(
+        ModalType.ReplaceWorkflow,
+        ModalNavigate(Direction.Down),
+        withReplaceNext
+      )
+      .state
     withSelectionScope.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.ReplaceWorkflow(

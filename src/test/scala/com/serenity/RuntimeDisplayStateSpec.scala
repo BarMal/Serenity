@@ -2,9 +2,9 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.app.RuntimeDisplayState
 import com.serenity.rope.Balance
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.app.RuntimeDisplayState
 import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -13,7 +13,7 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
   given org.typelevel.log4cats.Logger[IO] =
     LoggerFactory[IO].getLogger(using LoggerName("RuntimeDisplayStateSpec"))
@@ -27,18 +27,20 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "refresh both runtime fonts and metrics when the font config changes" in {
-    val runtime            = RuntimeDisplayState.create(FontConfig(fontSize = 12.0f, uiFontSize = 14.0f)).unsafeRunSync()
-    val originalCodeFont   = runtime.codeFont
+    val runtime          = RuntimeDisplayState.create(FontConfig(fontSize = 12.0f, uiFontSize = 14.0f)).unsafeRunSync()
+    val originalCodeFont = runtime.codeFont
     val originalCodeMetric = runtime.codeMetrics
 
-    runtime.update(
-      FontConfig(
-        codeFontFamily = "Monospaced",
-        textFontFamily = "SansSerif",
-        fontSize = 18.0f,
-        uiFontSize = 16.0f
+    runtime
+      .update(
+        FontConfig(
+          codeFontFamily = "Monospaced",
+          textFontFamily = "SansSerif",
+          fontSize = 18.0f,
+          uiFontSize = 16.0f
+        )
       )
-    ).unsafeRunSync()
+      .unsafeRunSync()
 
     runtime.codeFont.getSize2D shouldBe 18.0f
     runtime.textFont.getSize2D shouldBe 18.0f
@@ -51,9 +53,11 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "provide stable primaryMetrics that always equal codeMetrics" in {
-    val runtime = RuntimeDisplayState.create(
-      FontConfig(codeFontFamily = "Monospaced", textFontFamily = "SansSerif", fontSize = 12.0f)
-    ).unsafeRunSync()
+    val runtime = RuntimeDisplayState
+      .create(
+        FontConfig(codeFontFamily = "Monospaced", textFontFamily = "SansSerif", fontSize = 12.0f)
+      )
+      .unsafeRunSync()
 
     runtime.primaryMetrics shouldBe runtime.codeMetrics
   }
@@ -69,13 +73,17 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "return the same primaryMetrics regardless of font config font families" in {
-    val runtime = RuntimeDisplayState.create(
-      FontConfig(codeFontFamily = "Monospaced", textFontFamily = "SansSerif", fontSize = 14.0f)
-    ).unsafeRunSync()
+    val runtime = RuntimeDisplayState
+      .create(
+        FontConfig(codeFontFamily = "Monospaced", textFontFamily = "SansSerif", fontSize = 14.0f)
+      )
+      .unsafeRunSync()
 
     val metricsA = runtime.primaryMetrics
 
-    runtime.update(FontConfig(codeFontFamily = "Monospaced", textFontFamily = "Dialog", fontSize = 14.0f)).unsafeRunSync()
+    runtime
+      .update(FontConfig(codeFontFamily = "Monospaced", textFontFamily = "Dialog", fontSize = 14.0f))
+      .unsafeRunSync()
 
     runtime.primaryMetrics shouldBe metricsA
   }

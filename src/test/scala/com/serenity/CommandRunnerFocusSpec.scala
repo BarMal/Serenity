@@ -2,14 +2,14 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{Enter, Escape, InsertChar, MoveDown, TabKey, ToggleCommandRunner}
+import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{Focus, PaneId, SurfaceContent, SurfaceId}
+import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
 
@@ -21,11 +21,15 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     StateManager.apply(logger).unsafeRunSync()
 
   private def currentRunner(stateManager: StateManager) =
-    stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(runner) => Some(runner)
-        case _                                     => None
-    }.getOrElse(fail("Expected command runner"))
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(runner) => Some(runner)
+          case _                                     => None
+      }
+      .getOrElse(fail("Expected command runner"))
 
   "Command runner focus ownership" should "keep submenu navigation inside the command-runner domain" in {
     val stateManager = createStateManager()

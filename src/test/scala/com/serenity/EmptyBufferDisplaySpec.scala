@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.keystroke.events.*
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
@@ -73,10 +73,11 @@ class EmptyBufferDisplaySpec extends AnyFunSpec with Matchers:
         case _ => fail("Expected state change")
 
     it("should transition from welcome text to ~Empty~ when deleting all content"):
-      val bufferId          = BufferId(1)
-      val bufferWithContent = Buffer.fromString(bufferId, "h").copy(isNewEmpty = false, cursors = List(CursorPosition(0, 1)))
-      val paneId            = PaneId(1)
-      val pane              = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
+      val bufferId = BufferId(1)
+      val bufferWithContent =
+        Buffer.fromString(bufferId, "h").copy(isNewEmpty = false, cursors = List(CursorPosition(0, 1)))
+      val paneId = PaneId(1)
+      val pane   = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
 
       val initialState = AppState(
         buffers = Map(bufferId -> bufferWithContent),

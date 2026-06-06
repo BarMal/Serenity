@@ -345,12 +345,12 @@ object SurfaceContentResolver:
     rect: LayoutRect,
     mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
-    val group = runner.settingsGroups.find(_.id == groupId)
-    val submenuState = runner.activeSubmenu.filter(_.groupId == groupId)
-    val allItems = runner.submenuItems(groupId)
-    val items = submenuState.map(_.filteredItems(allItems)).getOrElse(allItems)
+    val group         = runner.settingsGroups.find(_.id == groupId)
+    val submenuState  = runner.activeSubmenu.filter(_.groupId == groupId)
+    val allItems      = runner.submenuItems(groupId)
+    val items         = submenuState.map(_.filteredItems(allItems)).getOrElse(allItems)
     val selectedIndex = submenuState.map(_.selectedIndex).getOrElse(0)
-    val maxItemRows = math.max(1, rect.height - 4)
+    val maxItemRows   = math.max(1, rect.height - 4)
     val offset =
       if items.size <= maxItemRows then 0
       else
@@ -494,7 +494,7 @@ object SurfaceContentResolver:
     selectedPath: Option[java.nio.file.Path]
   ): ResolvedSurfaceContent =
     val visibleRows = com.serenity.ui.layout.DirectoryTreeData.visibleRows(tree)
-    val maxRows = math.max(1, rect.height - 2)
+    val maxRows     = math.max(1, rect.height - 2)
     val rows = visibleRows.take(maxRows).map { row =>
       val marker =
         if row.isDirectory then

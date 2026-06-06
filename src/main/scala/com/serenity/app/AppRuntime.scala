@@ -36,11 +36,13 @@ object AppRuntime:
       _ <- logger.info("Starting Serenity text editor")
       themeManager = com.serenity.ui.theme.config.AppThemeManager.create
       defaultTheme <- themeManager.initializeWithTheme()
-      stateManager <- makeStateManager.getOrElse(logger => StateManager.apply(logger, initialConfig = appConfig))(logger)
+      stateManager <- makeStateManager.getOrElse(logger => StateManager.apply(logger, initialConfig = appConfig))(
+        logger
+      )
       initialState <- AppStartup.initializeState(stateManager, defaultTheme, initialViewportSize, appConfig)
       inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
       systemClipboard = SystemClipboard.awt[IO]
-      inputHandler = makeInputHandler(inputRouter)
+      inputHandler    = makeInputHandler(inputRouter)
       _             <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
       _             <- renderFull(initialState, true, None)
       _             <- logger.info("Initial render completed, starting main loop")

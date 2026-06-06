@@ -20,7 +20,8 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
 
   trait ExplorerFixture:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+
     val sm: StateManager = StateManager
       .apply(logger)(using Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
@@ -36,12 +37,12 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
     state.pinnedSurfaces should have size 1
     state.pinnedSurfaces.head.presentation match
       case SurfacePresentation.Pinned(PanelPosition.Left, _) => succeed
-      case other => fail(s"Expected Pinned(Left, _), got $other")
+      case other                                             => fail(s"Expected Pinned(Left, _), got $other")
 
   it should "populate the listing with the provided file names" in new ExplorerFixture:
     sm.loadDirectoryTree("/repo", List("src", "test", "build.sbt")).unsafeRunSync()
 
-    val state = sm.getCurrentState.unsafeRunSync()
+    val state   = sm.getCurrentState.unsafeRunSync()
     val content = state.pinnedSurfaces.head.content
     content match
       case SurfaceContent.DirectoryTree(tree, _) =>
@@ -55,7 +56,7 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
     val entries = state.pinnedSurfaces.head.content match
       case SurfaceContent.DirectoryTree(tree, _) => tree.entries(Paths.get("/repo"))
-      case other => fail(s"Expected DirectoryTree, got $other")
+      case other                                 => fail(s"Expected DirectoryTree, got $other")
 
     entries.find(_.name == "src/").map(_.isDirectory) shouldBe Some(true)
     entries.find(_.name == "build.sbt").map(_.isDirectory) shouldBe Some(false)
@@ -115,8 +116,8 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
   // ── dragFileToDirectory ───────────────────────────────────────────────────
 
   it should "move the source file into the target directory on the filesystem" in new ExplorerFixture:
-    val srcDir = Files.createTempDirectory("drag-src")
-    val dstDir = Files.createTempDirectory("drag-dst")
+    val srcDir  = Files.createTempDirectory("drag-src")
+    val dstDir  = Files.createTempDirectory("drag-dst")
     val srcFile = Files.createFile(srcDir.resolve("hello.txt"))
     Files.writeString(srcFile, "content")
     try
@@ -132,8 +133,8 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
       Files.deleteIfExists(dstDir)
 
   it should "remove the moved file from the source directory listing panel" in new ExplorerFixture:
-    val srcDir = Files.createTempDirectory("drag-src2")
-    val dstDir = Files.createTempDirectory("drag-dst2")
+    val srcDir  = Files.createTempDirectory("drag-src2")
+    val dstDir  = Files.createTempDirectory("drag-dst2")
     val srcFile = Files.createFile(srcDir.resolve("mover.txt"))
     try
       sm.loadDirectoryTree(srcDir.toString, List("mover.txt", "keeper.txt")).unsafeRunSync()

@@ -16,7 +16,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerAnimationSpec"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerAnimationSpec"))
     StateManager.apply(logger).unsafeRunSync()
 
   "Command runner open animation" should "start in Visible phase immediately (no buffer fade)" in {
@@ -98,7 +98,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val state = sm.getCurrentState.unsafeRunSync()
 
-    val ghost    = state.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay]).get
+    val ghost     = state.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay]).get
     val ghostAnim = state.surfaceAnimations.get(ghost.id)
     ghostAnim shouldBe defined
     ghostAnim.get.phase shouldBe SurfacePhase.Exiting
@@ -124,8 +124,8 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val state = sm.getCurrentState.unsafeRunSync()
 
-    val ghost    = state.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay]).get
-    val ghostAnim = state.surfaceAnimations(ghost.id).animationState
+    val ghost        = state.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay]).get
+    val ghostAnim    = state.surfaceAnimations(ghost.id).animationState
     val animatedRows = ghostAnim.animations.keys.map(_.line).toSet.toList.sorted
 
     val firstRowSteps = ghostAnim.getCell(0, animatedRows.head).map(_.backgroundSteps.length).getOrElse(0)
@@ -167,7 +167,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(TabKey).unsafeRunSync()
     sm.applyEvent(TabKey).unsafeRunSync()
 
-    val state = sm.getCurrentState.unsafeRunSync()
+    val state   = sm.getCurrentState.unsafeRunSync()
     val submenu = state.commandRunnerSubmenuSurface.getOrElse(fail("Expected submenu preview surface"))
 
     state.surfaceAnimations.get(submenu.id) shouldBe defined
@@ -189,7 +189,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     state.commandRunnerSubmenuSurface shouldBe None
     state.uiSurfaces.exists {
       case UiSurface(_, SurfaceContent.GhostOverlay(SurfaceContent.CommandPaletteSubmenu(_, _, _), _), _, _) => true
-      case _                                                                                                  => false
+      case _                                                                                                 => false
     } shouldBe true
   }
 

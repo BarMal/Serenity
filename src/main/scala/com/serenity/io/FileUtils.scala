@@ -46,10 +46,12 @@ object FileUtils:
     else
       Resource
         .fromAutoCloseable(IO.blocking(Files.list(directory)))
-        .use(stream => IO.blocking {
-          import scala.jdk.CollectionConverters.*
-          stream.iterator().asScala.toList.sorted
-        })
+        .use(stream =>
+          IO.blocking {
+            import scala.jdk.CollectionConverters.*
+            stream.iterator().asScala.toList.sorted
+          }
+        )
 
   /** Get current working directory */
   def getCurrentDirectory: IO[Path] =

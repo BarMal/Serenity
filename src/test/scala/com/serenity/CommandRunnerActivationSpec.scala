@@ -9,8 +9,8 @@ import com.serenity.state.models.SurfaceContent
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
 
@@ -37,11 +37,10 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   "ensureCommandRunnerSurface (via closePane)" should "use the current config, not defaults" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val sm = com.serenity.state.manager.StateManager.apply(logger).unsafeRunSync()
+    val sm                  = com.serenity.state.manager.StateManager.apply(logger).unsafeRunSync()
 
-    sm.updateState(s =>
-      s.copy(config = s.config.withFontConfig(s.config.fontConfig.copy(enableLigatures = false)))
-    ).unsafeRunSync()
+    sm.updateState(s => s.copy(config = s.config.withFontConfig(s.config.fontConfig.copy(enableLigatures = false))))
+      .unsafeRunSync()
 
     val stateBefore = sm.getCurrentState.unsafeRunSync()
     val paneId      = stateBefore.layout.editorPanes.keys.head

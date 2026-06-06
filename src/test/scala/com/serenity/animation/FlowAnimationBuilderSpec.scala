@@ -1,6 +1,7 @@
 package com.serenity.animation
 
 import java.awt.Color
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -13,15 +14,11 @@ class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
 
   /** 3 columns (0–2) × 2 rows (0–1), uniform colour pair */
   private def grid3x2(start: Color = black, end: Color = white): Map[CharacterKey, CellAnimation] =
-    (for col <- 0 until 3; row <- 0 until 2 yield
-      CharacterKey(col, row) -> CellAnimation('x', start, end)
-    ).toMap
+    (for col <- 0 until 3; row <- 0 until 2 yield CharacterKey(col, row) -> CellAnimation('x', start, end)).toMap
 
   /** 2 columns (0–1) × 3 rows (0–2), uniform colour pair */
   private def grid2x3(start: Color = black, end: Color = white): Map[CharacterKey, CellAnimation] =
-    (for col <- 0 until 2; row <- 0 until 3 yield
-      CharacterKey(col, row) -> CellAnimation('x', start, end)
-    ).toMap
+    (for col <- 0 until 2; row <- 0 until 3 yield CharacterKey(col, row) -> CellAnimation('x', start, end)).toMap
 
   // ── Group 1: Stagger lengths — ByColumn ──────────────────────────────────
 
@@ -89,7 +86,7 @@ class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
     val steps = 4
     val cells = Map(
       CharacterKey(0, 0) -> CellAnimation('a', black, white),
-      CharacterKey(1, 0) -> CellAnimation('b', red,   blue)
+      CharacterKey(1, 0) -> CellAnimation('b', red, blue)
     )
     val result = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, SweepDirection.Forward, steps)
 
@@ -101,7 +98,7 @@ class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
     val steps = 4
     val cells = Map(
       CharacterKey(0, 0) -> CellAnimation('a', black, white),
-      CharacterKey(1, 0) -> CellAnimation('b', red,   blue),
+      CharacterKey(1, 0) -> CellAnimation('b', red, blue),
       CharacterKey(1, 1) -> CellAnimation('c', black, white)
     )
     val result = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, SweepDirection.Forward, steps)
@@ -144,28 +141,25 @@ class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "give all cells offset 0 when the element spans a single column with ByColumn direction" in {
-    val steps = 4
-    val cells = (0 until 3).map(row => CharacterKey(2, row) -> CellAnimation('x', black, white)).toMap
+    val steps  = 4
+    val cells  = (0 until 3).map(row => CharacterKey(2, row) -> CellAnimation('x', black, white)).toMap
     val result = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, SweepDirection.Forward, steps)
 
-    for row <- 0 until 3 do
-      result(CharacterKey(2, row)).foregroundSteps should have length steps
+    for row <- 0 until 3 do result(CharacterKey(2, row)).foregroundSteps should have length steps
   }
 
   it should "give all cells offset 0 when the element spans a single row with ByRow direction" in {
-    val steps = 4
-    val cells = (0 until 3).map(col => CharacterKey(col, 5) -> CellAnimation('x', black, white)).toMap
+    val steps  = 4
+    val cells  = (0 until 3).map(col => CharacterKey(col, 5) -> CellAnimation('x', black, white)).toMap
     val result = FlowAnimationBuilder.build(cells, FlowDirection.ByRow, SweepDirection.Forward, steps)
 
-    for col <- 0 until 3 do
-      result(CharacterKey(col, 5)).foregroundSteps should have length steps
+    for col <- 0 until 3 do result(CharacterKey(col, 5)).foregroundSteps should have length steps
   }
 
   it should "compute stagger offset relative to the minimum column in the element" in {
     val steps = 4
-    val cells = (for col <- 5 until 8; row <- 0 until 2 yield
-      CharacterKey(col, row) -> CellAnimation('x', black, white)
-    ).toMap
+    val cells =
+      (for col <- 5 until 8; row <- 0 until 2 yield CharacterKey(col, row) -> CellAnimation('x', black, white)).toMap
     val result = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, SweepDirection.Forward, steps)
 
     for row <- 0 until 2 do

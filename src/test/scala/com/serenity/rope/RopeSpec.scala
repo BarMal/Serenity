@@ -1,6 +1,6 @@
 package com.serenity.rope
 
-import com.serenity.rope.{Balance, Leaf, Node, Rope}
+import com.serenity.rope.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -86,7 +86,7 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
   it should "search for first occurrence" in new ChunkedRopeSpecScope:
     val lorem0: String =
-      s"""Lorem ipsum dolor sit amet, consectetur adipiscing
+      """Lorem ipsum dolor sit amet, consectetur adipiscing
          |elit, sed do eiusmod tempor incididunt ut labore et
          |dolore magna aliqua. Ut enim ad minim veniam, quis
          |nostrud exercitation ullamco laboris nisi ut aliquip

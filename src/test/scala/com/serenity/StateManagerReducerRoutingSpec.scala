@@ -4,11 +4,11 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{Direction, InsertChar, PanelInputEvent, PeekInputEvent, Quit, ReloadCurrentTheme, SaveFile, SwitchTheme, TabKey, ToggleCommandRunner}
+import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{CursorPosition, FileWorkflowField, FileWorkflowMode, Focus, Modal, SurfaceContent, UiSurface}
-import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition, PeekContent}
+import com.serenity.state.models.*
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -16,7 +16,7 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def createStateManager(): StateManager =
@@ -68,18 +68,20 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
         .fromString(bufferId, "val x = 100")
         .copy(filePath = Some(tempFile), isDirty = true)
 
-      stateManager.updateState { state =>
-        state.copy(
-          buffers = state.buffers + (bufferId -> buffer),
-          layout = state.layout.copy(
-            editorPanes = state.layout.editorPanes.updated(
-              paneId,
-              state.layout.editorPanes(paneId).copy(bufferId = Some(bufferId))
-            )
-          ),
-          focus = Focus.EditorPane(paneId)
-        )
-      }.unsafeRunSync()
+      stateManager
+        .updateState { state =>
+          state.copy(
+            buffers = state.buffers + (bufferId -> buffer),
+            layout = state.layout.copy(
+              editorPanes = state.layout.editorPanes.updated(
+                paneId,
+                state.layout.editorPanes(paneId).copy(bufferId = Some(bufferId))
+              )
+            ),
+            focus = Focus.EditorPane(paneId)
+          )
+        }
+        .unsafeRunSync()
 
       stateManager.applyEvent(SaveFile).unsafeRunSync()
 
@@ -93,7 +95,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
 
     stateManager.showModal(Modal.GotoLine("7")).unsafeRunSync()
-    val modalState = stateManager.getCurrentState.unsafeRunSync()
+    val modalState   = stateManager.getCurrentState.unsafeRunSync()
     val modalSurface = modalState.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("7")))
     modalSurface shouldBe defined
     modalState.focus shouldBe Focus.Surface(modalSurface.get.id)
@@ -104,7 +106,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     afterDismiss.uiSurfaces.exists(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("7"))) shouldBe false
 
     stateManager.showPeek(PeekContent.QuickInfo("hint"), CursorPosition(1, 2)).unsafeRunSync()
-    val peekState = stateManager.getCurrentState.unsafeRunSync()
+    val peekState   = stateManager.getCurrentState.unsafeRunSync()
     val peekSurface = peekState.uiSurfaces.find(_.content == SurfaceContent.QuickInfo("hint"))
     peekSurface shouldBe defined
     peekState.focus shouldBe Focus.Surface(peekSurface.get.id)
@@ -116,8 +118,8 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "route focused editor events through the typed local handler path" in {
-    val stateManager = createStateManager()
-    val initialState = stateManager.getCurrentState.unsafeRunSync()
+    val stateManager    = createStateManager()
+    val initialState    = stateManager.getCurrentState.unsafeRunSync()
     val initialBufferId = initialState.focusedBufferId.get
 
     stateManager.applyEvent(InsertChar('x')).unsafeRunSync()
@@ -130,33 +132,45 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
   it should "route focused modal events through the typed local handler path" in {
     val stateManager = createStateManager()
 
-    stateManager.showModal(
-      Modal.FileWorkflow(
-        com.serenity.state.models.FileWorkflowState(mode = FileWorkflowMode.Open)
+    stateManager
+      .showModal(
+        Modal.FileWorkflow(
+          com.serenity.state.models.FileWorkflowState(mode = FileWorkflowMode.Open)
+        )
       )
-    ).unsafeRunSync()
+      .unsafeRunSync()
 
     stateManager.applyEvent(TabKey).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface.flatMap(_.content match
       case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow.activeField)
-      case _                                                          => None
-    ) shouldBe Some(FileWorkflowField.Path)
+      case _                                                          => None) shouldBe Some(FileWorkflowField.Path)
   }
 
   it should "route focused pinned panel events through the typed local handler path" in {
     val stateManager = createStateManager()
 
-    stateManager.pinPanel(
-      PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/repo")), None),
-      PanelPosition.Left,
-      24
-    ).unsafeRunSync()
-    val pinnedSurfaceId = stateManager.getCurrentState.unsafeRunSync().uiSurfaces.collectFirst {
-      case surface @ UiSurface(_, _, com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Left, _), _) =>
-        surface.id
-    }.get
+    stateManager
+      .pinPanel(
+        PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/repo")), None),
+        PanelPosition.Left,
+        24
+      )
+      .unsafeRunSync()
+    val pinnedSurfaceId = stateManager.getCurrentState
+      .unsafeRunSync()
+      .uiSurfaces
+      .collectFirst {
+        case surface @ UiSurface(
+              _,
+              _,
+              com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Left, _),
+              _
+            ) =>
+          surface.id
+      }
+      .get
     stateManager.switchFocus(Focus.Surface(pinnedSurfaceId)).unsafeRunSync()
 
     stateManager.applyEvent(PanelInputEvent.ReturnFocus).unsafeRunSync()

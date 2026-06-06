@@ -1,10 +1,9 @@
 package com.serenity.config
 
+import HotkeyConfig.given
+import com.serenity.keystroke.events.*
 import io.circe.syntax.given
 import io.circe.{Decoder, Encoder}
-import HotkeyConfig.given
-
-import com.serenity.keystroke.events.*
 
 trait KeymapEventAction[+E <: Event]:
   def configKey: String
@@ -32,24 +31,24 @@ enum EditorKeyAction extends KeymapEventAction[TextEntryEvent]:
 
   def configKey: String =
     this match
-      case MoveLeft          => "move_left"
-      case MoveRight         => "move_right"
-      case MoveUp            => "move_up"
-      case MoveDown          => "move_down"
-      case MoveToStart       => "move_to_start"
-      case MoveToEnd         => "move_to_end"
-      case MoveToStartOfFile => "move_to_start_of_file"
-      case MoveToEndOfFile   => "move_to_end_of_file"
-      case PageUp            => "page_up"
-      case PageDown          => "page_down"
-      case DeleteBackward    => "delete_backward"
-      case DeleteForward     => "delete_forward"
+      case MoveLeft           => "move_left"
+      case MoveRight          => "move_right"
+      case MoveUp             => "move_up"
+      case MoveDown           => "move_down"
+      case MoveToStart        => "move_to_start"
+      case MoveToEnd          => "move_to_end"
+      case MoveToStartOfFile  => "move_to_start_of_file"
+      case MoveToEndOfFile    => "move_to_end_of_file"
+      case PageUp             => "page_up"
+      case PageDown           => "page_down"
+      case DeleteBackward     => "delete_backward"
+      case DeleteForward      => "delete_forward"
       case DeleteWordBackward => "delete_word_backward"
-      case DeleteWordForward => "delete_word_forward"
-      case Escape            => "escape"
-      case NewLine           => "new_line"
-      case Tab               => "tab"
-      case ReverseTab        => "reverse_tab"
+      case DeleteWordForward  => "delete_word_forward"
+      case Escape             => "escape"
+      case NewLine            => "new_line"
+      case Tab                => "tab"
+      case ReverseTab         => "reverse_tab"
 
   def event: TextEntryEvent =
     this match
@@ -228,45 +227,53 @@ case class EditorKeymapConfig(
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
 object EditorKeymapConfig:
+
   val defaultBindings: Map[EditorKeyAction, List[HotkeyTrigger]] = Map(
-    EditorKeyAction.MoveLeft -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
-    EditorKeyAction.MoveRight -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set.empty)),
-    EditorKeyAction.MoveUp -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
-    EditorKeyAction.MoveDown -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),
+    EditorKeyAction.MoveLeft    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
+    EditorKeyAction.MoveRight   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set.empty)),
+    EditorKeyAction.MoveUp      -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
+    EditorKeyAction.MoveDown    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),
     EditorKeyAction.MoveToStart -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Home, None, Set.empty)),
-    EditorKeyAction.MoveToEnd -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.End, None, Set.empty)),
+    EditorKeyAction.MoveToEnd   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.End, None, Set.empty)),
     EditorKeyAction.MoveToStartOfFile -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Home, None, Set(com.serenity.keystroke.Modifier.Ctrl))
     ),
     EditorKeyAction.MoveToEndOfFile -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.End, None, Set(com.serenity.keystroke.Modifier.Ctrl))
     ),
-    EditorKeyAction.PageUp -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageUp, None, Set.empty)),
-    EditorKeyAction.PageDown -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageDown, None, Set.empty)),
+    EditorKeyAction.PageUp         -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageUp, None, Set.empty)),
+    EditorKeyAction.PageDown       -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageDown, None, Set.empty)),
     EditorKeyAction.DeleteBackward -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set.empty)),
-    EditorKeyAction.DeleteForward -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set.empty)),
+    EditorKeyAction.DeleteForward  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set.empty)),
     EditorKeyAction.DeleteWordBackward -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Ctrl))
     ),
     EditorKeyAction.DeleteWordForward -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set(com.serenity.keystroke.Modifier.Ctrl))
     ),
-    EditorKeyAction.Escape -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty)),
-    EditorKeyAction.NewLine -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty)),
-    EditorKeyAction.Tab -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Tab, None, Set.empty)),
+    EditorKeyAction.Escape     -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty)),
+    EditorKeyAction.NewLine    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty)),
+    EditorKeyAction.Tab        -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Tab, None, Set.empty)),
     EditorKeyAction.ReverseTab -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ReverseTab, None, Set.empty))
   )
 
   given Encoder[EditorKeyAction] = Encoder.encodeString.contramap(_.configKey)
+
   given Decoder[EditorKeyAction] = Decoder.decodeString.emap(key =>
     EditorKeyAction.values.find(_.configKey == key).toRight(s"Unknown editor key action: $key")
   )
+
   given Encoder[EditorKeymapConfig] =
     Encoder.instance(config => KeymapCodecSupport.encodeBindings(config.bindings)(_.configKey))
+
   given Decoder[EditorKeymapConfig] =
-    Decoder.decodeMap[String, List[HotkeyTrigger]].emap(bindings =>
-      KeymapCodecSupport.decodeBindings(bindings, EditorKeyAction.values.toList, _.configKey, defaultBindings).map(EditorKeymapConfig(_))
-    )
+    Decoder
+      .decodeMap[String, List[HotkeyTrigger]]
+      .emap(bindings =>
+        KeymapCodecSupport
+          .decodeBindings(bindings, EditorKeyAction.values.toList, _.configKey, defaultBindings)
+          .map(EditorKeymapConfig(_))
+      )
 
 case class CommandRunnerKeymapConfig(
     bindings: Map[CommandRunnerKeyAction, List[HotkeyTrigger]] = CommandRunnerKeymapConfig.defaultBindings
@@ -281,13 +288,24 @@ case class CommandRunnerKeymapConfig(
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
 object CommandRunnerKeymapConfig:
+
   val defaultBindings: Map[CommandRunnerKeyAction, List[HotkeyTrigger]] = Map(
     CommandRunnerKeyAction.NavigateUp -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
-    CommandRunnerKeyAction.NavigateDown -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),
-    CommandRunnerKeyAction.NavigateLeft -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
-    CommandRunnerKeyAction.NavigateRight -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set.empty)),
-    CommandRunnerKeyAction.DeleteBackward -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set.empty)),
-    CommandRunnerKeyAction.DeleteForward -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set.empty)),
+    CommandRunnerKeyAction.NavigateDown -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)
+    ),
+    CommandRunnerKeyAction.NavigateLeft -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)
+    ),
+    CommandRunnerKeyAction.NavigateRight -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set.empty)
+    ),
+    CommandRunnerKeyAction.DeleteBackward -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set.empty)
+    ),
+    CommandRunnerKeyAction.DeleteForward -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set.empty)
+    ),
     CommandRunnerKeyAction.DeleteWordBackward -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Ctrl))
     ),
@@ -298,21 +316,27 @@ object CommandRunnerKeymapConfig:
     CommandRunnerKeyAction.PreviousCategory -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.ReverseTab, None, Set.empty)
     ),
-    CommandRunnerKeyAction.Submit -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty)),
+    CommandRunnerKeyAction.Submit  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty)),
     CommandRunnerKeyAction.Dismiss -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty))
   )
 
   given Encoder[CommandRunnerKeyAction] = Encoder.encodeString.contramap(_.configKey)
+
   given Decoder[CommandRunnerKeyAction] = Decoder.decodeString.emap(key =>
     CommandRunnerKeyAction.values.find(_.configKey == key).toRight(s"Unknown command runner key action: $key")
   )
+
   given Encoder[CommandRunnerKeymapConfig] =
     Encoder.instance(config => KeymapCodecSupport.encodeBindings(config.bindings)(_.configKey))
+
   given Decoder[CommandRunnerKeymapConfig] =
-    Decoder.decodeMap[String, List[HotkeyTrigger]].emap(bindings =>
-      KeymapCodecSupport.decodeBindings(bindings, CommandRunnerKeyAction.values.toList, _.configKey, defaultBindings)
-        .map(CommandRunnerKeymapConfig(_))
-    )
+    Decoder
+      .decodeMap[String, List[HotkeyTrigger]]
+      .emap(bindings =>
+        KeymapCodecSupport
+          .decodeBindings(bindings, CommandRunnerKeyAction.values.toList, _.configKey, defaultBindings)
+          .map(CommandRunnerKeymapConfig(_))
+      )
 
 case class ModalKeymapConfig(
     bindings: Map[ModalKeyAction, List[HotkeyTrigger]] = ModalKeymapConfig.defaultBindings
@@ -327,36 +351,43 @@ case class ModalKeymapConfig(
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
 object ModalKeymapConfig:
+
   val defaultBindings: Map[ModalKeyAction, List[HotkeyTrigger]] = Map(
-    ModalKeyAction.NavigateUp -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
-    ModalKeyAction.NavigateDown -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),
-    ModalKeyAction.NavigateLeft -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
-    ModalKeyAction.NavigateRight -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set.empty)),
+    ModalKeyAction.NavigateUp     -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
+    ModalKeyAction.NavigateDown   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),
+    ModalKeyAction.NavigateLeft   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
+    ModalKeyAction.NavigateRight  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set.empty)),
     ModalKeyAction.DeleteBackward -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set.empty)),
-    ModalKeyAction.DeleteForward -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set.empty)),
+    ModalKeyAction.DeleteForward  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set.empty)),
     ModalKeyAction.DeleteWordBackward -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Ctrl))
     ),
     ModalKeyAction.DeleteWordForward -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set(com.serenity.keystroke.Modifier.Ctrl))
     ),
-    ModalKeyAction.NextField -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Tab, None, Set.empty)),
+    ModalKeyAction.NextField     -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Tab, None, Set.empty)),
     ModalKeyAction.PreviousField -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ReverseTab, None, Set.empty)),
-    ModalKeyAction.Submit -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty)),
-    ModalKeyAction.Dismiss -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty))
+    ModalKeyAction.Submit        -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty)),
+    ModalKeyAction.Dismiss       -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty))
   )
 
   given Encoder[ModalKeyAction] = Encoder.encodeString.contramap(_.configKey)
+
   given Decoder[ModalKeyAction] = Decoder.decodeString.emap(key =>
     ModalKeyAction.values.find(_.configKey == key).toRight(s"Unknown modal key action: $key")
   )
+
   given Encoder[ModalKeymapConfig] =
     Encoder.instance(config => KeymapCodecSupport.encodeBindings(config.bindings)(_.configKey))
+
   given Decoder[ModalKeymapConfig] =
-    Decoder.decodeMap[String, List[HotkeyTrigger]].emap(bindings =>
-      KeymapCodecSupport.decodeBindings(bindings, ModalKeyAction.values.toList, _.configKey, defaultBindings)
-        .map(ModalKeymapConfig(_))
-    )
+    Decoder
+      .decodeMap[String, List[HotkeyTrigger]]
+      .emap(bindings =>
+        KeymapCodecSupport
+          .decodeBindings(bindings, ModalKeyAction.values.toList, _.configKey, defaultBindings)
+          .map(ModalKeymapConfig(_))
+      )
 
 case class PanelKeymapConfig(
     bindings: Map[PanelKeyAction, List[HotkeyTrigger]] = PanelKeymapConfig.defaultBindings
@@ -371,10 +402,11 @@ case class PanelKeymapConfig(
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
 object PanelKeymapConfig:
+
   val defaultBindings: Map[PanelKeyAction, List[HotkeyTrigger]] = Map(
-    PanelKeyAction.NavigateUp -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
-    PanelKeyAction.NavigateDown -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),
-    PanelKeyAction.NavigateLeft -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
+    PanelKeyAction.NavigateUp    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
+    PanelKeyAction.NavigateDown  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),
+    PanelKeyAction.NavigateLeft  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
     PanelKeyAction.NavigateRight -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set.empty)),
     PanelKeyAction.ReturnFocus -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set.empty),
@@ -387,16 +419,22 @@ object PanelKeymapConfig:
   )
 
   given Encoder[PanelKeyAction] = Encoder.encodeString.contramap(_.configKey)
+
   given Decoder[PanelKeyAction] = Decoder.decodeString.emap(key =>
     PanelKeyAction.values.find(_.configKey == key).toRight(s"Unknown panel key action: $key")
   )
+
   given Encoder[PanelKeymapConfig] =
     Encoder.instance(config => KeymapCodecSupport.encodeBindings(config.bindings)(_.configKey))
+
   given Decoder[PanelKeymapConfig] =
-    Decoder.decodeMap[String, List[HotkeyTrigger]].emap(bindings =>
-      KeymapCodecSupport.decodeBindings(bindings, PanelKeyAction.values.toList, _.configKey, defaultBindings)
-        .map(PanelKeymapConfig(_))
-    )
+    Decoder
+      .decodeMap[String, List[HotkeyTrigger]]
+      .emap(bindings =>
+        KeymapCodecSupport
+          .decodeBindings(bindings, PanelKeyAction.values.toList, _.configKey, defaultBindings)
+          .map(PanelKeymapConfig(_))
+      )
 
 case class PeekKeymapConfig(
     bindings: Map[PeekKeyAction, List[HotkeyTrigger]] = PeekKeymapConfig.defaultBindings
@@ -411,13 +449,14 @@ case class PeekKeymapConfig(
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
 object PeekKeymapConfig:
+
   val defaultBindings: Map[PeekKeyAction, List[HotkeyTrigger]] = Map(
-    PeekKeyAction.NavigateUp -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
-    PeekKeyAction.NavigateDown -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),
-    PeekKeyAction.NavigateLeft -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
+    PeekKeyAction.NavigateUp    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
+    PeekKeyAction.NavigateDown  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),
+    PeekKeyAction.NavigateLeft  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
     PeekKeyAction.NavigateRight -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set.empty)),
-    PeekKeyAction.Accept -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty)),
-    PeekKeyAction.Dismiss -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty)),
+    PeekKeyAction.Accept        -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty)),
+    PeekKeyAction.Dismiss       -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty)),
     PeekKeyAction.OtherInput -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set.empty),
       HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set.empty),
@@ -427,16 +466,22 @@ object PeekKeymapConfig:
   )
 
   given Encoder[PeekKeyAction] = Encoder.encodeString.contramap(_.configKey)
+
   given Decoder[PeekKeyAction] = Decoder.decodeString.emap(key =>
     PeekKeyAction.values.find(_.configKey == key).toRight(s"Unknown peek key action: $key")
   )
+
   given Encoder[PeekKeymapConfig] =
     Encoder.instance(config => KeymapCodecSupport.encodeBindings(config.bindings)(_.configKey))
+
   given Decoder[PeekKeymapConfig] =
-    Decoder.decodeMap[String, List[HotkeyTrigger]].emap(bindings =>
-      KeymapCodecSupport.decodeBindings(bindings, PeekKeyAction.values.toList, _.configKey, defaultBindings)
-        .map(PeekKeymapConfig(_))
-    )
+    Decoder
+      .decodeMap[String, List[HotkeyTrigger]]
+      .emap(bindings =>
+        KeymapCodecSupport
+          .decodeBindings(bindings, PeekKeyAction.values.toList, _.configKey, defaultBindings)
+          .map(PeekKeymapConfig(_))
+      )
 
 case class FocusedKeymapConfig(
     editor: EditorKeymapConfig = EditorKeymapConfig(),
@@ -461,6 +506,7 @@ case class FocusedKeymapConfig(
     copy(peek = peek.withBinding(action, binding))
 
 object FocusedKeymapConfig:
+
   given Encoder[FocusedKeymapConfig] = Encoder.forProduct5(
     "editor",
     "commandRunner",

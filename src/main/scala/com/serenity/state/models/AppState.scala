@@ -102,13 +102,15 @@ case class AppState(
       case _                        => false
 
   def preferredCommandRunnerFocus: Option[Focus] =
-    commandRunnerSubmenuSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPaletteSubmenu(_, _, previewOnly) if !previewOnly =>
-          commandRunnerSubmenuSurface.map(surface => Focus.Surface(surface.id))
-        case _ =>
-          None
-    }.orElse(commandRunnerSurface.map(surface => Focus.Surface(surface.id)))
+    commandRunnerSubmenuSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPaletteSubmenu(_, _, previewOnly) if !previewOnly =>
+            commandRunnerSubmenuSurface.map(surface => Focus.Surface(surface.id))
+          case _ =>
+            None
+      }
+      .orElse(commandRunnerSurface.map(surface => Focus.Surface(surface.id)))
 
   def themePickerSurface: Option[UiSurface] =
     uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.ThemePicker])

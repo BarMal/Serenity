@@ -1,8 +1,10 @@
 package com.serenity
 
+import java.util.concurrent.atomic.AtomicReference
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{Enter, InsertChar, MoveDown, MoveRight, TabKey, ToggleCommandRunner}
+import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import org.scalatest.flatspec.AnyFlatSpec
@@ -37,8 +39,9 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     stateManager.applyEvent(Enter).unsafeRunSync()
 
   "StateManager" should "invoke the runtime font callback when changing buffer font size from typography settings" in {
-    var observed: List[FontConfig] = Nil
-    val stateManager = createStateManager("StateManagerFontConfigSpec", config => IO { observed = observed :+ config })
+    val observed = AtomicReference[List[FontConfig]](Nil)
+    val stateManager =
+      createStateManager("StateManagerFontConfigSpec", config => IO { observed.updateAndGet(_ :+ config); () })
 
     openTypographySubmenu(stateManager)
     stateManager.applyEvent(MoveDown).unsafeRunSync()
@@ -47,13 +50,14 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     List('1', '3').foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-    observed should not be empty
-    observed.last.fontSize shouldBe 13.0f
+    observed.get() should not be empty
+    observed.get().last.fontSize shouldBe 13.0f
   }
 
   it should "invoke the runtime font callback when changing UI font size from typography settings" in {
-    var observed: List[FontConfig] = Nil
-    val stateManager = createStateManager("StateManagerFontConfigSpec", config => IO { observed = observed :+ config })
+    val observed = AtomicReference[List[FontConfig]](Nil)
+    val stateManager =
+      createStateManager("StateManagerFontConfigSpec", config => IO { observed.updateAndGet(_ :+ config); () })
 
     openTypographySubmenu(stateManager)
     stateManager.applyEvent(MoveDown).unsafeRunSync()
@@ -63,19 +67,20 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     List('1', '5').foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-    observed should not be empty
-    observed.last.uiFontSize shouldBe 15.0f
+    observed.get() should not be empty
+    observed.get().last.uiFontSize shouldBe 15.0f
   }
 
   it should "invoke the runtime font callback when changing ligature shaping from typography settings" in {
-    var observed: List[FontConfig] = Nil
-    val stateManager = createStateManager("StateManagerFontConfigSpec", config => IO { observed = observed :+ config })
+    val observed = AtomicReference[List[FontConfig]](Nil)
+    val stateManager =
+      createStateManager("StateManagerFontConfigSpec", config => IO { observed.updateAndGet(_ :+ config); () })
 
     openTypographySubmenu(stateManager)
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveRight).unsafeRunSync()
 
-    observed should not be empty
-    observed.last.enableLigatures shouldBe false
+    observed.get() should not be empty
+    observed.get().last.enableLigatures shouldBe false
   }

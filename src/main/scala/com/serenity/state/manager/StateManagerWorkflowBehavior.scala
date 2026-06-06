@@ -34,7 +34,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
           FileUtils.getCurrentDirectory
 
     pathIO.flatMap { basePath =>
-      val workflow = FileWorkflowState(mode = mode, filename = filename, path = basePath.toString)
+      val workflow       = FileWorkflowState(mode = mode, filename = filename, path = basePath.toString)
       val predictedState = ModalStateReducer.show(Modal.FileWorkflow(workflow), state).state
       logger.info(
         s"[FILE-WORKFLOW OPENED] mode=$mode filename=${workflow.filename} path=${workflow.path} " +

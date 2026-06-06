@@ -1,8 +1,8 @@
 package com.serenity
 
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.keystroke.events.Direction
 import com.serenity.keystroke.translators.DirectionalKeyConverter
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

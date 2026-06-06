@@ -73,9 +73,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
     val phrase   = "the quick brown fox jumps over the lazy dog"
     val bufferId = setupBuffer("")
 
-    phrase.foreach { char =>
-      stateManager.applyEvent(InsertChar(char)).unsafeRunSync()
-    }
+    phrase.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val finalContent = getBufferContent(bufferId)
     finalContent.shouldBe(phrase)
@@ -84,9 +82,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
     val phrase   = "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG"
     val bufferId = setupBuffer("")
 
-    phrase.foreach { char =>
-      stateManager.applyEvent(InsertChar(char)).unsafeRunSync()
-    }
+    phrase.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val finalContent = getBufferContent(bufferId)
     finalContent.shouldBe(phrase)
@@ -95,9 +91,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
     val phrase   = "The Quick Brown Fox Jumps Over The Lazy Dog!"
     val bufferId = setupBuffer("")
 
-    phrase.foreach { char =>
-      stateManager.applyEvent(InsertChar(char)).unsafeRunSync()
-    }
+    phrase.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val finalContent = getBufferContent(bufferId)
     finalContent.shouldBe(phrase)
@@ -106,9 +100,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
     val phrase   = "Hello, World! How are you? I'm fine. (Thanks for asking) - it's 100% true."
     val bufferId = setupBuffer("")
 
-    phrase.foreach { char =>
-      stateManager.applyEvent(InsertChar(char)).unsafeRunSync()
-    }
+    phrase.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val finalContent = getBufferContent(bufferId)
     finalContent.shouldBe(phrase)
@@ -155,8 +147,8 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
 
   it should "properly translate KeyStrokeInfo for all printable ASCII" in new InputFixture:
     for charCode <- 32 to 126 do
-      val char  = charCode.toChar
-      val info  = KeyStrokeInfo(InputKey.Character, Some(char), Set.empty)
+      val char = charCode.toChar
+      val info = KeyStrokeInfo(InputKey.Character, Some(char), Set.empty)
       info.keyType.shouldBe(InputKey.Character)
       info.character.shouldBe(Some(char))
       info.modifiers.shouldBe(empty)
@@ -198,7 +190,8 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
     val translator: TextEntryTranslator = new TextEntryTranslator()
 
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+
     val stateManager: StateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()

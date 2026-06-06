@@ -7,7 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.{Enter, InsertChar, TabKey}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{BufferId, FileWorkflowField, FileWorkflowMode, FileWorkflowState, Modal, OpenFileWorkflowState, SaveAsFileWorkflowState, SurfaceContent}
+import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -15,7 +15,7 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def createStateManager(): StateManager =
@@ -23,11 +23,15 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     StateManager.apply(logger).unsafeRunSync()
 
   private def currentWorkflow(stateManager: StateManager): FileWorkflowState =
-    stateManager.getCurrentState.unsafeRunSync().modalSurface.flatMap {
-      _.content match
-        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow)
-        case _                                                          => None
-    }.getOrElse(fail("Expected active file workflow modal"))
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .modalSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow)
+          case _                                                          => None
+      }
+      .getOrElse(fail("Expected active file workflow modal"))
 
   "StateManager.applyEvent" should "refresh file workflow suggestions after path edits" in {
     val tempRoot   = Files.createTempDirectory("workflow-suggestions")
@@ -36,16 +40,18 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager.showModal(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.Open,
-            filename = "notes.scala",
-            path = tempRoot.resolve("p").toString,
-            activeField = FileWorkflowField.Path
+      stateManager
+        .showModal(
+          Modal.FileWorkflow(
+            FileWorkflowState(
+              mode = FileWorkflowMode.Open,
+              filename = "notes.scala",
+              path = tempRoot.resolve("p").toString,
+              activeField = FileWorkflowField.Path
+            )
           )
         )
-      ).unsafeRunSync()
+        .unsafeRunSync()
 
       stateManager.applyEvent(InsertChar('r')).unsafeRunSync()
 
@@ -61,28 +67,32 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "mark missing directories and require confirmation before save-as creates them" in {
-    val tempRoot    = Files.createTempDirectory("workflow-save")
-    val targetDir   = tempRoot.resolve("new").resolve("nested")
-    val targetFile  = targetDir.resolve("notes.scala")
-    val bufferId    = BufferId(0)
-    val bufferText  = "object Notes"
+    val tempRoot   = Files.createTempDirectory("workflow-save")
+    val targetDir  = tempRoot.resolve("new").resolve("nested")
+    val targetFile = targetDir.resolve("notes.scala")
+    val bufferId   = BufferId(0)
+    val bufferText = "object Notes"
 
     try
       val stateManager = createStateManager()
-      stateManager.updateState { state =>
-        val buffer = state.buffers(bufferId).copy(content = com.serenity.rope.Rope(bufferText), isDirty = true)
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
-      }.unsafeRunSync()
+      stateManager
+        .updateState { state =>
+          val buffer = state.buffers(bufferId).copy(content = com.serenity.rope.Rope(bufferText), isDirty = true)
+          state.copy(buffers = state.buffers + (bufferId -> buffer))
+        }
+        .unsafeRunSync()
 
-      stateManager.showModal(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.SaveAs,
-            filename = "notes.scala",
-            path = targetDir.toString
+      stateManager
+        .showModal(
+          Modal.FileWorkflow(
+            FileWorkflowState(
+              mode = FileWorkflowMode.SaveAs,
+              filename = "notes.scala",
+              path = targetDir.toString
+            )
           )
         )
-      ).unsafeRunSync()
+        .unsafeRunSync()
 
       stateManager.applyEvent(TabKey).unsafeRunSync()
 
@@ -120,15 +130,17 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       val stateManager = createStateManager()
       val initialState = stateManager.getCurrentState.unsafeRunSync()
 
-      stateManager.showModal(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.Open,
-            filename = "notes.scala",
-            path = tempRoot.toString
+      stateManager
+        .showModal(
+          Modal.FileWorkflow(
+            FileWorkflowState(
+              mode = FileWorkflowMode.Open,
+              filename = "notes.scala",
+              path = tempRoot.toString
+            )
           )
         )
-      ).unsafeRunSync()
+        .unsafeRunSync()
 
       stateManager.applyEvent(Enter).unsafeRunSync()
 
@@ -150,15 +162,17 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager.showModal(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.Open,
-            path = tempRoot.resolve("pro").toString,
-            activeField = FileWorkflowField.Path
+      stateManager
+        .showModal(
+          Modal.FileWorkflow(
+            FileWorkflowState(
+              mode = FileWorkflowMode.Open,
+              path = tempRoot.resolve("pro").toString,
+              activeField = FileWorkflowField.Path
+            )
           )
         )
-      ).unsafeRunSync()
+        .unsafeRunSync()
 
       stateManager.applyEvent(InsertChar('j')).unsafeRunSync()
       stateManager.applyEvent(TabKey).unsafeRunSync()
@@ -177,15 +191,17 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager.showModal(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.Open,
-            path = tempRoot.toString,
-            activeField = FileWorkflowField.Filename
+      stateManager
+        .showModal(
+          Modal.FileWorkflow(
+            FileWorkflowState(
+              mode = FileWorkflowMode.Open,
+              path = tempRoot.toString,
+              activeField = FileWorkflowField.Filename
+            )
           )
         )
-      ).unsafeRunSync()
+        .unsafeRunSync()
 
       stateManager.applyEvent(InsertChar('n')).unsafeRunSync()
       stateManager.applyEvent(TabKey).unsafeRunSync()
@@ -206,15 +222,17 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager.showModal(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.Open,
-            path = tempRoot.toString,
-            activeField = FileWorkflowField.Filename
+      stateManager
+        .showModal(
+          Modal.FileWorkflow(
+            FileWorkflowState(
+              mode = FileWorkflowMode.Open,
+              path = tempRoot.toString,
+              activeField = FileWorkflowField.Filename
+            )
           )
         )
-      ).unsafeRunSync()
+        .unsafeRunSync()
 
       stateManager.applyEvent(InsertChar('n')).unsafeRunSync()
 
@@ -233,20 +251,21 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager.showModal(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.Open,
-            filename = "missing.scala",
-            path = tempRoot.toString
+      stateManager
+        .showModal(
+          Modal.FileWorkflow(
+            FileWorkflowState(
+              mode = FileWorkflowMode.Open,
+              filename = "missing.scala",
+              path = tempRoot.toString
+            )
           )
         )
-      ).unsafeRunSync()
+        .unsafeRunSync()
 
       stateManager.applyEvent(Enter).unsafeRunSync()
 
       val workflow = currentWorkflow(stateManager)
       workflow.statusMessage shouldBe Some(s"File not found: ${tempRoot.resolve("missing.scala")}")
-    finally
-      Files.deleteIfExists(tempRoot)
+    finally Files.deleteIfExists(tempRoot)
   }

@@ -24,45 +24,46 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
   it should "never render characters beyond the right edge of editor panel" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val mockScreen = new MockScreen(80, 24)
-    
+    val mockScreen          = new MockScreen(80, 24)
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      
+
       // Setup: Create buffer with text longer than panel width
       bufferId <- stateManager.createBuffer("")
-      state <- stateManager.getCurrentState
+      state    <- stateManager.getCurrentState
       paneId = state.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // Calculate actual panel boundaries
       currentState <- stateManager.getCurrentState
-      layout = LayoutEngine.calculateLayout(currentState, ViewportSize(mockScreen.cols, mockScreen.rows))
+      layout    = LayoutEngine.calculateLayout(currentState, ViewportSize(mockScreen.cols, mockScreen.rows))
       panelRect = layout.editorPanelRect
 
       // Insert text much longer than panel width
-      longText = "x" * (panelRect.width + 20)
+      longText     = "x" * (panelRect.width + 20)
       insertEvents = longText.map(char => InsertChar(char)).toList
       _ <- insertEvents.traverse(event => stateManager.applyEvent(event))
 
       // Render the state
       finalState <- stateManager.getCurrentState
-      
+
       // Simulate rendering by placing 'x' characters within panel bounds (this is what we're testing)
-      _ = mockScreen.clear()
+      _            = mockScreen.clear()
       viewportSize = ViewportSize(mockScreen.cols, mockScreen.rows)
-      layout = LayoutEngine.calculateLayout(finalState, viewportSize)
-      panelRect = layout.editorPanelRect
-      buffer = finalState.buffers(bufferId)
-      content = buffer.content.collect()
-      
-      // Simulate placing characters on screen (basic version of what Renderer does)  
-      _ = content.zipWithIndex.foreach { case (char, i) =>
-        val x = panelRect.x + (i % panelRect.width) 
-        val y = panelRect.y + (i / panelRect.width)
-        if x < panelRect.right && y < panelRect.bottom && x < mockScreen.cols && y < mockScreen.rows then
-          mockScreen.putChar(x, y, char)
+      layout       = LayoutEngine.calculateLayout(finalState, viewportSize)
+      panelRect    = layout.editorPanelRect
+      buffer       = finalState.buffers(bufferId)
+      content      = buffer.content.collect()
+
+      // Simulate placing characters on screen (basic version of what Renderer does)
+      _ = content.zipWithIndex.foreach {
+        case (char, i) =>
+          val x = panelRect.x + (i % panelRect.width)
+          val y = panelRect.y + (i / panelRect.width)
+          if x < panelRect.right && y < panelRect.bottom && x < mockScreen.cols && y < mockScreen.rows then
+            mockScreen.putChar(x, y, char)
       }
     yield
       // Verify: No 'x' characters should appear beyond panel right boundary
@@ -84,8 +85,8 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
     // Get panel dimensions
     val currentState = stateManager.getCurrentState.unsafeRunSync()
-    val layout    = LayoutEngine.calculateLayout(currentState, ViewportSize(mockScreen.cols, mockScreen.rows))
-    val panelRect = layout.editorPanelRect
+    val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(mockScreen.cols, mockScreen.rows))
+    val panelRect    = layout.editorPanelRect
 
     // Create a line with identifiable pattern that's longer than panel
     val pattern     = "0123456789"
@@ -120,8 +121,8 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
     // Get panel dimensions
     val currentState = stateManager.getCurrentState.unsafeRunSync()
-    val layout    = LayoutEngine.calculateLayout(currentState, ViewportSize(mockScreen.cols, mockScreen.rows))
-    val panelRect = layout.editorPanelRect
+    val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(mockScreen.cols, mockScreen.rows))
+    val panelRect    = layout.editorPanelRect
 
     // Create text that will cause horizontal scrolling
     val alphabet = "abcdefghijklmnopqrstuvwxyz"
@@ -134,7 +135,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
     // Verify viewport has scrolled (cursor should be beyond initial visible area)
     val finalPane = finalState.layout.editorPanes(paneId)
-    val buffer    = finalState.buffers(bufferId)  // ← Get the correct buffer by ID
+    val buffer    = finalState.buffers(bufferId) // ← Get the correct buffer by ID
     val viewport  = buffer.viewport
     viewport.leftColumn should be > 0
 
@@ -176,7 +177,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
     // Verify viewport has scrolled to show the end
     val finalPane = finalState.layout.editorPanes(paneId)
-    val buffer    = finalState.buffers(bufferId)  // ← Get the correct buffer by ID
+    val buffer    = finalState.buffers(bufferId) // ← Get the correct buffer by ID
     val viewport  = buffer.viewport
     viewport.topLine should be > 0
 
@@ -246,7 +247,8 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
     val mockScreen = new MockScreen(80, 24)
 
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+
     val stateManager: StateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()

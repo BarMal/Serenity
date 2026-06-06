@@ -2,10 +2,10 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.input.InputRouter
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -15,7 +15,7 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class EOFGracefulShutdownIntegrationSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   "EOF Integration Test" should "demonstrate complete flow from EOF keystroke to graceful shutdown" in {
@@ -32,8 +32,7 @@ class EOFGracefulShutdownIntegrationSpec extends AnyFlatSpec with Matchers:
       _ = event shouldBe com.serenity.keystroke.events.Quit
 
       _ <- stateManager.applyEvent(event)
-    yield
-      succeed
+    yield succeed
 
     program.unsafeRunSync()
   }
@@ -53,8 +52,7 @@ class EOFGracefulShutdownIntegrationSpec extends AnyFlatSpec with Matchers:
 
       _ <- stateManager1.applyEvent(eofEvent)
       _ <- stateManager2.applyEvent(ctrlQEvent)
-    yield
-      succeed
+    yield succeed
 
     program.unsafeRunSync()
   }

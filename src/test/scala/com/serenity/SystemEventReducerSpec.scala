@@ -3,12 +3,12 @@ package com.serenity
 import java.nio.file.Paths
 
 import com.serenity.keystroke.events.{ExplorerEvent, ResizeEvent, UnhandledEvent}
+import com.serenity.keystroke.translators.TextEntryTranslator
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, SurfaceContent, SurfacePresentation}
 import com.serenity.state.reducers.{ReducerResult, SystemEventReducer}
-import com.serenity.keystroke.translators.TextEntryTranslator
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
-import com.serenity.ui.layout.{DirEntry, LayoutEngine, PanelPosition, ViewportSize}
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -106,7 +106,7 @@ class SystemEventReducerSpec extends AnyFlatSpec with Matchers:
           rootPath,
           expandedPaths = Set(selectedPath),
           entries = Map(
-            rootPath -> initialEntries,
+            rootPath     -> initialEntries,
             selectedPath -> nestedEntries
           )
         ),

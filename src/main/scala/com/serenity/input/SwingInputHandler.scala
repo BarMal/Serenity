@@ -5,7 +5,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
 import cats.effect.{Concurrent, Sync}
-import com.serenity.keystroke.events.{Event, MouseClick, MouseDrag, MousePress}
+import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.ui.layout.CellMetrics
 import fs2.Stream

@@ -11,24 +11,33 @@ object TextEditing:
     text.substring(0, text.length) + text.substring(boundary)
 
   def previousWordBoundary(text: String, cursor: Int): Int =
-    var idx = clamp(cursor, text.length)
+    val idx = clamp(cursor, text.length)
     if idx > 0 && text.charAt(idx - 1).isWhitespace then
-      while idx > 0 && text.charAt(idx - 1).isWhitespace do idx -= 1
-      while idx > 0 && !text.charAt(idx - 1).isWhitespace do idx -= 1
-    else
-      while idx > 0 && !text.charAt(idx - 1).isWhitespace do idx -= 1
-    idx
+      scanBackwardNonWhitespace(scanBackwardWhitespace(idx, text), text)
+    else scanBackwardNonWhitespace(idx, text)
 
   def nextWordBoundary(text: String, cursor: Int): Int =
     val length = text.length
-    var idx    = clamp(cursor, length)
+    val idx    = clamp(cursor, length)
     if idx < length && text.charAt(idx).isWhitespace then
-      while idx < length && text.charAt(idx).isWhitespace do idx += 1
-      while idx < length && !text.charAt(idx).isWhitespace do idx += 1
-    else
-      while idx < length && !text.charAt(idx).isWhitespace do idx += 1
-      while idx < length && text.charAt(idx).isWhitespace do idx += 1
-    idx
+      scanForwardNonWhitespace(scanForwardWhitespace(idx, text), text)
+    else scanForwardWhitespace(scanForwardNonWhitespace(idx, text), text)
 
   private def clamp(cursor: Int, length: Int): Int =
     math.max(0, math.min(cursor, length))
+
+  private def scanBackwardWhitespace(index: Int, text: String): Int =
+    if index > 0 && text.charAt(index - 1).isWhitespace then scanBackwardWhitespace(index - 1, text)
+    else index
+
+  private def scanBackwardNonWhitespace(index: Int, text: String): Int =
+    if index > 0 && !text.charAt(index - 1).isWhitespace then scanBackwardNonWhitespace(index - 1, text)
+    else index
+
+  private def scanForwardWhitespace(index: Int, text: String): Int =
+    if index < text.length && text.charAt(index).isWhitespace then scanForwardWhitespace(index + 1, text)
+    else index
+
+  private def scanForwardNonWhitespace(index: Int, text: String): Int =
+    if index < text.length && !text.charAt(index).isWhitespace then scanForwardNonWhitespace(index + 1, text)
+    else index

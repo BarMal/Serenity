@@ -109,8 +109,8 @@ object TextOverlayRenderer:
     cellMetrics: CellMetrics
   ): Unit =
     val rowView = scrolledRowView(row, width)
-    val baseFg = if defaultForeground != null then defaultForeground else theme.panel.foreground
-    val baseBg = if defaultBackground != null then defaultBackground else theme.panel.background
+    val baseFg  = if defaultForeground != null then defaultForeground else theme.panel.foreground
+    val baseBg  = if defaultBackground != null then defaultBackground else theme.panel.background
     val rowBackground =
       rowView.row.backgroundColor.getOrElse(
         if rowView.row.selected then theme.highlighted.background else baseBg
@@ -325,11 +325,11 @@ object TextOverlayRenderer:
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
-    val frc = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
-    val caretXs = TextLayoutSnapshot.caretXsForText(row.plainText, font, frc)
-    val safeColumn = cursorColumn.max(0).min(caretXs.length - 1)
-    val xPx = cellMetrics.toPixelX(x) + math.round(caretXs(safeColumn))
-    val yPx = cellMetrics.toPixelY(y)
+    val frc          = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+    val caretXs      = TextLayoutSnapshot.caretXsForText(row.plainText, font, frc)
+    val safeColumn   = cursorColumn.max(0).min(caretXs.length - 1)
+    val xPx          = cellMetrics.toPixelX(x) + math.round(caretXs(safeColumn))
+    val yPx          = cellMetrics.toPixelY(y)
     val caretWidthPx = math.max(2, math.round(cellMetrics.charWidth * 0.12f))
     surface.fillPixelRect(xPx, yPx, caretWidthPx, cellMetrics.lineHeight, theme.cursor)
 

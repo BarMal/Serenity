@@ -1,8 +1,8 @@
 package com.serenity
 
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.keystroke.events.{InsertChar, TabKey}
 import com.serenity.keystroke.translators.TextEntryTranslator
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.rope.Balance
 import com.serenity.state.components.ComponentResult
 import com.serenity.state.models.*
@@ -26,9 +26,10 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = BufferId(1)
     val cursor   = CursorPosition(0, 0)
-    val buffer   = Buffer.fromString(bufferId, "function test_func() {\n\treturn 'hello_world';\n}").copy(cursors = List(cursor))
-    val paneId   = PaneId(1)
-    val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
+    val buffer =
+      Buffer.fromString(bufferId, "function test_func() {\n\treturn 'hello_world';\n}").copy(cursors = List(cursor))
+    val paneId = PaneId(1)
+    val pane   = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
       buffers = Map(bufferId -> buffer),
       layout = Layout.empty.copy(editorPanes = Map(paneId -> pane)),

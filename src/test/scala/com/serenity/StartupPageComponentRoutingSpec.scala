@@ -23,37 +23,35 @@ class StartupPageComponentRoutingSpec extends AnyFlatSpec with Matchers:
 
   it should "route to StartupPageComponent when focus is on startup surface" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    
+
     val program = for
-      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      theme = Theme.default
+      theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
-      
+
       // Initialize startup state
       initialState <- AppStartup.initializeState(stateManager, theme, viewportSize)
-      
+
       // Verify the startup state
       _ = initialState.focus shouldBe Focus.Surface(SurfaceId("surface-0"))
-      _ = initialState.startPageSurface should be (defined)
-      
+      _ = initialState.startPageSurface should be(defined)
+
       // Test that the component routing works by manually calling the component selection logic
-      _ = {
+      _ =
         // This mimics what StateManager.getLegacyComponentForFocus does
         val surfaceId = SurfaceId("surface-0")
-        val surface = initialState.surfaceById(surfaceId).get
-        
+        val surface   = initialState.surfaceById(surfaceId).get
+
         val component = surface.content match
           case SurfaceContent.StartPage(_) => new StartupPageComponent()
-          case _ => fail("Expected StartPage content")
-        
+          case _                           => fail("Expected StartPage content")
+
         // Test that this component returns Dismiss for Escape
         val result = component.processEvent(Escape, initialState)
         import com.serenity.state.components.ComponentResult
         result shouldBe ComponentResult.Dismiss
-      }
-      
     yield ()
-    
+
     program.unsafeRunSync()
   }

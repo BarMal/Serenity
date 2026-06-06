@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.io.{FileBrowser, FileManager, FileType, FileUtils}
+import com.serenity.io.*
 import com.serenity.keystroke.events.SaveFile
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -16,7 +16,7 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def createStateManager(): StateManager =
@@ -91,18 +91,20 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       )
 
       val stateManager = createStateManager()
-      stateManager.updateState { state =>
-        state.copy(
-          buffers = state.buffers + (modifiedBuffer.id -> modifiedBuffer),
-          layout = state.layout.copy(
-            editorPanes = state.layout.editorPanes.updated(
-              PaneId(0),
-              state.layout.editorPanes(PaneId(0)).copy(bufferId = Some(modifiedBuffer.id))
-            )
-          ),
-          focus = Focus.EditorPane(PaneId(0))
-        )
-      }.unsafeRunSync()
+      stateManager
+        .updateState { state =>
+          state.copy(
+            buffers = state.buffers + (modifiedBuffer.id -> modifiedBuffer),
+            layout = state.layout.copy(
+              editorPanes = state.layout.editorPanes.updated(
+                PaneId(0),
+                state.layout.editorPanes(PaneId(0)).copy(bufferId = Some(modifiedBuffer.id))
+              )
+            ),
+            focus = Focus.EditorPane(PaneId(0))
+          )
+        }
+        .unsafeRunSync()
 
       stateManager.applyEvent(SaveFile).unsafeRunSync()
 

@@ -4,9 +4,8 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import com.serenity.animation.AnimationConfig
-import com.serenity.command.{AnimationMode, Command, CommandIntent, CommandRegistry}
-import com.serenity.io.FileEntry
-import com.serenity.io.FileUtils
+import com.serenity.command.*
+import com.serenity.io.{FileEntry, FileUtils}
 import com.serenity.keystroke.events.ExplorerEvent
 import com.serenity.lsp.LspEffect
 import com.serenity.state.core.EditorState
@@ -53,9 +52,9 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
 
   private def interpretFileEffect(effect: FileEffect): IO[Unit] =
     effect match
-      case FileEffect.SaveBuffer(bufferId)       => saveBufferEffect(bufferId)
+      case FileEffect.SaveBuffer(bufferId)         => saveBufferEffect(bufferId)
       case FileEffect.SaveBufferAs(bufferId, path) => saveBufferAsEffect(bufferId, path)
-      case FileEffect.DirectLoadFile(path)       => directLoadFileEffect(path)
+      case FileEffect.DirectLoadFile(path)         => directLoadFileEffect(path)
 
   private def interpretExplorerEffect(effect: ExplorerEffect): IO[Unit] =
     effect match
@@ -141,7 +140,9 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         beginCloseAction(CloseScope.Others, state)
       case CommandIntent.NewFile =>
         val registry = CommandRegistry.withToggleUI
-        updateState(current => AppEventReducer.reduce(com.serenity.keystroke.events.NewTab, current, registry)(using balance).state)
+        updateState(current =>
+          AppEventReducer.reduce(com.serenity.keystroke.events.NewTab, current, registry)(using balance).state
+        )
       case CommandIntent.CloseCurrentFile =>
         beginCloseAction(CloseScope.Current, state)
       case CommandIntent.FindInCurrentFile =>
@@ -268,10 +269,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
                 val refreshLspBinding =
                   buffer.filePath match
                     case Some(path) if buffer.language != language =>
-                      val uri      = path.toUri.toString
-                      val text     = buffer.content.collect()
-                      val closeOld = buffer.language.fold(IO.unit)(previous => lspQueue.offer(LspEffect.FileClosed(uri, previous)))
-                      val openNew  = language.fold(IO.unit)(next => lspQueue.offer(LspEffect.FileOpened(uri, next, text)))
+                      val uri  = path.toUri.toString
+                      val text = buffer.content.collect()
+                      val closeOld =
+                        buffer.language.fold(IO.unit)(previous => lspQueue.offer(LspEffect.FileClosed(uri, previous)))
+                      val openNew =
+                        language.fold(IO.unit)(next => lspQueue.offer(LspEffect.FileOpened(uri, next, text)))
                       closeOld >> openNew
                     case _ =>
                       IO.unit

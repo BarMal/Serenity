@@ -2,24 +2,23 @@ package com.serenity.lsp
 
 import scala.concurrent.duration.*
 
-import cats.effect.{IO, Resource}
 import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Resource}
 import com.serenity.lsp.client.LspConnection
 import com.serenity.lsp.config.LanguageId
 import io.circe.Json
 import io.circe.parser.parse
-import org.scalatest.BeforeAndAfterEach
-import org.scalatest.Ignore
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+import org.scalatest.{BeforeAndAfterEach, Ignore}
 import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 @Ignore
 class LspConnectionStreamIntegrationSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach:
 
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
-  private val logger = LoggerFactory[IO].getLogger(using LoggerName("LspConnectionStreamIntegrationSpec"))
+  private val logger      = LoggerFactory[IO].getLogger(using LoggerName("LspConnectionStreamIntegrationSpec"))
   private val testTimeout = 5.seconds
 
   override protected def beforeEach(): Unit =

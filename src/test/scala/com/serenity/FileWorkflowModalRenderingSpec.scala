@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CursorLayout, Layout, LayoutEngine, ViewportSize}
+import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -29,9 +29,11 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
       missingPathSegments = List("new", "nested"),
       confirmCreateDirectories = true
     )
-    val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma").copy(
-      cursors = List(CursorPosition(1, 2))
-    )
+    val buffer = Buffer
+      .fromString(bufferId, "alpha\nbeta\ngamma")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -93,9 +95,11 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
       path = "/tmp/project",
       statusMessage = Some("File not found: /tmp/project/missing.scala")
     )
-    val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma").copy(
-      cursors = List(CursorPosition(1, 2))
-    )
+    val buffer = Buffer
+      .fromString(bufferId, "alpha\nbeta\ngamma")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),

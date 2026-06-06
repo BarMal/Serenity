@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner}
+import com.serenity.command.*
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
@@ -42,7 +42,7 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 
   describe("Command runner navigation and execution"):
     it("should activate and gain focus when toggled"):
-      val registry  = CommandRegistry.default
+      val registry     = CommandRegistry.default
       val initialState = runnerState(registry, CommandRunner.empty, Focus.EditorPane(PaneId(1)))
 
       val result   = AppEventReducer.reduce(ToggleCommandRunner, initialState, registry)
@@ -76,9 +76,13 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
         Command.typed("second", "Second command", CommandIntent.ToggleLineNumbers),
         Command.typed("third", "Third command", CommandIntent.ToggleGutter)
       )
-      val registry    = CommandRegistry(commands)
-      val component   = CommandRunnerComponent(registry)
-      val initialState = runnerState(registry, CommandRunner.empty.activate(registry, AppConfig.default), Focus.Surface(SurfaceId("command-runner")))
+      val registry  = CommandRegistry(commands)
+      val component = CommandRunnerComponent(registry)
+      val initialState = runnerState(
+        registry,
+        CommandRunner.empty.activate(registry, AppConfig.default),
+        Focus.Surface(SurfaceId("command-runner"))
+      )
 
       runnerFrom(initialState).selectedIndex shouldEqual 0
       runnerFrom(initialState).selectedCommand.map(_.name) shouldEqual Some("first")
@@ -104,9 +108,13 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
         Command.typed("first", "First command", CommandIntent.ToggleTheme),
         Command.typed("second", "Second command", CommandIntent.ToggleLineNumbers)
       )
-      val registry     = CommandRegistry(commands)
-      val component    = CommandRunnerComponent(registry)
-      val initialState = runnerState(registry, CommandRunner.empty.activate(registry, AppConfig.default), Focus.Surface(SurfaceId("command-runner")))
+      val registry  = CommandRegistry(commands)
+      val component = CommandRunnerComponent(registry)
+      val initialState = runnerState(
+        registry,
+        CommandRunner.empty.activate(registry, AppConfig.default),
+        Focus.Surface(SurfaceId("command-runner"))
+      )
 
       component.processEvent(MoveUp, initialState) match
         case ComponentResult.StateChange(update) =>
@@ -122,9 +130,13 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
         Command.typed("search", "Search text", CommandIntent.FindInCurrentFile),
         Command.typed("open", "Open file", CommandIntent.OpenFile)
       )
-      val registry     = CommandRegistry(commands)
-      val component    = CommandRunnerComponent(registry)
-      val initialState = runnerState(registry, CommandRunner.empty.activate(registry, AppConfig.default), Focus.Surface(SurfaceId("command-runner")))
+      val registry  = CommandRegistry(commands)
+      val component = CommandRunnerComponent(registry)
+      val initialState = runnerState(
+        registry,
+        CommandRunner.empty.activate(registry, AppConfig.default),
+        Focus.Surface(SurfaceId("command-runner"))
+      )
 
       component.processEvent(InsertChar('s'), initialState) match
         case ComponentResult.StateChange(update) =>
@@ -142,14 +154,16 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
       val commands = List(
         Command.typed("test", "Test command", CommandIntent.ToggleLineNumbers)
       )
-      val registry = CommandRegistry(commands)
+      val registry  = CommandRegistry(commands)
       val component = CommandRunnerComponent(registry)
-      val runner = CommandRunner.empty.activate(registry, AppConfig.default)
+      val runner    = CommandRunner.empty.activate(registry, AppConfig.default)
       val initialState = runnerState(registry, runner, Focus.Surface(SurfaceId("command-runner")))
         .copy(focusHistory = List(Focus.EditorPane(PaneId(1))))
 
       component.processEvent(Enter, initialState) match
-        case ComponentResult.Composite(List(ComponentResult.StateChange(update), ComponentResult.ExecuteCommand(command))) =>
+        case ComponentResult.Composite(
+              List(ComponentResult.StateChange(update), ComponentResult.ExecuteCommand(command))
+            ) =>
           val newState = update(initialState)
 
           command.intent shouldEqual CommandIntent.ToggleLineNumbers
@@ -159,9 +173,10 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
           fail("Expected state change")
 
     it("should handle backspace in search term"):
-      val registry   = CommandRegistry.default
-      val component  = CommandRunnerComponent(registry)
-      val activeRunner = CommandRunner.empty.activate(registry, AppConfig.default).updateSearchTerm("test")(using registry)
+      val registry  = CommandRegistry.default
+      val component = CommandRunnerComponent(registry)
+      val activeRunner =
+        CommandRunner.empty.activate(registry, AppConfig.default).updateSearchTerm("test")(using registry)
       val initialState = runnerState(registry, activeRunner, Focus.Surface(SurfaceId("command-runner")))
 
       runnerFrom(initialState).searchTerm shouldEqual "test"

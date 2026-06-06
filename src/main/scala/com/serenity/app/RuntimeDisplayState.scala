@@ -54,9 +54,9 @@ final class RuntimeDisplayState private (
           }
         else
           logger.warn(
-            s"Rejecting font config: invalid metrics " +
+            "Rejecting font config: invalid metrics " +
               s"(code charWidth=${snapshot.codeMetrics.charWidth}, text charWidth=${snapshot.textMetrics.charWidth}, ui charWidth=${snapshot.uiMetrics.charWidth}). " +
-              s"Keeping previous fonts."
+              "Keeping previous fonts."
           )
       }
 

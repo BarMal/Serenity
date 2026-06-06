@@ -24,9 +24,13 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
               case ModalDeleteForward =>
                 ComponentResult.updateState(_ => updateQuery(state, surface, searchState.query))
               case ModalDeleteWordBackward =>
-                ComponentResult.updateState(_ => updateQuery(state, surface, TextEditing.deleteWordBackward(searchState.query)))
+                ComponentResult.updateState(_ =>
+                  updateQuery(state, surface, TextEditing.deleteWordBackward(searchState.query))
+                )
               case ModalDeleteWordForward =>
-                ComponentResult.updateState(_ => updateQuery(state, surface, TextEditing.deleteWordForward(searchState.query)))
+                ComponentResult.updateState(_ =>
+                  updateQuery(state, surface, TextEditing.deleteWordForward(searchState.query))
+                )
               case ModalNavigate(Direction.Up) =>
                 ComponentResult.updateState(_ => updateSelection(state, surface, searchState, -1))
               case ModalNavigate(Direction.Down) =>

@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, CommandRunner, CommandSurfaceItem}
+import com.serenity.command.*
 import com.serenity.config.{AppConfig, BackgroundStyle}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
@@ -71,7 +71,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "surface typed command intents through execute effects" in {
-    val command  = Command.typed("toggle-line-numbers", "Toggle line numbers display on/off", CommandIntent.ToggleLineNumbers)
+    val command =
+      Command.typed("toggle-line-numbers", "Toggle line numbers display on/off", CommandIntent.ToggleLineNumbers)
     val registry = CommandRegistry(List(command))
     val state    = activeState(registry)
 
@@ -98,7 +99,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   it should "delete the previous word from the search term" in {
     val registry = CommandRegistry.default
     val state    = activeState(registry)
-    val typed    = List('a', 'l', 'p', 'h', 'a', ' ', 'b', 'e', 't', 'a').foldLeft(state) { (s, c) =>
+    val typed = List('a', 'l', 'p', 'h', 'a', ' ', 'b', 'e', 't', 'a').foldLeft(state) { (s, c) =>
       CommandRunnerReducer.reduce(InsertChar(c), s, registry).state
     }
 
@@ -108,55 +109,63 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "switch categories with tab and reverse-tab while search is empty" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val state    = activeState(registry)
+    val state             = activeState(registry)
 
     val movedRight = CommandRunnerReducer.reduce(TabKey, state, registry)
-    val runnerAfterRight = movedRight.state.commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(runner) => Some(runner)
-        case _                                     => None
-    }.getOrElse(fail("Expected command runner surface"))
+    val runnerAfterRight = movedRight.state.commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(runner) => Some(runner)
+          case _                                     => None
+      }
+      .getOrElse(fail("Expected command runner surface"))
 
     runnerAfterRight.activeCategory shouldBe CommandCategory.File
 
     val movedLeft = CommandRunnerReducer.reduce(ReverseTabKey, movedRight.state, registry)
-    val runnerAfterLeft = movedLeft.state.commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(runner) => Some(runner)
-        case _                                     => None
-    }.getOrElse(fail("Expected command runner surface"))
+    val runnerAfterLeft = movedLeft.state.commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(runner) => Some(runner)
+          case _                                     => None
+      }
+      .getOrElse(fail("Expected command runner surface"))
 
     runnerAfterLeft.activeCategory shouldBe CommandCategory.All
   }
 
   it should "leave the category unchanged when left and right are pressed on non-option rows" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val state    = activeState(registry)
+    val state             = activeState(registry)
 
     val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), state, registry)
-    val runnerAfterRight = movedRight.state.commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(runner) => Some(runner)
-        case _                                     => None
-    }.getOrElse(fail("Expected command runner surface"))
+    val runnerAfterRight = movedRight.state.commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(runner) => Some(runner)
+          case _                                     => None
+      }
+      .getOrElse(fail("Expected command runner surface"))
 
     runnerAfterRight.activeCategory shouldBe CommandCategory.All
 
     val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
-    val runnerAfterLeft = movedLeft.state.commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(runner) => Some(runner)
-        case _                                     => None
-    }.getOrElse(fail("Expected command runner surface"))
+    val runnerAfterLeft = movedLeft.state.commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(runner) => Some(runner)
+          case _                                     => None
+      }
+      .getOrElse(fail("Expected command runner surface"))
 
     runnerAfterLeft.activeCategory shouldBe CommandCategory.All
   }
 
   it should "search globally even when opened on a narrower category" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
@@ -174,11 +183,13 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val typed = CommandRunnerReducer.reduce(InsertChar('t'), state, registry)
-    val typedRunner = typed.state.commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(updatedRunner) => Some(updatedRunner)
-        case _                                            => None
-    }.getOrElse(fail("Expected command runner surface"))
+    val typedRunner = typed.state.commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(updatedRunner) => Some(updatedRunner)
+          case _                                            => None
+      }
+      .getOrElse(fail("Expected command runner surface"))
 
     typedRunner.searchTerm shouldBe "t"
     typedRunner.visibleItems.exists {
@@ -188,7 +199,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "adjust the selected animation option inside the submenu with left and right" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
@@ -214,37 +225,49 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
-    val runnerAfterLeft = movedLeft.state.commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(updatedRunner) => Some(updatedRunner)
-        case _                                            => None
-    }.getOrElse(fail("Expected command runner surface"))
+    val runnerAfterLeft = movedLeft.state.commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(updatedRunner) => Some(updatedRunner)
+          case _                                            => None
+      }
+      .getOrElse(fail("Expected command runner surface"))
 
-    runnerAfterLeft.submenuItems("settings-animation").collectFirst {
-      case option: CommandSurfaceItem.OptionItem if option.id == "animation-mode" => option.selectedOption
-    }.shouldBe(Some("Subtle"))
+    runnerAfterLeft
+      .submenuItems("settings-animation")
+      .collectFirst {
+        case option: CommandSurfaceItem.OptionItem if option.id == "animation-mode" => option.selectedOption
+      }
+      .shouldBe(Some("Subtle"))
 
     val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), movedLeft.state, registry)
-    val runnerAfterRight = movedRight.state.commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(updatedRunner) => Some(updatedRunner)
-        case _                                            => None
-    }.getOrElse(fail("Expected command runner surface"))
+    val runnerAfterRight = movedRight.state.commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(updatedRunner) => Some(updatedRunner)
+          case _                                            => None
+      }
+      .getOrElse(fail("Expected command runner surface"))
 
-    runnerAfterRight.submenuItems("settings-animation").collectFirst {
-      case option: CommandSurfaceItem.OptionItem if option.id == "animation-mode" => option.selectedOption
-    }.shouldBe(Some("Full"))
+    runnerAfterRight
+      .submenuItems("settings-animation")
+      .collectFirst {
+        case option: CommandSurfaceItem.OptionItem if option.id == "animation-mode" => option.selectedOption
+      }
+      .shouldBe(Some("Full"))
   }
 
   it should "adjust the selected background style inside the submenu with left and right" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
       .withSelectedItem("settings-appearance")
       .enterSelectedGroup
-      .copy(activeSubmenu = Some(com.serenity.command.CommandRunnerSubmenuState("settings-appearance", selectedIndex = 1)))
+      .copy(activeSubmenu =
+        Some(com.serenity.command.CommandRunnerSubmenuState("settings-appearance", selectedIndex = 1))
+      )
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -263,15 +286,20 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
-    val runnerAfterLeft = movedLeft.state.commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(updatedRunner) => Some(updatedRunner)
-        case _                                            => None
-    }.getOrElse(fail("Expected command runner surface"))
+    val runnerAfterLeft = movedLeft.state.commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(updatedRunner) => Some(updatedRunner)
+          case _                                            => None
+      }
+      .getOrElse(fail("Expected command runner surface"))
 
-    runnerAfterLeft.submenuItems("settings-appearance").collectFirst {
-      case option: CommandSurfaceItem.OptionItem if option.id == "background-style" => option.selectedOption
-    }.shouldBe(Some("Transparent"))
+    runnerAfterLeft
+      .submenuItems("settings-appearance")
+      .collectFirst {
+        case option: CommandSurfaceItem.OptionItem if option.id == "background-style" => option.selectedOption
+      }
+      .shouldBe(Some("Transparent"))
 
     val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), movedLeft.state, registry)
     movedRight.effects.exists {
@@ -283,7 +311,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "open a preview submenu for the selected expandable settings row without moving focus" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
@@ -308,7 +336,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "focus the submenu on enter and return to the parent runner on escape" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
@@ -340,11 +368,13 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "exit submenu edit mode on escape before leaving the submenu" in {
     val registry = CommandRegistry.default
-    val state = CommandRunnerReducer.reduce(
-      RunnerInsertChar('5'),
-      settingsStateOnItem("settings-animation", "animation-duration"),
-      registry
-    ).state
+    val state = CommandRunnerReducer
+      .reduce(
+        RunnerInsertChar('5'),
+        settingsStateOnItem("settings-animation", "animation-duration"),
+        registry
+      )
+      .state
 
     runnerFrom(state).activeSubmenu.flatMap(_.editingItemId) shouldBe Some("animation-duration")
 
@@ -359,11 +389,11 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "preserve submenu selection when exiting to the parent and re-entering the same group" in {
     val registry = CommandRegistry.default
-    val state = settingsStateOnItem("settings-animation", "animation-steps")
+    val state    = settingsStateOnItem("settings-animation", "animation-steps")
 
-    val exited = CommandRunnerReducer.reduce(RunnerDismiss, state, registry)
+    val exited    = CommandRunnerReducer.reduce(RunnerDismiss, state, registry)
     val reentered = CommandRunnerReducer.reduce(RunnerSubmit, exited.state, registry)
-    val runner = runnerFrom(reentered.state)
+    val runner    = runnerFrom(reentered.state)
 
     runner.activeSubmenu.map(_.selectedIndex) shouldBe Some(2)
     runner.activeSubmenu.flatMap(_.selectedItem(runner.submenuItems("settings-animation")).map(_.id)) shouldBe
@@ -380,14 +410,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val runner = runnerFrom(searched)
 
     runner.activeSubmenu.map(_.searchTerm) shouldBe Some("java")
-    runner.focusedSubmenuItems.collect {
-      case CommandSurfaceItem.CommandItem(command) => command.label
-    } shouldBe List("Java", "JavaScript")
+    runner.focusedSubmenuItems.collect { case CommandSurfaceItem.CommandItem(command) => command.label } shouldBe List(
+      "Java",
+      "JavaScript"
+    )
 
     val submitted = CommandRunnerReducer.reduce(RunnerSubmit, searched, registry)
-    submitted.effects.collectFirst {
-      case AppEffect.ExecuteCommand(command) => command.intent
-    } shouldBe Some(CommandIntent.SetBufferLanguage(Some(com.serenity.lsp.config.LanguageId.Java)))
+    submitted.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
+      CommandIntent.SetBufferLanguage(Some(com.serenity.lsp.config.LanguageId.Java))
+    )
   }
 
   it should "clear submenu search with escape before leaving the submenu" in {
@@ -407,15 +438,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   it should "discard in-progress submenu edit text when exiting and re-entering the group" in {
     val registry = CommandRegistry.default
     val editingState = List('5').foldLeft(
-      CommandRunnerReducer.reduce(RunnerSubmit, settingsStateOnItem("settings-animation", "animation-steps"), registry).state
-    ) { (s, c) =>
-      CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry).state
-    }
+      CommandRunnerReducer
+        .reduce(RunnerSubmit, settingsStateOnItem("settings-animation", "animation-steps"), registry)
+        .state
+    )((s, c) => CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry).state)
 
     val stoppedEditing = CommandRunnerReducer.reduce(RunnerDismiss, editingState, registry)
-    val exited = CommandRunnerReducer.reduce(RunnerDismiss, stoppedEditing.state, registry)
-    val reentered = CommandRunnerReducer.reduce(RunnerSubmit, exited.state, registry)
-    val runner = runnerFrom(reentered.state)
+    val exited         = CommandRunnerReducer.reduce(RunnerDismiss, stoppedEditing.state, registry)
+    val reentered      = CommandRunnerReducer.reduce(RunnerSubmit, exited.state, registry)
+    val runner         = runnerFrom(reentered.state)
 
     runner.activeSubmenu.map(_.selectedIndex) shouldBe Some(2)
     runner.activeSubmenu.flatMap(_.editingItemId) shouldBe None
@@ -427,12 +458,13 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     itemId: String,
     config: AppConfig = AppConfig.default
   ): AppState =
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val baseRunner = CommandRunner.empty
       .activate(registry, config)
       .withActiveCategory(CommandCategory.Settings)
-    val groupIndex = baseRunner.settingsGroups.find(_.id == groupId).map(_.children.indexWhere(_.id == itemId)).getOrElse(0)
+    val groupIndex =
+      baseRunner.settingsGroups.find(_.id == groupId).map(_.children.indexWhere(_.id == itemId)).getOrElse(0)
     val runner = baseRunner
       .withSelectedItem(groupId)
       .enterSelectedGroup
@@ -455,11 +487,13 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
 
   private def runnerFrom(state: AppState): CommandRunner =
-    state.commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(r) => Some(r)
-        case _                               => None
-    }.getOrElse(fail("Expected command runner surface"))
+    state.commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(r) => Some(r)
+          case _                                => None
+      }
+      .getOrElse(fail("Expected command runner surface"))
 
   it should "select an input item without auto-entering edit mode" in {
     val registry = CommandRegistry.default
@@ -483,8 +517,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "start editing on first typed digit and replace the saved value" in {
-    val registry   = CommandRegistry.default
-    val state      = settingsStateOnItem("settings-animation", "animation-steps")
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-animation", "animation-steps")
 
     val result = CommandRunnerReducer.reduce(RunnerInsertChar('5'), state, registry)
     runnerFrom(result.state).activeSubmenu.flatMap(_.editingItemId) shouldBe Some("animation-steps")
@@ -496,7 +530,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val state    = settingsStateOnItem("settings-animation", "animation-steps")
 
     val result = CommandRunnerReducer.reduce(RunnerInsertChar('x'), state, registry)
-    runnerFrom(result.state).activeSubmenu.map(_.editingText) shouldBe runnerFrom(state).activeSubmenu.map(_.editingText)
+    runnerFrom(result.state).activeSubmenu.map(_.editingText) shouldBe runnerFrom(state).activeSubmenu.map(
+      _.editingText
+    )
   }
 
   it should "reject a decimal point on an integer InputItem" in {
@@ -504,7 +540,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val state    = settingsStateOnItem("settings-animation", "animation-steps")
 
     val result = CommandRunnerReducer.reduce(RunnerInsertChar('.'), state, registry)
-    runnerFrom(result.state).activeSubmenu.map(_.editingText) shouldBe runnerFrom(state).activeSubmenu.map(_.editingText)
+    runnerFrom(result.state).activeSubmenu.map(_.editingText) shouldBe runnerFrom(state).activeSubmenu.map(
+      _.editingText
+    )
   }
 
   it should "accept a decimal point on a decimal InputItem once dots are cleared" in {
@@ -512,7 +550,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val state    = settingsStateOnItem("settings-appearance", "blur-radius")
 
     val after0 = CommandRunnerReducer.reduce(RunnerInsertChar('0'), state, registry)
-    val s0 = state.copy(uiSurfaces = state.uiSurfaces.map(s => s.copy(content = SurfaceContent.CommandPalette(runnerFrom(after0.state)))))
+    val s0 = state.copy(uiSurfaces =
+      state.uiSurfaces.map(s => s.copy(content = SurfaceContent.CommandPalette(runnerFrom(after0.state))))
+    )
 
     val afterDot = CommandRunnerReducer.reduce(RunnerInsertChar('.'), s0, registry)
     runnerFrom(afterDot.state).activeSubmenu.map(_.editingText) shouldBe Some("0.")
@@ -525,7 +565,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val after0 = runnerFrom(CommandRunnerReducer.reduce(RunnerInsertChar('0'), state, registry).state)
     val s1 = state.copy(uiSurfaces = state.uiSurfaces.map(s => s.copy(content = SurfaceContent.CommandPalette(after0))))
     val afterDot = runnerFrom(CommandRunnerReducer.reduce(RunnerInsertChar('.'), s1, registry).state)
-    val s2 = state.copy(uiSurfaces = state.uiSurfaces.map(s => s.copy(content = SurfaceContent.CommandPalette(afterDot))))
+    val s2 =
+      state.copy(uiSurfaces = state.uiSurfaces.map(s => s.copy(content = SurfaceContent.CommandPalette(afterDot))))
     val afterSecondDot = runnerFrom(CommandRunnerReducer.reduce(RunnerInsertChar('.'), s2, registry).state)
 
     afterSecondDot.activeSubmenu.map(_.editingText) shouldBe afterDot.activeSubmenu.map(_.editingText)
@@ -533,11 +574,13 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "delete the last character on backspace" in {
     val registry = CommandRegistry.default
-    val state = CommandRunnerReducer.reduce(
-      RunnerInsertChar('5'),
-      settingsStateOnItem("settings-animation", "animation-steps"),
-      registry
-    ).state
+    val state = CommandRunnerReducer
+      .reduce(
+        RunnerInsertChar('5'),
+        settingsStateOnItem("settings-animation", "animation-steps"),
+        registry
+      )
+      .state
     val runner     = runnerFrom(state)
     val textBefore = runner.activeSubmenu.map(_.editingText).getOrElse("")
 
@@ -551,7 +594,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     val typed = List('2', '0').foldLeft(state) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
-      s.copy(uiSurfaces = s.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state)))))
+      s.copy(uiSurfaces =
+        s.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state))))
+      )
     }
 
     val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
@@ -569,7 +614,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     val typedOutOfBounds = List('9', '9', '9').foldLeft(state) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
-      s.copy(uiSurfaces = s.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state)))))
+      s.copy(uiSurfaces =
+        s.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state))))
+      )
     }
 
     val result = CommandRunnerReducer.reduce(RunnerSubmit, typedOutOfBounds, registry)
@@ -577,13 +624,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "discard editing text when navigating to a different item" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val state = settingsStateOnItem("settings-animation", "animation-steps")
+    val state             = settingsStateOnItem("settings-animation", "animation-steps")
 
     val typedState = List('5').foldLeft(state) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
-      s.copy(uiSurfaces = s.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state)))))
+      s.copy(uiSurfaces =
+        s.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state))))
+      )
     }
 
     val navigated = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Down), typedState, registry)
@@ -597,7 +646,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     val state = List('5').foldLeft(settingsStateOnItem("settings-animation", "animation-steps")) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
-      s.copy(uiSurfaces = s.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state)))))
+      s.copy(uiSurfaces =
+        s.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state))))
+      )
     }
 
     val cancelled = CommandRunnerReducer.reduce(Escape, state, registry)

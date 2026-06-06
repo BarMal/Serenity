@@ -1,7 +1,7 @@
 package com.serenity.app
 
-import com.serenity.config.AppConfig
 import cats.effect.IO
+import com.serenity.config.AppConfig
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize

@@ -30,13 +30,13 @@ class Java2DRenderSurface(
   g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
   g.setFont(font)
 
-  /** The FontRenderContext this surface uses for text layout. Exposed so that TextLayoutSnapshot and
-    * other measurement code can use the identical FRC, preventing cursor drift on proportional fonts.
+  /** The FontRenderContext this surface uses for text layout. Exposed so that TextLayoutSnapshot and other measurement
+    * code can use the identical FRC, preventing cursor drift on proportional fonts.
     */
   private val renderContext: FontRenderContext = g.getFontRenderContext()
 
-  private val fgRef = AtomicReference(Color.WHITE)
-  private val bgRef = AtomicReference(Color.BLACK)
+  private val fgRef       = AtomicReference(Color.WHITE)
+  private val bgRef       = AtomicReference(Color.BLACK)
   private val baseFontRef = AtomicReference(font)
 
   override def setFont(newFont: Font): Unit =
@@ -51,6 +51,7 @@ class Java2DRenderSurface(
     if s.nonEmpty then
       g.setColor(fgRef.get())
       g.drawString(s, xPx, (yPx + ascentPx).toFloat)
+
   def setForegroundColor(color: Color): Unit = fgRef.set(color)
   def setBackgroundColor(color: Color): Unit = bgRef.set(color)
   def getBackgroundColor: Color              = bgRef.get()
@@ -82,13 +83,14 @@ class Java2DRenderSurface(
       }
 
   def enableStyle(style: TextStyle): Unit =
-    val styled = baseFontRef.get().deriveFont(
-      (if style.isBold then java.awt.Font.BOLD else 0) |
-        (if style.isItalic then java.awt.Font.ITALIC else 0)
-    )
+    val styled = baseFontRef
+      .get()
+      .deriveFont(
+        (if style.isBold then java.awt.Font.BOLD else 0) |
+          (if style.isItalic then java.awt.Font.ITALIC else 0)
+      )
     val derived =
-      if style.isUnderlined then
-        styled.deriveFont(Map(TextAttribute.UNDERLINE -> TextAttribute.UNDERLINE_ON).asJava)
+      if style.isUnderlined then styled.deriveFont(Map(TextAttribute.UNDERLINE -> TextAttribute.UNDERLINE_ON).asJava)
       else styled
     g.setFont(derived)
 
@@ -127,12 +129,12 @@ class Java2DRenderSurface(
     color: Color,
     strokeWidth: Float = 1.5f
   ): Unit =
-    val px             = metrics.toPixelX(x)
-    val py             = metrics.toPixelY(y)
-    val pw             = width * metrics.charWidth
-    val ph             = height * metrics.lineHeight
-    val inset          = math.ceil(strokeWidth / 2).toInt
-    val savedStroke    = g.getStroke
+    val px          = metrics.toPixelX(x)
+    val py          = metrics.toPixelY(y)
+    val pw          = width * metrics.charWidth
+    val ph          = height * metrics.lineHeight
+    val inset       = math.ceil(strokeWidth / 2).toInt
+    val savedStroke = g.getStroke
     g.setColor(color)
     g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND))
     g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)

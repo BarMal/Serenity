@@ -1,6 +1,7 @@
 package com.serenity.animation
 
 import java.awt.Color
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

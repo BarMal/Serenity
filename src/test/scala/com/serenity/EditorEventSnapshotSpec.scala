@@ -9,8 +9,8 @@ import com.serenity.ui.layout.{Layout, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Verifies that MoveUp / MoveDown navigate correctly when using a single shared snapshot
-  * (exercising the navigationSnapshot extraction in B3).
+/** Verifies that MoveUp / MoveDown navigate correctly when using a single shared snapshot (exercising the
+  * navigationSnapshot extraction in B3).
   */
 class EditorEventSnapshotSpec extends AnyFlatSpec with Matchers:
 
@@ -33,10 +33,10 @@ class EditorEventSnapshotSpec extends AnyFlatSpec with Matchers:
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     AppState.initial.copy(
-      buffers     = Map(bufferId -> buffer),
+      buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
       layout = Layout(
-        editorPanes        = Map(paneId -> pane),
+        editorPanes = Map(paneId -> pane),
         activeEditorPaneId = Some(paneId)
       ),
       viewportSize = Some(ViewportSize(80, 24))
@@ -46,7 +46,7 @@ class EditorEventSnapshotSpec extends AnyFlatSpec with Matchers:
     val state     = stateWith("hello\nworld", CursorPosition(line = 1, column = 2))
     val result    = EditorEventReducer.reduce(MoveUp, paneId, state).state
     val newCursor = result.buffers(bufferId).cursors.head
-    newCursor.line   shouldBe 0
+    newCursor.line shouldBe 0
     newCursor.column shouldBe 2
   }
 
@@ -54,7 +54,7 @@ class EditorEventSnapshotSpec extends AnyFlatSpec with Matchers:
     val state     = stateWith("hello\nworld", CursorPosition(line = 0, column = 2))
     val result    = EditorEventReducer.reduce(MoveDown, paneId, state).state
     val newCursor = result.buffers(bufferId).cursors.head
-    newCursor.line   shouldBe 1
+    newCursor.line shouldBe 1
     newCursor.column shouldBe 2
   }
 

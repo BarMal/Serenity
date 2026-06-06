@@ -1,8 +1,8 @@
 package com.serenity
 
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.SingleLineFormTranslator
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

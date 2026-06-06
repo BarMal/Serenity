@@ -43,10 +43,12 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
   it should "restore editor focus when runner replaces a modal that held focus" in {
     val base = AppState.initial.copy(focus = Focus.EditorPane(PaneId(0)))
 
-    val withModal = ModalStateReducer.show(
-      Modal.FileWorkflow(FileWorkflowState(FileWorkflowMode.Open, "", "")),
-      base
-    ).state
+    val withModal = ModalStateReducer
+      .show(
+        Modal.FileWorkflow(FileWorkflowState(FileWorkflowMode.Open, "", "")),
+        base
+      )
+      .state
     val modalSurfaceId = withModal.modalSurface.get.id
     withModal.focus shouldBe Focus.Surface(modalSurfaceId)
 

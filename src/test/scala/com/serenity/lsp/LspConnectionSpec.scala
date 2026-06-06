@@ -14,13 +14,13 @@ import io.circe.syntax.*
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach:
 
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
-  private val logger = LoggerFactory[IO].getLogger(using LoggerName("LspConnectionSpec"))
+  private val logger      = LoggerFactory[IO].getLogger(using LoggerName("LspConnectionSpec"))
   private val testTimeout = 3.seconds
 
   override protected def beforeEach(): Unit =
@@ -57,13 +57,16 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
 
   "LspConnection.sendRequest" should "enqueue a request and complete when the matching response arrives" in
     (for
-      conn          <- makeConnection()
-      requestFiber  <- conn.sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace")).start
-      outgoing      <- conn.takeOutgoing
-      requestJson   <- IO.fromOption(outgoing)(new RuntimeException("Missing outgoing request"))
-      requestId     <- IO.fromOption(requestJson.hcursor.downField("id").as[Long].toOption)(new RuntimeException("Missing request id"))
-      _             <- conn.handleIncomingJson(Json.obj("jsonrpc" -> "2.0".asJson, "id" -> requestId.asJson, "result" -> Json.obj()))
-      response      <- requestFiber.joinWithNever
+      conn         <- makeConnection()
+      requestFiber <- conn.sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace")).start
+      outgoing     <- conn.takeOutgoing
+      requestJson  <- IO.fromOption(outgoing)(new RuntimeException("Missing outgoing request"))
+      requestId <- IO
+        .fromOption(requestJson.hcursor.downField("id").as[Long].toOption)(new RuntimeException("Missing request id"))
+      _ <- conn.handleIncomingJson(
+        Json.obj("jsonrpc" -> "2.0".asJson, "id" -> requestId.asJson, "result" -> Json.obj())
+      )
+      response <- requestFiber.joinWithNever
     yield
       requestJson.hcursor.downField("method").as[String].toOption shouldBe Some("initialize")
       response.hcursor.downField("id").as[Long].toOption shouldBe Some(requestId)
@@ -71,15 +74,18 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
 
   "LspConnection.sendNotification" should "enqueue a notification without an id" in
     (for
-      conn        <- makeConnection()
-      _           <- conn.sendNotification("textDocument/didOpen",
-                       LspProtocol.didOpenParams("file:///workspace/Foo.scala", "scala", 1, "object Foo"))
+      conn <- makeConnection()
+      _ <- conn.sendNotification(
+        "textDocument/didOpen",
+        LspProtocol.didOpenParams("file:///workspace/Foo.scala", "scala", 1, "object Foo")
+      )
       outgoing    <- conn.takeOutgoing
       messageJson <- IO.fromOption(outgoing)(new RuntimeException("Missing outgoing notification"))
     yield
       messageJson.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didOpen")
       messageJson.hcursor.downField("id").as[Long].toOption shouldBe None
-      messageJson.hcursor.downField("params")
+      messageJson.hcursor
+        .downField("params")
         .downField("textDocument")
         .downField("uri")
         .as[String]
@@ -124,8 +130,7 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
           _      <- conn.handleIncomingJson(windowLogNotif)
           _      <- conn.handleIncomingJson(pubDiagsEmpty)
           result <- callQueue.take.timeout(testTimeout)
-        yield
-          result._2 shouldBe empty
+        yield result._2 shouldBe empty
       }
     yield succeed).timeout(testTimeout).unsafeRunSync()
 

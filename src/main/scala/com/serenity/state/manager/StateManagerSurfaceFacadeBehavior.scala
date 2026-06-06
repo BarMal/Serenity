@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.effect.IO
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalStateReducer, PanelStateReducer, PeekStateReducer}
-import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, PanelContent, PanelPosition, PeekContent}
+import com.serenity.ui.layout.*
 
 private[manager] trait StateManagerSurfaceFacadeBehavior extends StateManagerEditorFacadeBehavior:
   this: StateManager =>

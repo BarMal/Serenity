@@ -5,7 +5,7 @@ import java.nio.file.Path
 import scala.concurrent.duration.FiniteDuration
 
 import com.serenity.animation.AnimationConfig
-import com.serenity.config.{AppConfig, BackgroundStyle, CursorMode, FocusedKeymapConfig, HotkeyConfig, WindowChromeMode}
+import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -120,7 +120,7 @@ object SessionState:
       focus = focus,
       uiSurfaces = List.empty, // Never restore UI surfaces
       actionStack = Nil,       // Never restore action stack
-      viewportSize = None, // Will be set when app starts
+      viewportSize = None,     // Will be set when app starts
       theme = theme,
       config = sessionState.config,
       recentFiles = sessionState.recentFiles.map(Path.of(_)),

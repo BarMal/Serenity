@@ -2,9 +2,11 @@ package com.serenity.lsp
 
 import java.nio.file.Files
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{Enter, InsertChar, LoadFile, MoveDown, Quit, ToggleCommandRunner}
+import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -13,11 +15,9 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-import scala.concurrent.duration.*
-
 class LspQueueSpec extends AnyFlatSpec with Matchers:
 
-  given Balance            = Balance.default
+  given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def makeStateManager(): StateManager =
@@ -53,7 +53,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
       effects should have size 1
       effects.head match
         case LspEffect.FileOpened(uri, lang, text) =>
-          uri  should include("test-lsp")
+          uri should include("test-lsp")
           lang shouldBe LanguageId.Scala
           text shouldBe "object Foo"
         case other => fail(s"Expected FileOpened, got $other")
@@ -78,8 +78,10 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
       fileOpened should have size 1
 
-      val bufferId = sm.getCurrentState.unsafeRunSync()
-        .buffers.values
+      val bufferId = sm.getCurrentState
+        .unsafeRunSync()
+        .buffers
+        .values
         .find(_.filePath.contains(tempFile))
         .map(_.id)
 

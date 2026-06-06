@@ -2,9 +2,9 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.layout.ViewportSize
@@ -16,7 +16,7 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   "RenderController.handleResize" should "immediately trigger re-render when resize is detected" in {
@@ -110,8 +110,7 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
       _            <- stateManager.applyEvent(com.serenity.keystroke.events.Quit)
-    yield
-      succeed
+    yield succeed
 
     program.unsafeRunSync()
   }
@@ -122,9 +121,13 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
     val eofEvent = translator.translate(KeyStrokeInfo(InputKey.EOF, None, Set.empty))
     eofEvent shouldBe com.serenity.keystroke.events.Quit
 
-    val unknownEvent    = translator.translate(KeyStrokeInfo(InputKey.Unknown, None, Set.empty)).asInstanceOf[UnhandledEvent[?]]
-    val nullCharEvent   = translator.translate(KeyStrokeInfo(InputKey.Character, None, Set.empty)).asInstanceOf[UnhandledEvent[?]]
-    val normalCharEvent = translator.translate(KeyStrokeInfo(InputKey.Character, Some(167.toChar), Set.empty)).asInstanceOf[UnhandledEvent[?]]
+    val unknownEvent =
+      translator.translate(KeyStrokeInfo(InputKey.Unknown, None, Set.empty)).asInstanceOf[UnhandledEvent[?]]
+    val nullCharEvent =
+      translator.translate(KeyStrokeInfo(InputKey.Character, None, Set.empty)).asInstanceOf[UnhandledEvent[?]]
+    val normalCharEvent = translator
+      .translate(KeyStrokeInfo(InputKey.Character, Some(167.toChar), Set.empty))
+      .asInstanceOf[UnhandledEvent[?]]
 
     isSystemEvent(unknownEvent) shouldBe true
     isSystemEvent(nullCharEvent) shouldBe true

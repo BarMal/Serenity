@@ -13,9 +13,9 @@ class PeekOverlayComponentSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private def baseState: AppState =
-    val paneId = PaneId(0)
+    val paneId   = PaneId(0)
     val bufferId = BufferId(1)
-    val buffer = Buffer.fromString(bufferId, "hello")
+    val buffer   = Buffer.fromString(bufferId, "hello")
     AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),

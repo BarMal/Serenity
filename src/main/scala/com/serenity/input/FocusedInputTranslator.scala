@@ -16,20 +16,20 @@ object FocusedInputTranslator:
       if state.hasCommandRunnerDomain then commandRunnerTranslator
       else
         state.activeSurface match
-        case Some(surface) =>
-          surface.presentation match
-            case com.serenity.state.models.SurfacePresentation.Pinned(_, _) =>
-              pinnedPanelTranslator
-            case _ =>
-              surface.content match
-                case SurfaceContent.CommandPalette(_)              => commandRunnerTranslator
-                case SurfaceContent.CommandPaletteSubmenu(_, _, _) => commandRunnerTranslator
-                case SurfaceContent.ModalWorkflow(_)               => formTranslator
-                case SurfaceContent.ThemePicker(_)                 => formTranslator
-                case SurfaceContent.FileSearch(_)                  => formTranslator
-                case SurfaceContent.StartPage(_)                   => editorTranslator
-                case _                                             => peekOverlayTranslator
-        case None =>
-          editorTranslator
+          case Some(surface) =>
+            surface.presentation match
+              case com.serenity.state.models.SurfacePresentation.Pinned(_, _) =>
+                pinnedPanelTranslator
+              case _ =>
+                surface.content match
+                  case SurfaceContent.CommandPalette(_)              => commandRunnerTranslator
+                  case SurfaceContent.CommandPaletteSubmenu(_, _, _) => commandRunnerTranslator
+                  case SurfaceContent.ModalWorkflow(_)               => formTranslator
+                  case SurfaceContent.ThemePicker(_)                 => formTranslator
+                  case SurfaceContent.FileSearch(_)                  => formTranslator
+                  case SurfaceContent.StartPage(_)                   => editorTranslator
+                  case _                                             => peekOverlayTranslator
+          case None =>
+            editorTranslator
 
     CompositeTranslator(new GlobalHotkeyTranslator(state.config), localTranslator)

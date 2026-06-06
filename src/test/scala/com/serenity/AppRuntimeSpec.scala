@@ -2,9 +2,10 @@ package com.serenity
 
 import java.awt.Color
 
-import cats.effect.IO
-import cats.effect.Ref
+import scala.concurrent.duration.*
+
 import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntime
 import com.serenity.config.AppConfig
 import com.serenity.input.InputHandler
@@ -19,17 +20,15 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-import scala.concurrent.duration.*
-
 class AppRuntimeSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private class SilentInputHandler extends InputHandler[IO]:
     override def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] = Stream.never
     override def eventStream: Stream[IO, Event]                 = Stream.never
-    override def shutdown: IO[Unit]                            = IO.unit
+    override def shutdown: IO[Unit]                             = IO.unit
 
   "AppRuntime" should "terminate the app loop when the external close signal fires" in {
     given org.typelevel.log4cats.Logger[IO] =

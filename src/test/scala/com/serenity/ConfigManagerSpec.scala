@@ -2,7 +2,7 @@ package com.serenity
 
 import java.nio.file.Files
 
-import com.serenity.config.{CommandRunnerKeyAction, ConfigManager, EditorKeyAction, HotkeyAction, ModalKeyAction, PanelKeyAction, PeekKeyAction}
+import com.serenity.config.*
 import com.serenity.keystroke.{InputKey, Modifier}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

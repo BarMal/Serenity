@@ -1,6 +1,5 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.ui.theme.SyntaxElement
 import com.serenity.ui.theme.config.*

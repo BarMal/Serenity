@@ -119,17 +119,17 @@ object ThemeManager:
         }
 
   private def highlightMarkdownLine(line: String, theme: Theme): List[StyledText] =
-    val headingPattern        = raw"^(#{1,6}\s+)(.*)$$".r
-    val unorderedListPattern  = raw"^(\s*[-*+]\s+)(.*)$$".r
-    val orderedListPattern    = raw"^(\s*\d+\.\s+)(.*)$$".r
-    val blockQuotePattern     = raw"^(\s*>\s?)(.*)$$".r
-    val inlineCodePattern     = raw"`[^`]+`".r
-    val linkPattern           = raw"\[([^\]]+)\]\(([^)]+)\)".r
-    val markerColor           = theme.colorFor(SyntaxElement.Delimiter)
-    val headingColor          = theme.colorFor(SyntaxElement.Keyword)
-    val inlineCodeColor       = theme.colorFor(SyntaxElement.String)
-    val linkTextColor         = theme.colorFor(SyntaxElement.Keyword)
-    val linkUrlColor          = theme.colorFor(SyntaxElement.String)
+    val headingPattern       = raw"^(#{1,6}\s+)(.*)$$".r
+    val unorderedListPattern = raw"^(\s*[-*+]\s+)(.*)$$".r
+    val orderedListPattern   = raw"^(\s*\d+\.\s+)(.*)$$".r
+    val blockQuotePattern    = raw"^(\s*>\s?)(.*)$$".r
+    val inlineCodePattern    = "`[^`]+`".r
+    val linkPattern          = raw"\[([^\]]+)\]\(([^)]+)\)".r
+    val markerColor          = theme.colorFor(SyntaxElement.Delimiter)
+    val headingColor         = theme.colorFor(SyntaxElement.Keyword)
+    val inlineCodeColor      = theme.colorFor(SyntaxElement.String)
+    val linkTextColor        = theme.colorFor(SyntaxElement.Keyword)
+    val linkUrlColor         = theme.colorFor(SyntaxElement.String)
 
     def withInlineMarkdownStyling(
       text: String,
@@ -139,63 +139,63 @@ object ThemeManager:
       enum InlineTokenKind:
         case InlineCode, Link
 
-      val segments = scala.collection.mutable.ListBuffer.empty[StyledText]
-      var cursor   = 0
+      def tokenSegments(kind: InlineTokenKind, matched: scala.util.matching.Regex.Match): Vector[StyledText] =
+        kind match
+          case InlineTokenKind.InlineCode =>
+            Vector(
+              StyledText(
+                matched.matched,
+                baseStyle.combine(TextStyle.italic),
+                inlineCodeColor.foreground,
+                inlineCodeColor.background
+              )
+            )
+          case InlineTokenKind.Link =>
+            Vector(
+              StyledText("[", baseStyle, markerColor.foreground, theme.background),
+              StyledText(
+                matched.group(1),
+                baseStyle.combine(TextStyle.underlined),
+                linkTextColor.foreground,
+                theme.background
+              ),
+              StyledText("](", baseStyle, markerColor.foreground, theme.background),
+              StyledText(
+                matched.group(2),
+                baseStyle.combine(TextStyle.underlined),
+                linkUrlColor.foreground,
+                theme.background
+              ),
+              StyledText(")", baseStyle, markerColor.foreground, theme.background)
+            )
 
-      def appendPlain(until: Int): Unit =
+      def nextMatchFrom(cursor: Int): Option[(Int, Int, InlineTokenKind, scala.util.matching.Regex.Match)] =
+        val remaining = text.substring(cursor)
+        val codeMatch = inlineCodePattern.findFirstMatchIn(remaining).map { matched =>
+          (cursor + matched.start, cursor + matched.end, InlineTokenKind.InlineCode, matched)
+        }
+        val linkMatch = linkPattern.findFirstMatchIn(remaining).map { matched =>
+          (cursor + matched.start, cursor + matched.end, InlineTokenKind.Link, matched)
+        }
+
+        List(codeMatch, linkMatch).flatten.sortBy(_._1).headOption
+
+      def appendPlain(acc: Vector[StyledText], cursor: Int, until: Int): Vector[StyledText] =
         if until > cursor then
-          segments += StyledText(text.substring(cursor, until), baseStyle, defaultForeground, theme.background)
+          acc :+ StyledText(text.substring(cursor, until), baseStyle, defaultForeground, theme.background)
+        else acc
 
-      while cursor < text.length do
-        val codeMatch = inlineCodePattern.findFirstMatchIn(text.substring(cursor)).map { m =>
-          (cursor + m.start, cursor + m.end, InlineTokenKind.InlineCode, m)
-        }
-        val linkMatch = linkPattern.findFirstMatchIn(text.substring(cursor)).map { m =>
-          (cursor + m.start, cursor + m.end, InlineTokenKind.Link, m)
-        }
+      def loop(cursor: Int, acc: Vector[StyledText]): Vector[StyledText] =
+        if cursor >= text.length then acc
+        else
+          nextMatchFrom(cursor) match
+            case Some((start, end, kind, matched)) =>
+              val withPlain = appendPlain(acc, cursor, start)
+              loop(end, withPlain ++ tokenSegments(kind, matched))
+            case None =>
+              appendPlain(acc, cursor, text.length)
 
-        val nextMatch =
-          List(codeMatch, linkMatch).flatten.sortBy(_._1).headOption
-
-        nextMatch match
-          case Some((start, end, kind, matched)) if start > cursor =>
-            appendPlain(start)
-            kind match
-              case InlineTokenKind.InlineCode =>
-                segments += StyledText(
-                  matched.matched,
-                  baseStyle.combine(TextStyle.italic),
-                  inlineCodeColor.foreground,
-                  inlineCodeColor.background
-                )
-              case InlineTokenKind.Link =>
-                segments += StyledText("[", baseStyle, markerColor.foreground, theme.background)
-                segments += StyledText(matched.group(1), baseStyle.combine(TextStyle.underlined), linkTextColor.foreground, theme.background)
-                segments += StyledText("](", baseStyle, markerColor.foreground, theme.background)
-                segments += StyledText(matched.group(2), baseStyle.combine(TextStyle.underlined), linkUrlColor.foreground, theme.background)
-                segments += StyledText(")", baseStyle, markerColor.foreground, theme.background)
-            cursor = end
-          case Some((_, end, kind, matched)) =>
-            kind match
-              case InlineTokenKind.InlineCode =>
-                segments += StyledText(
-                  matched.matched,
-                  baseStyle.combine(TextStyle.italic),
-                  inlineCodeColor.foreground,
-                  inlineCodeColor.background
-                )
-              case InlineTokenKind.Link =>
-                segments += StyledText("[", baseStyle, markerColor.foreground, theme.background)
-                segments += StyledText(matched.group(1), baseStyle.combine(TextStyle.underlined), linkTextColor.foreground, theme.background)
-                segments += StyledText("](", baseStyle, markerColor.foreground, theme.background)
-                segments += StyledText(matched.group(2), baseStyle.combine(TextStyle.underlined), linkUrlColor.foreground, theme.background)
-                segments += StyledText(")", baseStyle, markerColor.foreground, theme.background)
-            cursor = end
-          case None =>
-            appendPlain(text.length)
-            cursor = text.length
-
-      segments.toList
+      loop(0, Vector.empty).toList
 
     line match
       case headingPattern(marker, content) =>

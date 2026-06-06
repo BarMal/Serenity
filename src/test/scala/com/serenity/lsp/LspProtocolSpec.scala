@@ -1,5 +1,7 @@
 package com.serenity.lsp
 
+import java.nio.charset.StandardCharsets
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.lsp.client.{LspFramer, LspProtocol}
@@ -8,8 +10,6 @@ import io.circe.Json
 import io.circe.syntax.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
-import java.nio.charset.StandardCharsets
 
 class LspProtocolSpec extends AnyFlatSpec with Matchers:
 
@@ -31,20 +31,26 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
   "LspFramer.decode" should "round-trip a single message" in {
     val original = Json.obj("jsonrpc" -> "2.0".asJson, "method" -> "test".asJson)
     val bytes    = LspFramer.encode(original)
-    val result   = fs2.Stream.chunk(fs2.Chunk.array(bytes))
+    val result = fs2.Stream
+      .chunk(fs2.Chunk.array(bytes))
       .through(LspFramer.decode)
-      .compile.toList.unsafeRunSync()
+      .compile
+      .toList
+      .unsafeRunSync()
 
     result shouldBe List(original)
   }
 
   it should "decode multiple messages from a single byte stream" in {
-    val msg1 = Json.obj("id" -> 1.asJson, "result" -> "ok".asJson)
-    val msg2 = Json.obj("id" -> 2.asJson, "result" -> "done".asJson)
+    val msg1  = Json.obj("id" -> 1.asJson, "result" -> "ok".asJson)
+    val msg2  = Json.obj("id" -> 2.asJson, "result" -> "done".asJson)
     val bytes = LspFramer.encode(msg1) ++ LspFramer.encode(msg2)
-    val result = fs2.Stream.chunk(fs2.Chunk.array(bytes))
+    val result = fs2.Stream
+      .chunk(fs2.Chunk.array(bytes))
       .through(LspFramer.decode)
-      .compile.toList.unsafeRunSync()
+      .compile
+      .toList
+      .unsafeRunSync()
 
     result shouldBe List(msg1, msg2)
   }
@@ -52,14 +58,15 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
   "LspProtocol" should "identify responses and notifications correctly" in {
     val response     = Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 1.asJson, "result" -> Json.obj())
     val notification = Json.obj("jsonrpc" -> "2.0".asJson, "method" -> "initialized".asJson, "params" -> Json.obj())
-    val request      = Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 2.asJson, "method" -> "test".asJson, "params" -> Json.obj())
+    val request =
+      Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 2.asJson, "method" -> "test".asJson, "params" -> Json.obj())
 
-    LspProtocol.isResponse(response)       shouldBe true
-    LspProtocol.isNotification(response)   shouldBe false
+    LspProtocol.isResponse(response) shouldBe true
+    LspProtocol.isNotification(response) shouldBe false
     LspProtocol.isNotification(notification) shouldBe true
-    LspProtocol.isResponse(notification)   shouldBe false
-    LspProtocol.isResponse(request)        shouldBe false
-    LspProtocol.isNotification(request)    shouldBe false
+    LspProtocol.isResponse(notification) shouldBe false
+    LspProtocol.isResponse(request) shouldBe false
+    LspProtocol.isNotification(request) shouldBe false
   }
 
   it should "parse publishDiagnostics notifications" in {
@@ -84,12 +91,12 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     val result = LspProtocol.parseDiagnostics(diagJson)
     result shouldBe defined
     val (uri, diags) = result.get
-    uri   shouldBe "file:///foo/Bar.scala"
+    uri shouldBe "file:///foo/Bar.scala"
     diags should have size 1
-    diags.head.message          shouldBe "type mismatch"
-    diags.head.severity         shouldBe Some(DiagnosticSeverity.Error)
+    diags.head.message shouldBe "type mismatch"
+    diags.head.severity shouldBe Some(DiagnosticSeverity.Error)
     diags.head.range.start.line shouldBe 5
-    diags.head.source           shouldBe Some("metals")
+    diags.head.source shouldBe Some("metals")
   }
 
   it should "parse empty diagnostics list" in {
@@ -112,9 +119,9 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
 
   it should "build didOpen params with correct structure" in {
     val params = LspProtocol.didOpenParams("file:///foo/Bar.scala", "scala", 1, "object Bar")
-    val td = params.hcursor.downField("textDocument")
-    td.downField("uri").as[String].toOption     shouldBe Some("file:///foo/Bar.scala")
+    val td     = params.hcursor.downField("textDocument")
+    td.downField("uri").as[String].toOption shouldBe Some("file:///foo/Bar.scala")
     td.downField("languageId").as[String].toOption shouldBe Some("scala")
-    td.downField("version").as[Int].toOption    shouldBe Some(1)
-    td.downField("text").as[String].toOption    shouldBe Some("object Bar")
+    td.downField("version").as[Int].toOption shouldBe Some(1)
+    td.downField("text").as[String].toOption shouldBe Some("object Bar")
   }

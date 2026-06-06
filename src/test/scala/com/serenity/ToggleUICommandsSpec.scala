@@ -26,7 +26,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("ToggleUICommandsSpec"))
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("ToggleUICommandsSpec"))
     StateManager.apply(logger).unsafeRunSync()
 
   private def executeCommandThroughRunner(
@@ -35,13 +35,14 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     expectedCommandName: String
   ): Unit =
     val beforeOpen = stateManager.getCurrentState.unsafeRunSync()
-    if beforeOpen.commandRunnerSurface.flatMap {
-        _.content match
-          case SurfaceContent.CommandPalette(runner) => Some(runner.isActive)
-          case _                                     => None
-      }.getOrElse(false) == false
-    then
-      stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    if beforeOpen.commandRunnerSurface
+          .flatMap {
+            _.content match
+              case SurfaceContent.CommandPalette(runner) => Some(runner.isActive)
+              case _                                     => None
+          }
+          .getOrElse(false) == false
+    then stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface.flatMap {
       _.content match
@@ -153,9 +154,9 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "have descriptive command names and descriptions" in {
-    val registry       = CommandRegistry.withToggleUI
-    val lineCommand    = registry.findCommand("toggle-line-numbers").get
-    val gutterCommand  = registry.findCommand("toggle-gutter").get
+    val registry      = CommandRegistry.withToggleUI
+    val lineCommand   = registry.findCommand("toggle-line-numbers").get
+    val gutterCommand = registry.findCommand("toggle-gutter").get
 
     lineCommand.name shouldBe "toggle-line-numbers"
     lineCommand.label shouldBe "Toggle Line Numbers"

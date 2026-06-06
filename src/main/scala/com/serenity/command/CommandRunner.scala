@@ -46,9 +46,8 @@ case class CommandRunner(
         case CommandCategory.Settings => settingsGroups ++ commandItems
         case _                        => commandItems
     else
-      val (strongCommandMatches, remainingCommandMatches) = commandItems.partition(item =>
-        CommandRunner.isStrongCommandMatch(item.command, searchTerm)
-      )
+      val (strongCommandMatches, remainingCommandMatches) =
+        commandItems.partition(item => CommandRunner.isStrongCommandMatch(item.command, searchTerm))
       strongCommandMatches ++ matchingSettingsGroups(searchTerm) ++ remainingCommandMatches
 
   def selectedItem: Option[CommandSurfaceItem] =
@@ -163,9 +162,9 @@ case class CommandRunner(
         val items = submenu.filteredItems(submenuItems(submenu.groupId))
         if items.isEmpty then this
         else
-          val itemCount     = items.size
-          val newIndex      = (submenu.selectedIndex + delta) % itemCount
-          val wrappedIndex  = if newIndex < 0 then itemCount + newIndex else newIndex
+          val itemCount    = items.size
+          val newIndex     = (submenu.selectedIndex + delta) % itemCount
+          val wrappedIndex = if newIndex < 0 then itemCount + newIndex else newIndex
           copy(
             submenuSelections = submenuSelections + (submenu.groupId -> wrappedIndex),
             activeSubmenu = Some(submenu.copy(selectedIndex = wrappedIndex, editingItemId = None, editingText = ""))
@@ -316,19 +315,19 @@ case class CommandRunner(
 object CommandRunner:
 
   private def isStrongCommandMatch(command: Command, term: String): Boolean =
-    val lowerTerm   = term.toLowerCase
-    val nameLower   = command.name.toLowerCase
-    val labelLower  = command.label.toLowerCase
+    val lowerTerm  = term.toLowerCase
+    val nameLower  = command.name.toLowerCase
+    val labelLower = command.label.toLowerCase
     nameLower.startsWith(lowerTerm) || labelLower.startsWith(lowerTerm)
 
   private[command] def defaultOptionSelections(config: AppConfig): Map[String, Int] =
     Map(
-      "animation-mode" -> animationModeIndex(config),
-      "cursor-mode" -> cursorModeIndex(config.cursorMode),
+      "animation-mode"   -> animationModeIndex(config),
+      "cursor-mode"      -> cursorModeIndex(config.cursorMode),
       "background-style" -> backgroundStyleIndex(config.backgroundStyle),
-      "code-font" -> codeFontIndex(config.fontConfig.codeFontFamily),
-      "text-font" -> textFontIndex(config.fontConfig.textFontFamily),
-      "ligatures" -> ligaturesIndex(config.fontConfig.enableLigatures)
+      "code-font"        -> codeFontIndex(config.fontConfig.codeFontFamily),
+      "text-font"        -> textFontIndex(config.fontConfig.textFontFamily),
+      "ligatures"        -> ligaturesIndex(config.fontConfig.enableLigatures)
     )
 
   private[command] def cursorModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -391,9 +390,8 @@ object CommandRunner:
     CommandSurfaceItem.OptionItem(
       id = "text-font",
       label = "Text Font",
-      options = FontLoader.availableTextFamilies.map { family =>
-        CommandOption(family, CommandIntent.SetTextFontFamily(family))
-      },
+      options =
+        FontLoader.availableTextFamilies.map(family => CommandOption(family, CommandIntent.SetTextFontFamily(family))),
       selectedIndex = optionSelections.getOrElse("text-font", 0),
       category = CommandCategory.Settings,
       hint = Some("Used in prose buffers")
@@ -413,9 +411,9 @@ object CommandRunner:
     )
 
   private[command] def buildInputItems(config: AppConfig): List[CommandSurfaceItem.InputItem] =
-    val durationValue = config.characterAnimation.map(_.durationMs.toString).getOrElse("0")
-    val stepsValue    = config.characterAnimation.map(_.steps.toString).getOrElse("0")
-    val blurValue     = config.blurRadius.toString
+    val durationValue       = config.characterAnimation.map(_.durationMs.toString).getOrElse("0")
+    val stepsValue          = config.characterAnimation.map(_.steps.toString).getOrElse("0")
+    val blurValue           = config.blurRadius.toString
     val bufferFontSizeValue = config.fontConfig.fontSize.toString
     val uiFontSizeValue     = config.fontConfig.uiFontSize.toString
 
@@ -484,9 +482,9 @@ object CommandRunner:
 
   private def animationModeIndex(config: AppConfig): Int =
     config.characterAnimation match
-      case None                                                   => 0
+      case None                                                          => 0
       case Some(animation) if AnimationConfig.subtle.contains(animation) => 1
-      case _                                                      => 2
+      case _                                                             => 2
 
   private def cursorModeIndex(mode: CursorMode): Int =
     mode match

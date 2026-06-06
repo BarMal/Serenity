@@ -8,10 +8,10 @@ import org.scalatest.matchers.should.Matchers
 class LspPhase0Spec extends AnyFlatSpec with Matchers:
 
   "LanguageId" should "resolve known ids case-insensitively" in {
-    LanguageId.fromString("scala")      shouldBe Some(LanguageId.Scala)
-    LanguageId.fromString("SCALA")      shouldBe Some(LanguageId.Scala)
+    LanguageId.fromString("scala") shouldBe Some(LanguageId.Scala)
+    LanguageId.fromString("SCALA") shouldBe Some(LanguageId.Scala)
     LanguageId.fromString("typescript") shouldBe Some(LanguageId.TypeScript)
-    LanguageId.fromString("unknown")    shouldBe None
+    LanguageId.fromString("unknown") shouldBe None
   }
 
   "DiagnosticSeverity" should "round-trip through its integer code" in {
@@ -24,10 +24,10 @@ class LspPhase0Spec extends AnyFlatSpec with Matchers:
 
   "FileExtension" should "map extensions to language ids" in {
     FileExtension.languageIdFor("scala") shouldBe Some(LanguageId.Scala)
-    FileExtension.languageIdFor(".sbt")  shouldBe Some(LanguageId.Scala)
-    FileExtension.languageIdFor("rs")    shouldBe Some(LanguageId.Rust)
-    FileExtension.languageIdFor("ts")    shouldBe Some(LanguageId.TypeScript)
-    FileExtension.languageIdFor("xyz")   shouldBe None
+    FileExtension.languageIdFor(".sbt") shouldBe Some(LanguageId.Scala)
+    FileExtension.languageIdFor("rs") shouldBe Some(LanguageId.Rust)
+    FileExtension.languageIdFor("ts") shouldBe Some(LanguageId.TypeScript)
+    FileExtension.languageIdFor("xyz") shouldBe None
   }
 
   it should "enumerate all extensions for a given language" in {
@@ -42,19 +42,19 @@ class LspPhase0Spec extends AnyFlatSpec with Matchers:
 
   it should "resolve a marker by filename" in {
     RootMarker.fromFilename("build.sbt") shouldBe Some(RootMarker.BuildSbt)
-    RootMarker.fromFilename("unknown")   shouldBe None
+    RootMarker.fromFilename("unknown") shouldBe None
   }
 
   "LspServerBinary" should "resolve binaries for each supported language" in {
     LspServerBinary.forLanguage(LanguageId.Scala) should contain(LspServerBinary.Metals)
-    LspServerBinary.forLanguage(LanguageId.Rust)  should contain(LspServerBinary.RustAnalyzer)
-    LspServerBinary.forLanguage(LanguageId.Go)    should contain(LspServerBinary.Gopls)
+    LspServerBinary.forLanguage(LanguageId.Rust) should contain(LspServerBinary.RustAnalyzer)
+    LspServerBinary.forLanguage(LanguageId.Go) should contain(LspServerBinary.Gopls)
   }
 
   it should "look up a binary by command string" in {
-    LspServerBinary.fromCommand("metals")         shouldBe Some(LspServerBinary.Metals)
-    LspServerBinary.fromCommand("rust-analyzer")  shouldBe Some(LspServerBinary.RustAnalyzer)
-    LspServerBinary.fromCommand("nonexistent")    shouldBe None
+    LspServerBinary.fromCommand("metals") shouldBe Some(LspServerBinary.Metals)
+    LspServerBinary.fromCommand("rust-analyzer") shouldBe Some(LspServerBinary.RustAnalyzer)
+    LspServerBinary.fromCommand("nonexistent") shouldBe None
   }
 
   "LspServerRegistry.builtIn" should "have exactly one entry per language id" in {
@@ -64,14 +64,14 @@ class LspPhase0Spec extends AnyFlatSpec with Matchers:
 
   it should "include Scala/Metals as the first entry" in {
     LspServerRegistry.builtIn.head.languageId shouldBe LanguageId.Scala
-    LspServerRegistry.builtIn.head.binary     shouldBe LspServerBinary.Metals
+    LspServerRegistry.builtIn.head.binary shouldBe LspServerBinary.Metals
   }
 
   "LspEffect" should "carry language id and uri" in {
     val effect = LspEffect.FileOpened("file:///foo/Bar.scala", LanguageId.Scala, "object Foo")
     effect match
       case LspEffect.FileOpened(uri, lang, _) =>
-        uri  shouldBe "file:///foo/Bar.scala"
+        uri shouldBe "file:///foo/Bar.scala"
         lang shouldBe LanguageId.Scala
       case _ => fail("wrong variant")
   }
@@ -81,10 +81,10 @@ class LspPhase0Spec extends AnyFlatSpec with Matchers:
   }
 
   "Diagnostic" should "hold range, severity and message" in {
-    val pos  = LspPosition(10, 5)
+    val pos   = LspPosition(10, 5)
     val range = LspRange(pos, pos.copy(character = 20))
     val diag  = Diagnostic(range, Some(DiagnosticSeverity.Error), "type mismatch")
     diag.severity shouldBe Some(DiagnosticSeverity.Error)
-    diag.message  shouldBe "type mismatch"
+    diag.message shouldBe "type mismatch"
     diag.range.start.line shouldBe 10
   }

@@ -3,7 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.rope.Balance
-import com.serenity.state.models.{Buffer, BufferId, CursorPosition, Viewport}
+import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
@@ -14,7 +14,7 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
+  given Balance    = Balance.default
   given Logger[IO] = Slf4jLogger.getLogger[IO]
 
   private def proportionalDeltas(snapshot: TextLayoutSnapshot): Vector[Float] =
@@ -57,9 +57,11 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(3), "WiWi")
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2))
-    val font = FontLoader.loadTextFont(
-      FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
-    ).unsafeRunSync()
+    val font = FontLoader
+      .loadTextFont(
+        FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
+      )
+      .unsafeRunSync()
 
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font)
     val deltas   = proportionalDeltas(snapshot)
@@ -71,9 +73,11 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(4), "iW")
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2))
-    val font = FontLoader.loadTextFont(
-      FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
-    ).unsafeRunSync()
+    val font = FontLoader
+      .loadTextFont(
+        FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
+      )
+      .unsafeRunSync()
 
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font)
     val line     = snapshot.visualLines.head
@@ -87,15 +91,17 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(5), "WWWW\niiii")
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 4))
-    val font = FontLoader.loadTextFont(
-      FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
-    ).unsafeRunSync()
+    val font = FontLoader
+      .loadTextFont(
+        FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
+      )
+      .unsafeRunSync()
 
     val snapshot      = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font)
     val secondLineEnd = CursorPosition(1, 4)
     val preferredXPx  = snapshot.xPxForCursor(secondLineEnd).getOrElse(fail("missing caret x"))
     val firstLine     = snapshot.visualLines.head
-    val expectedCol = firstLine.caretStops.minBy(stop => math.abs(stop.xPx - preferredXPx)).column
+    val expectedCol   = firstLine.caretStops.minBy(stop => math.abs(stop.xPx - preferredXPx)).column
 
     snapshot.moveVertical(secondLineEnd, direction = -1, preferredXPx = preferredXPx) shouldBe
       Some(CursorPosition(0, expectedCol))
@@ -116,9 +122,11 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "derive a measured left column for cursor visibility in proportional text" in {
-    val font = FontLoader.loadTextFont(
-      FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
-    ).unsafeRunSync()
+    val font = FontLoader
+      .loadTextFont(
+        FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
+      )
+      .unsafeRunSync()
 
     val leftColumn = TextLayoutSnapshot.leftColumnForCursorVisibility(
       lineText = "iiiiiiiiWW",
@@ -135,9 +143,11 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(7), "...")
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2))
-    val font = FontLoader.loadCodeFont(
-      FontConfig(codeFontFamily = FontLoader.BundledCodeFontFamily, fontSize = 12.0f, enableLigatures = true)
-    ).unsafeRunSync()
+    val font = FontLoader
+      .loadCodeFont(
+        FontConfig(codeFontFamily = FontLoader.BundledCodeFontFamily, fontSize = 12.0f, enableLigatures = true)
+      )
+      .unsafeRunSync()
 
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font)
     val xs       = snapshot.visualLines.head.caretStops.map(_.xPx)
