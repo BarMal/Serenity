@@ -61,7 +61,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
   private def stateWithRunnerAndPlainTextBuffer: AppState =
     stateWithRunnerAndBuffer(None)
 
-  "Renderer" should "use the buffer's text font for cursor positioning even when the command runner is active" in {
+  "Renderer" should "use the buffer's text font for editor text layout even when the command runner is active" in {
     val state        = stateWithRunnerAndMarkdownBuffer
     val cursorColor  = java.awt.Color.RED
     val surface      = new MockRenderSurface(80, 24)
@@ -85,17 +85,22 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val panelWidthPx = contentRect.width * cellMetrics.charWidth
 
     val textSnapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, textFont)
+    val textWidthPx  = textSnapshot.visualLines.headOption.map(_.widthPx).getOrElse(fail("no text visual line"))
     val textXPx      = textSnapshot.xPxForCursor(CursorPosition(0, cursorCol)).getOrElse(fail("no text caret stop"))
     val expectedXPx  = cellMetrics.toPixelX(contentRect.x) + math.round(textXPx)
 
     val codeSnapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, codeFont)
+    val codeWidthPx  = codeSnapshot.visualLines.headOption.map(_.widthPx).getOrElse(fail("no code visual line"))
     val codeXPx      = codeSnapshot.xPxForCursor(CursorPosition(0, cursorCol)).getOrElse(fail("no code caret stop"))
     val codeExpected = cellMetrics.toPixelX(contentRect.x) + math.round(codeXPx)
 
+    textWidthPx should not be codeWidthPx
     expectedXPx should not be codeExpected
 
+    val editorRun = surface.drawRunPxCalls.find(_.s == text).getOrElse(fail("Expected editor text run"))
+    editorRun.bgWidthPx shouldBe textWidthPx +- 0.001f
     val cursorRects = surface.fillPixelRectCalls.filter(_.color == cursorColor)
-    cursorRects should not be empty
+    cursorRects should have size 1
     cursorRects.head.xPx shouldBe expectedXPx.toInt
   }
 
@@ -142,7 +147,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     surface.setFontCalls.last.getFamily should not be codeFont.getFamily
   }
 
-  it should "use the text font for a plain-text buffer even when the command runner is active" in {
+  it should "use the text font for a plain-text buffer layout even when the command runner is active" in {
     val state        = stateWithRunnerAndPlainTextBuffer
     val cursorColor  = java.awt.Color.RED
     val surface      = new MockRenderSurface(80, 24)
@@ -166,16 +171,21 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val panelWidthPx = contentRect.width * cellMetrics.charWidth
 
     val textSnapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, textFont)
+    val textWidthPx  = textSnapshot.visualLines.headOption.map(_.widthPx).getOrElse(fail("no text visual line"))
     val textXPx      = textSnapshot.xPxForCursor(CursorPosition(0, cursorCol)).getOrElse(fail("no text caret stop"))
     val expectedXPx  = cellMetrics.toPixelX(contentRect.x) + math.round(textXPx)
 
     val codeSnapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, codeFont)
+    val codeWidthPx  = codeSnapshot.visualLines.headOption.map(_.widthPx).getOrElse(fail("no code visual line"))
     val codeXPx      = codeSnapshot.xPxForCursor(CursorPosition(0, cursorCol)).getOrElse(fail("no code caret stop"))
     val codeExpected = cellMetrics.toPixelX(contentRect.x) + math.round(codeXPx)
 
+    textWidthPx should not be codeWidthPx
     expectedXPx should not be codeExpected
 
+    val editorRun = surface.drawRunPxCalls.find(_.s == text).getOrElse(fail("Expected editor text run"))
+    editorRun.bgWidthPx shouldBe textWidthPx +- 0.001f
     val cursorRects = surface.fillPixelRectCalls.filter(_.color == cursorColor)
-    cursorRects should not be empty
+    cursorRects should have size 1
     cursorRects.head.xPx shouldBe expectedXPx.toInt
   }

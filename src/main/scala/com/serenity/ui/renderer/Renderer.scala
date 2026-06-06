@@ -217,7 +217,10 @@ object Renderer:
       case None =>
         renderEmptyPane(contentRect, state.theme, context)
 
-    buffer.foreach(buf => renderCursors(buf, contentRect, state.theme, context, bufferSnapshot.get))
+    val cursorContext =
+      if state.hasCommandRunnerDomain then context.copy(cursorVisible = true)
+      else context
+    buffer.foreach(buf => renderCursors(buf, contentRect, state.theme, cursorContext, bufferSnapshot.get))
 
   private def renderBufferHeader(
     pane: EditorPane,
