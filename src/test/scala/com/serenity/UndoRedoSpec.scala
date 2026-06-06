@@ -220,6 +220,43 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     getCursors(bufferId) shouldBe List(CursorPosition(0, 1), CursorPosition(0, 8))
     getState.buffers(bufferId).allSelections shouldBe Nil
 
+  it should "restore viewport, find state, and empty-buffer state from undo snapshots" in new UndoFixture:
+    val bufferId = setupBuffer("alpha\nbeta\nalpha")
+    val beforeBuffer = getState
+      .buffers(bufferId)
+      .copy(
+        cursors = List(CursorPosition(2, 0)),
+        preferredColumn = Some(0),
+        viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 8, visibleColumns = 40),
+        findState = Some(FindState("alpha", List(0, 2), 1)),
+        isNewEmpty = true
+      )
+
+    updateBuffer(bufferId, beforeBuffer)
+
+    applyEvent(InsertChar('!'))
+
+    val edited = getState.buffers(bufferId)
+    edited.isNewEmpty shouldBe false
+    updateBuffer(
+      bufferId,
+      edited.copy(
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 24, visibleColumns = 80),
+        findState = None,
+        isNewEmpty = false
+      )
+    )
+
+    applyEvent(Undo)
+
+    val undone = getState.buffers(bufferId)
+    undone.content.collect() shouldBe "alpha\nbeta\nalpha"
+    undone.cursors shouldBe List(CursorPosition(2, 0))
+    undone.preferredColumn shouldBe Some(0)
+    undone.viewport shouldBe beforeBuffer.viewport
+    undone.findState shouldBe Some(FindState("alpha", List(0, 2), 1))
+    undone.isNewEmpty shouldBe true
+
   it should "undo and redo multi-cursor cut with the full cursor set" in new UndoFixture:
     val bufferId = setupBuffer("alpha\nbeta\ngamma\ndelta")
     setCursors(bufferId, List(CursorPosition(0, 1), CursorPosition(2, 2)))
@@ -333,3 +370,6 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
     def setClipboard(text: String): Unit =
       stateManager.updateState(_.copy(clipboard = Some(text))).unsafeRunSync()
+
+    def updateBuffer(bufferId: BufferId, buffer: Buffer): Unit =
+      stateManager.updateState(state => state.copy(buffers = state.buffers.updated(bufferId, buffer))).unsafeRunSync()

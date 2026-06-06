@@ -343,6 +343,71 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "shrink the active selection scope after a shorter replace-next result" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("needle one\nneedle two\noutside needle"),
+            selection = Some(
+              Selection(
+                CursorPosition(0, 0),
+                CursorPosition(1, "needle two".length)
+              )
+            )
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "replace", "replace")
+
+    "needle".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('n')).unsafeRunSync()
+    stateManager.applyEvent(MoveLeft).unsafeRunSync()
+    stateManager.applyEvent(ModalNavigate(Direction.Down)).unsafeRunSync()
+
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val afterFirst = stateManager.getCurrentState.unsafeRunSync()
+    afterFirst.buffers(bufferId).content.collect() shouldBe "n one\nneedle two\noutside needle"
+    afterFirst.buffers(bufferId).selection shouldBe Some(
+      Selection(CursorPosition(0, 0), CursorPosition(1, "needle two".length))
+    )
+
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val afterSecond = stateManager.getCurrentState.unsafeRunSync()
+    afterSecond.buffers(bufferId).content.collect() shouldBe "n one\nn two\noutside needle"
+    afterSecond.buffers(bufferId).selection shouldBe Some(
+      Selection(CursorPosition(0, 0), CursorPosition(1, "n two".length))
+    )
+
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val afterExhausted = stateManager.getCurrentState.unsafeRunSync()
+    afterExhausted.buffers(bufferId).content.collect() shouldBe "n one\nn two\noutside needle"
+    afterExhausted.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(
+        Modal.ReplaceWorkflow(
+          ReplaceWorkflowState(
+            findText = "needle",
+            replacementText = "n",
+            activeField = com.serenity.state.models.ReplaceWorkflowField.ReplaceWith,
+            selectedAction = com.serenity.state.models.ReplaceWorkflowAction.ReplaceNext,
+            selectedScope = ReplaceWorkflowScope.Selection,
+            statusMessage = Some("No matches found")
+          )
+        )
+      )
+    )
+  }
+
   it should "place the cursor at the final replacement and make replace-all undoable" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)

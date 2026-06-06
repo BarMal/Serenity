@@ -147,6 +147,19 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     second.buffers(bufferId).cursors.head shouldBe CursorPosition(0, "needle and ".length)
   }
 
+  it should "advance find results when the explicit find-next event is submitted" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithFindModal("needle", "needle one\nneedle two\nneedle three")
+
+    val first  = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
+    val second = ModalEventReducer.reduce(ModalType.Find, ModalFindNext, first).state
+
+    activeFindModal(second) shouldBe Some(Modal.Find("needle", List(0, 1, 2), 1))
+    second.buffers(bufferId).findState shouldBe Some(FindState("needle", List(0, 1, 2), 1))
+    second.buffers(bufferId).cursors.head shouldBe CursorPosition(1, 0)
+    second.focus shouldBe Focus.Surface(SurfaceId("find"))
+  }
+
   it should "keep stale find state out when live query has no matches" in {
     val bufferId = BufferId(0)
     val initialState = stateWithFindModal("", "alpha beta")
@@ -187,6 +200,17 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = ModalEventReducer.reduce(ModalType.Find, DeleteWordBackward, initialState).state
 
     updatedState.modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("alpha ", Nil, 0)))
+  }
+
+  it should "leave find query state stable when delete-next-word has no text after the query" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithFindModal("alpha beta", "alpha beta\nalpha")
+
+    val updatedState = ModalEventReducer.reduce(ModalType.Find, DeleteWordForward, initialState).state
+
+    activeFindModal(updatedState) shouldBe Some(Modal.Find("alpha beta", List(0), 0))
+    updatedState.buffers(bufferId).findState shouldBe Some(FindState("alpha beta", List(0), 0))
+    updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 0)
   }
 
   it should "update filename and path fields independently in file workflow mode" in {
