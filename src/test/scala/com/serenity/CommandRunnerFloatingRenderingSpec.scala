@@ -32,7 +32,12 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
   private val cellMetrics = CellMetrics.fromFont(codeFont)
 
-  private def stateWithRunner(theme: Theme, searchTerm: String, commands: List[Command]): AppState =
+  private def stateWithRunner(
+    theme: Theme,
+    searchTerm: String,
+    commands: List[Command],
+    cursors: List[CursorPosition] = List(CursorPosition(1, 2))
+  ): AppState =
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
@@ -40,7 +45,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        cursors = List(CursorPosition(1, 2))
+        cursors = cursors
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
@@ -111,6 +116,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     )
     val expectedCursorXPx = uiMetrics.toPixelX(overlay.x + 1) + math.round(caretXs.last)
     surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorXPx
+    surface.fillPixelRectCalls.filter(_.color == state.theme.cursor) should have size 2
   }
 
   it should "render category tabs in browse mode and show grouped settings rows" in {
@@ -176,6 +182,105 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
         .map(x => surface.getBg(x, overlay.y + 1))
         .distinct
     settingsBackgrounds.size should be > 1
+    surface.fillPixelRectCalls.filter(_.color == state.theme.cursor) should have size 1
+  }
+
+  it should "keep every editor cursor visible but steady while browsing a focused submenu" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+      .enterSelectedGroup
+    val buffer = Buffer
+      .fromString(bufferId, "alpha\nbeta\ngamma")
+      .copy(
+        cursors = List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3))
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner-submenu")),
+      theme = Theme.light,
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner-submenu"),
+          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val visibleSurface = new MockRenderSurface(100, 30)
+    val hiddenSurface  = new MockRenderSurface(100, 30)
+
+    Renderer.render(state, cursorVisible = true, visibleSurface, ViewportSize(100, 30))
+    Renderer.render(state, cursorVisible = false, hiddenSurface, ViewportSize(100, 30))
+
+    val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
+    val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
+
+    visibleCursors should have size 3
+    hiddenCursors should have size 3
+    hiddenCursors.map(_.xPx) shouldBe visibleCursors.map(_.xPx)
+  }
+
+  it should "blink only the submenu search cursor while keeping editor cursors steady" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+      .copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-language", searchTerm = "java")))
+    val buffer = Buffer
+      .fromString(bufferId, "alpha\nbeta\ngamma")
+      .copy(
+        cursors = List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3))
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner-submenu")),
+      theme = Theme.light,
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner-submenu"),
+          SurfaceContent.CommandPaletteSubmenu(runner, "settings-language", previewOnly = false),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val visibleSurface = new MockRenderSurface(100, 30)
+    val hiddenSurface  = new MockRenderSurface(100, 30)
+
+    Renderer.render(state, cursorVisible = true, visibleSurface, ViewportSize(100, 30))
+    Renderer.render(state, cursorVisible = false, hiddenSurface, ViewportSize(100, 30))
+
+    val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
+    val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
+
+    visibleCursors should have size 4
+    hiddenCursors should have size 3
+    hiddenCursors.map(_.xPx) shouldBe visibleCursors.take(3).map(_.xPx)
   }
 
   it should "keep the selected command highlighted while the overlay is animating" in {
