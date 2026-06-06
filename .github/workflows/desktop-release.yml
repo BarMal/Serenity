@@ -20,18 +20,10 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact_suffix: linux-x64
-            archive_command: |
-              cd dist
-              zip -r Serenity-linux-x64.zip Serenity
           - os: windows-latest
             artifact_suffix: windows-x64
-            archive_command: |
-              Compress-Archive -Path dist/Serenity -DestinationPath dist/Serenity-windows-x64.zip -Force
           - os: macos-latest
             artifact_suffix: macos-arm64
-            archive_command: |
-              cd dist
-              zip -r Serenity-macos-arm64.zip Serenity.app
 
     steps:
       - name: Check out repository
@@ -67,9 +59,22 @@ jobs:
             --main-class Main \
             --dest dist
 
-      - name: Archive app image
-        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
-        run: ${{ matrix.archive_command }}
+      - name: Archive Windows app image
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist/Serenity -DestinationPath dist/Serenity-${{ matrix.artifact_suffix }}.zip -Force
+
+      - name: Archive Unix app image
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          if [ -d Serenity.app ]; then
+            zip -r Serenity-${{ matrix.artifact_suffix }}.zip Serenity.app
+          else
+            zip -r Serenity-${{ matrix.artifact_suffix }}.zip Serenity
+          fi
 
       - name: Upload runnable JAR artifact
         if: runner.os == 'Linux'
