@@ -28,12 +28,16 @@ Priority labels used here:
 - `[x]` Focused keymaps are now configurable through config-backed editor, command-runner, modal, panel, and peek binding groups, and trigger parsing now covers non-character keys such as enter, escape, arrows, home/end, and page navigation.[12][13][46][47][49]
 - `[x]` Markdown block-lens rendering now keeps the active Markdown block as raw source while surrounding Markdown lines use Markdown presentation styling. Renderer capabilities and limitations are documented separately.[19][22][37][50]
 - `[x]` Focused command-runner submenus are now searchable. Typing in a submenu filters its rows, navigation and submission use the filtered result set, `Escape` clears the submenu search before leaving, and submenu heights/counts reflect filtered rows.[17][32][40][51][52]
+- `[x]` Multi-cursor editing now has comprehensive reducer coverage for insertion, newline, paste, delete/backspace, word deletion, line navigation, page navigation, select-all, find/modal entry, copy/cut by distinct cursor lines, overlapping selections, undo/redo snapshots, and renderer cursor behavior.[3][15][37][45][53][54][55]
+- `[x]` The editor gutter now shows the active buffer language so language-mode changes can be verified directly while editing.[37][56]
+- `[x]` Find/replace is now complete for the core editor surface: find opens below the cursor seeded from per-buffer state, updates matches live while typing, navigates exact occurrence columns including repeated hits on one line, keeps the overlay open during navigation, clears stale no-match state, and replace covers next/all over buffer or selection with undoable snapshots.[3][8][58][59][60][61][62]
+- `[x]` GUI/menu typography now has a separate UI font family path, so code/text editor font family changes no longer restyle command-runner/menu chrome.[16][18][38][57]
 
 ## 1. Core Editor Model
 
 - `[x]` Serenity uses ropes as its primary text model. `Buffer.content` is a `Rope`, and core editor mutations go through rope operations such as `insert`, `delete`, `searchAll`, and `replaceAll`.[1][2][3]
 - `[x]` Buffers carry real editor state: file path, dirty flag, language, viewport, multiple cursors, selection(s), per-buffer find state, and typography/navigation hints such as preferred column and preferred pixel x.[2]
-- `[~][P0]` Multi-cursor editing is only partially complete. The reducer now has dedicated multi-cursor and multi-selection paths; distinct-cursor whole-line copy/cut, overlapping multi-cursor word deletions, tab/delete-forward parity, repeated vertical navigation, and global actions such as select-all/find/modal-open are now covered, but many single-cursor branches still rely on `buffer.cursors.headOption` and write back via `newCursor :: buffer.cursors.tail`, so the primary cursor still dominates a lot of editing behavior.[3][45]
+- `[x][P0]` Core multi-cursor editing semantics are implemented and covered. The reducer dispatches multi-cursor and multi-selection events through dedicated paths, overlapping deletion/selection ranges are merged, undo/redo restores the full cursor and selection snapshot, mouse interactions intentionally collapse back to a single cursor/selection, and renderer blink behavior keeps only the primary cursor flashing while secondary cursors remain visible. Remaining `buffer.cursors.headOption` uses are primarily intentional active-cursor anchors for gutter, viewport, overlays, and single-cursor reducer paths rather than unhandled multi-cursor edit branches.[3][15][37][45][53][54][55][56]
 
 ## 2. Panes And Split Views
 
@@ -47,7 +51,8 @@ Priority labels used here:
 - `[x]` Selection highlighting is rendered in the editor surface and covered by renderer tests.[6][37]
 - `[x]` File-oriented commands such as `open`, `save`, `save-as`, `new`, `close`, `close-all`, and `close-others` are exposed through the command registry.[7]
 - `[x]` Cursor centering and cursor visibility logic exist for both ordinary movement and viewport-aware repositioning.[3][5]
-- `[~][P0]` The find/replace family is still narrower than a full editor workflow. Find is per-buffer query state with next-result navigation, and replace now supports both `Replace Next` and `Replace All` across the whole buffer or the active selection, but there is still no broader `find all` result set, project-wide scope, or richer result-navigation workflow yet.[2][3][8]
+- `[x][P0]` Core find/replace is implemented for the editor surface. Find is per-buffer query state with exact occurrence navigation, live match updates, below-cursor overlay placement, stale no-match clearing, and command-runner/editor seeding from saved find state; replace supports both `Replace Next` and `Replace All` across the whole buffer or active selection.[2][3][8][32][58][59][60][61][62]
+- `[x]` Replace edits are now undoable through full buffer snapshots, including cursor, selection, and find-state restoration after modal-driven replacement.[2][8][54]
 - `[x][P0]` Core mouse-driven text editing now works: click-to-place, shift-click range extension, drag selection, shift-drag extension, double-click word selection, and triple-click line selection all work, including proportional hit testing.[14][15]
 
 ## 4. Markdown And Prose Editing/Rendering
@@ -87,6 +92,7 @@ Priority labels used here:
 - `[x]` Serenity supports separate code and text font families, ligature configuration, buffer font size, and UI font size through `AppConfig` and command-runner settings.[16][17][18]
 - `[x]` Runtime typography switches between code and text fonts based on content context. Today that means plain text and Markdown use the text font path; code-oriented languages use the code font path.[2][17][18][37][38]
 - `[x]` Wrapped-line layout distinguishes monospaced and proportional text correctly, with fixed-advance behavior for true monospaced layout and measured layout when proportional advances or ligatures demand it.[19][37][39]
+- `[x]` UI/menu typography is isolated from editor font family changes through `FontConfig.uiFontFamily`, runtime `uiFont`, and renderer overlay tests that keep UI chrome off the code-font path.[16][18][38][57]
 - `[~][P1]` Content-aware typography is still essentially a language-based split, not a richer semantic `code vs prose vs preview` model.[2][18][19]
 
 ## 9. Themes, Effects, And Animation
@@ -138,14 +144,14 @@ Priority labels used here:
 
 - `[x]` The architecture is strongly event-driven and reducer-oriented. `AppState` is the central model, features are split into focused reducers, and runtime concerns live around Cats Effect state management and streams.[3][20][33]
 - `[x]` `StateManager` has now been split into composed behavior traits covering event pipeline, effects, workflows, viewport logic, file façade, editor façade, and surface façade responsibilities.[34][35][36]
-- `[~][P1]` The architecture is much healthier than before, but there is still room to push more behavior into precise types and smaller algebras, especially around multi-cursor editing, richer workflows, and IDE request/response paths.[3][34][36]
+- `[~][P1]` The architecture is much healthier than before, but there is still room to push more behavior into precise types and smaller algebras, especially around richer workflows, replace/find scope modelling, and IDE request/response paths.[3][34][36]
 
 ## Prioritized Tick List
 
 ### P0: Editing Fundamentals
 
-- `[~]` Finish true multi-cursor editing semantics across the remaining primary-cursor branches. Distinct-cursor whole-line copy/cut, overlapping word-delete parity, tab/delete-forward coverage, repeated vertical preferred-column / preferred-x preservation, and explicit select-all/find/modal-open semantics are now implemented; the remaining gap is broader parity across the rest of the single-cursor command set.[3][45]
-- `[~]` Expand the find/replace family into a fuller workflow with clearer single-step and all-step behavior. `Replace Next` and `Replace All` now support both current-buffer and active-selection scope; the remaining gaps are broader result management and larger-scope workflows.[3][8]
+- `[x]` Finish true multi-cursor editing semantics for the core editor surface. Distinct-cursor whole-line copy/cut, overlapping word-delete parity, tab/delete-forward coverage, repeated vertical preferred-column / preferred-x preservation, explicit select-all/find/modal-open semantics, undo/redo snapshots, mouse collapse rules, renderer parity, and primary-cursor-only blinking are now implemented and covered.[3][15][37][45][53][54][55][56]
+- `[x]` Finish the core find/replace workflow. Find now has live results, exact occurrence-column navigation, below-cursor overlay anchoring, saved-query seeding, no-match cleanup, and open-overlay next/previous behavior; replace-next and replace-all support current-buffer and active-selection scope with undoable snapshots.[3][8][32][58][59][60][61][62]
 - `[x]` Add richer mouse-driven text editing. Click placement, range extension, drag selection, double-click word selection, and triple-click line selection are now implemented.[14][15]
 - `[~]` Continue the markdown direction intentionally. Editor-side structural styling and block-lens raw-source editing now exist; the remaining decision is whether to add a separate preview/document presentation behavior beyond the current same-metric editor lens.[19][22][23][32][37][50]
 - `[~]` Continue the keymap direction beyond the new config-backed focused bindings. The runtime now supports editor/modal/panel/overlay-local overrides in addition to global hotkeys; the remaining gap is a user-facing keymap editing surface and any broader remapping of higher-level commands.[12][13][40][46][47][49]
@@ -155,6 +161,7 @@ Priority labels used here:
 - `[ ]` Add panel presets / workspace presets.[30][31]
 - `[ ]` Support multiple panels per side rather than single replacement per side.[30][31]
 - `[ ]` Add interface density / minimal-vs-maximal UI modes if still desired.[16][17][30]
+- `[x]` Separate GUI/menu font rendering from editor code/text font settings so changing the code font does not restyle command-runner or menu UI.[16][18][38][57]
 - `[~]` Revisit the command runner as a broader unified control surface once the editing fundamentals are settled. Nested settings, scrolling, text-entry rows, focused submenu search, and typed command execution are now in place; the remaining gap is breadth across every subsystem rather than command-runner mechanics.[7][17][32][40][51][52]
 - `[ ]` Add hover affordances and context-menu style mouse workflows if those are still desired as part of broader UI polish.[14][15]
 
@@ -167,8 +174,8 @@ Priority labels used here:
 ## Summary
 
 - Strongest implemented areas today: rope-backed editing, session restore/save, typography/layout correctness, nested command-runner overlays, theming/animation, and pinned-panel basics.[1][5][11][17][19][27]
-- Biggest current gaps remain: fully finished multi-cursor editing, richer find/replace workflows, a user-facing keymap editing surface beyond the new config-backed bindings, richer Markdown preview/document rendering beyond the same-metric block lens, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][40][46][47][49][50]
-- Recommended implementation order from here: finish editing fundamentals first, then polish workflow/UX, then deepen IDE behavior.[3][14][17][30][33]
+- Biggest current gaps remain: broader search surfaces such as find-all/project-wide search, a user-facing keymap editing surface beyond the new config-backed bindings, richer Markdown preview/document rendering beyond the same-metric block lens, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][40][46][47][49][50]
+- Recommended implementation order from here: finish any remaining editing-fundamental polish, then broaden workflow/UX surfaces such as find-all/project-wide search and keymap editing, then deepen IDE behavior.[3][8][14][17][30][33]
 
 ## Sources
 
@@ -224,3 +231,13 @@ Priority labels used here:
 [50] `docs/renderer-capabilities.md`
 [51] `src/test/scala/com/serenity/CommandRunnerReducerSpec.scala`
 [52] `src/test/scala/com/serenity/SurfaceContentResolverSpec.scala`
+[53] `src/test/scala/com/serenity/MultiCursorEditingSpec.scala`
+[54] `src/test/scala/com/serenity/UndoRedoSpec.scala`
+[55] `src/test/scala/com/serenity/RendererTextLayoutSpec.scala`
+[56] `src/test/scala/com/serenity/GutterAndLineNumbersSpec.scala`
+[57] `src/main/scala/com/serenity/ui/fonts/FontLoader.scala`
+[58] `src/main/scala/com/serenity/state/reducers/ModalEventReducer.scala`
+[59] `src/test/scala/com/serenity/ModalEventReducerSpec.scala`
+[60] `src/test/scala/com/serenity/CommandRunnerCoreCommandsSpec.scala`
+[61] `src/test/scala/com/serenity/ScrollingNavigationSpec.scala`
+[62] `src/test/scala/com/serenity/EditorEventReducerSpec.scala`

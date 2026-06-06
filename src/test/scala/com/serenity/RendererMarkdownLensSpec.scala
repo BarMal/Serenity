@@ -93,3 +93,43 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
 
     surface.styleCalls.filter(call => call.action == "enable" && call.style == TextStyle.bold).length shouldBe 4
   }
+
+  it should "render every active cursor markdown block as raw source" in {
+    val bufferId = BufferId(1)
+    val paneId   = PaneId(1)
+    val buffer = Buffer
+      .fromString(bufferId, "# First\nfirst body\n\n# Second\nsecond body\n\n# Third")
+      .copy(
+        language = Some(LanguageId.Markdown),
+        cursors = List(CursorPosition(0, 0), CursorPosition(3, 0)),
+        viewport = Viewport.default.copy(visibleLines = 10)
+      )
+    val state = AppState.empty.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId),
+        paneOrder = List(paneId)
+      ),
+      focus = Focus.EditorPane(paneId),
+      config = AppState.empty.config.withSyntaxHighlighting(true)
+    )
+    val surface = new MockRenderSurface(80, 24)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(80, 24),
+      codeFont = font,
+      textFont = font,
+      cellMetrics = CellMetrics.fromFont(font),
+      cursorColor = None
+    )
+
+    val boldCalls = surface.styleCalls.filter(call => call.action == "enable" && call.style == TextStyle.bold)
+
+    boldCalls.length shouldBe 2
+  }

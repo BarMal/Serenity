@@ -102,12 +102,14 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getBg(overlay.x + 1, overlay.y + 1) shouldBe state.theme.panel.background
     surface.getBg(overlay.x + 1, overlay.y + 2) shouldBe state.theme.highlighted.background
 
+    val uiFont    = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
+    val uiMetrics = CellMetrics.fromFont(uiFont)
     val caretXs = TextLayoutSnapshot.caretXsForText(
       "search: op",
-      codeFont,
+      uiFont,
       surface.fontRenderContext.getOrElse(fail("missing frc"))
     )
-    val expectedCursorXPx = cellMetrics.toPixelX(overlay.x + 1) + math.round(caretXs.last)
+    val expectedCursorXPx = uiMetrics.toPixelX(overlay.x + 1) + math.round(caretXs.last)
     surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorXPx
   }
 

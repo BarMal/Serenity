@@ -11,23 +11,6 @@ object CharacterRenderer:
   private case class TextRun(startX: Int, content: String)
   private case class CollectedRuns(runs: List[TextRun], endX: Int)
 
-  private case class MeasuredGlyph(
-      char: Char,
-      localIndex: Int,
-      foreground: Color,
-      background: Color,
-      style: TextStyle
-  )
-
-  private case class MeasuredRun(
-      startXPx: Float,
-      startLocalIndex: Int,
-      foreground: Color,
-      background: Color,
-      style: TextStyle,
-      content: String
-  )
-
   def renderString(
     surface: RenderSurface,
     x: Int,
@@ -169,55 +152,64 @@ object CharacterRenderer:
       def stopXPx(localIndex: Int): Float =
         stops.find(_.column == visualLine.startColumn + localIndex).map(_.xPx).getOrElse(0.0f)
 
-      val glyphs =
-        styledSegments
-          .foldLeft((Vector.empty[MeasuredGlyph], 0)) {
-            case ((acc, localIndex), segment) =>
-              val segmentGlyphs = segment.content.zipWithIndex.map {
-                case (char, offset) =>
-                  val glyphIndex = localIndex + offset
-                  val bufCol     = visualLine.startColumn + glyphIndex
-                  val cell       = animations.getCell(bufCol, visualLine.bufferLine)
-                  MeasuredGlyph(
-                    char,
-                    glyphIndex,
-                    cell.flatMap(_.currentForeground).getOrElse(segment.foregroundColor),
-                    cell.flatMap(_.currentBackground).getOrElse(segment.backgroundColor),
-                    segment.style
-                  )
-              }
-              (acc ++ segmentGlyphs, localIndex + segment.content.length)
-          }
-          ._1
+      case class MeasuredRun(
+          startXPx: Float,
+          foreground: Color,
+          background: Color,
+          style: TextStyle,
+          text: String,
+          endLocalIndex: Int
+      )
 
-      val runs = glyphs.foldLeft(Vector.empty[MeasuredRun]) { (acc, glyph) =>
-        acc.lastOption match
-          case Some(last)
-              if last.foreground == glyph.foreground &&
-                last.background == glyph.background &&
-                last.style == glyph.style =>
-            acc.updated(acc.length - 1, last.copy(content = last.content + glyph.char))
-          case _ =>
-            acc :+ MeasuredRun(
-              xOriginPx + stopXPx(glyph.localIndex),
-              glyph.localIndex,
-              glyph.foreground,
-              glyph.background,
-              glyph.style,
-              glyph.char.toString
-            )
-      }
-
-      runs.foreach { run =>
-        val endLocalIndex = run.startLocalIndex + run.content.length
-        val endXPx        = xOriginPx + stopXPx(endLocalIndex)
-        val widthPx       = endXPx - run.startXPx
+      def drawRun(run: MeasuredRun): Unit =
+        val endXPx  = xOriginPx + stopXPx(run.endLocalIndex)
+        val widthPx = endXPx - run.startXPx
         surface.setForegroundColor(run.foreground)
         surface.setBackgroundColor(run.background)
         withStyle(surface, run.style) {
-          surface.drawRunPx(run.startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.content)
+          surface.drawRunPx(run.startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text)
         }
+
+      val chars = styledSegments.flatMap(segment =>
+        segment.content.map(char => (char, segment.foregroundColor, segment.backgroundColor, segment.style))
+      )
+
+      val (runs, currentRun, _) = chars.foldLeft((List.empty[MeasuredRun], Option.empty[MeasuredRun], 0)) {
+        case ((completed, current, localIndex), (char, segmentForeground, segmentBackground, style)) =>
+          val bufferColumn = visualLine.startColumn + localIndex
+          val cell         = animations.getCell(bufferColumn, visualLine.bufferLine)
+          val foreground   = cell.flatMap(_.currentForeground).getOrElse(segmentForeground)
+          val background   = cell.flatMap(_.currentBackground).getOrElse(segmentBackground)
+
+          current match
+            case None =>
+              val run = MeasuredRun(
+                xOriginPx + stopXPx(localIndex),
+                foreground,
+                background,
+                style,
+                char.toString,
+                localIndex + 1
+              )
+              (completed, Some(run), localIndex + 1)
+
+            case Some(run) if foreground == run.foreground && background == run.background && style == run.style =>
+              val updatedRun = run.copy(text = run.text + char, endLocalIndex = localIndex + 1)
+              (completed, Some(updatedRun), localIndex + 1)
+
+            case Some(run) =>
+              val nextRun = MeasuredRun(
+                xOriginPx + stopXPx(localIndex),
+                foreground,
+                background,
+                style,
+                char.toString,
+                localIndex + 1
+              )
+              (run :: completed, Some(nextRun), localIndex + 1)
       }
+
+      (currentRun.toList ::: runs).reverse.foreach(drawRun)
 
   private def renderStyledLineWithAnimation(
     surface: RenderSurface,
@@ -260,40 +252,43 @@ object CharacterRenderer:
     content: String,
     tabWidth: Int
   ): CollectedRuns =
-    case class CollectState(runs: Vector[TextRun], currentText: String, currentStartX: Int, currentX: Int)
+    case class PlainRunState(
+        completed: List[TextRun],
+        currentText: String,
+        currentStartX: Int,
+        currentX: Int
+    ):
+      def flush: PlainRunState =
+        if currentText.nonEmpty then
+          copy(completed = TextRun(currentStartX, currentText) :: completed, currentText = "")
+        else this
 
-    def flushCurrent(state: CollectState): CollectState =
-      if state.currentText.nonEmpty then
-        state.copy(
-          runs = state.runs :+ TextRun(state.currentStartX, state.currentText),
-          currentText = ""
-        )
-      else state
-
-    val finalState = content.foldLeft(CollectState(Vector.empty, "", startX, startX)) { (state, char) =>
-      char match
-        case '\t' =>
-          val flushed     = flushCurrent(state)
+    val initial = PlainRunState(Nil, "", startX, startX)
+    val finalState = content
+      .foldLeft(initial) {
+        case (state, '\t') =>
+          val flushed     = state.flush
           val spacesToAdd = tabWidth - (flushed.currentX % tabWidth)
+          val tabSpaces   = " " * spacesToAdd
           flushed.copy(
-            runs = flushed.runs :+ TextRun(flushed.currentX, " " * spacesToAdd),
+            completed = TextRun(flushed.currentX, tabSpaces) :: flushed.completed,
             currentStartX = flushed.currentX + spacesToAdd,
             currentX = flushed.currentX + spacesToAdd
           )
-        case c if isVisibleChar(c) =>
+        case (state, char) if isVisibleChar(char) =>
           val start = if state.currentText.isEmpty then state.currentX else state.currentStartX
           state.copy(
-            currentText = state.currentText + c,
+            currentText = state.currentText + char,
             currentStartX = start,
             currentX = state.currentX + 1
           )
-        case _ =>
-          val flushed = flushCurrent(state)
+        case (state, _) =>
+          val flushed = state.flush
           flushed.copy(currentStartX = flushed.currentX)
-    }
+      }
+      .flush
 
-    val flushed = flushCurrent(finalState)
-    CollectedRuns(flushed.runs.toList, flushed.currentX)
+    CollectedRuns(finalState.completed.reverse, finalState.currentX)
 
   private def flushPlainRuns(surface: RenderSurface, y: Int, runs: List[TextRun]): Unit =
     runs.foreach(run => surface.putString(run.startX, y, run.content))
@@ -327,23 +322,52 @@ object CharacterRenderer:
     bufferLine: Int,
     bufferStartColumn: Int
   ): List[(Int, String, Color, Color)] =
-    case class ColorGroup(startX: Int, text: String, foreground: Color, background: Color)
+    val text = run.content
 
-    val groups = run.content.zipWithIndex.foldLeft(Vector.empty[ColorGroup]) {
-      case (acc, (char, index)) =>
-        val bufferColumn = bufferStartColumn + (run.startX - screenOriginX) + index
-        val cell         = screenAnimations.getCell(bufferColumn, bufferLine)
-        val foreground   = cell.flatMap(_.currentForeground).getOrElse(theme.foreground)
-        val background   = cell.flatMap(_.currentBackground).getOrElse(theme.background)
+    case class ColorRunState(
+        completed: List[(Int, String, Color, Color)],
+        currentText: String,
+        currentStartX: Int,
+        currentForeground: Color,
+        currentBackground: Color
+    ):
+      def flush: ColorRunState =
+        if currentText.nonEmpty then
+          copy(
+            completed = (currentStartX, currentText, currentForeground, currentBackground) :: completed,
+            currentText = ""
+          )
+        else this
 
-        acc.lastOption match
-          case Some(last) if last.foreground == foreground && last.background == background =>
-            acc.updated(acc.length - 1, last.copy(text = last.text + char))
-          case _ =>
-            acc :+ ColorGroup(run.startX + index, char.toString, foreground, background)
-    }
+    val initial = ColorRunState(Nil, "", run.startX, theme.foreground, theme.background)
+    val finalState = text.zipWithIndex
+      .foldLeft(initial) {
+        case (state, (char, index)) =>
+          val bufferColumn = bufferStartColumn + (run.startX - screenOriginX) + index
+          val cell         = screenAnimations.getCell(bufferColumn, bufferLine)
+          val foreground   = cell.flatMap(_.currentForeground).getOrElse(theme.foreground)
+          val background   = cell.flatMap(_.currentBackground).getOrElse(theme.background)
 
-    groups.map(group => (group.startX, group.text, group.foreground, group.background)).toList
+          if state.currentText.isEmpty then
+            state.copy(
+              currentText = char.toString,
+              currentStartX = run.startX + index,
+              currentForeground = foreground,
+              currentBackground = background
+            )
+          else if foreground == state.currentForeground && background == state.currentBackground then
+            state.copy(currentText = state.currentText + char)
+          else
+            state.flush.copy(
+              currentText = char.toString,
+              currentStartX = run.startX + index,
+              currentForeground = foreground,
+              currentBackground = background
+            )
+      }
+      .flush
+
+    finalState.completed.reverse
 
   private def renderCharAtPosition(
     surface: RenderSurface,

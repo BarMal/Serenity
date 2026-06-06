@@ -71,52 +71,45 @@ object ModalEventReducer:
       case ModalDismiss => ReducerResult.noEffects(dismissToPane(currentState))
       case ModalInsertChar(char) =>
         currentModal(currentState) match
-          case Some((surface, Modal.Find(query, results, idx))) =>
-            ReducerResult.noEffects(updateModal(currentState, surface, Modal.Find(query + char, results, idx)))
+          case Some((surface, Modal.Find(query, _, _))) =>
+            ReducerResult.noEffects(updateFindQuery(currentState, surface, query + char))
           case _ => ReducerResult.noEffects(currentState)
       case ModalDeleteBackward =>
         currentModal(currentState) match
-          case Some((surface, Modal.Find(query, results, idx))) if query.nonEmpty =>
-            ReducerResult.noEffects(updateModal(currentState, surface, Modal.Find(query.dropRight(1), results, idx)))
+          case Some((surface, Modal.Find(query, _, _))) if query.nonEmpty =>
+            ReducerResult.noEffects(updateFindQuery(currentState, surface, query.dropRight(1)))
           case _ => ReducerResult.noEffects(currentState)
       case ModalDeleteForward =>
         ReducerResult.noEffects(currentState)
       case ModalDeleteWordBackward =>
         currentModal(currentState) match
-          case Some((surface, Modal.Find(query, results, idx))) =>
-            ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.Find(TextEditing.deleteWordBackward(query), results, idx))
-            )
+          case Some((surface, Modal.Find(query, _, _))) =>
+            ReducerResult.noEffects(updateFindQuery(currentState, surface, TextEditing.deleteWordBackward(query)))
           case _ => ReducerResult.noEffects(currentState)
       case ModalDeleteWordForward =>
         currentModal(currentState) match
-          case Some((surface, Modal.Find(query, results, idx))) =>
-            ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.Find(TextEditing.deleteWordForward(query), results, idx))
-            )
+          case Some((surface, Modal.Find(query, _, _))) =>
+            ReducerResult.noEffects(updateFindQuery(currentState, surface, TextEditing.deleteWordForward(query)))
+          case _ => ReducerResult.noEffects(currentState)
+      case ModalFindNext | ModalNavigate(Direction.Down) | ModalNavigate(Direction.Right) =>
+        currentModal(currentState) match
+          case Some((surface, Modal.Find(query, _, currentIndex))) if query.nonEmpty =>
+            ReducerResult.noEffects(updateFindSelection(currentState, surface, query, currentIndex + 1))
+          case _ => ReducerResult.noEffects(currentState)
+      case ModalNavigate(Direction.Up) | ModalNavigate(Direction.Left) =>
+        currentModal(currentState) match
+          case Some((surface, Modal.Find(query, _, currentIndex))) if query.nonEmpty =>
+            ReducerResult.noEffects(updateFindSelection(currentState, surface, query, currentIndex - 1))
           case _ => ReducerResult.noEffects(currentState)
       case ModalSubmit =>
         currentModal(currentState) match
-          case Some((_, Modal.Find(query, _, _))) if query.nonEmpty =>
-            val resultLines = currentState.layout.activeEditorPaneId.toList.flatMap { paneId =>
-              currentState.layout.editorPanes.get(paneId).toList.flatMap { pane =>
-                pane.bufferId.toList.flatMap { bufferId =>
-                  currentState.buffers.get(bufferId).toList.flatMap { buffer =>
-                    val lines = buffer.content.collect().split('\n')
-                    lines.zipWithIndex.collect {
-                      case (line, idx) if line.contains(query) => idx
-                    }.toList
-                  }
-                }
-              }
-            }
-
-            if resultLines.nonEmpty then
-              val findState = FindState(query, resultLines, 0)
-              ReducerResult.noEffects(applyFindResult(currentState, findState, resultLines.head))
-            else ReducerResult.noEffects(dismissToPane(currentState))
+          case Some((surface, Modal.Find(query, resultLines, currentIndex))) if query.nonEmpty =>
+            val nextIndex =
+              if resultLines.nonEmpty then currentIndex + 1
+              else 0
+            ReducerResult.noEffects(updateFindSelection(currentState, surface, query, nextIndex))
           case _ =>
-            ReducerResult.noEffects(dismissToPane(currentState))
+            ReducerResult.noEffects(currentState)
       case _ =>
         ReducerResult.noEffects(currentState)
 
@@ -339,6 +332,95 @@ object ModalEventReducer:
       case _ =>
         ReducerResult.noEffects(currentState)
 
+  private def updateFindQuery(state: AppState, surface: UiSurface, query: String): AppState =
+    updateFindSelection(state, surface, query, 0)
+
+  private def updateFindSelection(
+    state: AppState,
+    surface: UiSurface,
+    query: String,
+    requestedIndex: Int
+  ): AppState =
+    val matches   = activeFindMatches(state, query)
+    val safeIndex = wrapFindIndex(requestedIndex, matches.length)
+    val modalState = updateModal(
+      state,
+      surface,
+      Modal.Find(query, matches.map(_.line), safeIndex)
+    )
+
+    if query.isEmpty || matches.isEmpty then clearActiveFindState(modalState)
+    else applyFindMatch(modalState, query, matches, safeIndex)
+
+  private def activeFindMatches(state: AppState, query: String): List[CursorPosition] =
+    if query.isEmpty then Nil
+    else
+      activeBuffer(state)
+        .map { buffer =>
+          val text = buffer.content.collect()
+          buffer.content.searchAll(query).map(offset => cursorPositionForOffset(text, offset))
+        }
+        .getOrElse(Nil)
+
+  private def wrapFindIndex(index: Int, resultCount: Int): Int =
+    if resultCount <= 0 then 0
+    else
+      val raw = index % resultCount
+      if raw < 0 then raw + resultCount else raw
+
+  private def applyFindMatch(
+    state: AppState,
+    query: String,
+    matches: List[CursorPosition],
+    index: Int
+  ): AppState =
+    activeBufferId(state) match
+      case Some(bufferId) =>
+        state.buffers.get(bufferId) match
+          case Some(buffer) =>
+            val safeIndex   = wrapFindIndex(index, matches.length)
+            val target      = matches(safeIndex)
+            val halfVisible = buffer.viewport.visibleLines / 2
+            val newTopLine  = math.max(0, target.line - halfVisible)
+            val updatedBuffer = buffer.copy(
+              cursors = List(target),
+              selection = None,
+              selections = Nil,
+              preferredColumn = Some(target.column),
+              preferredXPx = None,
+              viewport = buffer.viewport.copy(topLine = newTopLine),
+              findState = Some(FindState(query, matches.map(_.line), safeIndex))
+            )
+            state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
+          case None =>
+            state
+      case None =>
+        state
+
+  private def clearActiveFindState(state: AppState): AppState =
+    activeBufferId(state) match
+      case Some(bufferId) =>
+        state.buffers.get(bufferId) match
+          case Some(buffer) =>
+            state.copy(buffers = state.buffers + (bufferId -> buffer.copy(findState = None)))
+          case None =>
+            state
+      case None =>
+        state
+
+  private def activeBuffer(state: AppState): Option[Buffer] =
+    activeBufferId(state).flatMap(state.buffers.get)
+
+  private def activeBufferId(state: AppState): Option[BufferId] =
+    state.layout.activeEditorPaneId.flatMap(paneId => state.layout.editorPanes.get(paneId).flatMap(_.bufferId))
+
+  private def cursorPositionForOffset(text: String, offset: Int): CursorPosition =
+    val clamped = math.max(0, math.min(offset, text.length))
+    text.take(clamped).foldLeft(CursorPosition(0, 0)) { (cursor, char) =>
+      if char == '\n' then CursorPosition(cursor.line + 1, 0)
+      else cursor.copy(column = cursor.column + 1)
+    }
+
   private def dismissToPane(state: AppState): AppState =
     state.layout.activeEditorPaneId match
       case Some(paneId) =>
@@ -379,32 +461,6 @@ object ModalEventReducer:
             state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface), focus = Focus.EditorPane(PaneId(0)))
       case None =>
         state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface), focus = Focus.EditorPane(PaneId(0)))
-
-  private def applyFindResult(state: AppState, findState: FindState, firstLine: Int): AppState =
-    state.layout.activeEditorPaneId match
-      case Some(paneId) =>
-        state.layout.editorPanes.get(paneId) match
-          case Some(pane) =>
-            pane.bufferId.flatMap(state.buffers.get) match
-              case Some(buffer) =>
-                val halfVisible = buffer.viewport.visibleLines / 2
-                val newTopLine  = math.max(0, firstLine - halfVisible)
-                val updatedBuffer = buffer.copy(
-                  cursors = List(CursorPosition(firstLine, 0)),
-                  viewport = buffer.viewport.copy(topLine = newTopLine),
-                  findState = Some(findState)
-                )
-                state.copy(
-                  uiSurfaces = state.uiSurfaces.filterNot(isModalSurface),
-                  focus = Focus.EditorPane(paneId),
-                  buffers = state.buffers + (buffer.id -> updatedBuffer)
-                )
-              case None =>
-                state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface))
-          case None =>
-            state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface))
-      case None =>
-        state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface))
 
   private def currentModal(state: AppState): Option[(UiSurface, Modal)] =
     state.modalSurface.flatMap { surface =>

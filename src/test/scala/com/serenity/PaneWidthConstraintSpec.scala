@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{Event, NewTab}
+import com.serenity.keystroke.events.NewTab
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -21,13 +21,6 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     val logger                      = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager                = StateManager.apply(logger).unsafeRunSync()
     val defaultMinPaneWidth         = 50 // Expected default minimum
-
-    def navigateUntilFocused(targetBufferId: BufferId, event: Event, remainingAttempts: Int = 20): Unit =
-      if stateManager.getCurrentState.unsafeRunSync().focusedBufferId.contains(targetBufferId) then ()
-      else
-        if remainingAttempts <= 0 then fail(s"Could not focus buffer $targetBufferId")
-        stateManager.applyEvent(event).unsafeRunSync()
-        navigateUntilFocused(targetBufferId, event, remainingAttempts - 1)
 
   it should "enforce minimum pane width of 50 characters by default" in new PaneConstraintFixture:
     // Given: Narrow terminal width that can only fit 1 pane at minimum width
@@ -132,12 +125,18 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     // When: Navigate to different buffers using buffer navigation
     val initialFocusedBuffer = state.focusedBufferId.get
 
+    @annotation.tailrec
+    def navigateUntil(targetBufferId: BufferId, event: com.serenity.keystroke.events.Event): Unit =
+      if stateManager.getCurrentState.unsafeRunSync().focusedBufferId.get != targetBufferId then
+        stateManager.applyEvent(event).unsafeRunSync()
+        navigateUntil(targetBufferId, event)
+
     // Navigate to first buffer
-    navigateUntilFocused(bufferIds.head, com.serenity.keystroke.events.PreviousTab)
+    navigateUntil(bufferIds.head, com.serenity.keystroke.events.PreviousTab)
     val stateOnFirstBuffer = stateManager.getCurrentState.unsafeRunSync()
 
     // Navigate to last buffer
-    navigateUntilFocused(bufferIds.last, com.serenity.keystroke.events.NextTab)
+    navigateUntil(bufferIds.last, com.serenity.keystroke.events.NextTab)
     val stateOnLastBuffer = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Each time we navigate, the focused buffer should be assigned to a visible pane

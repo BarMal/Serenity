@@ -125,4 +125,40 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     rect.right shouldBe contentRect.right
     rect.bottom should be <= paneRect.bottom
   }
+
+  it should "size a find overlay to fit its header, query row, and result footer" in {
+    val state = baseState().copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("find"),
+          SurfaceContent.ModalWorkflow(Modal.Find("needle", List(1, 3), 0)),
+          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+
+    layout.belowCursorOverlayRect.map(_.height) shouldBe Some(5)
+  }
+
+  it should "size a replace overlay to fit fields, actions, scope, and status" in {
+    val state = baseState().copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("replace"),
+          SurfaceContent.ModalWorkflow(
+            Modal.ReplaceWorkflow(
+              ReplaceWorkflowState(statusMessage = Some("3 matches will be replaced"))
+            )
+          ),
+          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+
+    layout.belowCursorOverlayRect.map(_.height) shouldBe Some(8)
+  }
 end CursorOverlayLayoutSpec

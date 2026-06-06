@@ -388,27 +388,37 @@ object EditorEventReducer:
             ModalStateReducer.show(Modal.GotoLine(""), currentState)
 
           case OpenFind =>
-            ModalStateReducer.show(Modal.Find("", Nil, 0), currentState)
+            ModalStateReducer.show(findModalForBuffer(buffer), currentState)
 
           case FindNext =>
             buffer.findState match
-              case Some(FindState(query, resultLines, currentIndex)) if resultLines.nonEmpty =>
-                val nextIndex   = (currentIndex + 1) % resultLines.size
-                val targetLine  = resultLines(nextIndex)
-                val halfVisible = buffer.viewport.visibleLines / 2
-                val newTopLine  = math.max(0, targetLine - halfVisible)
-                val updatedBuffer = buffer.copy(
-                  cursors = List(CursorPosition(targetLine, 0)),
-                  preferredColumn = Some(0),
-                  preferredXPx = None,
-                  viewport = buffer.viewport.copy(topLine = newTopLine),
-                  findState = Some(FindState(query, resultLines, nextIndex))
-                )
-                ReducerResult.noEffects(
-                  currentState.copy(
-                    buffers = currentState.buffers + (buffer.id -> updatedBuffer)
+              case Some(FindState(query, storedResultLines, currentIndex)) if storedResultLines.nonEmpty =>
+                val matches = findMatches(buffer, query)
+                if matches.isEmpty then
+                  val updatedBuffer = buffer.copy(findState = None)
+                  ReducerResult.noEffects(
+                    currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
                   )
-                )
+                else
+                  val nextIndex   = wrapFindIndex(currentIndex + 1, matches.size)
+                  val target      = matches(nextIndex)
+                  val resultLines = matches.map(_.line)
+                  val halfVisible = buffer.viewport.visibleLines / 2
+                  val newTopLine  = math.max(0, target.line - halfVisible)
+                  val updatedBuffer = buffer.copy(
+                    cursors = List(target),
+                    selection = None,
+                    selections = Nil,
+                    preferredColumn = Some(target.column),
+                    preferredXPx = None,
+                    viewport = buffer.viewport.copy(topLine = newTopLine),
+                    findState = Some(FindState(query, resultLines, nextIndex))
+                  )
+                  ReducerResult.noEffects(
+                    currentState.copy(
+                      buffers = currentState.buffers + (buffer.id -> updatedBuffer)
+                    )
+                  )
               case _ =>
                 ReducerResult.noEffects(currentState)
 
@@ -937,16 +947,11 @@ object EditorEventReducer:
     currentState: AppState,
     insertedText: String
   ): Buffer =
-    val selections = activeSelections(buffer)
-    val offsets    = selections.map(selectionStartOffset(buffer, _))
-    val edits = selections.zipWithIndex.map {
-      case (selection, index) =>
-        MultiCursorEdit(
-          index,
-          selectionStartOffset(buffer, selection),
-          selectionEndOffset(buffer, selection),
-          insertedText
-        )
+    val ranges  = mergedActiveSelectionRanges(buffer)
+    val offsets = ranges.map(_._1)
+    val edits = ranges.zipWithIndex.map {
+      case ((start, end), index) =>
+        MultiCursorEdit(index, start, end, insertedText)
     }
     applyTrackedEdits(buffer, currentState, offsets, edits)
 
@@ -954,11 +959,11 @@ object EditorEventReducer:
     buffer: Buffer,
     currentState: AppState
   ): Buffer =
-    val selections = activeSelections(buffer)
-    val offsets    = selections.map(selectionStartOffset(buffer, _))
-    val edits = selections.zipWithIndex.map {
-      case (selection, index) =>
-        MultiCursorEdit(index, selectionStartOffset(buffer, selection), selectionEndOffset(buffer, selection), "")
+    val ranges  = mergedActiveSelectionRanges(buffer)
+    val offsets = ranges.map(_._1)
+    val edits = ranges.zipWithIndex.map {
+      case ((start, end), index) =>
+        MultiCursorEdit(index, start, end, "")
     }
     applyTrackedEdits(buffer, currentState, offsets, edits)
 
@@ -1092,6 +1097,25 @@ object EditorEventReducer:
       else cursor.copy(column = cursor.column + 1)
     }
     scanned
+
+  private def findModalForBuffer(buffer: Buffer): Modal =
+    buffer.findState match
+      case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
+        val matches   = findMatches(buffer, query)
+        val safeIndex = wrapFindIndex(currentIndex, matches.length)
+        Modal.Find(query, matches.map(_.line), safeIndex)
+      case _ =>
+        Modal.Find("", Nil, 0)
+
+  private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
+    if query.isEmpty then Nil
+    else buffer.content.searchAll(query).map(offset => offsetToCursorPosition(buffer.content, offset))
+
+  private def wrapFindIndex(index: Int, resultCount: Int): Int =
+    if resultCount <= 0 then 0
+    else
+      val raw = index % resultCount
+      if raw < 0 then raw + resultCount else raw
 
   private def moveCursorLeft(cursor: CursorPosition, content: Rope): CursorPosition =
     if cursor.column > 0 then cursor.moveLeft
@@ -1401,7 +1425,25 @@ object EditorEventReducer:
       )
 
   private def selectedTexts(buffer: Buffer): List[String] =
-    activeSelections(buffer).map(selectedText(buffer, _))
+    val text = buffer.content.collect()
+    mergedActiveSelectionRanges(buffer).map { case (start, end) => text.slice(start, end) }
+
+  private def mergedActiveSelectionRanges(buffer: Buffer): List[(Int, Int)] =
+    val ranges = activeSelections(buffer)
+      .map(selection => (selectionStartOffset(buffer, selection), selectionEndOffset(buffer, selection)))
+      .filter { case (start, end) => start < end }
+    mergeOverlappingSelectionRanges(ranges)
+
+  private def mergeOverlappingSelectionRanges(ranges: List[(Int, Int)]): List[(Int, Int)] =
+    ranges
+      .sortBy { case (start, end) => (start, end) }
+      .foldLeft(List.empty[(Int, Int)]) {
+        case (Nil, range) => range :: Nil
+        case ((currentStart, currentEnd) :: rest, (nextStart, nextEnd)) =>
+          if nextStart < currentEnd then (currentStart, math.max(currentEnd, nextEnd)) :: rest
+          else (nextStart, nextEnd) :: (currentStart, currentEnd) :: rest
+      }
+      .reverse
 
   private def selectionStartOffset(buffer: Buffer, selection: Selection): Int =
     lineColumnToOffset(buffer.content, selection.start.line, selection.start.column)

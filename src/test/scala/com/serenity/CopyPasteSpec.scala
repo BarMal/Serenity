@@ -237,10 +237,9 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     def setupBuffer(content: String): BufferId =
       val bufferId = stateManager.createBuffer(content).unsafeRunSync()
       val state    = stateManager.getCurrentState.unsafeRunSync()
-      val paneId   = state.layout.editorPanes.keys.head
-      activePaneId.set(paneId)
+      activePaneId.set(state.layout.editorPanes.keys.head)
       activeBufferId.set(bufferId)
-      stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+      stateManager.setBufferForPane(activePaneId.get(), bufferId).unsafeRunSync()
       bufferId
 
     def setCursor(line: Int, col: Int): Unit =

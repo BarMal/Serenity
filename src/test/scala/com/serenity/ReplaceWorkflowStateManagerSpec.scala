@@ -130,6 +130,53 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     afterSecondReplace.buffers(bufferId).content.collect() shouldBe "thread one\nthread two\nkeep"
   }
 
+  it should "make replace next undoable while leaving the workflow state available" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+    val original     = "needle one\nneedle two\nkeep"
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope(original),
+            cursors = List(CursorPosition(0, 0)),
+            selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))),
+            findState = Some(FindState("needle", List(0, 1), 0))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "replace", "replace")
+
+    "needle".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+    "thread".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(MoveLeft).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val replaced = stateManager.getCurrentState.unsafeRunSync()
+    replaced.modalSurface shouldBe defined
+    replaced.buffers(bufferId).content.collect() shouldBe "thread one\nneedle two\nkeep"
+    replaced.buffers(bufferId).cursors shouldBe List(CursorPosition(0, "thread".length))
+    replaced.buffers(bufferId).selection shouldBe None
+    replaced.buffers(bufferId).findState shouldBe None
+
+    stateManager.applyEvent(Undo).unsafeRunSync()
+
+    val undone = stateManager.getCurrentState.unsafeRunSync()
+    undone.modalSurface shouldBe defined
+    undone.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+    undone.buffers(bufferId).content.collect() shouldBe original
+    undone.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0))
+    undone.buffers(bufferId).selection shouldBe Some(
+      Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))
+    )
+    undone.buffers(bufferId).findState shouldBe Some(FindState("needle", List(0, 1), 0))
+  }
+
   it should "keep the modal open with a status message when find text is empty" in {
     val stateManager = createStateManager()
 
@@ -231,6 +278,154 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     updatedState.modalSurface shouldBe None
     updatedState.buffers(bufferId).content.collect() shouldBe "needle one\nthread two\nthread three"
     updatedState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+  }
+
+  it should "replace next repeatedly within the original selection scope" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three\noutside needle"),
+            selection = Some(
+              Selection(
+                CursorPosition(0, 0),
+                CursorPosition(2, "needle three".length)
+              )
+            )
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "replace", "replace")
+
+    "needle".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+    "thread".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(MoveLeft).unsafeRunSync()
+    stateManager.applyEvent(ModalNavigate(Direction.Down)).unsafeRunSync()
+
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).content.collect() shouldBe
+      "thread one\nneedle two\nneedle three\noutside needle"
+
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).content.collect() shouldBe
+      "thread one\nthread two\nneedle three\noutside needle"
+
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    val afterThird = stateManager.getCurrentState.unsafeRunSync()
+    afterThird.buffers(bufferId).content.collect() shouldBe
+      "thread one\nthread two\nthread three\noutside needle"
+    afterThird.modalSurface shouldBe defined
+
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    val afterExhausted = stateManager.getCurrentState.unsafeRunSync()
+    afterExhausted.buffers(bufferId).content.collect() shouldBe
+      "thread one\nthread two\nthread three\noutside needle"
+    afterExhausted.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(
+        Modal.ReplaceWorkflow(
+          ReplaceWorkflowState(
+            findText = "needle",
+            replacementText = "thread",
+            activeField = com.serenity.state.models.ReplaceWorkflowField.ReplaceWith,
+            selectedAction = com.serenity.state.models.ReplaceWorkflowAction.ReplaceNext,
+            selectedScope = ReplaceWorkflowScope.Selection,
+            statusMessage = Some("No matches found")
+          )
+        )
+      )
+    )
+  }
+
+  it should "place the cursor at the final replacement and make replace-all undoable" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+    val original     = "needle one\nmiddle\nneedle two"
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope(original),
+            cursors = List(CursorPosition(0, 0)),
+            selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))),
+            findState = Some(FindState("needle", List(0, 2), 0))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "replace", "replace")
+
+    "needle".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+    "thread".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val replaced = stateManager.getCurrentState.unsafeRunSync()
+    replaced.modalSurface shouldBe None
+    replaced.buffers(bufferId).content.collect() shouldBe "thread one\nmiddle\nthread two"
+    replaced.buffers(bufferId).cursors shouldBe List(CursorPosition(2, "thread".length))
+    replaced.buffers(bufferId).selection shouldBe None
+    replaced.buffers(bufferId).selections shouldBe Nil
+    replaced.buffers(bufferId).findState shouldBe None
+
+    stateManager.applyEvent(Undo).unsafeRunSync()
+
+    val undone = stateManager.getCurrentState.unsafeRunSync()
+    undone.buffers(bufferId).content.collect() shouldBe original
+    undone.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0))
+    undone.buffers(bufferId).selection shouldBe Some(
+      Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))
+    )
+    undone.buffers(bufferId).findState shouldBe Some(FindState("needle", List(0, 2), 0))
+  }
+
+  it should "leave the buffer clean and keep the modal open when replace-all has no matches" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("plain text"),
+            isDirty = false
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "replace", "replace")
+
+    "needle".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+    "thread".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.buffers(bufferId).content.collect() shouldBe "plain text"
+    updatedState.buffers(bufferId).isDirty shouldBe false
+    updatedState.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(
+        Modal.ReplaceWorkflow(
+          ReplaceWorkflowState(
+            findText = "needle",
+            replacementText = "thread",
+            activeField = com.serenity.state.models.ReplaceWorkflowField.ReplaceWith,
+            statusMessage = Some("No matches found")
+          )
+        )
+      )
+    )
   }
 
   it should "keep the replace modal open with a status message when selection scope is chosen without a selection" in {

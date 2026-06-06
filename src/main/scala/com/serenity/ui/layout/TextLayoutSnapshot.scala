@@ -215,35 +215,39 @@ object TextLayoutSnapshot:
   private def normalizeCollapsedCarets(rawXs: Vector[Float]): Vector[Float] =
     if rawXs.length < 3 then rawXs
     else
-      val epsilon = 0.01f
+      val normalized = rawXs.toArray
+      val epsilon    = 0.01f
 
-      def plateauEndFrom(xs: Vector[Float], plateauValue: Float, index: Int): Int =
-        if index + 1 < xs.length && math.abs(xs(index + 1) - plateauValue) <= epsilon then
-          plateauEndFrom(xs, plateauValue, index + 1)
+      @annotation.tailrec
+      def plateauEndFrom(index: Int, plateauValue: Float): Int =
+        if index + 1 < normalized.length && math.abs(normalized(index + 1) - plateauValue) <= epsilon then
+          plateauEndFrom(index + 1, plateauValue)
         else index
 
-      def normalizePlateau(xs: Vector[Float], plateauStart: Int, plateauEnd: Int): Vector[Float] =
-        val startX       = xs(plateauStart)
-        val endX         = xs(plateauEnd)
-        val segmentCount = plateauEnd - plateauStart
+      @annotation.tailrec
+      def normalizeFrom(index: Int): Unit =
+        if index < normalized.length - 1 then
+          val plateauValue = normalized(index)
+          if math.abs(normalized(index + 1) - plateauValue) <= epsilon then
+            val plateauEnd = plateauEndFrom(index + 1, plateauValue)
 
-        if endX > startX && segmentCount > 0 then
-          val step = (endX - startX) / segmentCount.toFloat
-          (plateauStart + 1 to plateauEnd).foldLeft(xs) { (acc, pointIndex) =>
-            acc.updated(pointIndex, startX + step * (pointIndex - plateauStart))
-          }
-        else xs
+            val plateauStart = index - 1
+            val startX       = normalized(plateauStart)
+            val endX         = normalized(plateauEnd)
+            val segmentCount = plateauEnd - plateauStart
 
-      def loop(xs: Vector[Float], index: Int): Vector[Float] =
-        if index >= xs.length - 1 then xs
-        else
-          val plateauValue = xs(index)
-          if math.abs(xs(index + 1) - plateauValue) <= epsilon then
-            val plateauEnd = plateauEndFrom(xs, plateauValue, index + 1)
-            loop(normalizePlateau(xs, index - 1, plateauEnd), plateauEnd + 1)
-          else loop(xs, index + 1)
+            if endX > startX && segmentCount > 0 then
+              val step = (endX - startX) / segmentCount.toFloat
+              (plateauStart + 1 to plateauEnd).foreach { pointIndex =>
+                normalized(pointIndex) = startX + step * (pointIndex - plateauStart)
+              }
 
-      loop(rawXs, 1)
+            normalizeFrom(plateauEnd + 1)
+          else normalizeFrom(index + 1)
+
+      normalizeFrom(1)
+
+      normalized.toVector
 
   def defaultFontRenderContext(): FontRenderContext =
     val image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)

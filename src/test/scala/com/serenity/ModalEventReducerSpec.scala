@@ -1,15 +1,51 @@
 package com.serenity
 
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalEventReducer}
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
+
+  private def stateWithFindModal(
+    query: String,
+    content: String,
+    cursor: CursorPosition = CursorPosition(0, 0),
+    viewport: Viewport = Viewport(0, 0, 24, 80)
+  ): AppState =
+    val bufferId = BufferId(0)
+    AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("find"),
+          SurfaceContent.ModalWorkflow(Modal.Find(query, Nil, 0)),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("find")),
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope(content),
+            cursors = List(cursor),
+            viewport = viewport
+          )
+      )
+    )
+
+  private def activeFindModal(state: AppState): Option[Modal] =
+    state.modalSurface.flatMap {
+      _.content match
+        case SurfaceContent.ModalWorkflow(find @ Modal.Find(_, _, _)) => Some(find)
+        case _                                                        => None
+    }
 
   "ModalEventReducer" should "append digits in goto line mode" in {
     val initialState = AppState.initial.copy(
@@ -53,30 +89,87 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(2, 0)
   }
 
-  it should "compute find results and move the cursor to the first hit" in {
-    val paneId   = PaneId(0)
-    val bufferId = BufferId(0)
-    val initialState = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("find"),
-          SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-        )
-      ),
-      focus = Focus.Surface(SurfaceId("find")),
-      buffers = AppState.initial.buffers.updated(
-        bufferId,
-        AppState.initial.buffers(bufferId).copy(content = com.serenity.rope.Rope("x\nneedle here\ny\nneedle again"))
-      )
-    )
+  it should "keep find open and move the cursor to the first hit when submitted" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithFindModal("needle", "x\nneedle here\ny\nneedle again")
 
     val updatedState = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
 
-    updatedState.modalSurface shouldBe None
-    updatedState.focus shouldBe Focus.EditorPane(paneId)
+    activeFindModal(updatedState) shouldBe Some(Modal.Find("needle", List(1, 3), 0))
+    updatedState.focus shouldBe Focus.Surface(SurfaceId("find"))
     updatedState.buffers(bufferId).findState shouldBe Some(FindState("needle", List(1, 3), 0))
     updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(1, 0)
+  }
+
+  it should "update find results live while typing and select the first occurrence column" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithFindModal("", "alpha needle beta\nneedle again")
+
+    val withNeedle = "needle".foldLeft(initialState) { (state, char) =>
+      ModalEventReducer.reduce(ModalType.Find, InsertChar(char), state).state
+    }
+
+    activeFindModal(withNeedle) shouldBe Some(Modal.Find("needle", List(0, 1), 0))
+    withNeedle.buffers(bufferId).findState shouldBe Some(FindState("needle", List(0, 1), 0))
+    withNeedle.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 6)
+    withNeedle.modalSurface shouldBe defined
+  }
+
+  it should "navigate find results forward and backward while the overlay remains open" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithFindModal("needle", "needle one\nmiddle\nneedle two\nneedle three")
+
+    val first  = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
+    val second = ModalEventReducer.reduce(ModalType.Find, Enter, first).state
+    val third  = ModalEventReducer.reduce(ModalType.Find, ModalNavigate(Direction.Down), second).state
+    val secondAgain =
+      ModalEventReducer.reduce(ModalType.Find, ModalNavigate(Direction.Up), third).state
+
+    activeFindModal(second) shouldBe Some(Modal.Find("needle", List(0, 2, 3), 1))
+    second.buffers(bufferId).cursors.head shouldBe CursorPosition(2, 0)
+    activeFindModal(third) shouldBe Some(Modal.Find("needle", List(0, 2, 3), 2))
+    third.buffers(bufferId).cursors.head shouldBe CursorPosition(3, 0)
+    activeFindModal(secondAgain) shouldBe Some(Modal.Find("needle", List(0, 2, 3), 1))
+    secondAgain.buffers(bufferId).cursors.head shouldBe CursorPosition(2, 0)
+    secondAgain.modalSurface shouldBe defined
+  }
+
+  it should "navigate multiple find occurrences on the same line by column" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithFindModal("needle", "needle and needle")
+
+    val first  = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
+    val second = ModalEventReducer.reduce(ModalType.Find, Enter, first).state
+
+    activeFindModal(first) shouldBe Some(Modal.Find("needle", List(0, 0), 0))
+    first.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 0)
+    activeFindModal(second) shouldBe Some(Modal.Find("needle", List(0, 0), 1))
+    second.buffers(bufferId).cursors.head shouldBe CursorPosition(0, "needle and ".length)
+  }
+
+  it should "keep stale find state out when live query has no matches" in {
+    val bufferId = BufferId(0)
+    val initialState = stateWithFindModal("", "alpha beta")
+      .copy(
+        buffers = AppState.initial.buffers.updated(
+          bufferId,
+          AppState.initial
+            .buffers(bufferId)
+            .copy(
+              content = com.serenity.rope.Rope("alpha beta"),
+              cursors = List(CursorPosition(0, 5)),
+              findState = Some(FindState("alpha", List(0), 0))
+            )
+        )
+      )
+
+    val noMatch = "zzz".foldLeft(initialState) { (state, char) =>
+      ModalEventReducer.reduce(ModalType.Find, InsertChar(char), state).state
+    }
+
+    activeFindModal(noMatch) shouldBe Some(Modal.Find("zzz", Nil, 0))
+    noMatch.buffers(bufferId).findState shouldBe None
+    noMatch.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 5)
   }
 
   it should "delete the previous word in find mode" in {

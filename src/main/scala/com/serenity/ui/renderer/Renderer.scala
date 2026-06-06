@@ -71,6 +71,7 @@ object Renderer:
     cellMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color]
   ): Unit =
+    val defaultUiFont = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
     render(
       state,
       cursorVisible,
@@ -78,9 +79,9 @@ object Renderer:
       viewportSize,
       codeFont,
       textFont,
-      codeFont,
+      defaultUiFont,
       cellMetrics,
-      cellMetrics,
+      CellMetrics.fromFont(defaultUiFont),
       cursorColor
     )
 
@@ -274,7 +275,10 @@ object Renderer:
     val rawMarkdownLines =
       if buffer.language.contains(LanguageId.Markdown) then
         val lines = (0 until buffer.content.lineCount).toVector.map(line => buffer.content.getLine(line).getOrElse(""))
-        MarkdownBlockLens.activeBlockLineSet(lines, buffer.cursors.headOption.map(_.line))
+        buffer.cursors
+          .map(_.line)
+          .flatMap(line => MarkdownBlockLens.activeBlockLineSet(lines, Some(line)))
+          .toSet
       else Set.empty[Int]
 
     visualLines.zipWithIndex.foreach {
@@ -483,9 +487,12 @@ object Renderer:
     snapshot: TextLayoutSnapshot
   ): Unit =
 
-    buffer.cursors.foreach { cursor =>
+    buffer.cursors.zipWithIndex.foreach { (cursor, cursorIndex) =>
+      val isPrimaryCursor = cursorIndex == 0
+      val shouldRenderCursor =
+        context.cursorVisible || (buffer.cursors.size > 1 && !isPrimaryCursor)
       calculateCursorVisualPosition(cursor, snapshot) match
-        case Some((visualLine, xPx)) if context.cursorVisible =>
+        case Some((visualLine, xPx)) if shouldRenderCursor =>
           val screenYCell = rect.y + visualLine
           if screenYCell >= rect.y && screenYCell < rect.bottom &&
               screenYCell >= 0 && screenYCell < context.surface.viewportHeight
@@ -675,11 +682,12 @@ object Renderer:
           case Some(buffer) =>
             val cursor   = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
             val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"
+            val language = buffer.language.fold("Plain Text")(_.displayName)
 
             val filePath = buffer.filePath match
               case Some(path) => s" | ${path.getFileName}"
               case None       => " | Not saved to file yet"
 
-            s" $position$filePath "
+            s" $position | Language: $language$filePath "
           case None => " No active buffer "
       case _ => " No active editor pane "

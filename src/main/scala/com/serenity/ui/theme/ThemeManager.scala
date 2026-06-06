@@ -139,10 +139,15 @@ object ThemeManager:
       enum InlineTokenKind:
         case InlineCode, Link
 
-      def tokenSegments(kind: InlineTokenKind, matched: scala.util.matching.Regex.Match): Vector[StyledText] =
+      def plainSegment(cursor: Int, until: Int): List[StyledText] =
+        if until > cursor then
+          List(StyledText(text.substring(cursor, until), baseStyle, defaultForeground, theme.background))
+        else Nil
+
+      def styledToken(kind: InlineTokenKind, matched: scala.util.matching.Regex.Match): List[StyledText] =
         kind match
           case InlineTokenKind.InlineCode =>
-            Vector(
+            List(
               StyledText(
                 matched.matched,
                 baseStyle.combine(TextStyle.italic),
@@ -151,7 +156,7 @@ object ThemeManager:
               )
             )
           case InlineTokenKind.Link =>
-            Vector(
+            List(
               StyledText("[", baseStyle, markerColor.foreground, theme.background),
               StyledText(
                 matched.group(1),
@@ -169,33 +174,29 @@ object ThemeManager:
               StyledText(")", baseStyle, markerColor.foreground, theme.background)
             )
 
-      def nextMatchFrom(cursor: Int): Option[(Int, Int, InlineTokenKind, scala.util.matching.Regex.Match)] =
-        val remaining = text.substring(cursor)
-        val codeMatch = inlineCodePattern.findFirstMatchIn(remaining).map { matched =>
-          (cursor + matched.start, cursor + matched.end, InlineTokenKind.InlineCode, matched)
-        }
-        val linkMatch = linkPattern.findFirstMatchIn(remaining).map { matched =>
-          (cursor + matched.start, cursor + matched.end, InlineTokenKind.Link, matched)
-        }
-
-        List(codeMatch, linkMatch).flatten.sortBy(_._1).headOption
-
-      def appendPlain(acc: Vector[StyledText], cursor: Int, until: Int): Vector[StyledText] =
-        if until > cursor then
-          acc :+ StyledText(text.substring(cursor, until), baseStyle, defaultForeground, theme.background)
-        else acc
-
-      def loop(cursor: Int, acc: Vector[StyledText]): Vector[StyledText] =
-        if cursor >= text.length then acc
+      @annotation.tailrec
+      def loop(cursor: Int, acc: List[StyledText]): List[StyledText] =
+        if cursor >= text.length then acc.reverse
         else
-          nextMatchFrom(cursor) match
-            case Some((start, end, kind, matched)) =>
-              val withPlain = appendPlain(acc, cursor, start)
-              loop(end, withPlain ++ tokenSegments(kind, matched))
-            case None =>
-              appendPlain(acc, cursor, text.length)
+          val codeMatch = inlineCodePattern.findFirstMatchIn(text.substring(cursor)).map { m =>
+            (cursor + m.start, cursor + m.end, InlineTokenKind.InlineCode, m)
+          }
+          val linkMatch = linkPattern.findFirstMatchIn(text.substring(cursor)).map { m =>
+            (cursor + m.start, cursor + m.end, InlineTokenKind.Link, m)
+          }
 
-      loop(0, Vector.empty).toList
+          val nextMatch =
+            List(codeMatch, linkMatch).flatten.sortBy(_._1).headOption
+
+          nextMatch match
+            case Some((start, end, kind, matched)) if start > cursor =>
+              loop(end, (plainSegment(cursor, start) ++ styledToken(kind, matched)).reverse ::: acc)
+            case Some((_, end, kind, matched)) =>
+              loop(end, styledToken(kind, matched).reverse ::: acc)
+            case None =>
+              (plainSegment(cursor, text.length).reverse ::: acc).reverse
+
+      loop(0, Nil)
 
     line match
       case headingPattern(marker, content) =>

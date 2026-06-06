@@ -320,6 +320,37 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
   // ── ThemePicker resolver ──────────────────────────────────────────────────
 
+  it should "render find modals as focused query overlays" in {
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
+      LayoutRect(0, 0, 60, 12),
+      SurfaceRenderMode.Floating
+    )
+
+    floating.header.map(_.plainText) shouldBe Some("find")
+    floating.rows should have size 1
+
+    val queryRow = floating.rows.head
+    queryRow.layout shouldBe OverlayRowLayout.Split
+    queryRow.selected shouldBe true
+    queryRow.cursorColumn shouldBe Some("Find ".length + "needle".length)
+    queryRow.segments.map(_.text) shouldBe List("Find", "needle")
+    queryRow.segments.last.selected shouldBe true
+    floating.footer shouldBe None
+  }
+
+  it should "render find result position when the modal carries match results" in {
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.ModalWorkflow(Modal.Find("needle", List(2, 5, 8), 1)),
+      LayoutRect(0, 0, 60, 12),
+      SurfaceRenderMode.Floating
+    )
+
+    floating.header.map(_.plainText) shouldBe Some("find")
+    floating.rows.head.plainText shouldBe "Find needle"
+    floating.footer.map(_.plainText) shouldBe Some("3 matches, 2/3")
+  }
+
   it should "resolve ThemePicker rows with the selected index highlighted" in {
     val picker = ThemePickerState(List("dark", "light", "mocha"), selectedIndex = 1, originalTheme = "dark")
 
