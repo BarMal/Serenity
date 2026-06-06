@@ -183,7 +183,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
   it should "open a save-as file workflow modal seeded from the focused buffer path" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
-    val filePath     = Path.of("C:\\temp\\notes.scala")
+    val filePath     = Path.of("temp", "notes.scala")
 
     stateManager
       .updateState { state =>
@@ -202,7 +202,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
           com.serenity.state.models.FileWorkflowState(
             mode = FileWorkflowMode.SaveAs,
             filename = "notes.scala",
-            path = "C:\\temp"
+            path = filePath.getParent.toString
           )
         )
       )
