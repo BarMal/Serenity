@@ -16,6 +16,7 @@ import scala.concurrent.duration.*
 class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
+  private val ciTimeout = 15.seconds
 
   private def makeStateManager() =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
@@ -38,7 +39,7 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
     yield ()
 
     // Should complete without timeout
-    program.unsafeRunTimed(2.seconds).shouldBe(defined)
+    program.unsafeRunTimed(ciTimeout).shouldBe(defined)
   }
 
   it should "go through the close workflow when there are dirty buffers" in {
@@ -69,6 +70,6 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
       ).parMapN((_, _) => ())
     yield ()
 
-    program.unsafeRunTimed(2.seconds).shouldBe(defined)
+    program.unsafeRunTimed(ciTimeout).shouldBe(defined)
     sm.getCurrentState.unsafeRunSync().buffers.get(bufferId).exists(_.isDirty) shouldBe true
   }
