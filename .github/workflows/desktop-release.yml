@@ -1,0 +1,168 @@
+name: Desktop Release
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.artifact_suffix }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_suffix: linux-x64
+            archive_command: |
+              cd dist
+              zip -r Serenity-linux-x64.zip Serenity
+          - os: windows-latest
+            artifact_suffix: windows-x64
+            archive_command: |
+              Compress-Archive -Path dist/Serenity -DestinationPath dist/Serenity-windows-x64.zip -Force
+          - os: macos-latest
+            artifact_suffix: macos-arm64
+            archive_command: |
+              cd dist
+              zip -r Serenity-macos-arm64.zip Serenity.app
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        uses: sbt/setup-sbt@v1
+
+      - name: Test and build runnable JAR
+        shell: bash
+        run: sbt -v clean test assembly
+
+      - name: Prepare app image
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp target/scala-*/Serenity.jar dist/Serenity.jar
+          jpackage \
+            --type app-image \
+            --name Serenity \
+            --input dist \
+            --main-jar Serenity.jar \
+            --main-class Main \
+            --dest dist
+
+      - name: Archive app image
+        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
+        run: ${{ matrix.archive_command }}
+
+      - name: Upload runnable JAR artifact
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Serenity-jar
+          path: dist/Serenity.jar
+          if-no-files-found: error
+
+      - name: Upload app image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Serenity-${{ matrix.artifact_suffix }}
+          path: dist/Serenity-${{ matrix.artifact_suffix }}.zip
+          if-no-files-found: error
+
+      - name: Generate release notes
+        if: github.event_name != 'pull_request' && runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "Desktop debug build for commit \`${GITHUB_SHA}\`."
+            echo
+            echo "Built from branch \`${GITHUB_REF_NAME}\`."
+            echo
+            echo "### Assets"
+            echo "- Serenity.jar: runnable JVM fat JAR"
+            echo "- Serenity-linux-x64.zip: Linux app image"
+            echo "- Serenity-windows-x64.zip: Windows app image"
+            echo "- Serenity-macos-arm64.zip: macOS Apple Silicon app image"
+            echo
+            echo "### Recent changes"
+            git log -10 --pretty=format:'- %s (%h)'
+            echo
+          } > dist/release-notes.md
+
+      - name: Upload release notes artifact
+        if: github.event_name != 'pull_request' && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Serenity-release-notes
+          path: dist/release-notes.md
+          if-no-files-found: error
+
+  publish:
+    name: Publish latest desktop release
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish latest desktop release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -f desktop-latest "$GITHUB_SHA"
+          git push -f origin desktop-latest
+
+          if gh release view desktop-latest >/dev/null 2>&1; then
+            gh release upload desktop-latest \
+              dist/Serenity.jar \
+              dist/Serenity-linux-x64.zip \
+              dist/Serenity-windows-x64.zip \
+              dist/Serenity-macos-arm64.zip \
+              --clobber
+            gh release edit desktop-latest \
+              --title "Latest desktop build" \
+              --notes-file dist/release-notes.md \
+              --prerelease
+          else
+            gh release create desktop-latest \
+              dist/Serenity.jar \
+              dist/Serenity-linux-x64.zip \
+              dist/Serenity-windows-x64.zip \
+              dist/Serenity-macos-arm64.zip \
+              --title "Latest desktop build" \
+              --notes-file dist/release-notes.md \
+              --prerelease \
+              --target "$GITHUB_SHA"
+          fi
