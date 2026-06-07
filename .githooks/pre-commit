@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ "${SERENITY_SKIP_STYLE_HOOK:-}" = "1" ]; then
+  echo "Skipping Serenity style hook because SERENITY_SKIP_STYLE_HOOK=1"
+  exit 0
+fi
+
+staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
+
+if [ -z "$staged_files" ]; then
+  exit 0
+fi
+
+echo "Running sbt -v scalafmtAll scalafixAll before commit..."
+sbt -v scalafmtAll scalafixAll
+
+printf '%s\n' "$staged_files" | while IFS= read -r path; do
+  if [ -n "$path" ] && [ -e "$path" ]; then
+    git add -- "$path"
+  fi
+done
