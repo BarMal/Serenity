@@ -151,6 +151,16 @@ class Java2DRenderSurface(
     g.setColor(color)
     g.fillRect(xPx, yPx, widthPx.max(1), heightPx.max(1))
 
+  override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
+    val px        = metrics.toPixelX(x)
+    val py        = metrics.toPixelY(y)
+    val pw        = width * metrics.charWidth
+    val ph        = height * metrics.lineHeight
+    val savedClip = g.getClip
+    g.clipRect(px, py, pw, ph)
+    g.drawImage(image, px, py, pw, ph, null)
+    g.setClip(savedClip)
+
   def hideCursor(): Unit = ()
 
   def viewportWidth: Int  = image.getWidth / metrics.charWidth

@@ -60,3 +60,12 @@ libraryDependencies ++= Seq(
   "org.typelevel" %% "log4cats-slf4j"  % log4CatsVersion,
   "ch.qos.logback" % "logback-classic" % "1.5.18"
 )
+
+val commonMarkVersion = "0.27.0"
+
+libraryDependencies ++= Seq(
+  "org.commonmark"   % "commonmark"                   % commonMarkVersion,
+  "org.commonmark"   % "commonmark-ext-gfm-tables"    % commonMarkVersion,
+  "org.commonmark"   % "commonmark-ext-task-list-items" % commonMarkVersion,
+  "org.xhtmlrenderer" % "flying-saucer-core"          % "10.2.2"
+)

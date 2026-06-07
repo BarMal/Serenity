@@ -136,7 +136,55 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       .fromState(updatedState, layout)
       .find(_.title == "Preview: Untitled")
 
-    rightPanel.map(_.lines.exists(_.contains("Updated live text"))) shouldBe Some(true)
+    rightPanel.map(_.lines) shouldBe Some(Nil)
+  }
+
+  it should "render split previews as a Java2D markdown image" in {
+    val bufferId = BufferId(1)
+    val paneId   = PaneId(1)
+    val state = AppState.empty.copy(
+      buffers = Map(
+        bufferId -> Buffer
+          .fromString(bufferId, "# Notes\n\n| Task | Owner |\n| ---- | ----- |\n| Ship | Codex |")
+          .copy(language = Some(LanguageId.Markdown))
+      ),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId),
+        paneOrder = List(paneId)
+      ),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("markdown-preview"),
+          SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
+          SurfacePresentation.Pinned(PanelPosition.Right, 40)
+        )
+      ),
+      config = AppConfig.default
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
+    )
+    val surface = new MockRenderSurface(120, 32)
+    val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(120, 32),
+      codeFont = font,
+      textFont = font,
+      cellMetrics = CellMetrics.fromFont(font),
+      cursorColor = None
+    )
+
+    surface.drawImageCalls should have size 1
+    val drawn = surface.drawImageCalls.head
+    drawn.image.getWidth shouldBe drawn.width * CellMetrics.fromFont(font).charWidth
+    drawn.image.getHeight shouldBe drawn.height * CellMetrics.fromFont(font).lineHeight
+    surfaceRows(surface).exists(_.contains("Task  Owner")) shouldBe false
   }
 
   "Markdown inline lens mode" should "leave markdown source untouched in source mode" in {

@@ -724,20 +724,60 @@ object Renderer:
 
   private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =
     context.surface.setFont(context.uiFont)
-    PinnedPanelViewModel
-      .fromState(state, context.layout)
-      .foreach { panel =>
-        val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
-        if blurRadius > 0f then
-          context.surface.blurRegion(
-            panel.rect.x,
-            panel.rect.y,
-            panel.rect.width,
-            panel.rect.height,
-            blurRadius
-          )
-        PinnedPanelRenderer.render(context.surface, panel, state.theme, state.config)
-      }
+    state.uiSurfaces.foreach {
+      case surface @ UiSurface(_, content, SurfacePresentation.Pinned(position, _), _) =>
+        context.layout.pinnedPanelRects.get(position).foreach { rect =>
+          val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
+          if blurRadius > 0f then
+            context.surface.blurRegion(
+              rect.x,
+              rect.y,
+              rect.width,
+              rect.height,
+              blurRadius
+            )
+          content match
+            case SurfaceContent.MarkdownPreview(bufferId, title) =>
+              renderMarkdownPreviewPanel(bufferId, title, rect, state, context)
+            case _ =>
+              PinnedPanelRenderer.render(
+                context.surface,
+                PinnedPanelViewModel.resolve(surface, rect),
+                state.theme,
+                state.config
+              )
+        }
+      case _ => ()
+    }
+
+  private def renderMarkdownPreviewPanel(
+    bufferId: BufferId,
+    title: String,
+    rect: LayoutRect,
+    state: AppState,
+    context: RenderContext
+  ): Unit =
+    val shell = TextPanelView(rect, s"Preview: $title", Nil)
+    PinnedPanelRenderer.render(context.surface, shell, state.theme, state.config)
+
+    val contentWidthCells  = math.max(1, rect.width - 2)
+    val contentHeightCells = math.max(1, rect.height - 2)
+    val widthPx            = contentWidthCells * context.cellMetrics.charWidth
+    val heightPx           = contentHeightCells * context.cellMetrics.lineHeight
+    val buffer             = state.buffers.get(bufferId)
+    val content            = buffer.map(_.content.collect()).getOrElse("")
+    val baseUri =
+      buffer.flatMap(_.filePath).flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
+    val image = MarkdownDocumentPreview.renderImage(
+      source = content,
+      title = title,
+      widthPx = widthPx,
+      heightPx = heightPx,
+      theme = state.theme,
+      font = context.textFont,
+      baseUri = baseUri
+    )
+    context.surface.drawImage(image, rect.x + 1, rect.y + 1, contentWidthCells, contentHeightCells)
 
   private def renderFloatingPanelPlaceholder(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
     context.surface.setBackgroundColor(theme.panel.background)
