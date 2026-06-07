@@ -21,6 +21,17 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines, activeLine = 3) shouldBe (2 to 3)
   }
 
+  it should "treat headings as their own block even when followed by prose without a blank line" in {
+    val lines = Vector(
+      "# Title",
+      "Paragraph immediately after the heading",
+      "continued paragraph line"
+    )
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 0) shouldBe (0 to 0)
+    MarkdownBlockLens.currentBlock(lines, activeLine = 1) shouldBe (1 to 2)
+  }
+
   it should "treat contiguous list items and indented continuations as one block" in {
     val lines = Vector(
       "Before",

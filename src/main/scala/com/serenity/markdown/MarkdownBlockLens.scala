@@ -10,6 +10,7 @@ object MarkdownBlockLens:
       else
         fencedBlock(lines, clampedLine)
           .orElse(tableBlock(lines, clampedLine))
+          .orElse(headingBlock(lines, clampedLine))
           .orElse(contiguousBlock(lines, clampedLine, isListLikeLine))
           .orElse(contiguousBlock(lines, clampedLine, isBlockQuoteLine))
           .getOrElse(paragraphBlock(lines, clampedLine))
@@ -32,6 +33,9 @@ object MarkdownBlockLens:
   private def tableBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
     if !isTableLine(lines(activeLine)) then None
     else contiguousBlock(lines, activeLine, isTableLine)
+
+  private def headingBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
+    Option.when(isHeadingLine(lines(activeLine)))(activeLine to activeLine)
 
   private def contiguousBlock(
     lines: Vector[String],
@@ -70,8 +74,12 @@ object MarkdownBlockLens:
     trimmed.nonEmpty &&
     !isFenceLine(line) &&
     !isTableLine(line) &&
+    !isHeadingLine(line) &&
     !isListLikeLine(line) &&
     !isBlockQuoteLine(line)
+
+  private def isHeadingLine(line: String): Boolean =
+    line.trim.matches("""^#{1,6}\s+.*""")
 
   private def isListLikeLine(line: String): Boolean =
     val trimmed = line.trim

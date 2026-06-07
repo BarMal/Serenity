@@ -156,11 +156,56 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     renderedRows.exists(_.contains("# Third")) shouldBe false
   }
 
+  it should "not pull an adjacent heading into a raw paragraph lens when there is no blank line" in {
+    val bufferId = BufferId(1)
+    val paneId   = PaneId(1)
+    val buffer = Buffer
+      .fromString(bufferId, "# Title\nParagraph immediately after the heading")
+      .copy(
+        language = Some(LanguageId.Markdown),
+        cursors = List(CursorPosition(1, 0)),
+        viewport = Viewport.default.copy(visibleLines = 10)
+      )
+    val state = AppState.empty.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId),
+        paneOrder = List(paneId)
+      ),
+      focus = Focus.EditorPane(paneId),
+      config = AppState.empty.config
+        .withSyntaxHighlighting(true)
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    )
+    val surface = new MockRenderSurface(80, 24)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(80, 24),
+      codeFont = font,
+      textFont = font,
+      cellMetrics = CellMetrics.fromFont(font),
+      cursorColor = None
+    )
+
+    val renderedRows = rows(surface)
+    renderedRows.exists(_.contains("Title")) shouldBe true
+    renderedRows.exists(_.contains("# Title")) shouldBe false
+    renderedRows.exists(_.contains("Paragraph immediately after the heading")) shouldBe true
+  }
+
   it should "draw a visible border around the raw source lens" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
     val buffer = Buffer
-      .fromString(bufferId, "# Preview\n\n# Raw\ncontinued")
+      .fromString(bufferId, "# Preview\n\nRaw paragraph\ncontinued")
       .copy(
         language = Some(LanguageId.Markdown),
         cursors = List(CursorPosition(2, 0)),
