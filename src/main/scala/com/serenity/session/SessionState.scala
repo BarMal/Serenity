@@ -9,9 +9,9 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.{Decoder, Encoder}
 
 import com.serenity.animation.AnimationConfig
-import com.serenity.config.*
+import com.serenity.config._
 import com.serenity.lsp.config.LanguageId
-import com.serenity.state.models.*
+import com.serenity.state.models._
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.Theme
@@ -77,8 +77,13 @@ case class SessionViewport(
 
 case class SessionFindState(
     query: String,
-    resultLines: List[Int],
+    results: List[SessionFindResult],
     currentIndex: Int
+)
+
+case class SessionFindResult(
+    line: Int,
+    column: Int
 )
 
 object SessionState:
@@ -243,16 +248,24 @@ object SessionFindState:
   def fromFindState(findState: FindState): SessionFindState =
     SessionFindState(
       query = findState.query,
-      resultLines = findState.resultLines,
+      results = findState.results.map(SessionFindResult.fromFindResult),
       currentIndex = findState.currentIndex
     )
 
   def toFindState(sessionFindState: SessionFindState): FindState =
     FindState(
       query = sessionFindState.query,
-      resultLines = sessionFindState.resultLines,
+      results = sessionFindState.results.map(SessionFindResult.toFindResult),
       currentIndex = sessionFindState.currentIndex
     )
+
+object SessionFindResult:
+
+  def fromFindResult(findResult: FindResult): SessionFindResult =
+    SessionFindResult(findResult.line, findResult.column)
+
+  def toFindResult(sessionFindResult: SessionFindResult): FindResult =
+    FindResult(sessionFindResult.line, sessionFindResult.column)
 
 // Circe codecs for all types
 // First encode the basic dependencies
@@ -363,5 +376,19 @@ given Decoder[SessionCursorPosition] = deriveDecoder
 given Encoder[SessionViewport] = deriveEncoder
 given Decoder[SessionViewport] = deriveDecoder
 
+given Encoder[SessionFindResult] = deriveEncoder
+given Decoder[SessionFindResult] = deriveDecoder
+
 given Encoder[SessionFindState] = deriveEncoder
-given Decoder[SessionFindState] = deriveDecoder
+given Decoder[SessionFindState] = Decoder.instance { cursor =>
+  for
+    query        <- cursor.downField("query").as[String]
+    currentIndex <- cursor.downField("currentIndex").as[Int]
+    results      <- cursor.downField("results").as[Option[List[SessionFindResult]]]
+    resultLines  <- cursor.downField("resultLines").as[Option[List[Int]]]
+  yield SessionFindState(
+    query = query,
+    results = results.getOrElse(resultLines.getOrElse(Nil).map(line => SessionFindResult(line, 0))),
+    currentIndex = currentIndex
+  )
+}

@@ -5,7 +5,7 @@ import org.scalatest.matchers.should.Matchers
 
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
-import com.serenity.state.models.*
+import com.serenity.state.models._
 import com.serenity.state.reducers.EditorEventReducer
 
 class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
@@ -819,7 +819,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .copy(
             content = com.serenity.rope.Rope("alpha\nbeta\nalpha"),
             cursors = List(CursorPosition(2, 0)),
-            findState = Some(FindState("alpha", List(0, 2), 1))
+            findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
           )
       )
     )
@@ -827,7 +827,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(OpenFind, paneId, initialState).state
     val modalSurface = updatedState.modalSurface
 
-    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("alpha", List(0, 2), 1)))
+    modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.Find("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
+    )
     modalSurface.map(_.presentation) shouldBe Some(
       SurfacePresentation.Floating(Some(CursorPosition(2, 0)), SurfacePlacement.BelowCursor)
     )
@@ -845,7 +847,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .copy(
             content = com.serenity.rope.Rope("match alpha\nbeta\nmatch gamma"),
             cursors = List(CursorPosition(0, 1), CursorPosition(2, 2)),
-            findState = Some(FindState("match", List(0, 2), 0)),
+            findState = Some(FindState("match", List(FindResult(0, 0), FindResult(2, 0)), 0)),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(visibleLines = 2)
           )
       )
@@ -855,7 +857,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.buffers(bufferId)
 
     buffer.cursors shouldBe List(CursorPosition(2, 0))
-    buffer.findState shouldBe Some(FindState("match", List(0, 2), 1))
+    buffer.findState shouldBe Some(FindState("match", List(FindResult(0, 0), FindResult(2, 0)), 1))
   }
 
   it should "advance find-next through multiple occurrences on one line by column" in {
@@ -869,7 +871,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .copy(
             content = com.serenity.rope.Rope("needle then needle"),
             cursors = List(CursorPosition(0, 0)),
-            findState = Some(FindState("needle", List(0, 0), 0))
+            findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(0, "needle then ".length)), 0))
           )
       )
     )
@@ -878,7 +880,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.buffers(bufferId)
 
     buffer.cursors shouldBe List(CursorPosition(0, "needle then ".length))
-    buffer.findState shouldBe Some(FindState("needle", List(0, 0), 1))
+    buffer.findState shouldBe Some(
+      FindState("needle", List(FindResult(0, 0), FindResult(0, "needle then ".length)), 1)
+    )
   }
 
   it should "restore each cursor's preferred column after moving through a shorter line" in {

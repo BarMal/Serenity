@@ -3,7 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Color
 
 import com.serenity.command.{CommandCategory, CommandRegistry, CommandSurfaceItem}
-import com.serenity.state.models.*
+import com.serenity.state.models._
 import com.serenity.ui.layout.{LayoutRect, SurfaceLayoutKind}
 
 enum SurfaceRenderMode:
@@ -114,8 +114,8 @@ object SurfaceContentResolver:
         resolveFileWorkflow(workflow, rect, mode)
       case Modal.ReplaceWorkflow(workflow) =>
         resolveReplaceWorkflow(workflow, mode)
-      case Modal.Find(query, resultLines, currentIndex) =>
-        resolveFindWorkflow(query, resultLines, currentIndex, mode)
+      case Modal.Find(query, results, currentIndex) =>
+        resolveFindWorkflow(query, results, currentIndex, mode)
       case Modal.CloseWorkflow(workflow) =>
         resolveCloseWorkflow(workflow, mode)
       case _ =>
@@ -140,7 +140,7 @@ object SurfaceContentResolver:
 
   private def resolveFindWorkflow(
     query: String,
-    resultLines: List[Int],
+    results: List[FindResult],
     currentIndex: Int,
     mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
@@ -157,12 +157,13 @@ object SurfaceContentResolver:
       layout = OverlayRowLayout.Split
     )
 
-    val footer = Option.when(resultLines.nonEmpty) {
-      val safeIndex = currentIndex.max(0).min(resultLines.length - 1)
+    val footer = Option.when(results.nonEmpty) {
+      val safeIndex = currentIndex.max(0).min(results.length - 1)
+      val active    = results(safeIndex)
       val matchLabel =
-        if resultLines.length == 1 then "match"
+        if results.length == 1 then "match"
         else "matches"
-      OverlayRow(s"${resultLines.length} $matchLabel, ${safeIndex + 1}/${resultLines.length}")
+      OverlayRow(s"${results.length} $matchLabel, ${safeIndex + 1}/${results.length} at ${active.line + 1}:${active.column + 1}")
     }
 
     ResolvedSurfaceContent(

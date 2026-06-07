@@ -342,14 +342,16 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
   it should "render find result position when the modal carries match results" in {
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.ModalWorkflow(Modal.Find("needle", List(2, 5, 8), 1)),
+      SurfaceContent.ModalWorkflow(
+        Modal.Find("needle", List(FindResult(2, 4), FindResult(5, 8), FindResult(8, 12)), 1)
+      ),
       LayoutRect(0, 0, 60, 12),
       SurfaceRenderMode.Floating
     )
 
     floating.header.map(_.plainText) shouldBe Some("find")
     floating.rows.head.plainText shouldBe "Find needle"
-    floating.footer.map(_.plainText) shouldBe Some("3 matches, 2/3")
+    floating.footer.map(_.plainText) shouldBe Some("3 matches, 2/3 at 6:9")
   }
 
   it should "resolve ThemePicker rows with the selected index highlighted" in {

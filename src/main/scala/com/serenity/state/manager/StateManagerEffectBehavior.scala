@@ -5,13 +5,13 @@ import java.nio.file.Path
 import cats.effect.IO
 
 import com.serenity.animation.AnimationConfig
-import com.serenity.command.*
+import com.serenity.command._
 import com.serenity.io.{FileEntry, FileUtils}
 import com.serenity.keystroke.events.ExplorerEvent
 import com.serenity.lsp.LspEffect
 import com.serenity.state.core.EditorState
-import com.serenity.state.models.*
-import com.serenity.state.reducers.*
+import com.serenity.state.models._
+import com.serenity.state.reducers._
 import com.serenity.ui.layout.{DirEntry, PanelContent, PanelPosition}
 
 private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBehavior:
@@ -391,7 +391,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
             val matches   = findMatches(buffer, query)
             val safeIndex = wrapFindIndex(currentIndex, matches.length)
-            Some(Modal.Find(query, matches.map(_.line), safeIndex))
+            Some(Modal.Find(query, matches.map(toFindResult), safeIndex))
           case _ =>
             None
       }
@@ -402,6 +402,9 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     else
       val text = buffer.content.collect()
       buffer.content.searchAll(query).map(offset => cursorPositionForOffset(text, offset))
+
+  private def toFindResult(cursor: CursorPosition): FindResult =
+    FindResult(cursor.line, cursor.column)
 
   private def wrapFindIndex(index: Int, resultCount: Int): Int =
     if resultCount <= 0 then 0

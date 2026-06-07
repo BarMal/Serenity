@@ -1,7 +1,7 @@
 package com.serenity.state.reducers
 
-import com.serenity.keystroke.events.*
-import com.serenity.state.models.*
+import com.serenity.keystroke.events._
+import com.serenity.state.models._
 import com.serenity.text.TextEditing
 
 object ModalEventReducer:
@@ -103,9 +103,9 @@ object ModalEventReducer:
           case _ => ReducerResult.noEffects(currentState)
       case ModalSubmit =>
         currentModal(currentState) match
-          case Some((surface, Modal.Find(query, resultLines, currentIndex))) if query.nonEmpty =>
+          case Some((surface, Modal.Find(query, results, currentIndex))) if query.nonEmpty =>
             val nextIndex =
-              if resultLines.nonEmpty then currentIndex + 1
+              if results.nonEmpty then currentIndex + 1
               else 0
             ReducerResult.noEffects(updateFindSelection(currentState, surface, query, nextIndex))
           case _ =>
@@ -346,7 +346,7 @@ object ModalEventReducer:
     val modalState = updateModal(
       state,
       surface,
-      Modal.Find(query, matches.map(_.line), safeIndex)
+      Modal.Find(query, matches.map(toFindResult), safeIndex)
     )
 
     if query.isEmpty || matches.isEmpty then clearActiveFindState(modalState)
@@ -389,7 +389,7 @@ object ModalEventReducer:
               preferredColumn = Some(target.column),
               preferredXPx = None,
               viewport = buffer.viewport.copy(topLine = newTopLine),
-              findState = Some(FindState(query, matches.map(_.line), safeIndex))
+              findState = Some(FindState(query, matches.map(toFindResult), safeIndex))
             )
             state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
           case None =>
@@ -407,6 +407,9 @@ object ModalEventReducer:
             state
       case None =>
         state
+
+  private def toFindResult(cursor: CursorPosition): FindResult =
+    FindResult(cursor.line, cursor.column)
 
   private def activeBuffer(state: AppState): Option[Buffer] =
     activeBufferId(state).flatMap(state.buffers.get)

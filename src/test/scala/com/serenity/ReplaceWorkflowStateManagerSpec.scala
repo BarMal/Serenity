@@ -144,7 +144,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
             content = com.serenity.rope.Rope(original),
             cursors = List(CursorPosition(0, 0)),
             selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))),
-            findState = Some(FindState("needle", List(0, 1), 0))
+            findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -175,7 +175,9 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     undone.buffers(bufferId).selection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))
     )
-    undone.buffers(bufferId).findState shouldBe Some(FindState("needle", List(0, 1), 0))
+    undone.buffers(bufferId).findState shouldBe Some(
+      FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0)
+    )
   }
 
   it should "keep the modal open with a status message when find text is empty" in {
@@ -422,7 +424,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
             content = com.serenity.rope.Rope(original),
             cursors = List(CursorPosition(0, 0)),
             selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))),
-            findState = Some(FindState("needle", List(0, 2), 0))
+            findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(2, 0)), 0))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -451,7 +453,9 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     undone.buffers(bufferId).selection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))
     )
-    undone.buffers(bufferId).findState shouldBe Some(FindState("needle", List(0, 2), 0))
+    undone.buffers(bufferId).findState shouldBe Some(
+      FindState("needle", List(FindResult(0, 0), FindResult(2, 0)), 0)
+    )
   }
 
   it should "leave the buffer clean and keep the modal open when replace-all has no matches" in {
