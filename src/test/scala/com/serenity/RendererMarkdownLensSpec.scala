@@ -5,12 +5,12 @@ import java.awt.Font
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+import com.serenity.config.MarkdownViewMode
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
+import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.Renderer
-import com.serenity.ui.theme.TextStyle
 
 class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
 
@@ -35,7 +35,11 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
         paneOrder = List(paneId)
       ),
       focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config.withSyntaxHighlighting(true)
+      config = AppState.empty.config
+        .withSyntaxHighlighting(true)
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
     )
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -51,13 +55,14 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       cursorColor = None
     )
 
-    val boldCalls = surface.styleCalls.filter(call => call.action == "enable" && call.style == TextStyle.bold)
-
-    boldCalls should not be empty
-    boldCalls.length shouldBe 2
+    val renderedRows = rows(surface)
+    renderedRows.exists(_.contains("Lens")) shouldBe true
+    renderedRows.exists(_.contains("# Lens")) shouldBe false
+    renderedRows.exists(_.contains("# Raw")) shouldBe true
+    renderedRows.exists(_.contains("continued")) shouldBe true
   }
 
-  it should "render every markdown line with presentation styling when the cursor is outside the viewport" in {
+  it should "render every markdown line as presentation text when the cursor is outside the viewport" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
     val buffer = Buffer
@@ -76,7 +81,11 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
         paneOrder = List(paneId)
       ),
       focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config.withSyntaxHighlighting(true)
+      config = AppState.empty.config
+        .withSyntaxHighlighting(true)
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
     )
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -92,7 +101,11 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       cursorColor = None
     )
 
-    surface.styleCalls.filter(call => call.action == "enable" && call.style == TextStyle.bold).length shouldBe 4
+    val renderedRows = rows(surface)
+    renderedRows.exists(_.contains("One")) shouldBe true
+    renderedRows.exists(_.contains("Two")) shouldBe true
+    renderedRows.exists(_.contains("# One")) shouldBe false
+    renderedRows.exists(_.contains("# Two")) shouldBe false
   }
 
   it should "render every active cursor markdown block as raw source" in {
@@ -114,7 +127,11 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
         paneOrder = List(paneId)
       ),
       focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config.withSyntaxHighlighting(true)
+      config = AppState.empty.config
+        .withSyntaxHighlighting(true)
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
     )
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -130,7 +147,62 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       cursorColor = None
     )
 
-    val boldCalls = surface.styleCalls.filter(call => call.action == "enable" && call.style == TextStyle.bold)
-
-    boldCalls.length shouldBe 2
+    val renderedRows = rows(surface)
+    renderedRows.exists(_.contains("# First")) shouldBe true
+    renderedRows.exists(_.contains("first body")) shouldBe true
+    renderedRows.exists(_.contains("# Second")) shouldBe true
+    renderedRows.exists(_.contains("second body")) shouldBe true
+    renderedRows.exists(_.contains("Third")) shouldBe true
+    renderedRows.exists(_.contains("# Third")) shouldBe false
   }
+
+  it should "draw a visible border around the raw source lens" in {
+    val bufferId = BufferId(1)
+    val paneId   = PaneId(1)
+    val buffer = Buffer
+      .fromString(bufferId, "# Preview\n\n# Raw\ncontinued")
+      .copy(
+        language = Some(LanguageId.Markdown),
+        cursors = List(CursorPosition(2, 0)),
+        viewport = Viewport.default.copy(visibleLines = 10)
+      )
+    val state = AppState.empty.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId),
+        paneOrder = List(paneId)
+      ),
+      focus = Focus.EditorPane(paneId),
+      config = AppState.empty.config
+        .withSyntaxHighlighting(true)
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    )
+    val surface = new MockRenderSurface(80, 24)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(80, 24),
+      codeFont = font,
+      textFont = font,
+      cellMetrics = CellMetrics.fromFont(font),
+      cursorColor = None
+    )
+
+    surface.strokeRoundRectCalls should not be empty
+    val border = surface.strokeRoundRectCalls.head
+    border.color shouldBe state.theme.border
+    val paneRect =
+      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(paneId)
+    border.w shouldBe paneRect.width * CellMetrics.fromFont(font).charWidth
+    border.h shouldBe 2 * CellMetrics.fromFont(font).lineHeight
+  }
+
+  private def rows(surface: MockRenderSurface): List[String] =
+    (0 until surface.height).map(surface.getRow).map(_.trim).filter(_.nonEmpty).toList

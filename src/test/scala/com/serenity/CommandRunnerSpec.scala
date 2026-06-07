@@ -205,7 +205,13 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val groupItems = runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group }
 
     groupItems
-      .map(_.id) shouldBe List("settings-animation", "settings-appearance", "settings-typography", "settings-language")
+      .map(_.id) shouldBe List(
+      "settings-animation",
+      "settings-appearance",
+      "settings-typography",
+      "settings-markdown",
+      "settings-language"
+    )
     groupItems.head.label shouldBe "Animation"
     groupItems.head.children.map(_.id) should contain allOf ("animation-mode", "animation-duration", "animation-steps")
     groupItems(1).label shouldBe "Appearance"
@@ -213,8 +219,10 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     groupItems(2).label shouldBe "Typography"
     groupItems(2).children
       .map(_.id) should contain allOf ("code-font", "text-font", "ligatures", "buffer-font-size", "ui-font-size")
-    groupItems(3).label shouldBe "Language"
-    groupItems(3).children.map(_.id) should contain("lang-plain-text")
+    groupItems(3).label shouldBe "Markdown"
+    groupItems(3).children.map(_.id) should contain("markdown-view")
+    groupItems(4).label shouldBe "Language"
+    groupItems(4).children.map(_.id) should contain("lang-plain-text")
   }
 
   it should "surface typography settings groups ahead of command matches when searching font-related terms" in {

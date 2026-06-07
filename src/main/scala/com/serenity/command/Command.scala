@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.{BackgroundStyle, CursorMode}
+import com.serenity.config.{BackgroundStyle, CursorMode, MarkdownViewMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.layout.PanelPosition
 
@@ -45,6 +45,8 @@ enum CommandIntent:
   case PinExplorerPanel
   case PinOutlinePanel
   case PinDiagnosticsPanel
+  case OpenMarkdownPreview
+  case SetMarkdownViewMode(mode: MarkdownViewMode)
   case FocusPanel(position: PanelPosition)
   case UnpinPanel(position: PanelPosition)
   case IncreaseFontSize

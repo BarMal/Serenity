@@ -2,6 +2,8 @@ package com.serenity.ui.layout
 
 import java.nio.file.Path
 
+import com.serenity.state.models.BufferId
+
 enum PanelPosition:
   case Left, Right, Bottom, Top
 
@@ -16,6 +18,7 @@ enum PanelContent:
   case Terminal(buffer: String, cursor: Int)
   case Outline(symbols: List[Symbol])
   case Diagnostics(issues: List[Diagnostic])
+  case MarkdownPreview(bufferId: BufferId, title: String)
 
 case class DirectoryTreeData(
     rootPath: Path,

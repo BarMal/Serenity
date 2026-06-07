@@ -313,6 +313,15 @@ given Decoder[WindowChromeMode] = Decoder.decodeString.emap {
   case other    => Left(s"Unknown WindowChromeMode: $other")
 }
 
+given Encoder[MarkdownViewMode] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[MarkdownViewMode] = Decoder.decodeString.emap {
+  case "Source"       => Right(MarkdownViewMode.Source)
+  case "SplitPreview" => Right(MarkdownViewMode.SplitPreview)
+  case "InlineLens"   => Right(MarkdownViewMode.InlineLens)
+  case other          => Left(s"Unknown MarkdownViewMode: $other")
+}
+
 given Encoder[BackgroundStyle] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[BackgroundStyle] = Decoder.decodeString.emap {
@@ -339,6 +348,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     backgroundStyle           <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
     cursorMode                <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
     windowChromeMode          <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(WindowChromeMode.Native)
+    markdownViewMode          <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
   yield AppConfig(
     characterAnimation = characterAnimation,
     syntaxHighlightingEnabled = syntaxHighlightingEnabled,
@@ -351,7 +361,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     blurRadius = blurRadius,
     backgroundStyle = backgroundStyle,
     cursorMode = cursorMode,
-    windowChromeMode = windowChromeMode
+    windowChromeMode = windowChromeMode,
+    markdownViewMode = markdownViewMode
   )
 }
 

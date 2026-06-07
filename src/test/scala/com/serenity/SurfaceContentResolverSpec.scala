@@ -429,4 +429,31 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.rows shouldBe Nil
   }
 
+  it should "resolve Markdown previews as pinned document presentation rows" in {
+    val resolved = SurfaceContentResolver.resolveMarkdownPreview(
+      title = "notes.md",
+      content = """# Notes
+            |
+            || Task | Owner |
+            || ---- | ----- |
+            || Ship | Codex |
+            |
+            |![Diagram](diagram.png)""".stripMargin,
+      rect = LayoutRect(0, 0, 40, 12),
+      mode = SurfaceRenderMode.Pinned
+    )
+
+    resolved.title shouldBe Some("Preview: notes.md")
+    resolved.rows.map(_.plainText) shouldBe List(
+      "NOTES",
+      "=====",
+      "",
+      "Task  Owner",
+      "----  -----",
+      "Ship  Codex",
+      "",
+      "Image: Diagram (diagram.png)"
+    )
+  }
+
 end SurfaceContentResolverSpec

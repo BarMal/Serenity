@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Color
 
 import com.serenity.command.{CommandCategory, CommandRegistry, CommandSurfaceItem}
+import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutRect, SurfaceLayoutKind}
 
@@ -101,6 +102,8 @@ object SurfaceContentResolver:
         resolveThemePicker(state, mode)
       case SurfaceContent.FileSearch(state) =>
         resolveFileSearch(state, rect, mode)
+      case SurfaceContent.MarkdownPreview(_, title) =>
+        ResolvedSurfaceContent(title = titleFor(mode, s"Preview: $title"))
       case SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
         resolve(originalContent, cachedRect, mode)
 
@@ -651,4 +654,21 @@ object SurfaceContentResolver:
       title = titleFor(mode, "Search"),
       header = Some(headerRow),
       rows = resultRows
+    )
+
+  def resolveMarkdownPreview(
+    title: String,
+    content: String,
+    rect: LayoutRect,
+    mode: SurfaceRenderMode
+  ): ResolvedSurfaceContent =
+    val maxRows = math.max(0, rect.height - 2)
+    val rows = MarkdownDocumentPreview
+      .render(content, math.max(12, rect.width - 2))
+      .take(maxRows)
+      .map(OverlayRow(_))
+
+    ResolvedSurfaceContent(
+      title = titleFor(mode, s"Preview: $title"),
+      rows = rows
     )
