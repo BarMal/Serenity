@@ -1,10 +1,11 @@
 package com.serenity
 
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.keystroke.events.{PreviousTab, ReverseTabKey, TabKey}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 class ReverseTabHandlingSpec extends AnyFlatSpec with Matchers:
 

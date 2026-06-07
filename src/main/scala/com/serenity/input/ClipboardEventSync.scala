@@ -1,6 +1,7 @@
 package com.serenity.input
 
 import cats.effect.IO
+
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 

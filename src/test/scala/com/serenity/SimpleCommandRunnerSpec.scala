@@ -1,9 +1,10 @@
 package com.serenity
 
-import com.serenity.command.*
-import com.serenity.config.AppConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import com.serenity.command.*
+import com.serenity.config.AppConfig
 
 class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
 

@@ -2,14 +2,15 @@ package com.serenity
 
 import java.awt.Font
 
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 /** Verifies that rendering a buffer with a cursor produces consistent pixel coordinates — text placement and cursor
   * placement derive from the same snapshot, so the cursor cannot drift.

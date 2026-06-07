@@ -1,12 +1,13 @@
 package com.serenity
 
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.keystroke.events.{InsertChar, TabKey}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.state.components.ComponentResult
 import com.serenity.ui.layout.Layout
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 class TabInsertionSpec extends AnyFlatSpec with Matchers:
 

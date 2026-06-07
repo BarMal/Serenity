@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.IO
+
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
 import com.serenity.io.{FileEntry, FileUtils}

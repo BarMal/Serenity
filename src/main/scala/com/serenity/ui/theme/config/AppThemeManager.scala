@@ -1,6 +1,7 @@
 package com.serenity.ui.theme.config
 
 import cats.effect.IO
+
 import com.serenity.state.models.AppState
 import com.serenity.ui.theme.Theme
 

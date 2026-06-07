@@ -2,9 +2,10 @@ package com.serenity
 
 import java.awt.Font
 
-import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 
 class CellMetricsSpec extends AnyFlatSpec with Matchers:
 

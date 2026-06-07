@@ -1,5 +1,8 @@
 package com.serenity
 
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.keystroke.events.{InsertChar, TabKey}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
@@ -9,8 +12,6 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
 

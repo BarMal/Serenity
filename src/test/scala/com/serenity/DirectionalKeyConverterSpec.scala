@@ -1,10 +1,11 @@
 package com.serenity
 
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.keystroke.events.Direction
 import com.serenity.keystroke.translators.DirectionalKeyConverter
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 class DirectionalKeyConverterSpec extends AnyFlatSpec with Matchers:
 

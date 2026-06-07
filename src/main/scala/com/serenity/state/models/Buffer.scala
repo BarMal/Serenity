@@ -3,6 +3,7 @@ package com.serenity.state.models
 import java.nio.file.Path
 
 import cats.Order
+
 import com.serenity.animation.AnimationState
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Rope

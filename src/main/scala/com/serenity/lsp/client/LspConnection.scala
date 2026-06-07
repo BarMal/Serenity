@@ -4,12 +4,13 @@ import java.io.{BufferedInputStream, BufferedOutputStream}
 
 import cats.effect.*
 import cats.effect.std.Queue
-import com.serenity.lsp.config.{LanguageId, LspServerConfig}
-import com.serenity.lsp.model.Diagnostic
 import fs2.Stream
 import fs2.io.readInputStream
 import io.circe.Json
 import org.typelevel.log4cats.Logger
+
+import com.serenity.lsp.config.{LanguageId, LspServerConfig}
+import com.serenity.lsp.model.Diagnostic
 
 class LspConnection private (
     val languageId: LanguageId,

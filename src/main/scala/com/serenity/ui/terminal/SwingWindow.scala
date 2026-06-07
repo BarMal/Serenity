@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import javax.swing.*
 
 import cats.effect.{IO, Resource}
+
 import com.serenity.config.WindowChromeMode
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 

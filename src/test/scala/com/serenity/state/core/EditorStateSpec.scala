@@ -1,10 +1,11 @@
 package com.serenity.state.core
 
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 class EditorStateSpec extends AnyFlatSpec with Matchers:
 

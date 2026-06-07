@@ -1,8 +1,9 @@
 package com.serenity.config
 
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import io.circe.syntax.given
 import io.circe.{Decoder, Encoder}
+
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 
 enum HotkeyAction:
   case Save

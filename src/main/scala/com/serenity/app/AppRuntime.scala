@@ -6,6 +6,10 @@ import scala.concurrent.duration.*
 
 import cats.effect.*
 import cats.syntax.parallel.*
+import fs2.Stream
+import fs2.concurrent.SignallingRef
+import org.typelevel.log4cats.{Logger, LoggerFactory}
+
 import com.serenity.config.{AppConfig, CursorMode}
 import com.serenity.input.*
 import com.serenity.keystroke.events.{Event, UnhandledEvent}
@@ -15,9 +19,6 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Focus}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
-import fs2.Stream
-import fs2.concurrent.SignallingRef
-import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 object AppRuntime:
 

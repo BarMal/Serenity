@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.IO
+
 import com.serenity.state.models.*
 
 private[manager] trait StateManagerFileFacadeBehavior extends StateManagerViewportBehavior:

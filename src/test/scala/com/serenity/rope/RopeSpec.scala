@@ -1,8 +1,9 @@
 package com.serenity.rope
 
-import com.serenity.rope.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import com.serenity.rope.*
 
 class RopeSpec extends AnyFlatSpec with Matchers:
 

@@ -2,14 +2,15 @@ package com.serenity
 
 import java.awt.Font
 
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.TextStyle
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
 

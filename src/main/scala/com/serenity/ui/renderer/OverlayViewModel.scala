@@ -1,9 +1,10 @@
 package com.serenity.ui.renderer
 
+import org.slf4j.LoggerFactory
+
 import com.serenity.animation.AnimationState
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CalculatedLayout, LayoutRect}
-import org.slf4j.LoggerFactory
 
 case class TextOverlayView(
     rect: LayoutRect,

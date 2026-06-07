@@ -1,5 +1,8 @@
 package com.serenity
 
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.command.*
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
@@ -8,8 +11,6 @@ import com.serenity.state.components.{CommandRunnerComponent, ComponentResult}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.AppEventReducer
 import com.serenity.ui.layout.Layout
-import org.scalatest.funspec.AnyFunSpec
-import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 

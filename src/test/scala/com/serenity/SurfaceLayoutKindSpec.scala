@@ -1,8 +1,9 @@
 package com.serenity
 
-import com.serenity.ui.layout.{LayoutRect, SurfaceLayoutKind}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import com.serenity.ui.layout.{LayoutRect, SurfaceLayoutKind}
 
 class SurfaceLayoutKindSpec extends AnyFlatSpec with Matchers:
 

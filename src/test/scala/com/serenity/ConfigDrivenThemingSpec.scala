@@ -3,10 +3,11 @@ package com.serenity
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.ui.theme.config.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import pureconfig.*
+
+import com.serenity.ui.theme.config.*
 
 class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
 

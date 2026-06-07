@@ -2,10 +2,11 @@ package com.serenity
 
 import java.nio.file.Files
 
-import com.serenity.config.*
-import com.serenity.keystroke.{InputKey, Modifier}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import com.serenity.config.*
+import com.serenity.keystroke.{InputKey, Modifier}
 
 class ConfigManagerSpec extends AnyFlatSpec with Matchers:
 

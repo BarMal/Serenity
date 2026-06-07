@@ -1,6 +1,7 @@
 package com.serenity.state.manager
 
 import cats.effect.IO
+
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEventReducer, SystemEventReducer}
 import com.serenity.ui.fonts.FontLoader

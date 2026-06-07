@@ -4,8 +4,6 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Resource}
-import com.serenity.lsp.client.LspConnection
-import com.serenity.lsp.config.LanguageId
 import io.circe.Json
 import io.circe.parser.parse
 import org.scalatest.flatspec.AnyFlatSpec
@@ -13,6 +11,9 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.{BeforeAndAfterEach, Ignore}
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+
+import com.serenity.lsp.client.LspConnection
+import com.serenity.lsp.config.LanguageId
 
 @Ignore
 class LspConnectionStreamIntegrationSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach:

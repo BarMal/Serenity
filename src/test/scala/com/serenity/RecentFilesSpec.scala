@@ -3,12 +3,13 @@ package com.serenity
 import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.session.SessionState
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.AppState
 import com.serenity.ui.theme.Theme
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 

@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.awt.Color
 
 import cats.syntax.foldable.*
+
 import com.serenity.animation.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.keystroke.events.*

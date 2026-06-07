@@ -4,10 +4,11 @@ import java.awt.Font
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
+import org.typelevel.log4cats.Logger
+
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.CellMetrics
-import org.typelevel.log4cats.Logger
 
 final class RuntimeDisplayState private (
     codeFontRef: AtomicReference[Font],

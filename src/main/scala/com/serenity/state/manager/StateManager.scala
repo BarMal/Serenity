@@ -4,6 +4,9 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.std.Queue
 import cats.effect.{Deferred, IO, Ref}
+import fs2.Stream
+import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
+
 import com.serenity.animation.{AnimatedCell, CharacterKey, RgbInterpolator}
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.AppConfig
@@ -17,8 +20,6 @@ import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.AppThemeManager
-import fs2.Stream
-import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
 trait StateManager:
   def applyEvent(event: Event): IO[Unit]
