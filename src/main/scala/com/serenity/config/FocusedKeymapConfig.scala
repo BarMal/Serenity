@@ -1,9 +1,11 @@
 package com.serenity.config
 
-import HotkeyConfig.given
-import com.serenity.keystroke.events.*
 import io.circe.syntax.given
 import io.circe.{Decoder, Encoder}
+
+import com.serenity.keystroke.events.*
+
+import HotkeyConfig.given
 
 trait KeymapEventAction[+E <: Event]:
   def configKey: String

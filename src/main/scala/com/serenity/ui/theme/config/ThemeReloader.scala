@@ -3,6 +3,7 @@ package com.serenity.ui.theme.config
 import java.nio.file.Path
 
 import cats.effect.{IO, Ref}
+
 import com.serenity.ui.theme.Theme
 
 class ThemeReloader(

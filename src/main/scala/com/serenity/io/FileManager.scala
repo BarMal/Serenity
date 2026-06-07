@@ -3,6 +3,7 @@ package com.serenity.io
 import java.nio.file.Path
 
 import cats.effect.IO
+
 import com.serenity.lsp.config.FileExtension
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}

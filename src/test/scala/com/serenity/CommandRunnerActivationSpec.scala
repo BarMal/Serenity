@@ -2,15 +2,16 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.SurfaceContent
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
 

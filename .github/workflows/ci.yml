@@ -11,6 +11,35 @@ permissions:
   contents: read
 
 jobs:
+  style:
+    name: Scalafmt and Scalafix
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        uses: sbt/setup-sbt@v1
+
+      - name: Apply scalafmt and scalafix
+        run: sbt -v scalafmtAll scalafixAll
+
+      - name: Check style tasks did not change files
+        shell: bash
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::scalafmtAll or scalafixAll changed files. Run 'sbt scalafmtAll scalafixAll' locally and commit the result."
+            exit 1
+          fi
+
   test:
     name: Test
     runs-on: ubuntu-latest

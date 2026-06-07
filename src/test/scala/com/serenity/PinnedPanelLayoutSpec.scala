@@ -2,11 +2,12 @@ package com.serenity
 
 import java.nio.file.Paths
 
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
 

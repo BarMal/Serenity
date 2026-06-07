@@ -1,5 +1,8 @@
 package com.serenity
 
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
@@ -8,8 +11,6 @@ import com.serenity.state.components.ThemePickerComponent
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ThemeEventReducer}
 import com.serenity.ui.layout.Layout
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 class ThemePickerSpec extends AnyFlatSpec with Matchers:
 

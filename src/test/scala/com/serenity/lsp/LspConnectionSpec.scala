@@ -5,9 +5,6 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
-import com.serenity.lsp.client.{LspConnection, LspProtocol}
-import com.serenity.lsp.config.LanguageId
-import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity}
 import io.circe.Json
 import io.circe.parser.parse
 import io.circe.syntax.*
@@ -16,6 +13,10 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+
+import com.serenity.lsp.client.{LspConnection, LspProtocol}
+import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity}
 
 class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach:
 

@@ -1,9 +1,10 @@
 package com.serenity
 
-import com.serenity.keystroke.events.*
-import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import com.serenity.keystroke.events.*
+import com.serenity.ui.layout.ViewportSize
 
 class EventHierarchySpec extends AnyFlatSpec with Matchers:
 

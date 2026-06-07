@@ -4,6 +4,11 @@ import java.awt.Font
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+
 import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
 import com.serenity.command.*
 import com.serenity.config.{AppConfig, BackgroundStyle}
@@ -13,10 +18,6 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{Renderer, SurfaceMaterials}
 import com.serenity.ui.theme.Theme
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.Logger
-import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 

@@ -1,13 +1,14 @@
 package com.serenity
 
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.command.*
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.{CommandRunnerComponent, ComponentResult}
 import com.serenity.state.models.*
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 

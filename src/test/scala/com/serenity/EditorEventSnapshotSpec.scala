@@ -1,13 +1,14 @@
 package com.serenity
 
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.keystroke.events.{MoveDown, MoveUp}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.ui.layout.{Layout, ViewportSize}
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 /** Verifies that MoveUp / MoveDown navigate correctly when using a single shared snapshot (exercising the
   * navigationSnapshot extraction in B3).

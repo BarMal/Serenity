@@ -4,6 +4,9 @@ import java.awt.Font
 import java.nio.file.Files
 
 import _root_.io.circe.syntax.*
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.{AppConfig, BackgroundStyle, WindowChromeMode}
 import com.serenity.rope.Balance
@@ -12,8 +15,6 @@ import com.serenity.session.given
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.Theme
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 class SessionStateSpec extends AnyFlatSpec with Matchers:
 

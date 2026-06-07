@@ -3,6 +3,9 @@ package com.serenity
 import java.awt.Font
 import java.awt.font.TextAttribute
 
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -10,8 +13,6 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
 
 /** Verifies that a buffer with language=Markdown (triggering textFont which is proportional) renders via drawRunPx,
   * while a code buffer renders via putString.

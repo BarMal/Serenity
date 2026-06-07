@@ -1,9 +1,10 @@
 package com.serenity.lsp
 
-import com.serenity.lsp.config.*
-import com.serenity.lsp.model.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import com.serenity.lsp.config.*
+import com.serenity.lsp.model.*
 
 class LspPhase0Spec extends AnyFlatSpec with Matchers:
 

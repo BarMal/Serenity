@@ -2,15 +2,16 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManager
-import com.serenity.ui.layout.ViewportSize
-import com.serenity.ui.renderer.RenderController
 import fs2.concurrent.SignallingRef
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+
+import com.serenity.rope.Balance
+import com.serenity.state.manager.StateManager
+import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.renderer.RenderController
 
 /** Verifies that detecting a terminal resize triggers a full render cycle (fast mode), not just a cursor-only render.
   * The root cause of the bug: checkResize in Main.scala applied the resize event but never set fastMode = true, so the

@@ -3,10 +3,11 @@ package com.serenity
 import java.awt.Font
 import java.awt.image.BufferedImage
 
-import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.Java2DRenderSurface
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.renderer.Java2DRenderSurface
 
 class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 

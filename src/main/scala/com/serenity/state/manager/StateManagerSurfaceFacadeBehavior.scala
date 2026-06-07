@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.IO
+
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalStateReducer, PanelStateReducer, PeekStateReducer}
 import com.serenity.ui.layout.*

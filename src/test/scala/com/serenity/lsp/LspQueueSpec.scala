@@ -6,14 +6,15 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.*
-import com.serenity.lsp.config.LanguageId
-import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+
+import com.serenity.keystroke.events.*
+import com.serenity.lsp.config.LanguageId
+import com.serenity.rope.Balance
+import com.serenity.state.manager.StateManager
 
 class LspQueueSpec extends AnyFlatSpec with Matchers:
 

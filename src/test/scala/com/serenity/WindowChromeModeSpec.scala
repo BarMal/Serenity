@@ -1,8 +1,9 @@
 package com.serenity
 
-import com.serenity.config.{AppConfig, WindowChromeMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import com.serenity.config.{AppConfig, WindowChromeMode}
 
 class WindowChromeModeSpec extends AnyFlatSpec with Matchers:
 

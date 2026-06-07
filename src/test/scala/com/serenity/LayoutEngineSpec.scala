@@ -1,9 +1,10 @@
 package com.serenity
 
-import com.serenity.state.models.*
-import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import com.serenity.state.models.*
+import com.serenity.ui.layout.*
 
 class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 

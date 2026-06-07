@@ -2,14 +2,15 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.NewTab
-import com.serenity.state.manager.StateManager
-import com.serenity.state.models.*
-import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+
+import com.serenity.keystroke.events.NewTab
+import com.serenity.state.manager.StateManager
+import com.serenity.state.models.*
+import com.serenity.ui.layout.*
 
 class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
 

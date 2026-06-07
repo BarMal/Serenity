@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import cats.effect.IO
+
 import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.layout.ViewportSize
