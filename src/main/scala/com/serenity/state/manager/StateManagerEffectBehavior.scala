@@ -5,13 +5,13 @@ import java.nio.file.Path
 import cats.effect.IO
 
 import com.serenity.animation.AnimationConfig
-import com.serenity.command._
+import com.serenity.command.*
 import com.serenity.io.{FileEntry, FileUtils}
 import com.serenity.keystroke.events.ExplorerEvent
 import com.serenity.lsp.LspEffect
 import com.serenity.state.core.EditorState
-import com.serenity.state.models._
-import com.serenity.state.reducers._
+import com.serenity.state.models.*
+import com.serenity.state.reducers.*
 import com.serenity.ui.layout.{DirEntry, PanelContent, PanelPosition}
 
 private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBehavior:

@@ -1,8 +1,8 @@
 package com.serenity.state.reducers
 
-import com.serenity.keystroke.events._
+import com.serenity.keystroke.events.*
 import com.serenity.rope.Rope
-import com.serenity.state.models._
+import com.serenity.state.models.*
 import com.serenity.text.TextEditing
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}

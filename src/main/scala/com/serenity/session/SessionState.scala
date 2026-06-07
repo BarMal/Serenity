@@ -9,9 +9,9 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.{Decoder, Encoder}
 
 import com.serenity.animation.AnimationConfig
-import com.serenity.config._
+import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
-import com.serenity.state.models._
+import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.Theme
@@ -380,6 +380,7 @@ given Encoder[SessionFindResult] = deriveEncoder
 given Decoder[SessionFindResult] = deriveDecoder
 
 given Encoder[SessionFindState] = deriveEncoder
+
 given Decoder[SessionFindState] = Decoder.instance { cursor =>
   for
     query        <- cursor.downField("query").as[String]

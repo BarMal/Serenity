@@ -12,7 +12,7 @@ import com.serenity.config.{AppConfig, BackgroundStyle, WindowChromeMode}
 import com.serenity.rope.Balance
 import com.serenity.session.given
 import com.serenity.session.{SessionFindResult, SessionFindState, SessionState}
-import com.serenity.state.models._
+import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.Theme
 

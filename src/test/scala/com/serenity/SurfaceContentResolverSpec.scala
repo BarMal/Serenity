@@ -337,7 +337,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     queryRow.cursorColumn shouldBe Some("Find ".length + "needle".length)
     queryRow.segments.map(_.text) shouldBe List("Find", "needle")
     queryRow.segments.last.selected shouldBe true
-    floating.footer shouldBe None
+    floating.footer.map(_.plainText) shouldBe Some("0 matches")
   }
 
   it should "render find result position when the modal carries match results" in {
@@ -351,7 +351,21 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
     floating.header.map(_.plainText) shouldBe Some("find")
     floating.rows.head.plainText shouldBe "Find needle"
+    floating.rows.map(_.plainText) shouldBe List("Find needle", "1. 3:5", "2. 6:9", "3. 9:13")
+    floating.rows(2).selected shouldBe true
     floating.footer.map(_.plainText) shouldBe Some("3 matches, 2/3 at 6:9")
+  }
+
+  it should "render an explicit empty result state for find queries with no matches" in {
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.ModalWorkflow(Modal.Find("missing", Nil, 0)),
+      LayoutRect(0, 0, 60, 12),
+      SurfaceRenderMode.Floating
+    )
+
+    floating.header.map(_.plainText) shouldBe Some("find")
+    floating.rows.map(_.plainText) shouldBe List("Find missing")
+    floating.footer.map(_.plainText) shouldBe Some("0 matches")
   }
 
   it should "resolve ThemePicker rows with the selected index highlighted" in {

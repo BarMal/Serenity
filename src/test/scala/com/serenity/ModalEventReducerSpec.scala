@@ -5,7 +5,7 @@ import org.scalatest.matchers.should.Matchers
 
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
-import com.serenity.state.models._
+import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalEventReducer}
 
 class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
@@ -104,6 +104,17 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(1, 0)
   }
 
+  it should "leave buffer find state unchanged when an empty find query is submitted" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithFindModal("", "alpha beta", CursorPosition(0, 5))
+
+    val updatedState = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
+
+    activeFindModal(updatedState) shouldBe Some(Modal.Find("", Nil, 0))
+    updatedState.buffers(bufferId).findState shouldBe None
+    updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 5)
+  }
+
   it should "update find results live while typing and select the first occurrence column" in {
     val bufferId     = BufferId(0)
     val initialState = stateWithFindModal("", "alpha needle beta\nneedle again")
@@ -132,7 +143,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     second.buffers(bufferId).cursors.head shouldBe CursorPosition(2, 0)
     activeFindModal(third) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(2, 0), matchAt(3, 0)), 2))
     third.buffers(bufferId).cursors.head shouldBe CursorPosition(3, 0)
-    activeFindModal(secondAgain) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(2, 0), matchAt(3, 0)), 1))
+    activeFindModal(secondAgain) shouldBe Some(
+      Modal.Find("needle", List(matchAt(0, 0), matchAt(2, 0), matchAt(3, 0)), 1)
+    )
     secondAgain.buffers(bufferId).cursors.head shouldBe CursorPosition(2, 0)
     secondAgain.modalSurface shouldBe defined
   }
@@ -146,8 +159,25 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
     activeFindModal(first) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(0, "needle and ".length)), 0))
     first.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 0)
-    activeFindModal(second) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(0, "needle and ".length)), 1))
+    activeFindModal(second) shouldBe Some(
+      Modal.Find("needle", List(matchAt(0, 0), matchAt(0, "needle and ".length)), 1)
+    )
     second.buffers(bufferId).cursors.head shouldBe CursorPosition(0, "needle and ".length)
+  }
+
+  it should "track overlapping find results as distinct navigable matches" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithFindModal("aa", "aaaa")
+
+    val first  = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
+    val second = ModalEventReducer.reduce(ModalType.Find, Enter, first).state
+    val third  = ModalEventReducer.reduce(ModalType.Find, Enter, second).state
+
+    val expectedResults = List(matchAt(0, 0), matchAt(0, 1), matchAt(0, 2))
+    activeFindModal(first) shouldBe Some(Modal.Find("aa", expectedResults, 0))
+    activeFindModal(second) shouldBe Some(Modal.Find("aa", expectedResults, 1))
+    activeFindModal(third) shouldBe Some(Modal.Find("aa", expectedResults, 2))
+    third.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 2)
   }
 
   it should "advance find results when the explicit find-next event is submitted" in {
@@ -158,7 +188,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val second = ModalEventReducer.reduce(ModalType.Find, ModalFindNext, first).state
 
     activeFindModal(second) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(1, 0), matchAt(2, 0)), 1))
-    second.buffers(bufferId).findState shouldBe Some(FindState("needle", List(matchAt(0, 0), matchAt(1, 0), matchAt(2, 0)), 1))
+    second.buffers(bufferId).findState shouldBe Some(
+      FindState("needle", List(matchAt(0, 0), matchAt(1, 0), matchAt(2, 0)), 1)
+    )
     second.buffers(bufferId).cursors.head shouldBe CursorPosition(1, 0)
     second.focus shouldBe Focus.Surface(SurfaceId("find"))
   }

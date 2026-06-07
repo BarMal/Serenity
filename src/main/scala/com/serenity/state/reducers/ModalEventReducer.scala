@@ -1,7 +1,7 @@
 package com.serenity.state.reducers
 
-import com.serenity.keystroke.events._
-import com.serenity.state.models._
+import com.serenity.keystroke.events.*
+import com.serenity.state.models.*
 import com.serenity.text.TextEditing
 
 object ModalEventReducer:

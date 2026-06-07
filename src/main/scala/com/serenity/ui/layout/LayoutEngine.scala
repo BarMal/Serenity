@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.state.models._
+import com.serenity.state.models.*
 
 case class ViewportSize(width: Int, height: Int)
 
