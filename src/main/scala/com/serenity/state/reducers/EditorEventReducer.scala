@@ -392,7 +392,7 @@ object EditorEventReducer:
 
           case FindNext =>
             buffer.findState match
-              case Some(FindState(query, storedResultLines, currentIndex)) if storedResultLines.nonEmpty =>
+              case Some(FindState(query, storedResults, currentIndex)) if storedResults.nonEmpty =>
                 val matches = findMatches(buffer, query)
                 if matches.isEmpty then
                   val updatedBuffer = buffer.copy(findState = None)
@@ -402,7 +402,7 @@ object EditorEventReducer:
                 else
                   val nextIndex   = wrapFindIndex(currentIndex + 1, matches.size)
                   val target      = matches(nextIndex)
-                  val resultLines = matches.map(_.line)
+                  val results     = matches.map(toFindResult)
                   val halfVisible = buffer.viewport.visibleLines / 2
                   val newTopLine  = math.max(0, target.line - halfVisible)
                   val updatedBuffer = buffer.copy(
@@ -412,7 +412,7 @@ object EditorEventReducer:
                     preferredColumn = Some(target.column),
                     preferredXPx = None,
                     viewport = buffer.viewport.copy(topLine = newTopLine),
-                    findState = Some(FindState(query, resultLines, nextIndex))
+                    findState = Some(FindState(query, results, nextIndex))
                   )
                   ReducerResult.noEffects(
                     currentState.copy(
@@ -1103,13 +1103,16 @@ object EditorEventReducer:
       case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
         val matches   = findMatches(buffer, query)
         val safeIndex = wrapFindIndex(currentIndex, matches.length)
-        Modal.Find(query, matches.map(_.line), safeIndex)
+        Modal.Find(query, matches.map(toFindResult), safeIndex)
       case _ =>
         Modal.Find("", Nil, 0)
 
   private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
     if query.isEmpty then Nil
     else buffer.content.searchAll(query).map(offset => offsetToCursorPosition(buffer.content, offset))
+
+  private def toFindResult(cursor: CursorPosition): FindResult =
+    FindResult(cursor.line, cursor.column)
 
   private def wrapFindIndex(index: Int, resultCount: Int): Int =
     if resultCount <= 0 then 0

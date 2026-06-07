@@ -331,7 +331,7 @@ enum Modal:
 
   case Find(
       query: String,
-      resultLines: List[Int],
+      results: List[FindResult],
       currentIndex: Int
   )
 

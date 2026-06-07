@@ -12,6 +12,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  private def matchAt(line: Int, column: Int): FindResult =
+    FindResult(line, column)
+
   private def stateWithFindModal(
     query: String,
     content: String,
@@ -95,10 +98,21 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
 
-    activeFindModal(updatedState) shouldBe Some(Modal.Find("needle", List(1, 3), 0))
+    activeFindModal(updatedState) shouldBe Some(Modal.Find("needle", List(matchAt(1, 0), matchAt(3, 0)), 0))
     updatedState.focus shouldBe Focus.Surface(SurfaceId("find"))
-    updatedState.buffers(bufferId).findState shouldBe Some(FindState("needle", List(1, 3), 0))
+    updatedState.buffers(bufferId).findState shouldBe Some(FindState("needle", List(matchAt(1, 0), matchAt(3, 0)), 0))
     updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(1, 0)
+  }
+
+  it should "leave buffer find state unchanged when an empty find query is submitted" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithFindModal("", "alpha beta", CursorPosition(0, 5))
+
+    val updatedState = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
+
+    activeFindModal(updatedState) shouldBe Some(Modal.Find("", Nil, 0))
+    updatedState.buffers(bufferId).findState shouldBe None
+    updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 5)
   }
 
   it should "update find results live while typing and select the first occurrence column" in {
@@ -109,8 +123,8 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       ModalEventReducer.reduce(ModalType.Find, InsertChar(char), state).state
     }
 
-    activeFindModal(withNeedle) shouldBe Some(Modal.Find("needle", List(0, 1), 0))
-    withNeedle.buffers(bufferId).findState shouldBe Some(FindState("needle", List(0, 1), 0))
+    activeFindModal(withNeedle) shouldBe Some(Modal.Find("needle", List(matchAt(0, 6), matchAt(1, 0)), 0))
+    withNeedle.buffers(bufferId).findState shouldBe Some(FindState("needle", List(matchAt(0, 6), matchAt(1, 0)), 0))
     withNeedle.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 6)
     withNeedle.modalSurface shouldBe defined
   }
@@ -125,11 +139,13 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val secondAgain =
       ModalEventReducer.reduce(ModalType.Find, ModalNavigate(Direction.Up), third).state
 
-    activeFindModal(second) shouldBe Some(Modal.Find("needle", List(0, 2, 3), 1))
+    activeFindModal(second) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(2, 0), matchAt(3, 0)), 1))
     second.buffers(bufferId).cursors.head shouldBe CursorPosition(2, 0)
-    activeFindModal(third) shouldBe Some(Modal.Find("needle", List(0, 2, 3), 2))
+    activeFindModal(third) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(2, 0), matchAt(3, 0)), 2))
     third.buffers(bufferId).cursors.head shouldBe CursorPosition(3, 0)
-    activeFindModal(secondAgain) shouldBe Some(Modal.Find("needle", List(0, 2, 3), 1))
+    activeFindModal(secondAgain) shouldBe Some(
+      Modal.Find("needle", List(matchAt(0, 0), matchAt(2, 0), matchAt(3, 0)), 1)
+    )
     secondAgain.buffers(bufferId).cursors.head shouldBe CursorPosition(2, 0)
     secondAgain.modalSurface shouldBe defined
   }
@@ -141,10 +157,27 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val first  = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
     val second = ModalEventReducer.reduce(ModalType.Find, Enter, first).state
 
-    activeFindModal(first) shouldBe Some(Modal.Find("needle", List(0, 0), 0))
+    activeFindModal(first) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(0, "needle and ".length)), 0))
     first.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 0)
-    activeFindModal(second) shouldBe Some(Modal.Find("needle", List(0, 0), 1))
+    activeFindModal(second) shouldBe Some(
+      Modal.Find("needle", List(matchAt(0, 0), matchAt(0, "needle and ".length)), 1)
+    )
     second.buffers(bufferId).cursors.head shouldBe CursorPosition(0, "needle and ".length)
+  }
+
+  it should "track overlapping find results as distinct navigable matches" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithFindModal("aa", "aaaa")
+
+    val first  = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
+    val second = ModalEventReducer.reduce(ModalType.Find, Enter, first).state
+    val third  = ModalEventReducer.reduce(ModalType.Find, Enter, second).state
+
+    val expectedResults = List(matchAt(0, 0), matchAt(0, 1), matchAt(0, 2))
+    activeFindModal(first) shouldBe Some(Modal.Find("aa", expectedResults, 0))
+    activeFindModal(second) shouldBe Some(Modal.Find("aa", expectedResults, 1))
+    activeFindModal(third) shouldBe Some(Modal.Find("aa", expectedResults, 2))
+    third.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 2)
   }
 
   it should "advance find results when the explicit find-next event is submitted" in {
@@ -154,8 +187,10 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val first  = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
     val second = ModalEventReducer.reduce(ModalType.Find, ModalFindNext, first).state
 
-    activeFindModal(second) shouldBe Some(Modal.Find("needle", List(0, 1, 2), 1))
-    second.buffers(bufferId).findState shouldBe Some(FindState("needle", List(0, 1, 2), 1))
+    activeFindModal(second) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(1, 0), matchAt(2, 0)), 1))
+    second.buffers(bufferId).findState shouldBe Some(
+      FindState("needle", List(matchAt(0, 0), matchAt(1, 0), matchAt(2, 0)), 1)
+    )
     second.buffers(bufferId).cursors.head shouldBe CursorPosition(1, 0)
     second.focus shouldBe Focus.Surface(SurfaceId("find"))
   }
@@ -171,7 +206,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
             .copy(
               content = com.serenity.rope.Rope("alpha beta"),
               cursors = List(CursorPosition(0, 5)),
-              findState = Some(FindState("alpha", List(0), 0))
+              findState = Some(FindState("alpha", List(matchAt(0, 0)), 0))
             )
         )
       )
@@ -208,8 +243,8 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = ModalEventReducer.reduce(ModalType.Find, DeleteWordForward, initialState).state
 
-    activeFindModal(updatedState) shouldBe Some(Modal.Find("alpha beta", List(0), 0))
-    updatedState.buffers(bufferId).findState shouldBe Some(FindState("alpha beta", List(0), 0))
+    activeFindModal(updatedState) shouldBe Some(Modal.Find("alpha beta", List(matchAt(0, 0)), 0))
+    updatedState.buffers(bufferId).findState shouldBe Some(FindState("alpha beta", List(matchAt(0, 0)), 0))
     updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 0)
   }
 

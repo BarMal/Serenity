@@ -109,7 +109,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       uiSurfaces = List(
         UiSurface(
           SurfaceId("find"),
-          SurfaceContent.ModalWorkflow(Modal.Find("two", List(1), 0)),
+          SurfaceContent.ModalWorkflow(Modal.Find("two", List(FindResult(1, 0)), 0)),
           SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
         )
       )
@@ -120,9 +120,10 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val overlay  = overlays.belowCursor.getOrElse(fail("Expected find overlay"))
 
     overlay.header.map(_.plainText) shouldBe Some("find")
-    overlay.rows.map(_.plainText) shouldBe List("Find two")
+    overlay.rows.map(_.plainText) shouldBe List("Find two", "1. 2:1")
     overlay.rows.head.cursorColumn shouldBe Some("Find two".length)
-    overlay.footer.map(_.plainText) shouldBe Some("1 match, 1/1")
+    overlay.rows(1).selected shouldBe true
+    overlay.footer.map(_.plainText) shouldBe Some("1 match, 1/1 at 2:1")
     overlay.rect shouldBe layout.belowCursorOverlayRect.get
   }
 

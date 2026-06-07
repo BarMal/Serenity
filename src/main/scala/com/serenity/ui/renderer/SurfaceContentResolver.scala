@@ -114,8 +114,8 @@ object SurfaceContentResolver:
         resolveFileWorkflow(workflow, rect, mode)
       case Modal.ReplaceWorkflow(workflow) =>
         resolveReplaceWorkflow(workflow, mode)
-      case Modal.Find(query, resultLines, currentIndex) =>
-        resolveFindWorkflow(query, resultLines, currentIndex, mode)
+      case Modal.Find(query, results, currentIndex) =>
+        resolveFindWorkflow(query, results, currentIndex, rect, mode)
       case Modal.CloseWorkflow(workflow) =>
         resolveCloseWorkflow(workflow, mode)
       case _ =>
@@ -140,8 +140,9 @@ object SurfaceContentResolver:
 
   private def resolveFindWorkflow(
     query: String,
-    resultLines: List[Int],
+    results: List[FindResult],
     currentIndex: Int,
+    rect: LayoutRect,
     mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
     val queryLabel = "Find"
@@ -157,18 +158,35 @@ object SurfaceContentResolver:
       layout = OverlayRowLayout.Split
     )
 
-    val footer = Option.when(resultLines.nonEmpty) {
-      val safeIndex = currentIndex.max(0).min(resultLines.length - 1)
-      val matchLabel =
-        if resultLines.length == 1 then "match"
-        else "matches"
-      OverlayRow(s"${resultLines.length} $matchLabel, ${safeIndex + 1}/${resultLines.length}")
+    val safeIndex     = currentIndex.max(0).min(results.length - 1)
+    val maxResultRows = math.max(0, rect.height - 3)
+    val resultRows = results.take(maxResultRows).zipWithIndex.map {
+      case (result, index) =>
+        OverlayRow(
+          plainText = s"${index + 1}. ${result.line + 1}:${result.column + 1}",
+          selected = index == safeIndex
+        )
     }
+
+    val footer = Option
+      .when(query.nonEmpty && results.isEmpty) {
+        OverlayRow("0 matches")
+      }
+      .orElse(Option.when(results.nonEmpty) {
+        val safeIndex = currentIndex.max(0).min(results.length - 1)
+        val active    = results(safeIndex)
+        val matchLabel =
+          if results.length == 1 then "match"
+          else "matches"
+        OverlayRow(
+          s"${results.length} $matchLabel, ${safeIndex + 1}/${results.length} at ${active.line + 1}:${active.column + 1}"
+        )
+      })
 
     ResolvedSurfaceContent(
       title = titleFor(mode, "find"),
       header = Some(OverlayRow("find")),
-      rows = List(queryRow),
+      rows = queryRow :: resultRows,
       footer = footer
     )
 

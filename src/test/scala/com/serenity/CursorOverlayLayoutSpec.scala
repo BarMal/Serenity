@@ -132,7 +132,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       uiSurfaces = List(
         UiSurface(
           SurfaceId("find"),
-          SurfaceContent.ModalWorkflow(Modal.Find("needle", List(1, 3), 0)),
+          SurfaceContent.ModalWorkflow(Modal.Find("needle", List(FindResult(1, 0), FindResult(3, 0)), 0)),
           SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
         )
       )

@@ -108,7 +108,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
           .copy(
             content = com.serenity.rope.Rope("alpha\nbeta\nalpha"),
             cursors = List(CursorPosition(2, 0)),
-            findState = Some(FindState("alpha", List(0, 2), 1))
+            findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -120,7 +120,9 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val modalSurface = updatedState.modalSurface
 
     updatedState.commandRunnerSurface shouldBe None
-    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("alpha", List(0, 2), 1)))
+    modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.Find("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
+    )
     modalSurface.map(_.presentation) shouldBe Some(
       SurfacePresentation.Floating(Some(CursorPosition(2, 0)), SurfacePlacement.BelowCursor)
     )

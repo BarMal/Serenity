@@ -19,9 +19,11 @@ case class SurfaceAnimationState(
     phaseTick: Int = 0         // ticks elapsed in current phase
 )
 
+case class FindResult(line: Int, column: Int)
+
 case class FindState(
     query: String,
-    resultLines: List[Int],
+    results: List[FindResult],
     currentIndex: Int
 )
 

@@ -10,8 +10,8 @@ import org.scalatest.matchers.should.Matchers
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.{AppConfig, BackgroundStyle, WindowChromeMode}
 import com.serenity.rope.Balance
-import com.serenity.session.SessionState
 import com.serenity.session.given
+import com.serenity.session.{SessionFindResult, SessionFindState, SessionState}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.Theme
@@ -131,7 +131,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       .copy(
         cursors = List(CursorPosition(3, 7)),
         viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 24, visibleColumns = 80),
-        findState = Some(FindState("round", List(0, 5), 1))
+        findState = Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1))
       )
     val appState = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
@@ -157,7 +157,24 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restoredBuffer.cursors.head shouldBe CursorPosition(3, 7)
     restoredBuffer.viewport.topLine shouldBe 2
     restoredBuffer.viewport.leftColumn shouldBe 1
-    restoredBuffer.findState shouldBe Some(FindState("round", List(0, 5), 1))
+    restoredBuffer.findState shouldBe Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1))
+  }
+
+  it should "restore legacy session find state that only stored result lines" in {
+    val decoded = _root_.io.circe.parser
+      .parse("""{"query":"legacy","resultLines":[2,4],"currentIndex":1}""")
+      .flatMap(_.as[SessionFindState])
+
+    decoded shouldBe Right(
+      SessionFindState(
+        query = "legacy",
+        results = List(SessionFindResult(2, 0), SessionFindResult(4, 0)),
+        currentIndex = 1
+      )
+    )
+    decoded.toOption.map(SessionFindState.toFindState) shouldBe Some(
+      FindState("legacy", List(FindResult(2, 0), FindResult(4, 0)), 1)
+    )
   }
 
   it should "preserve config fields including blurRadius and backgroundStyle through JSON round trip" in {
@@ -293,10 +310,10 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     val buffer1 = Buffer
       .fromFile(BufferId(40), file1, "apple banana cherry")
-      .copy(findState = Some(FindState("apple", List(0), 0)))
+      .copy(findState = Some(FindState("apple", List(FindResult(0, 0)), 0)))
     val buffer2 = Buffer
       .fromFile(BufferId(41), file2, "dog elephant fox")
-      .copy(findState = Some(FindState("elephant", List(1), 0)))
+      .copy(findState = Some(FindState("elephant", List(FindResult(1, 0)), 0)))
     val appState = AppState.initial.copy(
       buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
       bufferOrder = List(buffer1.id, buffer2.id),
@@ -319,6 +336,6 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     val restored = SessionState.toAppState(decoded.toOption.get, Theme.default)
 
-    restored.buffers(buffer1.id).findState shouldBe Some(FindState("apple", List(0), 0))
-    restored.buffers(buffer2.id).findState shouldBe Some(FindState("elephant", List(1), 0))
+    restored.buffers(buffer1.id).findState shouldBe Some(FindState("apple", List(FindResult(0, 0)), 0))
+    restored.buffers(buffer2.id).findState shouldBe Some(FindState("elephant", List(FindResult(1, 0)), 0))
   }
