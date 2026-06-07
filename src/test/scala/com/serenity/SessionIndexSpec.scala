@@ -1,9 +1,8 @@
 package com.serenity
 
+import com.serenity.session.{SessionId, SessionIndex, SessionMetadata}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
-import com.serenity.session.{SessionId, SessionIndex, SessionMetadata}
 
 class SessionIndexSpec extends AnyFlatSpec with Matchers:
 

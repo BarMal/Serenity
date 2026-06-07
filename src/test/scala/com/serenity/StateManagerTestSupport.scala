@@ -4,12 +4,11 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
-
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
 trait StateManagerTestSupport:
 

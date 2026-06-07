@@ -1,8 +1,5 @@
 package com.serenity
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.animation.AnimationState
 import com.serenity.keystroke.events.ToggleSyntaxHighlighting
 import com.serenity.lsp.config.LanguageId
@@ -12,6 +9,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.renderer.CharacterRenderer
 import com.serenity.ui.theme.Theme
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class RenderingFixesSpec extends AnyFlatSpec with Matchers:
 

@@ -5,11 +5,6 @@ import java.awt.Color
 import _root_.io.circe.syntax.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
-
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
 import com.serenity.config.{AppConfig, BackgroundStyle, CursorMode}
@@ -22,6 +17,10 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class CursorModeSpec extends AnyFlatSpec with Matchers:
 

@@ -2,14 +2,13 @@ package com.serenity
 
 import java.nio.file.Paths
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.command.*
 import com.serenity.config.AppConfig
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, LayoutRect}
 import com.serenity.ui.renderer.*
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 

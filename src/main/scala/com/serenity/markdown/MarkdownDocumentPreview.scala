@@ -10,6 +10,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Try
 import scala.util.control.NonFatal
 
+import com.serenity.ui.theme.Theme
 import org.commonmark.Extension
 import org.commonmark.ext.gfm.tables.TablesExtension
 import org.commonmark.ext.task.list.items.TaskListItemsExtension
@@ -19,8 +20,6 @@ import org.commonmark.renderer.html.*
 import org.w3c.dom.Document
 import org.xhtmlrenderer.swing.Java2DRenderer
 import org.xml.sax.InputSource
-
-import com.serenity.ui.theme.Theme
 
 object MarkdownDocumentPreview:
 

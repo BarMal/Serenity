@@ -1,9 +1,8 @@
 package com.serenity
 
+import com.serenity.state.models.*
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
-
-import com.serenity.state.models.*
 
 class CursorBlinkingSpec extends AnyFunSpec with Matchers:
 

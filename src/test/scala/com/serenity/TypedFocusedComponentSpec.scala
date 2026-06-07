@@ -1,12 +1,11 @@
 package com.serenity
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, TypedFocusedComponent}
 import com.serenity.state.models.{AppState, Focus, PaneId}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class TypedFocusedComponentSpec extends AnyFlatSpec with Matchers:
 

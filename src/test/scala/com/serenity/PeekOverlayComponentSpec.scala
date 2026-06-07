@@ -1,13 +1,12 @@
 package com.serenity
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.keystroke.events.{Direction, PeekInputEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, PeekOverlayComponent}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class PeekOverlayComponentSpec extends AnyFlatSpec with Matchers:
 

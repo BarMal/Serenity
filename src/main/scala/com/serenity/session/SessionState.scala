@@ -5,9 +5,6 @@ import java.nio.file.Path
 
 import scala.concurrent.duration.FiniteDuration
 
-import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
-import io.circe.{Decoder, Encoder}
-
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
@@ -15,6 +12,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.Theme
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import io.circe.{Decoder, Encoder}
 
 /** Represents the persistent session state that survives application restarts. This is a subset of AppState containing
   * only the information needed to restore the user's workspace.

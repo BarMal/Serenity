@@ -4,7 +4,6 @@ import java.awt.Color
 import java.nio.file.Path
 
 import cats.effect.IO
-
 import com.serenity.ui.theme.*
 
 object ConfigurableThemeManager:

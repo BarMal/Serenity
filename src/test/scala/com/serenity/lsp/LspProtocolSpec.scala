@@ -4,13 +4,12 @@ import java.nio.charset.StandardCharsets
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.lsp.client.{LspFramer, LspProtocol}
+import com.serenity.lsp.model.DiagnosticSeverity
 import io.circe.Json
 import io.circe.syntax.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
-import com.serenity.lsp.client.{LspFramer, LspProtocol}
-import com.serenity.lsp.model.DiagnosticSeverity
 
 class LspProtocolSpec extends AnyFlatSpec with Matchers:
 

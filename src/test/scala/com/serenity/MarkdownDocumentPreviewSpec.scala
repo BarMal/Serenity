@@ -3,11 +3,10 @@ package com.serenity
 import java.awt.Font
 import java.nio.file.Paths
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.ui.theme.Theme
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
 

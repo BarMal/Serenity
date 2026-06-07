@@ -6,10 +6,9 @@ import java.util.UUID
 
 import cats.effect.IO
 import cats.syntax.all.*
-import org.typelevel.log4cats.Logger
-
 import com.serenity.state.models.AppState
 import com.serenity.ui.theme.config.AppThemeManager
+import org.typelevel.log4cats.Logger
 
 /** Manages session persistence - saving and loading workspace state.
   */

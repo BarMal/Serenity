@@ -4,8 +4,6 @@ import java.nio.file.Path
 
 import cats.effect.std.Queue
 import cats.effect.{Deferred, IO, Ref}
-import org.typelevel.log4cats.Logger
-
 import com.serenity.io.FileManager
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
@@ -14,6 +12,7 @@ import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.theme.config.AppThemeManager
+import org.typelevel.log4cats.Logger
 
 private[manager] trait StateManagerRuntimeSupport:
   this: StateManager =>

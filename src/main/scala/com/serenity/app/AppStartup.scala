@@ -1,7 +1,6 @@
 package com.serenity.app
 
 import cats.effect.IO
-
 import com.serenity.config.AppConfig
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*

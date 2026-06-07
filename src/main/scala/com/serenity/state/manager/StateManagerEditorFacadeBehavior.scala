@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.IO
-
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Rope
 import com.serenity.state.core.EditorState

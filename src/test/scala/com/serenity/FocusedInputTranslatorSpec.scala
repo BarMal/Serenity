@@ -1,8 +1,5 @@
 package com.serenity
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.command.CommandRunner
 import com.serenity.config.*
 import com.serenity.input.FocusedInputTranslator
@@ -11,6 +8,8 @@ import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 

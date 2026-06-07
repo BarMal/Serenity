@@ -1,13 +1,12 @@
 package com.serenity
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, FileSearchComponent}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class FileSearchSpec extends AnyFlatSpec with Matchers:
 

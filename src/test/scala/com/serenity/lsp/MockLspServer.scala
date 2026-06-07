@@ -4,12 +4,11 @@ import java.io.{PipedInputStream, PipedOutputStream}
 
 import cats.effect.std.Queue
 import cats.effect.{IO, Resource}
+import com.serenity.lsp.client.LspFramer
 import fs2.Stream
 import io.circe.Json
 import io.circe.syntax.*
 import org.typelevel.log4cats.Logger
-
-import com.serenity.lsp.client.LspFramer
 
 class MockLspServer private (
     fixtures: Map[String, Json],

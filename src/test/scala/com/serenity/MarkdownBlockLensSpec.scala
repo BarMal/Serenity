@@ -1,9 +1,8 @@
 package com.serenity
 
+import com.serenity.markdown.MarkdownBlockLens
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
-import com.serenity.markdown.MarkdownBlockLens
 
 class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
 

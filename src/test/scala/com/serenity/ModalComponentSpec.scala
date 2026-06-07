@@ -1,8 +1,5 @@
 package com.serenity
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.keystroke.events.{InsertChar, TabKey, UnhandledEvent}
 import com.serenity.keystroke.translators.Translator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
@@ -10,6 +7,8 @@ import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, ModalComponent}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.AppEffect
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class ModalComponentSpec extends AnyFlatSpec with Matchers:
 

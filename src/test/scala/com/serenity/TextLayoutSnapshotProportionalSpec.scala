@@ -2,12 +2,11 @@ package com.serenity
 
 import java.awt.Font
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 import com.serenity.ui.layout.TextLayoutSnapshot
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class TextLayoutSnapshotProportionalSpec extends AnyFlatSpec with Matchers:
 

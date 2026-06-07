@@ -3,11 +3,10 @@ package com.serenity.input
 import cats.FlatMap
 import cats.effect.{Ref, Sync}
 import cats.syntax.functor.*
-import fs2.Stream
-
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.Translator
+import fs2.Stream
 
 trait InputRouter[F[_], E <: Event]:
   def eventStream(infoStream: Stream[F, KeyStrokeInfo]): Stream[F, Event]

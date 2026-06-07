@@ -1,13 +1,12 @@
 package com.serenity
 
-import org.scalatest.funspec.AnyFunSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
 class EmptyBufferDisplaySpec extends AnyFunSpec with Matchers:
   given Balance = Balance.default

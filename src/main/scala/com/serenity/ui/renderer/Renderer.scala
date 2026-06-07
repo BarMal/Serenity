@@ -2,8 +2,6 @@ package com.serenity.ui.renderer
 
 import java.awt.Font
 
-import org.slf4j.LoggerFactory
-
 import com.serenity.animation.ThemeInterpolator
 import com.serenity.config.MarkdownViewMode
 import com.serenity.lsp.config.LanguageId
@@ -11,6 +9,7 @@ import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
+import org.slf4j.LoggerFactory
 
 case class RenderContext(
     surface: RenderSurface,

@@ -2,10 +2,9 @@ package com.serenity.animation
 
 import java.awt.Color
 
+import com.serenity.ui.theme.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
-import com.serenity.ui.theme.*
 
 class ThemeInterpolatorSpec extends AnyFlatSpec with Matchers:
 
