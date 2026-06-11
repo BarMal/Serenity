@@ -281,6 +281,12 @@ object Renderer:
     val visualLines   = snapshot.visualLines
     val xOriginPx     = context.cellMetrics.toPixelX(rect.x).toFloat
     val markdownLines = markdownSourceLines(buffer)
+    val renderedMarkdownLines =
+      if isInlineMarkdownLens(buffer, state) then MarkdownDocumentPreview.renderInlineLines(markdownLines)
+      else Vector.empty[String]
+    val markdownTableLines =
+      if isInlineMarkdownLens(buffer, state) then MarkdownDocumentPreview.inlineTableLineIndexes(markdownLines)
+      else Set.empty[Int]
     val rawMarkdownLines =
       if isInlineMarkdownLens(buffer, state) then activeMarkdownBlockLineSet(markdownLines, buffer.cursors)
       else Set.empty[Int]
@@ -293,7 +299,11 @@ object Renderer:
           val rendersRawMarkdown = rawMarkdownLines.contains(visualLine.bufferLine)
           val displayLine =
             if isInlineMarkdownLens(buffer, state) && !rendersRawMarkdown then
-              visualLine.copy(text = MarkdownDocumentPreview.renderInlineLine(visualLine.text))
+              val renderedText =
+                if markdownTableLines.contains(visualLine.bufferLine) then
+                  renderedMarkdownLines.lift(visualLine.bufferLine).getOrElse("")
+                else MarkdownDocumentPreview.renderInlineLine(visualLine.text)
+              visualLine.copy(text = renderedText)
             else visualLine
           val effectiveLanguage =
             if rendersRawMarkdown then None else buffer.language

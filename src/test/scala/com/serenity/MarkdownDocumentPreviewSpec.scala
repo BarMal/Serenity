@@ -38,6 +38,38 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     html should include("<td>Grace</td>")
   }
 
+  it should "format markdown tables for inline lens rendering without raw separator rows" in {
+    val rows = MarkdownDocumentPreview.renderInlineLines(
+      Vector(
+        "| Task | Owner |",
+        "| ---- | ----- |",
+        "| Ship | Codex |",
+        "| Test longer | QA |"
+      )
+    )
+
+    rows shouldBe Vector(
+      "Task         Owner",
+      "───────────  ─────",
+      "Ship         Codex",
+      "Test longer  QA"
+    )
+    rows.mkString("\n") should not include "| ---- | ----- |"
+  }
+
+  it should "identify only table source rows for block-level inline rendering" in {
+    val lines = Vector(
+      "Before",
+      "| Task | Owner |",
+      "| ---- | ----- |",
+      "| Ship | Codex |",
+      "",
+      "After | not a table"
+    )
+
+    MarkdownDocumentPreview.inlineTableLineIndexes(lines) shouldBe Set(1, 2, 3)
+  }
+
   it should "preserve rendered image elements in the document preview HTML" in {
     val html = MarkdownDocumentPreview.renderHtmlFragment(
       """![Architecture](docs/arch.png)
