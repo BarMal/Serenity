@@ -22,12 +22,21 @@ class Java2DRenderSurface(
     image: BufferedImage,
     metrics: CellMetrics,
     font: Font,
-    onFlush: BufferedImage => Unit
+    onFlush: BufferedImage => Unit,
+    logicalWidthPx: Int = -1,
+    logicalHeightPx: Int = -1,
+    deviceScaleX: Double = 1.0,
+    deviceScaleY: Double = 1.0
 ) extends RenderSurface:
   private val g: Graphics2D = image.createGraphics()
+  private val effectiveLogicalWidthPx =
+    if logicalWidthPx > 0 then logicalWidthPx else image.getWidth
+  private val effectiveLogicalHeightPx =
+    if logicalHeightPx > 0 then logicalHeightPx else image.getHeight
 
   g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
   g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
+  g.scale(deviceScaleX, deviceScaleY)
   g.setFont(font)
 
   /** The FontRenderContext this surface uses for text layout. Exposed so that TextLayoutSnapshot and other measurement
@@ -163,8 +172,8 @@ class Java2DRenderSurface(
 
   def hideCursor(): Unit = ()
 
-  def viewportWidth: Int  = image.getWidth / metrics.charWidth
-  def viewportHeight: Int = image.getHeight / metrics.lineHeight
+  def viewportWidth: Int  = effectiveLogicalWidthPx / metrics.charWidth
+  def viewportHeight: Int = effectiveLogicalHeightPx / metrics.lineHeight
 
   def flush(): Unit =
     g.dispose()
@@ -172,15 +181,38 @@ class Java2DRenderSurface(
 
 object Java2DRenderSurface:
 
+  private[serenity] case class DeviceScale(x: Double, y: Double)
+
   def forFrame(
     metrics: CellMetrics,
     font: Font,
     canvas: javax.swing.JPanel,
     onFlush: BufferedImage => Unit
   ): Java2DRenderSurface =
+    val logicalWidth  = canvas.getWidth.max(1)
+    val logicalHeight = canvas.getHeight.max(1)
+    val scale         = deviceScaleFor(canvas)
     val image = new BufferedImage(
-      canvas.getWidth.max(1),
-      canvas.getHeight.max(1),
+      deviceImageDimension(logicalWidth, scale.x),
+      deviceImageDimension(logicalHeight, scale.y),
       BufferedImage.TYPE_INT_ARGB
     )
-    new Java2DRenderSurface(image, metrics, font, onFlush)
+    new Java2DRenderSurface(
+      image,
+      metrics,
+      font,
+      onFlush,
+      logicalWidthPx = logicalWidth,
+      logicalHeightPx = logicalHeight,
+      deviceScaleX = scale.x,
+      deviceScaleY = scale.y
+    )
+
+  private[serenity] def deviceImageDimension(logicalDimensionPx: Int, deviceScale: Double): Int =
+    math.ceil(logicalDimensionPx.max(1) * deviceScale.max(1.0)).toInt.max(1)
+
+  private def deviceScaleFor(canvas: javax.swing.JPanel): DeviceScale =
+    Option(canvas.getGraphicsConfiguration)
+      .map(_.getDefaultTransform)
+      .map(transform => DeviceScale(transform.getScaleX.max(1.0), transform.getScaleY.max(1.0)))
+      .getOrElse(DeviceScale(1.0, 1.0))
