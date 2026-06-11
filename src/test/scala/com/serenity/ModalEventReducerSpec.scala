@@ -490,7 +490,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     withFind.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.ReplaceWorkflow(
-          initialWorkflow.copy(findText = "n")
+          initialWorkflow.copy(findText = "n", statusMessage = Some("0 matches in current buffer"))
         )
       )
     )
@@ -499,7 +499,11 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     withReplacementField.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.ReplaceWorkflow(
-          initialWorkflow.copy(findText = "n", activeField = ReplaceWorkflowField.ReplaceWith)
+          initialWorkflow.copy(
+            findText = "n",
+            activeField = ReplaceWorkflowField.ReplaceWith,
+            statusMessage = Some("0 matches in current buffer")
+          )
         )
       )
     )
@@ -512,7 +516,8 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
           initialWorkflow.copy(
             findText = "n",
             replacementText = "x",
-            activeField = ReplaceWorkflowField.ReplaceWith
+            activeField = ReplaceWorkflowField.ReplaceWith,
+            statusMessage = Some("0 matches in current buffer")
           )
         )
       )
@@ -532,7 +537,8 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
             findText = "n",
             replacementText = "x",
             activeField = ReplaceWorkflowField.ReplaceWith,
-            selectedAction = ReplaceWorkflowAction.ReplaceNext
+            selectedAction = ReplaceWorkflowAction.ReplaceNext,
+            statusMessage = Some("0 matches in current buffer")
           )
         )
       )
@@ -553,7 +559,8 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
             replacementText = "x",
             activeField = ReplaceWorkflowField.ReplaceWith,
             selectedAction = ReplaceWorkflowAction.ReplaceNext,
-            selectedScope = ReplaceWorkflowScope.Selection
+            selectedScope = ReplaceWorkflowScope.Selection,
+            statusMessage = Some("Select text to preview selection matches")
           )
         )
       )
@@ -562,6 +569,84 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val submitted = ModalEventReducer.reduce(ModalType.ReplaceWorkflow, Enter, withSelectionScope)
     submitted.state shouldBe withSelectionScope
     submitted.effects shouldBe List(AppEffect.SubmitReplaceWorkflow(SurfaceId("replace-workflow")))
+  }
+
+  it should "preview replace match counts while editing the find text" in {
+    val initialWorkflow = ReplaceWorkflowState()
+    val buffer = AppState.initial
+      .buffers(BufferId(0))
+      .copy(
+        content = com.serenity.rope.Rope("needle one\nneedle two\nplain")
+      )
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers + (BufferId(0) -> buffer),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("replace-workflow"),
+          SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(initialWorkflow)),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("replace-workflow"))
+    )
+
+    val updatedState = "needle".foldLeft(initialState) { (state, char) =>
+      ModalEventReducer.reduce(ModalType.ReplaceWorkflow, InsertChar(char), state).state
+    }
+
+    updatedState.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(
+        Modal.ReplaceWorkflow(
+          initialWorkflow.copy(findText = "needle", statusMessage = Some("2 matches in current buffer"))
+        )
+      )
+    )
+  }
+
+  it should "preview replace matches inside the active selection scope" in {
+    val initialWorkflow = ReplaceWorkflowState(
+      findText = "needle",
+      replacementText = "thread",
+      activeField = ReplaceWorkflowField.ReplaceWith,
+      selectedAction = ReplaceWorkflowAction.ReplaceNext,
+      statusMessage = Some("2 matches in current buffer")
+    )
+    val buffer = AppState.initial
+      .buffers(BufferId(0))
+      .copy(
+        content = com.serenity.rope.Rope("needle one\nneedle two\nplain"),
+        selection = Some(Selection(CursorPosition(1, 0), CursorPosition(1, "needle two".length)))
+      )
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers + (BufferId(0) -> buffer),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("replace-workflow"),
+          SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(initialWorkflow)),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("replace-workflow"))
+    )
+
+    val updatedState = ModalEventReducer
+      .reduce(
+        ModalType.ReplaceWorkflow,
+        ModalNavigate(Direction.Down),
+        initialState
+      )
+      .state
+
+    updatedState.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(
+        Modal.ReplaceWorkflow(
+          initialWorkflow.copy(
+            selectedScope = ReplaceWorkflowScope.Selection,
+            statusMessage = Some("1 match in selection")
+          )
+        )
+      )
+    )
   }
 
   it should "cycle close workflow choices and queue close workflow submission on enter" in {

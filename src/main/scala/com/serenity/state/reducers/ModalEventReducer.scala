@@ -239,7 +239,7 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.appendToActiveField(char)))
+              updateReplaceWorkflow(currentState, surface, workflow.appendToActiveField(char))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -247,7 +247,7 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.deleteFromActiveField))
+              updateReplaceWorkflow(currentState, surface, workflow.deleteFromActiveField)
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -255,7 +255,7 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.deleteForwardFromActiveField))
+              updateReplaceWorkflow(currentState, surface, workflow.deleteForwardFromActiveField)
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -263,7 +263,7 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.deleteWordBackwardFromActiveField))
+              updateReplaceWorkflow(currentState, surface, workflow.deleteWordBackwardFromActiveField)
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -271,7 +271,7 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.deleteWordForwardFromActiveField))
+              updateReplaceWorkflow(currentState, surface, workflow.deleteWordForwardFromActiveField)
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -279,7 +279,7 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.switchField(1)))
+              updateReplaceWorkflow(currentState, surface, workflow.switchField(1))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -287,7 +287,7 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.switchField(-1)))
+              updateReplaceWorkflow(currentState, surface, workflow.switchField(-1))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -295,7 +295,7 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.moveAction(-1)))
+              updateReplaceWorkflow(currentState, surface, workflow.moveAction(-1))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -303,7 +303,7 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.moveAction(1)))
+              updateReplaceWorkflow(currentState, surface, workflow.moveAction(1))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -311,7 +311,7 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.moveScope(-1)))
+              updateReplaceWorkflow(currentState, surface, workflow.moveScope(-1))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -319,7 +319,7 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.ReplaceWorkflow(workflow.moveScope(1)))
+              updateReplaceWorkflow(currentState, surface, workflow.moveScope(1))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -331,6 +331,64 @@ object ModalEventReducer:
             ReducerResult.noEffects(currentState)
       case _ =>
         ReducerResult.noEffects(currentState)
+
+  private def updateReplaceWorkflow(
+    state: AppState,
+    surface: UiSurface,
+    workflow: ReplaceWorkflowState
+  ): AppState =
+    updateModal(state, surface, Modal.ReplaceWorkflow(withReplacePreview(state, workflow)))
+
+  private def withReplacePreview(state: AppState, workflow: ReplaceWorkflowState): ReplaceWorkflowState =
+    if workflow.findText.isEmpty then workflow.copy(statusMessage = None)
+    else
+      activeBuffer(state) match
+        case None =>
+          workflow.copy(statusMessage = Some("No active buffer"))
+        case Some(buffer) =>
+          replacePreviewRange(buffer, workflow) match
+            case Left(message) =>
+              workflow.copy(statusMessage = Some(message))
+            case Right(range) =>
+              val matchCount = scopedReplaceMatches(buffer, workflow.findText, range).length
+              val scopeLabel = workflow.selectedScope match
+                case ReplaceWorkflowScope.CurrentBuffer => "current buffer"
+                case ReplaceWorkflowScope.Selection     => "selection"
+              val countLabel =
+                matchCount match
+                  case 1     => "1 match"
+                  case count => s"$count matches"
+              workflow.copy(statusMessage = Some(s"$countLabel in $scopeLabel"))
+
+  private def replacePreviewRange(
+    buffer: Buffer,
+    workflow: ReplaceWorkflowState
+  ): Either[String, Option[(Int, Int)]] =
+    workflow.selectedScope match
+      case ReplaceWorkflowScope.CurrentBuffer =>
+        Right(None)
+      case ReplaceWorkflowScope.Selection =>
+        buffer.primarySelection match
+          case Some(selection) =>
+            val text        = buffer.content.collect()
+            val startOffset = offsetForCursor(text, selection.start)
+            val endOffset   = offsetForCursor(text, selection.end)
+            Right(Some((math.min(startOffset, endOffset), math.max(startOffset, endOffset))))
+          case None =>
+            Left("Select text to preview selection matches")
+
+  private def scopedReplaceMatches(
+    buffer: Buffer,
+    findText: String,
+    range: Option[(Int, Int)]
+  ): List[Int] =
+    buffer.content.searchAll(findText).filter { offset =>
+      range match
+        case Some((startOffset, endOffset)) =>
+          offset >= startOffset && (offset + findText.length) <= endOffset
+        case None =>
+          true
+    }
 
   private def updateFindQuery(state: AppState, surface: UiSurface, query: String): AppState =
     updateFindSelection(state, surface, query, 0)
@@ -407,6 +465,12 @@ object ModalEventReducer:
 
   private def activeBufferId(state: AppState): Option[BufferId] =
     state.layout.activeEditorPaneId.flatMap(paneId => state.layout.editorPanes.get(paneId).flatMap(_.bufferId))
+
+  private def offsetForCursor(text: String, cursor: CursorPosition): Int =
+    val lines            = text.split("\n", -1)
+    val clampedLine      = math.max(0, math.min(cursor.line, lines.length - 1))
+    val precedingLengths = lines.take(clampedLine).map(_.length + 1).sum
+    precedingLengths + math.max(0, math.min(cursor.column, lines(clampedLine).length))
 
   private def cursorPositionForOffset(text: String, offset: Int): CursorPosition =
     val clamped = math.max(0, math.min(offset, text.length))
