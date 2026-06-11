@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.{BackgroundStyle, CursorMode, MarkdownViewMode}
+import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.layout.PanelPosition
 
@@ -61,6 +61,12 @@ enum CommandIntent:
   case StartupRestoreSession
   case StartupOpenFile
   case SetBufferLanguage(language: Option[LanguageId])
+  case SetGlobalHotkey(action: HotkeyAction, binding: String)
+  case SetEditorKeyBinding(action: EditorKeyAction, binding: String)
+  case SetCommandRunnerKeyBinding(action: CommandRunnerKeyAction, binding: String)
+  case SetModalKeyBinding(action: ModalKeyAction, binding: String)
+  case SetPanelKeyBinding(action: PanelKeyAction, binding: String)
+  case SetPeekKeyBinding(action: PeekKeyAction, binding: String)
 
 /** A command that can be executed in the command runner */
 case class Command private (
@@ -138,9 +144,14 @@ object CommandSurfaceItem:
       currentValue: String,
       isDecimal: Boolean,
       parse: String => Option[CommandIntent],
-      category: CommandCategory
+      category: CommandCategory,
+      acceptsBindingText: Boolean = false
   ) extends CommandSurfaceItem:
     override def searchText: String = s"$label $hint"
+
+    def accepts(currentText: String, char: Char): Boolean =
+      if acceptsBindingText then char.isLetterOrDigit || char == '+' || char == '-' || char == '_'
+      else char.isDigit || (char == '.' && isDecimal && !currentText.contains('.'))
 
     def isOutOfBounds(text: String): Boolean =
       text.nonEmpty && parse(text).isEmpty
