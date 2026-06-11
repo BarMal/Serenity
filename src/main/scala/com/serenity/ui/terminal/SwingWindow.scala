@@ -58,7 +58,7 @@ class SwingWindow(
     override def paintComponent(g: java.awt.Graphics): Unit =
       g.setColor(Color.BLACK)
       g.fillRect(0, 0, getWidth, getHeight)
-      renderedImageRef.get().foreach(img => g.drawImage(img, 0, 0, null))
+      renderedImageRef.get().foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
 
   def onImageReady(image: BufferedImage): Unit =
     renderedImageRef.set(Some(image))
