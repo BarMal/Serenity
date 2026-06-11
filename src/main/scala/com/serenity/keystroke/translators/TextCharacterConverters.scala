@@ -18,7 +18,7 @@ object TextCharacterConverters:
   }
 
   private def isPrintableChar(char: Char): Boolean =
-    (char >= 32 && char <= 126) || char == '\t'
+    char == '\t' || !Character.isISOControl(char)
 
   private def isAcceptableForTextEntry(modifiers: Set[Modifier]): Boolean =
-    modifiers.isEmpty || modifiers == Set(Modifier.Shift)
+    !modifiers.contains(Modifier.Ctrl) && modifiers.subsetOf(Set(Modifier.Shift, Modifier.Alt))

@@ -6,6 +6,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -47,6 +48,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
     List('1', '3').foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
@@ -60,6 +62,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
       createStateManager("StateManagerFontConfigSpec", config => IO(observed.updateAndGet(_ :+ config)))
 
     openTypographySubmenu(stateManager)
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
@@ -79,8 +82,24 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     openTypographySubmenu(stateManager)
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveRight).unsafeRunSync()
 
     observed.get() should not be empty
     observed.get().last.enableLigatures shouldBe false
+  }
+
+  it should "invoke the runtime font callback when changing UI font family from typography settings" in {
+    val observed = AtomicReference[List[FontConfig]](Nil)
+    val stateManager =
+      createStateManager("StateManagerFontConfigSpec", config => IO(observed.updateAndGet(_ :+ config)))
+
+    openTypographySubmenu(stateManager)
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    observed.get() should not be empty
+    observed.get().last.uiFontFamily shouldBe FontLoader.availableUiFamilies.head
   }

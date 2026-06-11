@@ -218,7 +218,17 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     groupItems(1).children.map(_.id) should contain allOf ("cursor-mode", "background-style", "blur-radius")
     groupItems(2).label shouldBe "Typography"
     groupItems(2).children
-      .map(_.id) should contain allOf ("code-font", "text-font", "ligatures", "buffer-font-size", "ui-font-size")
+      .map(_.id) should contain allOf (
+      "code-font",
+      "text-font",
+      "ui-font",
+      "ligatures",
+      "buffer-font-size",
+      "ui-font-size"
+    )
+    groupItems(2).children
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "ui-font" => group }
+      .map(_.children.map(_.id)) should not be empty
     groupItems(5).label shouldBe "Keymap"
     groupItems(5).children.map(_.id) should contain allOf (
       "keymap-global-command_palette",

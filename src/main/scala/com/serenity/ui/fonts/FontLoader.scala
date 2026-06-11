@@ -27,6 +27,9 @@ object FontLoader:
   lazy val availableTextFamilies: List[String] =
     (Font.SANS_SERIF :: availableSystemFontFamilies).filterNot(isMonospacedFamily).filter(canRenderBasicText).distinct
 
+  lazy val availableUiFamilies: List[String] =
+    availableTextFamilies
+
   def isMonospacedFamily(family: String): Boolean =
     if family == BundledCodeFontFamily then true
     else isMonospaced(Font(family, Font.PLAIN, 12))

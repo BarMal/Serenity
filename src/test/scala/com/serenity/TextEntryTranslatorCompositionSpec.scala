@@ -19,6 +19,14 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
     event.isInstanceOf[TextInputEvent] shouldBe true
   }
 
+  it should "treat printable Option-produced characters as text entry on macOS" in {
+    val event = translator.translate(KeyStrokeInfo(InputKey.Character, Some('#'), Set(Modifier.Alt)))
+
+    event shouldBe InsertChar('#')
+    event.isInstanceOf[EditorEvent] shouldBe true
+    event.isInstanceOf[TextInputEvent] shouldBe true
+  }
+
   it should "prioritize tab hotkeys ahead of plain tab insertion" in {
     val ctrlTab        = translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set(Modifier.Ctrl)))
     val plainTab       = translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set.empty))

@@ -254,6 +254,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateFontConfig(_.copy(codeFontFamily = family))
       case CommandIntent.SetTextFontFamily(family) =>
         updateFontConfig(_.copy(textFontFamily = family))
+      case CommandIntent.SetUiFontFamily(family) =>
+        updateFontConfig(_.copy(uiFontFamily = family))
       case CommandIntent.SetLigatures(enabled) =>
         updateFontConfig(_.copy(enableLigatures = enabled))
       case CommandIntent.ToggleLigatures =>

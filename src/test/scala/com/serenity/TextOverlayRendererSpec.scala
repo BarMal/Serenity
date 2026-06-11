@@ -41,3 +41,40 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     surface.fillPixelRectCalls should not be empty
     surface.fillPixelRectCalls.last.xPx should be >= metrics.toPixelX(1)
   }
+
+  it should "render command runner settings rows with stable label, hint, and value columns" in {
+    val surface = new MockRenderSurface(80, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 70, 6),
+      rows = List(
+        OverlayRow(
+          plainText = "Code Font: Used in code buffers Monaspace Neon",
+          selected = true,
+          segments = List(
+            OverlaySegment("Code Font"),
+            OverlaySegment("Used in code buffers"),
+            OverlaySegment("Monaspace Neon", selected = true)
+          ),
+          layout = OverlayRowLayout.Columns
+        ),
+        OverlayRow(
+          plainText = "UI Font: Used in the app interface SansSerif",
+          segments = List(
+            OverlaySegment("UI Font"),
+            OverlaySegment("Used in the app interface"),
+            OverlaySegment("SansSerif", selected = true)
+          ),
+          layout = OverlayRowLayout.Columns
+        )
+      )
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+
+    val firstRow  = surface.getRow(1)
+    val secondRow = surface.getRow(2)
+    firstRow.indexOf("Used") shouldBe secondRow.indexOf("Used")
+    firstRow.indexOf("Monaspace") shouldBe secondRow.indexOf("SansSerif")
+  }

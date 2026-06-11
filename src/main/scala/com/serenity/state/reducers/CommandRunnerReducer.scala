@@ -456,6 +456,8 @@ object CommandRunnerReducer:
               state = deactivate(state),
               effects = List(AppEffect.ExecuteCommand(command))
             )
+          case Some(_: CommandSurfaceItem.GroupItem) =>
+            ReducerResult.noEffects(replaceRunner(state, _.enterSelectedSubmenuGroup))
           case _ =>
             ReducerResult.noEffects(state)
       case None =>

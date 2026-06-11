@@ -10,7 +10,8 @@ case class CommandRunnerSubmenuState(
     selectedIndex: Int = 0,
     editingItemId: Option[String] = None,
     editingText: String = "",
-    searchTerm: String = ""
+    searchTerm: String = "",
+    parentGroupId: Option[String] = None
 ):
   def selectedItem(items: List[CommandSurfaceItem]): Option[CommandSurfaceItem] =
     items.lift(selectedIndex)
@@ -84,8 +85,9 @@ case class CommandRunner(
     val cursorModeItem      = CommandRunner.cursorModeOptionItem(optionSelections)
     val backgroundStyleItem = CommandRunner.backgroundStyleOptionItem(optionSelections)
     val markdownViewItem    = CommandRunner.markdownViewOptionItem(optionSelections)
-    val codeFontItem        = CommandRunner.codeFontOptionItem(optionSelections)
-    val textFontItem        = CommandRunner.textFontOptionItem(optionSelections)
+    val codeFontGroup       = CommandRunner.codeFontGroupItem(optionSelections)
+    val textFontGroup       = CommandRunner.textFontGroupItem(optionSelections)
+    val uiFontGroup         = CommandRunner.uiFontGroupItem(optionSelections)
     val ligaturesItem       = CommandRunner.ligaturesOptionItem(optionSelections)
     val keymapItems         = inputItems.filter(_.id.startsWith("keymap-"))
     List(
@@ -108,11 +110,11 @@ case class CommandRunner(
       CommandSurfaceItem.GroupItem(
         id = "settings-typography",
         label = "Typography",
-        children = List(codeFontItem, textFontItem, ligaturesItem) ++ inputItems.filter(item =>
+        children = List(codeFontGroup, textFontGroup, uiFontGroup, ligaturesItem) ++ inputItems.filter(item =>
           item.id == "buffer-font-size" || item.id == "ui-font-size"
         ),
         category = CommandCategory.Settings,
-        hint = Some("Code font, text font, ligature shaping, buffer size, UI size")
+        hint = Some("Code, text, UI fonts, ligature shaping, buffer size, UI size")
       ),
       CommandSurfaceItem.GroupItem(
         id = "settings-markdown",
@@ -155,6 +157,18 @@ case class CommandRunner(
 
   def exitSubmenuToPreview: CommandRunner =
     activeSubmenu match
+      case Some(submenu) if submenu.parentGroupId.nonEmpty =>
+        val parentId    = submenu.parentGroupId.get
+        val parentItems = submenuItems(parentId)
+        val parentIndex =
+          parentItems.indexWhere(_.id == submenu.groupId) match
+            case -1    => submenuSelections.getOrElse(parentId, 0)
+            case index => index
+        copy(
+          submenuSelections =
+            submenuSelections + (submenu.groupId -> submenu.selectedIndex) + (parentId -> parentIndex),
+          activeSubmenu = Some(CommandRunnerSubmenuState(parentId, selectedIndex = parentIndex))
+        )
       case Some(submenu) =>
         copy(
           submenuSelections = submenuSelections + (submenu.groupId -> submenu.selectedIndex),
@@ -167,7 +181,24 @@ case class CommandRunner(
     activeSubmenu.map(_.groupId).orElse(previewedGroupId)
 
   def submenuItems(groupId: String): List[CommandSurfaceItem] =
-    settingsGroups.find(_.id == groupId).map(_.children).getOrElse(Nil)
+    submenuGroup(groupId).map(_.children).getOrElse(Nil)
+
+  def submenuGroup(groupId: String): Option[CommandSurfaceItem.GroupItem] =
+    findGroup(groupId, settingsGroups)
+
+  private def findGroup(
+    groupId: String,
+    groups: List[CommandSurfaceItem.GroupItem]
+  ): Option[CommandSurfaceItem.GroupItem] =
+    groups
+      .collectFirst { case group if group.id == groupId => group }
+      .orElse(
+        groups
+          .flatMap(_.children.collect { case group: CommandSurfaceItem.GroupItem => group })
+          .view
+          .flatMap(group => findGroup(groupId, List(group)))
+          .headOption
+      )
 
   def focusedSubmenuItems: List[CommandSurfaceItem] =
     activeSubmenu.toList.flatMap(submenu => submenu.filteredItems(submenuItems(submenu.groupId)))
@@ -193,6 +224,27 @@ case class CommandRunner(
         submenu.selectedItemFromAll(submenuItems(submenu.groupId)) match
           case Some(item: CommandSurfaceItem.InputItem) =>
             copy(activeSubmenu = Some(submenu.copy(editingItemId = Some(item.id), editingText = item.currentValue)))
+          case _ =>
+            this
+      case None =>
+        this
+
+  def enterSelectedSubmenuGroup: CommandRunner =
+    activeSubmenu match
+      case Some(submenu) =>
+        submenu.selectedItemFromAll(submenuItems(submenu.groupId)) match
+          case Some(group: CommandSurfaceItem.GroupItem) =>
+            val rememberedIndex = submenuSelections.getOrElse(group.id, 0)
+            copy(
+              submenuSelections = submenuSelections + (submenu.groupId -> submenu.selectedIndex),
+              activeSubmenu = Some(
+                CommandRunnerSubmenuState(
+                  group.id,
+                  selectedIndex = rememberedIndex,
+                  parentGroupId = Some(submenu.groupId)
+                )
+              )
+            )
           case _ =>
             this
       case None =>
@@ -344,6 +396,7 @@ object CommandRunner:
       "markdown-view"    -> markdownViewModeIndex(config.markdownViewMode),
       "code-font"        -> codeFontIndex(config.fontConfig.codeFontFamily),
       "text-font"        -> textFontIndex(config.fontConfig.textFontFamily),
+      "ui-font"          -> uiFontIndex(config.fontConfig.uiFontFamily),
       "ligatures"        -> ligaturesIndex(config.fontConfig.enableLigatures)
     )
 
@@ -405,27 +458,63 @@ object CommandRunner:
       hint = Some("None, subtle, or full")
     )
 
-  private[command] def codeFontOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
+  private[command] def codeFontGroupItem(optionSelections: Map[String, Int]): CommandSurfaceItem.GroupItem =
+    fontFamilyGroupItem(
       id = "code-font",
       label = "Code Font",
-      options = FontLoader.availableMonospaceFamilies.map { family =>
-        CommandOption(family, CommandIntent.SetCodeFontFamily(family))
-      },
       selectedIndex = optionSelections.getOrElse("code-font", 0),
-      category = CommandCategory.Settings,
-      hint = Some("Used in code buffers")
+      families = FontLoader.availableMonospaceFamilies,
+      intent = CommandIntent.SetCodeFontFamily(_),
+      hint = "Used in code buffers"
     )
 
-  private[command] def textFontOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
+  private[command] def textFontGroupItem(optionSelections: Map[String, Int]): CommandSurfaceItem.GroupItem =
+    fontFamilyGroupItem(
       id = "text-font",
       label = "Text Font",
-      options =
-        FontLoader.availableTextFamilies.map(family => CommandOption(family, CommandIntent.SetTextFontFamily(family))),
       selectedIndex = optionSelections.getOrElse("text-font", 0),
+      families = FontLoader.availableTextFamilies,
+      intent = CommandIntent.SetTextFontFamily(_),
+      hint = "Used in prose buffers"
+    )
+
+  private[command] def uiFontGroupItem(optionSelections: Map[String, Int]): CommandSurfaceItem.GroupItem =
+    fontFamilyGroupItem(
+      id = "ui-font",
+      label = "UI Font",
+      selectedIndex = optionSelections.getOrElse("ui-font", 0),
+      families = FontLoader.availableUiFamilies,
+      intent = CommandIntent.SetUiFontFamily(_),
+      hint = "Used in the app interface"
+    )
+
+  private def fontFamilyGroupItem(
+    id: String,
+    label: String,
+    selectedIndex: Int,
+    families: List[String],
+    intent: String => CommandIntent,
+    hint: String
+  ): CommandSurfaceItem.GroupItem =
+    val selectedFamily = families.lift(selectedIndex).orElse(families.headOption).getOrElse("")
+    val children = families.zipWithIndex.map {
+      case (family, index) =>
+        CommandSurfaceItem.CommandItem(
+          Command.typed(
+            s"$id-$index-${family.toLowerCase.replaceAll("[^a-z0-9]+", "-").stripPrefix("-").stripSuffix("-")}",
+            hint,
+            intent(family),
+            CommandCategory.Settings,
+            label = family
+          )
+        )
+    }
+    CommandSurfaceItem.GroupItem(
+      id = id,
+      label = label,
+      children = children,
       category = CommandCategory.Settings,
-      hint = Some("Used in prose buffers")
+      hint = Some(selectedFamily)
     )
 
   private[command] def ligaturesOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -608,6 +697,11 @@ object CommandRunner:
 
   private def textFontIndex(family: String): Int =
     FontLoader.availableTextFamilies.indexOf(family) match
+      case -1    => 0
+      case index => index
+
+  private def uiFontIndex(family: String): Int =
+    FontLoader.availableUiFamilies.indexOf(family) match
       case -1    => 0
       case index => index
 

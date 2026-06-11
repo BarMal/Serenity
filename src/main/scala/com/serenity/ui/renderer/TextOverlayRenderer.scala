@@ -131,6 +131,8 @@ object TextOverlayRenderer:
         renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, isAnimating)
       case OverlayRowLayout.Split =>
         renderSplitRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, isAnimating)
+      case OverlayRowLayout.Columns =>
+        renderColumnRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, isAnimating)
 
     if cursorVisible then
       rowView.row.cursorColumn.foreach { cursorColumn =>
@@ -254,6 +256,89 @@ object TextOverlayRenderer:
         }
       case _ =>
         CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
+
+  private def renderColumnRow(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    width: Int,
+    row: OverlayRow,
+    theme: Theme,
+    defaultForeground: Color,
+    defaultBackground: Color,
+    isAnimating: Boolean = false
+  ): Unit =
+    row.segments match
+      case label :: hint :: value :: Nil =>
+        val labelWidth = math.min(22, math.max(8, width / 3))
+        val valueWidth = math.min(18, math.max(8, width / 4))
+        val hintWidth  = math.max(0, width - labelWidth - valueWidth - 2)
+        renderColumnCell(surface, x, y, labelWidth, label, row.selected, theme, defaultForeground, defaultBackground)
+        renderColumnCell(
+          surface,
+          x + labelWidth + 1,
+          y,
+          hintWidth,
+          hint,
+          row.selected,
+          theme,
+          defaultForeground,
+          defaultBackground
+        )
+        renderColumnCell(
+          surface,
+          x + labelWidth + hintWidth + 2,
+          y,
+          valueWidth,
+          value,
+          row.selected,
+          theme,
+          defaultForeground,
+          defaultBackground
+        )
+      case label :: hint :: Nil =>
+        val labelWidth = math.min(22, math.max(8, width / 3))
+        val hintWidth  = math.max(0, width - labelWidth - 1)
+        renderColumnCell(surface, x, y, labelWidth, label, row.selected, theme, defaultForeground, defaultBackground)
+        renderColumnCell(
+          surface,
+          x + labelWidth + 1,
+          y,
+          hintWidth,
+          hint,
+          row.selected,
+          theme,
+          defaultForeground,
+          defaultBackground
+        )
+      case _ =>
+        CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
+
+  private def renderColumnCell(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    width: Int,
+    segment: OverlaySegment,
+    rowSelected: Boolean,
+    theme: Theme,
+    defaultForeground: Color,
+    defaultBackground: Color
+  ): Unit =
+    val text =
+      if rowSelected && segment.text.length > width then segment.text.takeRight(width)
+      else segment.text.take(width)
+    renderSegmentText(
+      surface,
+      x,
+      y,
+      width,
+      text,
+      segment,
+      theme,
+      defaultForeground,
+      defaultBackground
+    )
 
   private def renderSegmentCell(
     surface: RenderSurface,

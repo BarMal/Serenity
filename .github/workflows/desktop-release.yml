@@ -57,14 +57,28 @@ jobs:
           set -euo pipefail
           mkdir -p package-input dist
           cp target/scala-*/Serenity.jar package-input/Serenity.jar
-          cp package-input/Serenity.jar dist/Serenity.jar
-          jpackage \
-            --type app-image \
-            --name Serenity \
-            --input package-input \
-            --main-jar Serenity.jar \
-            --main-class Main \
+          APP_ARGS=(
+            --type app-image
+            --name Serenity
+            --input package-input
+            --main-jar Serenity.jar
+            --main-class Main
+            --app-version "1.0.${GITHUB_RUN_NUMBER:-0}"
+            --vendor "BarMal"
             --dest dist
+          )
+          if [ "$(uname -s)" = "Darwin" ]; then
+            APP_ARGS+=(--mac-package-identifier "com.barmal.serenity")
+          fi
+          cp package-input/Serenity.jar dist/Serenity.jar
+          jpackage "${APP_ARGS[@]}"
+
+      - name: Ad-hoc sign macOS app image
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          codesign --force --deep --sign - dist/Serenity.app
 
       - name: Archive Windows app image
         if: runner.os == 'Windows'
@@ -78,7 +92,7 @@ jobs:
           set -euo pipefail
           cd dist
           if [ -d Serenity.app ]; then
-            zip -r Serenity-${{ matrix.artifact_suffix }}.zip Serenity.app
+            ditto -c -k --sequesterRsrc --keepParent Serenity.app Serenity-${{ matrix.artifact_suffix }}.zip
           else
             zip -r Serenity-${{ matrix.artifact_suffix }}.zip Serenity
           fi

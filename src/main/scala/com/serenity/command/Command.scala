@@ -55,6 +55,7 @@ enum CommandIntent:
   case SetUiFontSize(size: Float)
   case SetCodeFontFamily(family: String)
   case SetTextFontFamily(family: String)
+  case SetUiFontFamily(family: String)
   case SetLigatures(enabled: Boolean)
   case ToggleLigatures
   case StartupNewSession

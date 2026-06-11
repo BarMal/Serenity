@@ -94,3 +94,28 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers:
       modifiers = Set(Modifier.Ctrl)
     )
   }
+
+  it should "load and write font configuration including UI font family" in {
+    val configFile = Files.createTempFile("serenity-font-config", ".conf")
+    Files.writeString(
+      configFile,
+      """font.code.family = Monospaced
+        |font.text.family = Serif
+        |font.ui.family = Dialog
+        |font.size = 15.0
+        |font.ui.size = 13.0
+        |font.ligatures = false
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.fontConfig.codeFontFamily shouldBe "Monospaced"
+    config.fontConfig.textFontFamily shouldBe "Serif"
+    config.fontConfig.uiFontFamily shouldBe "Dialog"
+    config.fontConfig.fontSize shouldBe 15.0f
+    config.fontConfig.uiFontSize shouldBe 13.0f
+    config.fontConfig.enableLigatures shouldBe false
+
+    ConfigManager.configToString(config) should include("font.ui.family = Dialog")
+  }
