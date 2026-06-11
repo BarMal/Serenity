@@ -108,7 +108,7 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
 
   private def translateTyped(e: KeyEvent): Option[KeyStrokeInfo] =
     val char = e.getKeyChar
-    if !e.isControlDown && !e.isAltDown && char != KeyEvent.CHAR_UNDEFINED && char >= 32 then
+    if !e.isControlDown && char != KeyEvent.CHAR_UNDEFINED && char >= 32 then
       Some(KeyStrokeInfo(InputKey.Character, Some(char), mods(e)))
     else None
 

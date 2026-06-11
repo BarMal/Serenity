@@ -56,6 +56,28 @@ object ConfigManager:
                   config.withSyntaxHighlighting(false)
                 case _ =>
                   config // Unknown value, keep current config
+            case "font.code.family" | "font_code_family" =>
+              config.withFontConfig(config.fontConfig.copy(codeFontFamily = value.trim))
+            case "font.text.family" | "font_text_family" =>
+              config.withFontConfig(config.fontConfig.copy(textFontFamily = value.trim))
+            case "font.ui.family" | "font_ui_family" =>
+              config.withFontConfig(config.fontConfig.copy(uiFontFamily = value.trim))
+            case "font.size" | "font_size" =>
+              value.trim.toFloatOption
+                .map(size => config.withFontConfig(config.fontConfig.copy(fontSize = clampFontSize(size))))
+                .getOrElse(config)
+            case "font.ui.size" | "font_ui_size" =>
+              value.trim.toFloatOption
+                .map(size => config.withFontConfig(config.fontConfig.copy(uiFontSize = clampFontSize(size))))
+                .getOrElse(config)
+            case "font.ligatures" | "font_ligatures" =>
+              value.trim.toLowerCase match
+                case "true" | "on" | "enabled" =>
+                  config.withFontConfig(config.fontConfig.copy(enableLigatures = true))
+                case "false" | "off" | "disabled" =>
+                  config.withFontConfig(config.fontConfig.copy(enableLigatures = false))
+                case _ =>
+                  config
             case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
               HotkeyAction.values
                 .find(action => s"hotkey.${action.configKey}" == hotkeyKey)
@@ -112,6 +134,14 @@ object ConfigManager:
        |# Syntax highlighting: true, false
        |syntax.highlighting = ${config.syntaxHighlightingEnabled}
        |
+       |# Font configuration
+       |font.code.family = ${config.fontConfig.codeFontFamily}
+       |font.text.family = ${config.fontConfig.textFontFamily}
+       |font.ui.family = ${config.fontConfig.uiFontFamily}
+       |font.size = ${config.fontConfig.fontSize}
+       |font.ui.size = ${config.fontConfig.uiFontSize}
+       |font.ligatures = ${config.fontConfig.enableLigatures}
+       |
        |# Hotkey overrides
        |hotkey.command_palette = ${config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render}
        |hotkey.file_search = ${config.hotkeyConfig.bindingsFor(HotkeyAction.FileSearch).head.render}
@@ -141,6 +171,9 @@ object ConfigManager:
   /** List available preset names */
   def availablePresets: List[String] = List("none", "quick", "smooth", "subtle")
 
+  private def clampFontSize(size: Float): Float =
+    size.max(8.0f).min(48.0f)
+
   /** Create a sample configuration file */
   def createSampleConfig(path: String): Boolean =
     try
@@ -156,6 +189,14 @@ object ConfigManager:
                           |
                           |# Syntax highlighting: true, false
                           |syntax.highlighting = false
+                          |
+                          |# Font configuration
+                          |font.code.family = Monaspace Neon (Bundled)
+                          |font.text.family = SansSerif
+                          |font.ui.family = SansSerif
+                          |font.size = 12.0
+                          |font.ui.size = 12.0
+                          |font.ligatures = true
                           |
                           |# Hotkey overrides
                           |hotkey.command_palette = ctrl+p

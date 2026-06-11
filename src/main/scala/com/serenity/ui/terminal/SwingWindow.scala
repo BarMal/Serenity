@@ -289,10 +289,11 @@ class SwingWindow(
     }
 
   def stop(): Unit =
-    SwingUtilities.invokeLater { () =>
+    val dispose: Runnable = () =>
       frame.setVisible(false)
       frame.dispose()
-    }
+    if SwingUtilities.isEventDispatchThread then dispose.run()
+    else SwingUtilities.invokeAndWait(dispose)
 
   def viewportSize: ViewportSize =
     val d = pixelSize.get()

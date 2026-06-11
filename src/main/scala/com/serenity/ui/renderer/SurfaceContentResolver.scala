@@ -19,6 +19,7 @@ enum OverlayRowLayout:
   case Plain
   case Distributed
   case Split
+  case Columns
 
 case class OverlaySegment(
     text: String,
@@ -374,7 +375,7 @@ object SurfaceContentResolver:
               OverlaySegment(group.label),
               OverlaySegment(group.hint.getOrElse(""), tone = OverlayTone.Normal)
             ).filterNot(_.text.isEmpty),
-            layout = OverlayRowLayout.Split
+            layout = OverlayRowLayout.Columns
           )
       }
       val footer =
@@ -395,7 +396,7 @@ object SurfaceContentResolver:
     rect: LayoutRect,
     mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
-    val group         = runner.settingsGroups.find(_.id == groupId)
+    val group         = runner.submenuGroup(groupId)
     val submenuState  = runner.activeSubmenu.filter(_.groupId == groupId)
     val allItems      = runner.submenuItems(groupId)
     val items         = submenuState.map(_.filteredItems(allItems)).getOrElse(allItems)
@@ -424,7 +425,12 @@ object SurfaceContentResolver:
       case (group: CommandSurfaceItem.GroupItem, index) =>
         OverlayRow(
           plainText = group.label,
-          selected = !previewOnly && index == adjustedSelectedIndex
+          selected = !previewOnly && index == adjustedSelectedIndex,
+          segments = List(
+            OverlaySegment(group.label),
+            OverlaySegment(group.hint.getOrElse(""), tone = OverlayTone.Normal)
+          ).filterNot(_.text.isEmpty),
+          layout = OverlayRowLayout.Columns
         )
     }
     val footer =
@@ -482,7 +488,7 @@ object SurfaceContentResolver:
       plainText = s"${option.label}: ${option.hint.map(_ + " ").getOrElse("")}${option.selectedOption}",
       selected = selected,
       segments = OverlaySegment(option.label) :: rightSegments,
-      layout = OverlayRowLayout.Split
+      layout = OverlayRowLayout.Columns
     )
 
   private def inputRow(
@@ -503,7 +509,7 @@ object SurfaceContentResolver:
         OverlaySegment(item.hint, tone = OverlayTone.Normal),
         OverlaySegment(displayText, tone = valueTone, selected = editingText.isDefined)
       ),
-      layout = OverlayRowLayout.Split
+      layout = OverlayRowLayout.Columns
     )
 
   private def resolveDirectoryListing(

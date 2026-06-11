@@ -125,7 +125,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     header.segments.find(_.selected).map(_.text) shouldBe Some("Settings")
 
     val optionRow = floating.rows.headOption.getOrElse(fail("Expected animation group row"))
-    optionRow.layout shouldBe OverlayRowLayout.Split
+    optionRow.layout shouldBe OverlayRowLayout.Columns
     optionRow.plainText shouldBe "Animation"
     optionRow.plainText should not include "["
     optionRow.segments should have size 2

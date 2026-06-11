@@ -165,6 +165,14 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
       val event = translator.translate(info)
       event.shouldBe(InsertChar(char))
 
+  it should "accept printable characters produced while Alt or Option is held" in new InputFixture:
+    val symbols = List('#', '£')
+
+    for char <- symbols do
+      val info  = KeyStrokeInfo(InputKey.Character, Some(char), Set(Modifier.Alt))
+      val event = translator.translate(info)
+      event.shouldBe(InsertChar(char))
+
   behavior of "Edge Cases and Error Conditions"
 
   it should "handle rapid sequence of problematic characters" in new InputFixture:

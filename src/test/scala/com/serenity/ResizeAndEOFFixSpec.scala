@@ -125,13 +125,13 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
       translator.translate(KeyStrokeInfo(InputKey.Unknown, None, Set.empty)).asInstanceOf[UnhandledEvent[?]]
     val nullCharEvent =
       translator.translate(KeyStrokeInfo(InputKey.Character, None, Set.empty)).asInstanceOf[UnhandledEvent[?]]
-    val normalCharEvent = translator
-      .translate(KeyStrokeInfo(InputKey.Character, Some(167.toChar), Set.empty))
+    val nonSystemEvent = translator
+      .translate(KeyStrokeInfo(InputKey.F1, None, Set.empty))
       .asInstanceOf[UnhandledEvent[?]]
 
     isSystemEvent(unknownEvent) shouldBe true
     isSystemEvent(nullCharEvent) shouldBe true
-    isSystemEvent(normalCharEvent) shouldBe false
+    isSystemEvent(nonSystemEvent) shouldBe false
   }
 
   private def isSystemEvent(event: UnhandledEvent[?]): Boolean =
