@@ -176,6 +176,15 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "restore legacy session viewports without a wrapped visual offset" in {
+    val decoded = _root_.io.circe.parser
+      .parse("""{"leftColumn":1,"topLine":2,"visibleColumns":80,"visibleLines":24}""")
+      .flatMap(_.as[com.serenity.session.SessionViewport])
+
+    decoded.toOption.map(com.serenity.session.SessionViewport.toViewport) shouldBe
+      Some(Viewport(leftColumn = 1, topLine = 2, visibleColumns = 80, visibleLines = 24, topVisualLine = 0))
+  }
+
   it should "preserve config fields including blurRadius and backgroundStyle through JSON round trip" in {
     val appState = AppState.initial.copy(
       config = AppConfig(

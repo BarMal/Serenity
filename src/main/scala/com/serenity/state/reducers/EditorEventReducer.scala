@@ -34,7 +34,7 @@ object EditorEventReducer:
             val totalLines    = countLines(buffer.content)
             val maxTopLine    = math.max(0, totalLines - buffer.viewport.visibleLines)
             val newTopLine    = math.min(buffer.viewport.topLine + lines, maxTopLine)
-            val newViewport   = buffer.viewport.copy(topLine = newTopLine)
+            val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
             val updatedBuffer = buffer.copy(viewport = newViewport)
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
           case None => ReducerResult.noEffects(currentState)
@@ -43,7 +43,7 @@ object EditorEventReducer:
         pane.bufferId.flatMap(currentState.buffers.get) match
           case Some(buffer) =>
             val newTopLine    = math.max(0, buffer.viewport.topLine - lines)
-            val newViewport   = buffer.viewport.copy(topLine = newTopLine)
+            val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
             val updatedBuffer = buffer.copy(viewport = newViewport)
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
           case None => ReducerResult.noEffects(currentState)
@@ -96,7 +96,7 @@ object EditorEventReducer:
           case InsertChar(char) =>
             val replacedBuffer  = replaceSelectionOrInsert(buffer, cursor, char.toString)
             val newCursor       = replacedBuffer.cursors.headOption.getOrElse(cursor)
-            val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
+            val updatedViewport = adjustViewportForCursor(replacedBuffer, currentState, newCursor)
             val updatedBuffer = addCharacterAnimationToBuffer(
               replacedBuffer.copy(viewport = updatedViewport),
               currentState,
@@ -283,7 +283,7 @@ object EditorEventReducer:
           case NewLine | Enter =>
             val updatedBuffer             = replaceSelectionOrInsert(buffer, cursor, "\n")
             val newCursor                 = updatedBuffer.cursors.headOption.getOrElse(cursor)
-            val updatedViewport           = adjustViewportForCursor(buffer, currentState, newCursor)
+            val updatedViewport           = adjustViewportForCursor(updatedBuffer, currentState, newCursor)
             val updatedBufferWithViewport = updatedBuffer.copy(viewport = updatedViewport)
             ReducerResult.noEffects(
               currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBufferWithViewport))
@@ -334,7 +334,7 @@ object EditorEventReducer:
             val newTopLine    = math.min(buffer.viewport.topLine + visLines, math.max(0, totalLines - visLines))
             val newCursorLine = math.min(cursor.line + visLines, totalLines - 1)
             val newCursor     = cursor.copy(line = newCursorLine, column = 0)
-            val newViewport   = buffer.viewport.copy(topLine = newTopLine)
+            val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
               preferredColumn = Some(newCursor.column),
@@ -348,7 +348,7 @@ object EditorEventReducer:
             val newTopLine    = math.max(0, buffer.viewport.topLine - visLines)
             val newCursorLine = math.max(0, cursor.line - visLines)
             val newCursor     = cursor.copy(line = newCursorLine, column = 0)
-            val newViewport   = buffer.viewport.copy(topLine = newTopLine)
+            val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
               preferredColumn = Some(newCursor.column),
@@ -363,7 +363,7 @@ object EditorEventReducer:
             val lastLineEnd = findLineEnd(buffer.content, lastLine)
             val newCursor   = CursorPosition(lastLine, lastLineEnd)
             val newTopLine  = math.max(0, lastLine - buffer.viewport.visibleLines + 1)
-            val newViewport = buffer.viewport.copy(topLine = newTopLine)
+            val newViewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
               preferredColumn = Some(newCursor.column),
@@ -411,7 +411,7 @@ object EditorEventReducer:
                     selections = Nil,
                     preferredColumn = Some(target.column),
                     preferredXPx = None,
-                    viewport = buffer.viewport.copy(topLine = newTopLine),
+                    viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0),
                     findState = Some(FindState.fromResultSet(resultSet))
                   )
                   ReducerResult.noEffects(
@@ -1050,7 +1050,7 @@ object EditorEventReducer:
       preferredColumn = Some(primaryCursor.column),
       preferredXPx = None,
       multiCursorVerticalStates = Nil,
-      viewport = buffer.viewport.copy(topLine = newTopLine)
+      viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
     )
 
   private def multiCursorEntries(buffer: Buffer): List[CursorEntry] =
@@ -1168,11 +1168,20 @@ object EditorEventReducer:
   ): Viewport =
     val viewport         = buffer.viewport
     val halfVisibleLines = viewport.visibleLines / 2
-    val targetTopLine    = cursor.line - halfVisibleLines
-    val clampedTopLine   = math.max(0, targetTopLine)
     val font             = previewFontForBuffer(buffer, currentState.config.fontConfig)
-    val visibleWidthPx   = effectivePanelWidth(currentState) * CellMetrics.fromFont(font).charWidth
+    val visibleWidthPx   = viewport.visibleColumns * CellMetrics.fromFont(font).charWidth
     val lineText         = buffer.content.getLine(cursor.line).getOrElse("")
+    val measuredCursorVisualLine =
+      TextLayoutSnapshot.visualLineIndexForCursor(lineText, cursor.column, visibleWidthPx, font)
+    val cellCursorVisualLine = cursor.column / math.max(1, viewport.visibleColumns)
+    val cursorVisualLine     = math.max(measuredCursorVisualLine, cellCursorVisualLine)
+    val targetTopLine =
+      if cursorVisualLine > halfVisibleLines then cursor.line
+      else cursor.line - halfVisibleLines
+    val clampedTopLine = math.max(0, targetTopLine)
+    val topVisualLine =
+      if clampedTopLine == cursor.line then math.max(0, cursorVisualLine - halfVisibleLines)
+      else 0
     val clampedLeftColumn =
       if usesMeasuredHorizontalViewport(buffer) then
         TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)
@@ -1184,7 +1193,8 @@ object EditorEventReducer:
 
     viewport.copy(
       topLine = clampedTopLine,
-      leftColumn = clampedLeftColumn
+      leftColumn = clampedLeftColumn,
+      topVisualLine = topVisualLine
     )
 
   private def moveUpVisualLine(
@@ -1272,7 +1282,11 @@ object EditorEventReducer:
     val metrics      = CellMetrics.fromFont(font)
     val panelWidthPx = effectivePanelWidth(currentState) * metrics.charWidth
     val snapshot =
-      TextLayoutSnapshot.fromBuffer(buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0)), panelWidthPx, font)
+      TextLayoutSnapshot.fromBuffer(
+        buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
+        panelWidthPx,
+        font
+      )
     snapshot.xPxForCursor(cursor).getOrElse(cursor.column.toFloat * metrics.charWidth.toFloat)
 
   private def moveVerticalByLayout(
@@ -1285,7 +1299,11 @@ object EditorEventReducer:
     val font         = previewFontForBuffer(buffer, currentState.config.fontConfig)
     val panelWidthPx = effectivePanelWidth(currentState) * CellMetrics.fromFont(font).charWidth
     val snapshot =
-      TextLayoutSnapshot.fromBuffer(buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0)), panelWidthPx, font)
+      TextLayoutSnapshot.fromBuffer(
+        buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
+        panelWidthPx,
+        font
+      )
     snapshot.moveVertical(cursor, direction, preferredXPx)
 
   private def measuredVerticalMove(
@@ -1309,7 +1327,11 @@ object EditorEventReducer:
     val metrics = CellMetrics.fromFont(font)
     val widthPx = effectivePanelWidth(state) * metrics.charWidth
     val snap =
-      TextLayoutSnapshot.fromBuffer(buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0)), widthPx, font)
+      TextLayoutSnapshot.fromBuffer(
+        buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
+        widthPx,
+        font
+      )
     (snap, metrics)
 
   private def measuredCursorXPxFrom(snap: TextLayoutSnapshot, metrics: CellMetrics, cursor: CursorPosition): Float =

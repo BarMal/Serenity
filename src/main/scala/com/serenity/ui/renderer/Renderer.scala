@@ -801,19 +801,27 @@ object Renderer:
           .flatMap(_.bufferId)
           .flatMap(state.buffers.get)
           .foreach { buffer =>
-            val viewport     = buffer.viewport
-            val startLine    = viewport.topLine
-            val visibleLines = math.min(viewport.visibleLines, lineRect.height)
+            val font         = context.fontForBuffer(buffer)
+            val panelWidthPx = context.layout.editorPanelRect.width * context.cellMetrics.charWidth
+            val snapshot = TextLayoutSnapshot.fromBuffer(
+              buffer,
+              panelWidthPx,
+              font,
+              surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+            )
+            val firstVisualRows =
+              snapshot.visualLines.zipWithIndex
+                .groupMapReduce(_._1.bufferLine)(_._2)(math.min)
 
-            for i <- 0 until visibleLines do
-              val bufferLineIndex   = startLine + i
-              val displayLineNumber = bufferLineIndex + 1
-              val screenY           = lineRect.y + i
-
-              if bufferLineIndex < buffer.content.lineCount then
-                val lineNumberText = displayLineNumber.toString.padTo(lineRect.width - 1, ' ') + " "
-                surface.putString(lineRect.x, screenY, lineNumberText)
-                renderDiagnosticIndicator(surface, lineRect, screenY, bufferLineIndex, buffer, state)
+            snapshot.visualLines.zipWithIndex.foreach {
+              case (visualLine, index) if index < lineRect.height =>
+                val screenY = lineRect.y + index
+                if firstVisualRows.get(visualLine.bufferLine).contains(index) then
+                  val lineNumberText = (visualLine.bufferLine + 1).toString.padTo(lineRect.width - 1, ' ') + " "
+                  surface.putString(lineRect.x, screenY, lineNumberText)
+                  renderDiagnosticIndicator(surface, lineRect, screenY, visualLine.bufferLine, buffer, state)
+              case _ => ()
+            }
           }
       }
 

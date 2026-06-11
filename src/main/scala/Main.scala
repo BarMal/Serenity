@@ -76,4 +76,5 @@ object Main extends IOApp.Simple:
           registerResizeCallback = cb => swingWin.setOnResize(() => cb.unsafeRunAndForget())
         )
       }
+      _ <- IO.blocking(System.exit(0))
     yield ()

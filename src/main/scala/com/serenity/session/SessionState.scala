@@ -71,7 +71,8 @@ case class SessionViewport(
     leftColumn: Int,
     topLine: Int,
     visibleColumns: Int,
-    visibleLines: Int
+    visibleLines: Int,
+    topVisualLine: Int = 0
 )
 
 case class SessionFindState(
@@ -231,7 +232,8 @@ object SessionViewport:
       leftColumn = viewport.leftColumn,
       topLine = viewport.topLine,
       visibleColumns = viewport.visibleColumns,
-      visibleLines = viewport.visibleLines
+      visibleLines = viewport.visibleLines,
+      topVisualLine = viewport.topVisualLine
     )
 
   def toViewport(sessionViewport: SessionViewport): Viewport =
@@ -239,7 +241,8 @@ object SessionViewport:
       leftColumn = sessionViewport.leftColumn,
       topLine = sessionViewport.topLine,
       visibleColumns = sessionViewport.visibleColumns,
-      visibleLines = sessionViewport.visibleLines
+      visibleLines = sessionViewport.visibleLines,
+      topVisualLine = sessionViewport.topVisualLine
     )
 
 object SessionFindState:
@@ -384,7 +387,16 @@ given Encoder[SessionCursorPosition] = deriveEncoder
 given Decoder[SessionCursorPosition] = deriveDecoder
 
 given Encoder[SessionViewport] = deriveEncoder
-given Decoder[SessionViewport] = deriveDecoder
+
+given Decoder[SessionViewport] = Decoder.instance { cursor =>
+  for
+    leftColumn    <- cursor.downField("leftColumn").as[Int]
+    topLine       <- cursor.downField("topLine").as[Int]
+    visibleCols   <- cursor.downField("visibleColumns").as[Int]
+    visibleLines  <- cursor.downField("visibleLines").as[Int]
+    topVisualLine <- cursor.downField("topVisualLine").as[Option[Int]]
+  yield SessionViewport(leftColumn, topLine, visibleCols, visibleLines, topVisualLine.getOrElse(0))
+}
 
 given Encoder[SessionFindResult] = deriveEncoder
 given Decoder[SessionFindResult] = deriveDecoder
