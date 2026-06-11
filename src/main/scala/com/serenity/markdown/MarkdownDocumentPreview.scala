@@ -75,6 +75,32 @@ object MarkdownDocumentPreview:
       case text =>
         normalizeInline(text)
 
+  def renderInlineLines(sourceLines: Vector[String]): Vector[String] =
+    @annotation.tailrec
+    def loop(index: Int, acc: Vector[String]): Vector[String] =
+      if index >= sourceLines.length then acc
+      else
+        tableBlockAt(sourceLines, index) match
+          case Some((endIndex, renderedRows)) =>
+            loop(endIndex + 1, acc ++ renderedRows)
+          case None =>
+            loop(index + 1, acc :+ renderInlineLine(sourceLines(index)))
+
+    loop(0, Vector.empty)
+
+  def inlineTableLineIndexes(sourceLines: Vector[String]): Set[Int] =
+    @annotation.tailrec
+    def loop(index: Int, acc: Set[Int]): Set[Int] =
+      if index >= sourceLines.length then acc
+      else
+        tableBlockAt(sourceLines, index) match
+          case Some((endIndex, _)) =>
+            loop(endIndex + 1, acc ++ (index to endIndex))
+          case None =>
+            loop(index + 1, acc)
+
+    loop(0, Set.empty)
+
   private def htmlRenderer(baseUri: Option[URI]): HtmlRenderer =
     baseUri match
       case None => defaultHtmlRenderer
@@ -220,6 +246,57 @@ object MarkdownDocumentPreview:
       matched => s"${matched.group(1)} (${matched.group(2)})"
     )
     "`([^`]+)`".r.replaceAllIn(withoutLinks, matched => matched.group(1))
+
+  private def tableBlockAt(lines: Vector[String], index: Int): Option[(Int, Vector[String])] =
+    Option
+      .when(index + 1 < lines.length && isTableRow(lines(index)) && isTableSeparator(lines(index + 1))) {
+        val rows = Iterator
+          .iterate(index)(_ + 1)
+          .takeWhile(lineIndex => lineIndex < lines.length && isTableRow(lines(lineIndex)))
+          .toVector
+        val endIndex     = rows.last
+        val renderedRows = renderInlineTable(rows.map(lines))
+        endIndex -> renderedRows
+      }
+      .filter(_._2.nonEmpty)
+
+  private def renderInlineTable(lines: Vector[String]): Vector[String] =
+    val parsedRows = lines.map(parseTableCells)
+    val contentRows =
+      parsedRows.zipWithIndex.collect {
+        case (cells, index) if index != 1 => cells.map(normalizeInline)
+      }
+    val columnCount = contentRows.map(_.length).maxOption.getOrElse(0)
+    if columnCount == 0 then Vector.empty
+    else
+      val widths = (0 until columnCount).map { column =>
+        contentRows.flatMap(_.lift(column)).map(_.length).maxOption.getOrElse(0)
+      }.toVector
+
+      parsedRows.zipWithIndex.map {
+        case (_, 1) =>
+          widths.map(width => "─" * width.max(1)).mkString("  ")
+        case (cells, _) =>
+          paddedTableRow(cells.map(normalizeInline), widths)
+      }
+
+  private def paddedTableRow(cells: Vector[String], widths: Vector[Int]): String =
+    widths.zipWithIndex
+      .map { case (width, index) => cells.lift(index).getOrElse("").padTo(width, ' ') }
+      .mkString("  ")
+      .stripTrailing()
+
+  private def parseTableCells(line: String): Vector[String] =
+    val trimmed           = line.trim
+    val withoutOuterPipes = trimmed.stripPrefix("|").stripSuffix("|")
+    withoutOuterPipes.split("\\|", -1).toVector.map(_.trim)
+
+  private def isTableRow(line: String): Boolean =
+    val trimmed = line.trim
+    trimmed.contains("|") && parseTableCells(trimmed).length >= 2
+
+  private def isTableSeparator(line: String): Boolean =
+    isTableRow(line) && parseTableCells(line).forall(cell => cell.matches(""":?-{3,}:?"""))
 
   private def css(color: Color): String =
     f"#${color.getRed}%02x${color.getGreen}%02x${color.getBlue}%02x"

@@ -228,6 +228,59 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     rows.exists(_.contains("continued")) shouldBe true
   }
 
+  it should "render inactive markdown tables as formatted table rows in inline lens mode" in {
+    val bufferId = BufferId(1)
+    val paneId   = PaneId(1)
+    val state = AppState.empty.copy(
+      buffers = Map(
+        bufferId -> Buffer
+          .fromString(
+            bufferId,
+            """|| Task | Owner |
+              || ---- | ----- |
+              || Ship | Codex |
+              |
+              |Editing here""".stripMargin
+          )
+          .copy(
+            language = Some(LanguageId.Markdown),
+            cursors = List(CursorPosition(4, 0)),
+            viewport = Viewport.default.copy(visibleLines = 10)
+          )
+      ),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId),
+        paneOrder = List(paneId)
+      ),
+      focus = Focus.EditorPane(paneId),
+      config = AppConfig.default
+        .withSyntaxHighlighting(true)
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    )
+    val surface = new MockRenderSurface(100, 20)
+    val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 20),
+      codeFont = font,
+      textFont = font,
+      cellMetrics = CellMetrics.fromFont(font),
+      cursorColor = None
+    )
+
+    val rows = surfaceRows(surface)
+    rows.exists(_.contains("Task  Owner")) shouldBe true
+    rows.exists(_.contains("Ship  Codex")) shouldBe true
+    rows.exists(_.contains("| ---- | ----- |")) shouldBe false
+  }
+
   private def surfaceRows(surface: MockRenderSurface): List[String] =
     (0 until surface.height).map(surface.getRow).map(_.trim).filter(_.nonEmpty).toList
 
