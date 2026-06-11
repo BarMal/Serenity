@@ -189,6 +189,32 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "keep wrapped text buffers anchored horizontally while navigating visual lines" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
+
+    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId   = state.layout.editorPanes.keys.head
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.handleViewportResize(ViewportSize(32, 8)).unsafeRunSync()
+
+    val text = List.fill(80)("wrapped").mkString(" ")
+    text.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(MoveUp).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    val buffer     = finalState.buffers(bufferId)
+
+    buffer.usesTextFont shouldBe true
+    buffer.viewport.topVisualLine should be > 0
+    buffer.viewport.leftColumn shouldBe 0
+  }
+
   behavior of "Buffer Content Integrity"
 
   it should "preserve all text content regardless of viewport position" in {

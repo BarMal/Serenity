@@ -1183,8 +1183,7 @@ object EditorEventReducer:
       if clampedTopLine == cursor.line then math.max(0, cursorVisualLine - halfVisibleLines)
       else 0
     val clampedLeftColumn =
-      if usesMeasuredHorizontalViewport(buffer) then
-        TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)
+      if buffer.usesTextFont then 0
       else
         val measuredLeftColumn =
           TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)
@@ -1357,9 +1356,6 @@ object EditorEventReducer:
         moveVerticalBySnapshot(cursor, snap, preferredXPx, direction)
       }
       .flatten
-
-  private def usesMeasuredHorizontalViewport(buffer: Buffer): Boolean =
-    buffer.usesTextFont
 
   private def usesMeasuredVerticalNavigation(buffer: Buffer): Boolean =
     buffer.usesTextFont

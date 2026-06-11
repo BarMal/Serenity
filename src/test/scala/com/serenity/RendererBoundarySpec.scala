@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.traverse.*
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -118,6 +119,16 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager
+      .updateState { current =>
+        current.copy(
+          buffers = current.buffers.updated(
+            bufferId,
+            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          )
+        )
+      }
+      .unsafeRunSync()
 
     // Get panel dimensions
     val currentState = stateManager.getCurrentState.unsafeRunSync()
