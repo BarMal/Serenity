@@ -63,7 +63,7 @@ jobs:
             --input package-input
             --main-jar Serenity.jar
             --main-class Main
-            --app-version "0.1.${GITHUB_RUN_NUMBER:-0}"
+            --app-version "1.0.${GITHUB_RUN_NUMBER:-0}"
             --vendor "BarMal"
             --dest dist
           )
