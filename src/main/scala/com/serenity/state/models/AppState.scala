@@ -21,11 +21,53 @@ case class SurfaceAnimationState(
 
 case class FindResult(line: Int, column: Int)
 
+case class FindResultSet private (
+    query: String,
+    results: List[FindResult],
+    currentIndex: Int
+):
+  def selectedResult: Option[FindResult] =
+    if results.isEmpty then None else results.lift(currentIndex)
+
+  def move(delta: Int): FindResultSet =
+    FindResultSet.normalized(query, results, currentIndex + delta)
+
+  def selectionSummary: String =
+    selectedResult match
+      case Some(result) =>
+        s"$matchCountLabel, ${currentIndex + 1}/${results.length} at ${result.line + 1}:${result.column + 1}"
+      case None =>
+        matchCountLabel
+
+  private def matchCountLabel: String =
+    results.length match
+      case 1     => "1 match"
+      case count => s"$count matches"
+
+object FindResultSet:
+  val empty: FindResultSet = FindResultSet("", Nil, 0)
+
+  def normalized(query: String, results: List[FindResult], requestedIndex: Int): FindResultSet =
+    if query.isEmpty then empty
+    else FindResultSet(query, results, wrapIndex(requestedIndex, results.length))
+
+  private def wrapIndex(index: Int, resultCount: Int): Int =
+    if resultCount <= 0 then 0
+    else
+      val raw = index % resultCount
+      if raw < 0 then raw + resultCount else raw
+
 case class FindState(
     query: String,
     results: List[FindResult],
     currentIndex: Int
-)
+):
+  def resultSet: FindResultSet =
+    FindResultSet.normalized(query, results, currentIndex)
+
+object FindState:
+  def fromResultSet(resultSet: FindResultSet): FindState =
+    FindState(resultSet.query, resultSet.results, resultSet.currentIndex)
 
 case class ThemeTransition(previousTheme: Theme, currentStep: Int, totalSteps: Int):
   def progress: Double         = if totalSteps <= 0 then 1.0 else currentStep.toDouble / totalSteps

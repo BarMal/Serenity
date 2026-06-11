@@ -429,9 +429,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       .flatMap { buffer =>
         buffer.findState match
           case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
-            val matches   = findMatches(buffer, query)
-            val safeIndex = wrapFindIndex(currentIndex, matches.length)
-            Some(Modal.Find(query, matches.map(toFindResult), safeIndex))
+            val resultSet = FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult), currentIndex)
+            Some(Modal.Find(resultSet.query, resultSet.results, resultSet.currentIndex))
           case _ =>
             None
       }
@@ -445,12 +444,6 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
 
   private def toFindResult(cursor: CursorPosition): FindResult =
     FindResult(cursor.line, cursor.column)
-
-  private def wrapFindIndex(index: Int, resultCount: Int): Int =
-    if resultCount <= 0 then 0
-    else
-      val raw = index % resultCount
-      if raw < 0 then raw + resultCount else raw
 
   private def cursorPositionForOffset(text: String, offset: Int): CursorPosition =
     val clamped = math.max(0, math.min(offset, text.length))

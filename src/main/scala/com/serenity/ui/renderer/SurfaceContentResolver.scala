@@ -147,6 +147,7 @@ object SurfaceContentResolver:
     rect: LayoutRect,
     mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
+    val resultSet  = FindResultSet.normalized(query, results, currentIndex)
     val queryLabel = "Find"
     val queryText  = s"$queryLabel $query"
     val queryRow = OverlayRow(
@@ -160,9 +161,9 @@ object SurfaceContentResolver:
       layout = OverlayRowLayout.Split
     )
 
-    val safeIndex     = currentIndex.max(0).min(results.length - 1)
+    val safeIndex     = resultSet.currentIndex
     val maxResultRows = math.max(0, rect.height - 3)
-    val resultRows = results.take(maxResultRows).zipWithIndex.map {
+    val resultRows = resultSet.results.take(maxResultRows).zipWithIndex.map {
       case (result, index) =>
         OverlayRow(
           plainText = s"${index + 1}. ${result.line + 1}:${result.column + 1}",
@@ -171,18 +172,11 @@ object SurfaceContentResolver:
     }
 
     val footer = Option
-      .when(query.nonEmpty && results.isEmpty) {
+      .when(resultSet.query.nonEmpty && resultSet.results.isEmpty) {
         OverlayRow("0 matches")
       }
-      .orElse(Option.when(results.nonEmpty) {
-        val safeIndex = currentIndex.max(0).min(results.length - 1)
-        val active    = results(safeIndex)
-        val matchLabel =
-          if results.length == 1 then "match"
-          else "matches"
-        OverlayRow(
-          s"${results.length} $matchLabel, ${safeIndex + 1}/${results.length} at ${active.line + 1}:${active.column + 1}"
-        )
+      .orElse(Option.when(resultSet.results.nonEmpty) {
+        OverlayRow(resultSet.selectionSummary)
       })
 
     ResolvedSurfaceContent(

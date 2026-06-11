@@ -393,16 +393,16 @@ object EditorEventReducer:
           case FindNext =>
             buffer.findState match
               case Some(FindState(query, storedResults, currentIndex)) if storedResults.nonEmpty =>
-                val matches = findMatches(buffer, query)
-                if matches.isEmpty then
+                val resultSet =
+                  FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult), currentIndex + 1)
+                if resultSet.results.isEmpty then
                   val updatedBuffer = buffer.copy(findState = None)
                   ReducerResult.noEffects(
                     currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
                   )
                 else
-                  val nextIndex   = wrapFindIndex(currentIndex + 1, matches.size)
-                  val target      = matches(nextIndex)
-                  val results     = matches.map(toFindResult)
+                  val selected    = resultSet.results(resultSet.currentIndex)
+                  val target      = CursorPosition(selected.line, selected.column)
                   val halfVisible = buffer.viewport.visibleLines / 2
                   val newTopLine  = math.max(0, target.line - halfVisible)
                   val updatedBuffer = buffer.copy(
@@ -412,7 +412,7 @@ object EditorEventReducer:
                     preferredColumn = Some(target.column),
                     preferredXPx = None,
                     viewport = buffer.viewport.copy(topLine = newTopLine),
-                    findState = Some(FindState(query, results, nextIndex))
+                    findState = Some(FindState.fromResultSet(resultSet))
                   )
                   ReducerResult.noEffects(
                     currentState.copy(
@@ -1101,9 +1101,8 @@ object EditorEventReducer:
   private def findModalForBuffer(buffer: Buffer): Modal =
     buffer.findState match
       case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
-        val matches   = findMatches(buffer, query)
-        val safeIndex = wrapFindIndex(currentIndex, matches.length)
-        Modal.Find(query, matches.map(toFindResult), safeIndex)
+        val resultSet = FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult), currentIndex)
+        Modal.Find(resultSet.query, resultSet.results, resultSet.currentIndex)
       case _ =>
         Modal.Find("", Nil, 0)
 
@@ -1113,12 +1112,6 @@ object EditorEventReducer:
 
   private def toFindResult(cursor: CursorPosition): FindResult =
     FindResult(cursor.line, cursor.column)
-
-  private def wrapFindIndex(index: Int, resultCount: Int): Int =
-    if resultCount <= 0 then 0
-    else
-      val raw = index % resultCount
-      if raw < 0 then raw + resultCount else raw
 
   private def moveCursorLeft(cursor: CursorPosition, content: Rope): CursorPosition =
     if cursor.column > 0 then cursor.moveLeft
