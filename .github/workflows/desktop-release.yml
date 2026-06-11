@@ -73,12 +73,67 @@ jobs:
           cp package-input/Serenity.jar dist/Serenity.jar
           jpackage "${APP_ARGS[@]}"
 
-      - name: Ad-hoc sign macOS app image
-        if: runner.os == 'macOS'
+      - name: Import macOS Developer ID certificate
+        if: github.event_name != 'pull_request' && runner.os == 'macOS'
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD }}
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
-          codesign --force --deep --sign - dist/Serenity.app
+          if [ -z "${MACOS_CERTIFICATE_BASE64:-}" ]; then
+            echo "No macOS Developer ID certificate configured; ad-hoc signing will be used."
+            exit 0
+          fi
+
+          if [ -z "${MACOS_CERTIFICATE_PASSWORD:-}" ] || [ -z "${MACOS_KEYCHAIN_PASSWORD:-}" ]; then
+            echo "::error::Set MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD and MACOS_KEYCHAIN_PASSWORD when configuring Developer ID signing."
+            exit 1
+          fi
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/serenity-signing.keychain-db"
+          CERTIFICATE_PATH="$RUNNER_TEMP/developer-id-application.p12"
+
+          if ! printf '%s' "$MACOS_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH" 2>/dev/null; then
+            printf '%s' "$MACOS_CERTIFICATE_BASE64" | base64 -D > "$CERTIFICATE_PATH"
+          fi
+
+          security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Sign macOS app image
+        if: runner.os == 'macOS'
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ github.event_name != 'pull_request' && secrets.MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64 || '' }}
+          MACOS_CODESIGN_IDENTITY: ${{ github.event_name != 'pull_request' && secrets.MACOS_CODESIGN_IDENTITY || '' }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] || [ -z "${MACOS_CERTIFICATE_BASE64:-}" ]; then
+            codesign --force --deep --sign - dist/Serenity.app
+            exit 0
+          fi
+
+          IDENTITY="${MACOS_CODESIGN_IDENTITY:-}"
+          if [ -z "$IDENTITY" ]; then
+            IDENTITY="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)"
+          fi
+
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::No Developer ID Application signing identity was found."
+            security find-identity -v -p codesigning
+            exit 1
+          fi
+
+          codesign --force --deep --options runtime --timestamp --sign "$IDENTITY" dist/Serenity.app
+          codesign --verify --deep --strict --verbose=2 dist/Serenity.app
 
       - name: Archive Windows app image
         if: runner.os == 'Windows'
@@ -96,6 +151,39 @@ jobs:
           else
             zip -r Serenity-${{ matrix.artifact_suffix }}.zip Serenity
           fi
+
+      - name: Notarize macOS app image
+        if: github.event_name != 'pull_request' && runner.os == 'macOS'
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64 }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${MACOS_CERTIFICATE_BASE64:-}" ]; then
+            echo "No macOS Developer ID certificate configured; notarization will be skipped."
+            exit 0
+          fi
+
+          if [ -z "${MACOS_NOTARY_APPLE_ID:-}" ] || [ -z "${MACOS_NOTARY_TEAM_ID:-}" ] || [ -z "${MACOS_NOTARY_PASSWORD:-}" ]; then
+            echo "::error::Set MACOS_NOTARY_APPLE_ID, MACOS_NOTARY_TEAM_ID, and MACOS_NOTARY_PASSWORD to notarize the macOS artifact."
+            exit 1
+          fi
+
+          ARCHIVE="dist/Serenity-${{ matrix.artifact_suffix }}.zip"
+          xcrun notarytool submit "$ARCHIVE" \
+            --apple-id "$MACOS_NOTARY_APPLE_ID" \
+            --team-id "$MACOS_NOTARY_TEAM_ID" \
+            --password "$MACOS_NOTARY_PASSWORD" \
+            --wait
+          xcrun stapler staple dist/Serenity.app
+          xcrun stapler validate dist/Serenity.app
+
+          cd dist
+          rm -f Serenity-${{ matrix.artifact_suffix }}.zip
+          ditto -c -k --sequesterRsrc --keepParent Serenity.app Serenity-${{ matrix.artifact_suffix }}.zip
 
       - name: Upload runnable JAR artifact
         if: runner.os == 'Linux'
