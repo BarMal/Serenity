@@ -71,11 +71,37 @@ object EditorEventReducer:
     paneId: PaneId,
     currentState: AppState
   )(using balance: com.serenity.rope.Balance): ReducerResult =
-    if buffer.allSelections.nonEmpty then reduceMultiSelectionTextEvent(event, buffer, paneId, currentState)
-    else if preservesInFlightMultiCursorVerticalState(event, buffer) then
-      reduceMultiCursorTextEvent(event, buffer, paneId, currentState)
-    else if buffer.cursors.size > 1 then reduceMultiCursorTextEvent(event, buffer, paneId, currentState)
-    else reduceSingleCursorTextEvent(event, clearInFlightMultiCursorVerticalState(buffer), paneId, currentState)
+    val result =
+      if buffer.allSelections.nonEmpty then reduceMultiSelectionTextEvent(event, buffer, paneId, currentState)
+      else if preservesInFlightMultiCursorVerticalState(event, buffer) then
+        reduceMultiCursorTextEvent(event, buffer, paneId, currentState)
+      else if buffer.cursors.size > 1 then reduceMultiCursorTextEvent(event, buffer, paneId, currentState)
+      else reduceSingleCursorTextEvent(event, clearInFlightMultiCursorVerticalState(buffer), paneId, currentState)
+
+    if refreshesFindResults(event) then result.copy(state = refreshFindState(result.state, buffer.id))
+    else result
+
+  private def refreshesFindResults(event: TextEntryEvent): Boolean =
+    event match
+      case InsertChar(_) | TabKey | ReverseTabKey | DeleteBackward | DeleteForward | DeleteWordBackward |
+          DeleteWordForward | NewLine | Enter | Paste | Cut =>
+        true
+      case _ =>
+        false
+
+  private def refreshFindState(state: AppState, bufferId: BufferId): AppState =
+    state.buffers.get(bufferId) match
+      case Some(buffer) =>
+        buffer.findState match
+          case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
+            val resultSet = FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult), currentIndex)
+            val updatedFindState =
+              Option.when(resultSet.results.nonEmpty)(FindState.fromResultSet(resultSet))
+            state.copy(buffers = state.buffers + (bufferId -> buffer.copy(findState = updatedFindState)))
+          case _ =>
+            state
+      case _ =>
+        state
 
   private def preservesInFlightMultiCursorVerticalState(event: TextEntryEvent, buffer: Buffer): Boolean =
     buffer.multiCursorVerticalStates.size > 1 && (event == MoveUp || event == MoveDown)

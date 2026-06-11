@@ -149,8 +149,19 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         beginCloseAction(CloseScope.Current, state)
       case CommandIntent.FindInCurrentFile =>
         updateState(current => ModalStateReducer.show(findModalForState(current), current).state)
+      case CommandIntent.FindAllInCurrentFile =>
+        updateState(current => ModalStateReducer.show(findModalForState(current), current).state)
       case CommandIntent.ReplaceInCurrentFile =>
         updateState(current => ModalStateReducer.show(Modal.ReplaceWorkflow(ReplaceWorkflowState()), current).state)
+      case CommandIntent.ReplaceAllInCurrentFile =>
+        updateState(current =>
+          ModalStateReducer
+            .show(
+              Modal.ReplaceWorkflow(ReplaceWorkflowState(selectedAction = ReplaceWorkflowAction.ReplaceAll)),
+              current
+            )
+            .state
+        )
       case CommandIntent.OpenGotoLine =>
         updateState(current => ModalStateReducer.show(Modal.GotoLine(""), current).state)
       case CommandIntent.ToggleTheme =>

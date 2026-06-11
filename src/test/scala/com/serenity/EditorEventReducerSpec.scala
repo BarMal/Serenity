@@ -884,6 +884,52 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "refresh stored find-all results after text is inserted before matches" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("needle\nneedle"),
+            cursors = List(CursorPosition(0, 0)),
+            findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(InsertChar('x'), paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.collect() shouldBe "xneedle\nneedle"
+    buffer.findState shouldBe Some(FindState("needle", List(FindResult(0, 1), FindResult(1, 0)), 0))
+  }
+
+  it should "clear stored find-all results when an edit removes the last match" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("needle"),
+            cursors = List(CursorPosition(0, "needle".length)),
+            findState = Some(FindState("needle", List(FindResult(0, 0)), 0))
+          )
+      )
+    )
+
+    val afterFirstDelete = EditorEventReducer.reduce(DeleteBackward, paneId, initialState).state
+    val buffer           = afterFirstDelete.buffers(bufferId)
+
+    buffer.content.collect() shouldBe "needl"
+    buffer.findState shouldBe None
+  }
+
   it should "restore each cursor's preferred column after moving through a shorter line" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)

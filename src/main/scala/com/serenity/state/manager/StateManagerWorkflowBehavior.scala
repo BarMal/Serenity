@@ -248,6 +248,8 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
                       workflow.replacementText.length
                     )
                   val newCursor = cursorPositionForOffset(updatedContent.collect(), cursorOffset)
+                  val updatedFindState =
+                    refreshedFindState(updatedContent, workflow.findText, requestedIndex = 0)
                   val updatedBuffer = buffer.copy(
                     content = updatedContent,
                     isDirty = true,
@@ -257,7 +259,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
                     selections = Nil,
                     preferredColumn = Some(newCursor.column),
                     preferredXPx = None,
-                    findState = None
+                    findState = updatedFindState
                   )
                   recordWorkflowUndo(state, bufferId, buffer) >> stateRef.update { current =>
                     val updatedState = current.copy(
@@ -310,6 +312,8 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
                     .insert(startOffset, workflow.replacementText)
                   val cursorOffset = startOffset + workflow.replacementText.length
                   val newCursor    = cursorPositionForOffset(updatedContent.collect(), cursorOffset)
+                  val updatedFindState =
+                    refreshedFindStateAfterOffset(updatedContent, workflow.findText, cursorOffset)
                   val replacementSelection =
                     workflow.selectedScope match
                       case ReplaceWorkflowScope.Selection =>
@@ -334,7 +338,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
                     selections = Nil,
                     preferredColumn = Some(newCursor.column),
                     preferredXPx = None,
-                    findState = None
+                    findState = updatedFindState
                   )
                   recordWorkflowUndo(state, bufferId, buffer) >> stateRef.update { current =>
                     current.copy(buffers = current.buffers + (bufferId -> updatedBuffer))
@@ -565,6 +569,30 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
         case None =>
           true
     }
+
+  private def refreshedFindState(
+    content: com.serenity.rope.Rope,
+    findText: String,
+    requestedIndex: Int
+  ): Option[FindState] =
+    val text = content.collect()
+    val results = content
+      .searchAll(findText)
+      .map(offset => cursorPositionForOffset(text, offset))
+      .map(cursor => FindResult(cursor.line, cursor.column))
+    val resultSet = FindResultSet.normalized(findText, results, requestedIndex)
+    Option.when(resultSet.results.nonEmpty)(FindState.fromResultSet(resultSet))
+
+  private def refreshedFindStateAfterOffset(
+    content: com.serenity.rope.Rope,
+    findText: String,
+    offset: Int
+  ): Option[FindState] =
+    val matchOffsets = content.searchAll(findText)
+    val requestedIndex = matchOffsets.indexWhere(_ >= offset) match
+      case -1    => 0
+      case index => index
+    refreshedFindState(content, findText, requestedIndex)
 
   private def replaceMatchesInRanges(
     rope: com.serenity.rope.Rope,
