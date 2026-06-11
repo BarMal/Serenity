@@ -39,6 +39,15 @@ case class FindResultSet private (
       case None =>
         matchCountLabel
 
+  def visibleResults(maxResults: Int): List[(FindResult, Int)] =
+    if maxResults <= 0 || results.isEmpty then Nil
+    else
+      val windowSize = math.min(maxResults, results.length)
+      val halfWindow = windowSize / 2
+      val maxStart   = results.length - windowSize
+      val start      = math.max(0, math.min(currentIndex - halfWindow, maxStart))
+      results.zipWithIndex.slice(start, start + windowSize)
+
   private def matchCountLabel: String =
     results.length match
       case 1     => "1 match"

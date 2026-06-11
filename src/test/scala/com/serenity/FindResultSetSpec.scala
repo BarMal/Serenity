@@ -32,6 +32,29 @@ class FindResultSetSpec extends AnyFlatSpec with Matchers:
     resultSet.selectionSummary.shouldBe("3 matches, 2/3 at 6:9")
   }
 
+  it should "window visible results around the selected result" in {
+    val results   = (0 until 10).map(line => FindResult(line, 0)).toList
+    val resultSet = FindResultSet.normalized("needle", results, requestedIndex = 7)
+
+    resultSet
+      .visibleResults(maxResults = 5)
+      .shouldBe(
+        List(
+          FindResult(5, 0) -> 5,
+          FindResult(6, 0) -> 6,
+          FindResult(7, 0) -> 7,
+          FindResult(8, 0) -> 8,
+          FindResult(9, 0) -> 9
+        )
+      )
+  }
+
+  it should "return no visible results when the result window has no space" in {
+    val resultSet = FindResultSet.normalized("needle", List(FindResult(0, 0)), requestedIndex = 0)
+
+    resultSet.visibleResults(maxResults = 0).shouldBe(Nil)
+  }
+
   it should "preserve overlapping match positions from rope search results" in {
     val content = Rope("aaaa")
     val results = content.searchAll("aa").map(offset => FindResult(0, offset))

@@ -355,6 +355,20 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.footer.map(_.plainText) shouldBe Some("3 matches, 2/3 at 6:9")
   }
 
+  it should "render a find result window that keeps the selected match visible" in {
+    val results = (0 until 6).map(line => FindResult(line, 0)).toList
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.ModalWorkflow(Modal.Find("needle", results, 4)),
+      LayoutRect(0, 0, 60, 6),
+      SurfaceRenderMode.Floating
+    )
+
+    floating.rows.map(_.plainText) shouldBe List("Find needle", "4. 4:1", "5. 5:1", "6. 6:1")
+    floating.rows(2).selected shouldBe true
+    floating.footer.map(_.plainText) shouldBe Some("6 matches, 5/6 at 5:1")
+  }
+
   it should "render an explicit empty result state for find queries with no matches" in {
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.ModalWorkflow(Modal.Find("missing", Nil, 0)),
