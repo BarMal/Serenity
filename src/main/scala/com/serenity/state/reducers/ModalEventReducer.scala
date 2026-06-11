@@ -341,16 +341,15 @@ object ModalEventReducer:
     query: String,
     requestedIndex: Int
   ): AppState =
-    val matches   = activeFindMatches(state, query)
-    val safeIndex = wrapFindIndex(requestedIndex, matches.length)
+    val resultSet = FindResultSet.normalized(query, activeFindMatches(state, query).map(toFindResult), requestedIndex)
     val modalState = updateModal(
       state,
       surface,
-      Modal.Find(query, matches.map(toFindResult), safeIndex)
+      Modal.Find(resultSet.query, resultSet.results, resultSet.currentIndex)
     )
 
-    if query.isEmpty || matches.isEmpty then clearActiveFindState(modalState)
-    else applyFindMatch(modalState, query, matches, safeIndex)
+    if resultSet.query.isEmpty || resultSet.results.isEmpty then clearActiveFindState(modalState)
+    else applyFindMatch(modalState, resultSet)
 
   private def activeFindMatches(state: AppState, query: String): List[CursorPosition] =
     if query.isEmpty then Nil
@@ -362,24 +361,16 @@ object ModalEventReducer:
         }
         .getOrElse(Nil)
 
-  private def wrapFindIndex(index: Int, resultCount: Int): Int =
-    if resultCount <= 0 then 0
-    else
-      val raw = index % resultCount
-      if raw < 0 then raw + resultCount else raw
-
   private def applyFindMatch(
     state: AppState,
-    query: String,
-    matches: List[CursorPosition],
-    index: Int
+    resultSet: FindResultSet
   ): AppState =
     activeBufferId(state) match
       case Some(bufferId) =>
         state.buffers.get(bufferId) match
           case Some(buffer) =>
-            val safeIndex   = wrapFindIndex(index, matches.length)
-            val target      = matches(safeIndex)
+            val selected    = resultSet.results(resultSet.currentIndex)
+            val target      = CursorPosition(selected.line, selected.column)
             val halfVisible = buffer.viewport.visibleLines / 2
             val newTopLine  = math.max(0, target.line - halfVisible)
             val updatedBuffer = buffer.copy(
@@ -389,7 +380,7 @@ object ModalEventReducer:
               preferredColumn = Some(target.column),
               preferredXPx = None,
               viewport = buffer.viewport.copy(topLine = newTopLine),
-              findState = Some(FindState(query, matches.map(toFindResult), safeIndex))
+              findState = Some(FindState.fromResultSet(resultSet))
             )
             state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
           case None =>
