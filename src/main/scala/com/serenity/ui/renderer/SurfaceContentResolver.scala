@@ -163,7 +163,7 @@ object SurfaceContentResolver:
 
     val safeIndex     = resultSet.currentIndex
     val maxResultRows = math.max(0, rect.height - 3)
-    val resultRows = resultSet.results.take(maxResultRows).zipWithIndex.map {
+    val resultRows = resultSet.visibleResults(maxResultRows).map {
       case (result, index) =>
         OverlayRow(
           plainText = s"${index + 1}. ${result.line + 1}:${result.column + 1}",
