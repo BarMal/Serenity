@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -24,6 +25,16 @@ class DebugScrollingIssueSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager
+      .updateState { current =>
+        current.copy(
+          buffers = current.buffers.updated(
+            bufferId,
+            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          )
+        )
+      }
+      .unsafeRunSync()
 
     println("=== HORIZONTAL SCROLLING DEBUG ===")
     println(s"BufferId: $bufferId, PaneId: $paneId")

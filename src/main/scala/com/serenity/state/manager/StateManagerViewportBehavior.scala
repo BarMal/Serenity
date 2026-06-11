@@ -26,8 +26,7 @@ private[manager] trait StateManagerViewportBehavior extends StateManagerSurfaceF
               val cellCursorVisualLine = cursor.column / math.max(1, viewport.visibleColumns)
               val cursorVisualLine     = math.max(measuredCursorVisualLine, cellCursorVisualLine)
               val newLeftColumn =
-                if usesMeasuredHorizontalViewport(buffer) then
-                  TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)
+                if buffer.usesTextFont then 0
                 else
                   val measuredLeftColumn =
                     TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)
@@ -132,6 +131,3 @@ private[manager] trait StateManagerViewportBehavior extends StateManagerSurfaceF
   ): java.awt.Font =
     if buffer.usesTextFont then FontLoader.previewTextFont(config)
     else FontLoader.previewCodeFont(config)
-
-  private def usesMeasuredHorizontalViewport(buffer: Buffer): Boolean =
-    buffer.usesTextFont
