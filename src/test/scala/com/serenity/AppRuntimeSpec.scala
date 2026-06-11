@@ -12,6 +12,8 @@ import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
+import com.serenity.session.SessionManager
+import com.serenity.state.manager.StateManager
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
@@ -72,4 +74,31 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
     shutdownObserved.get.unsafeRunSync() shouldBe true
+  }
+
+  it should "terminate after external close even when app-close session persistence fails" in {
+    given org.typelevel.log4cats.Logger[IO] =
+      LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeExternalClosePersistenceSpec"))
+
+    val program = AppRuntime.run(
+      initialViewportSize = ViewportSize(120, 40),
+      makeInputHandler = _ => new SilentInputHandler,
+      checkResize = IO.pure(None),
+      renderFull = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
+      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
+      appConfig = AppConfig.default,
+      makeStateManager = Some(logger =>
+        IO.blocking(java.nio.file.Files.createTempFile("serenity-session-root", ".tmp")).flatMap { fileRoot =>
+          StateManager.apply(
+            logger,
+            policy = SessionManager.SessionPolicy(saveOnAppClose = true),
+            sessionRootOverride = Some(fileRoot)
+          )
+        }
+      ),
+      awaitExternalQuit = IO.unit,
+      registerResizeCallback = _ => ()
+    )
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
   }

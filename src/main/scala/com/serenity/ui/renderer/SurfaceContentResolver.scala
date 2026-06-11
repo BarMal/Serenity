@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.Color
 
-import com.serenity.command.{CommandCategory, CommandRegistry, CommandSurfaceItem}
+import com.serenity.command.{CommandCategory, CommandSurfaceItem}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutRect, SurfaceLayoutKind}
 
@@ -26,7 +26,8 @@ case class OverlaySegment(
     selected: Boolean = false,
     tone: OverlayTone = OverlayTone.Normal,
     foregroundColor: Option[Color] = None,
-    backgroundColor: Option[Color] = None
+    backgroundColor: Option[Color] = None,
+    fontFamily: Option[String] = None
 )
 
 case class OverlayRow(
@@ -331,7 +332,7 @@ object SurfaceContentResolver:
   ): ResolvedSurfaceContent =
     if !runner.isActive then ResolvedSurfaceContent(titleFor(mode, "commands"))
     else
-      given CommandRegistry = CommandRegistry.withToggleUI
+      given com.serenity.command.CommandRegistry = com.serenity.command.CommandRegistry.withToggleUI
       val header =
         if runner.searchTerm.isEmpty then Some(categoryTabs(runner.activeCategory))
         else
@@ -358,10 +359,7 @@ object SurfaceContentResolver:
           val prefix =
             if runner.searchTerm.isEmpty then ""
             else s"[${categoryLabel(command.category)}] "
-          OverlayRow(
-            plainText = s"$prefix${command.label} - ${command.description}",
-            selected = index == adjustedSelectedIndex
-          )
+          commandRow(command, index == adjustedSelectedIndex, prefix)
         case (option: CommandSurfaceItem.OptionItem, index) =>
           optionRow(option, index == adjustedSelectedIndex)
         case (item: CommandSurfaceItem.InputItem, index) =>
@@ -418,10 +416,7 @@ object SurfaceContentResolver:
           else None
         inputRow(item, !previewOnly && index == adjustedSelectedIndex, editingText)
       case (CommandSurfaceItem.CommandItem(command), index) =>
-        OverlayRow(
-          plainText = s"${command.label} - ${command.description}",
-          selected = !previewOnly && index == adjustedSelectedIndex
-        )
+        commandRow(command, !previewOnly && index == adjustedSelectedIndex)
       case (group: CommandSurfaceItem.GroupItem, index) =>
         OverlayRow(
           plainText = group.label,
@@ -478,6 +473,24 @@ object SurfaceContentResolver:
       case CommandCategory.View     => "View"
       case CommandCategory.Edit     => "Edit"
       case CommandCategory.Settings => "Settings"
+
+  private def commandRow(command: com.serenity.command.Command, selected: Boolean, prefix: String = ""): OverlayRow =
+    OverlayRow(
+      plainText = s"$prefix${command.label} - ${command.description}",
+      selected = selected,
+      segments = List(
+        OverlaySegment(s"$prefix${command.label}", fontFamily = fontFamilyForCommand(command)),
+        OverlaySegment(command.description, tone = OverlayTone.Normal)
+      ),
+      layout = OverlayRowLayout.Columns
+    )
+
+  private def fontFamilyForCommand(command: com.serenity.command.Command): Option[String] =
+    command.intent match
+      case com.serenity.command.CommandIntent.SetCodeFontFamily(family) => Some(family)
+      case com.serenity.command.CommandIntent.SetTextFontFamily(family) => Some(family)
+      case com.serenity.command.CommandIntent.SetUiFontFamily(family)   => Some(family)
+      case _                                                            => None
 
   private def optionRow(option: CommandSurfaceItem.OptionItem, selected: Boolean): OverlayRow =
     val rightSegments =

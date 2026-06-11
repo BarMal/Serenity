@@ -28,6 +28,7 @@ private[manager] trait StateManagerRuntimeSupport:
   protected def themeManager: AppThemeManager
   protected def lspQueue: Queue[IO, LspEffect]
   protected def onFontConfigChanged: FontConfig => IO[Unit]
+  protected def configPersistencePath: Option[Path]
 
   protected def fileManager: FileManager
   protected def sessionManager: SessionManager

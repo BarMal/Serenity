@@ -8,6 +8,7 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 
 object EditorEventReducer:
+  private val TabInsertion = "    "
 
   def reducer(paneId: PaneId)(using balance: com.serenity.rope.Balance): Reducer[EditorEvent] =
     Reducer.instance((event, state) => reduce(event, paneId, state))
@@ -133,7 +134,14 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case TabKey =>
-            reduceTextEventForBuffer(InsertChar('\t'), buffer, paneId, currentState)
+            val replacedBuffer  = replaceSelectionOrInsert(buffer, cursor, TabInsertion)
+            val newCursor       = replacedBuffer.cursors.headOption.getOrElse(cursor)
+            val updatedViewport = adjustViewportForCursor(replacedBuffer, currentState, newCursor)
+            ReducerResult.noEffects(
+              currentState.copy(buffers =
+                currentState.buffers + (buffer.id -> replacedBuffer.copy(viewport = updatedViewport))
+              )
+            )
 
           case ReverseTabKey =>
             reduceTextEventForBuffer(DeleteBackward, buffer, paneId, currentState)
@@ -545,7 +553,7 @@ object EditorEventReducer:
         )
       case TabKey =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiSelectionReplacement(buffer, currentState, "\t"))
+          updateBufferInState(currentState, applyMultiSelectionReplacement(buffer, currentState, TabInsertion))
         )
       case NewLine | Enter =>
         ReducerResult.noEffects(
@@ -593,7 +601,7 @@ object EditorEventReducer:
         )
       case TabKey =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorInsertion(buffer, currentState, "\t"))
+          updateBufferInState(currentState, applyMultiCursorInsertion(buffer, currentState, TabInsertion))
         )
       case NewLine | Enter =>
         ReducerResult.noEffects(
@@ -731,7 +739,9 @@ object EditorEventReducer:
         )
 
       case TabKey =>
-        handleEventWithoutBuffer(InsertChar('\t'), paneId, pane, currentState)
+        TabInsertion.foldLeft(ReducerResult.noEffects(currentState)) { (result, char) =>
+          handleEventWithoutBuffer(InsertChar(char), paneId, pane, result.state)
+        }
 
       case _ =>
         ReducerResult.noEffects(currentState)

@@ -206,7 +206,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     rows.exists(_.contains("# Raw")) shouldBe true
   }
 
-  it should "render inactive markdown as presentation text and overlay the active block as raw source" in {
+  it should "render markdown preview as an image and overlay the active block as raw source" in {
     val surface = new MockRenderSurface(100, 20)
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
 
@@ -222,13 +222,13 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     )
 
     val rows = surfaceRows(surface)
-    rows.exists(_.contains("Rendered")) shouldBe true
+    surface.drawImageCalls should have size 1
     rows.exists(_.contains("# Rendered")) shouldBe false
     rows.exists(_.contains("# Raw")) shouldBe true
-    rows.exists(_.contains("continued")) shouldBe true
+    rows.exists(_.contains("continued")) shouldBe false
   }
 
-  it should "render inactive markdown tables as formatted table rows in inline lens mode" in {
+  it should "render inactive markdown tables through the markdown preview image in inline lens mode" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
     val state = AppState.empty.copy(
@@ -275,10 +275,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       cursorColor = None
     )
 
-    val rows = surfaceRows(surface)
-    rows.exists(_.contains("Task  Owner")) shouldBe true
-    rows.exists(_.contains("Ship  Codex")) shouldBe true
-    rows.exists(_.contains("| ---- | ----- |")) shouldBe false
+    surface.drawImageCalls should have size 1
+    surfaceRows(surface).exists(_.contains("| ---- | ----- |")) shouldBe false
   }
 
   private def surfaceRows(surface: MockRenderSurface): List[String] =

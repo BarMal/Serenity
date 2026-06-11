@@ -23,6 +23,8 @@ import org.xml.sax.InputSource
 
 object MarkdownDocumentPreview:
 
+  case class InlinePreviewLine(sourceLine: Option[Int], text: String)
+
   private val extensions: java.util.List[Extension] =
     List[Extension](TablesExtension.create(), TaskListItemsExtension.create()).asJava
 
@@ -76,15 +78,18 @@ object MarkdownDocumentPreview:
         normalizeInline(text)
 
   def renderInlineLines(sourceLines: Vector[String]): Vector[String] =
+    renderInlineDocument(sourceLines).map(_.text)
+
+  def renderInlineDocument(sourceLines: Vector[String]): Vector[InlinePreviewLine] =
     @annotation.tailrec
-    def loop(index: Int, acc: Vector[String]): Vector[String] =
+    def loop(index: Int, acc: Vector[InlinePreviewLine]): Vector[InlinePreviewLine] =
       if index >= sourceLines.length then acc
       else
         tableBlockAt(sourceLines, index) match
-          case Some((endIndex, renderedRows)) =>
-            loop(endIndex + 1, acc ++ renderedRows)
+          case Some(tableBlock) =>
+            loop(tableBlock.endIndex + 1, acc ++ tableBlock.previewLines)
           case None =>
-            loop(index + 1, acc :+ renderInlineLine(sourceLines(index)))
+            loop(index + 1, acc :+ InlinePreviewLine(Some(index), renderInlineLine(sourceLines(index))))
 
     loop(0, Vector.empty)
 
@@ -94,12 +99,24 @@ object MarkdownDocumentPreview:
       if index >= sourceLines.length then acc
       else
         tableBlockAt(sourceLines, index) match
-          case Some((endIndex, _)) =>
-            loop(endIndex + 1, acc ++ (index to endIndex))
+          case Some(tableBlock) =>
+            loop(tableBlock.endIndex + 1, acc ++ (index to tableBlock.endIndex))
           case None =>
             loop(index + 1, acc)
 
     loop(0, Set.empty)
+
+  def renderInlineLineAt(sourceLines: Vector[String], index: Int): String =
+    tableBlockContaining(sourceLines, index) match
+      case Some(tableBlock) =>
+        tableBlock.previewLines.find(_.sourceLine.contains(index)).map(_.text).getOrElse("")
+      case None =>
+        sourceLines.lift(index).map(renderInlineLine).getOrElse("")
+
+  def previewRowForSourceLine(sourceLines: Vector[String], sourceLine: Int): Option[Int] =
+    renderInlineDocument(sourceLines).zipWithIndex.collectFirst {
+      case (line, row) if line.sourceLine.contains(sourceLine) => row
+    }
 
   private def htmlRenderer(baseUri: Option[URI]): HtmlRenderer =
     baseUri match
@@ -247,7 +264,9 @@ object MarkdownDocumentPreview:
     )
     "`([^`]+)`".r.replaceAllIn(withoutLinks, matched => matched.group(1))
 
-  private def tableBlockAt(lines: Vector[String], index: Int): Option[(Int, Vector[String])] =
+  private case class InlineTableBlock(endIndex: Int, previewLines: Vector[InlinePreviewLine])
+
+  private def tableBlockAt(lines: Vector[String], index: Int): Option[InlineTableBlock] =
     Option
       .when(index + 1 < lines.length && isTableRow(lines(index)) && isTableSeparator(lines(index + 1))) {
         val rows = Iterator
@@ -256,9 +275,38 @@ object MarkdownDocumentPreview:
           .toVector
         val endIndex     = rows.last
         val renderedRows = renderInlineTable(rows.map(lines))
-        endIndex -> renderedRows
+        InlineTableBlock(endIndex, sourceMappedTableRows(rows, renderedRows))
       }
-      .filter(_._2.nonEmpty)
+      .filter(_.previewLines.nonEmpty)
+
+  private def tableBlockContaining(lines: Vector[String], index: Int): Option[InlineTableBlock] =
+    @annotation.tailrec
+    def loop(lineIndex: Int): Option[InlineTableBlock] =
+      if lineIndex > index then None
+      else
+        tableBlockAt(lines, lineIndex) match
+          case Some(tableBlock) if index <= tableBlock.endIndex =>
+            Some(tableBlock)
+          case Some(tableBlock) =>
+            loop(tableBlock.endIndex + 1)
+          case None =>
+            loop(lineIndex + 1)
+
+    loop(0)
+
+  private def sourceMappedTableRows(sourceRows: Vector[Int], renderedRows: Vector[String]): Vector[InlinePreviewLine] =
+    renderedRows.zipWithIndex.map {
+      case (text, 0) =>
+        InlinePreviewLine(None, text)
+      case (text, 1) =>
+        InlinePreviewLine(sourceRows.headOption, text)
+      case (text, 2) =>
+        InlinePreviewLine(sourceRows.lift(1), text)
+      case (text, rowIndex) if rowIndex == renderedRows.length - 1 =>
+        InlinePreviewLine(None, text)
+      case (text, rowIndex) =>
+        InlinePreviewLine(sourceRows.lift(rowIndex - 1), text)
+    }
 
   private def renderInlineTable(lines: Vector[String]): Vector[String] =
     val parsedRows = lines.map(parseTableCells)
@@ -273,18 +321,29 @@ object MarkdownDocumentPreview:
         contentRows.flatMap(_.lift(column)).map(_.length).maxOption.getOrElse(0)
       }.toVector
 
-      parsedRows.zipWithIndex.map {
-        case (_, 1) =>
-          widths.map(width => "─" * width.max(1)).mkString("  ")
+      contentRows.zipWithIndex.flatMap {
+        case (cells, 0) =>
+          Vector(tableBorder(widths, "\u250c", "\u252c", "\u2510"), boxedTableRow(cells, widths))
         case (cells, _) =>
-          paddedTableRow(cells.map(normalizeInline), widths)
-      }
+          Vector(boxedTableRow(cells, widths))
+      } match
+        case rows if rows.nonEmpty =>
+          rows.take(2) ++
+            Vector(tableBorder(widths, "\u251c", "\u253c", "\u2524")) ++
+            rows.drop(2) ++
+            Vector(tableBorder(widths, "\u2514", "\u2534", "\u2518"))
+        case _ =>
+          Vector.empty
 
-  private def paddedTableRow(cells: Vector[String], widths: Vector[Int]): String =
+  private def boxedTableRow(cells: Vector[String], widths: Vector[Int]): String =
     widths.zipWithIndex
-      .map { case (width, index) => cells.lift(index).getOrElse("").padTo(width, ' ') }
-      .mkString("  ")
-      .stripTrailing()
+      .map { case (width, index) => s" ${cells.lift(index).getOrElse("").padTo(width, ' ')} " }
+      .mkString("\u2502", "\u2502", "\u2502")
+
+  private def tableBorder(widths: Vector[Int], left: String, separator: String, right: String): String =
+    widths
+      .map(width => "\u2500" * (width + 2).max(3))
+      .mkString(left, separator, right)
 
   private def parseTableCells(line: String): Vector[String] =
     val trimmed           = line.trim
