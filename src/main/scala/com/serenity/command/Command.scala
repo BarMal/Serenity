@@ -27,7 +27,9 @@ enum CommandIntent:
   case NewFile
   case CloseCurrentFile
   case FindInCurrentFile
+  case FindAllInCurrentFile
   case ReplaceInCurrentFile
+  case ReplaceAllInCurrentFile
   case OpenGotoLine
   case ToggleTheme
   case ReloadTheme

@@ -129,6 +129,19 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.focus shouldBe Focus.Surface(modalSurface.get.id)
   }
 
+  it should "open the find modal for the find-all command" in {
+    val stateManager = createStateManager()
+
+    executeCommandThroughRunner(stateManager, "find-all", "find-all")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    val modalSurface = updatedState.modalSurface
+
+    updatedState.commandRunnerSurface shouldBe None
+    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("", Nil, 0)))
+    updatedState.focus shouldBe Focus.Surface(modalSurface.get.id)
+  }
+
   it should "open the replace modal for the replace command" in {
     val stateManager = createStateManager()
     val cursor       = CursorPosition(0, 0)
@@ -148,6 +161,25 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     )
     modalSurface.map(_.presentation) shouldBe Some(
       SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    )
+    updatedState.focus shouldBe Focus.Surface(modalSurface.get.id)
+  }
+
+  it should "open the replace-all workflow with the bulk action selected" in {
+    val stateManager = createStateManager()
+
+    executeCommandThroughRunner(stateManager, "replace-all", "replace-all")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    val modalSurface = updatedState.modalSurface
+
+    updatedState.commandRunnerSurface shouldBe None
+    modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(
+        Modal.ReplaceWorkflow(
+          com.serenity.state.models.ReplaceWorkflowState(selectedAction = ReplaceWorkflowAction.ReplaceAll)
+        )
+      )
     )
     updatedState.focus shouldBe Focus.Surface(modalSurface.get.id)
   }

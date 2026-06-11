@@ -160,11 +160,25 @@ object CommandRegistry:
       label = "Find"
     ),
     Command.typed(
+      "find-all",
+      "Show every match for text in the current file.",
+      CommandIntent.FindAllInCurrentFile,
+      CommandCategory.Edit,
+      label = "Find All"
+    ),
+    Command.typed(
       "replace",
       "Find and replace text in the current file.",
       CommandIntent.ReplaceInCurrentFile,
       CommandCategory.Edit,
       label = "Replace"
+    ),
+    Command.typed(
+      "replace-all",
+      "Replace every match in the current file or active selection.",
+      CommandIntent.ReplaceAllInCurrentFile,
+      CommandCategory.Edit,
+      label = "Replace All"
     ),
     Command.typed(
       "goto-line",

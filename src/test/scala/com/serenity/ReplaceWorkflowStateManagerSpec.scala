@@ -162,7 +162,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     replaced.buffers(bufferId).content.collect() shouldBe "thread one\nneedle two\nkeep"
     replaced.buffers(bufferId).cursors shouldBe List(CursorPosition(0, "thread".length))
     replaced.buffers(bufferId).selection shouldBe None
-    replaced.buffers(bufferId).findState shouldBe None
+    replaced.buffers(bufferId).findState shouldBe Some(FindState("needle", List(FindResult(1, 0)), 0))
 
     stateManager.applyEvent(Undo).unsafeRunSync()
 
@@ -454,6 +454,37 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     )
     undone.buffers(bufferId).findState shouldBe Some(
       FindState("needle", List(FindResult(0, 0), FindResult(2, 0)), 0)
+    )
+  }
+
+  it should "refresh find-all results after replace-all when the replacement still matches" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("needle one\nneedle two"),
+            findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "replace-all", "replace-all")
+
+    "needle".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+    "needle!".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.modalSurface shouldBe None
+    updatedState.buffers(bufferId).content.collect() shouldBe "needle! one\nneedle! two"
+    updatedState.buffers(bufferId).findState shouldBe Some(
+      FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0)
     )
   }
 
