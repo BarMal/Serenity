@@ -35,6 +35,38 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       Vector(0 -> 3, 3 -> 6, 6 -> 9, 9 -> 10)
   }
 
+  it should "prefer word boundaries when wrapping text" in {
+    val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val metrics = CellMetrics.fromFont(font)
+    val buffer = Buffer
+      .fromString(BufferId(8), "hello world again")
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 8, visibleLines = 4))
+
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 8, font)
+
+    snapshot.visualLines.map(_.text) shouldBe Vector("hello ", "world ", "again")
+  }
+
+  it should "skip wrapped visual rows from the top of a long logical line" in {
+    val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val metrics = CellMetrics.fromFont(font)
+    val buffer = Buffer
+      .fromString(BufferId(9), "alpha beta gamma")
+      .copy(
+        viewport = Viewport(
+          topLine = 0,
+          leftColumn = 0,
+          visibleColumns = 8,
+          visibleLines = 2,
+          topVisualLine = 1
+        )
+      )
+
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 8, font)
+
+    snapshot.visualLines.map(_.text) shouldBe Vector("beta ", "gamma")
+  }
+
   it should "track caret stops for every logical column in a visual segment" in {
     val buffer = Buffer
       .fromString(BufferId(2), "office")

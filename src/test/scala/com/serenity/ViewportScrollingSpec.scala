@@ -7,6 +7,9 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -150,6 +153,40 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     // Viewport top line should be > 0 since we scrolled
     viewport.topLine should be > 0
+  }
+
+  it should "scroll within a wrapped logical line to keep the cursor visible" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
+
+    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId   = state.layout.editorPanes.keys.head
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.handleViewportResize(ViewportSize(32, 8)).unsafeRunSync()
+
+    val text = List.fill(200)("word").mkString(" ")
+    text.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    val buffer     = finalState.buffers(bufferId)
+    val cursor     = buffer.cursors.head
+    val font       = FontLoader.previewCodeFont(FontConfig(fontSize = 12.0f))
+    val metrics    = CellMetrics.fromFont(font)
+    val snapshot   = TextLayoutSnapshot.fromBuffer(buffer, buffer.viewport.visibleColumns * metrics.charWidth, font)
+    val cursorShown = snapshot.visualLines.exists(line =>
+      line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
+    )
+
+    withClue(
+      s"viewport=${buffer.viewport} cursor=$cursor visualLines=${snapshot.visualLines.map(line => line.startColumn -> line.endColumn)}"
+    ) {
+      buffer.viewport.topVisualLine should be > 0
+      cursorShown shouldBe true
+    }
   }
 
   behavior of "Buffer Content Integrity"

@@ -5,7 +5,9 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -225,6 +227,48 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       (lineRect.x until lineRect.right).map(x => surface.getChar(x, lineRect.y)).mkString.trim
 
     firstRenderedLine shouldBe "6"
+  }
+
+  it should "leave continuation rows blank when a logical line wraps" in {
+    val longLine = List.fill(20)("alpha").mkString(" ")
+    val buffer = Buffer
+      .fromString(BufferId(3), s"$longLine\nsecond")
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 8, visibleColumns = 20))
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.EditorPane(PaneId(0)),
+      theme = Theme.light
+    )
+    val surface  = new MockRenderSurface(40, 12)
+    val viewport = ViewportSize(40, 12)
+    val layout   = LayoutEngine.calculateLayout(state, viewport)
+    val lineRect = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
+    val font     = FontLoader.previewCodeFont(FontConfig(fontSize = 12.0f))
+    val snapshot = TextLayoutSnapshot.fromBuffer(
+      buffer,
+      layout.editorPanelRect.width * CellMetrics.fromFont(font).charWidth,
+      font
+    )
+    val secondLineVisualRow =
+      snapshot.visualLines.indexWhere(_.bufferLine == 1) match
+        case -1    => fail("Expected second logical line to be visible")
+        case index => index
+
+    Renderer.render(state, cursorVisible = true, surface, viewport)
+
+    val continuationRow =
+      (lineRect.x until lineRect.right).map(x => surface.getChar(x, lineRect.y + 1)).mkString.trim
+    val secondLineRow =
+      (lineRect.x until lineRect.right).map(x => surface.getChar(x, lineRect.y + secondLineVisualRow)).mkString.trim
+
+    continuationRow shouldBe empty
+    secondLineRow shouldBe "2"
   }
 
   it should "position gutter correctly below buffer header and use black background" in {

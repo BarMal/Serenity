@@ -21,6 +21,10 @@ private[manager] trait StateManagerViewportBehavior extends StateManagerSurfaceF
               val font           = previewFontForBuffer(buffer, state.config.fontConfig)
               val visibleWidthPx = viewport.visibleColumns * CellMetrics.fromFont(font).charWidth
               val lineText       = buffer.content.getLine(cursor.line).getOrElse("")
+              val measuredCursorVisualLine =
+                TextLayoutSnapshot.visualLineIndexForCursor(lineText, cursor.column, visibleWidthPx, font)
+              val cellCursorVisualLine = cursor.column / math.max(1, viewport.visibleColumns)
+              val cursorVisualLine     = math.max(measuredCursorVisualLine, cellCursorVisualLine)
               val newLeftColumn =
                 if usesMeasuredHorizontalViewport(buffer) then
                   TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)
@@ -29,14 +33,20 @@ private[manager] trait StateManagerViewportBehavior extends StateManagerSurfaceF
                     TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)
                   val minimumVisibleColumn = math.max(0, cursor.column - viewport.visibleColumns + 1)
                   math.max(minimumVisibleColumn, measuredLeftColumn)
+              val halfVisibleLines = viewport.visibleLines / 2
               val newTopLine =
-                if cursor.line < viewport.topLine then cursor.line
+                if cursorVisualLine > halfVisibleLines then cursor.line
+                else if cursor.line < viewport.topLine then cursor.line
                 else if cursor.line >= viewport.topLine + viewport.visibleLines then
                   cursor.line - viewport.visibleLines + 1
                 else viewport.topLine
+              val newTopVisualLine =
+                if math.max(0, newTopLine) == cursor.line then math.max(0, cursorVisualLine - halfVisibleLines)
+                else 0
               val newViewport = viewport.copy(
                 topLine = math.max(0, newTopLine),
-                leftColumn = math.max(0, newLeftColumn)
+                leftColumn = math.max(0, newLeftColumn),
+                topVisualLine = newTopVisualLine
               )
               val updatedBuffer = buffer.copy(viewport = newViewport)
               state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
@@ -75,8 +85,9 @@ private[manager] trait StateManagerViewportBehavior extends StateManagerSurfaceF
                         math.round(currentTopLine + progress * (targetTopLine - currentTopLine)).toInt
                       (interpolated, Some(SmoothScrollState(targetTopLine, progress)))
 
-                  val updatedBuffer = buffer.copy(viewport = buffer.viewport.copy(topLine = newTopLine))
-                  val updatedPane   = pane.copy(smoothScrolling = newSmoothing)
+                  val updatedBuffer =
+                    buffer.copy(viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0))
+                  val updatedPane = pane.copy(smoothScrolling = newSmoothing)
 
                   state.copy(
                     buffers = state.buffers + (buffer.id -> updatedBuffer),
@@ -99,7 +110,7 @@ private[manager] trait StateManagerViewportBehavior extends StateManagerSurfaceF
               val newTopLine  = math.max(0, targetLine - halfVisible)
               val updatedBuffer = buffer.copy(
                 cursors = List(CursorPosition(targetLine, 0)),
-                viewport = buffer.viewport.copy(topLine = newTopLine)
+                viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
               )
               state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
             case None => state

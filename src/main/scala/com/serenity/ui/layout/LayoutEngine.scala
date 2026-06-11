@@ -348,18 +348,20 @@ object LayoutEngine:
     val maxScrollLine     = math.max(0, bufferLineCount - viewport.visibleLines)
     val clampedScrollLine = math.max(0, math.min(desiredScrollLine, maxScrollLine))
 
-    viewport.copy(topLine = clampedScrollLine)
+    viewport.copy(topLine = clampedScrollLine, topVisualLine = 0)
 
   def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect): Viewport =
     viewport.copy(
       visibleLines = panelRect.height,
-      visibleColumns = panelRect.width
+      visibleColumns = panelRect.width,
+      topVisualLine = viewport.topVisualLine.min(math.max(0, panelRect.height - 1))
     )
 
   def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect, metrics: CellMetrics): Viewport =
     viewport.copy(
       visibleLines = panelRect.height / metrics.lineHeight,
-      visibleColumns = panelRect.width / metrics.charWidth
+      visibleColumns = panelRect.width / metrics.charWidth,
+      topVisualLine = viewport.topVisualLine.min(math.max(0, panelRect.height / metrics.lineHeight - 1))
     )
 
   /** Calculate individual pane layouts within the editor area */
