@@ -1,6 +1,6 @@
 package com.serenity.config
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import scala.io.Source
 
@@ -8,6 +8,9 @@ import com.serenity.animation.AnimationConfig
 
 /** Manages loading and saving application configuration */
 object ConfigManager:
+
+  val defaultConfigPath: Path =
+    Paths.get(System.getProperty("user.home"), ".serenity", "config.conf")
 
   /** Available animation presets */
   object Presets:
@@ -18,14 +21,14 @@ object ConfigManager:
 
   /** Load configuration from file or return default */
   def loadConfig(configPath: Option[String] = None): AppConfig =
-    configPath match
-      case Some(path) if Files.exists(Paths.get(path)) =>
-        try parseConfig(Source.fromFile(path).mkString)
-        catch
-          case _: Exception =>
-            System.err.println(s"[CONFIG] Failed to load config from $path, using defaults")
-            AppConfig.default
-      case _ => AppConfig.default
+    val path = configPath.map(Paths.get(_)).getOrElse(defaultConfigPath)
+    if Files.exists(path) then
+      try parseConfig(Source.fromFile(path.toFile).mkString)
+      catch
+        case _: Exception =>
+          System.err.println(s"[CONFIG] Failed to load config from $path, using defaults")
+          AppConfig.default
+    else AppConfig.default
 
   /** Parse configuration from string */
   private def parseConfig(content: String): AppConfig =
@@ -154,8 +157,12 @@ object ConfigManager:
 
   /** Save configuration to file */
   def saveConfig(config: AppConfig, configPath: String): Boolean =
+    saveConfig(config, Paths.get(configPath))
+
+  def saveConfig(config: AppConfig, configPath: Path): Boolean =
     try
-      Files.write(Paths.get(configPath), configToString(config).getBytes)
+      Option(configPath.getParent).foreach(parent => Files.createDirectories(parent))
+      Files.write(configPath, configToString(config).getBytes)
       true
     catch case _: Exception => false
 

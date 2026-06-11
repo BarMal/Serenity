@@ -55,13 +55,12 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     )
 
     val renderedRows = rows(surface)
-    renderedRows.exists(_.contains("Lens")) shouldBe true
-    renderedRows.exists(_.contains("# Lens")) shouldBe false
+    surface.drawImageCalls should have size 1
     renderedRows.exists(_.contains("# Raw")) shouldBe true
-    renderedRows.exists(_.contains("continued")) shouldBe true
+    renderedRows.exists(_.contains("continued")) shouldBe false
   }
 
-  it should "render every markdown line as presentation text when the cursor is outside the viewport" in {
+  it should "render markdown preview as the inline lens base when the cursor is outside the viewport" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
     val buffer = Buffer
@@ -100,11 +99,9 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       cursorColor = None
     )
 
-    val renderedRows = rows(surface)
-    renderedRows.exists(_.contains("One")) shouldBe true
-    renderedRows.exists(_.contains("Two")) shouldBe true
-    renderedRows.exists(_.contains("# One")) shouldBe false
-    renderedRows.exists(_.contains("# Two")) shouldBe false
+    surface.drawImageCalls should have size 1
+    rows(surface).exists(_.contains("# One")) shouldBe false
+    rows(surface).exists(_.contains("# Two")) shouldBe false
   }
 
   it should "render every active cursor markdown block as raw source" in {
@@ -147,11 +144,11 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     )
 
     val renderedRows = rows(surface)
+    surface.drawImageCalls should have size 1
     renderedRows.exists(_.contains("# First")) shouldBe true
-    renderedRows.exists(_.contains("first body")) shouldBe true
+    renderedRows.exists(_.contains("first body")) shouldBe false
     renderedRows.exists(_.contains("# Second")) shouldBe true
-    renderedRows.exists(_.contains("second body")) shouldBe true
-    renderedRows.exists(_.contains("Third")) shouldBe true
+    renderedRows.exists(_.contains("second body")) shouldBe false
     renderedRows.exists(_.contains("# Third")) shouldBe false
   }
 
@@ -195,8 +192,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     )
 
     val renderedRows = rows(surface)
-    renderedRows.exists(_.contains("Title")) shouldBe true
-    renderedRows.exists(_.contains("# Title")) shouldBe false
+    surface.drawImageCalls should have size 1
     renderedRows.exists(_.contains("Paragraph immediately after the heading")) shouldBe true
   }
 

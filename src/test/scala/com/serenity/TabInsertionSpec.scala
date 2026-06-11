@@ -28,7 +28,7 @@ class TabInsertionSpec extends AnyFlatSpec with Matchers:
     result shouldBe InsertChar('\t')
   }
 
-  "EditorPaneComponent" should "insert tab character into buffer correctly" in {
+  "EditorPaneComponent" should "insert fixed spaces into the buffer when tab is pressed" in {
     import com.serenity.rope.Balance
     import com.serenity.state.models.*
     import com.serenity.state.components.EditorPaneComponent
@@ -55,9 +55,9 @@ class TabInsertionSpec extends AnyFlatSpec with Matchers:
       case ComponentResult.StateChange(stateUpdate) =>
         val newState      = stateUpdate(state)
         val updatedBuffer = newState.buffers(bufferId)
-        updatedBuffer.content.collect() shouldBe "hello\t world"
+        updatedBuffer.content.collect() shouldBe "hello     world"
 
         val newCursor = updatedBuffer.cursors.head
-        newCursor.column shouldBe 6
+        newCursor.column shouldBe 9
       case _ => fail("Expected StateChange result")
   }

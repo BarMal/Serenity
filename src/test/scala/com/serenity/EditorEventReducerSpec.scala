@@ -68,7 +68,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     buffer.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(2, 0))
   }
 
-  it should "insert tabs at every cursor position when multiple cursors are active" in {
+  it should "insert fixed spaces at every cursor position when tab is pressed with multiple cursors" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)
     val initialState = AppState.initial.copy(
@@ -86,8 +86,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(TabKey, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "a\tbc\td"
-    buffer.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 5))
+    buffer.content.collect() shouldBe "a    bc    d"
+    buffer.cursors shouldBe List(CursorPosition(0, 5), CursorPosition(0, 11))
   }
 
   it should "delete backward at every cursor position when multiple cursors are active" in {
@@ -272,7 +272,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     buffer.allSelections shouldBe Nil
   }
 
-  it should "replace every active selection when tab is pressed with multiple selections" in {
+  it should "replace every active selection with fixed spaces when tab is pressed with multiple selections" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)
     val first    = Selection(CursorPosition(0, 0), CursorPosition(0, 3))
@@ -294,8 +294,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(TabKey, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "\t def \t"
-    buffer.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 7))
+    buffer.content.collect() shouldBe "     def     "
+    buffer.cursors shouldBe List(CursorPosition(0, 4), CursorPosition(0, 13))
     buffer.allSelections shouldBe Nil
   }
 

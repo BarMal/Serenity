@@ -11,11 +11,11 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 given Balance = Balance.default
 
-object Main extends IOApp.Simple:
+object Main extends IOApp:
 
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-  def run: IO[Unit] =
+  def run(args: List[String]): IO[ExitCode] =
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
     val appConfig                                   = ConfigManager.loadConfig()
 
@@ -69,12 +69,12 @@ object Main extends IOApp.Simple:
               logger,
               onFontConfigChanged = config =>
                 displayState.update(config) >>
-                  IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics))
+                  IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics)),
+              configPersistencePath = Some(ConfigManager.defaultConfigPath)
             )
           ),
           awaitExternalQuit = swingWin.awaitClose,
           registerResizeCallback = cb => swingWin.setOnResize(() => cb.unsafeRunAndForget())
         )
       }
-      _ <- IO.blocking(System.exit(0))
-    yield ()
+    yield ExitCode.Success

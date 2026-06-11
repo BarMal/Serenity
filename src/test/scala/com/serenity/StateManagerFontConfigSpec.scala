@@ -1,9 +1,11 @@
 package com.serenity
 
+import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.ConfigManager
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.fonts.FontLoader
@@ -102,4 +104,71 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
 
     observed.get() should not be empty
     observed.get().last.uiFontFamily shouldBe FontLoader.availableUiFamilies.head
+  }
+
+  it should "persist font family changes made through typography settings" in {
+    val sessionRoot  = Files.createTempDirectory("font-config-persistence")
+    val expectedFont = FontLoader.availableUiFamilies.lift(1).getOrElse(FontLoader.availableUiFamilies.head)
+    val stateManager =
+      StateManager
+        .apply(
+          testLogger("StateManagerFontConfigSpec"),
+          sessionRootOverride = Some(sessionRoot)
+        )
+        .unsafeRunSync()
+
+    openTypographySubmenu(stateManager)
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    if FontLoader.availableUiFamilies.size > 1 then stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val loaded = stateManager.loadSession().unsafeRunSync()
+
+    loaded.map(_.config.fontConfig.uiFontFamily) shouldBe Some(expectedFont)
+  }
+
+  it should "persist font size changes made through typography settings to the config file" in {
+    val configFile = Files.createTempDirectory("font-config-file").resolve("config.conf")
+    val stateManager =
+      StateManager
+        .apply(
+          testLogger("StateManagerFontConfigSpec"),
+          configPersistencePath = Some(configFile)
+        )
+        .unsafeRunSync()
+
+    openTypographySubmenu(stateManager)
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    List('1', '6').foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val saved = ConfigManager.loadConfig(Some(configFile.toString))
+    saved.fontConfig.fontSize shouldBe 16.0f
+  }
+
+  it should "persist font family changes made through typography settings to the config file" in {
+    val configFile   = Files.createTempDirectory("font-family-config-file").resolve("config.conf")
+    val expectedFont = FontLoader.availableUiFamilies.lift(1).getOrElse(FontLoader.availableUiFamilies.head)
+    val stateManager =
+      StateManager
+        .apply(
+          testLogger("StateManagerFontConfigSpec"),
+          configPersistencePath = Some(configFile)
+        )
+        .unsafeRunSync()
+
+    openTypographySubmenu(stateManager)
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    if FontLoader.availableUiFamilies.size > 1 then stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val saved = ConfigManager.loadConfig(Some(configFile.toString))
+    saved.fontConfig.uiFontFamily shouldBe expectedFont
   }

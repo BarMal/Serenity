@@ -9,7 +9,6 @@ import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
-import org.slf4j.LoggerFactory
 
 case class RenderContext(
     surface: RenderSurface,
@@ -26,7 +25,6 @@ case class RenderContext(
     if buffer.usesTextFont then textFont else codeFont
 
 object Renderer:
-  private val logger = LoggerFactory.getLogger("com.serenity.ui.renderer.Renderer")
 
   private def withEffectiveTheme(state: AppState): AppState =
     state.themeTransition match
@@ -156,7 +154,7 @@ object Renderer:
         case _                              => None
     } match
       case Some(page) =>
-        renderStartPage(page, surface, viewportSize, state.theme, uiFont)
+        renderStartPage(page, surface, viewportSize, state.theme, uiFont, cellMetrics, uiMetrics)
         val floatContext =
           RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
         renderFloatingPanels(state, floatContext)
@@ -278,37 +276,28 @@ object Renderer:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): Unit =
-    val visualLines   = snapshot.visualLines
-    val xOriginPx     = context.cellMetrics.toPixelX(rect.x).toFloat
-    val markdownLines = markdownSourceLines(buffer)
-    val renderedMarkdownLines =
-      if isInlineMarkdownLens(buffer, state) then MarkdownDocumentPreview.renderInlineLines(markdownLines)
-      else Vector.empty[String]
-    val markdownTableLines =
-      if isInlineMarkdownLens(buffer, state) then MarkdownDocumentPreview.inlineTableLineIndexes(markdownLines)
-      else Set.empty[Int]
-    val rawMarkdownLines =
-      if isInlineMarkdownLens(buffer, state) then activeMarkdownBlockLineSet(markdownLines, buffer.cursors)
-      else Set.empty[Int]
+    if isInlineMarkdownLens(buffer, state) then
+      val markdownLines = markdownSourceLines(buffer)
+      renderInlineMarkdownPreview(buffer, rect, state, context)
+      renderMarkdownRawLenses(buffer, rect, state, context, snapshot, markdownLines)
+    else renderPlainBufferContent(pane, buffer, rect, state, context, snapshot)
+
+  private def renderPlainBufferContent(
+    pane: EditorPane,
+    buffer: Buffer,
+    rect: LayoutRect,
+    state: AppState,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
+  ): Unit =
+    val visualLines = snapshot.visualLines
+    val xOriginPx   = context.cellMetrics.toPixelX(rect.x).toFloat
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
         if screenLineIndex < rect.height then
-          val screenY            = rect.y + screenLineIndex
-          val screenX            = rect.x
-          val rendersRawMarkdown = rawMarkdownLines.contains(visualLine.bufferLine)
-          val displayLine =
-            if isInlineMarkdownLens(buffer, state) && !rendersRawMarkdown then
-              val renderedText =
-                if markdownTableLines.contains(visualLine.bufferLine) then
-                  renderedMarkdownLines.lift(visualLine.bufferLine).getOrElse("")
-                else MarkdownDocumentPreview.renderInlineLine(visualLine.text)
-              visualLine.copy(text = renderedText)
-            else visualLine
-          val effectiveLanguage =
-            if rendersRawMarkdown then None else buffer.language
-          val effectiveSyntaxHighlighting =
-            state.syntaxHighlightingEnabled && !rendersRawMarkdown
+          val screenY = rect.y + screenLineIndex
+          val screenX = rect.x
 
           context.surface.setForegroundColor(state.theme.foreground)
 
@@ -326,22 +315,22 @@ object Renderer:
                 context.cellMetrics.toPixelY(screenY),
                 snapshot.lineHeightPx,
                 snapshot.ascentPx,
-                displayLine,
+                visualLine,
                 state.theme,
                 buffer.animations,
-                effectiveSyntaxHighlighting,
-                effectiveLanguage
+                state.syntaxHighlightingEnabled,
+                buffer.language
               )
             else
               CharacterRenderer.renderStringWithAnimation(
                 context.surface,
                 screenX,
                 screenY,
-                displayLine.text,
+                visualLine.text,
                 state.theme,
                 buffer.animations,
-                effectiveSyntaxHighlighting,
-                effectiveLanguage,
+                state.syntaxHighlightingEnabled,
+                buffer.language,
                 bufferLine = visualLine.bufferLine,
                 bufferStartColumn = visualLine.startColumn
               )
@@ -357,7 +346,7 @@ object Renderer:
               snapshot
             )
 
-            val stringEnd = visualLine.startColumn + displayLine.text.length
+            val stringEnd = visualLine.startColumn + visualLine.text.length
             val lineAnims = buffer.animations.getLineAnimations(visualLine.bufferLine)
             lineAnims
               .filter((col, cell) => col >= stringEnd && cell.currentBackground.isDefined)
@@ -370,8 +359,26 @@ object Renderer:
               }
     }
 
-    if isInlineMarkdownLens(buffer, state) then
-      renderMarkdownRawLenses(buffer, rect, state, context, snapshot, markdownLines)
+  private def renderInlineMarkdownPreview(
+    buffer: Buffer,
+    rect: LayoutRect,
+    state: AppState,
+    context: RenderContext
+  ): Unit =
+    val widthPx  = math.max(1, rect.width * context.cellMetrics.charWidth)
+    val heightPx = math.max(1, rect.height * context.cellMetrics.lineHeight)
+    val baseUri  = buffer.filePath.flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
+    val title    = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
+    val image = MarkdownDocumentPreview.renderImage(
+      source = buffer.content.collect(),
+      title = title,
+      widthPx = widthPx,
+      heightPx = heightPx,
+      theme = state.theme,
+      font = context.textFont,
+      baseUri = baseUri
+    )
+    context.surface.drawImage(image, rect.x, rect.y, rect.width, rect.height)
 
   private def renderSelectionHighlights(
     surface: RenderSurface,
@@ -451,7 +458,7 @@ object Renderer:
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
         val lensTop =
-          markdownLensTop(blockVisualLines, cursorForBlock(buffer.cursors, blockRange), rect.height, snapshot)
+          markdownLensTop(blockVisualLines, cursorForBlock(buffer.cursors, blockRange), rect.height, snapshot, lines)
         val lensY = rect.y + lensTop
         context.surface.setBackgroundColor(state.theme.panel.background)
         context.surface.fillRect(rect.x, lensY, rect.width, blockVisualLines.length, ' ')
@@ -511,7 +518,7 @@ object Renderer:
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
         val lensTop =
-          markdownLensTop(blockVisualLines, cursorForBlock(buffer.cursors, blockRange), rect.height, snapshot)
+          markdownLensTop(blockVisualLines, cursorForBlock(buffer.cursors, blockRange), rect.height, snapshot, lines)
         buffer.cursors.zipWithIndex.foreach { (cursor, cursorIndex) =>
           val isPrimaryCursor = cursorIndex == 0
           val shouldRenderCursor =
@@ -546,10 +553,15 @@ object Renderer:
     blockVisualLines: Vector[TextVisualLine],
     primaryCursor: Option[CursorPosition],
     visibleHeight: Int,
-    snapshot: TextLayoutSnapshot
+    snapshot: TextLayoutSnapshot,
+    markdownLines: Vector[String]
   ): Int =
-    val lensHeight      = blockVisualLines.length
-    val cursorVisualRow = primaryCursor.flatMap(cursor => calculateCursorVisualPosition(cursor, snapshot).map(_._1))
+    val lensHeight = blockVisualLines.length
+    val cursorVisualRow = primaryCursor.flatMap { cursor =>
+      MarkdownDocumentPreview
+        .previewRowForSourceLine(markdownLines, cursor.line)
+        .orElse(calculateCursorVisualPosition(cursor, snapshot).map(_._1))
+    }
     val desiredTop =
       cursorVisualRow.map(row => row - lensHeight / 2).getOrElse(blockVisualLines.headOption.fold(0)(_.bufferLine))
     desiredTop.max(0).min(math.max(0, visibleHeight - lensHeight))
@@ -571,13 +583,18 @@ object Renderer:
       Option.when(overlapStart < overlapEnd)((overlapStart, overlapEnd))
 
   private def renderEmptyPane(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
-    val message = "~ Empty ~"
-    val centerX = rect.x + (rect.width - message.length) / 2
-    val centerY = rect.y + rect.height / 2
-
+    context.surface.setFont(context.textFont)
     context.surface.setForegroundColor(theme.muted)
-    if centerY < context.surface.viewportHeight && centerX >= 0 then
-      CharacterRenderer.renderString(context.surface, centerX, centerY, message)
+    context.surface.setBackgroundColor(theme.background)
+    renderAlignedTextLine(
+      surface = context.surface,
+      line = "~ Empty ~",
+      rect = rect,
+      y = rect.y + rect.height / 2,
+      font = context.textFont,
+      cellMetrics = context.cellMetrics,
+      textMetrics = CellMetrics.fromFont(context.textFont)
+    )
 
   private def renderWelcomeText(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
     val lines = List(
@@ -590,23 +607,70 @@ object Renderer:
 
     val startY = rect.y + (rect.height - lines.length) / 2
 
+    context.surface.setFont(context.textFont)
     context.surface.setForegroundColor(theme.placeholder)
+    context.surface.setBackgroundColor(theme.background)
 
     lines.zipWithIndex.foreach {
       case (line, index) =>
-        val lineY   = startY + index
-        val centerX = rect.x + (rect.width - line.length) / 2
-
-        if lineY >= 0 && lineY < context.surface.viewportHeight && centerX >= 0 then
-          CharacterRenderer.renderString(context.surface, centerX, lineY, line)
+        renderAlignedTextLine(
+          surface = context.surface,
+          line = line,
+          rect = rect,
+          y = startY + index,
+          font = context.textFont,
+          cellMetrics = context.cellMetrics,
+          textMetrics = CellMetrics.fromFont(context.textFont)
+        )
     }
+
+  private def renderAlignedTextLine(
+    surface: RenderSurface,
+    line: String,
+    rect: LayoutRect,
+    y: Int,
+    font: java.awt.Font,
+    cellMetrics: CellMetrics,
+    textMetrics: CellMetrics
+  ): Unit =
+    if y >= 0 && y < surface.viewportHeight then
+      surface.fontRenderContext match
+        case Some(frc) =>
+          val placement = TextAlignment.placeLine(
+            text = line,
+            area = TextAreaPx(
+              xPx = cellMetrics.toPixelX(rect.x).toFloat,
+              yPx = cellMetrics.toPixelY(y),
+              widthPx = rect.width * cellMetrics.charWidth,
+              heightPx = cellMetrics.lineHeight
+            ),
+            font = font,
+            lineHeightPx = cellMetrics.lineHeight,
+            ascentPx = textMetrics.ascent,
+            horizontal = TextHorizontalAlignment.Center,
+            vertical = TextVerticalAlignment.Top,
+            fontRenderContext = frc
+          )
+          surface.drawRunPx(
+            placement.xPx,
+            placement.yPx,
+            placement.widthPx,
+            placement.lineHeightPx,
+            placement.ascentPx,
+            line
+          )
+        case None =>
+          val centerX = rect.x + (rect.width - line.length) / 2
+          if centerX >= 0 then CharacterRenderer.renderString(surface, centerX, y, line)
 
   private def renderStartPage(
     page: StartupPage,
     surface: RenderSurface,
     viewportSize: ViewportSize,
     theme: Theme,
-    uiFont: java.awt.Font
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics
   ): Unit =
     surface.setFont(uiFont)
     val lines  = page.renderLines
@@ -619,7 +683,6 @@ object Renderer:
     lines.zipWithIndex.foreach {
       case (line, lineIndex) =>
         val y = startY + lineIndex
-        val x = math.max(0, (viewportSize.width - line.length) / 2)
 
         if y >= 0 && y < viewportSize.height then
           val isOption    = lineIndex >= optionStartIndex && lineIndex <= optionEndIndex
@@ -630,12 +693,50 @@ object Renderer:
             surface.setForegroundColor(theme.highlighted.foreground)
             surface.setBackgroundColor(theme.highlighted.background)
             CharacterRenderer.renderStringPlain(surface, 0, y, " " * viewportSize.width)
-            CharacterRenderer.renderString(surface, x, y, line)
+            renderCenteredStartPageLine(surface, line, y, viewportSize, uiFont, cellMetrics, uiMetrics)
           else
             surface.setForegroundColor(theme.placeholder)
             surface.setBackgroundColor(theme.background)
-            CharacterRenderer.renderString(surface, x, y, line)
+            renderCenteredStartPageLine(surface, line, y, viewportSize, uiFont, cellMetrics, uiMetrics)
     }
+
+  private def renderCenteredStartPageLine(
+    surface: RenderSurface,
+    line: String,
+    y: Int,
+    viewportSize: ViewportSize,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics
+  ): Unit =
+    surface.fontRenderContext match
+      case Some(frc) =>
+        val placement = TextAlignment.placeLine(
+          text = line,
+          area = TextAreaPx(
+            xPx = 0.0f,
+            yPx = cellMetrics.toPixelY(y),
+            widthPx = viewportSize.width * cellMetrics.charWidth,
+            heightPx = cellMetrics.lineHeight
+          ),
+          font = uiFont,
+          lineHeightPx = cellMetrics.lineHeight,
+          ascentPx = uiMetrics.ascent,
+          horizontal = TextHorizontalAlignment.Center,
+          vertical = TextVerticalAlignment.Top,
+          fontRenderContext = frc
+        )
+        surface.drawRunPx(
+          xPx = placement.xPx,
+          yPx = placement.yPx,
+          bgWidthPx = placement.widthPx,
+          lineHeightPx = placement.lineHeightPx,
+          ascentPx = placement.ascentPx,
+          s = line
+        )
+      case None =>
+        val x = math.max(0, (viewportSize.width - line.length) / 2)
+        CharacterRenderer.renderString(surface, x, y, line)
 
   private def renderCursors(
     buffer: Buffer,
@@ -685,7 +786,6 @@ object Renderer:
     val overlays = OverlayViewModel.fromState(state, context.layout)
 
     overlays.aboveCursor.foreach { overlay =>
-      logger.info(s"[OVERLAY RENDERED] placement=AboveCursor rect=${overlay.rect} title=${overlay.title.getOrElse("")}")
       val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
       if blurRadius > 0f then
         context.surface.blurRegion(
@@ -708,7 +808,6 @@ object Renderer:
     val belowOverlays =
       if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
     belowOverlays.foreach { overlay =>
-      logger.info(s"[OVERLAY RENDERED] placement=BelowCursor rect=${overlay.rect} title=${overlay.title.getOrElse("")}")
       val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
       if blurRadius > 0f then
         context.surface.blurRegion(

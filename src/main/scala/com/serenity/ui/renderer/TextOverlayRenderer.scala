@@ -1,6 +1,6 @@
 package com.serenity.ui.renderer
 
-import java.awt.Color
+import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
 import com.serenity.ui.fonts.FontLoader
@@ -128,11 +128,11 @@ object TextOverlayRenderer:
       case OverlayRowLayout.Plain =>
         CharacterRenderer.renderStringPlain(surface, x, y, rowView.row.plainText.take(width))
       case OverlayRowLayout.Distributed =>
-        renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, isAnimating)
+        renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font, isAnimating)
       case OverlayRowLayout.Split =>
-        renderSplitRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, isAnimating)
+        renderSplitRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font, isAnimating)
       case OverlayRowLayout.Columns =>
-        renderColumnRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, isAnimating)
+        renderColumnRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font, isAnimating)
 
     if cursorVisible then
       rowView.row.cursorColumn.foreach { cursorColumn =>
@@ -179,6 +179,7 @@ object TextOverlayRenderer:
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
+    font: Font,
     isAnimating: Boolean = false
   ): Unit =
     val segments = row.segments
@@ -199,6 +200,7 @@ object TextOverlayRenderer:
             theme,
             defaultForeground,
             defaultBackground,
+            font,
             isAnimating
           )
           cursorX + cellWidth
@@ -214,6 +216,7 @@ object TextOverlayRenderer:
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
+    font: Font,
     isAnimating: Boolean = false
   ): Unit =
     row.segments match
@@ -234,6 +237,7 @@ object TextOverlayRenderer:
           theme,
           defaultForeground,
           defaultBackground,
+          font,
           isAnimating
         )
 
@@ -250,6 +254,7 @@ object TextOverlayRenderer:
             theme,
             defaultForeground,
             defaultBackground,
+            font,
             isAnimating
           )
           cursorX + text.length + 1
@@ -266,6 +271,7 @@ object TextOverlayRenderer:
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
+    font: Font,
     isAnimating: Boolean = false
   ): Unit =
     row.segments match
@@ -273,7 +279,18 @@ object TextOverlayRenderer:
         val labelWidth = math.min(22, math.max(8, width / 3))
         val valueWidth = math.min(18, math.max(8, width / 4))
         val hintWidth  = math.max(0, width - labelWidth - valueWidth - 2)
-        renderColumnCell(surface, x, y, labelWidth, label, row.selected, theme, defaultForeground, defaultBackground)
+        renderColumnCell(
+          surface,
+          x,
+          y,
+          labelWidth,
+          label,
+          row.selected,
+          theme,
+          defaultForeground,
+          defaultBackground,
+          font
+        )
         renderColumnCell(
           surface,
           x + labelWidth + 1,
@@ -283,7 +300,8 @@ object TextOverlayRenderer:
           row.selected,
           theme,
           defaultForeground,
-          defaultBackground
+          defaultBackground,
+          font
         )
         renderColumnCell(
           surface,
@@ -294,12 +312,24 @@ object TextOverlayRenderer:
           row.selected,
           theme,
           defaultForeground,
-          defaultBackground
+          defaultBackground,
+          font
         )
       case label :: hint :: Nil =>
         val labelWidth = math.min(22, math.max(8, width / 3))
         val hintWidth  = math.max(0, width - labelWidth - 1)
-        renderColumnCell(surface, x, y, labelWidth, label, row.selected, theme, defaultForeground, defaultBackground)
+        renderColumnCell(
+          surface,
+          x,
+          y,
+          labelWidth,
+          label,
+          row.selected,
+          theme,
+          defaultForeground,
+          defaultBackground,
+          font
+        )
         renderColumnCell(
           surface,
           x + labelWidth + 1,
@@ -309,7 +339,8 @@ object TextOverlayRenderer:
           row.selected,
           theme,
           defaultForeground,
-          defaultBackground
+          defaultBackground,
+          font
         )
       case _ =>
         CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
@@ -323,7 +354,8 @@ object TextOverlayRenderer:
     rowSelected: Boolean,
     theme: Theme,
     defaultForeground: Color,
-    defaultBackground: Color
+    defaultBackground: Color,
+    font: Font
   ): Unit =
     val text =
       if rowSelected && segment.text.length > width then segment.text.takeRight(width)
@@ -337,7 +369,8 @@ object TextOverlayRenderer:
       segment,
       theme,
       defaultForeground,
-      defaultBackground
+      defaultBackground,
+      font = font
     )
 
   private def renderSegmentCell(
@@ -349,6 +382,7 @@ object TextOverlayRenderer:
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
+    font: Font,
     isAnimating: Boolean = false
   ): Unit =
     val text    = segment.text.take(width)
@@ -364,6 +398,7 @@ object TextOverlayRenderer:
       theme,
       defaultForeground,
       defaultBackground,
+      font,
       isAnimating
     )
 
@@ -377,6 +412,7 @@ object TextOverlayRenderer:
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
+    font: Font,
     isAnimating: Boolean = false
   ): Unit =
     if width > 0 then
@@ -395,7 +431,11 @@ object TextOverlayRenderer:
         )
       surface.setForegroundColor(segmentForeground)
       surface.setBackgroundColor(segmentBackground)
+      segment.fontFamily.foreach(family =>
+        surface.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
+      )
       CharacterRenderer.renderStringPlain(surface, x, y, segmentText.take(width))
+      if segment.fontFamily.nonEmpty then surface.setFont(font)
 
   private def shouldUseMeasuredCursor(font: java.awt.Font, surface: RenderSurface): Boolean =
     FontLoader.ligaturesEnabled(font) || !FontLoader.isMonospacedFont(font) || surface.fontRenderContext.nonEmpty

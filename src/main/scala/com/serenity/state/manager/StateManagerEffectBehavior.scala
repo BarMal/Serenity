@@ -10,6 +10,7 @@ import com.serenity.io.{FileEntry, FileUtils}
 import com.serenity.keystroke.events.ExplorerEvent
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
+import com.serenity.session.SessionSaveTrigger
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
@@ -105,11 +106,27 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   protected def updateConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
-    stateRef.modify { state =>
-      val newConfig = update(state.config)
-      val newState  = withUpdatedRunnerConfig(state.copy(config = newConfig), newConfig)
-      (newState, newConfig)
-    }
+    stateRef
+      .modify { state =>
+        val newConfig = update(state.config)
+        val newState  = withUpdatedRunnerConfig(state.copy(config = newConfig), newConfig)
+        (newState, newConfig)
+      }
+      .flatTap(config =>
+        configPersistencePath match
+          case Some(path) =>
+            IO.blocking(com.serenity.config.ConfigManager.saveConfig(config, path)).flatMap {
+              case true  => IO.unit
+              case false => logger.warn(s"[CONFIG] Failed to persist config to $path")
+            }
+          case None =>
+            IO.unit
+      )
+      .flatTap(_ =>
+        stateRef.get
+          .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
+          .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after config change failed"))
+      )
 
   protected def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig

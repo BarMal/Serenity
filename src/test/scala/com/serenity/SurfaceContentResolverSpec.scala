@@ -5,6 +5,7 @@ import java.nio.file.Paths
 import com.serenity.command.*
 import com.serenity.config.AppConfig
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, LayoutRect}
 import com.serenity.ui.renderer.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -190,6 +191,23 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
     floating.rows.headOption.map(_.selected) shouldBe Some(true)
     floating.footer.map(_.plainText) shouldBe Some("1/2")
+  }
+
+  it should "mark font submenu labels with their preview font family" in {
+    val family = FontLoader.availableTextFamilies.head
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(activeSubmenu = Some(CommandRunnerSubmenuState("text-font")))
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPaletteSubmenu(runner, "text-font", previewOnly = false),
+      LayoutRect(0, 0, 60, 8),
+      SurfaceRenderMode.Floating
+    )
+
+    val firstRow = floating.rows.head
+    firstRow.plainText should include(family)
+    firstRow.segments.headOption.flatMap(_.fontFamily) shouldBe Some(family)
   }
 
   it should "resolve file workflow modals into field rows, suggestion rows, and a directory confirmation footer" in {

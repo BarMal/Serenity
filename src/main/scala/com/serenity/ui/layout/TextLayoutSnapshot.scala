@@ -68,6 +68,16 @@ object TextLayoutSnapshot:
     val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
     caretXs(text, font, fontRenderContext, measuredLayout)
 
+  def visualLineForText(
+    text: String,
+    bufferLine: Int,
+    font: Font,
+    fontRenderContext: FontRenderContext = defaultFontRenderContext(),
+    startColumn: Int = 0
+  ): TextVisualLine =
+    val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
+    shapeSegment(text, bufferLine, startColumn, startColumn + text.length, font, fontRenderContext, measuredLayout)
+
   def leftColumnForCursorVisibility(
     lineText: String,
     cursorColumn: Int,

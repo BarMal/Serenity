@@ -115,7 +115,8 @@ object StateManager:
     policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy(),
     onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
     sessionRootOverride: Option[Path] = None,
-    initialConfig: AppConfig = AppConfig.default
+    initialConfig: AppConfig = AppConfig.default,
+    configPersistencePath: Option[Path] = None
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     for
@@ -137,7 +138,8 @@ object StateManager:
       resolvedSessionRootOverride,
       themeManager,
       lspQueue,
-      onFontConfigChanged
+      onFontConfigChanged,
+      configPersistencePath
     )
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
@@ -167,7 +169,8 @@ object StateManager:
       protected val sessionRootOverride: Option[Path],
       protected val themeManager: AppThemeManager = AppThemeManager.create,
       protected val lspQueue: Queue[IO, LspEffect],
-      protected val onFontConfigChanged: FontConfig => IO[Unit]
+      protected val onFontConfigChanged: FontConfig => IO[Unit],
+      protected val configPersistencePath: Option[Path]
   )(using Balance)
       extends StateManager,
         StateManagerBehavior:
@@ -207,7 +210,9 @@ object StateManager:
 
     def forceQuit(): IO[Unit] =
       stateRef.get.flatMap { state =>
-        sessionPersistence.onAppClose(clearCloseActions(state)) >>
+        sessionPersistence
+          .onAppClose(clearCloseActions(state))
+          .handleErrorWith(error => logger.error(error)("[SESSION] Failed to save session during forced quit")) >>
           quitSignal.complete(()).attempt.void
       }
 

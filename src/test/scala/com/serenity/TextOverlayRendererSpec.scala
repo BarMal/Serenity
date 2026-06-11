@@ -78,3 +78,27 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     firstRow.indexOf("Used") shouldBe secondRow.indexOf("Used")
     firstRow.indexOf("Monaspace") shouldBe secondRow.indexOf("SansSerif")
   }
+
+  it should "render font preview segments with the segment font family" in {
+    val surface = new MockRenderSurface(60, 6)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 50, 5),
+      rows = List(
+        OverlayRow(
+          plainText = "Serif - Used in prose buffers",
+          segments = List(
+            OverlaySegment("Serif", fontFamily = Some(Font.SERIF)),
+            OverlaySegment("Used in prose buffers")
+          ),
+          layout = OverlayRowLayout.Columns
+        )
+      )
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+
+    surface.setFontCalls.map(_.getFamily) should contain(Font.SERIF)
+    surface.setFontCalls.last.getFamily shouldBe font.getFamily
+  }
