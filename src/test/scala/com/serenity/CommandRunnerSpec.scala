@@ -209,7 +209,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-appearance",
       "settings-typography",
       "settings-markdown",
-      "settings-language"
+      "settings-language",
+      "settings-keymap"
     )
     groupItems.head.label shouldBe "Animation"
     groupItems.head.children.map(_.id) should contain allOf ("animation-mode", "animation-duration", "animation-steps")
@@ -218,6 +219,12 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     groupItems(2).label shouldBe "Typography"
     groupItems(2).children
       .map(_.id) should contain allOf ("code-font", "text-font", "ligatures", "buffer-font-size", "ui-font-size")
+    groupItems(5).label shouldBe "Keymap"
+    groupItems(5).children.map(_.id) should contain allOf (
+      "keymap-global-command_palette",
+      "keymap-command-runner-submit",
+      "keymap-modal-dismiss"
+    )
     groupItems(3).label shouldBe "Markdown"
     groupItems(3).children.map(_.id) should contain("markdown-view")
     groupItems(4).label shouldBe "Language"

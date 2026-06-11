@@ -87,6 +87,7 @@ case class CommandRunner(
     val codeFontItem        = CommandRunner.codeFontOptionItem(optionSelections)
     val textFontItem        = CommandRunner.textFontOptionItem(optionSelections)
     val ligaturesItem       = CommandRunner.ligaturesOptionItem(optionSelections)
+    val keymapItems         = inputItems.filter(_.id.startsWith("keymap-"))
     List(
       CommandSurfaceItem.GroupItem(
         id = "settings-animation",
@@ -126,6 +127,13 @@ case class CommandRunner(
         children = CommandRunner.languageItems,
         category = CommandCategory.Settings,
         hint = Some("Set the current buffer language mode")
+      ),
+      CommandSurfaceItem.GroupItem(
+        id = "settings-keymap",
+        label = "Keymap",
+        children = keymapItems,
+        category = CommandCategory.Settings,
+        hint = Some("Inspect and edit bindings")
       )
     )
 
@@ -440,7 +448,7 @@ object CommandRunner:
     val bufferFontSizeValue = config.fontConfig.fontSize.toString
     val uiFontSizeValue     = config.fontConfig.uiFontSize.toString
 
-    List(
+    val numericItems = List(
       CommandSurfaceItem.InputItem(
         id = "animation-duration",
         label = "Animation Duration",
@@ -501,6 +509,72 @@ object CommandRunner:
             .map(CommandIntent.SetUiFontSize(_)),
         category = CommandCategory.Settings
       )
+    )
+
+    numericItems ++ buildKeymapInputItems(config)
+
+  private def buildKeymapInputItems(config: AppConfig): List[CommandSurfaceItem.InputItem] =
+    List(
+      bindingInputItem(
+        id = "keymap-global-command_palette",
+        label = "Command Palette",
+        currentValue = config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).headOption.map(_.render),
+        parse = binding => CommandIntent.SetGlobalHotkey(HotkeyAction.ToggleCommandRunner, binding)
+      ),
+      bindingInputItem(
+        id = "keymap-global-file_search",
+        label = "File Search",
+        currentValue = config.hotkeyConfig.bindingsFor(HotkeyAction.FileSearch).headOption.map(_.render),
+        parse = binding => CommandIntent.SetGlobalHotkey(HotkeyAction.FileSearch, binding)
+      ),
+      bindingInputItem(
+        id = "keymap-editor-page_down",
+        label = "Editor Page Down",
+        currentValue = config.focusedKeymapConfig.editor.bindingsFor(EditorKeyAction.PageDown).headOption.map(_.render),
+        parse = binding => CommandIntent.SetEditorKeyBinding(EditorKeyAction.PageDown, binding)
+      ),
+      bindingInputItem(
+        id = "keymap-command-runner-submit",
+        label = "Command Submit",
+        currentValue =
+          config.focusedKeymapConfig.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit).headOption.map(_.render),
+        parse = binding => CommandIntent.SetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit, binding)
+      ),
+      bindingInputItem(
+        id = "keymap-modal-dismiss",
+        label = "Modal Dismiss",
+        currentValue = config.focusedKeymapConfig.modal.bindingsFor(ModalKeyAction.Dismiss).headOption.map(_.render),
+        parse = binding => CommandIntent.SetModalKeyBinding(ModalKeyAction.Dismiss, binding)
+      ),
+      bindingInputItem(
+        id = "keymap-panel-activate",
+        label = "Panel Activate",
+        currentValue = config.focusedKeymapConfig.panel.bindingsFor(PanelKeyAction.Activate).headOption.map(_.render),
+        parse = binding => CommandIntent.SetPanelKeyBinding(PanelKeyAction.Activate, binding)
+      ),
+      bindingInputItem(
+        id = "keymap-peek-accept",
+        label = "Peek Accept",
+        currentValue = config.focusedKeymapConfig.peek.bindingsFor(PeekKeyAction.Accept).headOption.map(_.render),
+        parse = binding => CommandIntent.SetPeekKeyBinding(PeekKeyAction.Accept, binding)
+      )
+    )
+
+  private def bindingInputItem(
+    id: String,
+    label: String,
+    currentValue: Option[String],
+    parse: String => CommandIntent
+  ): CommandSurfaceItem.InputItem =
+    CommandSurfaceItem.InputItem(
+      id = id,
+      label = label,
+      hint = "Binding",
+      currentValue = currentValue.getOrElse(""),
+      isDecimal = false,
+      parse = text => HotkeyTrigger.parse(text).map(_ => parse(text)),
+      category = CommandCategory.Settings,
+      acceptsBindingText = true
     )
 
   private def animationModeIndex(config: AppConfig): Int =

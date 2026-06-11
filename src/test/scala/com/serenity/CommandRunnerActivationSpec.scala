@@ -2,8 +2,8 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{CommandRegistry, CommandRunner}
-import com.serenity.config.AppConfig
+import com.serenity.command.{CommandRegistry, CommandRunner, CommandSurfaceItem}
+import com.serenity.config.{AppConfig, CommandRunnerKeyAction, HotkeyAction}
 import com.serenity.rope.Balance
 import com.serenity.state.models.SurfaceContent
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -32,6 +32,23 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val expectedIndex = com.serenity.ui.fonts.FontLoader.availableMonospaceFamilies.indexOf("Courier New")
     if expectedIndex >= 0 then runner.optionSelections.get("code-font") shouldBe Some(expectedIndex)
     else succeed
+  }
+
+  it should "include keymap editing rows seeded from current bindings" in {
+    val config = AppConfig.default
+      .withHotkeyOverride(HotkeyAction.ToggleCommandRunner, "ctrl+k")
+      .withCommandRunnerKeyOverride(CommandRunnerKeyAction.Submit, "ctrl+enter")
+    val runner = CommandRunner.empty.activate(registry, config)
+
+    val keymapGroup = runner.settingsGroups.find(_.id == "settings-keymap").getOrElse(fail("Expected keymap group"))
+
+    keymapGroup.label shouldBe "Keymap"
+    keymapGroup.children.collectFirst {
+      case item: CommandSurfaceItem.InputItem if item.id == "keymap-global-command_palette" => item.currentValue
+    } shouldBe Some("ctrl+k")
+    keymapGroup.children.collectFirst {
+      case item: CommandSurfaceItem.InputItem if item.id == "keymap-command-runner-submit" => item.currentValue
+    } shouldBe Some("ctrl+enter")
   }
 
   "ensureCommandRunnerSurface (via closePane)" should "use the current config, not defaults" in {

@@ -92,8 +92,7 @@ object CommandRunnerReducer:
                 }
                 .orElse(selectedInput)
               val currentText = Option.when(submenu.editingItemId.nonEmpty)(submenu.editingText).getOrElse("")
-              val allowDot    = activeInput.exists(_.isDecimal) && !currentText.contains('.')
-              if char.isDigit || (char == '.' && allowDot) then
+              if activeInput.exists(_.accepts(currentText, char)) then
                 activeInput match
                   case Some(item) =>
                     val nextText =
@@ -118,17 +117,15 @@ object CommandRunnerReducer:
         else
           currentRunner(state).flatMap(_.editingItemId) match
             case Some(itemId) =>
-              val runner   = currentRunner(state).get
-              val item     = runner.inputItems.find(_.id == itemId)
-              val allowDot = item.exists(_.isDecimal) && !runner.editingText.contains('.')
-              if char.isDigit || (char == '.' && allowDot) then
+              val runner = currentRunner(state).get
+              val item   = runner.inputItems.find(_.id == itemId)
+              if item.exists(_.accepts(runner.editingText, char)) then
                 ReducerResult.noEffects(replaceRunner(state, r => r.copy(editingText = r.editingText + char)))
               else ReducerResult.noEffects(state)
             case None =>
               currentRunner(state).flatMap(_.selectedItem) match
                 case Some(item: CommandSurfaceItem.InputItem) =>
-                  val allowDot = item.isDecimal && char == '.'
-                  if char.isDigit || allowDot then
+                  if item.accepts("", char) then
                     ReducerResult.noEffects(
                       replaceRunner(
                         state,

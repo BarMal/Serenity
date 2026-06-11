@@ -42,8 +42,14 @@ jobs:
         uses: sbt/setup-sbt@v1
 
       - name: Test and build runnable JAR
+        if: github.event_name != 'pull_request'
         shell: bash
         run: sbt -v clean test assembly
+
+      - name: Build runnable JAR
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: sbt -v clean assembly
 
       - name: Prepare app image
         shell: bash

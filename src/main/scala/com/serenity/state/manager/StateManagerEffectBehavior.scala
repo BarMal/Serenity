@@ -289,6 +289,18 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
               case None =>
                 IO.unit
           case None => IO.unit
+      case CommandIntent.SetGlobalHotkey(action, binding) =>
+        updateConfig(_.withHotkeyOverride(action, binding)).void
+      case CommandIntent.SetEditorKeyBinding(action, binding) =>
+        updateConfig(_.withEditorKeyOverride(action, binding)).void
+      case CommandIntent.SetCommandRunnerKeyBinding(action, binding) =>
+        updateConfig(_.withCommandRunnerKeyOverride(action, binding)).void
+      case CommandIntent.SetModalKeyBinding(action, binding) =>
+        updateConfig(_.withModalKeyOverride(action, binding)).void
+      case CommandIntent.SetPanelKeyBinding(action, binding) =>
+        updateConfig(_.withPanelKeyOverride(action, binding)).void
+      case CommandIntent.SetPeekKeyBinding(action, binding) =>
+        updateConfig(_.withPeekKeyOverride(action, binding)).void
 
   private def openMarkdownPreview(state: AppState): IO[Unit] =
     state.focusedBufferId

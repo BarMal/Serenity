@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.*
-import com.serenity.config.{AppConfig, BackgroundStyle}
+import com.serenity.config.{AppConfig, BackgroundStyle, CommandRunnerKeyAction}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
@@ -660,4 +660,18 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runner.activeSubmenu.flatMap(_.editingItemId) shouldBe None
     runner.activeSubmenu.map(_.editingText) shouldBe Some("")
     restoredValue shouldBe Some("12")
+  }
+
+  it should "edit keymap binding text and emit a focused keymap update intent" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-keymap", "keymap-command-runner-submit")
+
+    val typed =
+      "ctrl+enter".foldLeft(state)((s, char) => CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state)
+
+    val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
+
+    result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
+      CommandIntent.SetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit, "ctrl+enter")
+    )
   }
