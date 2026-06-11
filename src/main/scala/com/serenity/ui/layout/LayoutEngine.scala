@@ -323,7 +323,8 @@ object LayoutEngine:
           case Modal.CloseWorkflow(_) => 4
           case Modal.Custom(_, _)     => 4
           case _                      => 3
-      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_) | SurfaceContent.Diagnostics(_) =>
+      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_) | SurfaceContent.Diagnostics(_) |
+          SurfaceContent.MarkdownPreview(_, _) =>
         math.min(8, math.max(4, maxHeight - 1))
       case SurfaceContent.GhostOverlay(_, cachedRect) =>
         cachedRect.height

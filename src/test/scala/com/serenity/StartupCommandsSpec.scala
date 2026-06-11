@@ -2,16 +2,15 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.LoggerFactory
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-
 import com.serenity.app.AppStartup
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.LoggerFactory
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 
 class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 

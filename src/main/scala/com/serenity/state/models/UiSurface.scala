@@ -49,6 +49,7 @@ enum SurfaceContent:
   case CommandPaletteSubmenu(runner: CommandRunner, groupId: String, previewOnly: Boolean)
   case ThemePicker(state: ThemePickerState)
   case FileSearch(state: FileSearchState)
+  case MarkdownPreview(bufferId: BufferId, title: String)
   case ModalWorkflow(modal: Modal)
   case Terminal(buffer: String, cursor: Int)
   case Outline(symbols: List[Symbol])
@@ -81,6 +82,8 @@ object UiSurface:
         SurfaceContent.Outline(symbols)
       case PanelContent.Diagnostics(issues) =>
         SurfaceContent.Diagnostics(issues)
+      case PanelContent.MarkdownPreview(bufferId, title) =>
+        SurfaceContent.MarkdownPreview(bufferId, title)
 
     UiSurface(
       id = id,

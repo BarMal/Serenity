@@ -12,11 +12,11 @@ if [ -z "$staged_files" ]; then
   exit 0
 fi
 
-echo "Running sbt -v scalafmtAll scalafixAll before commit..."
+echo "Running sbt -v scalafmtAll 'Compile / scalafix' 'Test / scalafix' before commit..."
 if command -v cmd.exe >/dev/null 2>&1; then
-  MSYS2_ARG_CONV_EXCL="*" cmd.exe /c sbt -v scalafmtAll scalafixAll
+  MSYS2_ARG_CONV_EXCL="*" cmd.exe /c sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 else
-  sbt -v scalafmtAll scalafixAll
+  sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 fi
 
 printf '%s\n' "$staged_files" | while IFS= read -r path; do

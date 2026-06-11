@@ -1,6 +1,7 @@
 package com.serenity
 
 import java.awt.font.FontRenderContext
+import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 import java.util.concurrent.atomic.AtomicReference
 
@@ -109,7 +110,9 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
   case class BlurRegionCall(x: Int, y: Int, width: Int, height: Int, radius: Float)
   private val blurRegionCallsBuffer = scala.collection.mutable.ListBuffer.empty[BlurRegionCall]
   case class FillPixelRectCall(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color)
+  case class DrawImageCall(image: BufferedImage, x: Int, y: Int, width: Int, height: Int)
   private val fillPixelRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[FillPixelRectCall]
+  private val drawImageCallsBuffer     = scala.collection.mutable.ListBuffer.empty[DrawImageCall]
   private val alphaCallsBuffer         = scala.collection.mutable.ListBuffer.empty[Float]
 
   override def strokeRoundRect(
@@ -135,9 +138,13 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
   override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit =
     fillPixelRectCallsBuffer += FillPixelRectCall(xPx, yPx, widthPx, heightPx, color)
 
+  override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
+    drawImageCallsBuffer += DrawImageCall(image, x, y, width, height)
+
   def currentAlphaValue: Float                    = currentAlpha.get()
   def blurRegionCalls: List[BlurRegionCall]       = blurRegionCallsBuffer.toList
   def fillPixelRectCalls: List[FillPixelRectCall] = fillPixelRectCallsBuffer.toList
+  def drawImageCalls: List[DrawImageCall]         = drawImageCallsBuffer.toList
   def alphaCalls: List[Float]                     = alphaCallsBuffer.toList
   def putStringCalls: List[PutStringCall]         = putStringCallsBuffer.toList
 
@@ -175,6 +182,7 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
     strokeRoundRectCallsBuffer.clear()
     blurRegionCallsBuffer.clear()
     fillPixelRectCallsBuffer.clear()
+    drawImageCallsBuffer.clear()
     alphaCallsBuffer.clear()
     drawRunPxCallsBuffer.clear()
     styleCallsBuffer.clear()

@@ -1,10 +1,9 @@
 package com.serenity
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.rope.Balance
 import com.serenity.state.models.StartupPage
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class StartupPageRenderingSpec extends AnyFlatSpec with Matchers:
 

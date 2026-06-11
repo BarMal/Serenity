@@ -1,12 +1,11 @@
 package com.serenity.lsp
 
 import cats.effect.{IO, Ref}
-import fs2.Stream
-import org.typelevel.log4cats.Logger
-
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{LspConnection, LspProtocol}
 import com.serenity.lsp.config.*
+import fs2.Stream
+import org.typelevel.log4cats.Logger
 
 object LspManager:
 

@@ -3,12 +3,13 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.IO
-
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
+import com.serenity.config.MarkdownViewMode
 import com.serenity.io.{FileEntry, FileUtils}
 import com.serenity.keystroke.events.ExplorerEvent
 import com.serenity.lsp.LspEffect
+import com.serenity.lsp.config.LanguageId
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
@@ -170,6 +171,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30)
       case CommandIntent.PinDiagnosticsPanel =>
         pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 10)
+      case CommandIntent.OpenMarkdownPreview =>
+        openMarkdownPreview(state)
+      case CommandIntent.SetMarkdownViewMode(mode) =>
+        setMarkdownViewMode(state, mode)
       case CommandIntent.FocusPanel(position) =>
         switchToPinnedPanel(position)
       case CommandIntent.UnpinPanel(position) =>
@@ -284,6 +289,41 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
               case None =>
                 IO.unit
           case None => IO.unit
+
+  private def openMarkdownPreview(state: AppState): IO[Unit] =
+    state.focusedBufferId
+      .flatMap(state.buffers.get)
+      .filter(_.language.contains(LanguageId.Markdown))
+      .map { buffer =>
+        val title = buffer.filePath
+          .flatMap(path => Option(path.getFileName).map(_.toString))
+          .getOrElse("Untitled")
+        pinPanel(
+          PanelContent.MarkdownPreview(buffer.id, title),
+          PanelPosition.Right,
+          40
+        )
+      }
+      .getOrElse(logger.debug("[CMD] Markdown preview requested without an active Markdown buffer"))
+
+  private def setMarkdownViewMode(state: AppState, mode: MarkdownViewMode): IO[Unit] =
+    val updateConfig = updateState { s =>
+      val newConfig = s.config.withMarkdownViewMode(mode)
+      withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
+    }
+    mode match
+      case MarkdownViewMode.SplitPreview =>
+        updateConfig >> openMarkdownPreview(state)
+      case MarkdownViewMode.Source | MarkdownViewMode.InlineLens =>
+        updateConfig >> unpinMarkdownPreviewPanel()
+
+  private def unpinMarkdownPreviewPanel(): IO[Unit] =
+    updateState { state =>
+      val markdownPreviewPositions = state.pinnedSurfaces.collect {
+        case UiSurface(_, SurfaceContent.MarkdownPreview(_, _), SurfacePresentation.Pinned(position, _), _) => position
+      }
+      markdownPreviewPositions.foldLeft(state)((current, position) => PanelStateReducer.unpin(position, current).state)
+    }
 
   protected def pinExplorerPanelEffect(position: PanelPosition, path: Path, size: Int): IO[Unit] =
     for

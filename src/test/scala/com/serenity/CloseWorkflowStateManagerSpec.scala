@@ -4,15 +4,14 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
-
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 

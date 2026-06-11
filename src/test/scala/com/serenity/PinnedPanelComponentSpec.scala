@@ -2,15 +2,14 @@ package com.serenity
 
 import java.nio.file.Paths
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.keystroke.events.{Direction, PanelInputEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, PinnedPanelComponent}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.*
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
 

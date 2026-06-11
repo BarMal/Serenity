@@ -30,13 +30,13 @@ jobs:
         uses: sbt/setup-sbt@v1
 
       - name: Apply scalafmt and scalafix
-        run: sbt -v scalafmtAll scalafixAll
+        run: sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 
       - name: Check style tasks did not change files
         shell: bash
         run: |
           if ! git diff --exit-code; then
-            echo "::error::scalafmtAll or scalafixAll changed files. Run 'sbt scalafmtAll scalafixAll' locally and commit the result."
+            echo "::error::Style tasks changed files. Run 'sbt scalafmtAll \"Compile / scalafix\" \"Test / scalafix\"' locally and commit the result."
             exit 1
           fi
 

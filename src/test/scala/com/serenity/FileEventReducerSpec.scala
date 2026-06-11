@@ -2,9 +2,6 @@ package com.serenity
 
 import java.nio.file.Paths
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.command.CommandRunner
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
@@ -12,6 +9,8 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, FileEventReducer}
 import com.serenity.ui.layout.Layout
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class FileEventReducerSpec extends AnyFlatSpec with Matchers:
 

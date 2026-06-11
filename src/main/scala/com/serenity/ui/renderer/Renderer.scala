@@ -2,14 +2,14 @@ package com.serenity.ui.renderer
 
 import java.awt.Font
 
-import org.slf4j.LoggerFactory
-
 import com.serenity.animation.ThemeInterpolator
+import com.serenity.config.MarkdownViewMode
 import com.serenity.lsp.config.LanguageId
-import com.serenity.markdown.MarkdownBlockLens
+import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
+import org.slf4j.LoggerFactory
 
 case class RenderContext(
     surface: RenderSurface,
@@ -221,7 +221,11 @@ object Renderer:
     val cursorContext =
       if state.hasCommandRunnerDomain then context.copy(cursorVisible = true)
       else context
-    buffer.foreach(buf => renderCursors(buf, contentRect, state.theme, cursorContext, bufferSnapshot.get))
+    buffer.foreach { buf =>
+      if isInlineMarkdownLens(buf, state) then
+        renderMarkdownLensCursors(buf, contentRect, state.theme, cursorContext, bufferSnapshot.get)
+      else renderCursors(buf, contentRect, state.theme, cursorContext, bufferSnapshot.get)
+    }
 
   private def renderBufferHeader(
     pane: EditorPane,
@@ -274,15 +278,11 @@ object Renderer:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): Unit =
-    val visualLines = snapshot.visualLines
-    val xOriginPx   = context.cellMetrics.toPixelX(rect.x).toFloat
+    val visualLines   = snapshot.visualLines
+    val xOriginPx     = context.cellMetrics.toPixelX(rect.x).toFloat
+    val markdownLines = markdownSourceLines(buffer)
     val rawMarkdownLines =
-      if buffer.language.contains(LanguageId.Markdown) then
-        val lines = (0 until buffer.content.lineCount).toVector.map(line => buffer.content.getLine(line).getOrElse(""))
-        buffer.cursors
-          .map(_.line)
-          .flatMap(line => MarkdownBlockLens.activeBlockLineSet(lines, Some(line)))
-          .toSet
+      if isInlineMarkdownLens(buffer, state) then activeMarkdownBlockLineSet(markdownLines, buffer.cursors)
       else Set.empty[Int]
 
     visualLines.zipWithIndex.foreach {
@@ -291,6 +291,10 @@ object Renderer:
           val screenY            = rect.y + screenLineIndex
           val screenX            = rect.x
           val rendersRawMarkdown = rawMarkdownLines.contains(visualLine.bufferLine)
+          val displayLine =
+            if isInlineMarkdownLens(buffer, state) && !rendersRawMarkdown then
+              visualLine.copy(text = MarkdownDocumentPreview.renderInlineLine(visualLine.text))
+            else visualLine
           val effectiveLanguage =
             if rendersRawMarkdown then None else buffer.language
           val effectiveSyntaxHighlighting =
@@ -312,7 +316,7 @@ object Renderer:
                 context.cellMetrics.toPixelY(screenY),
                 snapshot.lineHeightPx,
                 snapshot.ascentPx,
-                visualLine,
+                displayLine,
                 state.theme,
                 buffer.animations,
                 effectiveSyntaxHighlighting,
@@ -323,7 +327,7 @@ object Renderer:
                 context.surface,
                 screenX,
                 screenY,
-                visualLine.text,
+                displayLine.text,
                 state.theme,
                 buffer.animations,
                 effectiveSyntaxHighlighting,
@@ -343,7 +347,7 @@ object Renderer:
               snapshot
             )
 
-            val stringEnd = visualLine.startColumn + visualLine.text.length
+            val stringEnd = visualLine.startColumn + displayLine.text.length
             val lineAnims = buffer.animations.getLineAnimations(visualLine.bufferLine)
             lineAnims
               .filter((col, cell) => col >= stringEnd && cell.currentBackground.isDefined)
@@ -355,6 +359,9 @@ object Renderer:
                   context.surface.putString(bgScreenX, screenY, " ")
               }
     }
+
+    if isInlineMarkdownLens(buffer, state) then
+      renderMarkdownRawLenses(buffer, rect, state, context, snapshot, markdownLines)
 
   private def renderSelectionHighlights(
     surface: RenderSurface,
@@ -402,6 +409,143 @@ object Renderer:
             }
       }
     }
+
+  private def isInlineMarkdownLens(buffer: Buffer, state: AppState): Boolean =
+    buffer.language.contains(LanguageId.Markdown) && state.config.markdownViewMode == MarkdownViewMode.InlineLens
+
+  private def markdownSourceLines(buffer: Buffer): Vector[String] =
+    (0 until buffer.content.lineCount).toVector.map(line => buffer.content.getLine(line).getOrElse(""))
+
+  private def activeMarkdownBlockLineSet(lines: Vector[String], cursors: List[CursorPosition]): Set[Int] =
+    cursors
+      .map(_.line)
+      .flatMap(line => MarkdownBlockLens.activeBlockLineSet(lines, Some(line)))
+      .toSet
+
+  private def activeMarkdownBlockRanges(lines: Vector[String], cursors: List[CursorPosition]): List[Range.Inclusive] =
+    cursors
+      .map(_.line)
+      .filter(line => line >= 0 && line < lines.length)
+      .map(line => MarkdownBlockLens.currentBlock(lines, line))
+      .distinctBy(range => range.start -> range.end)
+
+  private def renderMarkdownRawLenses(
+    buffer: Buffer,
+    rect: LayoutRect,
+    state: AppState,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot,
+    lines: Vector[String]
+  ): Unit =
+    activeMarkdownBlockRanges(lines, buffer.cursors).foreach { blockRange =>
+      val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
+      if blockVisualLines.nonEmpty then
+        val lensTop =
+          markdownLensTop(blockVisualLines, cursorForBlock(buffer.cursors, blockRange), rect.height, snapshot)
+        val lensY = rect.y + lensTop
+        context.surface.setBackgroundColor(state.theme.panel.background)
+        context.surface.fillRect(rect.x, lensY, rect.width, blockVisualLines.length, ' ')
+        context.surface.strokeRoundRect(
+          context.cellMetrics.toPixelX(rect.x),
+          context.cellMetrics.toPixelY(lensY),
+          rect.width * context.cellMetrics.charWidth,
+          blockVisualLines.length * context.cellMetrics.lineHeight,
+          arcPx = 0,
+          state.theme.border
+        )
+        blockVisualLines.zipWithIndex.foreach {
+          case (visualLine, index) =>
+            val screenY = lensY + index
+            if screenY >= rect.y && screenY < rect.bottom && screenY >= 0 && screenY < context.surface.viewportHeight
+            then
+              context.surface.setForegroundColor(state.theme.foreground)
+              context.surface.setBackgroundColor(state.theme.panel.background)
+              if snapshot.usesMeasuredLayout then
+                CharacterRenderer.renderMeasuredLineWithAnimation(
+                  context.surface,
+                  context.cellMetrics.toPixelX(rect.x).toFloat,
+                  context.cellMetrics.toPixelY(screenY),
+                  snapshot.lineHeightPx,
+                  snapshot.ascentPx,
+                  visualLine,
+                  state.theme.copy(background = state.theme.panel.background),
+                  buffer.animations,
+                  syntaxHighlightingEnabled = false,
+                  language = None
+                )
+              else
+                CharacterRenderer.renderStringWithAnimation(
+                  context.surface,
+                  rect.x,
+                  screenY,
+                  visualLine.text,
+                  state.theme.copy(background = state.theme.panel.background),
+                  buffer.animations,
+                  syntaxHighlightingEnabled = false,
+                  language = None,
+                  bufferLine = visualLine.bufferLine,
+                  bufferStartColumn = visualLine.startColumn
+                )
+        }
+    }
+
+  private def renderMarkdownLensCursors(
+    buffer: Buffer,
+    rect: LayoutRect,
+    theme: Theme,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
+  ): Unit =
+    val lines = markdownSourceLines(buffer)
+    activeMarkdownBlockRanges(lines, buffer.cursors).foreach { blockRange =>
+      val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
+      if blockVisualLines.nonEmpty then
+        val lensTop =
+          markdownLensTop(blockVisualLines, cursorForBlock(buffer.cursors, blockRange), rect.height, snapshot)
+        buffer.cursors.zipWithIndex.foreach { (cursor, cursorIndex) =>
+          val isPrimaryCursor = cursorIndex == 0
+          val shouldRenderCursor =
+            context.cursorVisible || (buffer.cursors.size > 1 && !isPrimaryCursor)
+          blockVisualLines.zipWithIndex.collectFirst {
+            case (line, visualIndex)
+                if line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn =>
+              val xPx = line.xForColumn(cursor.column).getOrElse(line.widthPx)
+              (visualIndex, xPx)
+          } match
+            case Some((visualLine, xPx)) if shouldRenderCursor =>
+              val screenYCell = rect.y + lensTop + visualLine
+              if screenYCell >= rect.y && screenYCell < rect.bottom &&
+                  screenYCell >= 0 && screenYCell < context.surface.viewportHeight
+              then
+                val effectiveCursorColor = context.cursorColorOverride.getOrElse(theme.cursor)
+                val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
+                val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
+                val screenYPx            = context.cellMetrics.toPixelY(screenYCell)
+                context.surface.fillPixelRect(
+                  screenXPx,
+                  screenYPx,
+                  caretWidthPx,
+                  if snapshot.usesMeasuredLayout then snapshot.lineHeightPx else context.cellMetrics.lineHeight,
+                  effectiveCursorColor
+                )
+            case _ => ()
+        }
+    }
+
+  private def markdownLensTop(
+    blockVisualLines: Vector[TextVisualLine],
+    primaryCursor: Option[CursorPosition],
+    visibleHeight: Int,
+    snapshot: TextLayoutSnapshot
+  ): Int =
+    val lensHeight      = blockVisualLines.length
+    val cursorVisualRow = primaryCursor.flatMap(cursor => calculateCursorVisualPosition(cursor, snapshot).map(_._1))
+    val desiredTop =
+      cursorVisualRow.map(row => row - lensHeight / 2).getOrElse(blockVisualLines.headOption.fold(0)(_.bufferLine))
+    desiredTop.max(0).min(math.max(0, visibleHeight - lensHeight))
+
+  private def cursorForBlock(cursors: List[CursorPosition], blockRange: Range.Inclusive): Option[CursorPosition] =
+    cursors.find(cursor => blockRange.contains(cursor.line)).orElse(cursors.headOption)
 
   private def selectionColumnsForLine(selection: Selection, visualLine: TextVisualLine): Option[(Int, Int)] =
     if visualLine.bufferLine < selection.start.line || visualLine.bufferLine > selection.end.line then None
@@ -579,20 +723,60 @@ object Renderer:
 
   private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =
     context.surface.setFont(context.uiFont)
-    PinnedPanelViewModel
-      .fromLayout(context.layout, state.uiSurfaces)
-      .foreach { panel =>
-        val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
-        if blurRadius > 0f then
-          context.surface.blurRegion(
-            panel.rect.x,
-            panel.rect.y,
-            panel.rect.width,
-            panel.rect.height,
-            blurRadius
-          )
-        PinnedPanelRenderer.render(context.surface, panel, state.theme, state.config)
-      }
+    state.uiSurfaces.foreach {
+      case surface @ UiSurface(_, content, SurfacePresentation.Pinned(position, _), _) =>
+        context.layout.pinnedPanelRects.get(position).foreach { rect =>
+          val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
+          if blurRadius > 0f then
+            context.surface.blurRegion(
+              rect.x,
+              rect.y,
+              rect.width,
+              rect.height,
+              blurRadius
+            )
+          content match
+            case SurfaceContent.MarkdownPreview(bufferId, title) =>
+              renderMarkdownPreviewPanel(bufferId, title, rect, state, context)
+            case _ =>
+              PinnedPanelRenderer.render(
+                context.surface,
+                PinnedPanelViewModel.resolve(surface, rect),
+                state.theme,
+                state.config
+              )
+        }
+      case _ => ()
+    }
+
+  private def renderMarkdownPreviewPanel(
+    bufferId: BufferId,
+    title: String,
+    rect: LayoutRect,
+    state: AppState,
+    context: RenderContext
+  ): Unit =
+    val shell = TextPanelView(rect, s"Preview: $title", Nil)
+    PinnedPanelRenderer.render(context.surface, shell, state.theme, state.config)
+
+    val contentWidthCells  = math.max(1, rect.width - 2)
+    val contentHeightCells = math.max(1, rect.height - 2)
+    val widthPx            = contentWidthCells * context.cellMetrics.charWidth
+    val heightPx           = contentHeightCells * context.cellMetrics.lineHeight
+    val buffer             = state.buffers.get(bufferId)
+    val content            = buffer.map(_.content.collect()).getOrElse("")
+    val baseUri =
+      buffer.flatMap(_.filePath).flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
+    val image = MarkdownDocumentPreview.renderImage(
+      source = content,
+      title = title,
+      widthPx = widthPx,
+      heightPx = heightPx,
+      theme = state.theme,
+      font = context.textFont,
+      baseUri = baseUri
+    )
+    context.surface.drawImage(image, rect.x + 1, rect.y + 1, contentWidthCells, contentHeightCells)
 
   private def renderFloatingPanelPlaceholder(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
     context.surface.setBackgroundColor(theme.panel.background)

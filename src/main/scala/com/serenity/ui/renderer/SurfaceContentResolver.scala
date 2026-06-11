@@ -101,6 +101,8 @@ object SurfaceContentResolver:
         resolveThemePicker(state, mode)
       case SurfaceContent.FileSearch(state) =>
         resolveFileSearch(state, rect, mode)
+      case SurfaceContent.MarkdownPreview(_, title) =>
+        ResolvedSurfaceContent(title = titleFor(mode, s"Preview: $title"))
       case SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
         resolve(originalContent, cachedRect, mode)
 
@@ -651,4 +653,14 @@ object SurfaceContentResolver:
       title = titleFor(mode, "Search"),
       header = Some(headerRow),
       rows = resultRows
+    )
+
+  def resolveMarkdownPreview(
+    title: String,
+    content: String,
+    rect: LayoutRect,
+    mode: SurfaceRenderMode
+  ): ResolvedSurfaceContent =
+    ResolvedSurfaceContent(
+      title = titleFor(mode, s"Preview: $title")
     )

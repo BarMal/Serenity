@@ -1,14 +1,13 @@
 package com.serenity
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.command.*
 import com.serenity.config.{AppConfig, BackgroundStyle}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
 import com.serenity.ui.layout.Layout
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 

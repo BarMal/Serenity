@@ -6,17 +6,16 @@ import java.text.AttributedString
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.Logger
-import org.typelevel.log4cats.slf4j.Slf4jLogger
-
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, Viewport}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 import com.serenity.ui.renderer.Java2DRenderSurface
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 /** Verifies that the FontRenderContext used by Java2DRenderSurface for drawing text matches the one used by
   * TextLayoutSnapshot for measuring caret positions. A mismatch causes the cursor to drift leftward as characters are

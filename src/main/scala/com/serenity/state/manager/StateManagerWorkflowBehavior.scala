@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.IO
-
 import com.serenity.io.FileUtils
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*

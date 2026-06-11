@@ -1,7 +1,7 @@
 package com.serenity.command
 
 import com.serenity.animation.AnimationConfig
-import com.serenity.config.{AppConfig, BackgroundStyle, CursorMode}
+import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.fonts.FontLoader
 
@@ -83,6 +83,7 @@ case class CommandRunner(
     val animationItem       = CommandRunner.animationOptionItem(optionSelections)
     val cursorModeItem      = CommandRunner.cursorModeOptionItem(optionSelections)
     val backgroundStyleItem = CommandRunner.backgroundStyleOptionItem(optionSelections)
+    val markdownViewItem    = CommandRunner.markdownViewOptionItem(optionSelections)
     val codeFontItem        = CommandRunner.codeFontOptionItem(optionSelections)
     val textFontItem        = CommandRunner.textFontOptionItem(optionSelections)
     val ligaturesItem       = CommandRunner.ligaturesOptionItem(optionSelections)
@@ -111,6 +112,13 @@ case class CommandRunner(
         ),
         category = CommandCategory.Settings,
         hint = Some("Code font, text font, ligature shaping, buffer size, UI size")
+      ),
+      CommandSurfaceItem.GroupItem(
+        id = "settings-markdown",
+        label = "Markdown",
+        children = List(markdownViewItem),
+        category = CommandCategory.Settings,
+        hint = Some("Source, split preview, or inline lens")
       ),
       CommandSurfaceItem.GroupItem(
         id = "settings-language",
@@ -325,6 +333,7 @@ object CommandRunner:
       "animation-mode"   -> animationModeIndex(config),
       "cursor-mode"      -> cursorModeIndex(config.cursorMode),
       "background-style" -> backgroundStyleIndex(config.backgroundStyle),
+      "markdown-view"    -> markdownViewModeIndex(config.markdownViewMode),
       "code-font"        -> codeFontIndex(config.fontConfig.codeFontFamily),
       "text-font"        -> textFontIndex(config.fontConfig.textFontFamily),
       "ligatures"        -> ligaturesIndex(config.fontConfig.enableLigatures)
@@ -358,6 +367,20 @@ object CommandRunner:
       selectedIndex = optionSelections.getOrElse("background-style", 2),
       category = CommandCategory.Settings,
       hint = Some("Solid, transparent, frosted, or glass")
+    )
+
+  private[command] def markdownViewOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "markdown-view",
+      label = "Markdown View",
+      options = List(
+        CommandOption("Source", CommandIntent.SetMarkdownViewMode(MarkdownViewMode.Source)),
+        CommandOption("Split Preview", CommandIntent.SetMarkdownViewMode(MarkdownViewMode.SplitPreview)),
+        CommandOption("Inline Lens", CommandIntent.SetMarkdownViewMode(MarkdownViewMode.InlineLens))
+      ),
+      selectedIndex = optionSelections.getOrElse("markdown-view", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Source, side preview, or inline editing lens")
     )
 
   private[command] def animationOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -497,6 +520,12 @@ object CommandRunner:
       case BackgroundStyle.Transparent => 1
       case BackgroundStyle.Frosted     => 2
       case BackgroundStyle.GlassLike   => 3
+
+  private def markdownViewModeIndex(mode: MarkdownViewMode): Int =
+    mode match
+      case MarkdownViewMode.Source       => 0
+      case MarkdownViewMode.SplitPreview => 1
+      case MarkdownViewMode.InlineLens   => 2
 
   private def codeFontIndex(family: String): Int =
     FontLoader.availableMonospaceFamilies.indexOf(family) match

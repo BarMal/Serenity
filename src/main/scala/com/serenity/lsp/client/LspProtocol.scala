@@ -1,9 +1,8 @@
 package com.serenity.lsp.client
 
+import com.serenity.lsp.model.*
 import io.circe.Json
 import io.circe.syntax.*
-
-import com.serenity.lsp.model.*
 
 object LspProtocol:
 

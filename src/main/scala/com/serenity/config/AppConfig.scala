@@ -17,6 +17,11 @@ enum WindowChromeMode:
   case Native
   case Custom
 
+enum MarkdownViewMode:
+  case Source
+  case SplitPreview
+  case InlineLens
+
 /** Global application configuration */
 case class AppConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
@@ -30,7 +35,8 @@ case class AppConfig(
     blurRadius: Float = 0.0f,
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     cursorMode: CursorMode = CursorMode.Blink,
-    windowChromeMode: WindowChromeMode = WindowChromeMode.Native
+    windowChromeMode: WindowChromeMode = WindowChromeMode.Native,
+    markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source
 ):
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
@@ -95,6 +101,9 @@ case class AppConfig(
 
   def withWindowChromeMode(mode: WindowChromeMode): AppConfig =
     copy(windowChromeMode = mode)
+
+  def withMarkdownViewMode(mode: MarkdownViewMode): AppConfig =
+    copy(markdownViewMode = mode)
 
 object AppConfig:
 

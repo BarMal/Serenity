@@ -1,12 +1,11 @@
 package com.serenity
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
 

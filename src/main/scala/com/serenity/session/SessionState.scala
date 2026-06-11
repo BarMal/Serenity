@@ -5,9 +5,6 @@ import java.nio.file.Path
 
 import scala.concurrent.duration.FiniteDuration
 
-import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
-import io.circe.{Decoder, Encoder}
-
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
@@ -15,6 +12,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.Theme
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import io.circe.{Decoder, Encoder}
 
 /** Represents the persistent session state that survives application restarts. This is a subset of AppState containing
   * only the information needed to restore the user's workspace.
@@ -313,6 +312,15 @@ given Decoder[WindowChromeMode] = Decoder.decodeString.emap {
   case other    => Left(s"Unknown WindowChromeMode: $other")
 }
 
+given Encoder[MarkdownViewMode] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[MarkdownViewMode] = Decoder.decodeString.emap {
+  case "Source"       => Right(MarkdownViewMode.Source)
+  case "SplitPreview" => Right(MarkdownViewMode.SplitPreview)
+  case "InlineLens"   => Right(MarkdownViewMode.InlineLens)
+  case other          => Left(s"Unknown MarkdownViewMode: $other")
+}
+
 given Encoder[BackgroundStyle] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[BackgroundStyle] = Decoder.decodeString.emap {
@@ -339,6 +347,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     backgroundStyle           <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
     cursorMode                <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
     windowChromeMode          <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(WindowChromeMode.Native)
+    markdownViewMode          <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
   yield AppConfig(
     characterAnimation = characterAnimation,
     syntaxHighlightingEnabled = syntaxHighlightingEnabled,
@@ -351,7 +360,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     blurRadius = blurRadius,
     backgroundStyle = backgroundStyle,
     cursorMode = cursorMode,
-    windowChromeMode = windowChromeMode
+    windowChromeMode = windowChromeMode,
+    markdownViewMode = markdownViewMode
   )
 }
 

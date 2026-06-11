@@ -1,14 +1,13 @@
 import cats.effect.*
 import cats.effect.unsafe.implicits.global
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
-
 import com.serenity.app.{AppRuntime, RuntimeDisplayState}
 import com.serenity.config.ConfigManager
 import com.serenity.input.SwingInputHandler
 import com.serenity.rope.Balance
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.terminal.SwingWindow
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 given Balance = Balance.default
 

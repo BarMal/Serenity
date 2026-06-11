@@ -4,12 +4,11 @@ import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 

@@ -1,11 +1,10 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.ui.theme.DefaultThemes
 import com.serenity.ui.theme.config.{AppThemeManager, ThemeRegistry}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class StartupThemeFixSpec extends AnyFlatSpec with Matchers:
 

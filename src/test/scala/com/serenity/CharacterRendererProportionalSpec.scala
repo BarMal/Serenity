@@ -2,13 +2,12 @@ package com.serenity
 
 import java.awt.Color
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
 import com.serenity.ui.layout.{TextCaretStop, TextVisualLine}
 import com.serenity.ui.renderer.CharacterRenderer
 import com.serenity.ui.theme.Theme
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
 

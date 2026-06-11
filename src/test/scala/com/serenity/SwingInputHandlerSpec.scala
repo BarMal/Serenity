@@ -7,13 +7,12 @@ import scala.concurrent.duration.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO}
 import cats.syntax.parallel.*
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.input.{InputRouter, SwingInputHandler}
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.ui.layout.CellMetrics
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
 

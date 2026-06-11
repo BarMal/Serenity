@@ -2,14 +2,13 @@ package com.serenity
 
 import java.nio.file.Paths
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
-
 import com.serenity.command.*
 import com.serenity.config.AppConfig
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, LayoutRect}
 import com.serenity.ui.renderer.*
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
@@ -426,6 +425,24 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       SurfaceRenderMode.Floating
     )
     resolved.header.map(_.plainText) shouldBe Some(" ")
+    resolved.rows shouldBe Nil
+  }
+
+  it should "resolve Markdown previews as rendered pinned preview shells" in {
+    val resolved = SurfaceContentResolver.resolveMarkdownPreview(
+      title = "notes.md",
+      content = """# Notes
+            |
+            || Task | Owner |
+            || ---- | ----- |
+            || Ship | Codex |
+            |
+            |![Diagram](diagram.png)""".stripMargin,
+      rect = LayoutRect(0, 0, 40, 12),
+      mode = SurfaceRenderMode.Pinned
+    )
+
+    resolved.title shouldBe Some("Preview: notes.md")
     resolved.rows shouldBe Nil
   }
 

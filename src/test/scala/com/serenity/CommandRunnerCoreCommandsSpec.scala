@@ -4,16 +4,16 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.io.FileUtils
+import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
+import com.serenity.lsp.config.LanguageId
+import com.serenity.state.manager.StateManager
+import com.serenity.state.models.*
+import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
-
-import com.serenity.io.FileUtils
-import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
-import com.serenity.state.manager.StateManager
-import com.serenity.state.models.*
-import com.serenity.ui.layout.PanelPosition
 
 class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
@@ -388,6 +388,50 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       _.presentation == com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Bottom, 10)
     } shouldBe true
     updatedState.pinnedSurfaces.exists(_.content == SurfaceContent.Diagnostics(Nil)) shouldBe true
+  }
+
+  it should "pin a right-side Markdown preview for the active Markdown buffer" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .updateState { state =>
+        val bufferId = BufferId(0)
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("# Notes\n\n![Diagram](diagram.png)"),
+            language = Some(LanguageId.Markdown)
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "markdown-preview", "markdown-preview")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.commandRunnerSurface shouldBe None
+    val preview = updatedState.pinnedSurfaces.collectFirst {
+      case surface @ UiSurface(
+            _,
+            SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"),
+            SurfacePresentation.Pinned(PanelPosition.Right, 40),
+            _
+          ) =>
+        surface
+    }
+
+    preview should not be empty
+    updatedState.buffers(BufferId(0)).content.collect() shouldBe "# Notes\n\n![Diagram](diagram.png)"
+  }
+
+  it should "leave the workspace unchanged when Markdown preview is requested for a non-Markdown buffer" in {
+    val stateManager = createStateManager()
+    val before       = stateManager.getCurrentState.unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "markdown-preview", "markdown-preview")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.pinnedSurfaces shouldBe before.pinnedSurfaces
   }
 
   it should "focus the left panel from the command runner" in {

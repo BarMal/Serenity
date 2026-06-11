@@ -1,9 +1,8 @@
 package com.serenity
 
+import com.serenity.rope.{Balance, Rope}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
-import com.serenity.rope.{Balance, Rope}
 
 class UnderscoreStorageSpec extends AnyFlatSpec with Matchers:
 

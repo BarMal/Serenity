@@ -2,14 +2,13 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.rope.Balance
+import com.serenity.state.manager.StateManager
+import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.slf4j.Slf4jFactory
-
-import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManager
-import com.serenity.ui.theme.config.AppThemeManager
 
 class EndToEndConfigThemingSpec extends AnyFlatSpec with Matchers:
 

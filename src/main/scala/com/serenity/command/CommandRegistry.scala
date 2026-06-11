@@ -230,6 +230,34 @@ object CommandRegistry:
       label = "Pin Diagnostics Panel"
     ),
     Command.typed(
+      "markdown-preview",
+      "Open a rendered Markdown preview for the current buffer.",
+      CommandIntent.OpenMarkdownPreview,
+      CommandCategory.View,
+      label = "Open Markdown Preview"
+    ),
+    Command.typed(
+      "markdown-view-source",
+      "Show Markdown buffers as editable source.",
+      CommandIntent.SetMarkdownViewMode(com.serenity.config.MarkdownViewMode.Source),
+      CommandCategory.Settings,
+      label = "Markdown View Source"
+    ),
+    Command.typed(
+      "markdown-view-split",
+      "Show Markdown source with a live side-by-side preview.",
+      CommandIntent.SetMarkdownViewMode(com.serenity.config.MarkdownViewMode.SplitPreview),
+      CommandCategory.Settings,
+      label = "Markdown View Split"
+    ),
+    Command.typed(
+      "markdown-view-inline-lens",
+      "Show rendered Markdown with a raw-source editing lens at the cursor.",
+      CommandIntent.SetMarkdownViewMode(com.serenity.config.MarkdownViewMode.InlineLens),
+      CommandCategory.Settings,
+      label = "Markdown View Inline Lens"
+    ),
+    Command.typed(
       "focus-left-panel",
       "Focus the left pinned panel.",
       CommandIntent.FocusPanel(PanelPosition.Left),

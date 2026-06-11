@@ -3,9 +3,8 @@ package com.serenity.ui.fonts
 import java.awt.{Font, GraphicsEnvironment, Toolkit}
 
 import cats.effect.IO
-import org.typelevel.log4cats.Logger
-
 import com.serenity.ui.layout.CellMetrics
+import org.typelevel.log4cats.Logger
 
 object FontLoader:
 

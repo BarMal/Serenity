@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import java.awt.font.FontRenderContext
+import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 
 import com.serenity.ui.theme.TextStyle
@@ -42,6 +43,8 @@ trait RenderSurface:
     * s at (xPx, yPx + ascent) with the current foreground color. Callers set fg/bg colors before calling.
     */
   def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit = ()
+
+  def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit = ()
 
   def hideCursor(): Unit
   def viewportWidth: Int
