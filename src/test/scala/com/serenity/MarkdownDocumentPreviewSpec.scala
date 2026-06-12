@@ -1,6 +1,6 @@
 package com.serenity
 
-import java.awt.Font
+import java.awt.{Color, Font}
 import java.nio.file.Paths
 
 import com.serenity.markdown.MarkdownDocumentPreview
@@ -96,6 +96,18 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     MarkdownDocumentPreview.previewRowForSourceLine(lines, 3) shouldBe Some(4)
   }
 
+  it should "map source ranges to preview rows including table borders" in {
+    val lines = Vector(
+      "Before",
+      "| Task | Owner |",
+      "| ---- | ----- |",
+      "| Ship | Codex |",
+      "After"
+    )
+
+    MarkdownDocumentPreview.previewRowsForSourceRange(lines, 1 to 3) shouldBe Some(1 to 5)
+  }
+
   it should "preserve rendered image elements in the document preview HTML" in {
     val html = MarkdownDocumentPreview.renderHtmlFragment(
       """![Architecture](docs/arch.png)
@@ -135,6 +147,25 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
 
     image.getWidth shouldBe 420
     image.getHeight shouldBe 280
+  }
+
+  it should "render inline preview images with editor theme colours instead of panel colours" in {
+    val theme = Theme.default.copy(
+      background = Color(10, 20, 30),
+      panel = Theme.default.panel.copy(background = Color(40, 50, 60))
+    )
+
+    val image = MarkdownDocumentPreview.renderImage(
+      source = "Plain text",
+      title = "inline.md",
+      widthPx = 120,
+      heightPx = 80,
+      theme = theme,
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
+      panelChrome = false
+    )
+
+    Color(image.getRGB(1, 1), true) shouldBe theme.background
   }
 
 end MarkdownDocumentPreviewSpec

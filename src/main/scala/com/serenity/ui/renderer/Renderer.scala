@@ -375,7 +375,8 @@ object Renderer:
       heightPx = heightPx,
       theme = state.theme,
       font = context.textFont,
-      baseUri = baseUri
+      baseUri = baseUri,
+      panelChrome = false
     )
     context.surface.drawImage(image, rect.x, rect.y, rect.width, rect.height)
 
@@ -445,6 +446,8 @@ object Renderer:
       .map(line => MarkdownBlockLens.currentBlock(lines, line))
       .distinctBy(range => range.start -> range.end)
 
+  private case class MarkdownLensPlacement(top: Int, height: Int)
+
   private def renderMarkdownRawLenses(
     buffer: Buffer,
     rect: LayoutRect,
@@ -456,16 +459,23 @@ object Renderer:
     activeMarkdownBlockRanges(lines, buffer.cursors).foreach { blockRange =>
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
-        val lensTop =
-          markdownLensTop(blockVisualLines, cursorForBlock(buffer.cursors, blockRange), rect.height, snapshot, lines)
-        val lensY = rect.y + lensTop
+        val placement =
+          markdownLensPlacement(
+            blockRange,
+            blockVisualLines,
+            cursorForBlock(buffer.cursors, blockRange),
+            rect.height,
+            snapshot,
+            lines
+          )
+        val lensY = rect.y + placement.top
         context.surface.setBackgroundColor(state.theme.panel.background)
-        context.surface.fillRect(rect.x, lensY, rect.width, blockVisualLines.length, ' ')
+        context.surface.fillRect(rect.x, lensY, rect.width, placement.height, ' ')
         context.surface.strokeRoundRect(
           context.cellMetrics.toPixelX(rect.x),
           context.cellMetrics.toPixelY(lensY),
           rect.width * context.cellMetrics.charWidth,
-          blockVisualLines.length * context.cellMetrics.lineHeight,
+          placement.height * context.cellMetrics.lineHeight,
           arcPx = 0,
           state.theme.border
         )
@@ -517,8 +527,15 @@ object Renderer:
     activeMarkdownBlockRanges(lines, buffer.cursors).foreach { blockRange =>
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
-        val lensTop =
-          markdownLensTop(blockVisualLines, cursorForBlock(buffer.cursors, blockRange), rect.height, snapshot, lines)
+        val placement =
+          markdownLensPlacement(
+            blockRange,
+            blockVisualLines,
+            cursorForBlock(buffer.cursors, blockRange),
+            rect.height,
+            snapshot,
+            lines
+          )
         buffer.cursors.zipWithIndex.foreach { (cursor, cursorIndex) =>
           val isPrimaryCursor = cursorIndex == 0
           val shouldRenderCursor =
@@ -530,7 +547,7 @@ object Renderer:
               (visualIndex, xPx)
           } match
             case Some((visualLine, xPx)) if shouldRenderCursor =>
-              val screenYCell = rect.y + lensTop + visualLine
+              val screenYCell = rect.y + placement.top + visualLine
               if screenYCell >= rect.y && screenYCell < rect.bottom &&
                   screenYCell >= 0 && screenYCell < context.surface.viewportHeight
               then
@@ -549,22 +566,34 @@ object Renderer:
         }
     }
 
-  private def markdownLensTop(
+  private def markdownLensPlacement(
+    blockRange: Range.Inclusive,
     blockVisualLines: Vector[TextVisualLine],
     primaryCursor: Option[CursorPosition],
     visibleHeight: Int,
     snapshot: TextLayoutSnapshot,
     markdownLines: Vector[String]
-  ): Int =
-    val lensHeight = blockVisualLines.length
+  ): MarkdownLensPlacement =
+    val previewRange = MarkdownDocumentPreview.previewRowsForSourceRange(markdownLines, blockRange)
+    val lensHeight = math.max(
+      blockVisualLines.length,
+      previewRange.map(range => range.end - range.start + 1).getOrElse(0)
+    )
     val cursorVisualRow = primaryCursor.flatMap { cursor =>
       MarkdownDocumentPreview
         .previewRowForSourceLine(markdownLines, cursor.line)
         .orElse(calculateCursorVisualPosition(cursor, snapshot).map(_._1))
     }
     val desiredTop =
-      cursorVisualRow.map(row => row - lensHeight / 2).getOrElse(blockVisualLines.headOption.fold(0)(_.bufferLine))
-    desiredTop.max(0).min(math.max(0, visibleHeight - lensHeight))
+      previewRange
+        .map(_.start)
+        .orElse(cursorVisualRow.map(row => row - lensHeight / 2))
+        .getOrElse(blockVisualLines.headOption.fold(0)(_.bufferLine))
+    val visibleLensHeight = lensHeight.max(1).min(visibleHeight.max(1))
+    MarkdownLensPlacement(
+      top = desiredTop.max(0).min(math.max(0, visibleHeight - visibleLensHeight)),
+      height = visibleLensHeight
+    )
 
   private def cursorForBlock(cursors: List[CursorPosition], blockRange: Range.Inclusive): Option[CursorPosition] =
     cursors.find(cursor => blockRange.contains(cursor.line)).orElse(cursors.headOption)
