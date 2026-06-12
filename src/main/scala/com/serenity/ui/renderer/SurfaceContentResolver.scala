@@ -77,6 +77,8 @@ object SurfaceContentResolver:
             OverlayRow(s"Line ${location.line + 1}, Col ${location.column + 1}")
           )
         )
+      case SurfaceContent.CursorInfoBar(text) =>
+        ResolvedSurfaceContent(rows = List(OverlayRow(text)))
       case SurfaceContent.DirectoryListing(path, entries, selectedPath) =>
         resolveDirectoryListing(
           rect,

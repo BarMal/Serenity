@@ -127,6 +127,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MoveDown).unsafeRunSync()
     sm.applyEvent(Enter).unsafeRunSync()
     sm.applyEvent(MoveDown).unsafeRunSync()
+    sm.applyEvent(MoveDown).unsafeRunSync()
     sm.applyEvent(MoveRight).unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().config.backgroundStyle shouldBe BackgroundStyle.GlassLike

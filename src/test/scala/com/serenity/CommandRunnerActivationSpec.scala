@@ -79,7 +79,17 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
 
     runner.optionSelections.get("interface-density") shouldBe Some(0)
     runner.settingsGroups.find(_.id == "settings-appearance").map(_.children.map(_.id)) should contain(
-      List("cursor-mode", "background-style", "interface-density", "blur-radius")
+      List("cursor-mode", "cursor-info-bar", "background-style", "interface-density", "blur-radius")
+    )
+  }
+
+  it should "expose cursor info bar mode in the appearance settings group" in {
+    val config = AppConfig.default.withCursorInfoBarMode(CursorInfoBarMode.Detailed)
+    val runner = CommandRunner.empty.activate(registry, config)
+
+    runner.optionSelections.get("cursor-info-bar") shouldBe Some(2)
+    runner.settingsGroups.find(_.id == "settings-appearance").map(_.children.map(_.id)) should contain(
+      List("cursor-mode", "cursor-info-bar", "background-style", "interface-density", "blur-radius")
     )
   }
 

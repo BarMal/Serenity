@@ -85,6 +85,7 @@ case class CommandRunner(
   def settingsGroups: List[CommandSurfaceItem.GroupItem] =
     val animationItem        = CommandRunner.animationOptionItem(optionSelections)
     val cursorModeItem       = CommandRunner.cursorModeOptionItem(optionSelections)
+    val cursorInfoBarItem    = CommandRunner.cursorInfoBarOptionItem(optionSelections)
     val backgroundStyleItem  = CommandRunner.backgroundStyleOptionItem(optionSelections)
     val interfaceDensityItem = CommandRunner.interfaceDensityOptionItem(optionSelections)
     val markdownViewItem     = CommandRunner.markdownViewOptionItem(optionSelections)
@@ -102,11 +103,12 @@ case class CommandRunner(
       CommandSurfaceItem.GroupItem(
         id = "settings-appearance",
         label = "Appearance",
-        children = List(cursorModeItem, backgroundStyleItem, interfaceDensityItem) ++ inputItems.filter(
-          _.id == "blur-radius"
-        ),
+        children =
+          List(cursorModeItem, cursorInfoBarItem, backgroundStyleItem, interfaceDensityItem) ++ inputItems.filter(
+            _.id == "blur-radius"
+          ),
         category = CommandCategory.Settings,
-        hint = Some("Cursor, background, density, blur")
+        hint = Some("Cursor, info bar, background, density, blur")
       ),
       CommandSurfaceItem.GroupItem(
         id = "settings-ui-presets",
@@ -445,6 +447,7 @@ object CommandRunner:
     Map(
       "animation-mode"    -> animationModeIndex(config),
       "cursor-mode"       -> cursorModeIndex(config.cursorMode),
+      "cursor-info-bar"   -> cursorInfoBarModeIndex(config.cursorInfoBarMode),
       "background-style"  -> backgroundStyleIndex(config.backgroundStyle),
       "interface-density" -> interfaceDensityIndex(config.interfaceDensity),
       "markdown-view"     -> markdownViewModeIndex(config.markdownViewMode),
@@ -467,6 +470,20 @@ object CommandRunner:
       selectedIndex = optionSelections.getOrElse("cursor-mode", 0),
       category = CommandCategory.Settings,
       hint = Some("Blink or breathe")
+    )
+
+  private[command] def cursorInfoBarOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "cursor-info-bar",
+      label = "Cursor Info Bar",
+      options = List(
+        CommandOption("Off", CommandIntent.SetCursorInfoBarMode(CursorInfoBarMode.Off)),
+        CommandOption("Position", CommandIntent.SetCursorInfoBarMode(CursorInfoBarMode.Position)),
+        CommandOption("Detailed", CommandIntent.SetCursorInfoBarMode(CursorInfoBarMode.Detailed))
+      ),
+      selectedIndex = optionSelections.getOrElse("cursor-info-bar", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Off, position, or detailed")
     )
 
   private[command] def backgroundStyleOptionItem(
@@ -859,6 +876,12 @@ object CommandRunner:
     mode match
       case CursorMode.Blink   => 0
       case CursorMode.Breathe => 1
+
+  private def cursorInfoBarModeIndex(mode: CursorInfoBarMode): Int =
+    mode match
+      case CursorInfoBarMode.Off      => 0
+      case CursorInfoBarMode.Position => 1
+      case CursorInfoBarMode.Detailed => 2
 
   private def backgroundStyleIndex(style: BackgroundStyle): Int =
     style match

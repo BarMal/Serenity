@@ -287,6 +287,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           val newConfig = s.config.withCursorMode(mode)
           withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
         }
+      case CommandIntent.SetCursorInfoBarMode(mode) =>
+        updateConfig(_.withCursorInfoBarMode(mode)).void
       case CommandIntent.IncreaseFontSize =>
         updateFontConfig(config =>
           config.copy(

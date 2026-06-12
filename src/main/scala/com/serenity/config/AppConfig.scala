@@ -16,6 +16,17 @@ enum CursorMode:
   case Blink
   case Breathe
 
+enum CursorInfoBarMode:
+  case Off
+  case Position
+  case Detailed
+
+  def configKey: String =
+    this match
+      case Off      => "off"
+      case Position => "position"
+      case Detailed => "detailed"
+
 enum WindowChromeMode:
   case Native
   case Custom
@@ -141,6 +152,7 @@ case class AppConfig(
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     cursorMode: CursorMode = CursorMode.Blink,
     cursorColors: CursorColorConfig = CursorColorConfig(),
+    cursorInfoBarMode: CursorInfoBarMode = CursorInfoBarMode.Off,
     windowChromeMode: WindowChromeMode = WindowChromeMode.Native,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
@@ -229,6 +241,9 @@ case class AppConfig(
 
   def withCursorColors(colors: CursorColorConfig): AppConfig =
     copy(cursorColors = colors)
+
+  def withCursorInfoBarMode(mode: CursorInfoBarMode): AppConfig =
+    copy(cursorInfoBarMode = mode)
 
   def withWindowChromeMode(mode: WindowChromeMode): AppConfig =
     copy(windowChromeMode = mode)
