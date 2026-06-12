@@ -98,9 +98,9 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
 
   "SetCursorMode" should "update config.cursorMode to Breathe via command runner navigation" in {
     val sm = makeStateManager()
-    // Open runner, navigate to Settings (4 tabs), move down to cursor mode option, press Right (Blink → Breathe)
+    // Open runner, navigate to Settings (5 tabs), move down to cursor mode option, press Right (Blink → Breathe)
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    for _ <- 1 to 4 do sm.applyEvent(TabKey).unsafeRunSync()
+    for _ <- 1 to 5 do sm.applyEvent(TabKey).unsafeRunSync()
     sm.applyEvent(MoveDown).unsafeRunSync()
     sm.applyEvent(Enter).unsafeRunSync()
     sm.applyEvent(MoveRight).unsafeRunSync()
@@ -111,7 +111,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   it should "restore Blink by pressing Right again (wraps around)" in {
     val sm = makeStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    for _ <- 1 to 4 do sm.applyEvent(TabKey).unsafeRunSync()
+    for _ <- 1 to 5 do sm.applyEvent(TabKey).unsafeRunSync()
     sm.applyEvent(MoveDown).unsafeRunSync()
     sm.applyEvent(Enter).unsafeRunSync()
     sm.applyEvent(MoveRight).unsafeRunSync() // Blink → Breathe
@@ -123,7 +123,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   "SetBackgroundStyle" should "update config.backgroundStyle via command runner navigation" in {
     val sm = makeStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    for _ <- 1 to 4 do sm.applyEvent(TabKey).unsafeRunSync()
+    for _ <- 1 to 5 do sm.applyEvent(TabKey).unsafeRunSync()
     sm.applyEvent(MoveDown).unsafeRunSync()
     sm.applyEvent(Enter).unsafeRunSync()
     sm.applyEvent(MoveDown).unsafeRunSync()

@@ -121,7 +121,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
     val header = floating.header.getOrElse(fail("Expected category header"))
     header.layout shouldBe OverlayRowLayout.Distributed
-    header.segments.map(_.text) shouldBe List("All", "File", "View", "Edit", "Settings")
+    header.segments.map(_.text) shouldBe List("All", "File", "View", "Edit", "Project", "Settings")
     header.segments.count(_.selected) shouldBe 1
     header.segments.find(_.selected).map(_.text) shouldBe Some("Settings")
 

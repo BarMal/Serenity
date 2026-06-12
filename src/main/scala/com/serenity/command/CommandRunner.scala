@@ -312,6 +312,7 @@ case class CommandRunner(
       CommandCategory.File,
       CommandCategory.View,
       CommandCategory.Edit,
+      CommandCategory.Project,
       CommandCategory.Settings
     )
     val currentIndex = categories.indexOf(activeCategory)

@@ -2,6 +2,7 @@ package com.serenity.command
 
 import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
+import com.serenity.project.ProjectTaskKind
 import com.serenity.ui.layout.PanelPosition
 
 enum AnimationMode:
@@ -15,6 +16,7 @@ enum CommandCategory:
   case File
   case View
   case Edit
+  case Project
   case Settings
 
 enum CommandIntent:
@@ -74,6 +76,7 @@ enum CommandIntent:
   case SetUiLigatures(enabled: Boolean)
   case SaveUiPreset(name: String)
   case ApplyUiPreset(name: String)
+  case RunProjectTask(kind: ProjectTaskKind)
   case ToggleLigatures
   case StartupNewSession
   case StartupRestoreSession

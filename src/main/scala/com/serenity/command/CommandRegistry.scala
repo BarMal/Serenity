@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import com.serenity.command.CommandSurfaceItem.CommandItem
+import com.serenity.project.ProjectTaskKind
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.layout.PanelPosition
 
@@ -361,5 +362,40 @@ object CommandRegistry:
       CommandIntent.CollapseExpandedPanel,
       CommandCategory.View,
       label = "Collapse Expanded Panel"
+    ),
+    Command.typed(
+      "project-build",
+      "Build the detected project.",
+      CommandIntent.RunProjectTask(ProjectTaskKind.Build),
+      CommandCategory.Project,
+      label = "Build Project"
+    ),
+    Command.typed(
+      "project-test",
+      "Run tests for the detected project.",
+      CommandIntent.RunProjectTask(ProjectTaskKind.Test),
+      CommandCategory.Project,
+      label = "Test Project"
+    ),
+    Command.typed(
+      "project-run",
+      "Run the detected project.",
+      CommandIntent.RunProjectTask(ProjectTaskKind.Run),
+      CommandCategory.Project,
+      label = "Run Project"
+    ),
+    Command.typed(
+      "project-debug",
+      "Run the detected project through its debug workflow.",
+      CommandIntent.RunProjectTask(ProjectTaskKind.Debug),
+      CommandCategory.Project,
+      label = "Debug Project"
+    ),
+    Command.typed(
+      "project-dependencies",
+      "Show or resolve dependencies for the detected project.",
+      CommandIntent.RunProjectTask(ProjectTaskKind.Dependencies),
+      CommandCategory.Project,
+      label = "Project Dependencies"
     )
   )

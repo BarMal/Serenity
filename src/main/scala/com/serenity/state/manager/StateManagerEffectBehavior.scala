@@ -11,6 +11,7 @@ import com.serenity.io.{FileEntry, FileUtils}
 import com.serenity.keystroke.events.ExplorerEvent
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
+import com.serenity.project.*
 import com.serenity.session.SessionSaveTrigger
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
@@ -331,6 +332,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateConfig(_.withTextAreaLeftInset(value)).void
       case CommandIntent.SetTextAreaRightInset(value) =>
         updateConfig(_.withTextAreaRightInset(value)).void
+      case CommandIntent.RunProjectTask(kind) =>
+        runProjectTask(state, kind)
       case CommandIntent.ToggleLigatures =>
         updateFontConfig(config =>
           config.copy(enableLigatures = !config.enableLigatures, textLigatures = !config.textLigatures)
@@ -447,6 +450,33 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
 
   private def normalizedPresetName(name: String): Option[String] =
     Option(name.trim).filter(_.nonEmpty)
+
+  private def runProjectTask(state: AppState, kind: ProjectTaskKind): IO[Unit] =
+    projectTaskStartPath(state).flatMap { start =>
+      ProjectTaskDetector.detect(start, kind) match
+        case None =>
+          pinProjectTerminal(ProjectTaskTerminal.noTask(kind, start))
+        case Some(command) =>
+          pinProjectTerminal(ProjectTaskTerminal.started(command)) >>
+            ProjectTaskRunner
+              .run(command)
+              .attempt
+              .flatMap {
+                case Right(result) =>
+                  pinProjectTerminal(ProjectTaskTerminal.completed(result))
+                case Left(error) =>
+                  pinProjectTerminal(ProjectTaskTerminal.failedToStart(command, error))
+              }
+    }
+
+  private def projectTaskStartPath(state: AppState): IO[Path] =
+    state.focusedBufferId
+      .flatMap(state.buffers.get)
+      .flatMap(_.filePath)
+      .fold(FileUtils.getCurrentDirectory)(path => IO.pure(path))
+
+  private def pinProjectTerminal(text: String): IO[Unit] =
+    pinPanel(PanelContent.Terminal(text, text.length), PanelPosition.Bottom, 14)
 
   private def persistConfigFile(config: com.serenity.config.AppConfig): IO[Unit] =
     configPersistencePath match
