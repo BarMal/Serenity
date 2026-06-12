@@ -40,6 +40,8 @@ enum CommandIntent:
   case ReloadTheme
   case FormatCurrentFile
   case SetAnimationMode(mode: AnimationMode)
+  case SetMaterialPreset(preset: MaterialPreset)
+  case SetMotionPreset(preset: MotionPreset)
   case SetBackgroundStyle(style: BackgroundStyle)
   case SetBlurRadius(r: Float)
   case SetAnimationDuration(ms: Int)

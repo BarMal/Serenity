@@ -156,6 +156,10 @@ object ConfigManager:
                   config.withCursorInfoBarMode(CursorInfoBarMode.Detailed)
                 case _ =>
                   config
+            case "ui.material" | "ui_material" | "material.preset" | "material_preset" =>
+              parseMaterialPreset(value.trim).map(config.withMaterialPreset).getOrElse(config)
+            case "ui.motion" | "ui_motion" | "motion.preset" | "motion_preset" =>
+              parseMotionPreset(value.trim).map(config.withMotionPreset).getOrElse(config)
             case "window.preferred.width" | "window_preferred_width" =>
               value.trim.toIntOption
                 .map(width =>
@@ -258,6 +262,10 @@ object ConfigManager:
        |# Interface density: compact, comfortable, spacious
        |interface.density = ${config.interfaceDensity.configKey}
        |
+       |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
+       |ui.material = ${config.materialPreset.configKey}
+       |ui.motion = ${config.motionPreset.configKey}
+       |
        |# Preferred desktop window size. Leave empty to use the default.
        |window.preferred.width = ${config.preferredWindowSize.map(_.width).fold("")(_.toString)}
        |window.preferred.height = ${config.preferredWindowSize.map(_.height).fold("")(_.toString)}
@@ -304,6 +312,24 @@ object ConfigManager:
 
   private def clampFontSize(size: Float): Float =
     size.max(8.0f).min(48.0f)
+
+  private def parseMaterialPreset(value: String): Option[MaterialPreset] =
+    value.toLowerCase match
+      case "solid" | "opaque"      => Some(MaterialPreset.Solid)
+      case "clear" | "transparent" => Some(MaterialPreset.Clear)
+      case "frosted" | "soft"      => Some(MaterialPreset.Frosted)
+      case "crystal" | "glass"     => Some(MaterialPreset.Crystal)
+      case "custom"                => Some(MaterialPreset.Custom)
+      case _                       => None
+
+  private def parseMotionPreset(value: String): Option[MotionPreset] =
+    value.toLowerCase match
+      case "reduced" | "none" | "off" | "disabled" => Some(MotionPreset.Reduced)
+      case "subtle"                                => Some(MotionPreset.Subtle)
+      case "smooth"                                => Some(MotionPreset.Smooth)
+      case "expressive" | "full" | "quick"         => Some(MotionPreset.Expressive)
+      case "custom"                                => Some(MotionPreset.Custom)
+      case _                                       => None
 
   private def parseColor(value: String): Option[java.awt.Color] =
     val hex = value.stripPrefix("#")
@@ -415,6 +441,10 @@ object ConfigManager:
                           |
                           |# Interface density: compact, comfortable, spacious
                           |interface.density = comfortable
+                          |
+                          |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
+                          |ui.material = frosted
+                          |ui.motion = smooth
                           |
                           |# Preferred desktop window size. Leave empty to use the default.
                           |window.preferred.width =

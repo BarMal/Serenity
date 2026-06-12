@@ -93,6 +93,25 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "expose material and motion presets with current selections" in {
+    val config = AppConfig.default
+      .withMaterialPreset(MaterialPreset.Crystal)
+      .withMotionPreset(MotionPreset.Reduced)
+    val runner = CommandRunner.empty.activate(registry, config)
+
+    val materialGroup = runner.settingsGroups.find(_.id == "settings-material-motion").getOrElse {
+      fail("Expected material and motion settings group")
+    }
+    materialGroup.children.collectFirst {
+      case item: CommandSurfaceItem.OptionItem if item.id == "material-preset" =>
+        (item.selectedOption, item.options.map(_.label))
+    } shouldBe Some("Crystal" -> List("Solid", "Clear", "Frosted", "Crystal", "Custom"))
+    materialGroup.children.collectFirst {
+      case item: CommandSurfaceItem.OptionItem if item.id == "motion-preset" =>
+        (item.selectedOption, item.options.map(_.label))
+    } shouldBe Some("Reduced" -> List("Reduced", "Subtle", "Smooth", "Expressive", "Custom"))
+  }
+
   "ensureCommandRunnerSurface (via closePane)" should "use the current config, not defaults" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))

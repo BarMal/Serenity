@@ -228,34 +228,28 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.FormatCurrentFile =>
         logger.debug("[CMD] Format command requested")
       case CommandIntent.SetAnimationMode(mode) =>
-        updateState { s =>
+        updateConfig { config =>
           mode match
-            case AnimationMode.None =>
-              s.copy(config = s.config.withoutCharacterAnimation)
-            case AnimationMode.Quick =>
-              s.copy(config = s.config.copy(characterAnimation = AnimationConfig.quick))
-            case AnimationMode.Smooth =>
-              s.copy(config = s.config.copy(characterAnimation = AnimationConfig.smooth))
-            case AnimationMode.Subtle =>
-              s.copy(config = s.config.copy(characterAnimation = AnimationConfig.subtle))
-        }
+            case AnimationMode.None   => config.withoutCharacterAnimation
+            case AnimationMode.Quick  => config.withMotionPreset(com.serenity.config.MotionPreset.Expressive)
+            case AnimationMode.Smooth => config.withMotionPreset(com.serenity.config.MotionPreset.Smooth)
+            case AnimationMode.Subtle => config.withMotionPreset(com.serenity.config.MotionPreset.Subtle)
+        }.void
+      case CommandIntent.SetMaterialPreset(preset) =>
+        updateConfig(_.withMaterialPreset(preset)).void
+      case CommandIntent.SetMotionPreset(preset) =>
+        updateConfig(_.withMotionPreset(preset)).void
       case CommandIntent.SetBackgroundStyle(style) =>
-        updateState { s =>
-          val newConfig = s.config.withBackgroundStyle(style)
-          withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
-        }
+        updateConfig(_.withBackgroundStyle(style)).void
       case CommandIntent.SetBlurRadius(r) =>
-        updateState { s =>
-          val newConfig = s.config.withBlurRadius(r)
-          withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
-        }
+        updateConfig(_.withBlurRadius(r)).void
       case CommandIntent.SetAnimationDuration(ms) =>
-        updateState { s =>
+        updateConfig { config =>
           val newAnim =
             if ms <= 0 then None
             else
               Some(
-                s.config.characterAnimation.fold(
+                config.characterAnimation.fold(
                   AnimationConfig(
                     steps = 12,
                     totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L)
@@ -264,30 +258,25 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
                   existing.copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
                 )
               )
-          val newConfig = s.config.copy(characterAnimation = newAnim)
-          withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
-        }
+          config.copy(characterAnimation = newAnim, motionPreset = com.serenity.config.MotionPreset.Custom)
+        }.void
       case CommandIntent.SetAnimationSteps(n) =>
-        updateState { s =>
+        updateConfig { config =>
           val newAnim =
             if n <= 0 then None
             else
               Some(
-                s.config.characterAnimation.fold(
+                config.characterAnimation.fold(
                   AnimationConfig(
                     steps = n,
                     totalDuration = scala.concurrent.duration.Duration.fromNanos(200_000_000L)
                   )
                 )(existing => existing.copy(steps = n))
               )
-          val newConfig = s.config.copy(characterAnimation = newAnim)
-          withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
-        }
+          config.copy(characterAnimation = newAnim, motionPreset = com.serenity.config.MotionPreset.Custom)
+        }.void
       case CommandIntent.SetCursorMode(mode) =>
-        updateState { s =>
-          val newConfig = s.config.withCursorMode(mode)
-          withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
-        }
+        updateConfig(_.withCursorMode(mode)).void
       case CommandIntent.SetCursorInfoBarMode(mode) =>
         updateConfig(_.withCursorInfoBarMode(mode)).void
       case CommandIntent.IncreaseFontSize =>
