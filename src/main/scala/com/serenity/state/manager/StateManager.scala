@@ -7,11 +7,10 @@ import cats.effect.{Deferred, IO, Ref}
 import com.serenity.animation.{AnimatedCell, CharacterKey, RgbInterpolator}
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
-import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
-import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
+import com.serenity.session.{SessionManager, SessionSaveTrigger}
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -137,23 +136,24 @@ object StateManager:
         .flatMap(Ref.of[IO, List[String]])
       quitSignal <- Deferred[IO, Unit]
       lspQueue   <- Queue.bounded[IO, LspEffect](256)
-    yield new StateManagerImpl(
-      stateRef,
-      undoRef,
-      themeNamesRef,
-      quitSignal,
-      LoggerFactory[IO].getLogger(using LoggerName("com.serenity.state.manager.StateManager")),
-      policy,
-      resolvedSessionRootOverride,
-      themeManager,
-      lspQueue,
-      mouseTargetCacheRef,
-      onFontConfigChanged,
-      configPersistencePath,
-      uiPresetStore,
-      windowSizeProvider,
-      onPreferredWindowSizeChanged
-    )
+      runtime = StateManagerRuntime.create(
+        stateRef = stateRef,
+        undoRef = undoRef,
+        themeNamesRef = themeNamesRef,
+        quitSignal = quitSignal,
+        logger = LoggerFactory[IO].getLogger(using LoggerName("com.serenity.state.manager.StateManager")),
+        policy = policy,
+        sessionRootOverride = resolvedSessionRootOverride,
+        themeManager = themeManager,
+        lspQueue = lspQueue,
+        mouseTargetCacheRef = mouseTargetCacheRef,
+        onFontConfigChanged = onFontConfigChanged,
+        configPersistencePath = configPersistencePath,
+        uiPresetStore = uiPresetStore,
+        windowSizeProvider = windowSizeProvider,
+        onPreferredWindowSizeChanged = onPreferredWindowSizeChanged
+      )
+    yield new StateManagerImpl(runtime)
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
     val modePart =
@@ -172,23 +172,7 @@ object StateManager:
   def describeCommandExecution(command: Command): String =
     s"command=${command.name} category=${command.category} intent=${command.intent}"
 
-  private class StateManagerImpl(
-      protected val stateRef: Ref[IO, AppState],
-      protected val undoRef: Ref[IO, UndoState],
-      protected val themeNamesRef: Ref[IO, List[String]],
-      protected val quitSignal: Deferred[IO, Unit],
-      protected val logger: Logger[IO],
-      protected val policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy(),
-      protected val sessionRootOverride: Option[Path],
-      protected val themeManager: AppThemeManager = AppThemeManager.create,
-      protected val lspQueue: Queue[IO, LspEffect],
-      protected val mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
-      protected val onFontConfigChanged: FontConfig => IO[Unit],
-      protected val configPersistencePath: Option[Path],
-      protected val uiPresetStore: UiPresetStore,
-      protected val windowSizeProvider: IO[Option[PreferredWindowSize]],
-      protected val onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit]
-  )(using Balance)
+  private class StateManagerImpl(protected val runtime: StateManagerRuntime)(using Balance)
       extends StateManager,
         StateManagerBehavior:
 
@@ -198,14 +182,6 @@ object StateManager:
       Stream
         .fromQueueUnterminated(lspQueue)
         .interruptWhen(Stream.eval(quitSignal.get).as(true))
-
-    protected val fileManager = new FileManager()
-
-    protected val sessionManager = sessionRootOverride
-      .map(root => SessionManager.create(root, themeManager, logger, policy))
-      .getOrElse(SessionManager.create(themeManager, logger, policy))
-
-    protected val sessionPersistence = new SessionPersistence(sessionManager, policy, logger)
 
     def executeCommand(command: Command): IO[Unit] =
       stateRef.get.flatMap(state => interpretCommand(command, state))
