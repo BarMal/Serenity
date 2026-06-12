@@ -1,5 +1,6 @@
 package com.serenity.ui.layout
 
+import com.serenity.config.InterfaceDensityMetrics
 import com.serenity.state.models.*
 
 case class ViewportSize(width: Int, height: Int)
@@ -49,8 +50,9 @@ object LayoutEngine:
     viewportSize: ViewportSize,
     spacerPercentage: Double = DefaultSpacerPercentage
   ): CalculatedLayout =
-    val gutterHeight  = if state.config.showGutter then 1 else 0
-    val contentHeight = math.max(1, viewportSize.height - gutterHeight)
+    val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
+    val gutterHeight   = if state.config.showGutter then densityMetrics.gutterHeight else 0
+    val contentHeight  = math.max(1, viewportSize.height - gutterHeight)
     val pinnedPanelRects = calculatePinnedPanelRects(
       state.pinnedSurfaces,
       viewportSize.width,
@@ -73,7 +75,7 @@ object LayoutEngine:
     val workspaceHeight =
       math.max(1, contentHeight - topPinnedHeight - bottomPinnedHeight)
 
-    val spacerWidth = (workspaceWidth * spacerPercentage).toInt
+    val spacerWidth = (workspaceWidth * densityAwareSpacerPercentage(spacerPercentage, densityMetrics)).toInt
 
     // Calculate space needed for UI elements
     val lineNumberWidth =
@@ -87,7 +89,8 @@ object LayoutEngine:
     val leftSpacerRect = LayoutRect(workspaceX, workspaceY, spacerWidth, workspaceHeight)
     val lineNumberRect =
       if state.config.showLineNumbers then
-        Some(LayoutRect(workspaceX + spacerWidth, workspaceY + 1, lineNumberWidth, availableHeight))
+        val topInset = densityMetrics.lineNumberTopInset.min(math.max(0, availableHeight - 1))
+        Some(LayoutRect(workspaceX + spacerWidth, workspaceY + topInset, lineNumberWidth, availableHeight - topInset))
       else None
 
     val editorPanelRect = LayoutRect(
@@ -100,7 +103,8 @@ object LayoutEngine:
       LayoutRect(workspaceX + spacerWidth + lineNumberWidth + availableWidth, workspaceY, spacerWidth, workspaceHeight)
 
     val gutterRect =
-      if state.config.showGutter then Some(LayoutRect(0, viewportSize.height - 1, viewportSize.width, 1))
+      if state.config.showGutter then
+        Some(LayoutRect(0, viewportSize.height - gutterHeight, viewportSize.width, gutterHeight))
       else None
 
     val baseLayout = CalculatedLayout(
@@ -201,7 +205,7 @@ object LayoutEngine:
     yield
       val contentRect     = CursorLayout.contentRectForPane(paneRect)
       val preferredWidth  = calculateFloatingSurfaceWidth(surface.content, contentRect.width)
-      val preferredHeight = calculateFloatingSurfaceHeight(surface.content, contentRect.height)
+      val preferredHeight = calculateFloatingSurfaceHeight(surface.content, contentRect.height, state)
       val overlayX = math.max(
         contentRect.x,
         math.min(screenPosition.x - (preferredWidth / 2), contentRect.right - preferredWidth)
@@ -266,7 +270,7 @@ object LayoutEngine:
           (mainRectOpt, submenuBaseRectOpt) match
             case (Some(mainRect), Some(submenuRect)) =>
               val collapsedHeight = 3
-              val gapRows         = 1
+              val gapRows         = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows
               val availableBottom = state.layout.activeEditorPaneId
                 .flatMap(paneLayouts.get)
                 .map(CursorLayout.contentRectForPane)
@@ -294,7 +298,8 @@ object LayoutEngine:
   private def calculateFloatingSurfaceWidth(content: SurfaceContent, maxWidth: Int): Int =
     maxWidth
 
-  private def calculateFloatingSurfaceHeight(content: SurfaceContent, maxHeight: Int): Int =
+  private def calculateFloatingSurfaceHeight(content: SurfaceContent, maxHeight: Int, state: AppState): Int =
+    val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
     val preferredHeight = content match
       case SurfaceContent.StartPage(_)            => maxHeight
       case SurfaceContent.QuickInfo(text)         => math.max(3, text.linesIterator.size + 2)
@@ -304,14 +309,20 @@ object LayoutEngine:
       case SurfaceContent.DirectoryTree(tree, _) =>
         math.max(4, math.min(8, DirectoryTreeData.visibleRows(tree).size + 2))
       case SurfaceContent.CommandPalette(_) | SurfaceContent.ThemePicker(_) | SurfaceContent.FileSearch(_) =>
-        math.min(8, math.max(4, maxHeight - 1))
+        math.min(
+          densityMetrics.commandSurfaceMaxHeight,
+          math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1)
+        )
       case SurfaceContent.CommandPaletteSubmenu(runner, groupId, _) =>
         val allItems = runner.submenuItems(groupId)
         val itemCount = runner.activeSubmenu
           .filter(_.groupId == groupId)
           .map(_.filteredItems(allItems).size)
           .getOrElse(allItems.size)
-        math.min(8, math.max(4, itemCount + 3))
+        math.min(
+          densityMetrics.commandSurfaceMaxHeight,
+          math.max(densityMetrics.commandSurfaceMinHeight, itemCount + densityMetrics.commandSurfaceVerticalPadding)
+        )
       case SurfaceContent.ModalWorkflow(modal) =>
         modal match
           case Modal.FileWorkflow(workflow) =>
@@ -330,6 +341,13 @@ object LayoutEngine:
         cachedRect.height
 
     math.max(3, math.min(maxHeight, preferredHeight))
+
+  private def densityAwareSpacerPercentage(
+    spacerPercentage: Double,
+    densityMetrics: InterfaceDensityMetrics
+  ): Double =
+    if spacerPercentage == DefaultSpacerPercentage then densityMetrics.editorSpacerPercentage
+    else spacerPercentage
 
   private def surfaceAnchor(surface: UiSurface): Option[CursorPosition] =
     surface.presentation match

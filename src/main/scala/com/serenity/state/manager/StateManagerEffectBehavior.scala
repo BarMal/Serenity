@@ -205,6 +205,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         openMarkdownPreview(state)
       case CommandIntent.SetMarkdownViewMode(mode) =>
         setMarkdownViewMode(state, mode)
+      case CommandIntent.SetInterfaceDensity(density) =>
+        updateConfig(_.withInterfaceDensity(density)).void
       case CommandIntent.FocusPanel(position) =>
         switchToPinnedPanel(position)
       case CommandIntent.UnpinPanel(position) =>

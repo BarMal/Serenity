@@ -5,7 +5,7 @@ import java.nio.file.Files
 
 import _root_.io.circe.syntax.*
 import com.serenity.animation.AnimationConfig
-import com.serenity.config.{AppConfig, BackgroundStyle, WindowChromeMode}
+import com.serenity.config.*
 import com.serenity.rope.Balance
 import com.serenity.session.given
 import com.serenity.session.{SessionFindResult, SessionFindState, SessionState}
@@ -203,6 +203,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         blurRadius = 0.42f,
         backgroundStyle = BackgroundStyle.GlassLike,
         windowChromeMode = WindowChromeMode.Custom,
+        interfaceDensity = InterfaceDensity.Spacious,
         showLineNumbers = false,
         showGutter = false
       )
@@ -213,6 +214,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.blurRadius shouldBe 0.42f
     decoded.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
     decoded.config.windowChromeMode shouldBe WindowChromeMode.Custom
+    decoded.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     decoded.config.fontConfig.codeFontFamily shouldBe "Monospaced"
     decoded.config.fontConfig.textFontFamily shouldBe "SansSerif"
     decoded.config.fontConfig.uiFontFamily shouldBe "Dialog"
@@ -256,6 +258,21 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.windowChromeMode shouldBe WindowChromeMode.Native
+  }
+
+  it should "default interfaceDensity to Comfortable when loading older JSON without the field" in {
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val jsonWithoutInterfaceDensity =
+      originalJson.mapObject(
+        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("interfaceDensity")))
+      )
+
+    val decoded = jsonWithoutInterfaceDensity.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.interfaceDensity shouldBe InterfaceDensity.Comfortable
   }
 
   it should "default uiFontFamily to SansSerif when loading older JSON without the field" in {

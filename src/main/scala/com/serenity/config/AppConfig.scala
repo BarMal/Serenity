@@ -24,6 +24,62 @@ enum MarkdownViewMode:
   case SplitPreview
   case InlineLens
 
+enum InterfaceDensity:
+  case Compact
+  case Comfortable
+  case Spacious
+
+  def configKey: String =
+    this match
+      case Compact     => "compact"
+      case Comfortable => "comfortable"
+      case Spacious    => "spacious"
+
+case class InterfaceDensityMetrics(
+    editorSpacerPercentage: Double,
+    lineNumberTopInset: Int,
+    gutterHeight: Int,
+    overlayGapRows: Int,
+    commandSurfaceMaxHeight: Int,
+    commandSurfaceMinHeight: Int,
+    commandSurfaceVerticalPadding: Int
+)
+
+object InterfaceDensityMetrics:
+
+  def forDensity(density: InterfaceDensity): InterfaceDensityMetrics =
+    density match
+      case InterfaceDensity.Compact =>
+        InterfaceDensityMetrics(
+          editorSpacerPercentage = 0.08,
+          lineNumberTopInset = 0,
+          gutterHeight = 1,
+          overlayGapRows = 0,
+          commandSurfaceMaxHeight = 6,
+          commandSurfaceMinHeight = 3,
+          commandSurfaceVerticalPadding = 2
+        )
+      case InterfaceDensity.Comfortable =>
+        InterfaceDensityMetrics(
+          editorSpacerPercentage = 0.15,
+          lineNumberTopInset = 1,
+          gutterHeight = 1,
+          overlayGapRows = 1,
+          commandSurfaceMaxHeight = 8,
+          commandSurfaceMinHeight = 4,
+          commandSurfaceVerticalPadding = 3
+        )
+      case InterfaceDensity.Spacious =>
+        InterfaceDensityMetrics(
+          editorSpacerPercentage = 0.22,
+          lineNumberTopInset = 2,
+          gutterHeight = 2,
+          overlayGapRows = 2,
+          commandSurfaceMaxHeight = 10,
+          commandSurfaceMinHeight = 5,
+          commandSurfaceVerticalPadding = 4
+        )
+
 case class PreferredWindowSize(width: Int, height: Int):
   def normalized: PreferredWindowSize =
     PreferredWindowSize(width.max(400), height.max(300))
@@ -54,6 +110,7 @@ case class AppConfig(
     cursorColors: CursorColorConfig = CursorColorConfig(),
     windowChromeMode: WindowChromeMode = WindowChromeMode.Native,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
+    interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
     preferredWindowSize: Option[PreferredWindowSize] = None
 ):
   /** Create a new config with character animation enabled */
@@ -125,6 +182,9 @@ case class AppConfig(
 
   def withMarkdownViewMode(mode: MarkdownViewMode): AppConfig =
     copy(markdownViewMode = mode)
+
+  def withInterfaceDensity(density: InterfaceDensity): AppConfig =
+    copy(interfaceDensity = density)
 
   def withPreferredWindowSize(size: PreferredWindowSize): AppConfig =
     copy(preferredWindowSize = Some(size.normalized))
