@@ -1,0 +1,30 @@
+{
+  "name": "Serenity Scala",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+  "remoteUser": "vscode",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "scalameta.metals",
+        "scala-lang.scala",
+        "redhat.vscode-yaml",
+        "github.vscode-github-actions",
+        "eamodio.gitlens"
+      ]
+    }
+  },
+  "mounts": [
+    "source=serenity-sbt-cache,target=/home/vscode/.sbt,type=volume",
+    "source=serenity-coursier-cache,target=/home/vscode/.cache/coursier,type=volume",
+    "source=serenity-ivy-cache,target=/home/vscode/.ivy2,type=volume"
+  ],
+  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.sbt /home/vscode/.cache/coursier /home/vscode/.ivy2 && sbt -v --version"
+}
