@@ -116,6 +116,13 @@ case class CommandRunner(
         hint = Some("Save or apply named layouts")
       ),
       CommandSurfaceItem.GroupItem(
+        id = "settings-text-area",
+        label = "Text Area",
+        children = inputItems.filter(item => item.id == "text-area-left" || item.id == "text-area-right"),
+        category = CommandCategory.Settings,
+        hint = Some("Resize editor margins")
+      ),
+      CommandSurfaceItem.GroupItem(
         id = "settings-code-font",
         label = "Code Font",
         children = List(
@@ -622,12 +629,14 @@ object CommandRunner:
     )
 
   private[command] def buildInputItems(config: AppConfig): List[CommandSurfaceItem.InputItem] =
-    val durationValue     = config.characterAnimation.map(_.durationMs.toString).getOrElse("0")
-    val stepsValue        = config.characterAnimation.map(_.steps.toString).getOrElse("0")
-    val blurValue         = config.blurRadius.toString
-    val codeFontSizeValue = config.fontConfig.codeFontSize.toString
-    val textFontSizeValue = config.fontConfig.textFontSize.toString
-    val uiFontSizeValue   = config.fontConfig.uiFontSize.toString
+    val durationValue      = config.characterAnimation.map(_.durationMs.toString).getOrElse("0")
+    val stepsValue         = config.characterAnimation.map(_.steps.toString).getOrElse("0")
+    val blurValue          = config.blurRadius.toString
+    val codeFontSizeValue  = config.fontConfig.codeFontSize.toString
+    val textFontSizeValue  = config.fontConfig.textFontSize.toString
+    val uiFontSizeValue    = config.fontConfig.uiFontSize.toString
+    val textAreaLeftValue  = f"${config.textAreaInsets.leftPercent}%.1f"
+    val textAreaRightValue = f"${config.textAreaInsets.rightPercent}%.1f"
 
     val presetItems = List(
       CommandSurfaceItem.InputItem(
@@ -649,6 +658,33 @@ object CommandRunner:
         parse = text => nonEmptyText(text).map(CommandIntent.ApplyUiPreset(_)),
         category = CommandCategory.Settings,
         acceptsFreeText = true
+      )
+    )
+
+    val textAreaItems = List(
+      CommandSurfaceItem.InputItem(
+        id = "text-area-left",
+        label = "Left Text Margin",
+        hint = "Percent (0-45)",
+        currentValue = textAreaLeftValue,
+        isDecimal = true,
+        parse = text =>
+          text.toDoubleOption
+            .filter(value => value >= 0.0 && value <= 45.0)
+            .map(value => CommandIntent.SetTextAreaLeftInset(value / 100.0)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "text-area-right",
+        label = "Right Text Margin",
+        hint = "Percent (0-45)",
+        currentValue = textAreaRightValue,
+        isDecimal = true,
+        parse = text =>
+          text.toDoubleOption
+            .filter(value => value >= 0.0 && value <= 45.0)
+            .map(value => CommandIntent.SetTextAreaRightInset(value / 100.0)),
+        category = CommandCategory.Settings
       )
     )
 
@@ -727,7 +763,7 @@ object CommandRunner:
       )
     )
 
-    presetItems ++ numericItems ++ buildKeymapInputItems(config)
+    presetItems ++ textAreaItems ++ numericItems ++ buildKeymapInputItems(config)
 
   private def nonEmptyText(text: String): Option[String] =
     Option(text.trim).filter(_.nonEmpty)

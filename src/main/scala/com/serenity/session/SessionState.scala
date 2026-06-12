@@ -417,6 +417,9 @@ given Decoder[InterfaceDensity] = Decoder.decodeString.emap {
 given Encoder[PreferredWindowSize] = deriveEncoder
 given Decoder[PreferredWindowSize] = deriveDecoder
 
+given Encoder[TextAreaInsets] = deriveEncoder
+given Decoder[TextAreaInsets] = deriveDecoder
+
 given Encoder[BackgroundStyle] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[BackgroundStyle] = Decoder.decodeString.emap {
@@ -459,6 +462,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     windowChromeMode          <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(WindowChromeMode.Native)
     markdownViewMode          <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
     interfaceDensity          <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(InterfaceDensity.Comfortable)
+    textAreaInsets            <- cursor.getOrElse[TextAreaInsets]("textAreaInsets")(TextAreaInsets())
     preferredWindowSize       <- cursor.getOrElse[Option[PreferredWindowSize]]("preferredWindowSize")(None)
     lspUserConfig             <- cursor.getOrElse[LspUserConfig]("lspUserConfig")(LspUserConfig.empty)
   yield AppConfig(
@@ -477,6 +481,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     windowChromeMode = windowChromeMode,
     markdownViewMode = markdownViewMode,
     interfaceDensity = interfaceDensity,
+    textAreaInsets = textAreaInsets,
     preferredWindowSize = preferredWindowSize,
     lspUserConfig = lspUserConfig
   )

@@ -547,33 +547,37 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
   private def handleMouseDrag(drag: MouseDrag, state: AppState): cats.effect.IO[Unit] =
     if drag.button != MouseButton.Primary then cats.effect.IO.unit
     else
-      resolveMouseTarget(drag, state).flatMap {
-        _.fold(cats.effect.IO.unit) { (paneId, buffer, draggedCursor) =>
-          stateRef.update { s =>
-            s.buffers.get(buffer.id) match
-              case Some(current) =>
-                val anchor =
-                  current.primarySelection.map(_.anchor).orElse(current.cursors.headOption).getOrElse(draggedCursor)
-                val selection =
-                  Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
-                s.copy(
-                  buffers = s.buffers.updated(
-                    buffer.id,
-                    current.copy(
-                      cursors = List(draggedCursor),
-                      selection = selection,
-                      selections = Nil,
-                      preferredColumn = Some(draggedCursor.column),
-                      preferredXPx = None,
-                      multiCursorVerticalStates = Nil
+      handleTextAreaResizeDrag(drag, state).flatMap {
+        case true => cats.effect.IO.unit
+        case false =>
+          resolveMouseTarget(drag, state).flatMap {
+            _.fold(cats.effect.IO.unit) { (paneId, buffer, draggedCursor) =>
+              stateRef.update { s =>
+                s.buffers.get(buffer.id) match
+                  case Some(current) =>
+                    val anchor =
+                      current.primarySelection.map(_.anchor).orElse(current.cursors.headOption).getOrElse(draggedCursor)
+                    val selection =
+                      Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
+                    s.copy(
+                      buffers = s.buffers.updated(
+                        buffer.id,
+                        current.copy(
+                          cursors = List(draggedCursor),
+                          selection = selection,
+                          selections = Nil,
+                          preferredColumn = Some(draggedCursor.column),
+                          preferredXPx = None,
+                          multiCursorVerticalStates = Nil
+                        )
+                      ),
+                      focus = Focus.EditorPane(paneId),
+                      layout = s.layout.copy(activeEditorPaneId = Some(paneId))
                     )
-                  ),
-                  focus = Focus.EditorPane(paneId),
-                  layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-                )
-              case None => s
+                  case None => s
+              }
+            }
           }
-        }
       }
 
   private def handleMouseMove(move: MouseMove, state: AppState): cats.effect.IO[Unit] =
@@ -607,6 +611,31 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       val layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       val surfaces = List(state.commandRunnerSubmenuSurface, state.commandRunnerSurface).flatten
       surfaces.view.flatMap(surface => commandRunnerSelectionForSurface(event, layout, surface)).headOption
+    }
+
+  private def handleTextAreaResizeDrag(drag: MouseDrag, state: AppState): cats.effect.IO[Boolean] =
+    textAreaInsetFromDrag(drag, state) match
+      case Some(Left(value)) =>
+        updateConfig(_.withTextAreaLeftInset(value)).map(_ => true)
+      case Some(Right(value)) =>
+        updateConfig(_.withTextAreaRightInset(value)).map(_ => true)
+      case None =>
+        cats.effect.IO.pure(false)
+
+  private def textAreaInsetFromDrag(drag: MouseDrag, state: AppState): Option[Either[Double, Double]] =
+    state.viewportSize.flatMap { viewportSize =>
+      val layout         = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      val workspaceX     = layout.leftSpacerRect.x
+      val workspaceRight = layout.rightSpacerRect.right
+      val workspaceWidth = (workspaceRight - workspaceX).max(1)
+      val withinWorkspaceY =
+        drag.row >= layout.leftSpacerRect.y && drag.row < layout.leftSpacerRect.bottom
+
+      if withinWorkspaceY && drag.col >= layout.leftSpacerRect.x && drag.col < layout.leftSpacerRect.right then
+        Some(Left((drag.col - workspaceX).toDouble / workspaceWidth.toDouble))
+      else if withinWorkspaceY && drag.col >= layout.rightSpacerRect.x && drag.col < layout.rightSpacerRect.right then
+        Some(Right((workspaceRight - drag.col).toDouble / workspaceWidth.toDouble))
+      else None
     }
 
   private def commandRunnerSelectionForSurface(

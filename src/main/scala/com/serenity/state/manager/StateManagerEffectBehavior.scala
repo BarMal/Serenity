@@ -327,6 +327,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         saveUiPresetEffect(name)
       case CommandIntent.ApplyUiPreset(name) =>
         applyUiPresetEffect(name)
+      case CommandIntent.SetTextAreaLeftInset(value) =>
+        updateConfig(_.withTextAreaLeftInset(value)).void
+      case CommandIntent.SetTextAreaRightInset(value) =>
+        updateConfig(_.withTextAreaRightInset(value)).void
       case CommandIntent.ToggleLigatures =>
         updateFontConfig(config =>
           config.copy(enableLigatures = !config.enableLigatures, textLigatures = !config.textLigatures)
