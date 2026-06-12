@@ -20,6 +20,8 @@ object FocusedInputTranslator:
             surface.presentation match
               case com.serenity.state.models.SurfacePresentation.Pinned(_, _) =>
                 pinnedPanelTranslator
+              case com.serenity.state.models.SurfacePresentation.Expanded(_, _) =>
+                pinnedPanelTranslator
               case _ =>
                 surface.content match
                   case SurfaceContent.CommandPalette(_)              => commandRunnerTranslator

@@ -17,6 +17,7 @@ case class CalculatedLayout(
     rightSpacerRect: LayoutRect,
     pinnedPanelRects: Map[PanelPosition, LayoutRect] = Map.empty,
     floatingPanelRect: Option[LayoutRect] = None,
+    expandedPanelRect: Option[LayoutRect] = None,
     aboveCursorOverlayRect: Option[LayoutRect] = None,
     belowCursorOverlayRect: Option[LayoutRect] = None,
     aboveCursorOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
@@ -112,6 +113,7 @@ object LayoutEngine:
       leftSpacerRect = leftSpacerRect,
       rightSpacerRect = rightSpacerRect,
       pinnedPanelRects = pinnedPanelRects,
+      expandedPanelRect = state.expandedPanelSurface.map(_ => editorPanelRect),
       lineNumberRect = lineNumberRect,
       gutterRect = gutterRect
     )

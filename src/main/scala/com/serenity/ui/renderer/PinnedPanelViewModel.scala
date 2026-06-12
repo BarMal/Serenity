@@ -21,6 +21,8 @@ object PinnedPanelViewModel:
     state.uiSurfaces.flatMap {
       case surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, _), _) =>
         layout.pinnedPanelRects.get(position).map(rect => resolve(surface, rect, Some(state)))
+      case surface @ UiSurface(_, _, SurfacePresentation.Expanded(_, _), _) =>
+        layout.expandedPanelRect.map(rect => resolve(surface, rect, Some(state)))
       case _ =>
         None
     }
@@ -29,6 +31,8 @@ object PinnedPanelViewModel:
     surfaces.flatMap {
       case surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, _), _) =>
         layout.pinnedPanelRects.get(position).map(rect => resolve(surface, rect, None))
+      case surface @ UiSurface(_, _, SurfacePresentation.Expanded(_, _), _) =>
+        layout.expandedPanelRect.map(rect => resolve(surface, rect, None))
       case _ =>
         None
     }

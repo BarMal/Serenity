@@ -312,5 +312,33 @@ object CommandRegistry:
       CommandIntent.UnpinPanel(PanelPosition.Bottom),
       CommandCategory.View,
       label = "Unpin Bottom Panel"
+    ),
+    Command.typed(
+      "expand-left-panel",
+      "Expand the left pinned panel into the editor workspace.",
+      CommandIntent.ExpandPanel(PanelPosition.Left),
+      CommandCategory.View,
+      label = "Expand Left Panel"
+    ),
+    Command.typed(
+      "expand-right-panel",
+      "Expand the right pinned panel into the editor workspace.",
+      CommandIntent.ExpandPanel(PanelPosition.Right),
+      CommandCategory.View,
+      label = "Expand Right Panel"
+    ),
+    Command.typed(
+      "expand-bottom-panel",
+      "Expand the bottom pinned panel into the editor workspace.",
+      CommandIntent.ExpandPanel(PanelPosition.Bottom),
+      CommandCategory.View,
+      label = "Expand Bottom Panel"
+    ),
+    Command.typed(
+      "collapse-expanded-panel",
+      "Collapse the expanded panel back to its pinned position.",
+      CommandIntent.CollapseExpandedPanel,
+      CommandCategory.View,
+      label = "Collapse Expanded Panel"
     )
   )

@@ -52,6 +52,8 @@ enum CommandIntent:
   case SetInterfaceDensity(density: InterfaceDensity)
   case FocusPanel(position: PanelPosition)
   case UnpinPanel(position: PanelPosition)
+  case ExpandPanel(position: PanelPosition)
+  case CollapseExpandedPanel
   case IncreaseFontSize
   case DecreaseFontSize
   case SetFontSize(size: Float)

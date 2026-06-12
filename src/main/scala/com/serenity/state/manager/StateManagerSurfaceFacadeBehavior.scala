@@ -29,6 +29,12 @@ private[manager] trait StateManagerSurfaceFacadeBehavior extends StateManagerEdi
   def unpinPanel(position: PanelPosition): IO[Unit] =
     stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.unpin(position, state).state, state))
 
+  def expandPinnedPanel(position: PanelPosition): IO[Unit] =
+    stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.expand(position, state).state, state))
+
+  def collapseExpandedPanel(): IO[Unit] =
+    stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.collapseExpandedPanel(state).state, state))
+
   def showModal(modal: Modal): IO[Unit] =
     stateRef.get.flatMap(state => validateAndUpdateState(ModalStateReducer.show(modal, state).state, state))
 

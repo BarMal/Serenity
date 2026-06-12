@@ -113,6 +113,37 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     unpinned.state.focus shouldBe Focus.EditorPane(paneId)
   }
 
+  it should "expand and collapse a pinned panel without losing its original position and size" in {
+    val content = PanelContent.Diagnostics(List(Diagnostic("broken", DiagnosticSeverity.Error, Location(2, 4))))
+    val pinned  = PanelStateReducer.pin(content, PanelPosition.Right, 28, baseState).state
+    val panelId = pinned.pinnedSurfaces.head.id
+
+    val expanded = PanelStateReducer.expand(PanelPosition.Right, pinned).state
+
+    expanded.surfaceById(panelId).map(_.presentation) shouldBe Some(
+      SurfacePresentation.Expanded(PanelPosition.Right, 28)
+    )
+    expanded.focus shouldBe Focus.Surface(panelId)
+    expanded.pinnedSurfaces shouldBe empty
+
+    val collapsed = PanelStateReducer.collapseExpandedPanel(expanded).state
+
+    collapsed.surfaceById(panelId).map(_.presentation) shouldBe Some(
+      SurfacePresentation.Pinned(PanelPosition.Right, 28)
+    )
+    collapsed.focus shouldBe Focus.Surface(panelId)
+  }
+
+  it should "restore editor focus when collapsing an expanded panel that is not focused" in {
+    val content  = PanelContent.Outline(Nil)
+    val pinned   = PanelStateReducer.pin(content, PanelPosition.Left, 20, baseState).state
+    val expanded = PanelStateReducer.expand(PanelPosition.Left, pinned).state.copy(focus = Focus.EditorPane(paneId))
+
+    val collapsed = PanelStateReducer.collapseExpandedPanel(expanded).state
+
+    collapsed.focus shouldBe Focus.EditorPane(paneId)
+  }
+
   it should "pin a directory listing from a peek overlay" in {
     val surface = UiSurface(
       SurfaceId("peek-directory"),
