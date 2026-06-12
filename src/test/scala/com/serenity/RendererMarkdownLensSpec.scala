@@ -244,5 +244,56 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     border.h shouldBe 2 * CellMetrics.fromFont(font).lineHeight
   }
 
+  it should "size an active table lens to cover the rendered preview table" in {
+    val bufferId = BufferId(1)
+    val paneId   = PaneId(1)
+    val buffer = Buffer
+      .fromString(
+        bufferId,
+        """Before
+          || Task | Owner |
+          || ---- | ----- |
+          || Ship | Codex |
+          |After""".stripMargin
+      )
+      .copy(
+        language = Some(LanguageId.Markdown),
+        cursors = List(CursorPosition(1, 0)),
+        viewport = Viewport.default.copy(visibleLines = 10)
+      )
+    val state = AppState.empty.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId),
+        paneOrder = List(paneId)
+      ),
+      focus = Focus.EditorPane(paneId),
+      config = AppState.empty.config
+        .withSyntaxHighlighting(true)
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    )
+    val surface = new MockRenderSurface(80, 24)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(80, 24),
+      codeFont = font,
+      textFont = font,
+      cellMetrics = metrics,
+      cursorColor = None
+    )
+
+    surface.strokeRoundRectCalls should not be empty
+    surface.strokeRoundRectCalls.head.h shouldBe 5 * metrics.lineHeight
+  }
+
   private def rows(surface: MockRenderSurface): List[String] =
     (0 until surface.height).map(surface.getRow).map(_.trim).filter(_.nonEmpty).toList

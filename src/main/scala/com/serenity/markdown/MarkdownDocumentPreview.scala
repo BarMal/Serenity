@@ -51,13 +51,14 @@ object MarkdownDocumentPreview:
     heightPx: Int,
     theme: Theme,
     font: Font,
-    baseUri: Option[URI] = None
+    baseUri: Option[URI] = None,
+    panelChrome: Boolean = true
   ): BufferedImage =
     val safeWidth  = widthPx.max(1)
     val safeHeight = heightPx.max(1)
     try
       val renderer = Java2DRenderer(
-        parseXhtml(renderXhtml(source, title, theme, font, baseUri)),
+        parseXhtml(renderXhtml(source, title, theme, font, baseUri, panelChrome)),
         safeWidth,
         safeHeight
       )
@@ -118,6 +119,33 @@ object MarkdownDocumentPreview:
       case (line, row) if line.sourceLine.contains(sourceLine) => row
     }
 
+  def previewRowsForSourceRange(sourceLines: Vector[String], sourceRange: Range.Inclusive): Option[Range.Inclusive] =
+    val preview = renderInlineDocument(sourceLines)
+    val mappedRows = preview.zipWithIndex.collect {
+      case (line, row) if line.sourceLine.exists(sourceRange.contains) => row
+    }
+    mappedRows match
+      case rows if rows.nonEmpty =>
+        val firstMapped = rows.min
+        val lastMapped  = rows.max
+        val first =
+          Iterator
+            .iterate(firstMapped - 1)(_ - 1)
+            .takeWhile(row => row >= 0 && preview(row).sourceLine.isEmpty)
+            .toVector
+            .lastOption
+            .getOrElse(firstMapped)
+        val last =
+          Iterator
+            .iterate(lastMapped + 1)(_ + 1)
+            .takeWhile(row => row < preview.length && preview(row).sourceLine.isEmpty)
+            .toVector
+            .lastOption
+            .getOrElse(lastMapped)
+        Some(first to last)
+      case _ =>
+        None
+
   private def htmlRenderer(baseUri: Option[URI]): HtmlRenderer =
     baseUri match
       case None => defaultHtmlRenderer
@@ -149,14 +177,21 @@ object MarkdownDocumentPreview:
   private def isAbsoluteUri(value: String): Boolean =
     Try(URI.create(value).isAbsolute).getOrElse(false)
 
-  private def renderXhtml(source: String, title: String, theme: Theme, font: Font, baseUri: Option[URI]): String =
+  private def renderXhtml(
+    source: String,
+    title: String,
+    theme: Theme,
+    font: Font,
+    baseUri: Option[URI],
+    panelChrome: Boolean
+  ): String =
     val fragment = renderHtmlFragment(source, title, baseUri)
     s"""<?xml version="1.0" encoding="UTF-8"?>
        |<html xmlns="http://www.w3.org/1999/xhtml">
        |  <head>
        |    <title>${escapeXml(title)}</title>
        |    <style type="text/css">
-       |${stylesheet(theme, font)}
+       |${stylesheet(theme, font, panelChrome)}
        |    </style>
        |  </head>
        |  <body>
@@ -166,12 +201,14 @@ object MarkdownDocumentPreview:
        |  </body>
        |</html>""".stripMargin
 
-  private def stylesheet(theme: Theme, font: Font): String =
+  private def stylesheet(theme: Theme, font: Font, panelChrome: Boolean): String =
+    val background = if panelChrome then theme.panel.background else theme.background
+    val foreground = if panelChrome then theme.panel.foreground else theme.foreground
     s"""      html, body {
        |        margin: 0;
        |        padding: 0;
-       |        background: ${css(theme.panel.background)};
-       |        color: ${css(theme.panel.foreground)};
+       |        background: ${css(background)};
+       |        color: ${css(foreground)};
        |        font-family: ${cssString(font.getFamily)}, sans-serif;
        |        font-size: ${font.getSize.max(10)}px;
        |        line-height: 1.45;
