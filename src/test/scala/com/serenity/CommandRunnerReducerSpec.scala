@@ -746,3 +746,19 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.ResetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit)
     )
   }
+
+  it should "keep keymap edit mode open with a status message for invalid binding text" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-keymap", "keymap-command-runner-submit")
+
+    val typed =
+      "ctrl".foldLeft(state)((s, char) => CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state)
+
+    val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
+    val runner = runnerFrom(result.state)
+
+    result.effects shouldBe Nil
+    runner.statusMessage shouldBe Some("Invalid binding: ctrl")
+    runner.activeSubmenu.flatMap(_.editingItemId) shouldBe Some("keymap-command-runner-submit")
+    runner.activeSubmenu.map(_.editingText) shouldBe Some("ctrl")
+  }

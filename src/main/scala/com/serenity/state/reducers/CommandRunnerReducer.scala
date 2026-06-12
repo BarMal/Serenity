@@ -44,11 +44,19 @@ object CommandRunnerReducer:
                     case Some(intent) =>
                       val cmd = Command.typed(itemId, item.label, intent, CommandCategory.Settings)
                       ReducerResult(
-                        state = replaceRunner(state, r => r.copy(editingItemId = None, editingText = "")),
+                        state = replaceRunner(
+                          state,
+                          r => r.copy(editingItemId = None, editingText = "", statusMessage = None)
+                        ),
                         effects = List(AppEffect.ExecuteCommand(cmd))
                       )
                     case None =>
-                      ReducerResult.noEffects(state)
+                      ReducerResult.noEffects(
+                        replaceRunner(
+                          state,
+                          _.copy(statusMessage = Some(invalidInputMessage(item, runner.editingText)))
+                        )
+                      )
                 case None =>
                   ReducerResult.noEffects(state)
 
@@ -104,7 +112,7 @@ object CommandRunnerReducer:
                           r.copy(
                             activeSubmenu =
                               r.activeSubmenu.map(s => s.copy(editingItemId = Some(item.id), editingText = nextText))
-                          )
+                          ).copy(statusMessage = None)
                       )
                     )
                   case None =>
@@ -120,7 +128,9 @@ object CommandRunnerReducer:
               val runner = currentRunner(state).get
               val item   = runner.inputItems.find(_.id == itemId)
               if item.exists(_.accepts(runner.editingText, char)) then
-                ReducerResult.noEffects(replaceRunner(state, r => r.copy(editingText = r.editingText + char)))
+                ReducerResult.noEffects(
+                  replaceRunner(state, r => r.copy(editingText = r.editingText + char, statusMessage = None))
+                )
               else ReducerResult.noEffects(state)
             case None =>
               currentRunner(state).flatMap(_.selectedItem) match
@@ -129,7 +139,8 @@ object CommandRunnerReducer:
                     ReducerResult.noEffects(
                       replaceRunner(
                         state,
-                        runner => runner.copy(editingItemId = Some(item.id), editingText = char.toString)
+                        runner =>
+                          runner.copy(editingItemId = Some(item.id), editingText = char.toString, statusMessage = None)
                       )
                     )
                   else ReducerResult.noEffects(state)
@@ -147,7 +158,10 @@ object CommandRunnerReducer:
                 replaceRunner(
                   state,
                   r =>
-                    r.copy(activeSubmenu = r.activeSubmenu.map(s => s.copy(editingText = s.editingText.dropRight(1))))
+                    r.copy(
+                      activeSubmenu = r.activeSubmenu.map(s => s.copy(editingText = s.editingText.dropRight(1))),
+                      statusMessage = None
+                    )
                 )
               )
             case Some(submenu) if submenu.searchTerm.nonEmpty =>
@@ -158,7 +172,9 @@ object CommandRunnerReducer:
           currentRunner(state).flatMap(_.editingItemId) match
             case Some(_) =>
               if currentRunner(state).exists(_.editingText.nonEmpty) then
-                ReducerResult.noEffects(replaceRunner(state, r => r.copy(editingText = r.editingText.dropRight(1))))
+                ReducerResult.noEffects(
+                  replaceRunner(state, r => r.copy(editingText = r.editingText.dropRight(1), statusMessage = None))
+                )
               else ReducerResult.noEffects(state)
             case None =>
               if currentRunner(state).exists(_.searchTerm.nonEmpty) then
@@ -192,7 +208,8 @@ object CommandRunnerReducer:
                   r =>
                     r.copy(
                       activeSubmenu =
-                        r.activeSubmenu.map(s => s.copy(editingText = TextEditing.deleteWordBackward(s.editingText)))
+                        r.activeSubmenu.map(s => s.copy(editingText = TextEditing.deleteWordBackward(s.editingText))),
+                      statusMessage = None
                     )
                 )
               )
@@ -207,7 +224,10 @@ object CommandRunnerReducer:
             case Some(_) =>
               if currentRunner(state).exists(_.editingText.nonEmpty) then
                 ReducerResult.noEffects(
-                  replaceRunner(state, r => r.copy(editingText = TextEditing.deleteWordBackward(r.editingText)))
+                  replaceRunner(
+                    state,
+                    r => r.copy(editingText = TextEditing.deleteWordBackward(r.editingText), statusMessage = None)
+                  )
                 )
               else ReducerResult.noEffects(state)
             case None =>
@@ -231,7 +251,8 @@ object CommandRunnerReducer:
                   r =>
                     r.copy(
                       activeSubmenu =
-                        r.activeSubmenu.map(s => s.copy(editingText = TextEditing.deleteWordForward(s.editingText)))
+                        r.activeSubmenu.map(s => s.copy(editingText = TextEditing.deleteWordForward(s.editingText))),
+                      statusMessage = None
                     )
                 )
               )
@@ -246,7 +267,10 @@ object CommandRunnerReducer:
             case Some(_) =>
               if currentRunner(state).exists(_.editingText.nonEmpty) then
                 ReducerResult.noEffects(
-                  replaceRunner(state, r => r.copy(editingText = TextEditing.deleteWordForward(r.editingText)))
+                  replaceRunner(
+                    state,
+                    r => r.copy(editingText = TextEditing.deleteWordForward(r.editingText), statusMessage = None)
+                  )
                 )
               else ReducerResult.noEffects(state)
             case None =>
@@ -421,11 +445,15 @@ object CommandRunnerReducer:
   private def clearSubmenuEditMode(state: AppState): AppState =
     replaceRunner(
       state,
-      runner => runner.copy(activeSubmenu = runner.activeSubmenu.map(_.copy(editingItemId = None, editingText = "")))
+      runner =>
+        runner.copy(
+          activeSubmenu = runner.activeSubmenu.map(_.copy(editingItemId = None, editingText = "")),
+          statusMessage = None
+        )
     )
 
   private def clearRootEditMode(state: AppState): AppState =
-    replaceRunner(state, _.copy(editingItemId = None, editingText = ""))
+    replaceRunner(state, _.copy(editingItemId = None, editingText = "", statusMessage = None))
 
   private def submenuSelectedOption(runner: CommandRunner): Option[CommandSurfaceItem.OptionItem] =
     runner.activeSubmenu.flatMap { submenu =>
@@ -455,12 +483,18 @@ object CommandRunnerReducer:
                 ReducerResult(
                   state = replaceRunner(
                     state,
-                    r => r.copy(activeSubmenu = r.activeSubmenu.map(_.copy(editingItemId = None, editingText = "")))
+                    r =>
+                      r.copy(
+                        activeSubmenu = r.activeSubmenu.map(_.copy(editingItemId = None, editingText = "")),
+                        statusMessage = None
+                      )
                   ),
                   effects = List(AppEffect.ExecuteCommand(Command.typed(item.id, item.label, intent, item.category)))
                 )
               case None =>
-                ReducerResult.noEffects(state)
+                ReducerResult.noEffects(
+                  replaceRunner(state, _.copy(statusMessage = Some(invalidInputMessage(item, submenu.editingText))))
+                )
           case Some(option: CommandSurfaceItem.OptionItem) =>
             option.selectedIntent match
               case Some(intent) =>
@@ -482,6 +516,11 @@ object CommandRunnerReducer:
             ReducerResult.noEffects(state)
       case None =>
         ReducerResult.noEffects(state)
+
+  private def invalidInputMessage(item: CommandSurfaceItem.InputItem, text: String): String =
+    val value = if text.trim.isEmpty then "<empty>" else text
+    if item.acceptsBindingText then s"Invalid binding: $value"
+    else s"Invalid value: $value"
 
   private def replaceRunner(state: AppState, update: CommandRunner => CommandRunner): AppState =
     state.commandRunnerSurface match

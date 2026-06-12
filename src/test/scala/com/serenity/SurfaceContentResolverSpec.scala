@@ -147,6 +147,21 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.footer shouldBe None
   }
 
+  it should "render command runner status messages in the command palette footer" in {
+    val registry = CommandRegistry.default
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(statusMessage = Some("Invalid binding: ctrl"))
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 60, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.footer.map(_.plainText) shouldBe Some("Invalid binding: ctrl")
+  }
+
   it should "scroll long submenus so the selected language stays visible" in {
     val registry = CommandRegistry.default
     val runner = CommandRunner.empty

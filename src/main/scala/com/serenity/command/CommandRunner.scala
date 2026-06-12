@@ -37,7 +37,8 @@ case class CommandRunner(
     editingText: String = "",
     submenuSelections: Map[String, Int] = Map.empty,
     previewedGroupId: Option[String] = None,
-    activeSubmenu: Option[CommandRunnerSubmenuState] = None
+    activeSubmenu: Option[CommandRunnerSubmenuState] = None,
+    statusMessage: Option[String] = None
 ):
 
   def visibleItems: List[CommandSurfaceItem] =
@@ -64,7 +65,8 @@ case class CommandRunner(
       selectedIndex = 0,
       filteredCommands = filtered,
       previewedGroupId = None,
-      activeSubmenu = None
+      activeSubmenu = None,
+      statusMessage = None
     )
 
   /** Move selection up or down, with wrapping */
