@@ -382,8 +382,9 @@ object SurfaceContentResolver:
           )
       }
       val footer =
-        if allItems.nonEmpty then Some(OverlayRow(s"${runner.selectedIndex + 1}/${allItems.length}"))
-        else None
+        runner.statusMessage
+          .map(OverlayRow(_))
+          .orElse(Option.when(allItems.nonEmpty)(OverlayRow(s"${runner.selectedIndex + 1}/${allItems.length}")))
 
       ResolvedSurfaceContent(
         title = titleFor(mode, "commands"),
@@ -434,7 +435,9 @@ object SurfaceContentResolver:
         )
     }
     val footer =
-      Option.when(items.nonEmpty)(OverlayRow(s"${selectedIndex + 1}/${items.length}"))
+      runner.statusMessage
+        .map(OverlayRow(_))
+        .orElse(Option.when(items.nonEmpty)(OverlayRow(s"${selectedIndex + 1}/${items.length}")))
 
     ResolvedSurfaceContent(
       title = titleFor(mode, group.map(_.label).getOrElse("submenu")),
