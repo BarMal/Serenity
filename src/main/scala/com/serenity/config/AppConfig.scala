@@ -74,23 +74,41 @@ case class AppConfig(
   def withHotkeyOverride(action: HotkeyAction, binding: String): AppConfig =
     copy(hotkeyConfig = hotkeyConfig.withBinding(action, binding))
 
+  def resetHotkeyOverride(action: HotkeyAction): AppConfig =
+    copy(hotkeyConfig = hotkeyConfig.resetBinding(action))
+
   def withFocusedKeymapConfig(config: FocusedKeymapConfig): AppConfig =
     copy(focusedKeymapConfig = config)
 
   def withEditorKeyOverride(action: EditorKeyAction, binding: String): AppConfig =
     copy(focusedKeymapConfig = focusedKeymapConfig.withEditorBinding(action, binding))
 
+  def resetEditorKeyOverride(action: EditorKeyAction): AppConfig =
+    copy(focusedKeymapConfig = focusedKeymapConfig.resetEditorBinding(action))
+
   def withCommandRunnerKeyOverride(action: CommandRunnerKeyAction, binding: String): AppConfig =
     copy(focusedKeymapConfig = focusedKeymapConfig.withCommandRunnerBinding(action, binding))
+
+  def resetCommandRunnerKeyOverride(action: CommandRunnerKeyAction): AppConfig =
+    copy(focusedKeymapConfig = focusedKeymapConfig.resetCommandRunnerBinding(action))
 
   def withModalKeyOverride(action: ModalKeyAction, binding: String): AppConfig =
     copy(focusedKeymapConfig = focusedKeymapConfig.withModalBinding(action, binding))
 
+  def resetModalKeyOverride(action: ModalKeyAction): AppConfig =
+    copy(focusedKeymapConfig = focusedKeymapConfig.resetModalBinding(action))
+
   def withPanelKeyOverride(action: PanelKeyAction, binding: String): AppConfig =
     copy(focusedKeymapConfig = focusedKeymapConfig.withPanelBinding(action, binding))
 
+  def resetPanelKeyOverride(action: PanelKeyAction): AppConfig =
+    copy(focusedKeymapConfig = focusedKeymapConfig.resetPanelBinding(action))
+
   def withPeekKeyOverride(action: PeekKeyAction, binding: String): AppConfig =
     copy(focusedKeymapConfig = focusedKeymapConfig.withPeekBinding(action, binding))
+
+  def resetPeekKeyOverride(action: PeekKeyAction): AppConfig =
+    copy(focusedKeymapConfig = focusedKeymapConfig.resetPeekBinding(action))
 
   /** Create a new config with font configuration */
   def withFontConfig(config: FontConfig): AppConfig =

@@ -359,6 +359,18 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateConfig(_.withPanelKeyOverride(action, binding)).void
       case CommandIntent.SetPeekKeyBinding(action, binding) =>
         updateConfig(_.withPeekKeyOverride(action, binding)).void
+      case CommandIntent.ResetGlobalHotkey(action) =>
+        updateConfig(_.resetHotkeyOverride(action)).void
+      case CommandIntent.ResetEditorKeyBinding(action) =>
+        updateConfig(_.resetEditorKeyOverride(action)).void
+      case CommandIntent.ResetCommandRunnerKeyBinding(action) =>
+        updateConfig(_.resetCommandRunnerKeyOverride(action)).void
+      case CommandIntent.ResetModalKeyBinding(action) =>
+        updateConfig(_.resetModalKeyOverride(action)).void
+      case CommandIntent.ResetPanelKeyBinding(action) =>
+        updateConfig(_.resetPanelKeyOverride(action)).void
+      case CommandIntent.ResetPeekKeyBinding(action) =>
+        updateConfig(_.resetPeekKeyOverride(action)).void
 
   protected def saveUiPresetEffect(name: String): IO[Unit] =
     normalizedPresetName(name) match

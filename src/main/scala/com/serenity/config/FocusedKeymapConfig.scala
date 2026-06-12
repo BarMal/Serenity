@@ -227,6 +227,9 @@ case class EditorKeymapConfig(
   def withBinding(action: EditorKeyAction, binding: String): EditorKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
+  def resetBinding(action: EditorKeyAction): EditorKeymapConfig =
+    copy(bindings = bindings + (action -> EditorKeymapConfig.defaultBindings.getOrElse(action, Nil)))
+
 object EditorKeymapConfig:
 
   val defaultBindings: Map[EditorKeyAction, List[HotkeyTrigger]] = Map(
@@ -287,6 +290,9 @@ case class CommandRunnerKeymapConfig(
 
   def withBinding(action: CommandRunnerKeyAction, binding: String): CommandRunnerKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
+
+  def resetBinding(action: CommandRunnerKeyAction): CommandRunnerKeymapConfig =
+    copy(bindings = bindings + (action -> CommandRunnerKeymapConfig.defaultBindings.getOrElse(action, Nil)))
 
 object CommandRunnerKeymapConfig:
 
@@ -351,6 +357,9 @@ case class ModalKeymapConfig(
   def withBinding(action: ModalKeyAction, binding: String): ModalKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
+  def resetBinding(action: ModalKeyAction): ModalKeymapConfig =
+    copy(bindings = bindings + (action -> ModalKeymapConfig.defaultBindings.getOrElse(action, Nil)))
+
 object ModalKeymapConfig:
 
   val defaultBindings: Map[ModalKeyAction, List[HotkeyTrigger]] = Map(
@@ -402,6 +411,9 @@ case class PanelKeymapConfig(
   def withBinding(action: PanelKeyAction, binding: String): PanelKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
+  def resetBinding(action: PanelKeyAction): PanelKeymapConfig =
+    copy(bindings = bindings + (action -> PanelKeymapConfig.defaultBindings.getOrElse(action, Nil)))
+
 object PanelKeymapConfig:
 
   val defaultBindings: Map[PanelKeyAction, List[HotkeyTrigger]] = Map(
@@ -448,6 +460,9 @@ case class PeekKeymapConfig(
 
   def withBinding(action: PeekKeyAction, binding: String): PeekKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
+
+  def resetBinding(action: PeekKeyAction): PeekKeymapConfig =
+    copy(bindings = bindings + (action -> PeekKeymapConfig.defaultBindings.getOrElse(action, Nil)))
 
 object PeekKeymapConfig:
 
@@ -505,6 +520,21 @@ case class FocusedKeymapConfig(
 
   def withPeekBinding(action: PeekKeyAction, binding: String): FocusedKeymapConfig =
     copy(peek = peek.withBinding(action, binding))
+
+  def resetEditorBinding(action: EditorKeyAction): FocusedKeymapConfig =
+    copy(editor = editor.resetBinding(action))
+
+  def resetCommandRunnerBinding(action: CommandRunnerKeyAction): FocusedKeymapConfig =
+    copy(commandRunner = commandRunner.resetBinding(action))
+
+  def resetModalBinding(action: ModalKeyAction): FocusedKeymapConfig =
+    copy(modal = modal.resetBinding(action))
+
+  def resetPanelBinding(action: PanelKeyAction): FocusedKeymapConfig =
+    copy(panel = panel.resetBinding(action))
+
+  def resetPeekBinding(action: PeekKeyAction): FocusedKeymapConfig =
+    copy(peek = peek.resetBinding(action))
 
 object FocusedKeymapConfig:
 

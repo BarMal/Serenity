@@ -692,3 +692,19 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.SetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit, "ctrl+enter")
     )
   }
+
+  it should "emit a keymap reset intent when a binding field is set to reset" in {
+    val registry = CommandRegistry.default
+    val config = AppConfig.default
+      .withCommandRunnerKeyOverride(CommandRunnerKeyAction.Submit, "ctrl+enter")
+    val state = settingsStateOnItem("settings-keymap", "keymap-command-runner-submit", config)
+
+    val typed =
+      "reset".foldLeft(state)((s, char) => CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state)
+
+    val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
+
+    result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
+      CommandIntent.ResetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit)
+    )
+  }
