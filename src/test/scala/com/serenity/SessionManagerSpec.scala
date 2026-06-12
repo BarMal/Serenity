@@ -6,7 +6,8 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
-import com.serenity.state.models.{AppState, Buffer}
+import com.serenity.state.models.*
+import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -35,6 +36,26 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     val bufferId = initial.bufferOrder.head
     val buffer   = Buffer.fromString(bufferId, text)
     initial.copy(buffers = Map(bufferId -> buffer))
+
+  private def dirtyFileStateWithText(diskText: String, unsavedText: String): IO[AppState] =
+    IO.blocking {
+      val tempFile = Files.createTempFile("session-manager-file-backed", ".txt")
+      Files.writeString(tempFile, diskText)
+      val buffer = Buffer
+        .fromFile(BufferId(7), tempFile, unsavedText)
+        .copy(isDirty = true)
+      AppState.initial.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0)),
+        nextBufferId = BufferId(8),
+        nextPaneId = PaneId(1)
+      )
+    }
 
   "SessionManager" should "save and load named sessions through the index" in {
     val sessionManager = createManager()
@@ -93,6 +114,20 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       sessionId <- sessionManager.saveSessionAs("Draft", dirtyStateWithText("unsaved work"))
       loaded    <- sessionManager.loadSession(sessionId)
     yield loaded.map(_.buffers.values.head.content.toString).shouldBe(Some(""))
+
+    program.unsafeRunSync()
+  }
+
+  it should "restore file-backed buffers from disk when persisted session content is absent" in {
+    val sessionManager = createManager(SessionManager.SessionPolicy(persistUnsavedBuffers = false))
+
+    val program = for
+      state     <- dirtyFileStateWithText("saved on disk", "unsaved work")
+      sessionId <- sessionManager.saveSessionAs("File draft", state)
+      loaded    <- sessionManager.loadSession(sessionId)
+    yield
+      loaded.map(_.buffers.values.head.content.toString) shouldBe Some("saved on disk")
+      loaded.map(_.buffers.values.head.isDirty) shouldBe Some(false)
 
     program.unsafeRunSync()
   }

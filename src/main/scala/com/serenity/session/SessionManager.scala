@@ -167,8 +167,8 @@ class SessionManager(
               logger.warn(s"[SESSION] Theme '${sessionState.themeName}' not found, using default") >>
                 themeManager.initializeWithTheme("dark")
             )
-          appState = SessionState.toAppState(sessionState, theme)
-          _ <- logger.info(s"[SESSION] Session loaded successfully with ${sessionState.buffers.size} buffers")
+          appState <- SessionState.toAppStateIO(sessionState, theme)
+          _        <- logger.info(s"[SESSION] Session loaded successfully with ${sessionState.buffers.size} buffers")
         yield Some(appState)
     }
 
