@@ -784,7 +784,7 @@ object EditorEventReducer:
     )
 
   private[reducers] def lineColumnToOffset(rope: Rope, line: Int, column: Int): Int =
-    lineColumnToOffset(rope.collect(), line, column)
+    rope.lineColumnToOffset(line, column)
 
   private[reducers] def lineColumnToOffset(content: String, line: Int, column: Int): Int =
     val targetLine = math.max(0, line)
@@ -805,13 +805,13 @@ object EditorEventReducer:
     math.min(lineStart + targetCol, lineEnd)
 
   private def findLineEnd(rope: Rope, line: Int): Int =
-    findLineEnd(rope.collect(), line)
+    rope.getLine(line).fold(0)(_.length)
 
   private def findLineEnd(content: String, line: Int): Int =
     getLine(content, line).fold(0)(_.length)
 
   private def countLines(rope: Rope): Int =
-    countLines(rope.collect())
+    rope.lineCount
 
   private def countLines(content: String): Int =
     if content.isEmpty then 1 else content.count(_ == '\n') + 1

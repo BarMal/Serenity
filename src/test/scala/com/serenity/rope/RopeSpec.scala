@@ -491,6 +491,28 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     multiline.getLine(4) shouldBe None
     multiline.getLine(-1) shouldBe None
 
+  it should "resolve line and column offsets through rope line traversal" in new ChunkedRopeSpecScope:
+    val multiline = Rope("alpha\nbeta\ngamma")
+
+    multiline.lineColumnToOffset(0, 0) shouldBe 0
+    multiline.lineColumnToOffset(0, 3) shouldBe 3
+    multiline.lineColumnToOffset(0, 20) shouldBe 5
+    multiline.lineColumnToOffset(1, 0) shouldBe 6
+    multiline.lineColumnToOffset(1, 2) shouldBe 8
+    multiline.lineColumnToOffset(2, 5) shouldBe multiline.weight
+    multiline.lineColumnToOffset(20, 0) shouldBe multiline.weight
+    multiline.lineColumnToOffset(-1, -4) shouldBe 0
+
+  it should "read line helpers across many leaves" in new ChunkedRopeSpecScope:
+    val content = (1 to 200).map(index => s"line-$index").mkString("\n")
+    val rope    = Rope(content)
+
+    rope.lineCount shouldBe 200
+    rope.getLine(0) shouldBe Some("line-1")
+    rope.getLine(149) shouldBe Some("line-150")
+    rope.getLine(199) shouldBe Some("line-200")
+    rope.lineColumnToOffset(149, 4) shouldBe content.indexOf("line-150") + 4
+
   trait ChunkedRopeSpecScope:
     given balance: Balance =
       Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
