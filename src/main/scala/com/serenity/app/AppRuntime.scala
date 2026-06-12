@@ -115,22 +115,32 @@ object AppRuntime:
         val quitSignal = stateManager.awaitQuit.attempt
         val shutdownInputHandler =
           stateManager.awaitQuit >> inputHandler.shutdown
+        def supervised(name: String)(effect: IO[Unit]): IO[Unit] =
+          effect.handleErrorWith { error =>
+            logger.error(error)(s"[RUNTIME] $name failed; forcing safe shutdown") >>
+              stateManager.forceQuit().attempt.void
+          }
+
         (
-          inputHandler.eventStream
-            .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
-            .through(inputFunnel)
-            .interruptWhen(quitSignal)
-            .compile
-            .drain,
-          renderLoop.interruptWhen(quitSignal).compile.drain,
+          supervised("input loop")(
+            inputHandler.eventStream
+              .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
+              .through(inputFunnel)
+              .interruptWhen(quitSignal)
+              .compile
+              .drain
+          ),
+          supervised("render loop")(renderLoop.interruptWhen(quitSignal).compile.drain),
           stateManager.awaitQuit,
-          stateManager.intervalSaveStream.compile.drain,
-          IO.race(
-            awaitExternalQuit >> stateManager.forceQuit(),
-            stateManager.awaitQuit
-          ).void,
-          shutdownInputHandler,
-          LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger)
+          supervised("interval save loop")(stateManager.intervalSaveStream.compile.drain),
+          supervised("external quit coordinator")(
+            IO.race(
+              awaitExternalQuit >> stateManager.forceQuit(),
+              stateManager.awaitQuit
+            ).void
+          ),
+          supervised("input shutdown")(shutdownInputHandler),
+          supervised("LSP loop")(LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger))
         ).parMapN((_, _, _, _, _, _, _) => ())
       _ <- logger.info("Serenity editor shutdown complete")
     yield ()
