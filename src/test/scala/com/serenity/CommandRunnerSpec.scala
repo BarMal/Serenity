@@ -119,6 +119,17 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     commandNames should not contain "toggle-ligatures"
   }
 
+  it should "include session persistence commands in the file category" in {
+    val registry = CommandRegistry.default
+
+    val fileCommandNames = registry.commandsForCategory(CommandCategory.File).map(_.name)
+
+    fileCommandNames should contain allOf ("save-session", "restore-session", "clear-session")
+    registry.findCommand("save-session").map(_.intent) shouldBe Some(CommandIntent.SaveSession)
+    registry.findCommand("restore-session").map(_.intent) shouldBe Some(CommandIntent.RestoreSession)
+    registry.findCommand("clear-session").map(_.intent) shouldBe Some(CommandIntent.ClearSession)
+  }
+
   "CommandRunner state" should "initialize with empty search and no selection" in {
     val runner = CommandRunner.empty
 

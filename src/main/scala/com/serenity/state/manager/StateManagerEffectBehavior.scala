@@ -151,6 +151,15 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           case None           => logger.debug("[CMD] No focused buffer to save")
       case CommandIntent.SaveCurrentFileAs =>
         openFileWorkflowModal(FileWorkflowMode.SaveAs, state)
+      case CommandIntent.SaveSession =>
+        saveSession()
+      case CommandIntent.RestoreSession =>
+        loadSession().flatMap {
+          case Some(restored) => validateAndUpdateState(restored, state)
+          case None           => logger.debug("[SESSION] Restore requested without a saved session")
+        }
+      case CommandIntent.ClearSession =>
+        clearSession()
       case CommandIntent.OpenFile =>
         openFileWorkflowModal(FileWorkflowMode.Open, state)
       case CommandIntent.QuitApp =>

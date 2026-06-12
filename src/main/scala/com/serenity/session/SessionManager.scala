@@ -28,6 +28,11 @@ class SessionManager(
   /** Save the current app state to the current session, creating one if needed.
     */
   def saveSession(appState: AppState): IO[Unit] =
+    saveSession(appState, policy.persistUnsavedBuffers)
+
+  /** Save the current app state to the current session with an explicit unsaved-content persistence mode.
+    */
+  def saveSession(appState: AppState, persistUnsavedBuffers: Boolean): IO[Unit] =
     for
       now   <- currentTimeMillis()
       index <- readIndex()
@@ -43,7 +48,7 @@ class SessionManager(
             updatedAtEpochMillis = now
           )
         )
-      _ <- writeSessionFile(metadata.sessionFileName, appState)
+      _ <- writeSessionFile(metadata.sessionFileName, appState, persistUnsavedBuffers)
       updatedMetadata = metadata.copy(updatedAtEpochMillis = now)
       updatedIndex    = upsertSession(index, updatedMetadata).copy(currentSessionId = Some(updatedMetadata.id))
       _ <- writeIndex(updatedIndex)
@@ -187,8 +192,12 @@ class SessionManager(
   private def writeIndex(index: SessionIndex): IO[Unit] =
     writeUtf8(indexFile, _root_.io.circe.syntax.EncoderOps(index).asJson.spaces2)
 
-  private def writeSessionFile(sessionFileName: String, appState: AppState): IO[Unit] =
-    val sessionState = SessionState.fromAppState(appState, persistUnsaved = policy.persistUnsavedBuffers)
+  private def writeSessionFile(
+    sessionFileName: String,
+    appState: AppState,
+    persistUnsavedBuffers: Boolean = policy.persistUnsavedBuffers
+  ): IO[Unit] =
+    val sessionState = SessionState.fromAppState(appState, persistUnsaved = persistUnsavedBuffers)
     writeUtf8(
       sessionsDirectory.resolve(sessionFileName),
       _root_.io.circe.syntax.EncoderOps(sessionState).asJson.spaces2

@@ -111,6 +111,27 @@ object CommandRegistry:
       label = "Save As"
     ),
     Command.typed(
+      "save-session",
+      "Save the current editor session.",
+      CommandIntent.SaveSession,
+      CommandCategory.File,
+      label = "Save Session"
+    ),
+    Command.typed(
+      "restore-session",
+      "Restore the last saved editor session.",
+      CommandIntent.RestoreSession,
+      CommandCategory.File,
+      label = "Restore Session"
+    ),
+    Command.typed(
+      "clear-session",
+      "Clear the saved editor session.",
+      CommandIntent.ClearSession,
+      CommandCategory.File,
+      label = "Clear Session"
+    ),
+    Command.typed(
       "open",
       "Open a file.",
       CommandIntent.OpenFile,
