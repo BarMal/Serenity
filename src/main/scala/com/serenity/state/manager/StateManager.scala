@@ -127,7 +127,7 @@ object StateManager:
     for
       resolvedSessionRootOverride <- resolveSessionRootOverride(sessionRootOverride)
       stateRef                    <- Ref.of[IO, AppState](AppState.initial.copy(config = initialConfig))
-      undoRef                     <- Ref.of[IO, UndoState](UndoState())
+      undoRef                     <- Ref.of[IO, UndoState](UndoState(maxUndoDepth = policy.maxUndoDepth))
       themeNamesRef <- themeManager.listAvailableThemes
         .handleErrorWith(_ => IO.pure(Nil))
         .flatMap(Ref.of[IO, List[String]])
