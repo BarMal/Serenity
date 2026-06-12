@@ -41,7 +41,15 @@ object LspProtocol:
       "rootUri"    -> rootUri.asJson,
       "capabilities" -> Json.obj(
         "textDocument" -> Json.obj(
-          "publishDiagnostics" -> Json.obj("relatedInformation" -> true.asJson)
+          "publishDiagnostics" -> Json.obj("relatedInformation" -> true.asJson),
+          "hover"              -> Json.obj("contentFormat" -> Json.arr("markdown".asJson, "plaintext".asJson)),
+          "definition"         -> Json.obj("linkSupport" -> false.asJson),
+          "completion" -> Json.obj(
+            "completionItem" -> Json.obj(
+              "snippetSupport"      -> false.asJson,
+              "documentationFormat" -> Json.arr("markdown".asJson, "plaintext".asJson)
+            )
+          )
         )
       )
     )
@@ -67,6 +75,21 @@ object LspProtocol:
     Json.obj(
       "textDocument"   -> Json.obj("uri" -> uri.asJson, "version" -> version.asJson),
       "contentChanges" -> Json.arr(Json.obj("text" -> text.asJson))
+    )
+
+  def hoverParams(uri: String, line: Int, character: Int): Json =
+    textDocumentPositionParams(uri, line, character)
+
+  def definitionParams(uri: String, line: Int, character: Int): Json =
+    textDocumentPositionParams(uri, line, character)
+
+  def completionParams(uri: String, line: Int, character: Int): Json =
+    textDocumentPositionParams(uri, line, character)
+
+  private def textDocumentPositionParams(uri: String, line: Int, character: Int): Json =
+    Json.obj(
+      "textDocument" -> Json.obj("uri" -> uri.asJson),
+      "position"     -> Json.obj("line" -> line.asJson, "character" -> character.asJson)
     )
 
   // ── PublishDiagnostics ──────────────────────────────────────────────────────

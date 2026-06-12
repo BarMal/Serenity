@@ -130,6 +130,10 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     val params = LspProtocol.initializeParams(12345, "file:///workspace")
     params.hcursor.downField("processId").as[Int].toOption shouldBe Some(12345)
     params.hcursor.downField("rootUri").as[String].toOption shouldBe Some("file:///workspace")
+    val textDocumentCapabilities = params.hcursor.downField("capabilities").downField("textDocument")
+    textDocumentCapabilities.downField("hover").succeeded shouldBe true
+    textDocumentCapabilities.downField("definition").succeeded shouldBe true
+    textDocumentCapabilities.downField("completion").succeeded shouldBe true
   }
 
   it should "build didOpen params with correct structure" in {
@@ -139,4 +143,20 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     td.downField("languageId").as[String].toOption shouldBe Some("scala")
     td.downField("version").as[Int].toOption shouldBe Some(1)
     td.downField("text").as[String].toOption shouldBe Some("object Bar")
+  }
+
+  it should "build hover, definition, and completion params from document positions" in {
+    val hover      = LspProtocol.hoverParams("file:///foo/Bar.scala", line = 7, character = 4)
+    val definition = LspProtocol.definitionParams("file:///foo/Bar.scala", line = 8, character = 2)
+    val completion = LspProtocol.completionParams("file:///foo/Bar.scala", line = 9, character = 6)
+
+    hover.hcursor.downField("textDocument").downField("uri").as[String].toOption shouldBe Some("file:///foo/Bar.scala")
+    hover.hcursor.downField("position").downField("line").as[Int].toOption shouldBe Some(7)
+    hover.hcursor.downField("position").downField("character").as[Int].toOption shouldBe Some(4)
+
+    definition.hcursor.downField("position").downField("line").as[Int].toOption shouldBe Some(8)
+    definition.hcursor.downField("position").downField("character").as[Int].toOption shouldBe Some(2)
+
+    completion.hcursor.downField("position").downField("line").as[Int].toOption shouldBe Some(9)
+    completion.hcursor.downField("position").downField("character").as[Int].toOption shouldBe Some(6)
   }
