@@ -18,6 +18,8 @@ import com.serenity.ui.layout.*
 private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEffectBehavior:
   this: StateManager =>
 
+  protected val mouseTargetCacheRef: cats.effect.Ref[cats.effect.IO, Option[MouseTargetCache]]
+
   def applyEvent(event: Event): cats.effect.IO[Unit] =
     stateRef.get.flatMap { rawState =>
       val prevState = normalizeCommandRunnerFocus(rawState)
@@ -466,127 +468,169 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       .pushFocus(Focus.Surface(surfaceId))
 
   private def handleMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Unit] =
-    resolveMouseTarget(click, state).fold(cats.effect.IO.unit) { (paneId, buffer, clickedCursor) =>
-      stateRef.update { s =>
-        s.buffers.get(buffer.id) match
-          case Some(current) =>
-            val selection =
-              if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
-              else if click.clickCount >= 3 then lineSelectionAtCursor(current, clickedCursor)
-              else if click.clickCount >= 2 then wordSelectionAtCursor(current, clickedCursor)
-              else None
-            val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
-            s.copy(
-              buffers = s.buffers.updated(
-                buffer.id,
-                current.copy(
-                  cursors = List(focusCursor),
-                  selection = selection,
-                  selections = Nil,
-                  preferredColumn = Some(focusCursor.column),
-                  preferredXPx = None,
-                  multiCursorVerticalStates = Nil
-                )
-              ),
-              focus = Focus.EditorPane(paneId),
-              layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-            )
-          case None => s
+    resolveMouseTarget(click, state).flatMap {
+      _.fold(cats.effect.IO.unit) { (paneId, buffer, clickedCursor) =>
+        stateRef.update { s =>
+          s.buffers.get(buffer.id) match
+            case Some(current) =>
+              val selection =
+                if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
+                else if click.clickCount >= 3 then lineSelectionAtCursor(current, clickedCursor)
+                else if click.clickCount >= 2 then wordSelectionAtCursor(current, clickedCursor)
+                else None
+              val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
+              s.copy(
+                buffers = s.buffers.updated(
+                  buffer.id,
+                  current.copy(
+                    cursors = List(focusCursor),
+                    selection = selection,
+                    selections = Nil,
+                    preferredColumn = Some(focusCursor.column),
+                    preferredXPx = None,
+                    multiCursorVerticalStates = Nil
+                  )
+                ),
+                focus = Focus.EditorPane(paneId),
+                layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+              )
+            case None => s
+        }
       }
     }
 
   private def handleMousePress(press: MousePress, state: AppState): cats.effect.IO[Unit] =
-    resolveMouseTarget(press, state).fold(cats.effect.IO.unit) { (paneId, buffer, pressedCursor) =>
-      stateRef.update { s =>
-        s.buffers.get(buffer.id) match
-          case Some(current) =>
-            val selection =
-              Option.when(press.shiftDown)(rangeSelectionFromAnchor(current, pressedCursor)).flatten
-            val focusCursor = selection.map(_.focus).getOrElse(pressedCursor)
-            s.copy(
-              buffers = s.buffers.updated(
-                buffer.id,
-                current.copy(
-                  cursors = List(focusCursor),
-                  selection = selection,
-                  selections = Nil,
-                  preferredColumn = Some(focusCursor.column),
-                  preferredXPx = None,
-                  multiCursorVerticalStates = Nil
-                )
-              ),
-              focus = Focus.EditorPane(paneId),
-              layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-            )
-          case None => s
+    resolveMouseTarget(press, state).flatMap {
+      _.fold(cats.effect.IO.unit) { (paneId, buffer, pressedCursor) =>
+        stateRef.update { s =>
+          s.buffers.get(buffer.id) match
+            case Some(current) =>
+              val selection =
+                Option.when(press.shiftDown)(rangeSelectionFromAnchor(current, pressedCursor)).flatten
+              val focusCursor = selection.map(_.focus).getOrElse(pressedCursor)
+              s.copy(
+                buffers = s.buffers.updated(
+                  buffer.id,
+                  current.copy(
+                    cursors = List(focusCursor),
+                    selection = selection,
+                    selections = Nil,
+                    preferredColumn = Some(focusCursor.column),
+                    preferredXPx = None,
+                    multiCursorVerticalStates = Nil
+                  )
+                ),
+                focus = Focus.EditorPane(paneId),
+                layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+              )
+            case None => s
+        }
       }
     }
 
   private def handleMouseDrag(drag: MouseDrag, state: AppState): cats.effect.IO[Unit] =
-    resolveMouseTarget(drag, state).fold(cats.effect.IO.unit) { (paneId, buffer, draggedCursor) =>
-      stateRef.update { s =>
-        s.buffers.get(buffer.id) match
-          case Some(current) =>
-            val anchor =
-              current.primarySelection.map(_.anchor).orElse(current.cursors.headOption).getOrElse(draggedCursor)
-            val selection =
-              Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
-            s.copy(
-              buffers = s.buffers.updated(
-                buffer.id,
-                current.copy(
-                  cursors = List(draggedCursor),
-                  selection = selection,
-                  selections = Nil,
-                  preferredColumn = Some(draggedCursor.column),
-                  preferredXPx = None,
-                  multiCursorVerticalStates = Nil
-                )
-              ),
-              focus = Focus.EditorPane(paneId),
-              layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-            )
-          case None => s
+    resolveMouseTarget(drag, state).flatMap {
+      _.fold(cats.effect.IO.unit) { (paneId, buffer, draggedCursor) =>
+        stateRef.update { s =>
+          s.buffers.get(buffer.id) match
+            case Some(current) =>
+              val anchor =
+                current.primarySelection.map(_.anchor).orElse(current.cursors.headOption).getOrElse(draggedCursor)
+              val selection =
+                Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
+              s.copy(
+                buffers = s.buffers.updated(
+                  buffer.id,
+                  current.copy(
+                    cursors = List(draggedCursor),
+                    selection = selection,
+                    selections = Nil,
+                    preferredColumn = Some(draggedCursor.column),
+                    preferredXPx = None,
+                    multiCursorVerticalStates = Nil
+                  )
+                ),
+                focus = Focus.EditorPane(paneId),
+                layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+              )
+            case None => s
+        }
       }
     }
 
-  private def resolveMouseTarget(click: MouseInputEvent, state: AppState): Option[(PaneId, Buffer, CursorPosition)] =
+  private def resolveMouseTarget(
+    click: MouseInputEvent,
+    state: AppState
+  ): cats.effect.IO[Option[(PaneId, Buffer, CursorPosition)]] =
     state.viewportSize match
-      case None => None
+      case None => cats.effect.IO.pure(None)
       case Some(tSize) =>
-        val layout      = LayoutEngine.calculateLayoutWithUI(state, tSize)
-        val paneLayouts = LayoutEngine.calculatePaneLayouts(state, layout)
-        paneLayouts.find {
-          case (_, rect) =>
-            click.col >= rect.x && click.col < rect.x + rect.width &&
-            click.row > rect.y && click.row < rect.y + rect.height
-        } match
-          case Some((paneId, paneRect)) =>
-            state.layout.editorPanes.get(paneId).flatMap(pane => pane.bufferId.flatMap(state.buffers.get)) match
-              case Some(buffer) =>
-                val vp           = buffer.viewport
-                val contentY     = paneRect.y + 1
-                val visualRow    = (click.row - contentY).max(0)
-                val font         = previewFontForBuffer(buffer, state.config.fontConfig)
-                val metrics      = CellMetrics.fromFont(font)
-                val panelWidthPx = paneRect.width * metrics.charWidth
-                val snapshot     = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font)
-                val xPx = click.pixelX match
-                  case Some(pixelX) => (pixelX - (paneRect.x * metrics.charWidth)).toFloat
-                  case None         => ((click.col - paneRect.x).max(0) * metrics.charWidth).toFloat
-                val clickedCursor = snapshot
-                  .cursorForVisualRowAndXPx(visualRow, xPx.max(0.0f))
-                  .orElse {
-                    val bufferLine  = (vp.topLine + visualRow).max(0)
-                    val bufferCol   = (vp.leftColumn + (click.col - paneRect.x)).max(0)
-                    val clampedLine = bufferLine.min(math.max(0, buffer.content.lineCount - 1))
-                    val lineLen     = buffer.content.getLine(clampedLine).getOrElse("").length
-                    Some(CursorPosition(clampedLine, bufferCol.min(lineLen)))
+        mouseTargetLayout(state, tSize).flatMap { cache =>
+          cache.paneLayouts.find {
+            case (_, rect) =>
+              click.col >= rect.x && click.col < rect.x + rect.width &&
+              click.row > rect.y && click.row < rect.y + rect.height
+          } match
+            case Some((paneId, paneRect)) =>
+              state.layout.editorPanes.get(paneId).flatMap(pane => pane.bufferId.flatMap(state.buffers.get)) match
+                case Some(buffer) =>
+                  val vp           = buffer.viewport
+                  val contentY     = paneRect.y + 1
+                  val visualRow    = (click.row - contentY).max(0)
+                  val font         = previewFontForBuffer(buffer, state.config.fontConfig)
+                  val metrics      = CellMetrics.fromFont(font)
+                  val panelWidthPx = paneRect.width * metrics.charWidth
+                  mouseTargetSnapshot(cache.layoutKey, buffer, state.config.fontConfig, panelWidthPx, font).map {
+                    snapshot =>
+                      val xPx = click.pixelX match
+                        case Some(pixelX) => (pixelX - (paneRect.x * metrics.charWidth)).toFloat
+                        case None         => ((click.col - paneRect.x).max(0) * metrics.charWidth).toFloat
+                      val clickedCursor = snapshot
+                        .cursorForVisualRowAndXPx(visualRow, xPx.max(0.0f))
+                        .orElse {
+                          val bufferLine  = (vp.topLine + visualRow).max(0)
+                          val bufferCol   = (vp.leftColumn + (click.col - paneRect.x)).max(0)
+                          val clampedLine = bufferLine.min(math.max(0, buffer.content.lineCount - 1))
+                          val lineLen     = buffer.content.getLine(clampedLine).getOrElse("").length
+                          Some(CursorPosition(clampedLine, bufferCol.min(lineLen)))
+                        }
+                      clickedCursor.map(cursor => (paneId, buffer, cursor))
                   }
-                clickedCursor.map(cursor => (paneId, buffer, cursor))
-              case None =>
-                None
-          case None => None
+                case None =>
+                  cats.effect.IO.pure(None)
+            case None => cats.effect.IO.pure(None)
+        }
+
+  private def mouseTargetLayout(state: AppState, viewportSize: ViewportSize): cats.effect.IO[MouseTargetCache] =
+    val key = MouseTargetLayoutKey.from(state, viewportSize)
+    mouseTargetCacheRef.modify {
+      case Some(cache) if cache.layoutKey == key =>
+        Some(cache) -> cache
+      case _ =>
+        val next = MouseTargetCache.fromState(state, viewportSize)
+        Some(next) -> next
+    }
+
+  private def mouseTargetSnapshot(
+    layoutKey: MouseTargetLayoutKey,
+    buffer: Buffer,
+    fontConfig: FontConfig,
+    panelWidthPx: Int,
+    font: java.awt.Font
+  ): cats.effect.IO[TextLayoutSnapshot] =
+    val key = MouseTargetSnapshotKey.from(buffer, fontConfig, panelWidthPx)
+    mouseTargetCacheRef.modify {
+      case Some(cache) if cache.layoutKey == layoutKey =>
+        cache.snapshots.get(key) match
+          case Some(snapshot) =>
+            Some(cache) -> snapshot
+          case None =>
+            val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font)
+            Some(cache.copy(snapshots = cache.snapshots.updated(key, snapshot))) -> snapshot
+      case other =>
+        val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font)
+        other -> snapshot
+    }
 
   private def wordSelectionAtCursor(buffer: Buffer, cursor: CursorPosition): Option[Selection] =
     val text          = buffer.content.collect()

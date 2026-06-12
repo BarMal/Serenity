@@ -128,6 +128,7 @@ object StateManager:
       resolvedSessionRootOverride <- resolveSessionRootOverride(sessionRootOverride)
       stateRef                    <- Ref.of[IO, AppState](AppState.initial.copy(config = initialConfig))
       undoRef                     <- Ref.of[IO, UndoState](UndoState(maxUndoDepth = policy.maxUndoDepth))
+      mouseTargetCacheRef         <- Ref.of[IO, Option[MouseTargetCache]](None)
       themeNamesRef <- themeManager.listAvailableThemes
         .handleErrorWith(_ => IO.pure(Nil))
         .flatMap(Ref.of[IO, List[String]])
@@ -143,6 +144,7 @@ object StateManager:
       resolvedSessionRootOverride,
       themeManager,
       lspQueue,
+      mouseTargetCacheRef,
       onFontConfigChanged,
       configPersistencePath,
       uiPresetStore,
@@ -177,6 +179,7 @@ object StateManager:
       protected val sessionRootOverride: Option[Path],
       protected val themeManager: AppThemeManager = AppThemeManager.create,
       protected val lspQueue: Queue[IO, LspEffect],
+      protected val mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
       protected val onFontConfigChanged: FontConfig => IO[Unit],
       protected val configPersistencePath: Option[Path],
       protected val uiPresetStore: UiPresetStore,
