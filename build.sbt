@@ -3,7 +3,7 @@ import sbtassembly.MergeStrategy
 
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
-ThisBuild / scalaVersion := "3.8.3"
+ThisBuild / scalaVersion := "3.8.4"
 
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
@@ -38,9 +38,9 @@ lazy val root = (project in file("."))
   )
 
 libraryDependencies ++= Seq(
-  "org.typelevel"         %% "cats-effect"     % "3.7-4972921",
-  "co.fs2"                %% "fs2-core"        % "3.13.0-M2",
-  "co.fs2"                %% "fs2-io"          % "3.13.0-M2",
+  "org.typelevel"         %% "cats-effect"     % "3.7.0",
+  "co.fs2"                %% "fs2-core"        % "3.13.0",
+  "co.fs2"                %% "fs2-io"          % "3.13.0",
   "org.scalatest"         %% "scalatest"       % "3.2.19" % "test",
   "com.github.pureconfig" %% "pureconfig-core" % "0.17.9"
 )
