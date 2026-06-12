@@ -1,17 +1,19 @@
 # Serenity State Of Play
 
-Generated on 2026-06-05 against the current branch state.
+Generated on 2026-06-05 against the branch state at that time.
 
-This document now serves two purposes:
-- a current implementation status report
-- the working backlog/tick list for feature completion
+This document is an archived implementation snapshot. It is useful as historical context for architecture and feature
+coverage as of the generation date, but it is no longer the source of truth for backlog or roadmap tracking.
+
+Current and future work is tracked in GitHub Issues. Use issue labels, milestones, projects, and issue title prefixes
+there rather than editing this file as a tick list.
 
 Status labels used here:
 - `[x]` Implemented in code and backed by direct implementation and/or tests
 - `[~]` Partial: real, but narrower than the intended product shape
 - `[ ]` Missing: no direct implementation evidence found in the current codebase
 
-Priority labels used here:
+Priority labels used in this archived snapshot:
 - `P0` Editing fundamentals and correctness
 - `P1` UX polish and workflow quality
 - `P2` IDE/deeper language tooling
@@ -146,36 +148,22 @@ Priority labels used here:
 - `[x]` `StateManager` has now been split into composed behavior traits covering event pipeline, effects, workflows, viewport logic, file façade, editor façade, and surface façade responsibilities.[34][35][36]
 - `[~][P1]` The architecture is much healthier than before, but there is still room to push more behavior into precise types and smaller algebras, especially around richer workflows, replace/find scope modelling, and IDE request/response paths.[3][34][36]
 
-## Prioritized Tick List
+## Backlog Tracking
 
-### P0: Editing Fundamentals
+This section used to contain the working tick list. That list has been retired.
 
-- `[x]` Finish true multi-cursor editing semantics for the core editor surface. Distinct-cursor whole-line copy/cut, overlapping word-delete parity, tab/delete-forward coverage, repeated vertical preferred-column / preferred-x preservation, explicit select-all/find/modal-open semantics, undo/redo snapshots, mouse collapse rules, renderer parity, and primary-cursor-only blinking are now implemented and covered.[3][15][37][45][53][54][55][56]
-- `[x]` Finish the core find/replace workflow. Find now has live results, exact occurrence-column navigation, below-cursor overlay anchoring, saved-query seeding, no-match cleanup, and open-overlay next/previous behavior; replace-next and replace-all support current-buffer and active-selection scope with undoable snapshots.[3][8][32][58][59][60][61][62]
-- `[x]` Add richer mouse-driven text editing. Click placement, range extension, drag selection, double-click word selection, and triple-click line selection are now implemented.[14][15]
-- `[~]` Continue the markdown direction intentionally. Editor-side structural styling and block-lens raw-source editing now exist; the remaining decision is whether to add a separate preview/document presentation behavior beyond the current same-metric editor lens.[19][22][23][32][37][50]
-- `[~]` Continue the keymap direction beyond the new config-backed focused bindings. The runtime now supports editor/modal/panel/overlay-local overrides in addition to global hotkeys; the remaining gap is a user-facing keymap editing surface and any broader remapping of higher-level commands.[12][13][40][46][47][49]
+Use GitHub Issues as the canonical backlog:
 
-### P1: UX Polish
+- create one issue per feature, bug, or documentation task
+- use labels such as `bug`, `enhancement`, `documentation`, `performance`, `architecture`, and `testability`
+- use milestones or projects for release grouping when the queue needs higher-level planning
+- treat this document only as historical context when writing or refining issues
 
-- `[ ]` Add panel presets / workspace presets.[30][31]
-- `[ ]` Support multiple panels per side rather than single replacement per side.[30][31]
-- `[ ]` Add interface density / minimal-vs-maximal UI modes if still desired.[16][17][30]
-- `[x]` Separate GUI/menu font rendering from editor code/text font settings so changing the code font does not restyle command-runner or menu UI.[16][18][38][57]
-- `[~]` Revisit the command runner as a broader unified control surface once the editing fundamentals are settled. Nested settings, scrolling, text-entry rows, focused submenu search, and typed command execution are now in place; the remaining gap is breadth across every subsystem rather than command-runner mechanics.[7][17][32][40][51][52]
-- `[ ]` Add hover affordances and context-menu style mouse workflows if those are still desired as part of broader UI polish.[14][15]
-
-### P2: IDE Features
-
-- `[ ]` Add user-facing LSP configuration and language tooling controls beyond the current built-in registry plus `LspUserConfig.empty` path.[33][43]
-- `[ ]` Add request/response driven IDE interactions such as hover, completion, definition, and symbol navigation.[32][33]
-- `[ ]` Add build/test/run/debug/dependency workflows if Serenity is meant to grow into a fuller IDE shell.[33]
-
-## Summary
+## Snapshot Summary
 
 - Strongest implemented areas today: rope-backed editing, session restore/save, typography/layout correctness, nested command-runner overlays, theming/animation, and pinned-panel basics.[1][5][11][17][19][27]
 - Biggest current gaps remain: broader search surfaces such as find-all/project-wide search, a user-facing keymap editing surface beyond the new config-backed bindings, richer Markdown preview/document rendering beyond the same-metric block lens, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][40][46][47][49][50]
-- Recommended implementation order from here: finish any remaining editing-fundamental polish, then broaden workflow/UX surfaces such as find-all/project-wide search and keymap editing, then deepen IDE behavior.[3][8][14][17][30][33]
+- These notes describe the 2026-06-05 snapshot. Check GitHub Issues for current gaps, prioritisation, and implementation order.
 
 ## Sources
 
