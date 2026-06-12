@@ -435,18 +435,18 @@ object EditorEventReducer:
                     currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
                   )
                 else
-                  val selected    = resultSet.results(resultSet.currentIndex)
-                  val target      = CursorPosition(selected.line, selected.column)
-                  val halfVisible = buffer.viewport.visibleLines / 2
-                  val newTopLine  = math.max(0, target.line - halfVisible)
-                  val updatedBuffer = buffer.copy(
+                  val selected = resultSet.results(resultSet.currentIndex)
+                  val target   = CursorPosition(selected.line, selected.column)
+                  val baseBuffer = buffer.copy(
                     cursors = List(target),
                     selection = None,
                     selections = Nil,
                     preferredColumn = Some(target.column),
                     preferredXPx = None,
-                    viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0),
                     findState = Some(FindState.fromResultSet(resultSet))
+                  )
+                  val updatedBuffer = baseBuffer.copy(
+                    viewport = adjustViewportForCursor(baseBuffer, currentState, target)
                   )
                   ReducerResult.noEffects(
                     currentState.copy(
@@ -1202,35 +1202,7 @@ object EditorEventReducer:
     currentState: AppState,
     cursor: CursorPosition
   ): Viewport =
-    val viewport         = buffer.viewport
-    val halfVisibleLines = viewport.visibleLines / 2
-    val font             = previewFontForBuffer(buffer, currentState.config.fontConfig)
-    val visibleWidthPx   = viewport.visibleColumns * CellMetrics.fromFont(font).charWidth
-    val lineText         = buffer.content.getLine(cursor.line).getOrElse("")
-    val measuredCursorVisualLine =
-      TextLayoutSnapshot.visualLineIndexForCursor(lineText, cursor.column, visibleWidthPx, font)
-    val cellCursorVisualLine = cursor.column / math.max(1, viewport.visibleColumns)
-    val cursorVisualLine     = math.max(measuredCursorVisualLine, cellCursorVisualLine)
-    val targetTopLine =
-      if cursorVisualLine > halfVisibleLines then cursor.line
-      else cursor.line - halfVisibleLines
-    val clampedTopLine = math.max(0, targetTopLine)
-    val topVisualLine =
-      if clampedTopLine == cursor.line then math.max(0, cursorVisualLine - halfVisibleLines)
-      else 0
-    val clampedLeftColumn =
-      if buffer.usesTextFont then 0
-      else
-        val measuredLeftColumn =
-          TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)
-        val minimumVisibleColumn = math.max(0, cursor.column - viewport.visibleColumns + 1)
-        math.max(minimumVisibleColumn, measuredLeftColumn)
-
-    viewport.copy(
-      topLine = clampedTopLine,
-      leftColumn = clampedLeftColumn,
-      topVisualLine = topVisualLine
-    )
+    CursorViewport.adjustForCursor(buffer, currentState, cursor)
 
   private def moveUpVisualLine(
     cursor: CursorPosition,

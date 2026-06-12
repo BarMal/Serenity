@@ -69,7 +69,7 @@ object AppRuntime:
             case CursorMode.Breathe =>
               for
                 i <- breathIndex.updateAndGet(i => (i + 1) % 48)
-                c     = state.theme.cursor
+                c     = state.config.cursorColors.activeOr(state.theme.cursor)
                 alpha = ((math.sin(i * math.Pi / 24) + 1.0) / 2.0 * 255).toInt
               yield (true, Some(new Color(c.getRed, c.getGreen, c.getBlue, alpha)))
 

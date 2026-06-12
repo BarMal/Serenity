@@ -1,10 +1,10 @@
 package com.serenity
 
-import java.awt.Font
+import java.awt.{Color, Font}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, CursorColorConfig}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
@@ -27,7 +27,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     cursor: CursorPosition,
     font: Font,
     viewport: Viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 10, visibleLines = 4),
-    viewportSize: ViewportSize = ViewportSize(100, 30)
+    viewportSize: ViewportSize = ViewportSize(100, 30),
+    config: AppConfig = AppConfig.default.withLineNumbers(false).withGutter(false)
   ): MockRenderSurface =
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
@@ -47,7 +48,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         activeEditorPaneId = Some(paneId)
       ),
       theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      config = config
     )
 
     val surface     = new MockRenderSurface(viewportSize.width, viewportSize.height)
@@ -150,6 +151,40 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     visibleCursorRects should have size 3
     hiddenCursorRects should have size 2
     hiddenCursorRects.map(_.xPx) shouldBe visibleCursorRects.drop(1).map(_.xPx)
+  }
+
+  it should "use configured active and inactive cursor colours for primary and secondary cursors" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val font     = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val activeColor   = new Color(0x33, 0x66, 0xcc)
+    val inactiveColor = new Color(0xcc, 0x66, 0x33)
+    val buffer = Buffer
+      .fromString(bufferId, "iW")
+      .copy(
+        language = Some(com.serenity.lsp.config.LanguageId.Markdown),
+        cursors = List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2))
+      )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withCursorColors(CursorColorConfig(active = Some(activeColor), inactive = Some(inactiveColor)))
+    )
+    val surface     = new MockRenderSurface(100, 30)
+    val cellMetrics = CellMetrics.fromFont(font)
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30), font, font, cellMetrics, None)
+
+    surface.fillPixelRectCalls.count(_.color == activeColor) shouldBe 1
+    surface.fillPixelRectCalls.count(_.color == inactiveColor) shouldBe 2
   }
 
   it should "hide the only cursor during the hidden blink phase" in {

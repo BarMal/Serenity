@@ -3,7 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Font
 
 import com.serenity.animation.ThemeInterpolator
-import com.serenity.config.MarkdownViewMode
+import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.state.models.*
@@ -221,8 +221,8 @@ object Renderer:
       else context
     buffer.foreach { buf =>
       if isInlineMarkdownLens(buf, state) then
-        renderMarkdownLensCursors(buf, contentRect, state.theme, cursorContext, bufferSnapshot.get)
-      else renderCursors(buf, contentRect, state.theme, cursorContext, bufferSnapshot.get)
+        renderMarkdownLensCursors(buf, contentRect, state.theme, state.config, cursorContext, bufferSnapshot.get)
+      else renderCursors(buf, contentRect, state.theme, state.config, cursorContext, bufferSnapshot.get)
     }
 
   private def renderBufferHeader(
@@ -510,6 +510,7 @@ object Renderer:
     buffer: Buffer,
     rect: LayoutRect,
     theme: Theme,
+    config: AppConfig,
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): Unit =
@@ -534,7 +535,7 @@ object Renderer:
               if screenYCell >= rect.y && screenYCell < rect.bottom &&
                   screenYCell >= 0 && screenYCell < context.surface.viewportHeight
               then
-                val effectiveCursorColor = context.cursorColorOverride.getOrElse(theme.cursor)
+                val effectiveCursorColor = cursorColorFor(config, theme, context, isPrimaryCursor)
                 val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
                 val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
                 val screenYPx            = context.cellMetrics.toPixelY(screenYCell)
@@ -742,6 +743,7 @@ object Renderer:
     buffer: Buffer,
     rect: LayoutRect,
     theme: Theme,
+    config: AppConfig,
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): Unit =
@@ -756,7 +758,7 @@ object Renderer:
           if screenYCell >= rect.y && screenYCell < rect.bottom &&
               screenYCell >= 0 && screenYCell < context.surface.viewportHeight
           then
-            val effectiveCursorColor = context.cursorColorOverride.getOrElse(theme.cursor)
+            val effectiveCursorColor = cursorColorFor(config, theme, context, isPrimaryCursor)
             val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
             val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
             val screenYPx            = context.cellMetrics.toPixelY(screenYCell)
@@ -780,6 +782,16 @@ object Renderer:
         val xPx = line.xForColumn(cursor.column).getOrElse(line.widthPx)
         (visualIndex, xPx)
     }
+
+  private def cursorColorFor(
+    config: AppConfig,
+    theme: Theme,
+    context: RenderContext,
+    isPrimaryCursor: Boolean
+  ): java.awt.Color =
+    val activeColor = context.cursorColorOverride.getOrElse(config.cursorColors.activeOr(theme.cursor))
+    if isPrimaryCursor then activeColor
+    else config.cursorColors.inactiveOr(activeColor)
 
   private def renderFloatingPanels(state: AppState, context: RenderContext): Unit =
     context.surface.setFont(context.uiFont)

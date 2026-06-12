@@ -4,6 +4,8 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -882,6 +884,46 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     buffer.findState shouldBe Some(
       FindState("needle", List(FindResult(0, 0), FindResult(0, "needle then ".length)), 1)
     )
+  }
+
+  it should "scroll wrapped text to the selected find-next visual row" in {
+    val paneId       = PaneId(0)
+    val bufferId     = BufferId(0)
+    val prefix       = List.fill(80)("wrapped").mkString(" ")
+    val content      = s"first $prefix needle"
+    val needleColumn = content.indexOf("needle")
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope(content),
+            cursors = List(CursorPosition(0, 0)),
+            findState = Some(FindState("needle", List(FindResult(0, needleColumn)), 0)),
+            viewport = Viewport(0, 0, visibleLines = 3, visibleColumns = 12)
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(FindNext, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+    val cursor       = buffer.cursors.head
+    val font         = FontLoader.previewTextFont(updatedState.config.fontConfig)
+    val metrics      = CellMetrics.fromFont(font)
+    val snapshot =
+      TextLayoutSnapshot.fromBuffer(buffer, buffer.viewport.visibleColumns * metrics.charWidth, font)
+
+    cursor shouldBe CursorPosition(0, needleColumn)
+    buffer.viewport.topLine shouldBe 0
+    buffer.viewport.topVisualLine should be > 0
+    withClue(
+      s"viewport=${buffer.viewport} cursor=$cursor visualLines=${snapshot.visualLines.map(line => (line.startColumn, line.endColumn))}"
+    ) {
+      snapshot.visualLines.exists(line =>
+        line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
+      ) shouldBe true
+    }
   }
 
   it should "refresh stored find-all results after text is inserted before matches" in {

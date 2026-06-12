@@ -1,5 +1,6 @@
 package com.serenity
 
+import java.awt.Color
 import java.nio.file.Files
 
 import com.serenity.config.*
@@ -118,4 +119,36 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers:
     config.fontConfig.enableLigatures shouldBe false
 
     ConfigManager.configToString(config) should include("font.ui.family = Dialog")
+  }
+
+  it should "load and write active and inactive cursor colour overrides" in {
+    val configFile = Files.createTempFile("serenity-cursor-config", ".conf")
+    Files.writeString(
+      configFile,
+      """cursor.active.color = #3366CC
+        |cursor.inactive.color = #CC663380
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.cursorColors.active shouldBe Some(new Color(0x33, 0x66, 0xcc))
+    config.cursorColors.inactive shouldBe Some(new Color(0xcc, 0x66, 0x33, 0x80))
+    ConfigManager.configToString(config) should include("cursor.active.color = #3366CC")
+    ConfigManager.configToString(config) should include("cursor.inactive.color = #CC663380")
+  }
+
+  it should "ignore invalid cursor colour overrides" in {
+    val configFile = Files.createTempFile("serenity-cursor-config", ".conf")
+    Files.writeString(
+      configFile,
+      """cursor.active.color = not-a-colour
+        |cursor.inactive.color = #xyz
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.cursorColors.active shouldBe None
+    config.cursorColors.inactive shouldBe None
   }

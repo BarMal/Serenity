@@ -1,6 +1,6 @@
 package com.serenity.session
 
-import java.awt.Font
+import java.awt.{Color, Font}
 import java.nio.file.Path
 
 import scala.concurrent.duration.FiniteDuration
@@ -334,6 +334,13 @@ given Decoder[BackgroundStyle] = Decoder.decodeString.emap {
   case other         => Left(s"Unknown BackgroundStyle: $other")
 }
 
+given Encoder[Color] = Encoder.encodeString.contramap(formatColor)
+
+given Decoder[Color] = Decoder.decodeString.emap(value => parseColor(value).toRight(s"Invalid colour value: $value"))
+
+given Encoder[CursorColorConfig] = deriveEncoder
+given Decoder[CursorColorConfig] = deriveDecoder
+
 given Encoder[AppConfig] = deriveEncoder
 
 given Decoder[AppConfig] = Decoder.instance { cursor =>
@@ -349,6 +356,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     blurRadius                <- cursor.getOrElse[Float]("blurRadius")(0.0f)
     backgroundStyle           <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
     cursorMode                <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
+    cursorColors              <- cursor.getOrElse[CursorColorConfig]("cursorColors")(CursorColorConfig())
     windowChromeMode          <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(WindowChromeMode.Native)
     markdownViewMode          <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
   yield AppConfig(
@@ -363,10 +371,30 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     blurRadius = blurRadius,
     backgroundStyle = backgroundStyle,
     cursorMode = cursorMode,
+    cursorColors = cursorColors,
     windowChromeMode = windowChromeMode,
     markdownViewMode = markdownViewMode
   )
 }
+
+private def parseColor(value: String): Option[Color] =
+  val hex = value.stripPrefix("#")
+  Option
+    .when(hex.length == 6 || hex.length == 8)(hex)
+    .filter(_.forall(ch => Character.digit(ch, 16) >= 0))
+    .flatMap { normalized =>
+      scala.util.Try {
+        val red   = Integer.parseInt(normalized.substring(0, 2), 16)
+        val green = Integer.parseInt(normalized.substring(2, 4), 16)
+        val blue  = Integer.parseInt(normalized.substring(4, 6), 16)
+        val alpha = if normalized.length == 8 then Integer.parseInt(normalized.substring(6, 8), 16) else 255
+        Color(red, green, blue, alpha)
+      }.toOption
+    }
+
+private def formatColor(color: Color): String =
+  val rgb = f"#${color.getRed}%02X${color.getGreen}%02X${color.getBlue}%02X"
+  if color.getAlpha == 255 then rgb else f"$rgb${color.getAlpha}%02X"
 
 given Encoder[SessionState] = deriveEncoder
 given Decoder[SessionState] = deriveDecoder

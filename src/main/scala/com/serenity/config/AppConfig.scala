@@ -1,5 +1,7 @@
 package com.serenity.config
 
+import java.awt.Color
+
 import com.serenity.animation.AnimationConfig
 import com.serenity.ui.fonts.FontLoader.FontConfig
 
@@ -22,6 +24,16 @@ enum MarkdownViewMode:
   case SplitPreview
   case InlineLens
 
+case class CursorColorConfig(
+    active: Option[Color] = None,
+    inactive: Option[Color] = None
+):
+  def activeOr(default: Color): Color =
+    active.getOrElse(default)
+
+  def inactiveOr(activeColor: Color): Color =
+    inactive.getOrElse(activeColor)
+
 /** Global application configuration */
 case class AppConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
@@ -35,6 +47,7 @@ case class AppConfig(
     blurRadius: Float = 0.0f,
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     cursorMode: CursorMode = CursorMode.Blink,
+    cursorColors: CursorColorConfig = CursorColorConfig(),
     windowChromeMode: WindowChromeMode = WindowChromeMode.Native,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source
 ):
@@ -98,6 +111,9 @@ case class AppConfig(
 
   def withCursorMode(mode: CursorMode): AppConfig =
     copy(cursorMode = mode)
+
+  def withCursorColors(colors: CursorColorConfig): AppConfig =
+    copy(cursorColors = colors)
 
   def withWindowChromeMode(mode: WindowChromeMode): AppConfig =
     copy(windowChromeMode = mode)
