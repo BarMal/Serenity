@@ -65,6 +65,11 @@ class Java2DRenderSurface(
   def setBackgroundColor(color: Color): Unit = bgRef.set(color)
   def getBackgroundColor: Color              = bgRef.get()
 
+  override def clearViewport(color: Color): Unit =
+    bgRef.set(color)
+    g.setColor(color)
+    g.fillRect(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
+
   def putString(x: Int, y: Int, s: String): Unit =
     if s.nonEmpty then
       val px = metrics.toPixelX(x)

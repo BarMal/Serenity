@@ -145,8 +145,7 @@ object Renderer:
     cursorColor: Option[java.awt.Color] = None
   ): Unit =
     surface.hideCursor()
-    surface.setBackgroundColor(state.theme.background)
-    surface.fillRect(0, 0, surface.viewportWidth, surface.viewportHeight, ' ')
+    surface.clearViewport(state.theme.background)
 
     state.startPageSurface.flatMap {
       _.content match

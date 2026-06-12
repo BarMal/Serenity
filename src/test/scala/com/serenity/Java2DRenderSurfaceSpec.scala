@@ -1,14 +1,20 @@
 package com.serenity
 
-import java.awt.Font
 import java.awt.image.BufferedImage
+import java.awt.{Color, Font}
 
-import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.Java2DRenderSurface
+import com.serenity.config.AppConfig
+import com.serenity.rope.Balance
+import com.serenity.state.models.AppState
+import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.renderer.{Java2DRenderSurface, Renderer}
+import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
 
   "Java2DRenderSurface.strokeRoundRect" should "respect the active alpha composite when drawing borders" in {
     val lowAlphaImage  = new BufferedImage(80, 60, BufferedImage.TYPE_INT_ARGB)
@@ -54,6 +60,21 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     surface.viewportWidth shouldBe 10
     surface.viewportHeight shouldBe 5
+  }
+
+  "Renderer.render" should "clear pixels outside the whole-cell grid to the theme background" in {
+    val image   = new BufferedImage(83, 57, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+    val state = AppState.initial.copy(
+      theme = Theme.light,
+      config = AppConfig.default.withLineNumbers(false).withGutter(false)
+    )
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(8, 5), font, font, metrics, None)
+
+    new Color(image.getRGB(82, 56), true) shouldBe Theme.light.background
   }
 
   private def maxAlpha(image: BufferedImage): Int =
