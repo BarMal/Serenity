@@ -186,6 +186,14 @@ object ConfigManager:
               value.trim.toDoubleOption
                 .map(percent => config.withTextAreaRightInset(percent / 100.0))
                 .getOrElse(config)
+            case "spellcheck.enabled" | "spellcheck_enabled" =>
+              parseBoolean(value.trim)
+                .map(enabled => config.withSpellCheck(config.spellCheck.copy(enabled = enabled)))
+                .getOrElse(config)
+            case "spellcheck.languages" | "spellcheck_languages" =>
+              config.withSpellCheck(config.spellCheck.copy(languages = parseCommaList(value.trim)))
+            case "spellcheck.words" | "spellcheck_words" =>
+              config.withSpellCheck(config.spellCheck.copy(additionalWords = parseCommaList(value.trim)))
             case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
               HotkeyAction.values
                 .find(action => s"hotkey.${action.configKey}" == hotkeyKey)
@@ -276,6 +284,11 @@ object ConfigManager:
        |
        |# LSP server overrides
        |$lspSettings
+       |
+       |# Spell-checking for prose buffers
+       |spellcheck.enabled = ${config.spellCheck.enabled}
+       |spellcheck.languages = ${config.spellCheck.normalized.languages.mkString(",")}
+       |spellcheck.words = ${config.spellCheck.normalized.additionalWords.mkString(",")}
        |
        |# Hotkey overrides
        |hotkey.command_palette = ${config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render}
@@ -407,6 +420,14 @@ object ConfigManager:
       }
       .mkString("\n")
 
+  private def parseCommaList(value: String): List[String] =
+    value
+      .split(",")
+      .toList
+      .map(_.trim.toLowerCase)
+      .filter(_.nonEmpty)
+      .distinct
+
   /** Create a sample configuration file */
   def createSampleConfig(path: String): Boolean =
     try
@@ -449,6 +470,11 @@ object ConfigManager:
                           |# Preferred desktop window size. Leave empty to use the default.
                           |window.preferred.width =
                           |window.preferred.height =
+                          |
+                          |# Spell-checking for prose buffers
+                          |spellcheck.enabled = false
+                          |spellcheck.languages = en
+                          |spellcheck.words =
                           |
                           |# Hotkey overrides
                           |hotkey.command_palette = ctrl+p

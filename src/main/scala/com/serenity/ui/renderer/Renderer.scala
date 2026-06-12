@@ -6,6 +6,7 @@ import com.serenity.animation.ThemeInterpolator
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
+import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
@@ -1014,8 +1015,8 @@ object Renderer:
     buffer: Buffer,
     state: AppState
   ): Unit =
-    val uriOpt = buffer.filePath.map(_.toUri.toString)
-    uriOpt.foreach { uri =>
+    val uri = SpellChecker.diagnosticsUri(buffer)
+    {
       val lineDiags = state.diagnostics
         .getOrElse(uri, Nil)
         .filter(d => d.range.start.line == bufferLineIndex)

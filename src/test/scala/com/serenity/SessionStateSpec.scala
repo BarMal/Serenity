@@ -220,7 +220,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
               )
             )
           )
-        )
+        ),
+        spellCheck = SpellCheckConfig(enabled = true, languages = List("en", "fr"), additionalWords = List("serenity"))
       )
     )
 
@@ -250,6 +251,11 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         args = Some(List("--stdio")),
         enabled = Some(true)
       )
+    )
+    decoded.config.spellCheck shouldBe SpellCheckConfig(
+      enabled = true,
+      languages = List("en", "fr"),
+      additionalWords = List("serenity")
     )
     decoded.config.characterAnimation.map(_.steps) shouldBe
       AnimationConfig.quick.map(_.steps)

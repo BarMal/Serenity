@@ -6,6 +6,7 @@ import cats.syntax.foldable.*
 import com.serenity.animation.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.keystroke.events.*
+import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.components.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
@@ -169,16 +170,17 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
   protected def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
     normalizeCommandRunnerFocus(newState).validated match
       case Right(validState) =>
+        val diagnosticState = SpellChecker.refreshDiagnostics(validState)
         val modalTransitionLog =
-          (fallbackState.modalSurface, validState.modalSurface) match
+          (fallbackState.modalSurface, diagnosticState.modalSurface) match
             case (before, after) if before != after =>
               logger.info(
                 s"[STATE MODAL] before=${before.map(_.id).getOrElse("none")} " +
-                  s"after=${after.map(_.id).getOrElse("none")} focus=${validState.focus}"
+                  s"after=${after.map(_.id).getOrElse("none")} focus=${diagnosticState.focus}"
               )
             case _ =>
               cats.effect.IO.unit
-        modalTransitionLog >> stateRef.set(validState)
+        modalTransitionLog >> stateRef.set(diagnosticState)
       case Left(errors) =>
         logger.error(s"State validation failed: ${errors.mkString(", ")}") >>
           stateRef.set(fallbackState)
