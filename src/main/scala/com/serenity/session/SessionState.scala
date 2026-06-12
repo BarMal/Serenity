@@ -5,6 +5,8 @@ import java.nio.file.Path
 
 import scala.concurrent.duration.FiniteDuration
 
+import cats.effect.IO
+import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
@@ -144,6 +146,43 @@ object SessionState:
       nextSurfaceId = 0
     )
 
+  /** Convert SessionState back to AppState for restoration, reading file-backed buffers from disk when older or
+    * size-conscious session files do not contain persisted text.
+    */
+  def toAppStateIO(sessionState: SessionState, theme: Theme)(using balance: com.serenity.rope.Balance): IO[AppState] =
+    for buffers <- sessionState.buffers.traverse { sessionBuffer =>
+          SessionBuffer.toBufferIO(sessionBuffer).map(buffer => BufferId(sessionBuffer.id) -> buffer)
+        }
+    yield toAppStateWithBuffers(sessionState, theme, buffers.toMap)
+
+  private def toAppStateWithBuffers(
+    sessionState: SessionState,
+    theme: Theme,
+    bufferMap: Map[BufferId, Buffer]
+  ): AppState =
+    val layout = SessionLayout.toLayout(sessionState.layout)
+    val focus = sessionState.focus
+      .map(SessionFocus.toFocus)
+      .getOrElse(
+        layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(Focus.EditorPane(PaneId(0)))
+      )
+
+    AppState(
+      layout = layout,
+      buffers = bufferMap,
+      bufferOrder = sessionState.bufferOrder.map(BufferId.apply),
+      focus = focus,
+      uiSurfaces = List.empty,
+      actionStack = Nil,
+      viewportSize = None,
+      theme = theme,
+      config = sessionState.config,
+      recentFiles = sessionState.recentFiles.map(Path.of(_)),
+      nextBufferId = BufferId(bufferMap.keys.map(_.value).maxOption.getOrElse(-1) + 1),
+      nextPaneId = PaneId(layout.editorPanes.keys.map(_.value).maxOption.getOrElse(-1) + 1),
+      nextSurfaceId = 0
+    )
+
 object SessionBuffer:
 
   def fromBuffer(buffer: Buffer, persistUnsaved: Boolean = true): SessionBuffer =
@@ -176,6 +215,23 @@ object SessionBuffer:
       viewport = SessionViewport.toViewport(sessionBuffer.viewport),
       findState = sessionBuffer.findState.map(SessionFindState.toFindState)
     )
+
+  def toBufferIO(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): IO[Buffer] =
+    import com.serenity.rope.Rope
+    import java.nio.file.{Files, Paths}
+
+    sessionBuffer.unsavedContent match
+      case Some(_) =>
+        IO.pure(toBuffer(sessionBuffer))
+      case None =>
+        sessionBuffer.filePath match
+          case Some(pathText) =>
+            val path = Paths.get(pathText)
+            IO.blocking(Files.readString(path))
+              .map(diskContent => toBuffer(sessionBuffer).copy(content = Rope(diskContent), isDirty = false))
+              .handleError(_ => toBuffer(sessionBuffer))
+          case None =>
+            IO.pure(toBuffer(sessionBuffer))
 
 object SessionLayout:
 
