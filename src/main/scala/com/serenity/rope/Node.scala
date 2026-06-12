@@ -13,22 +13,7 @@ case class Node(left: Rope, right: Rope)(using balance: Balance) extends Rope:
 
   override def rebalance: Rope =
     if isWeightBalanced && isHeightBalanced then this
-    else
-      val rebalanced =
-        if !isWeightBalanced then
-          if left.weight < right.weight then rotateLeft()
-          else rotateRight()
-        else this
-
-      // Recursively rebalance children if needed
-      rebalanced match
-        case Node(l, r) =>
-          val newLeft  = l.rebalance
-          val newRight = r.rebalance
-          val result   = Node(newLeft, newRight)
-          if result.isWeightBalanced && result.isHeightBalanced then result
-          else result.rebuild
-        case leaf => leaf
+    else rebuild
 
   override def splitAt(index: Int): Option[(Rope, Rope)] =
     if index < 0 || index > weight then None
@@ -48,17 +33,3 @@ case class Node(left: Rope, right: Rope)(using balance: Balance) extends Rope:
 
   override def index(i: Int): Option[Char] =
     if i < left.weight then left.index(i) else right.index(i - left.weight)
-
-  private def rotateLeft(): Rope = right match
-    case Node(l, r) => Node(Node(left, l), r)
-    case Leaf(_)    =>
-      // If right is a leaf but still unbalanced, rebuild
-      if Math.abs(left.weight - right.weight) > balance.weightBalance then rebuild
-      else this
-
-  private def rotateRight(): Rope = left match
-    case Node(l, r) => Node(l, Node(r, right))
-    case Leaf(_)    =>
-      // If left is a leaf but still unbalanced, rebuild
-      if Math.abs(left.weight - right.weight) > balance.weightBalance then rebuild
-      else this
