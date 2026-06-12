@@ -44,7 +44,7 @@ object AppEventReducer:
         state
           .copy(
             uiSurfaces = state.uiSurfaces.filterNot { current =>
-              current.id == surface.id || current.content.isInstanceOf[SurfaceContent.CommandPaletteSubmenu]
+              current.id == surface.id || isCommandPaletteSubmenu(current.content)
             }
           )
           .popFocus
@@ -58,10 +58,8 @@ object AppEventReducer:
           content = SurfaceContent.CommandPalette(activatedRunner),
           presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
         )
-        val clearedSurfaces = stateWithId.uiSurfaces.filterNot { current =>
-          current.content.isInstanceOf[SurfaceContent.FileSearch] ||
-          current.content.isInstanceOf[SurfaceContent.ModalWorkflow]
-        }
+        val clearedSurfaces =
+          stateWithId.uiSurfaces.filterNot(current => isFileSearch(current.content) || isModalWorkflow(current.content))
         stateWithId
           .copy(
             uiSurfaces = upsertSurface(clearedSurfaces, surface)
@@ -77,6 +75,21 @@ object AppEventReducer:
     surface.content match
       case SurfaceContent.CommandPalette(runner) => Some((surface, runner))
       case _                                     => None
+
+  private def isCommandPaletteSubmenu(content: SurfaceContent): Boolean =
+    content match
+      case SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
+      case _                                             => false
+
+  private def isFileSearch(content: SurfaceContent): Boolean =
+    content match
+      case SurfaceContent.FileSearch(_) => true
+      case _                            => false
+
+  private def isModalWorkflow(content: SurfaceContent): Boolean =
+    content match
+      case SurfaceContent.ModalWorkflow(_) => true
+      case _                               => false
 
   private def upsertSurface(surfaces: List[UiSurface], surface: UiSurface): List[UiSurface] =
     surfaces.filterNot(_.id == surface.id) :+ surface

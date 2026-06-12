@@ -438,31 +438,36 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
 
   protected def completeOpenWorkflow(surfaceId: SurfaceId, workflow: OpenFileWorkflowState): IO[Unit] =
     workflowTargetPath(workflow).flatMap { targetPath =>
-      if !FileUtils.isReadableFile(targetPath) then
-        updateFileWorkflowSurface(
-          surfaceId,
-          workflow.updated(statusMessage = Some(s"File not found: $targetPath"))
-        ) >>
-          logger.debug(s"[FILE-WORKFLOW] Open target is not readable: $targetPath")
-      else
-        fileManager
-          .loadFile(targetPath)
-          .flatMap { loadedBuffer =>
-            stateRef.modify { state =>
-              val newBufferId    = state.nextBufferId
-              val bufferToInsert = loadedBuffer.copy(id = newBufferId)
-              val stateWithBuffer = state.copy(
-                buffers = state.buffers + (newBufferId -> bufferToInsert),
-                nextBufferId = BufferId(newBufferId.value + 1),
-                uiSurfaces = List.empty
-              )
-              val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
-              val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
-              val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
-              (focused, ())
+      IO.blocking(FileUtils.isReadableFile(targetPath)).flatMap {
+        case false =>
+          updateFileWorkflowSurface(
+            surfaceId,
+            workflow.updated(statusMessage = Some(s"File not found: $targetPath"))
+          ) >>
+            logger.debug(s"[FILE-WORKFLOW] Open target is not readable: $targetPath")
+        case true =>
+          stateRef
+            .modify { state =>
+              val bufferId = state.nextBufferId
+              (state.copy(nextBufferId = BufferId(bufferId.value + 1)), bufferId)
             }
-          }
-          .handleErrorWith(ex => logger.error(ex)(s"[FILE-WORKFLOW] Failed to open $targetPath"))
+            .flatMap(bufferId => fileManager.loadFile(targetPath, bufferId))
+            .flatMap { loadedBuffer =>
+              stateRef.modify { state =>
+                val newBufferId = loadedBuffer.id
+                val stateWithBuffer = state.copy(
+                  buffers = state.buffers + (newBufferId -> loadedBuffer),
+                  uiSurfaces = List.empty,
+                  recentFiles = trackRecentFile(state.recentFiles, targetPath)
+                )
+                val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
+                val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
+                val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
+                (focused, ())
+              }
+            }
+            .handleErrorWith(ex => logger.error(ex)(s"[FILE-WORKFLOW] Failed to open $targetPath"))
+      }
     }
 
   protected def completeSaveAsWorkflow(

@@ -39,5 +39,8 @@ private[manager] trait StateManagerRuntimeSupport:
   protected def saveBufferEffect(bufferId: BufferId): IO[Unit]
   protected def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit]
 
+  protected def trackRecentFile(current: List[Path], path: Path): List[Path] =
+    (path :: current.filterNot(_ == path)).take(20)
+
 private[manager] trait StateManagerBehavior extends StateManagerFileFacadeBehavior:
   this: StateManager =>

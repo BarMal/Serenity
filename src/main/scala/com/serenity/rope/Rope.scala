@@ -90,7 +90,7 @@ trait Rope(using balance: Balance):
       def findAll(start: Int, acc: List[Int]): List[Int] =
         val index = content.indexOf(term, start)
         if index == -1 then acc.reverse
-        else findAll(index + 1, index :: acc)
+        else findAll(index + term.length, index :: acc)
       findAll(0, List.empty)
 
   def lineCount: Int =

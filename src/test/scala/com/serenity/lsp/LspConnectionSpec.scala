@@ -92,6 +92,18 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
         .toOption shouldBe Some("file:///workspace/Foo.scala")
     ).timeout(testTimeout).unsafeRunSync()
 
+  "LspConnection.closeQueues" should "fail pending requests" in
+    (for
+      conn         <- makeConnection()
+      requestFiber <- conn.sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace")).start
+      _            <- conn.takeOutgoing
+      _            <- conn.closeQueues
+      outcome      <- requestFiber.join
+    yield outcome match
+      case cats.effect.kernel.Outcome.Errored(_) => succeed
+      case other                                 => fail(s"Expected pending request to fail, got $other")
+    ).timeout(testTimeout).unsafeRunSync()
+
   "LspConnection.processIncoming" should "route publishDiagnostics to the callback" in
     (for
       conn <- makeConnection()

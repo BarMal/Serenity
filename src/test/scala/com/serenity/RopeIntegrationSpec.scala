@@ -156,6 +156,15 @@ function processText(input) {
         }
     }
 
+  it should "return non-overlapping matches for searchAll" in new RopeIntegrationFixture:
+    Rope("aaaa").searchAll("aa") shouldBe List(0, 2)
+
+  it should "ignore out-of-bounds leaf insertions" in new RopeIntegrationFixture:
+    val rope = Rope("abc")
+
+    rope.insert(-1, "x").collect() shouldBe "abc"
+    rope.insert(4, "x").collect() shouldBe "abc"
+
   it should "handle rope replace operations for find-and-replace functionality" in new RopeIntegrationFixture:
     // Given: Code with variables to rename
     val code = """let oldName = 5;

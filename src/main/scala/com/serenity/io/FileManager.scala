@@ -11,24 +11,8 @@ class FileManager(using balance: Balance):
   private val fileBrowser = new FileBrowser()
 
   /** Load file into a new buffer */
-  def loadFile(path: Path): IO[Buffer] =
-    for
-      content <- FileUtils.readFileContent(path)
-      bufferId = BufferId(System.currentTimeMillis().toInt) // Temporary ID generation
-    yield Buffer(
-      id = bufferId,
-      content = com.serenity.rope.Rope(content),
-      filePath = Some(path),
-      isDirty = false,
-      language = Option(path.getFileName)
-        .map(_.toString)
-        .flatMap(n =>
-          n.lastIndexOf('.') match
-            case -1 => None;
-            case i  => Some(n.substring(i + 1))
-        )
-        .flatMap(FileExtension.languageIdFor)
-    )
+  def loadFile(path: Path, bufferId: BufferId): IO[Buffer] =
+    FileUtils.readFileContent(path).map(content => bufferFromContent(bufferId, path, content))
 
   /** Save buffer to file */
   def saveBuffer(buffer: Buffer, path: Path): IO[Buffer] =
@@ -60,8 +44,7 @@ class FileManager(using balance: Balance):
   def getFileBrowser: FileBrowser = fileBrowser
 
   /** Create a new empty buffer */
-  def createNewBuffer: IO[Buffer] =
-    val bufferId = BufferId(System.currentTimeMillis().toInt)
+  def createNewBuffer(bufferId: BufferId): IO[Buffer] =
     IO.pure(
       Buffer(
         id = bufferId,
@@ -71,9 +54,6 @@ class FileManager(using balance: Balance):
         language = None
       )
     )
-
-  def getRecentFiles: IO[List[Path]] =
-    IO.pure(List.empty)
 
   /** Check if file exists */
   def fileExists(path: Path): IO[Boolean] =
@@ -88,6 +68,22 @@ class FileManager(using balance: Balance):
         fileType = FileUtils.detectFileType(path)
       yield Some(FileInfo(path, size, lastModified, fileType))
     else IO.pure(None)
+
+  private def bufferFromContent(bufferId: BufferId, path: Path, content: String): Buffer =
+    Buffer(
+      id = bufferId,
+      content = com.serenity.rope.Rope(content),
+      filePath = Some(path),
+      isDirty = false,
+      language = Option(path.getFileName)
+        .map(_.toString)
+        .flatMap(n =>
+          n.lastIndexOf('.') match
+            case -1 => None
+            case i  => Some(n.substring(i + 1))
+        )
+        .flatMap(FileExtension.languageIdFor)
+    )
 
 case class FileInfo(
     path: Path,

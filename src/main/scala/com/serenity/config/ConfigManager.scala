@@ -1,8 +1,10 @@
 package com.serenity.config
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 
 import scala.io.Source
+import scala.util.Using
 
 import com.serenity.animation.AnimationConfig
 
@@ -23,7 +25,10 @@ object ConfigManager:
   def loadConfig(configPath: Option[String] = None): AppConfig =
     val path = configPath.map(Paths.get(_)).getOrElse(defaultConfigPath)
     if Files.exists(path) then
-      try parseConfig(Source.fromFile(path.toFile).mkString)
+      try
+        Using.resource(Source.fromFile(path.toFile, StandardCharsets.UTF_8.name())) { source =>
+          parseConfig(source.mkString)
+        }
       catch
         case _: Exception =>
           System.err.println(s"[CONFIG] Failed to load config from $path, using defaults")
@@ -174,7 +179,7 @@ object ConfigManager:
   def saveConfig(config: AppConfig, configPath: Path): Boolean =
     try
       Option(configPath.getParent).foreach(parent => Files.createDirectories(parent))
-      Files.write(configPath, configToString(config).getBytes)
+      Files.write(configPath, configToString(config).getBytes(StandardCharsets.UTF_8))
       true
     catch case _: Exception => false
 
@@ -250,6 +255,6 @@ object ConfigManager:
                           |keymap.modal.dismiss = escape
                           |""".stripMargin
 
-      Files.write(Paths.get(path), sampleConfig.getBytes)
+      Files.write(Paths.get(path), sampleConfig.getBytes(StandardCharsets.UTF_8))
       true
     catch case _: Exception => false

@@ -310,6 +310,27 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restored.bufferOrder shouldBe List(buffer1.id, buffer2.id)
   }
 
+  it should "serialize buffers and panes in their canonical order" in {
+    val buffer1 = Buffer.fromString(BufferId(1), "one")
+    val buffer2 = Buffer.fromString(BufferId(2), "two")
+    val pane1   = EditorPane.withBuffer(PaneId(1), buffer1.id)
+    val pane2   = EditorPane.withBuffer(PaneId(2), buffer2.id)
+    val appState = AppState.initial.copy(
+      buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
+      bufferOrder = List(buffer2.id, buffer1.id),
+      layout = Layout(
+        editorPanes = Map(pane1.id -> pane1, pane2.id -> pane2),
+        activeEditorPaneId = Some(pane2.id),
+        paneOrder = List(pane2.id, pane1.id)
+      )
+    )
+
+    val sessionState = SessionState.fromAppState(appState)
+
+    sessionState.buffers.map(_.id) shouldBe List(2, 1)
+    sessionState.layout.editorPanes.map(_.id) shouldBe List(2, 1)
+  }
+
   it should "preserve distinct find state per buffer through round trip" in {
     val file1 = Files.createTempFile("session-find-buffer-1", ".txt")
     val file2 = Files.createTempFile("session-find-buffer-2", ".txt")

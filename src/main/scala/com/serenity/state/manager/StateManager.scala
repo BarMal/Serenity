@@ -127,7 +127,7 @@ object StateManager:
         .handleErrorWith(_ => IO.pure(Nil))
         .flatMap(Ref.of[IO, List[String]])
       quitSignal <- Deferred[IO, Unit]
-      lspQueue   <- Queue.unbounded[IO, LspEffect]
+      lspQueue   <- Queue.bounded[IO, LspEffect](256)
     yield new StateManagerImpl(
       stateRef,
       undoRef,

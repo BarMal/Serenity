@@ -92,7 +92,7 @@ object SessionState:
     */
   def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
     SessionState(
-      buffers = appState.buffers.values.map(SessionBuffer.fromBuffer(_, persistUnsaved)).toList,
+      buffers = orderedBuffers(appState).map(SessionBuffer.fromBuffer(_, persistUnsaved)),
       layout = SessionLayout.fromLayout(appState.layout),
       focus = SessionFocus.fromFocus(appState.focus),
       bufferOrder = appState.bufferOrder.map(_.value),
@@ -100,6 +100,14 @@ object SessionState:
       themeName = appState.theme.name,
       recentFiles = appState.recentFiles.map(_.toString)
     )
+
+  private def orderedBuffers(appState: AppState): List[Buffer] =
+    val orderedIds = appState.bufferOrder.filter(appState.buffers.contains)
+    val missingIds = appState.buffers.keys.toList
+      .filterNot(orderedIds.toSet)
+      .sortBy(_.value)
+
+    (orderedIds ++ missingIds).flatMap(appState.buffers.get)
 
   /** Convert SessionState back to AppState for restoration
     */
@@ -173,10 +181,18 @@ object SessionLayout:
 
   def fromLayout(layout: Layout): SessionLayout =
     SessionLayout(
-      editorPanes = layout.editorPanes.values.map(SessionEditorPane.fromEditorPane).toList,
+      editorPanes = orderedPanes(layout).map(SessionEditorPane.fromEditorPane),
       activeEditorPaneId = layout.activeEditorPaneId.map(_.value),
       paneOrder = layout.paneOrder.map(_.value)
     )
+
+  private def orderedPanes(layout: Layout): List[EditorPane] =
+    val orderedIds = layout.orderedPaneIds.filter(layout.editorPanes.contains)
+    val missingIds = layout.editorPanes.keys.toList
+      .filterNot(orderedIds.toSet)
+      .sortBy(_.value)
+
+    (orderedIds ++ missingIds).flatMap(layout.editorPanes.get)
 
   def toLayout(sessionLayout: SessionLayout): Layout =
     val editorPanes = sessionLayout.editorPanes.map { sessionPane =>
