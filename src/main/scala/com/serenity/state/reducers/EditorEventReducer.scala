@@ -156,13 +156,14 @@ object EditorEventReducer:
                   currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
                 )
               case None =>
-                val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+                val text   = buffer.content.collect()
+                val offset = lineColumnToOffset(text, cursor.line, cursor.column)
                 if offset > 0 then
                   val newContent = buffer.content.delete(offset - 1, offset)
                   val newCursor =
                     if cursor.column > 0 then cursor.copy(column = cursor.column - 1)
                     else if cursor.line > 0 then
-                      val prevLineEnd = findLineEnd(buffer.content, cursor.line - 1)
+                      val prevLineEnd = findLineEnd(text, cursor.line - 1)
                       cursor.copy(line = cursor.line - 1, column = prevLineEnd)
                     else cursor
                   val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
@@ -189,7 +190,8 @@ object EditorEventReducer:
                   currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
                 )
               case None =>
-                val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+                val text   = buffer.content.collect()
+                val offset = lineColumnToOffset(text, cursor.line, cursor.column)
                 if offset < buffer.content.weight then
                   val newContent = buffer.content.delete(offset, offset + 1)
                   val updatedBuffer = buffer.copy(
@@ -213,7 +215,7 @@ object EditorEventReducer:
                 )
               case None =>
                 val text   = buffer.content.collect()
-                val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+                val offset = lineColumnToOffset(text, cursor.line, cursor.column)
                 val start  = TextEditing.previousWordBoundary(text, offset)
                 if start < offset then
                   val updatedBuffer = deleteOffsetRange(buffer, currentState, start, offset, start)
@@ -231,7 +233,7 @@ object EditorEventReducer:
                 )
               case None =>
                 val text   = buffer.content.collect()
-                val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+                val offset = lineColumnToOffset(text, cursor.line, cursor.column)
                 val end    = TextEditing.nextWordBoundary(text, offset)
                 if offset < end then
                   val updatedBuffer = deleteOffsetRange(buffer, currentState, offset, end, offset)
@@ -242,10 +244,11 @@ object EditorEventReducer:
 
           case MoveLeft =>
             val movementStart = selectionFocusOrCursor(buffer, cursor)
+            val text          = buffer.content.collect()
             val newCursor =
               if movementStart.column > 0 then movementStart.moveLeft
               else if movementStart.line > 0 then
-                val prevLineEnd = findLineEnd(buffer.content, movementStart.line - 1)
+                val prevLineEnd = findLineEnd(text, movementStart.line - 1)
                 movementStart.copy(line = movementStart.line - 1, column = prevLineEnd)
               else movementStart
             val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
@@ -260,11 +263,12 @@ object EditorEventReducer:
 
           case MoveRight =>
             val movementStart  = selectionFocusOrCursor(buffer, cursor)
-            val currentLineEnd = findLineEnd(buffer.content, movementStart.line)
+            val text           = buffer.content.collect()
+            val currentLineEnd = findLineEnd(text, movementStart.line)
             val newCursor =
               if movementStart.column < currentLineEnd then movementStart.moveRight
               else
-                val totalLines = countLines(buffer.content)
+                val totalLines = countLines(text)
                 if movementStart.line < totalLines - 1 then
                   movementStart.copy(line = movementStart.line + 1, column = 0)
                 else movementStart
@@ -338,7 +342,7 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveToEnd =>
-            val lineEnd         = findLineEnd(buffer.content, cursor.line)
+            val lineEnd         = findLineEnd(buffer.content.collect(), cursor.line)
             val newCursor       = cursor.copy(column = lineEnd)
             val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
             val updatedBuffer = buffer.copy(
@@ -351,8 +355,9 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case SelectAll =>
-            val lastLine    = math.max(0, countLines(buffer.content) - 1)
-            val lastColumn  = findLineEnd(buffer.content, lastLine)
+            val text        = buffer.content.collect()
+            val lastLine    = math.max(0, countLines(text) - 1)
+            val lastColumn  = findLineEnd(text, lastLine)
             val startCursor = CursorPosition(0, 0)
             val endCursor   = CursorPosition(lastLine, lastColumn)
             val updatedBuffer = buffer.copy(
@@ -394,9 +399,10 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveToEndOfFile =>
-            val totalLines  = countLines(buffer.content)
+            val text        = buffer.content.collect()
+            val totalLines  = countLines(text)
             val lastLine    = totalLines - 1
-            val lastLineEnd = findLineEnd(buffer.content, lastLine)
+            val lastLineEnd = findLineEnd(text, lastLine)
             val newCursor   = CursorPosition(lastLine, lastLineEnd)
             val newTopLine  = math.max(0, lastLine - buffer.viewport.visibleLines + 1)
             val newViewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
@@ -475,17 +481,19 @@ object EditorEventReducer:
             )
 
           case Copy =>
-            val clipboardText = buffer.content.getLine(cursor.line).getOrElse("")
+            val text          = buffer.content.collect()
+            val clipboardText = getLine(text, cursor.line).getOrElse("")
             ReducerResult.noEffects(currentState.copy(clipboard = Some(clipboardText)))
 
           case Cut =>
-            val lineText  = buffer.content.getLine(cursor.line).getOrElse("")
-            val lineStart = lineColumnToOffset(buffer.content, cursor.line, 0)
-            val lineEnd   = lineColumnToOffset(buffer.content, cursor.line, lineText.length)
+            val text      = buffer.content.collect()
+            val lineText  = getLine(text, cursor.line).getOrElse("")
+            val lineStart = lineColumnToOffset(text, cursor.line, 0)
+            val lineEnd   = lineColumnToOffset(text, cursor.line, lineText.length)
+            val lineCount = countLines(text)
             val (newContent, newCursor) =
-              if cursor.line == 0 && countLines(buffer.content) == 1 then
-                (buffer.content.delete(0, lineEnd), CursorPosition(0, 0))
-              else if cursor.line < countLines(buffer.content) - 1 then
+              if cursor.line == 0 && lineCount == 1 then (buffer.content.delete(0, lineEnd), CursorPosition(0, 0))
+              else if cursor.line < lineCount - 1 then
                 // delete including the trailing newline
                 (buffer.content.delete(lineStart, lineEnd + 1), CursorPosition(cursor.line, 0))
               else
@@ -642,17 +650,19 @@ object EditorEventReducer:
           updateBufferInState(currentState, applyLineUnindent(buffer, currentState, distinctCursorLines(buffer)))
         )
       case MoveLeft =>
+        val text = buffer.content.collect()
         ReducerResult.noEffects(
           updateBufferInState(
             currentState,
-            applyMultiCursorNavigation(buffer, currentState)(cursor => moveCursorLeft(cursor, buffer.content))
+            applyMultiCursorNavigation(buffer, currentState)(cursor => moveCursorLeft(cursor, text))
           )
         )
       case MoveRight =>
+        val text = buffer.content.collect()
         ReducerResult.noEffects(
           updateBufferInState(
             currentState,
-            applyMultiCursorNavigation(buffer, currentState)(cursor => moveCursorRight(cursor, buffer.content))
+            applyMultiCursorNavigation(buffer, currentState)(cursor => moveCursorRight(cursor, text))
           )
         )
       case MoveToStart =>
@@ -663,11 +673,12 @@ object EditorEventReducer:
           )
         )
       case MoveToEnd =>
+        val text = buffer.content.collect()
         ReducerResult.noEffects(
           updateBufferInState(
             currentState,
             applyMultiCursorNavigation(buffer, currentState)(cursor =>
-              cursor.copy(column = findLineEnd(buffer.content, cursor.line))
+              cursor.copy(column = findLineEnd(text, cursor.line))
             )
           )
         )
@@ -692,22 +703,25 @@ object EditorEventReducer:
           updateBufferInState(currentState, applyMultiCursorNavigation(buffer, currentState)(_ => CursorPosition(0, 0)))
         )
       case MoveToEndOfFile =>
-        val totalLines  = countLines(buffer.content)
+        val text        = buffer.content.collect()
+        val totalLines  = countLines(text)
         val lastLine    = totalLines - 1
-        val lastLineEnd = findLineEnd(buffer.content, lastLine)
+        val lastLineEnd = findLineEnd(text, lastLine)
         val target      = CursorPosition(lastLine, lastLineEnd)
         ReducerResult.noEffects(
           updateBufferInState(currentState, applyMultiCursorNavigation(buffer, currentState)(_ => target))
         )
       case Copy =>
+        val text = buffer.content.collect()
         val clipboardText = distinctCursorLines(buffer)
-          .map(line => buffer.content.getLine(line).getOrElse(""))
+          .map(line => getLine(text, line).getOrElse(""))
           .mkString("\n")
         ReducerResult.noEffects(currentState.copy(clipboard = Some(clipboardText)))
       case Cut =>
+        val text          = buffer.content.collect()
         val targetLines   = distinctCursorLines(buffer)
-        val clipboardText = targetLines.map(line => buffer.content.getLine(line).getOrElse("")).mkString("\n")
-        val updatedBuffer = applyMultiCursorLineCut(buffer, currentState, targetLines)
+        val clipboardText = targetLines.map(line => getLine(text, line).getOrElse("")).mkString("\n")
+        val updatedBuffer = applyMultiCursorLineCut(buffer, currentState, targetLines, text)
         ReducerResult.noEffects(
           currentState.copy(
             buffers = currentState.buffers + (buffer.id -> updatedBuffer),
@@ -770,7 +784,9 @@ object EditorEventReducer:
     )
 
   private[reducers] def lineColumnToOffset(rope: Rope, line: Int, column: Int): Int =
-    val content    = rope.collect()
+    lineColumnToOffset(rope.collect(), line, column)
+
+  private[reducers] def lineColumnToOffset(content: String, line: Int, column: Int): Int =
     val targetLine = math.max(0, line)
     val targetCol  = math.max(0, column)
 
@@ -789,13 +805,34 @@ object EditorEventReducer:
     math.min(lineStart + targetCol, lineEnd)
 
   private def findLineEnd(rope: Rope, line: Int): Int =
-    val content = rope.collect()
-    val lines   = content.split('\n')
-    if line >= 0 && line < lines.length then lines(line).length else 0
+    findLineEnd(rope.collect(), line)
+
+  private def findLineEnd(content: String, line: Int): Int =
+    getLine(content, line).fold(0)(_.length)
 
   private def countLines(rope: Rope): Int =
-    val content = rope.collect()
+    countLines(rope.collect())
+
+  private def countLines(content: String): Int =
     if content.isEmpty then 1 else content.count(_ == '\n') + 1
+
+  private def getLine(content: String, lineIndex: Int): Option[String] =
+    if lineIndex < 0 then None
+    else
+      @annotation.tailrec
+      def findLineStart(currentLine: Int, lineStart: Int): Option[Int] =
+        if currentLine == lineIndex then Some(lineStart)
+        else
+          val nextLineBreak = content.indexOf('\n', lineStart)
+          if nextLineBreak == -1 then None
+          else findLineStart(currentLine + 1, nextLineBreak + 1)
+
+      findLineStart(currentLine = 0, lineStart = 0).map { lineStart =>
+        val lineEnd = content.indexOf('\n', lineStart) match
+          case -1    => content.length
+          case index => index
+        content.slice(lineStart, lineEnd)
+      }
 
   private case class CursorEntry(cursor: CursorPosition, offset: Int)
   private case class MultiCursorEdit(ownerIndex: Int, start: Int, end: Int, insertedText: String)
@@ -832,8 +869,8 @@ object EditorEventReducer:
     currentState: AppState,
     backward: Boolean
   ): Buffer =
-    val entries = multiCursorEntries(buffer)
     val text    = buffer.content.collect()
+    val entries = multiCursorEntries(buffer, text)
     val edits = entries.zipWithIndex.flatMap {
       case (entry, index) =>
         if backward then
@@ -927,15 +964,16 @@ object EditorEventReducer:
   private def applyMultiCursorLineCut(
     buffer: Buffer,
     currentState: AppState,
-    targetLines: List[Int]
+    targetLines: List[Int],
+    text: String
   ): Buffer =
     if targetLines.isEmpty then buffer
     else
-      val totalLines = countLines(buffer.content)
+      val totalLines = countLines(text)
       val lineEdits = targetLines.distinct.sorted.map { line =>
-        val lineText  = buffer.content.getLine(line).getOrElse("")
-        val lineStart = lineColumnToOffset(buffer.content, line, 0)
-        val lineEnd   = lineColumnToOffset(buffer.content, line, lineText.length)
+        val lineText  = getLine(text, line).getOrElse("")
+        val lineStart = lineColumnToOffset(text, line, 0)
+        val lineEnd   = lineColumnToOffset(text, line, lineText.length)
         val (deleteStart, deleteEnd) =
           if line == 0 && totalLines == 1 then (0, lineEnd)
           else if line < totalLines - 1 then (lineStart, lineEnd + 1)
@@ -948,7 +986,8 @@ object EditorEventReducer:
           case (content, (_, start, end)) =>
             content.delete(start, end)
         }
-      val maxFinalLine = math.max(0, countLines(updatedContent) - 1)
+      val updatedText  = updatedContent.collect()
+      val maxFinalLine = math.max(0, countLines(updatedText) - 1)
       val finalCursors = targetLines.distinct.sorted.map { line =>
         val deletedBefore = targetLines.count(_ < line)
         val targetLine =
@@ -956,7 +995,7 @@ object EditorEventReducer:
           else if line < totalLines - 1 then line - deletedBefore
           else line - targetLines.count(_ <= line)
         val clampedLine = math.max(0, math.min(targetLine, maxFinalLine))
-        offsetToCursorPosition(updatedContent, lineColumnToOffset(updatedContent, clampedLine, 0))
+        offsetToCursorPosition(updatedText, updatedContent.weight, lineColumnToOffset(updatedText, clampedLine, 0))
       }.distinct
       val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
       val baseBuffer = buffer.copy(
@@ -998,8 +1037,9 @@ object EditorEventReducer:
         }
         offsets
       }
+      val updatedText = updatedContent.collect()
       val finalCursors = finalOffsets.toList
-        .map(offset => offsetToCursorPosition(updatedContent, offset))
+        .map(offset => offsetToCursorPosition(updatedText, updatedContent.weight, offset))
         .distinct
       val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
       val baseBuffer = buffer.copy(
@@ -1031,8 +1071,9 @@ object EditorEventReducer:
             content.delete(start, end)
         }
       val finalOffsets = initialOffsets.map(offset => remapOffsetAfterDeletions(offset, mergedRanges))
+      val updatedText  = updatedContent.collect()
       val finalCursors = finalOffsets
-        .map(offset => offsetToCursorPosition(updatedContent, offset))
+        .map(offset => offsetToCursorPosition(updatedText, updatedContent.weight, offset))
         .distinct
       val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
       val baseBuffer = buffer.copy(
@@ -1076,7 +1117,8 @@ object EditorEventReducer:
     currentState: AppState,
     insertedText: String
   ): Buffer =
-    val ranges  = mergedActiveSelectionRanges(buffer)
+    val text    = buffer.content.collect()
+    val ranges  = mergedActiveSelectionRanges(buffer, text)
     val offsets = ranges.map(_._1)
     val edits = ranges.zipWithIndex.map {
       case ((start, end), index) =>
@@ -1088,7 +1130,8 @@ object EditorEventReducer:
     buffer: Buffer,
     currentState: AppState
   ): Buffer =
-    val ranges  = mergedActiveSelectionRanges(buffer)
+    val text    = buffer.content.collect()
+    val ranges  = mergedActiveSelectionRanges(buffer, text)
     val offsets = ranges.map(_._1)
     val edits = ranges.zipWithIndex.map {
       case ((start, end), index) =>
@@ -1183,8 +1226,11 @@ object EditorEventReducer:
     )
 
   private def multiCursorEntries(buffer: Buffer): List[CursorEntry] =
+    multiCursorEntries(buffer, buffer.content.collect())
+
+  private def multiCursorEntries(buffer: Buffer, text: String): List[CursorEntry] =
     buffer.cursors.distinct
-      .map(cursor => CursorEntry(cursor, lineColumnToOffset(buffer.content, cursor.line, cursor.column)))
+      .map(cursor => CursorEntry(cursor, lineColumnToOffset(text, cursor.line, cursor.column)))
       .sortBy(_.offset)
 
   private def distinctCursorLines(buffer: Buffer): List[Int] =
@@ -1225,8 +1271,10 @@ object EditorEventReducer:
     baseBuffer.copy(viewport = updatedViewport)
 
   private def offsetToCursorPosition(content: Rope, offset: Int): CursorPosition =
-    val clamped = math.max(0, math.min(offset, content.weight))
-    val text    = content.collect()
+    offsetToCursorPosition(content.collect(), content.weight, offset)
+
+  private def offsetToCursorPosition(text: String, contentLength: Int, offset: Int): CursorPosition =
+    val clamped = math.max(0, math.min(offset, contentLength))
     val scanned = text.take(clamped).foldLeft(CursorPosition(0, 0)) { (cursor, char) =>
       if char == '\n' then CursorPosition(cursor.line + 1, 0)
       else cursor.copy(column = cursor.column + 1)
@@ -1243,19 +1291,32 @@ object EditorEventReducer:
 
   private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
     if query.isEmpty then Nil
-    else buffer.content.searchAll(query).map(offset => offsetToCursorPosition(buffer.content, offset))
+    else
+      val text = buffer.content.collect()
+      findMatches(text, query).map(offset => offsetToCursorPosition(text, text.length, offset))
+
+  private def findMatches(text: String, query: String): List[Int] =
+    if query.isEmpty then Nil
+    else
+      @annotation.tailrec
+      def loop(start: Int, acc: List[Int]): List[Int] =
+        val index = text.indexOf(query, start)
+        if index == -1 then acc.reverse
+        else loop(index + query.length, index :: acc)
+
+      loop(0, Nil)
 
   private def toFindResult(cursor: CursorPosition): FindResult =
     FindResult(cursor.line, cursor.column)
 
-  private def moveCursorLeft(cursor: CursorPosition, content: Rope): CursorPosition =
+  private def moveCursorLeft(cursor: CursorPosition, content: String): CursorPosition =
     if cursor.column > 0 then cursor.moveLeft
     else if cursor.line > 0 then
       val prevLineEnd = findLineEnd(content, cursor.line - 1)
       cursor.copy(line = cursor.line - 1, column = prevLineEnd)
     else cursor
 
-  private def moveCursorRight(cursor: CursorPosition, content: Rope): CursorPosition =
+  private def moveCursorRight(cursor: CursorPosition, content: String): CursorPosition =
     val currentLineEnd = findLineEnd(content, cursor.line)
     if cursor.column < currentLineEnd then cursor.moveRight
     else
@@ -1474,26 +1535,30 @@ object EditorEventReducer:
     if buffer.usesTextFont then FontLoader.previewTextFont(config)
     else FontLoader.previewCodeFont(config)
 
-  private def replaceSelectionOrInsert(buffer: Buffer, cursor: CursorPosition, text: String)(using
+  private def replaceSelectionOrInsert(buffer: Buffer, cursor: CursorPosition, insertedText: String)(using
     balance: com.serenity.rope.Balance
   ): Buffer =
-    val (baseContent, insertionStart) = buffer.primarySelection match
+    val (baseContent, insertionStart, startOffset) = buffer.primarySelection match
       case Some(selection) =>
-        val startOffset = selectionStartOffset(buffer, selection)
-        val endOffset   = selectionEndOffset(buffer, selection)
+        val contentText = buffer.content.collect()
+        val startOffset = selectionStartOffset(selection, contentText)
+        val endOffset   = selectionEndOffset(selection, contentText)
         (
           buffer.content.delete(startOffset, endOffset),
-          selection.start
+          selection.start,
+          startOffset
         )
       case None =>
+        val contentText = buffer.content.collect()
+        val startOffset = lineColumnToOffset(contentText, cursor.line, cursor.column)
         (
           buffer.content,
-          cursor
+          cursor,
+          startOffset
         )
 
-    val startOffset = lineColumnToOffset(baseContent, insertionStart.line, insertionStart.column)
-    val newContent  = baseContent.insert(startOffset, text)
-    val newCursor   = cursorAfterInsertion(insertionStart, text)
+    val newContent = baseContent.insert(startOffset, insertedText)
+    val newCursor  = cursorAfterInsertion(insertionStart, insertedText)
 
     buffer.copy(
       content = newContent,
@@ -1511,8 +1576,9 @@ object EditorEventReducer:
     selection: Selection,
     currentState: AppState
   ): Buffer =
-    val startOffset = selectionStartOffset(buffer, selection)
-    val endOffset   = selectionEndOffset(buffer, selection)
+    val contentText = buffer.content.collect()
+    val startOffset = selectionStartOffset(selection, contentText)
+    val endOffset   = selectionEndOffset(selection, contentText)
     val newContent  = buffer.content.delete(startOffset, endOffset)
     val newCursor   = selection.start
     val baseBuffer = buffer.copy(
@@ -1530,9 +1596,10 @@ object EditorEventReducer:
     baseBuffer.copy(viewport = updatedViewport)
 
   private def selectedText(buffer: Buffer, selection: Selection): String =
-    val startOffset = selectionStartOffset(buffer, selection)
-    val endOffset   = selectionEndOffset(buffer, selection)
-    buffer.content.collect().slice(startOffset, endOffset)
+    val text        = buffer.content.collect()
+    val startOffset = selectionStartOffset(selection, text)
+    val endOffset   = selectionEndOffset(selection, text)
+    text.slice(startOffset, endOffset)
 
   private def activeSelections(buffer: Buffer): List[Selection] =
     buffer.allSelections.distinct
@@ -1547,11 +1614,14 @@ object EditorEventReducer:
 
   private def selectedTexts(buffer: Buffer): List[String] =
     val text = buffer.content.collect()
-    mergedActiveSelectionRanges(buffer).map { case (start, end) => text.slice(start, end) }
+    mergedActiveSelectionRanges(buffer, text).map { case (start, end) => text.slice(start, end) }
 
   private def mergedActiveSelectionRanges(buffer: Buffer): List[(Int, Int)] =
+    mergedActiveSelectionRanges(buffer, buffer.content.collect())
+
+  private def mergedActiveSelectionRanges(buffer: Buffer, text: String): List[(Int, Int)] =
     val ranges = activeSelections(buffer)
-      .map(selection => (selectionStartOffset(buffer, selection), selectionEndOffset(buffer, selection)))
+      .map(selection => (selectionStartOffset(selection, text), selectionEndOffset(selection, text)))
       .filter { case (start, end) => start < end }
     mergeOverlappingSelectionRanges(ranges)
 
@@ -1569,8 +1639,14 @@ object EditorEventReducer:
   private def selectionStartOffset(buffer: Buffer, selection: Selection): Int =
     lineColumnToOffset(buffer.content, selection.start.line, selection.start.column)
 
+  private def selectionStartOffset(selection: Selection, text: String): Int =
+    lineColumnToOffset(text, selection.start.line, selection.start.column)
+
   private def selectionEndOffset(buffer: Buffer, selection: Selection): Int =
     lineColumnToOffset(buffer.content, selection.end.line, selection.end.column)
+
+  private def selectionEndOffset(selection: Selection, text: String): Int =
+    lineColumnToOffset(text, selection.end.line, selection.end.column)
 
   private def collapseSelectionsToFocus(buffer: Buffer, currentState: AppState): Buffer =
     val cursors = activeSelections(buffer)
