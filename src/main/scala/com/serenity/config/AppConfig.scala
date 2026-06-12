@@ -95,6 +95,38 @@ case class CursorColorConfig(
   def inactiveOr(activeColor: Color): Color =
     inactive.getOrElse(activeColor)
 
+case class TextAreaInsets(
+    left: Double = TextAreaInsets.DefaultInset,
+    right: Double = TextAreaInsets.DefaultInset
+):
+
+  def normalized: TextAreaInsets =
+    val normalizedLeft  = TextAreaInsets.clamp(left)
+    val normalizedRight = TextAreaInsets.clamp(right)
+    val total           = normalizedLeft + normalizedRight
+    if total <= TextAreaInsets.MaxCombinedInset then copy(left = normalizedLeft, right = normalizedRight)
+    else
+      val scale = TextAreaInsets.MaxCombinedInset / total
+      copy(left = normalizedLeft * scale, right = normalizedRight * scale)
+
+  def leftPercent: Double =
+    left * 100.0
+
+  def rightPercent: Double =
+    right * 100.0
+
+object TextAreaInsets:
+  val DefaultInset: Double     = 0.15
+  val MaxInset: Double         = 0.45
+  val MaxCombinedInset: Double = 0.8
+  val MinTextAreaWidth: Double = 1.0 - MaxCombinedInset
+
+  def fromPercent(left: Double, right: Double): TextAreaInsets =
+    TextAreaInsets(left / 100.0, right / 100.0).normalized
+
+  def clamp(value: Double): Double =
+    value.max(0.0).min(MaxInset)
+
 /** Global application configuration */
 case class AppConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
@@ -112,6 +144,7 @@ case class AppConfig(
     windowChromeMode: WindowChromeMode = WindowChromeMode.Native,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
+    textAreaInsets: TextAreaInsets = TextAreaInsets(),
     preferredWindowSize: Option[PreferredWindowSize] = None,
     lspUserConfig: LspUserConfig = LspUserConfig.empty
 ):
@@ -205,6 +238,15 @@ case class AppConfig(
 
   def withInterfaceDensity(density: InterfaceDensity): AppConfig =
     copy(interfaceDensity = density)
+
+  def withTextAreaInsets(insets: TextAreaInsets): AppConfig =
+    copy(textAreaInsets = insets.normalized)
+
+  def withTextAreaLeftInset(value: Double): AppConfig =
+    withTextAreaInsets(textAreaInsets.copy(left = value))
+
+  def withTextAreaRightInset(value: Double): AppConfig =
+    withTextAreaInsets(textAreaInsets.copy(right = value))
 
   def withPreferredWindowSize(size: PreferredWindowSize): AppConfig =
     copy(preferredWindowSize = Some(size.normalized))

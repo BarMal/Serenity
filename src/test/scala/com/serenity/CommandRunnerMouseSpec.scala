@@ -105,8 +105,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
   private def openLanguageSubmenu(stateManager: com.serenity.state.manager.StateManager): Unit =
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    (1 to 4).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())
-    (1 to 7).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
+    "language".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
   private def commandRunnerRect(state: AppState): LayoutRect =

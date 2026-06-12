@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.InterfaceDensityMetrics
+import com.serenity.config.{InterfaceDensityMetrics, TextAreaInsets}
 import com.serenity.state.models.*
 
 case class ViewportSize(width: Int, height: Int)
@@ -77,7 +77,18 @@ object LayoutEngine:
     val workspaceHeight =
       math.max(1, contentHeight - topPinnedHeight - bottomPinnedHeight)
 
-    val spacerWidth = (workspaceWidth * densityAwareSpacerPercentage(spacerPercentage, densityMetrics)).toInt
+    val textAreaInsets =
+      if spacerPercentage == DefaultSpacerPercentage then
+        val configuredInsets = state.config.textAreaInsets.normalized
+        if configuredInsets == TextAreaInsets() then
+          TextAreaInsets(
+            densityAwareSpacerPercentage(spacerPercentage, densityMetrics),
+            densityAwareSpacerPercentage(spacerPercentage, densityMetrics)
+          ).normalized
+        else configuredInsets
+      else TextAreaInsets(spacerPercentage, spacerPercentage).normalized
+    val leftSpacerWidth  = (workspaceWidth * textAreaInsets.left).toInt
+    val rightSpacerWidth = (workspaceWidth * textAreaInsets.right).toInt
 
     // Calculate space needed for UI elements
     val lineNumberWidth =
@@ -85,24 +96,31 @@ object LayoutEngine:
       else 0
 
     // Adjust editor area to accommodate UI elements
-    val availableWidth  = math.max(1, workspaceWidth - (2 * spacerWidth) - lineNumberWidth)
+    val availableWidth  = math.max(1, workspaceWidth - leftSpacerWidth - rightSpacerWidth - lineNumberWidth)
     val availableHeight = workspaceHeight
 
-    val leftSpacerRect = LayoutRect(workspaceX, workspaceY, spacerWidth, workspaceHeight)
+    val leftSpacerRect = LayoutRect(workspaceX, workspaceY, leftSpacerWidth, workspaceHeight)
     val lineNumberRect =
       if state.config.showLineNumbers then
         val topInset = densityMetrics.lineNumberTopInset.min(math.max(0, availableHeight - 1))
-        Some(LayoutRect(workspaceX + spacerWidth, workspaceY + topInset, lineNumberWidth, availableHeight - topInset))
+        Some(
+          LayoutRect(workspaceX + leftSpacerWidth, workspaceY + topInset, lineNumberWidth, availableHeight - topInset)
+        )
       else None
 
     val editorPanelRect = LayoutRect(
-      x = workspaceX + spacerWidth + lineNumberWidth,
+      x = workspaceX + leftSpacerWidth + lineNumberWidth,
       y = workspaceY,
       width = availableWidth,
       height = availableHeight
     )
     val rightSpacerRect =
-      LayoutRect(workspaceX + spacerWidth + lineNumberWidth + availableWidth, workspaceY, spacerWidth, workspaceHeight)
+      LayoutRect(
+        workspaceX + leftSpacerWidth + lineNumberWidth + availableWidth,
+        workspaceY,
+        rightSpacerWidth,
+        workspaceHeight
+      )
 
     val gutterRect =
       if state.config.showGutter then

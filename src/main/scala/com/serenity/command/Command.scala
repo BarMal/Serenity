@@ -53,6 +53,8 @@ enum CommandIntent:
   case OpenMarkdownPreview
   case SetMarkdownViewMode(mode: MarkdownViewMode)
   case SetInterfaceDensity(density: InterfaceDensity)
+  case SetTextAreaLeftInset(value: Double)
+  case SetTextAreaRightInset(value: Double)
   case FocusPanel(position: PanelPosition)
   case UnpinPanel(position: PanelPosition)
   case ExpandPanel(position: PanelPosition)

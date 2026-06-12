@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.config.InterfaceDensity
+import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -36,6 +36,37 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
     val pane0Layout = paneLayouts(PaneId(0))
     pane0Layout shouldBe calculatedLayout.editorPanelRect
+  }
+
+  it should "apply text area insets inside the workspace without resizing pinned panels or line numbers" in {
+    val buffer = Buffer.fromString(BufferId(0), "one\ntwo\nthree")
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      config = AppConfig.default.copy(textAreaInsets = TextAreaInsets(left = 0.10, right = 0.20)),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("left-panel"),
+          SurfaceContent.Outline(Nil),
+          SurfacePresentation.Pinned(PanelPosition.Left, 10)
+        ),
+        UiSurface(
+          SurfaceId("right-panel"),
+          SurfaceContent.Diagnostics(Nil),
+          SurfacePresentation.Pinned(PanelPosition.Right, 20)
+        )
+      )
+    )
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val paneLayouts      = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
+
+    calculatedLayout.pinnedPanelRects(PanelPosition.Left).width shouldBe 10
+    calculatedLayout.pinnedPanelRects(PanelPosition.Right).width shouldBe 20
+    calculatedLayout.leftSpacerRect shouldBe LayoutRect(10, 0, 7, 29)
+    calculatedLayout.rightSpacerRect shouldBe LayoutRect(66, 0, 14, 29)
+    calculatedLayout.lineNumberRect.map(_.width) shouldBe Some(3)
+    calculatedLayout.editorPanelRect shouldBe LayoutRect(20, 0, 46, 29)
+    paneLayouts(PaneId(0)) shouldBe calculatedLayout.editorPanelRect
   }
 
   it should "split editor area between two panes horizontally" in {

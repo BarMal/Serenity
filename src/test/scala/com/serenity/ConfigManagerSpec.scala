@@ -264,6 +264,23 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     written should include("lsp.python.args = --stdio,--log-file,/tmp/pylsp.log")
   }
 
+  it should "load and write text area inset percentages" in {
+    val configFile = Files.createTempFile("serenity-text-area-config", ".conf")
+    Files.writeString(
+      configFile,
+      """text_area.left.percent = 12.5
+        |text_area.right.percent = 20
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.textAreaInsets.left shouldBe 0.125 +- 0.0001
+    config.textAreaInsets.right shouldBe 0.20 +- 0.0001
+    ConfigManager.configToString(config) should include("text_area.left.percent = 12.5")
+    ConfigManager.configToString(config) should include("text_area.right.percent = 20.0")
+  }
+
   it should "close loaded config files and save using UTF-8" in {
     val configFile = Files.createTempFile("serenity-config-utf8", ".conf")
     Files.writeString(

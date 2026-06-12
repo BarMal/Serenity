@@ -164,6 +164,14 @@ object ConfigManager:
                 .getOrElse(config)
             case lspKey if lspKey.startsWith("lsp.") =>
               parseLspConfigEntry(config, lspKey, value.trim)
+            case "text_area.left.percent" | "text.area.left.percent" | "text_area_left_percent" =>
+              value.trim.toDoubleOption
+                .map(percent => config.withTextAreaLeftInset(percent / 100.0))
+                .getOrElse(config)
+            case "text_area.right.percent" | "text.area.right.percent" | "text_area_right_percent" =>
+              value.trim.toDoubleOption
+                .map(percent => config.withTextAreaRightInset(percent / 100.0))
+                .getOrElse(config)
             case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
               HotkeyAction.values
                 .find(action => s"hotkey.${action.configKey}" == hotkeyKey)
@@ -242,6 +250,10 @@ object ConfigManager:
        |# Preferred desktop window size. Leave empty to use the default.
        |window.preferred.width = ${config.preferredWindowSize.map(_.width).fold("")(_.toString)}
        |window.preferred.height = ${config.preferredWindowSize.map(_.height).fold("")(_.toString)}
+       |
+       |# Text area horizontal insets as percentages of the central workspace.
+       |text_area.left.percent = ${config.textAreaInsets.leftPercent}
+       |text_area.right.percent = ${config.textAreaInsets.rightPercent}
        |
        |# LSP server overrides
        |$lspSettings

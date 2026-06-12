@@ -762,3 +762,17 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runner.activeSubmenu.flatMap(_.editingItemId) shouldBe Some("keymap-command-runner-submit")
     runner.activeSubmenu.map(_.editingText) shouldBe Some("ctrl")
   }
+
+  it should "edit text area inset percentages and emit a layout update intent" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-text-area", "text-area-left")
+
+    val typed =
+      "22.5".foldLeft(state)((s, char) => CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state)
+
+    val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
+
+    result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
+      CommandIntent.SetTextAreaLeftInset(0.225)
+    )
+  }
