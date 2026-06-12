@@ -6,6 +6,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
+import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -147,6 +148,26 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
     applyEvent(Redo) // redo group 2 → "ac"
     getContent(bufferId) shouldBe "ac"
+
+  it should "bound undo history to the configured maximum depth" in new UndoFixture:
+    override def sessionPolicy: SessionManager.SessionPolicy =
+      SessionManager.SessionPolicy(maxUndoDepth = 2)
+
+    val bufferId = setupBuffer("abcd")
+
+    applyEvent(DeleteBackward)
+    applyEvent(DeleteBackward)
+    applyEvent(DeleteBackward)
+    getContent(bufferId) shouldBe "a"
+
+    applyEvent(Undo)
+    getContent(bufferId) shouldBe "ab"
+
+    applyEvent(Undo)
+    getContent(bufferId) shouldBe "abc"
+
+    applyEvent(Undo)
+    getContent(bufferId) shouldBe "abc"
 
   behavior of "Multi-cursor undo/redo"
 
@@ -293,8 +314,11 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
   trait UndoFixture:
 
+    def sessionPolicy: SessionManager.SessionPolicy =
+      SessionManager.SessionPolicy()
+
     val stateManager: StateManager = StateManager
-      .apply(LoggerFactory[IO].getLogger(using LoggerName("UndoRedoSpec")))
+      .apply(LoggerFactory[IO].getLogger(using LoggerName("UndoRedoSpec")), policy = sessionPolicy)
       .unsafeRunSync()
 
     private val currentPaneId = AtomicReference[PaneId](PaneId(0))

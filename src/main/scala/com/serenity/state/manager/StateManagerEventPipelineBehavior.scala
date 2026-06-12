@@ -94,7 +94,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
                   undoRef.update { undo =>
                     val flushed = undo.flushPendingGroup
                     val entry   = HistoryEntry(bufferId, paneId, beforeSnapshot)
-                    flushed.copy(undoStack = entry :: flushed.undoStack, redoStack = Nil)
+                    flushed.pushUndo(entry)
                   }
             case _ => cats.effect.IO.unit
         }
@@ -112,7 +112,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
                 val redoEntry      = HistoryEntry(entry.bufferId, entry.paneId, BufferSnapshot.fromBuffer(current))
                 val restoredBuffer = entry.snapshot.restoreInto(current)
                 val snappedState   = snapFocusToPane(state, entry.paneId)
-                undoRef.set(flushed.copy(undoStack = rest, redoStack = redoEntry :: flushed.redoStack)) >>
+                undoRef.set(flushed.copy(undoStack = rest).pushRedo(redoEntry)) >>
                   validateAndUpdateState(
                     snappedState.copy(buffers = snappedState.buffers + (entry.bufferId -> restoredBuffer)),
                     state
@@ -132,7 +132,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
                 val undoEntry      = HistoryEntry(entry.bufferId, entry.paneId, BufferSnapshot.fromBuffer(current))
                 val restoredBuffer = entry.snapshot.restoreInto(current)
                 val snappedState   = snapFocusToPane(state, entry.paneId)
-                undoRef.set(undo.copy(undoStack = undoEntry :: undo.undoStack, redoStack = rest)) >>
+                undoRef.set(undo.copy(redoStack = rest).pushUndo(undoEntry, clearRedo = false)) >>
                   validateAndUpdateState(
                     snappedState.copy(buffers = snappedState.buffers + (entry.bufferId -> restoredBuffer)),
                     state

@@ -271,7 +271,8 @@ object SessionManager:
       saveOnAppClose: Boolean = true,
       saveInterval: Option[scala.concurrent.duration.FiniteDuration] = None,
       persistUnsavedBuffers: Boolean = false,
-      maxSessionHistory: Int = 5
+      maxSessionHistory: Int = 5,
+      maxUndoDepth: Int = 1000
   )
 
 /** Higher-level session operations.

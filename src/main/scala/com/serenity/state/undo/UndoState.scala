@@ -67,7 +67,8 @@ case class PendingGroup(
 case class UndoState(
     undoStack: List[HistoryEntry] = Nil,
     redoStack: List[HistoryEntry] = Nil,
-    pendingGroup: Option[PendingGroup] = None
+    pendingGroup: Option[PendingGroup] = None,
+    maxUndoDepth: Int = UndoState.DefaultMaxUndoDepth
 ):
 
   def flushPendingGroup: UndoState =
@@ -75,6 +76,24 @@ case class UndoState(
       case None => this
       case Some(group) =>
         val entry = HistoryEntry(group.bufferId, group.paneId, group.beforeSnapshot)
-        copy(undoStack = entry :: undoStack, pendingGroup = None)
+        pushUndo(entry, clearRedo = false).copy(pendingGroup = None)
 
   def clearRedo: UndoState = copy(redoStack = Nil)
+
+  def pushUndo(entry: HistoryEntry, clearRedo: Boolean = true): UndoState =
+    copy(
+      undoStack = boundedPush(entry, undoStack),
+      redoStack = if clearRedo then Nil else redoStack
+    )
+
+  def pushRedo(entry: HistoryEntry): UndoState =
+    copy(redoStack = boundedPush(entry, redoStack))
+
+  private def boundedPush(entry: HistoryEntry, stack: List[HistoryEntry]): List[HistoryEntry] =
+    entry :: stack.take(effectiveMaxUndoDepth - 1)
+
+  private def effectiveMaxUndoDepth: Int =
+    math.max(1, maxUndoDepth)
+
+object UndoState:
+  val DefaultMaxUndoDepth: Int = 1000

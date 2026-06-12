@@ -650,7 +650,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
         undoRef.update { undo =>
           val flushed = undo.flushPendingGroup
           val entry   = HistoryEntry(bufferId, paneId, BufferSnapshot.fromBuffer(buffer))
-          flushed.copy(undoStack = entry :: flushed.undoStack, redoStack = Nil)
+          flushed.pushUndo(entry)
         }
       case None =>
         IO.unit
