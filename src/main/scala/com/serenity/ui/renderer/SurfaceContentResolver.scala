@@ -461,6 +461,7 @@ object SurfaceContentResolver:
       CommandCategory.File,
       CommandCategory.View,
       CommandCategory.Edit,
+      CommandCategory.Project,
       CommandCategory.Settings
     )
     OverlayRow(
@@ -480,6 +481,7 @@ object SurfaceContentResolver:
       case CommandCategory.File     => "File"
       case CommandCategory.View     => "View"
       case CommandCategory.Edit     => "Edit"
+      case CommandCategory.Project  => "Project"
       case CommandCategory.Settings => "Settings"
 
   private def commandRow(command: com.serenity.command.Command, selected: Boolean, prefix: String = ""): OverlayRow =

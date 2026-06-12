@@ -39,7 +39,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
 
   private def openSettingsSubmenu(stateManager: StateManager, movesDown: Int): Unit =
     openRunner(stateManager)
-    for _ <- 1 to 4 do stateManager.applyEvent(TabKey).unsafeRunSync()
+    for _ <- 1 to 5 do stateManager.applyEvent(TabKey).unsafeRunSync()
     for _ <- 1 to movesDown do stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
 

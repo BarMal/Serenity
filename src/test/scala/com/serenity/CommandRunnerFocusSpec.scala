@@ -35,7 +35,7 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    (1 to 4).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())
+    (1 to 5).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
@@ -53,7 +53,7 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    (1 to 4).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())
+    (1 to 5).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
 

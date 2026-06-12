@@ -166,6 +166,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(TabKey).unsafeRunSync()
     sm.applyEvent(TabKey).unsafeRunSync()
     sm.applyEvent(TabKey).unsafeRunSync()
+    sm.applyEvent(TabKey).unsafeRunSync()
 
     val state   = sm.getCurrentState.unsafeRunSync()
     val submenu = state.commandRunnerSubmenuSurface.getOrElse(fail("Expected submenu preview surface"))
@@ -177,6 +178,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
   it should "add a ghost overlay when the submenu preview is dismissed" in {
     val sm = createStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.applyEvent(TabKey).unsafeRunSync()
     sm.applyEvent(TabKey).unsafeRunSync()
     sm.applyEvent(TabKey).unsafeRunSync()
     sm.applyEvent(TabKey).unsafeRunSync()
