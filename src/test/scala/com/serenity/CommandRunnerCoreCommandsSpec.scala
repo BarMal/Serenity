@@ -1,6 +1,6 @@
 package com.serenity
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -19,10 +19,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
-  private def createStateManager(): StateManager =
+  private def createStateManager(sessionRootOverride: Option[Path] = None): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerCoreCommandsSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, sessionRootOverride = sessionRootOverride).unsafeRunSync()
 
   private def executeCommandThroughRunner(
     stateManager: StateManager,
@@ -464,6 +464,26 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.pinnedSurfaces shouldBe before.pinnedSurfaces
+  }
+
+  it should "save, restore, and clear the current session from command runner commands" in {
+    val sessionRoot  = Files.createTempDirectory("serenity-command-session")
+    val stateManager = createStateManager(Some(sessionRoot))
+    val bufferId     = BufferId(0)
+
+    stateManager.updateBuffer(bufferId, "saved session").unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).isNewEmpty shouldBe false
+
+    executeCommandThroughRunner(stateManager, "save-session", "save-session")
+    stateManager.sessionExists.unsafeRunSync() shouldBe true
+
+    stateManager.updateBuffer(bufferId, "changed session").unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "restore-session", "restore-session")
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).content.collect() shouldBe "saved session"
+
+    executeCommandThroughRunner(stateManager, "clear-session", "clear-session")
+    stateManager.sessionExists.unsafeRunSync() shouldBe false
   }
 
   it should "focus the left panel from the command runner" in {

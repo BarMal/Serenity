@@ -20,6 +20,9 @@ enum CommandCategory:
 enum CommandIntent:
   case SaveCurrentFile
   case SaveCurrentFileAs
+  case SaveSession
+  case RestoreSession
+  case ClearSession
   case OpenFile
   case QuitApp
   case CloseAll

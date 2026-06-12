@@ -207,7 +207,7 @@ object StateManager:
     // Session persistence operations
     def saveSession(): IO[Unit] =
       getCurrentState.flatMap { state =>
-        sessionManager.saveSession(state) >>
+        sessionManager.saveSession(state, persistUnsavedBuffers = true) >>
           logger.info("[SESSION] Session saved")
       }.void
 

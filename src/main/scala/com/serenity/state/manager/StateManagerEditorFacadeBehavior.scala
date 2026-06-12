@@ -81,7 +81,8 @@ private[manager] trait StateManagerEditorFacadeBehavior extends StateManagerEven
         case Some(buffer) =>
           val updatedBuffer = buffer.copy(
             content = Rope(content)(using balance),
-            isDirty = true
+            isDirty = true,
+            isNewEmpty = false
           )
           state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
         case None => state
