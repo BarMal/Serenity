@@ -8,7 +8,7 @@ import com.serenity.keystroke.events.Enter
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.PanelPosition
+import com.serenity.ui.layout.{PanelContent, PanelPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -72,6 +72,21 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
         tree.rootPath shouldBe Paths.get("/new")
         tree.entries(Paths.get("/new")).map(_.name) shouldBe List("b.txt", "c.txt")
       case other => fail(s"Expected DirectoryTree, got $other")
+
+  it should "preserve non-explorer left panels when loading a directory tree" in new ExplorerFixture:
+    sm.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 20).unsafeRunSync()
+    sm.loadDirectoryTree("/repo", List("src")).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    state.pinnedSurfaces should have size 2
+    state.pinnedSurfaces.map(_.content).exists {
+      case SurfaceContent.Outline(_) => true
+      case _                         => false
+    } shouldBe true
+    state.pinnedSurfaces.map(_.content).exists {
+      case SurfaceContent.DirectoryTree(tree, _) if tree.rootPath == Paths.get("/repo") => true
+      case _                                                                            => false
+    } shouldBe true
 
   // ── selectFileInExplorer ──────────────────────────────────────────────────
 

@@ -519,10 +519,18 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
 
   private def unpinMarkdownPreviewPanel(): IO[Unit] =
     updateState { state =>
-      val markdownPreviewPositions = state.pinnedSurfaces.collect {
-        case UiSurface(_, SurfaceContent.MarkdownPreview(_, _), SurfacePresentation.Pinned(position, _), _) => position
-      }
-      markdownPreviewPositions.foldLeft(state)((current, position) => PanelStateReducer.unpin(position, current).state)
+      val markdownPreviewSurfaceIds = state.pinnedSurfaces.collect {
+        case UiSurface(id, SurfaceContent.MarkdownPreview(_, _), SurfacePresentation.Pinned(_, _), _) => id
+      }.toSet
+      val nextFocus = state.focus match
+        case Focus.Surface(surfaceId) if markdownPreviewSurfaceIds.contains(surfaceId) =>
+          state.layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(state.focus)
+        case _ =>
+          state.focus
+      state.copy(
+        uiSurfaces = state.uiSurfaces.filterNot(surface => markdownPreviewSurfaceIds.contains(surface.id)),
+        focus = nextFocus
+      )
     }
 
   protected def pinExplorerPanelEffect(position: PanelPosition, path: Path, size: Int): IO[Unit] =

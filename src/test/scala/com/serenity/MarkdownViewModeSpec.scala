@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{CommandRunner, CommandSurfaceItem}
+import com.serenity.command.*
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.lsp.config.LanguageId
@@ -136,6 +136,47 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       .find(_.title == "Preview: Untitled")
 
     rightPanel.map(_.lines) shouldBe Some(Nil)
+  }
+
+  it should "remove only markdown preview panels when leaving split preview mode" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .updateState { state =>
+        state.copy(
+          uiSurfaces = state.uiSurfaces ++ List(
+            UiSurface(
+              SurfaceId("outline"),
+              SurfaceContent.Outline(Nil),
+              SurfacePresentation.Pinned(PanelPosition.Right, 30)
+            ),
+            UiSurface(
+              SurfaceId("markdown-preview"),
+              SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"),
+              SurfacePresentation.Pinned(PanelPosition.Right, 40)
+            )
+          ),
+          config = state.config.withMarkdownViewMode(MarkdownViewMode.SplitPreview),
+          focus = Focus.Surface(SurfaceId("outline"))
+        )
+      }
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "markdown-view-source",
+          "Switch Markdown rendering back to source mode.",
+          CommandIntent.SetMarkdownViewMode(MarkdownViewMode.Source),
+          CommandCategory.View
+        )
+      )
+      .unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.config.markdownViewMode shouldBe MarkdownViewMode.Source
+    state.pinnedSurfaces.map(_.id) should contain only SurfaceId("outline")
+    state.focus shouldBe Focus.Surface(SurfaceId("outline"))
   }
 
   it should "render split previews as a Java2D markdown image" in {
