@@ -1471,8 +1471,7 @@ object EditorEventReducer:
     buffer: Buffer,
     config: com.serenity.ui.fonts.FontLoader.FontConfig
   ): java.awt.Font =
-    if buffer.usesTextFont then FontLoader.previewTextFont(config)
-    else FontLoader.previewCodeFont(config)
+    FontLoader.previewFontForRole(config, buffer.typographyRole)
 
   private def replaceSelectionOrInsert(buffer: Buffer, cursor: CursorPosition, text: String)(using
     balance: com.serenity.rope.Balance

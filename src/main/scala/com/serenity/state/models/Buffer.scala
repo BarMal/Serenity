@@ -12,6 +12,19 @@ case class BufferId(value: Int)
 object BufferId:
   given Order[BufferId] = Order.by(_.value)
 
+enum TypographyRole:
+  case Code
+  case Prose
+  case MarkdownSource
+  case MarkdownPreview
+  case Ui
+  case Mixed
+
+  def usesTextFont: Boolean =
+    this match
+      case Prose | MarkdownSource | MarkdownPreview | Mixed => true
+      case Code | Ui                                        => false
+
 case class Selection(anchor: CursorPosition, focus: CursorPosition):
 
   def start: CursorPosition =
@@ -40,8 +53,15 @@ case class Buffer(
     findState: Option[FindState] = None,
     selections: List[Selection] = Nil
 ):
+
+  def typographyRole: TypographyRole =
+    language match
+      case None                      => TypographyRole.Prose
+      case Some(LanguageId.Markdown) => TypographyRole.MarkdownSource
+      case Some(_)                   => TypographyRole.Code
+
   def usesTextFont: Boolean =
-    language.isEmpty || language.contains(LanguageId.Markdown)
+    typographyRole.usesTextFont
 
   def allSelections: List[Selection] =
     if selections.nonEmpty then selections else selection.toList

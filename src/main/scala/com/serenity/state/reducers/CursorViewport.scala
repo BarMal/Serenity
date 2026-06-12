@@ -48,5 +48,4 @@ object CursorViewport:
     buffer: Buffer,
     config: FontLoader.FontConfig
   ): java.awt.Font =
-    if buffer.usesTextFont then FontLoader.previewTextFont(config)
-    else FontLoader.previewCodeFont(config)
+    FontLoader.previewFontForRole(config, buffer.typographyRole)

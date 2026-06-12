@@ -654,5 +654,4 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     buffer: Buffer,
     config: FontConfig
   ): java.awt.Font =
-    if buffer.usesTextFont then FontLoader.previewTextFont(config)
-    else FontLoader.previewCodeFont(config)
+    FontLoader.previewFontForRole(config, buffer.typographyRole)
