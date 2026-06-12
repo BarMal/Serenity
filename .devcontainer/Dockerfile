@@ -4,10 +4,12 @@ ENV COURSIER_BIN_DIR=/usr/local/bin
 
 RUN rm -f /etc/apt/sources.list.d/yarn.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends curl gzip zip \
+    && apt-get install -y --no-install-recommends curl gzip nodejs npm zip \
     && curl -fsSL https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz -o /tmp/cs.gz \
     && gunzip /tmp/cs.gz \
     && chmod +x /tmp/cs \
     && /tmp/cs install sbt --install-dir "${COURSIER_BIN_DIR}" \
+    && npm install -g @openai/codex \
+    && codex --version \
     && rm -f /tmp/cs \
     && rm -rf /var/lib/apt/lists/*
