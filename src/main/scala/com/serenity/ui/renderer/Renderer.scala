@@ -21,8 +21,18 @@ case class RenderContext(
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics
 ):
+
+  def fontForRole(role: TypographyRole): java.awt.Font =
+    role match
+      case TypographyRole.Code            => codeFont
+      case TypographyRole.Prose           => textFont
+      case TypographyRole.MarkdownSource  => textFont
+      case TypographyRole.MarkdownPreview => textFont
+      case TypographyRole.Ui              => uiFont
+      case TypographyRole.Mixed           => textFont
+
   def fontForBuffer(buffer: Buffer): java.awt.Font =
-    if buffer.usesTextFont then textFont else codeFont
+    fontForRole(buffer.typographyRole)
 
 object Renderer:
 

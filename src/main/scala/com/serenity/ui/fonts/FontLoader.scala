@@ -3,6 +3,7 @@ package com.serenity.ui.fonts
 import java.awt.{Font, GraphicsEnvironment, Toolkit}
 
 import cats.effect.IO
+import com.serenity.state.models.TypographyRole
 import com.serenity.ui.layout.CellMetrics
 import org.typelevel.log4cats.Logger
 
@@ -78,6 +79,15 @@ object FontLoader:
       Font(config.uiFontFamily, Font.PLAIN, config.uiFontSize.toInt).deriveFont(config.uiFontSize),
       config.uiLigatures
     )
+
+  def previewFontForRole(config: FontConfig, role: TypographyRole): Font =
+    role match
+      case TypographyRole.Code            => previewCodeFont(config)
+      case TypographyRole.Prose           => previewTextFont(config)
+      case TypographyRole.MarkdownSource  => previewTextFont(config)
+      case TypographyRole.MarkdownPreview => previewTextFont(config)
+      case TypographyRole.Ui              => previewUiFont(config)
+      case TypographyRole.Mixed           => previewTextFont(config)
 
   def isMonospacedFont(font: Font): Boolean =
     isMonospaced(font)
