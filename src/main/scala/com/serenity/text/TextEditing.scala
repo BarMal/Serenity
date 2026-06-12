@@ -2,6 +2,9 @@ package com.serenity.text
 
 object TextEditing:
 
+  private enum CharacterClass:
+    case Whitespace, Word, Punctuation
+
   def deleteWordBackward(text: String): String =
     val boundary = previousWordBoundary(text, text.length)
     text.substring(0, boundary) + text.substring(text.length)
@@ -12,36 +15,52 @@ object TextEditing:
 
   def previousWordBoundary(text: String, cursor: Int): Int =
     val idx = clamp(cursor, text.length)
-    if idx > 0 && text.charAt(idx - 1).isWhitespace then
-      scanBackwardNonWhitespaceStart(text, scanBackwardWhitespaceStart(text, idx))
-    else scanBackwardNonWhitespaceStart(text, idx)
+    val segmentEnd =
+      if idx > 0 && characterClass(text.charAt(idx - 1)) == CharacterClass.Whitespace then
+        scanBackwardClassStart(text, idx, CharacterClass.Whitespace)
+      else idx
+
+    if segmentEnd <= 0 then 0
+    else scanBackwardClassStart(text, segmentEnd, characterClass(text.charAt(segmentEnd - 1)))
 
   def nextWordBoundary(text: String, cursor: Int): Int =
     val length = text.length
     val idx    = clamp(cursor, length)
-    if idx < length && text.charAt(idx).isWhitespace then
-      scanForwardNonWhitespaceEnd(text, scanForwardWhitespaceEnd(text, idx))
-    else scanForwardWhitespaceEnd(text, scanForwardNonWhitespaceEnd(text, idx))
+    val segmentStart =
+      if idx < length && characterClass(text.charAt(idx)) == CharacterClass.Whitespace then
+        scanForwardClassEnd(text, idx, CharacterClass.Whitespace)
+      else idx
+
+    if segmentStart >= length then length
+    else
+      val segmentEnd = scanForwardClassEnd(text, segmentStart, characterClass(text.charAt(segmentStart)))
+      if segmentEnd < length && characterClass(text.charAt(segmentEnd)) == CharacterClass.Whitespace then
+        scanForwardClassEnd(text, segmentEnd, CharacterClass.Whitespace)
+      else segmentEnd
 
   private def clamp(cursor: Int, length: Int): Int =
     math.max(0, math.min(cursor, length))
 
+  private def characterClass(char: Char): CharacterClass =
+    if char.isWhitespace then CharacterClass.Whitespace
+    else
+      Character.getType(char) match
+        case Character.UPPERCASE_LETTER | Character.LOWERCASE_LETTER | Character.TITLECASE_LETTER |
+            Character.MODIFIER_LETTER | Character.OTHER_LETTER | Character.DECIMAL_DIGIT_NUMBER |
+            Character.LETTER_NUMBER | Character.OTHER_NUMBER | Character.NON_SPACING_MARK |
+            Character.COMBINING_SPACING_MARK =>
+          CharacterClass.Word
+        case _ =>
+          CharacterClass.Punctuation
+
   @annotation.tailrec
-  private def scanBackwardWhitespaceStart(text: String, idx: Int): Int =
-    if idx > 0 && text.charAt(idx - 1).isWhitespace then scanBackwardWhitespaceStart(text, idx - 1)
+  private def scanBackwardClassStart(text: String, idx: Int, targetClass: CharacterClass): Int =
+    if idx > 0 && characterClass(text.charAt(idx - 1)) == targetClass then
+      scanBackwardClassStart(text, idx - 1, targetClass)
     else idx
 
   @annotation.tailrec
-  private def scanBackwardNonWhitespaceStart(text: String, idx: Int): Int =
-    if idx > 0 && !text.charAt(idx - 1).isWhitespace then scanBackwardNonWhitespaceStart(text, idx - 1)
-    else idx
-
-  @annotation.tailrec
-  private def scanForwardWhitespaceEnd(text: String, idx: Int): Int =
-    if idx < text.length && text.charAt(idx).isWhitespace then scanForwardWhitespaceEnd(text, idx + 1)
-    else idx
-
-  @annotation.tailrec
-  private def scanForwardNonWhitespaceEnd(text: String, idx: Int): Int =
-    if idx < text.length && !text.charAt(idx).isWhitespace then scanForwardNonWhitespaceEnd(text, idx + 1)
+  private def scanForwardClassEnd(text: String, idx: Int, targetClass: CharacterClass): Int =
+    if idx < text.length && characterClass(text.charAt(idx)) == targetClass then
+      scanForwardClassEnd(text, idx + 1, targetClass)
     else idx
