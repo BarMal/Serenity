@@ -16,7 +16,7 @@ import com.serenity.session.SessionSaveTrigger
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
-import com.serenity.ui.layout.{DirEntry, PanelContent, PanelPosition}
+import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 
 private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBehavior:
@@ -193,6 +193,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         )
       case CommandIntent.OpenGotoLine =>
         updateState(current => ModalStateReducer.show(Modal.GotoLine(""), current).state)
+      case CommandIntent.RequestLspHover =>
+        requestLspHover(state)
+      case CommandIntent.RequestLspDefinition =>
+        requestLspDefinition(state)
       case CommandIntent.ToggleTheme =>
         toggleThemeEffect(state)
       case CommandIntent.ReloadTheme =>
@@ -468,6 +472,58 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
 
   private def pinProjectTerminal(text: String): IO[Unit] =
     pinPanel(PanelContent.Terminal(text, text.length), PanelPosition.Bottom, 14)
+
+  private def requestLspHover(state: AppState): IO[Unit] =
+    activeLspRequestTarget(state) match
+      case Some((uri, languageId, cursor, _)) =>
+        lspQueue.offer(LspEffect.HoverRequested(uri, languageId, cursor.line, cursor.column, cursor))
+      case None =>
+        showLspUnavailablePeek(state)
+
+  private def requestLspDefinition(state: AppState): IO[Unit] =
+    activeLspRequestTarget(state) match
+      case Some((uri, languageId, cursor, buffer)) =>
+        lspQueue.offer(
+          LspEffect.DefinitionRequested(
+            uri,
+            languageId,
+            cursor.line,
+            cursor.column,
+            cursor,
+            wordAtCursor(buffer, cursor)
+          )
+        )
+      case None =>
+        showLspUnavailablePeek(state)
+
+  private def activeLspRequestTarget(state: AppState): Option[(String, LanguageId, CursorPosition, Buffer)] =
+    for
+      bufferId   <- activeEditorBufferId(state)
+      buffer     <- state.buffers.get(bufferId)
+      path       <- buffer.filePath
+      languageId <- buffer.language
+      cursor     <- buffer.cursors.headOption
+    yield (path.toUri.toString, languageId, cursor, buffer)
+
+  private def showLspUnavailablePeek(state: AppState): IO[Unit] =
+    showPeek(
+      PeekContent.QuickInfo("LSP requests need a saved buffer with a language mode."),
+      state.activeCursorPosition.getOrElse(CursorPosition(0, 0))
+    )
+
+  private def wordAtCursor(buffer: Buffer, cursor: CursorPosition): String =
+    val line = buffer.content.getLine(cursor.line).getOrElse("")
+    if line.isEmpty then ""
+    else
+      val clamped = cursor.column.max(0).min(line.length)
+      val start =
+        Iterator.iterate(clamped)(i => i - 1).dropWhile(i => i > 0 && isSymbolChar(line.charAt(i - 1))).next()
+      val end =
+        Iterator.iterate(clamped)(i => i + 1).dropWhile(i => i < line.length && isSymbolChar(line.charAt(i))).next()
+      line.substring(start, end)
+
+  private def isSymbolChar(char: Char): Boolean =
+    char.isLetterOrDigit || char == '_'
 
   private def persistConfigFile(config: com.serenity.config.AppConfig): IO[Unit] =
     configPersistencePath match

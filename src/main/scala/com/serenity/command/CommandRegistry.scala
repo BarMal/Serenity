@@ -210,6 +210,20 @@ object CommandRegistry:
       label = "Go to Line"
     ),
     Command.typed(
+      "lsp-hover",
+      "Show language-server hover information at the cursor.",
+      CommandIntent.RequestLspHover,
+      CommandCategory.Edit,
+      label = "LSP Hover"
+    ),
+    Command.typed(
+      "lsp-definition",
+      "Request the symbol definition from the language server.",
+      CommandIntent.RequestLspDefinition,
+      CommandCategory.Edit,
+      label = "LSP Definition"
+    ),
+    Command.typed(
       "toggle-theme",
       "Switch between the light and dark themes.",
       CommandIntent.ToggleTheme,

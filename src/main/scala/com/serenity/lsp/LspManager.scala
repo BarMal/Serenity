@@ -53,6 +53,40 @@ object LspManager:
                 case None =>
                   IO.unit
             }
+
+          case LspEffect.HoverRequested(uri, languageId, line, character, anchor) =>
+            ensureConnection(connectionsRef, languageId, uri, applyEvent, logger, userConfig).flatMap {
+              case Some(conn) =>
+                conn
+                  .sendRequest("textDocument/hover", LspProtocol.textDocumentPositionParams(uri, line, character))
+                  .flatMap(response =>
+                    LspProtocol
+                      .parseHoverText(response)
+                      .fold(IO.unit)(text => applyEvent(LspEvent.LspHoverReceived(text, anchor)))
+                  )
+                  .handleErrorWith(ex => logger.error(ex)(s"[LSP] hover failed: $uri"))
+              case None =>
+                applyEvent(LspEvent.LspHoverReceived(s"No LSP server available for ${languageId.displayName}", anchor))
+            }
+
+          case LspEffect.DefinitionRequested(uri, languageId, line, character, anchor, symbol) =>
+            ensureConnection(connectionsRef, languageId, uri, applyEvent, logger, userConfig).flatMap {
+              case Some(conn) =>
+                conn
+                  .sendRequest("textDocument/definition", LspProtocol.textDocumentPositionParams(uri, line, character))
+                  .flatMap(response =>
+                    LspProtocol
+                      .parseDefinitionLocation(response)
+                      .fold(IO.unit)(location =>
+                        applyEvent(
+                          LspEvent.LspDefinitionReceived(symbol, location.uri, location.range.start, anchor)
+                        )
+                      )
+                  )
+                  .handleErrorWith(ex => logger.error(ex)(s"[LSP] definition failed: $uri"))
+              case None =>
+                applyEvent(LspEvent.LspHoverReceived(s"No LSP server available for ${languageId.displayName}", anchor))
+            }
         }
         .compile
         .drain

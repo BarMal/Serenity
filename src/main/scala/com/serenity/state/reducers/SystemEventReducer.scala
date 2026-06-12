@@ -30,6 +30,16 @@ object SystemEventReducer:
       case LspEvent.LspDiagnosticsReceived(uri, diagnostics) =>
         ReducerResult.noEffects(state.copy(diagnostics = state.diagnostics + (uri -> diagnostics)))
 
+      case LspEvent.LspHoverReceived(text, anchor) =>
+        PeekStateReducer.show(PeekContent.QuickInfo(text), anchor, state)
+
+      case LspEvent.LspDefinitionReceived(symbol, uri, position, anchor) =>
+        PeekStateReducer.show(
+          PeekContent.SymbolDefinition(s"$symbol @ $uri", Location(position.line, position.character)),
+          anchor,
+          state
+        )
+
       case ExplorerEvent.RootDirectoryLoaded(position, rootPath, size, entries, selectedPath) =>
         val tree = DirectoryTreeData(rootPath, entries = Map(rootPath -> entries))
         PanelStateReducer.pin(
