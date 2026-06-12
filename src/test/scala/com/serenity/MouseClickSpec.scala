@@ -78,6 +78,31 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     buffer.cursors.headOption.map(_.column) shouldBe Some(0)
   }
 
+  it should "not move the cursor for non-primary clicks" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state
+            .buffers(bufferId)
+            .copy(
+              language = Some(LanguageId.Scala),
+              cursors = List(CursorPosition(0, 1))
+            )
+        )
+      )
+    }.unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    sm.applyEvent(MouseClick(18, 2, button = MouseButton.Secondary)).unsafeRunSync()
+
+    val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.cursors shouldBe List(CursorPosition(0, 1))
+  }
+
   it should "clamp column to line length when clicking past end of line" in {
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hi\nworld").unsafeRunSync()

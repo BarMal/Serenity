@@ -6,6 +6,10 @@ sealed trait MouseInputEvent extends Event:
   def pixelX: Option[Int]
   def pixelY: Option[Int]
   def shiftDown: Boolean
+  def button: MouseButton
+
+enum MouseButton:
+  case Primary, Secondary, Middle, Other
 
 case class MouseClick(
     col: Int,
@@ -13,7 +17,8 @@ case class MouseClick(
     pixelX: Option[Int] = None,
     pixelY: Option[Int] = None,
     clickCount: Int = 1,
-    shiftDown: Boolean = false
+    shiftDown: Boolean = false,
+    button: MouseButton = MouseButton.Primary
 ) extends MouseInputEvent
 
 case class MousePress(
@@ -21,7 +26,8 @@ case class MousePress(
     row: Int,
     pixelX: Option[Int] = None,
     pixelY: Option[Int] = None,
-    shiftDown: Boolean = false
+    shiftDown: Boolean = false,
+    button: MouseButton = MouseButton.Primary
 ) extends MouseInputEvent
 
 case class MouseDrag(
@@ -29,7 +35,8 @@ case class MouseDrag(
     row: Int,
     pixelX: Option[Int] = None,
     pixelY: Option[Int] = None,
-    shiftDown: Boolean = false
+    shiftDown: Boolean = false,
+    button: MouseButton = MouseButton.Primary
 ) extends MouseInputEvent
 
 case class MouseMove(
@@ -37,5 +44,6 @@ case class MouseMove(
     row: Int,
     pixelX: Option[Int] = None,
     pixelY: Option[Int] = None,
-    shiftDown: Boolean = false
+    shiftDown: Boolean = false,
+    button: MouseButton = MouseButton.Primary
 ) extends MouseInputEvent

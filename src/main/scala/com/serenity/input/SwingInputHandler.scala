@@ -48,7 +48,8 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
             currentMetrics.toRow(e.getY),
             pixelX = Some(e.getX),
             pixelY = Some(e.getY),
-            shiftDown = e.isShiftDown
+            shiftDown = e.isShiftDown,
+            button = mouseButton(e)
           )
         )
 
@@ -61,7 +62,8 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
             pixelX = Some(e.getX),
             pixelY = Some(e.getY),
             clickCount = e.getClickCount,
-            shiftDown = e.isShiftDown
+            shiftDown = e.isShiftDown,
+            button = mouseButton(e)
           )
         )
   )
@@ -88,7 +90,8 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
             currentMetrics.toRow(e.getY),
             pixelX = Some(e.getX),
             pixelY = Some(e.getY),
-            shiftDown = e.isShiftDown
+            shiftDown = e.isShiftDown,
+            button = dragButton(e)
           )
         )
   )
@@ -103,6 +106,20 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
 
   def eventStream: Stream[F, Event] =
     inputRouter.eventStream(keyStrokeInfoStream).merge(mouseStream)
+
+  private def mouseButton(e: MouseEvent): MouseButton =
+    e.getButton match
+      case MouseEvent.BUTTON1 => MouseButton.Primary
+      case MouseEvent.BUTTON2 => MouseButton.Middle
+      case MouseEvent.BUTTON3 => MouseButton.Secondary
+      case _                  => MouseButton.Other
+
+  private def dragButton(e: MouseEvent): MouseButton =
+    val modifiers = e.getModifiersEx
+    if (modifiers & InputEvent.BUTTON1_DOWN_MASK) != 0 then MouseButton.Primary
+    else if (modifiers & InputEvent.BUTTON2_DOWN_MASK) != 0 then MouseButton.Middle
+    else if (modifiers & InputEvent.BUTTON3_DOWN_MASK) != 0 then MouseButton.Secondary
+    else MouseButton.Other
 
   def shutdown: F[Unit] =
     Sync[F].blocking {

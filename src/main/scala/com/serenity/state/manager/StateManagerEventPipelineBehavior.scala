@@ -472,103 +472,109 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       .pushFocus(Focus.Surface(surfaceId))
 
   private def handleMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Unit] =
-    handleCommandRunnerMouseClick(click, state).flatMap {
-      case true => cats.effect.IO.unit
-      case false =>
-        resolveMouseTarget(click, state).flatMap {
-          _.fold(cats.effect.IO.unit) { (paneId, buffer, clickedCursor) =>
-            stateRef.update { s =>
-              s.buffers.get(buffer.id) match
-                case Some(current) =>
-                  val selection =
-                    if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
-                    else if click.clickCount >= 3 then lineSelectionAtCursor(current, clickedCursor)
-                    else if click.clickCount >= 2 then wordSelectionAtCursor(current, clickedCursor)
-                    else None
-                  val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
-                  s.copy(
-                    buffers = s.buffers.updated(
-                      buffer.id,
-                      current.copy(
-                        cursors = List(focusCursor),
-                        selection = selection,
-                        selections = Nil,
-                        preferredColumn = Some(focusCursor.column),
-                        preferredXPx = None,
-                        multiCursorVerticalStates = Nil
-                      )
-                    ),
-                    focus = Focus.EditorPane(paneId),
-                    layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-                  )
-                case None => s
+    if click.button != MouseButton.Primary then cats.effect.IO.unit
+    else
+      handleCommandRunnerMouseClick(click, state).flatMap {
+        case true => cats.effect.IO.unit
+        case false =>
+          resolveMouseTarget(click, state).flatMap {
+            _.fold(cats.effect.IO.unit) { (paneId, buffer, clickedCursor) =>
+              stateRef.update { s =>
+                s.buffers.get(buffer.id) match
+                  case Some(current) =>
+                    val selection =
+                      if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
+                      else if click.clickCount >= 3 then lineSelectionAtCursor(current, clickedCursor)
+                      else if click.clickCount >= 2 then wordSelectionAtCursor(current, clickedCursor)
+                      else None
+                    val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
+                    s.copy(
+                      buffers = s.buffers.updated(
+                        buffer.id,
+                        current.copy(
+                          cursors = List(focusCursor),
+                          selection = selection,
+                          selections = Nil,
+                          preferredColumn = Some(focusCursor.column),
+                          preferredXPx = None,
+                          multiCursorVerticalStates = Nil
+                        )
+                      ),
+                      focus = Focus.EditorPane(paneId),
+                      layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                    )
+                  case None => s
+              }
             }
           }
-        }
-    }
+      }
 
   private def handleMousePress(press: MousePress, state: AppState): cats.effect.IO[Unit] =
-    handleCommandRunnerMouseHover(press, state).flatMap {
-      case true => cats.effect.IO.unit
-      case false =>
-        resolveMouseTarget(press, state).flatMap {
-          _.fold(cats.effect.IO.unit) { (paneId, buffer, pressedCursor) =>
-            stateRef.update { s =>
-              s.buffers.get(buffer.id) match
-                case Some(current) =>
-                  val selection =
-                    Option.when(press.shiftDown)(rangeSelectionFromAnchor(current, pressedCursor)).flatten
-                  val focusCursor = selection.map(_.focus).getOrElse(pressedCursor)
-                  s.copy(
-                    buffers = s.buffers.updated(
-                      buffer.id,
-                      current.copy(
-                        cursors = List(focusCursor),
-                        selection = selection,
-                        selections = Nil,
-                        preferredColumn = Some(focusCursor.column),
-                        preferredXPx = None,
-                        multiCursorVerticalStates = Nil
-                      )
-                    ),
-                    focus = Focus.EditorPane(paneId),
-                    layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-                  )
-                case None => s
+    if press.button != MouseButton.Primary then cats.effect.IO.unit
+    else
+      handleCommandRunnerMouseHover(press, state).flatMap {
+        case true => cats.effect.IO.unit
+        case false =>
+          resolveMouseTarget(press, state).flatMap {
+            _.fold(cats.effect.IO.unit) { (paneId, buffer, pressedCursor) =>
+              stateRef.update { s =>
+                s.buffers.get(buffer.id) match
+                  case Some(current) =>
+                    val selection =
+                      Option.when(press.shiftDown)(rangeSelectionFromAnchor(current, pressedCursor)).flatten
+                    val focusCursor = selection.map(_.focus).getOrElse(pressedCursor)
+                    s.copy(
+                      buffers = s.buffers.updated(
+                        buffer.id,
+                        current.copy(
+                          cursors = List(focusCursor),
+                          selection = selection,
+                          selections = Nil,
+                          preferredColumn = Some(focusCursor.column),
+                          preferredXPx = None,
+                          multiCursorVerticalStates = Nil
+                        )
+                      ),
+                      focus = Focus.EditorPane(paneId),
+                      layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                    )
+                  case None => s
+              }
             }
           }
-        }
-    }
+      }
 
   private def handleMouseDrag(drag: MouseDrag, state: AppState): cats.effect.IO[Unit] =
-    resolveMouseTarget(drag, state).flatMap {
-      _.fold(cats.effect.IO.unit) { (paneId, buffer, draggedCursor) =>
-        stateRef.update { s =>
-          s.buffers.get(buffer.id) match
-            case Some(current) =>
-              val anchor =
-                current.primarySelection.map(_.anchor).orElse(current.cursors.headOption).getOrElse(draggedCursor)
-              val selection =
-                Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
-              s.copy(
-                buffers = s.buffers.updated(
-                  buffer.id,
-                  current.copy(
-                    cursors = List(draggedCursor),
-                    selection = selection,
-                    selections = Nil,
-                    preferredColumn = Some(draggedCursor.column),
-                    preferredXPx = None,
-                    multiCursorVerticalStates = Nil
-                  )
-                ),
-                focus = Focus.EditorPane(paneId),
-                layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-              )
-            case None => s
+    if drag.button != MouseButton.Primary then cats.effect.IO.unit
+    else
+      resolveMouseTarget(drag, state).flatMap {
+        _.fold(cats.effect.IO.unit) { (paneId, buffer, draggedCursor) =>
+          stateRef.update { s =>
+            s.buffers.get(buffer.id) match
+              case Some(current) =>
+                val anchor =
+                  current.primarySelection.map(_.anchor).orElse(current.cursors.headOption).getOrElse(draggedCursor)
+                val selection =
+                  Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
+                s.copy(
+                  buffers = s.buffers.updated(
+                    buffer.id,
+                    current.copy(
+                      cursors = List(draggedCursor),
+                      selection = selection,
+                      selections = Nil,
+                      preferredColumn = Some(draggedCursor.column),
+                      preferredXPx = None,
+                      multiCursorVerticalStates = Nil
+                    )
+                  ),
+                  focus = Focus.EditorPane(paneId),
+                  layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                )
+              case None => s
+          }
         }
       }
-    }
 
   private def handleMouseMove(move: MouseMove, state: AppState): cats.effect.IO[Unit] =
     handleCommandRunnerMouseHover(move, state).map(_ => ())
