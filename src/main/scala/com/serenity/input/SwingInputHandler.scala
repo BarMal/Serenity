@@ -68,6 +68,18 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
 
   component.addMouseMotionListener(
     new MouseMotionAdapter:
+      override def mouseMoved(e: MouseEvent): Unit =
+        val currentMetrics = metrics()
+        enqueueMouse(
+          MouseMove(
+            currentMetrics.toCol(e.getX),
+            currentMetrics.toRow(e.getY),
+            pixelX = Some(e.getX),
+            pixelY = Some(e.getY),
+            shiftDown = e.isShiftDown
+          )
+        )
+
       override def mouseDragged(e: MouseEvent): Unit =
         val currentMetrics = metrics()
         enqueueMouse(

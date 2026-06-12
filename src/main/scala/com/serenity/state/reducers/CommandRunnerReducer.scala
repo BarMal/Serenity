@@ -271,6 +271,26 @@ object CommandRunnerReducer:
         if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.moveSubmenuSelection(1)))
         else ReducerResult.noEffects(replaceRunner(state, runner => updatePreviewForSelection(runner.moveSelection(1))))
 
+      case RunnerSelectVisibleItem(index) =>
+        given CommandRegistry = registry
+        val mainFocusedState = state.commandRunnerSurface
+          .map(surface => state.copy(focus = Focus.Surface(surface.id)))
+          .getOrElse(state)
+        ReducerResult.noEffects(
+          replaceRunner(
+            mainFocusedState,
+            runner => updatePreviewForSelection(runner.withSelectedVisibleIndex(index))
+          )
+        )
+
+      case RunnerSelectSubmenuItem(index) =>
+        val submenuFocusedState = state.commandRunnerSubmenuSurface
+          .map(surface => state.copy(focus = Focus.Surface(surface.id)))
+          .getOrElse(state)
+        ReducerResult.noEffects(
+          replaceRunner(submenuFocusedState, _.withSelectedFocusedSubmenuIndex(index))
+        )
+
       case RunnerNavigate(Direction.Left) =>
         given CommandRegistry = registry
         if submenuHasFocus(state) then
