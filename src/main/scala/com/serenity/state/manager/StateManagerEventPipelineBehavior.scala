@@ -18,8 +18,6 @@ import com.serenity.ui.layout.*
 private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEffectBehavior:
   this: StateManager =>
 
-  protected val mouseTargetCacheRef: cats.effect.Ref[cats.effect.IO, Option[MouseTargetCache]]
-
   def applyEvent(event: Event): cats.effect.IO[Unit] =
     stateRef.get.flatMap { rawState =>
       val prevState = normalizeCommandRunnerFocus(rawState)
