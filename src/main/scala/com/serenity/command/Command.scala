@@ -77,6 +77,12 @@ enum CommandIntent:
   case SetModalKeyBinding(action: ModalKeyAction, binding: String)
   case SetPanelKeyBinding(action: PanelKeyAction, binding: String)
   case SetPeekKeyBinding(action: PeekKeyAction, binding: String)
+  case ResetGlobalHotkey(action: HotkeyAction)
+  case ResetEditorKeyBinding(action: EditorKeyAction)
+  case ResetCommandRunnerKeyBinding(action: CommandRunnerKeyAction)
+  case ResetModalKeyBinding(action: ModalKeyAction)
+  case ResetPanelKeyBinding(action: PanelKeyAction)
+  case ResetPeekKeyBinding(action: PeekKeyAction)
 
 /** A command that can be executed in the command runner */
 case class Command private (

@@ -699,44 +699,51 @@ object CommandRunner:
         id = "keymap-global-command_palette",
         label = "Command Palette",
         currentValue = config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).headOption.map(_.render),
-        parse = binding => CommandIntent.SetGlobalHotkey(HotkeyAction.ToggleCommandRunner, binding)
+        parse = binding => CommandIntent.SetGlobalHotkey(HotkeyAction.ToggleCommandRunner, binding),
+        reset = CommandIntent.ResetGlobalHotkey(HotkeyAction.ToggleCommandRunner)
       ),
       bindingInputItem(
         id = "keymap-global-file_search",
         label = "File Search",
         currentValue = config.hotkeyConfig.bindingsFor(HotkeyAction.FileSearch).headOption.map(_.render),
-        parse = binding => CommandIntent.SetGlobalHotkey(HotkeyAction.FileSearch, binding)
+        parse = binding => CommandIntent.SetGlobalHotkey(HotkeyAction.FileSearch, binding),
+        reset = CommandIntent.ResetGlobalHotkey(HotkeyAction.FileSearch)
       ),
       bindingInputItem(
         id = "keymap-editor-page_down",
         label = "Editor Page Down",
         currentValue = config.focusedKeymapConfig.editor.bindingsFor(EditorKeyAction.PageDown).headOption.map(_.render),
-        parse = binding => CommandIntent.SetEditorKeyBinding(EditorKeyAction.PageDown, binding)
+        parse = binding => CommandIntent.SetEditorKeyBinding(EditorKeyAction.PageDown, binding),
+        reset = CommandIntent.ResetEditorKeyBinding(EditorKeyAction.PageDown)
       ),
       bindingInputItem(
         id = "keymap-command-runner-submit",
         label = "Command Submit",
         currentValue =
           config.focusedKeymapConfig.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit).headOption.map(_.render),
-        parse = binding => CommandIntent.SetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit, binding)
+        parse = binding => CommandIntent.SetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit, binding),
+        reset = CommandIntent.ResetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit)
       ),
       bindingInputItem(
         id = "keymap-modal-dismiss",
         label = "Modal Dismiss",
         currentValue = config.focusedKeymapConfig.modal.bindingsFor(ModalKeyAction.Dismiss).headOption.map(_.render),
-        parse = binding => CommandIntent.SetModalKeyBinding(ModalKeyAction.Dismiss, binding)
+        parse = binding => CommandIntent.SetModalKeyBinding(ModalKeyAction.Dismiss, binding),
+        reset = CommandIntent.ResetModalKeyBinding(ModalKeyAction.Dismiss)
       ),
       bindingInputItem(
         id = "keymap-panel-activate",
         label = "Panel Activate",
         currentValue = config.focusedKeymapConfig.panel.bindingsFor(PanelKeyAction.Activate).headOption.map(_.render),
-        parse = binding => CommandIntent.SetPanelKeyBinding(PanelKeyAction.Activate, binding)
+        parse = binding => CommandIntent.SetPanelKeyBinding(PanelKeyAction.Activate, binding),
+        reset = CommandIntent.ResetPanelKeyBinding(PanelKeyAction.Activate)
       ),
       bindingInputItem(
         id = "keymap-peek-accept",
         label = "Peek Accept",
         currentValue = config.focusedKeymapConfig.peek.bindingsFor(PeekKeyAction.Accept).headOption.map(_.render),
-        parse = binding => CommandIntent.SetPeekKeyBinding(PeekKeyAction.Accept, binding)
+        parse = binding => CommandIntent.SetPeekKeyBinding(PeekKeyAction.Accept, binding),
+        reset = CommandIntent.ResetPeekKeyBinding(PeekKeyAction.Accept)
       )
     )
 
@@ -744,18 +751,28 @@ object CommandRunner:
     id: String,
     label: String,
     currentValue: Option[String],
-    parse: String => CommandIntent
+    parse: String => CommandIntent,
+    reset: CommandIntent
   ): CommandSurfaceItem.InputItem =
     CommandSurfaceItem.InputItem(
       id = id,
       label = label,
-      hint = "Binding",
+      hint = "Binding or default",
       currentValue = currentValue.getOrElse(""),
       isDecimal = false,
-      parse = text => HotkeyTrigger.parse(text).map(_ => parse(text)),
+      parse = text => parseBindingText(text, parse, reset),
       category = CommandCategory.Settings,
       acceptsBindingText = true
     )
+
+  private def parseBindingText(
+    text: String,
+    parse: String => CommandIntent,
+    reset: CommandIntent
+  ): Option[CommandIntent] =
+    text.trim.toLowerCase match
+      case "default" | "reset" => Some(reset)
+      case binding             => HotkeyTrigger.parse(binding).map(_ => parse(binding))
 
   private def animationModeIndex(config: AppConfig): Int =
     config.characterAnimation match

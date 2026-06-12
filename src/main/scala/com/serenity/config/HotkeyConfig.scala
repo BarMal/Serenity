@@ -181,6 +181,9 @@ case class HotkeyConfig(
   def withBinding(action: HotkeyAction, binding: String): HotkeyConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
+  def resetBinding(action: HotkeyAction): HotkeyConfig =
+    copy(bindings = bindings + (action -> HotkeyConfig.defaultBindings.getOrElse(action, Nil)))
+
 object HotkeyConfig:
 
   val defaultBindings: Map[HotkeyAction, List[HotkeyTrigger]] = Map(
