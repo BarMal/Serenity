@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.PaneId
+import com.serenity.ui.layout.PaneSplitDirection
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -56,5 +57,13 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
     val pane1 = sm.createPane().unsafeRunSync()
     val split = sm.splitPaneHorizontal(pane0).unsafeRunSync()
     sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, split, pane1)
+
+  it should "insert splitPaneVertical result immediately after the split pane and mark the layout vertical" in new PaneFixture:
+    val pane1 = sm.createPane().unsafeRunSync()
+    val split = sm.splitPaneVertical(pane0).unsafeRunSync()
+    val state = sm.getCurrentState.unsafeRunSync()
+
+    sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, split, pane1)
+    state.layout.splitDirection shouldBe PaneSplitDirection.Vertical
 
 end PaneOrderSpec

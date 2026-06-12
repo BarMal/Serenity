@@ -7,6 +7,7 @@ import com.serenity.lsp.LspEffect
 import com.serenity.rope.Rope
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
+import com.serenity.ui.layout.PaneSplitDirection
 
 private[manager] trait StateManagerEditorFacadeBehavior extends StateManagerEventPipelineBehavior:
   this: StateManager =>
@@ -223,4 +224,18 @@ private[manager] trait StateManagerEditorFacadeBehavior extends StateManagerEven
     stateRef.get.map(_.layout.orderedPaneIds)
 
   def splitPaneHorizontal(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId] =
-    createPaneAfter(paneId, bufferId)
+    splitPane(paneId, bufferId, PaneSplitDirection.Horizontal)
+
+  def splitPaneVertical(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId] =
+    splitPane(paneId, bufferId, PaneSplitDirection.Vertical)
+
+  private def splitPane(
+    paneId: PaneId,
+    bufferId: Option[BufferId],
+    splitDirection: PaneSplitDirection
+  ): IO[PaneId] =
+    createPaneAfter(paneId, bufferId).flatMap { createdPaneId =>
+      stateRef
+        .update(state => state.copy(layout = state.layout.copy(splitDirection = splitDirection)))
+        .as(createdPaneId)
+    }

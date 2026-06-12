@@ -12,7 +12,7 @@ import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.Layout
+import com.serenity.ui.layout.{Layout, PaneSplitDirection}
 import com.serenity.ui.theme.Theme
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.{Decoder, Encoder}
@@ -50,7 +50,8 @@ case class SessionBuffer(
 case class SessionLayout(
     editorPanes: List[SessionEditorPane],
     activeEditorPaneId: Option[Int],
-    paneOrder: List[Int] = Nil
+    paneOrder: List[Int] = Nil,
+    splitDirection: String = PaneSplitDirection.Horizontal.toString
 )
 
 case class SessionEditorPane(
@@ -239,7 +240,8 @@ object SessionLayout:
     SessionLayout(
       editorPanes = orderedPanes(layout).map(SessionEditorPane.fromEditorPane),
       activeEditorPaneId = layout.activeEditorPaneId.map(_.value),
-      paneOrder = layout.paneOrder.map(_.value)
+      paneOrder = layout.paneOrder.map(_.value),
+      splitDirection = layout.splitDirection.toString
     )
 
   private def orderedPanes(layout: Layout): List[EditorPane] =
@@ -259,7 +261,8 @@ object SessionLayout:
     Layout(
       editorPanes = editorPanes,
       activeEditorPaneId = sessionLayout.activeEditorPaneId.map(PaneId.apply),
-      paneOrder = sessionLayout.paneOrder.map(PaneId.apply)
+      paneOrder = sessionLayout.paneOrder.map(PaneId.apply),
+      splitDirection = PaneSplitDirection.fromString(sessionLayout.splitDirection)
     )
 
 object SessionEditorPane:

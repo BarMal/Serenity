@@ -10,7 +10,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.given
 import com.serenity.session.{SessionFindResult, SessionFindState, SessionState}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.Layout
+import com.serenity.ui.layout.{Layout, PaneSplitDirection}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -352,6 +352,26 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     sessionState.buffers.map(_.id) shouldBe List(2, 1)
     sessionState.layout.editorPanes.map(_.id) shouldBe List(2, 1)
+  }
+
+  it should "preserve pane split direction through round trip" in {
+    val pane1 = EditorPane.empty(PaneId(1))
+    val pane2 = EditorPane.empty(PaneId(2))
+    val appState = AppState.initial.copy(
+      layout = Layout(
+        editorPanes = Map(pane1.id -> pane1, pane2.id -> pane2),
+        activeEditorPaneId = Some(pane2.id),
+        paneOrder = List(pane1.id, pane2.id),
+        splitDirection = PaneSplitDirection.Vertical
+      ),
+      focus = Focus.EditorPane(pane2.id)
+    )
+
+    val sessionState = SessionState.fromAppState(appState)
+    val restored     = SessionState.toAppState(sessionState, Theme.default)
+
+    sessionState.layout.splitDirection shouldBe "Vertical"
+    restored.layout.splitDirection shouldBe PaneSplitDirection.Vertical
   }
 
   it should "preserve distinct find state per buffer through round trip" in {

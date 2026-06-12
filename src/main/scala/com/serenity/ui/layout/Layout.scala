@@ -2,10 +2,22 @@ package com.serenity.ui.layout
 
 import com.serenity.state.models.{EditorPane, PaneId}
 
+enum PaneSplitDirection:
+  case Horizontal
+  case Vertical
+
+object PaneSplitDirection:
+
+  def fromString(value: String): PaneSplitDirection =
+    value match
+      case "Vertical" => Vertical
+      case _          => Horizontal
+
 case class Layout(
     editorPanes: Map[PaneId, EditorPane],
     activeEditorPaneId: Option[PaneId],
-    paneOrder: List[PaneId] = Nil
+    paneOrder: List[PaneId] = Nil,
+    splitDirection: PaneSplitDirection = PaneSplitDirection.Horizontal
 ):
 
   def orderedPaneIds: List[PaneId] =

@@ -74,6 +74,29 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     pane0Layout.height shouldBe editorRect.height
   }
 
+  it should "split editor area between panes vertically when the layout requests vertical splits" in {
+    val pane1 = EditorPane.empty(PaneId(0))
+    val pane2 = EditorPane.empty(PaneId(1))
+    val layout = Layout(
+      editorPanes = Map(PaneId(0) -> pane1, PaneId(1) -> pane2),
+      activeEditorPaneId = Some(PaneId(0)),
+      paneOrder = List(PaneId(0), PaneId(1)),
+      splitDirection = PaneSplitDirection.Vertical
+    )
+    val state = AppState(
+      layout = layout,
+      buffers = Map.empty,
+      focus = Focus.EditorPane(PaneId(0))
+    )
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val paneLayouts      = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
+    val editorRect       = calculatedLayout.editorPanelRect
+
+    paneLayouts(PaneId(0)) shouldBe LayoutRect(editorRect.x, editorRect.y, editorRect.width, 15)
+    paneLayouts(PaneId(1)) shouldBe LayoutRect(editorRect.x, editorRect.y + 15, editorRect.width, 14)
+  }
+
   it should "handle three panes with equal width distribution" in {
     // Given: State with three panes
     val panes = Map(
