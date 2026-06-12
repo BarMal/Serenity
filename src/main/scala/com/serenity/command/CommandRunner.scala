@@ -322,6 +322,23 @@ case class CommandRunner(
       case Some((_, index)) => copy(selectedIndex = index).syncEditMode
       case None             => this
 
+  def withSelectedVisibleIndex(index: Int): CommandRunner =
+    if visibleItems.indices.contains(index) then copy(selectedIndex = index).syncEditMode
+    else this
+
+  def withSelectedFocusedSubmenuIndex(index: Int): CommandRunner =
+    activeSubmenu match
+      case Some(submenu) =>
+        val items = submenu.filteredItems(submenuItems(submenu.groupId))
+        if items.indices.contains(index) then
+          copy(
+            submenuSelections = submenuSelections + (submenu.groupId -> index),
+            activeSubmenu = Some(submenu.copy(selectedIndex = index, editingItemId = None, editingText = ""))
+          )
+        else this
+      case None =>
+        this
+
   /** Activate the command runner with given registry and config */
   def activate(registry: CommandRegistry, config: AppConfig): CommandRunner =
     copy(
