@@ -33,35 +33,35 @@ object LspServerRegistry:
 
   def resolve(languageId: LanguageId, userConfig: LspUserConfig): IO[Option[LspServerConfig]] =
     IO.blocking {
-      val base = builtIn.find(_.languageId == languageId)
-      base.flatMap { config =>
-        val overridden = applyUserOverride(config, languageId, userConfig)
-        if isAvailable(overridden.binary.command) then Some(overridden) else None
-      }
+      configuredServer(languageId, userConfig).filter(config => isAvailable(config.command))
     }
 
   def availableServers(userConfig: LspUserConfig): IO[List[LspServerConfig]] =
     IO.blocking {
-      builtIn.flatMap { config =>
-        val overridden = applyUserOverride(config, config.languageId, userConfig)
-        if isAvailable(overridden.binary.command) then Some(overridden) else None
-      }
+      builtIn.flatMap(config =>
+        configuredServer(config.languageId, userConfig).filter(server => isAvailable(server.command))
+      )
     }
 
-  private def applyUserOverride(
-    config: LspServerConfig,
-    languageId: LanguageId,
-    userConfig: LspUserConfig
-  ): LspServerConfig =
-    val key = languageId.id
-    userConfig.servers.flatMap(_.get(key)) match
-      case None => config
-      case Some(override_) =>
-        val binary = override_.command
-          .flatMap(LspServerBinary.fromCommand)
-          .getOrElse(config.binary)
-        val args = override_.args.getOrElse(config.defaultArgs)
-        config.copy(binary = binary, defaultArgs = args)
+  def configuredServer(languageId: LanguageId, userConfig: LspUserConfig): Option[LspServerConfig] =
+    builtIn.find(_.languageId == languageId).flatMap { config =>
+      userConfig.servers.flatMap(_.get(languageId.id)) match
+        case Some(override_) if override_.enabled.contains(false) =>
+          None
+        case Some(override_) =>
+          val binary = override_.command
+            .flatMap(LspServerBinary.fromCommand)
+            .getOrElse(config.binary)
+          Some(
+            config.copy(
+              binary = binary,
+              defaultArgs = override_.args.getOrElse(config.defaultArgs),
+              commandOverride = override_.command.filter(_ != binary.command)
+            )
+          )
+        case None =>
+          Some(config)
+    }
 
   private def isAvailable(command: String): Boolean =
     val pathDirs = sys.env

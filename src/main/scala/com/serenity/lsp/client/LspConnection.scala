@@ -165,7 +165,7 @@ object LspConnection:
       process <- Resource.make(
         IO.blocking(
           new java.lang.ProcessBuilder(
-            (config.binary.command :: config.defaultArgs).toArray*
+            (config.command :: config.defaultArgs).toArray*
           ).start()
         )
       )(proc => IO.blocking(proc.destroyForcibly()).void)

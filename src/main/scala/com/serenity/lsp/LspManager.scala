@@ -15,13 +15,14 @@ object LspManager:
   def run(
     effects: Stream[IO, LspEffect],
     applyEvent: Event => IO[Unit],
-    logger: Logger[IO]
+    logger: Logger[IO],
+    userConfig: LspUserConfig = LspUserConfig.empty
   ): IO[Unit] =
     Ref.of[IO, Map[LanguageId, ManagedConnection]](Map.empty).flatMap { connectionsRef =>
       effects
         .evalMap {
           case LspEffect.FileOpened(uri, languageId, text) =>
-            ensureConnection(connectionsRef, languageId, uri, applyEvent, logger)
+            ensureConnection(connectionsRef, languageId, uri, applyEvent, logger, userConfig)
               .flatMap {
                 case Some(conn) =>
                   conn
@@ -63,12 +64,13 @@ object LspManager:
     languageId: LanguageId,
     fileUri: String,
     applyEvent: Event => IO[Unit],
-    logger: Logger[IO]
+    logger: Logger[IO],
+    userConfig: LspUserConfig
   ): IO[Option[LspConnection]] =
     connectionsRef.get.flatMap { conns =>
       conns.get(languageId) match
         case Some(managed) => IO.pure(Some(managed.connection))
-        case None          => spawnConnection(connectionsRef, languageId, fileUri, applyEvent, logger)
+        case None          => spawnConnection(connectionsRef, languageId, fileUri, applyEvent, logger, userConfig)
     }
 
   private def spawnConnection(
@@ -76,9 +78,10 @@ object LspManager:
     languageId: LanguageId,
     fileUri: String,
     applyEvent: Event => IO[Unit],
-    logger: Logger[IO]
+    logger: Logger[IO],
+    userConfig: LspUserConfig
   ): IO[Option[LspConnection]] =
-    LspServerRegistry.resolve(languageId, LspUserConfig.empty).flatMap {
+    LspServerRegistry.resolve(languageId, userConfig).flatMap {
       case None =>
         logger.info(s"[LSP] No server available for ${languageId.id}").as(None)
       case Some(config) =>
@@ -99,7 +102,7 @@ object LspManager:
                 } >>
                   IO.pure(Some(conn))
             }
-            .handleErrorWith(ex => logger.error(ex)(s"[LSP] Failed to connect to ${config.binary.command}").as(None))
+            .handleErrorWith(ex => logger.error(ex)(s"[LSP] Failed to connect to ${config.command}").as(None))
         }
     }
 

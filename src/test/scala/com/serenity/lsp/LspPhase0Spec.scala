@@ -2,10 +2,11 @@ package com.serenity.lsp
 
 import com.serenity.lsp.config.*
 import com.serenity.lsp.model.*
+import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class LspPhase0Spec extends AnyFlatSpec with Matchers:
+class LspPhase0Spec extends AnyFlatSpec with Matchers with OptionValues:
 
   "LanguageId" should "resolve known ids case-insensitively" in {
     LanguageId.fromString("scala") shouldBe Some(LanguageId.Scala)
@@ -78,6 +79,42 @@ class LspPhase0Spec extends AnyFlatSpec with Matchers:
 
   "LspUserConfig.empty" should "have no server overrides" in {
     LspUserConfig.empty.servers shouldBe None
+  }
+
+  it should "disable configured language servers" in {
+    val userConfig = LspUserConfig(
+      servers = Some(
+        Map(
+          LanguageId.Scala.id -> LspServerOverride(
+            command = None,
+            args = None,
+            enabled = Some(false)
+          )
+        )
+      )
+    )
+
+    LspServerRegistry.configuredServer(LanguageId.Scala, userConfig) shouldBe None
+  }
+
+  it should "apply configured command and args for a language server" in {
+    val userConfig = LspUserConfig(
+      servers = Some(
+        Map(
+          LanguageId.Scala.id -> LspServerOverride(
+            command = Some("custom-metals"),
+            args = Some(List("--stdio", "--verbose")),
+            enabled = Some(true)
+          )
+        )
+      )
+    )
+
+    val server = LspServerRegistry.configuredServer(LanguageId.Scala, userConfig).value
+
+    server.languageId shouldBe LanguageId.Scala
+    server.command shouldBe "custom-metals"
+    server.defaultArgs shouldBe List("--stdio", "--verbose")
   }
 
   "Diagnostic" should "hold range, severity and message" in {

@@ -5,7 +5,8 @@ import pureconfig.generic.derivation.default.*
 
 case class LspServerOverride(
     command: Option[String],
-    args: Option[List[String]]
+    args: Option[List[String]],
+    enabled: Option[Boolean] = None
 ) derives ConfigReader
 
 case class LspUserConfig(

@@ -9,7 +9,7 @@ import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.*
-import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{Layout, PaneSplitDirection}
@@ -434,6 +434,12 @@ given Decoder[Color] = Decoder.decodeString.emap(value => parseColor(value).toRi
 given Encoder[CursorColorConfig] = deriveEncoder
 given Decoder[CursorColorConfig] = deriveDecoder
 
+given Encoder[LspServerOverride] = deriveEncoder
+given Decoder[LspServerOverride] = deriveDecoder
+
+given Encoder[LspUserConfig] = deriveEncoder
+given Decoder[LspUserConfig] = deriveDecoder
+
 given Encoder[AppConfig] = deriveEncoder
 
 given Decoder[AppConfig] = Decoder.instance { cursor =>
@@ -454,6 +460,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     markdownViewMode          <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
     interfaceDensity          <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(InterfaceDensity.Comfortable)
     preferredWindowSize       <- cursor.getOrElse[Option[PreferredWindowSize]]("preferredWindowSize")(None)
+    lspUserConfig             <- cursor.getOrElse[LspUserConfig]("lspUserConfig")(LspUserConfig.empty)
   yield AppConfig(
     characterAnimation = characterAnimation,
     syntaxHighlightingEnabled = syntaxHighlightingEnabled,
@@ -470,7 +477,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     windowChromeMode = windowChromeMode,
     markdownViewMode = markdownViewMode,
     interfaceDensity = interfaceDensity,
-    preferredWindowSize = preferredWindowSize
+    preferredWindowSize = preferredWindowSize,
+    lspUserConfig = lspUserConfig
   )
 }
 

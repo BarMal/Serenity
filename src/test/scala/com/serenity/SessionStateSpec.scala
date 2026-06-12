@@ -6,6 +6,7 @@ import java.nio.file.Files
 import _root_.io.circe.syntax.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.*
+import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.rope.Balance
 import com.serenity.session.given
 import com.serenity.session.{SessionFindResult, SessionFindState, SessionState}
@@ -205,7 +206,18 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         windowChromeMode = WindowChromeMode.Custom,
         interfaceDensity = InterfaceDensity.Spacious,
         showLineNumbers = false,
-        showGutter = false
+        showGutter = false,
+        lspUserConfig = LspUserConfig(
+          servers = Some(
+            Map(
+              LanguageId.Scala.id -> LspServerOverride(
+                command = Some("custom-metals"),
+                args = Some(List("--stdio")),
+                enabled = Some(true)
+              )
+            )
+          )
+        )
       )
     )
 
@@ -226,6 +238,13 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.fontConfig.uiLigatures shouldBe true
     decoded.config.showLineNumbers shouldBe false
     decoded.config.showGutter shouldBe false
+    decoded.config.lspUserConfig.servers.map(_(LanguageId.Scala.id)) shouldBe Some(
+      LspServerOverride(
+        command = Some("custom-metals"),
+        args = Some(List("--stdio")),
+        enabled = Some(true)
+      )
+    )
     decoded.config.characterAnimation.map(_.steps) shouldBe
       AnimationConfig.quick.map(_.steps)
   }
