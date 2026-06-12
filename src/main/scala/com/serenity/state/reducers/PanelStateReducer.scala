@@ -15,16 +15,20 @@ object PanelStateReducer:
     )
 
   def focus(position: PanelPosition, state: AppState): ReducerResult =
-    pinnedSurfaceAt(position, state) match
+    panelSurfaceAt(position, state) match
       case Some(surface) =>
         ReducerResult.noEffects(state.copy(focus = Focus.Surface(surface.id)))
       case None =>
         ReducerResult.noEffects(state)
 
   def resize(position: PanelPosition, newSize: Int, state: AppState): ReducerResult =
-    pinnedSurfaceAt(position, state) match
+    panelSurfaceAt(position, state) match
       case Some(surface) =>
-        val resized = surface.copy(presentation = SurfacePresentation.Pinned(position, newSize))
+        val resized = surface.presentation match
+          case SurfacePresentation.Expanded(originalPosition, _) =>
+            surface.copy(presentation = SurfacePresentation.Expanded(originalPosition, newSize))
+          case _ =>
+            surface.copy(presentation = SurfacePresentation.Pinned(position, newSize))
         ReducerResult.noEffects(
           state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ resized)
         )
@@ -33,7 +37,7 @@ object PanelStateReducer:
 
   def unpin(position: PanelPosition, state: AppState): ReducerResult =
     val nextFocus =
-      pinnedSurfaceAt(position, state).map(_.id) match
+      panelSurfaceAt(position, state).map(_.id) match
         case Some(surfaceId) if state.focus == Focus.Surface(surfaceId) => fallbackEditorFocus(state)
         case _                                                          => state.focus
 
@@ -41,12 +45,38 @@ object PanelStateReducer:
       state.copy(
         uiSurfaces = state.uiSurfaces.filterNot {
           _.presentation match
-            case SurfacePresentation.Pinned(pos, _) if pos == position => true
-            case _                                                     => false
+            case SurfacePresentation.Pinned(pos, _) if pos == position   => true
+            case SurfacePresentation.Expanded(pos, _) if pos == position => true
+            case _                                                       => false
         },
         focus = nextFocus
       )
     )
+
+  def expand(position: PanelPosition, state: AppState): ReducerResult =
+    pinnedSurfaceAt(position, state) match
+      case Some(surface @ UiSurface(_, _, SurfacePresentation.Pinned(_, size), _)) =>
+        val expanded = surface.copy(presentation = SurfacePresentation.Expanded(position, size))
+        ReducerResult.noEffects(
+          state.copy(
+            uiSurfaces = replaceSurface(collapseExpandedSurfaces(state.uiSurfaces), expanded),
+            focus = Focus.Surface(surface.id)
+          )
+        )
+      case Some(surface @ UiSurface(_, _, SurfacePresentation.Expanded(_, _), _)) =>
+        ReducerResult.noEffects(state.copy(focus = Focus.Surface(surface.id)))
+      case _ =>
+        ReducerResult.noEffects(state)
+
+  def collapseExpandedPanel(state: AppState): ReducerResult =
+    state.expandedPanelSurface match
+      case Some(surface @ UiSurface(_, _, SurfacePresentation.Expanded(position, size), _)) =>
+        val collapsed = surface.copy(presentation = SurfacePresentation.Pinned(position, size))
+        ReducerResult.noEffects(
+          state.copy(uiSurfaces = replaceSurface(state.uiSurfaces, collapsed))
+        )
+      case _ =>
+        ReducerResult.noEffects(state)
 
   def pinPeekOverlay(position: PanelPosition, state: AppState): ReducerResult =
     pinActiveFloatingSurface(position, state)
@@ -111,8 +141,9 @@ object PanelStateReducer:
   ): List[UiSurface] =
     surfaces.filterNot {
       _.presentation match
-        case SurfacePresentation.Pinned(pos, _) if pos == position => true
-        case _                                                     => false
+        case SurfacePresentation.Pinned(pos, _) if pos == position   => true
+        case SurfacePresentation.Expanded(pos, _) if pos == position => true
+        case _                                                       => false
     } :+ updated
 
   private def pinnedSurfaceAt(position: PanelPosition, state: AppState): Option[UiSurface] =
@@ -120,6 +151,21 @@ object PanelStateReducer:
       _.presentation match
         case SurfacePresentation.Pinned(pos, _) if pos == position => true
         case _                                                     => false
+    }
+
+  private def panelSurfaceAt(position: PanelPosition, state: AppState): Option[UiSurface] =
+    state.uiSurfaces.find {
+      _.presentation match
+        case SurfacePresentation.Pinned(pos, _) if pos == position   => true
+        case SurfacePresentation.Expanded(pos, _) if pos == position => true
+        case _                                                       => false
+    }
+
+  private def collapseExpandedSurfaces(surfaces: List[UiSurface]): List[UiSurface] =
+    surfaces.map {
+      case surface @ UiSurface(_, _, SurfacePresentation.Expanded(position, size), _) =>
+        surface.copy(presentation = SurfacePresentation.Pinned(position, size))
+      case surface => surface
     }
 
   private def fallbackEditorFocus(state: AppState): Focus =

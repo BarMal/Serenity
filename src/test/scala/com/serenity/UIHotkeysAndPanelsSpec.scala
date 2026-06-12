@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -138,6 +139,54 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val focusBefore = stateManager.getCurrentState.unsafeRunSync().focus
     stateManager.switchToPinnedPanel(PanelPosition.Right).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().focus shouldBe focusBefore
+
+  it should "expand and collapse a pinned panel through the panel facade" in new UIFixture:
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
+    stateManager.expandPinnedPanel(PanelPosition.Right).unsafeRunSync()
+
+    val expanded = stateManager.getCurrentState.unsafeRunSync()
+    expanded.expandedPanelSurface.map(_.presentation) shouldBe Some(
+      SurfacePresentation.Expanded(PanelPosition.Right, 30)
+    )
+    expanded.pinnedSurfaces shouldBe empty
+
+    stateManager.collapseExpandedPanel().unsafeRunSync()
+
+    val collapsed = stateManager.getCurrentState.unsafeRunSync()
+    collapsed.expandedPanelSurface shouldBe None
+    collapsed.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Right, 30))
+
+  it should "expand and collapse a pinned panel through commands" in new UIFixture:
+    stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 10).unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "expand-bottom-panel",
+          "Expand bottom panel",
+          CommandIntent.ExpandPanel(PanelPosition.Bottom),
+          CommandCategory.View
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().expandedPanelSurface.map(_.presentation) shouldBe Some(
+      SurfacePresentation.Expanded(PanelPosition.Bottom, 10)
+    )
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "collapse-expanded-panel",
+          "Collapse expanded panel",
+          CommandIntent.CollapseExpandedPanel,
+          CommandCategory.View
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.map(_.presentation) shouldBe List(
+      SurfacePresentation.Pinned(PanelPosition.Bottom, 10)
+    )
 
   // ── Backlog ───────────────────────────────────────────────────────────────
 

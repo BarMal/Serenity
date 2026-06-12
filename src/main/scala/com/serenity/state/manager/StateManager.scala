@@ -67,6 +67,8 @@ trait StateManager:
   // Panel operations
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
   def unpinPanel(position: PanelPosition): IO[Unit]
+  def expandPinnedPanel(position: PanelPosition): IO[Unit]
+  def collapseExpandedPanel(): IO[Unit]
 
   // Modal operations
   def showModal(modal: Modal): IO[Unit]

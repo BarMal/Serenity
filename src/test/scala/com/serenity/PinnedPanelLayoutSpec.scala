@@ -58,4 +58,22 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     layout.editorPanelRect.width should be < noPanels.editorPanelRect.width
     layout.editorPanelRect.bottom shouldBe 33
   }
+
+  it should "place an expanded panel in the central editor workspace and keep side panels out of the layout" in {
+    val expandedPanel = UiSurface(
+      SurfaceId("expanded-outline"),
+      SurfaceContent.Outline(Nil),
+      SurfacePresentation.Expanded(PanelPosition.Right, 24)
+    )
+    val state = baseState.copy(
+      uiSurfaces = List(expandedPanel),
+      focus = Focus.Surface(expandedPanel.id)
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(120, 40))
+
+    layout.pinnedPanelRects shouldBe empty
+    layout.expandedPanelRect shouldBe Some(layout.editorPanelRect)
+    layout.editorPanelRect shouldBe LayoutEngine.calculateLayout(baseState, ViewportSize(120, 40)).editorPanelRect
+  }
 end PinnedPanelLayoutSpec

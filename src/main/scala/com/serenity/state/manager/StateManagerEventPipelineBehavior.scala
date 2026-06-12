@@ -190,6 +190,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
             surface.presentation match
               case SurfacePresentation.Pinned(position, _) =>
                 new PinnedPanelComponent(position)
+              case SurfacePresentation.Expanded(position, _) =>
+                new PinnedPanelComponent(position)
               case SurfacePresentation.Floating(_, _) =>
                 surface.content match
                   case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>

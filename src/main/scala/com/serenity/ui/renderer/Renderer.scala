@@ -866,6 +866,28 @@ object Renderer:
                 state.config
               )
         }
+      case surface @ UiSurface(_, content, SurfacePresentation.Expanded(_, _), _) =>
+        context.layout.expandedPanelRect.foreach { rect =>
+          val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
+          if blurRadius > 0f then
+            context.surface.blurRegion(
+              rect.x,
+              rect.y,
+              rect.width,
+              rect.height,
+              blurRadius
+            )
+          content match
+            case SurfaceContent.MarkdownPreview(bufferId, title) =>
+              renderMarkdownPreviewPanel(bufferId, title, rect, state, context)
+            case _ =>
+              PinnedPanelRenderer.render(
+                context.surface,
+                PinnedPanelViewModel.resolve(surface, rect),
+                state.theme,
+                state.config
+              )
+        }
       case _ => ()
     }
 

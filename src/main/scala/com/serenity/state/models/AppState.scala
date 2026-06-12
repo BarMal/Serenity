@@ -129,6 +129,13 @@ case class AppState(
         case _                                => false
     }
 
+  def expandedPanelSurface: Option[UiSurface] =
+    uiSurfaces.find {
+      _.presentation match
+        case SurfacePresentation.Expanded(_, _) => true
+        case _                                  => false
+    }
+
   def surfaceById(surfaceId: SurfaceId): Option[UiSurface] =
     uiSurfaces.find(_.id == surfaceId)
 

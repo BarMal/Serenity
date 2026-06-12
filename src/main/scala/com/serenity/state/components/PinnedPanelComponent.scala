@@ -15,8 +15,9 @@ class PinnedPanelComponent(
   protected def processTypedEvent(event: PanelInputEvent, currentState: AppState): ComponentResult =
     currentState.uiSurfaces.find {
       _.presentation match
-        case SurfacePresentation.Pinned(pos, _) if pos == position => true
-        case _                                                     => false
+        case SurfacePresentation.Pinned(pos, _) if pos == position   => true
+        case SurfacePresentation.Expanded(pos, _) if pos == position => true
+        case _                                                       => false
     } match
       case Some(_) =>
         processPanelEvent(event, currentState)
@@ -144,8 +145,9 @@ class PinnedPanelComponent(
   private def activeDirectorySurface(currentState: AppState) =
     currentState.uiSurfaces.find {
       _.presentation match
-        case SurfacePresentation.Pinned(pos, _) if pos == position => true
-        case _                                                     => false
+        case SurfacePresentation.Pinned(pos, _) if pos == position   => true
+        case SurfacePresentation.Expanded(pos, _) if pos == position => true
+        case _                                                       => false
     }
 
   private def replaceSurface(currentState: AppState, updated: com.serenity.state.models.UiSurface): AppState =

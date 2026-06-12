@@ -209,6 +209,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         switchToPinnedPanel(position)
       case CommandIntent.UnpinPanel(position) =>
         unpinPanel(position)
+      case CommandIntent.ExpandPanel(position) =>
+        expandPinnedPanel(position)
+      case CommandIntent.CollapseExpandedPanel =>
+        collapseExpandedPanel()
       case CommandIntent.FormatCurrentFile =>
         logger.debug("[CMD] Format command requested")
       case CommandIntent.SetAnimationMode(mode) =>
