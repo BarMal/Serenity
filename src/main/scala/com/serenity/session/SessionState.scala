@@ -439,6 +439,28 @@ given Decoder[BackgroundStyle] = Decoder.decodeString.emap {
   case other         => Left(s"Unknown BackgroundStyle: $other")
 }
 
+given Encoder[MaterialPreset] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[MaterialPreset] = Decoder.decodeString.emap {
+  case "Solid"   => Right(MaterialPreset.Solid)
+  case "Clear"   => Right(MaterialPreset.Clear)
+  case "Frosted" => Right(MaterialPreset.Frosted)
+  case "Crystal" => Right(MaterialPreset.Crystal)
+  case "Custom"  => Right(MaterialPreset.Custom)
+  case other     => Left(s"Unknown MaterialPreset: $other")
+}
+
+given Encoder[MotionPreset] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[MotionPreset] = Decoder.decodeString.emap {
+  case "Reduced"    => Right(MotionPreset.Reduced)
+  case "Subtle"     => Right(MotionPreset.Subtle)
+  case "Smooth"     => Right(MotionPreset.Smooth)
+  case "Expressive" => Right(MotionPreset.Expressive)
+  case "Custom"     => Right(MotionPreset.Custom)
+  case other        => Left(s"Unknown MotionPreset: $other")
+}
+
 given Encoder[Color] = Encoder.encodeString.contramap(formatColor)
 
 given Decoder[Color] = Decoder.decodeString.emap(value => parseColor(value).toRight(s"Invalid colour value: $value"))
@@ -466,6 +488,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     showGutter                <- cursor.get[Boolean]("showGutter")
     blurRadius                <- cursor.getOrElse[Float]("blurRadius")(0.0f)
     backgroundStyle           <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
+    materialPreset            <- cursor.getOrElse[MaterialPreset]("materialPreset")(MaterialPreset.Frosted)
+    motionPreset              <- cursor.getOrElse[MotionPreset]("motionPreset")(MotionPreset.Smooth)
     cursorMode                <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
     cursorColors              <- cursor.getOrElse[CursorColorConfig]("cursorColors")(CursorColorConfig())
     cursorInfoBarMode         <- cursor.getOrElse[CursorInfoBarMode]("cursorInfoBarMode")(CursorInfoBarMode.Off)
@@ -486,6 +510,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     showGutter = showGutter,
     blurRadius = blurRadius,
     backgroundStyle = backgroundStyle,
+    materialPreset = materialPreset,
+    motionPreset = motionPreset,
     cursorMode = cursorMode,
     cursorColors = cursorColors,
     cursorInfoBarMode = cursorInfoBarMode,

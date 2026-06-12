@@ -88,6 +88,8 @@ case class CommandRunner(
     val cursorInfoBarItem    = CommandRunner.cursorInfoBarOptionItem(optionSelections)
     val backgroundStyleItem  = CommandRunner.backgroundStyleOptionItem(optionSelections)
     val interfaceDensityItem = CommandRunner.interfaceDensityOptionItem(optionSelections)
+    val materialPresetItem   = CommandRunner.materialPresetOptionItem(optionSelections)
+    val motionPresetItem     = CommandRunner.motionPresetOptionItem(optionSelections)
     val markdownViewItem     = CommandRunner.markdownViewOptionItem(optionSelections)
     val keymapItems          = inputItems.filter(_.id.startsWith("keymap-"))
     List(
@@ -109,6 +111,13 @@ case class CommandRunner(
           ),
         category = CommandCategory.Settings,
         hint = Some("Cursor, info bar, background, density, blur")
+      ),
+      CommandSurfaceItem.GroupItem(
+        id = "settings-material-motion",
+        label = "Material & Motion",
+        children = List(materialPresetItem, motionPresetItem),
+        category = CommandCategory.Settings,
+        hint = Some("Named UI material and animation presets")
       ),
       CommandSurfaceItem.GroupItem(
         id = "settings-ui-presets",
@@ -447,6 +456,8 @@ object CommandRunner:
   private[command] def defaultOptionSelections(config: AppConfig): Map[String, Int] =
     Map(
       "animation-mode"    -> animationModeIndex(config),
+      "material-preset"   -> materialPresetIndex(config.materialPreset),
+      "motion-preset"     -> motionPresetIndex(config.motionPreset),
       "cursor-mode"       -> cursorModeIndex(config.cursorMode),
       "cursor-info-bar"   -> cursorInfoBarModeIndex(config.cursorInfoBarMode),
       "background-style"  -> backgroundStyleIndex(config.backgroundStyle),
@@ -518,6 +529,40 @@ object CommandRunner:
       selectedIndex = optionSelections.getOrElse("interface-density", 1),
       category = CommandCategory.Settings,
       hint = Some("Compact, comfortable, or spacious")
+    )
+
+  private[command] def materialPresetOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "material-preset",
+      label = "Material Preset",
+      options = List(
+        CommandOption("Solid", CommandIntent.SetMaterialPreset(MaterialPreset.Solid)),
+        CommandOption("Clear", CommandIntent.SetMaterialPreset(MaterialPreset.Clear)),
+        CommandOption("Frosted", CommandIntent.SetMaterialPreset(MaterialPreset.Frosted)),
+        CommandOption("Crystal", CommandIntent.SetMaterialPreset(MaterialPreset.Crystal)),
+        CommandOption("Custom", CommandIntent.SetMaterialPreset(MaterialPreset.Custom))
+      ),
+      selectedIndex = optionSelections.getOrElse("material-preset", 2),
+      category = CommandCategory.Settings,
+      hint = Some("Material baseline for panels and overlays")
+    )
+
+  private[command] def motionPresetOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "motion-preset",
+      label = "Motion Preset",
+      options = List(
+        CommandOption("Reduced", CommandIntent.SetMotionPreset(MotionPreset.Reduced)),
+        CommandOption("Subtle", CommandIntent.SetMotionPreset(MotionPreset.Subtle)),
+        CommandOption("Smooth", CommandIntent.SetMotionPreset(MotionPreset.Smooth)),
+        CommandOption("Expressive", CommandIntent.SetMotionPreset(MotionPreset.Expressive)),
+        CommandOption("Custom", CommandIntent.SetMotionPreset(MotionPreset.Custom))
+      ),
+      selectedIndex = optionSelections.getOrElse("motion-preset", 2),
+      category = CommandCategory.Settings,
+      hint = Some("Animation baseline for UI motion")
     )
 
   private[command] def markdownViewOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -896,6 +941,22 @@ object CommandRunner:
       case InterfaceDensity.Compact     => 0
       case InterfaceDensity.Comfortable => 1
       case InterfaceDensity.Spacious    => 2
+
+  private def materialPresetIndex(preset: MaterialPreset): Int =
+    preset match
+      case MaterialPreset.Solid   => 0
+      case MaterialPreset.Clear   => 1
+      case MaterialPreset.Frosted => 2
+      case MaterialPreset.Crystal => 3
+      case MaterialPreset.Custom  => 4
+
+  private def motionPresetIndex(preset: MotionPreset): Int =
+    preset match
+      case MotionPreset.Reduced    => 0
+      case MotionPreset.Subtle     => 1
+      case MotionPreset.Smooth     => 2
+      case MotionPreset.Expressive => 3
+      case MotionPreset.Custom     => 4
 
   private def markdownViewModeIndex(mode: MarkdownViewMode): Int =
     mode match

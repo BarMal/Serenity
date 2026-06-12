@@ -203,6 +203,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         ),
         blurRadius = 0.42f,
         backgroundStyle = BackgroundStyle.GlassLike,
+        materialPreset = MaterialPreset.Crystal,
+        motionPreset = MotionPreset.Reduced,
         windowChromeMode = WindowChromeMode.Custom,
         interfaceDensity = InterfaceDensity.Spacious,
         cursorInfoBarMode = CursorInfoBarMode.Detailed,
@@ -226,6 +228,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     decoded.config.blurRadius shouldBe 0.42f
     decoded.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    decoded.config.materialPreset shouldBe MaterialPreset.Crystal
+    decoded.config.motionPreset shouldBe MotionPreset.Reduced
     decoded.config.windowChromeMode shouldBe WindowChromeMode.Custom
     decoded.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     decoded.config.cursorInfoBarMode shouldBe CursorInfoBarMode.Detailed
@@ -264,6 +268,25 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.backgroundStyle shouldBe BackgroundStyle.Frosted
+  }
+
+  it should "default material and motion presets when loading older JSON without the fields" in {
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val jsonWithoutPresets =
+      originalJson.mapObject(
+        _.add(
+          "config",
+          _root_.io.circe.Json.fromJsonObject(configObject.remove("materialPreset").remove("motionPreset"))
+        )
+      )
+
+    val decoded = jsonWithoutPresets.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.materialPreset shouldBe MaterialPreset.Frosted
+    decoded.toOption.get.config.motionPreset shouldBe MotionPreset.Smooth
   }
 
   it should "default windowChromeMode to Native when loading older JSON without the field" in {

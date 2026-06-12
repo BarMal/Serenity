@@ -218,6 +218,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .map(_.id) shouldBe List(
       "settings-animation",
       "settings-appearance",
+      "settings-material-motion",
       "settings-ui-presets",
       "settings-text-area",
       "settings-code-font",
@@ -231,29 +232,31 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     groupItems.head.children.map(_.id) should contain allOf ("animation-mode", "animation-duration", "animation-steps")
     groupItems(1).label shouldBe "Appearance"
     groupItems(1).children.map(_.id) should contain allOf ("cursor-mode", "background-style", "blur-radius")
-    groupItems(2).label shouldBe "UI Presets"
-    groupItems(2).children.map(_.id) should contain allOf ("ui-preset-save", "ui-preset-apply")
-    groupItems(3).label shouldBe "Text Area"
-    groupItems(3).children.map(_.id) should contain allOf ("text-area-left", "text-area-right")
-    groupItems(4).label shouldBe "Code Font"
-    groupItems(4).children.map(_.id) should contain allOf ("code-font", "code-ligatures", "code-font-size")
-    groupItems(5).label shouldBe "Prose Font"
-    groupItems(5).children.map(_.id) should contain allOf ("text-font", "text-ligatures", "text-font-size")
-    groupItems(6).label shouldBe "UI Font"
-    groupItems(6).children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
-    groupItems(4).children
+    groupItems(2).label shouldBe "Material & Motion"
+    groupItems(2).children.map(_.id) should contain allOf ("material-preset", "motion-preset")
+    groupItems(3).label shouldBe "UI Presets"
+    groupItems(3).children.map(_.id) should contain allOf ("ui-preset-save", "ui-preset-apply")
+    groupItems(4).label shouldBe "Text Area"
+    groupItems(4).children.map(_.id) should contain allOf ("text-area-left", "text-area-right")
+    groupItems(5).label shouldBe "Code Font"
+    groupItems(5).children.map(_.id) should contain allOf ("code-font", "code-ligatures", "code-font-size")
+    groupItems(6).label shouldBe "Prose Font"
+    groupItems(6).children.map(_.id) should contain allOf ("text-font", "text-ligatures", "text-font-size")
+    groupItems(7).label shouldBe "UI Font"
+    groupItems(7).children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
+    groupItems(5).children
       .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "code-font" => group }
       .map(_.children.map(_.id)) should not be empty
-    groupItems(9).label shouldBe "Keymap"
-    groupItems(9).children.map(_.id) should contain allOf (
+    groupItems(10).label shouldBe "Keymap"
+    groupItems(10).children.map(_.id) should contain allOf (
       "keymap-global-command_palette",
       "keymap-command-runner-submit",
       "keymap-modal-dismiss"
     )
-    groupItems(7).label shouldBe "Markdown"
-    groupItems(7).children.map(_.id) should contain("markdown-view")
-    groupItems(8).label shouldBe "Language"
-    groupItems(8).children.map(_.id) should contain("lang-plain-text")
+    groupItems(8).label shouldBe "Markdown"
+    groupItems(8).children.map(_.id) should contain("markdown-view")
+    groupItems(9).label shouldBe "Language"
+    groupItems(9).children.map(_.id) should contain("lang-plain-text")
   }
 
   it should "surface UI preset save and apply inputs in settings" in {

@@ -295,6 +295,26 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("text_area.right.percent = 20.0")
   }
 
+  it should "load and write material and motion presets" in {
+    val configFile = Files.createTempFile("serenity-material-motion-config", ".conf")
+    Files.writeString(
+      configFile,
+      """ui.material = crystal
+        |ui.motion = reduced
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.materialPreset shouldBe MaterialPreset.Crystal
+    config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    config.blurRadius shouldBe 0.65f
+    config.motionPreset shouldBe MotionPreset.Reduced
+    config.characterAnimation shouldBe None
+    ConfigManager.configToString(config) should include("ui.material = crystal")
+    ConfigManager.configToString(config) should include("ui.motion = reduced")
+  }
+
   it should "close loaded config files and save using UTF-8" in {
     val configFile = Files.createTempFile("serenity-config-utf8", ".conf")
     Files.writeString(

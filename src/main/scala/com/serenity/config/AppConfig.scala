@@ -12,6 +12,43 @@ enum BackgroundStyle:
   case Frosted
   case GlassLike
 
+enum MaterialPreset(val configKey: String):
+  case Solid   extends MaterialPreset("solid")
+  case Clear   extends MaterialPreset("clear")
+  case Frosted extends MaterialPreset("frosted")
+  case Crystal extends MaterialPreset("crystal")
+  case Custom  extends MaterialPreset("custom")
+
+  def backgroundStyle: BackgroundStyle =
+    this match
+      case Solid   => BackgroundStyle.Solid
+      case Clear   => BackgroundStyle.Transparent
+      case Frosted => BackgroundStyle.Frosted
+      case Crystal => BackgroundStyle.GlassLike
+      case Custom  => BackgroundStyle.Frosted
+
+  def blurRadius: Float =
+    this match
+      case Solid | Clear => 0.0f
+      case Frosted       => 0.3f
+      case Crystal       => 0.65f
+      case Custom        => 0.3f
+
+enum MotionPreset(val configKey: String):
+  case Reduced    extends MotionPreset("reduced")
+  case Subtle     extends MotionPreset("subtle")
+  case Smooth     extends MotionPreset("smooth")
+  case Expressive extends MotionPreset("expressive")
+  case Custom     extends MotionPreset("custom")
+
+  def animationConfig: Option[AnimationConfig] =
+    this match
+      case Reduced    => AnimationConfig.none
+      case Subtle     => AnimationConfig.subtle
+      case Smooth     => AnimationConfig.smooth
+      case Expressive => AnimationConfig.quick
+      case Custom     => AnimationConfig.smooth
+
 enum CursorMode:
   case Blink
   case Breathe
@@ -150,6 +187,8 @@ case class AppConfig(
     showGutter: Boolean = true,
     blurRadius: Float = 0.0f,
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
+    materialPreset: MaterialPreset = MaterialPreset.Frosted,
+    motionPreset: MotionPreset = MotionPreset.Reduced,
     cursorMode: CursorMode = CursorMode.Blink,
     cursorColors: CursorColorConfig = CursorColorConfig(),
     cursorInfoBarMode: CursorInfoBarMode = CursorInfoBarMode.Off,
@@ -162,11 +201,11 @@ case class AppConfig(
 ):
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
-    copy(characterAnimation = Some(config))
+    copy(characterAnimation = Some(config), motionPreset = MotionPreset.Custom)
 
   /** Create a new config with character animation disabled */
   def withoutCharacterAnimation: AppConfig =
-    copy(characterAnimation = None)
+    copy(characterAnimation = None, motionPreset = MotionPreset.Reduced)
 
   /** Create a new config with syntax highlighting toggled */
   def withSyntaxHighlighting(enabled: Boolean): AppConfig =
@@ -231,10 +270,31 @@ case class AppConfig(
     copy(showGutter = enabled)
 
   def withBlurRadius(r: Float): AppConfig =
-    copy(blurRadius = r.max(0.0f).min(1.0f))
+    copy(blurRadius = r.max(0.0f).min(1.0f), materialPreset = MaterialPreset.Custom)
 
   def withBackgroundStyle(style: BackgroundStyle): AppConfig =
-    copy(backgroundStyle = style)
+    copy(backgroundStyle = style, materialPreset = MaterialPreset.Custom)
+
+  def withMaterialPreset(preset: MaterialPreset): AppConfig =
+    preset match
+      case MaterialPreset.Custom =>
+        copy(materialPreset = MaterialPreset.Custom)
+      case _ =>
+        copy(
+          materialPreset = preset,
+          backgroundStyle = preset.backgroundStyle,
+          blurRadius = preset.blurRadius
+        )
+
+  def withMotionPreset(preset: MotionPreset): AppConfig =
+    preset match
+      case MotionPreset.Custom =>
+        copy(motionPreset = MotionPreset.Custom)
+      case _ =>
+        copy(
+          motionPreset = preset,
+          characterAnimation = preset.animationConfig
+        )
 
   def withCursorMode(mode: CursorMode): AppConfig =
     copy(cursorMode = mode)
@@ -276,29 +336,34 @@ object AppConfig:
     characterAnimation = AnimationConfig.smooth,
     syntaxHighlightingEnabled = false,
     blurRadius = 0.3f,
-    backgroundStyle = BackgroundStyle.Frosted
+    backgroundStyle = BackgroundStyle.Frosted,
+    motionPreset = MotionPreset.Smooth
   )
 
   /** Test configuration with visible animations enabled */
   val withTestAnimations: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.quick,
-    syntaxHighlightingEnabled = false
+    syntaxHighlightingEnabled = false,
+    motionPreset = MotionPreset.Expressive
   )
 
   /** Quick fade-in animation configuration */
   val withQuickAnimation: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.quick,
-    syntaxHighlightingEnabled = false
+    syntaxHighlightingEnabled = false,
+    motionPreset = MotionPreset.Expressive
   )
 
   /** Smooth fade-in animation configuration */
   val withSmoothAnimation: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.smooth,
-    syntaxHighlightingEnabled = false
+    syntaxHighlightingEnabled = false,
+    motionPreset = MotionPreset.Smooth
   )
 
   /** Subtle fade-in animation configuration */
   val withSubtleAnimation: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.subtle,
-    syntaxHighlightingEnabled = false
+    syntaxHighlightingEnabled = false,
+    motionPreset = MotionPreset.Subtle
   )
