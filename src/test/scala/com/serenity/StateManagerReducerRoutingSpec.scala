@@ -190,6 +190,16 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     updatedState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
   }
 
+  it should "ignore local events when surface focus points at no surface" in {
+    val stateManager = createStateManager()
+    val missingFocus = Focus.Surface(SurfaceId("missing"))
+
+    stateManager.updateState(_.copy(focus = missingFocus)).unsafeRunSync()
+    stateManager.applyEvent(PeekInputEvent.Dismiss).unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().focus shouldBe missingFocus
+  }
+
   it should "route theme events through the application event path" in {
     val stateManager = createStateManager()
 
