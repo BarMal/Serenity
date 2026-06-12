@@ -55,14 +55,14 @@ class FindResultSetSpec extends AnyFlatSpec with Matchers:
     resultSet.visibleResults(maxResults = 0).shouldBe(Nil)
   }
 
-  it should "preserve overlapping match positions from rope search results" in {
+  it should "preserve non-overlapping match positions from rope search results" in {
     val content = Rope("aaaa")
     val results = content.searchAll("aa").map(offset => FindResult(0, offset))
 
     FindResultSet
-      .normalized("aa", results, requestedIndex = 2)
+      .normalized("aa", results, requestedIndex = 1)
       .shouldBe(
-        FindResultSet.normalized("aa", List(FindResult(0, 0), FindResult(0, 1), FindResult(0, 2)), 2)
+        FindResultSet.normalized("aa", List(FindResult(0, 0), FindResult(0, 2)), 1)
       )
   }
 

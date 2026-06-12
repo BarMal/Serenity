@@ -120,13 +120,12 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
     results should contain theSameElementsAs expected
 
-  it should "find overlapping matches" in new ChunkedRopeSpecScope:
+  it should "find non-overlapping matches" in new ChunkedRopeSpecScope:
     val text = "aaaaaa"
     val rope = Rope(text)
 
     val results = rope.searchAll("aa")
-    // Should find: positions 0, 1, 2, 3, 4
-    results.length should be >= 5
+    results shouldBe List(0, 2, 4)
 
   it should "search across leaf boundaries" in new ChunkedRopeSpecScope:
     // With leafChunkSize = 30, create a pattern that spans boundaries

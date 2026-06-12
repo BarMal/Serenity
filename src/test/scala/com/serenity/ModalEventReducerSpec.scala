@@ -166,19 +166,17 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     second.buffers(bufferId).cursors.head shouldBe CursorPosition(0, "needle and ".length)
   }
 
-  it should "track overlapping find results as distinct navigable matches" in {
+  it should "track non-overlapping find results as distinct navigable matches" in {
     val bufferId     = BufferId(0)
     val initialState = stateWithFindModal("aa", "aaaa")
 
     val first  = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
     val second = ModalEventReducer.reduce(ModalType.Find, Enter, first).state
-    val third  = ModalEventReducer.reduce(ModalType.Find, Enter, second).state
 
-    val expectedResults = List(matchAt(0, 0), matchAt(0, 1), matchAt(0, 2))
+    val expectedResults = List(matchAt(0, 0), matchAt(0, 2))
     activeFindModal(first) shouldBe Some(Modal.Find("aa", expectedResults, 0))
     activeFindModal(second) shouldBe Some(Modal.Find("aa", expectedResults, 1))
-    activeFindModal(third) shouldBe Some(Modal.Find("aa", expectedResults, 2))
-    third.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 2)
+    second.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 2)
   }
 
   it should "advance find results when the explicit find-next event is submitted" in {

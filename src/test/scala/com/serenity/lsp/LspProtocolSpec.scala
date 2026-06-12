@@ -55,6 +55,21 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     result shouldBe List(msg1, msg2)
   }
 
+  it should "decode multi-byte UTF-8 messages split across byte chunks" in {
+    val msg1  = Json.obj("id" -> 1.asJson, "result" -> "héllo".asJson)
+    val msg2  = Json.obj("id" -> 2.asJson, "result" -> "done".asJson)
+    val bytes = LspFramer.encode(msg1) ++ LspFramer.encode(msg2)
+    val result = fs2.Stream
+      .emits(bytes.toSeq)
+      .covary[IO]
+      .through(LspFramer.decode)
+      .compile
+      .toList
+      .unsafeRunSync()
+
+    result shouldBe List(msg1, msg2)
+  }
+
   "LspProtocol" should "identify responses and notifications correctly" in {
     val response     = Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 1.asJson, "result" -> Json.obj())
     val notification = Json.obj("jsonrpc" -> "2.0".asJson, "method" -> "initialized".asJson, "params" -> Json.obj())

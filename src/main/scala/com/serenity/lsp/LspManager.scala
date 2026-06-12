@@ -1,6 +1,7 @@
 package com.serenity.lsp
 
 import cats.effect.{IO, Ref}
+import cats.syntax.all.*
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{LspConnection, LspProtocol}
 import com.serenity.lsp.config.*
@@ -9,12 +10,14 @@ import org.typelevel.log4cats.Logger
 
 object LspManager:
 
+  private case class ManagedConnection(connection: LspConnection, release: IO[Unit])
+
   def run(
     effects: Stream[IO, LspEffect],
     applyEvent: Event => IO[Unit],
     logger: Logger[IO]
   ): IO[Unit] =
-    Ref.of[IO, Map[LanguageId, LspConnection]](Map.empty).flatMap { connectionsRef =>
+    Ref.of[IO, Map[LanguageId, ManagedConnection]](Map.empty).flatMap { connectionsRef =>
       effects
         .evalMap {
           case LspEffect.FileOpened(uri, languageId, text) =>
@@ -31,8 +34,8 @@ object LspManager:
           case LspEffect.FileChanged(uri, languageId, text, version) =>
             connectionsRef.get.flatMap { conns =>
               conns.get(languageId) match
-                case Some(conn) =>
-                  conn
+                case Some(managed) =>
+                  managed.connection
                     .sendNotification("textDocument/didChange", LspProtocol.didChangeParams(uri, version, text))
                     .handleErrorWith(ex => logger.error(ex)(s"[LSP] didChange failed: $uri"))
                 case None =>
@@ -42,8 +45,8 @@ object LspManager:
           case LspEffect.FileClosed(uri, languageId) =>
             connectionsRef.get.flatMap { conns =>
               conns.get(languageId) match
-                case Some(conn) =>
-                  conn
+                case Some(managed) =>
+                  managed.connection
                     .sendNotification("textDocument/didClose", LspProtocol.didCloseParams(uri))
                     .handleErrorWith(ex => logger.error(ex)(s"[LSP] didClose failed: $uri"))
                 case None =>
@@ -52,10 +55,11 @@ object LspManager:
         }
         .compile
         .drain
+        .guarantee(releaseConnections(connectionsRef, logger))
     }
 
   private def ensureConnection(
-    connectionsRef: Ref[IO, Map[LanguageId, LspConnection]],
+    connectionsRef: Ref[IO, Map[LanguageId, ManagedConnection]],
     languageId: LanguageId,
     fileUri: String,
     applyEvent: Event => IO[Unit],
@@ -63,12 +67,12 @@ object LspManager:
   ): IO[Option[LspConnection]] =
     connectionsRef.get.flatMap { conns =>
       conns.get(languageId) match
-        case Some(conn) => IO.pure(Some(conn))
-        case None       => spawnConnection(connectionsRef, languageId, fileUri, applyEvent, logger)
+        case Some(managed) => IO.pure(Some(managed.connection))
+        case None          => spawnConnection(connectionsRef, languageId, fileUri, applyEvent, logger)
     }
 
   private def spawnConnection(
-    connectionsRef: Ref[IO, Map[LanguageId, LspConnection]],
+    connectionsRef: Ref[IO, Map[LanguageId, ManagedConnection]],
     languageId: LanguageId,
     fileUri: String,
     applyEvent: Event => IO[Unit],
@@ -86,8 +90,13 @@ object LspManager:
               case (conn, release) =>
                 val onDiagnostics = (uri: String, diags: List[com.serenity.lsp.model.Diagnostic]) =>
                   applyEvent(LspEvent.LspDiagnosticsReceived(uri, diags))
-                conn.processIncoming(onDiagnostics).start >>
-                  connectionsRef.update(_ + (languageId -> conn)) >>
+                conn.processIncoming(onDiagnostics).start.flatMap { diagnosticsFiber =>
+                  val managed = ManagedConnection(
+                    connection = conn,
+                    release = release >> diagnosticsFiber.cancel
+                  )
+                  connectionsRef.update(_ + (languageId -> managed))
+                } >>
                   IO.pure(Some(conn))
             }
             .handleErrorWith(ex => logger.error(ex)(s"[LSP] Failed to connect to ${config.binary.command}").as(None))
@@ -101,3 +110,11 @@ object LspManager:
   private def parentUri(uri: String): String =
     val lastSlash = uri.lastIndexOf('/')
     if lastSlash > 0 then uri.substring(0, lastSlash) else uri
+
+  private def releaseConnections(
+    connectionsRef: Ref[IO, Map[LanguageId, ManagedConnection]],
+    logger: Logger[IO]
+  ): IO[Unit] =
+    connectionsRef
+      .modify(connections => (Map.empty, connections.values.toList))
+      .flatMap(_.traverse_(managed => managed.release.handleErrorWith(ex => logger.error(ex)("[LSP] release failed"))))

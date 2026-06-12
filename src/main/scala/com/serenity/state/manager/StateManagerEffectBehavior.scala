@@ -393,35 +393,39 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     entries.map(entry => DirEntry(entry.path, entry.name, entry.isDirectory))
 
   protected def directLoadFileEffect(path: Path): IO[Unit] =
-    if !FileUtils.isReadableFile(path) then logger.debug(s"[FILE] DirectLoad: file not readable: $path")
-    else
-      fileManager
-        .loadFile(path)
-        .flatMap { loadedBuffer =>
-          stateRef.modify { state =>
-            val newBufferId    = state.nextBufferId
-            val bufferToInsert = loadedBuffer.copy(id = newBufferId)
-            val stateWithBuffer = state.copy(
-              buffers = state.buffers + (newBufferId -> bufferToInsert),
-              nextBufferId = BufferId(newBufferId.value + 1)
-            )
-            val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
-            val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
-            val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
-            (focused, loadedBuffer)
+    IO.blocking(FileUtils.isReadableFile(path)).flatMap {
+      case false => logger.debug(s"[FILE] DirectLoad: file not readable: $path")
+      case true =>
+        stateRef
+          .modify { state =>
+            val bufferId = state.nextBufferId
+            (state.copy(nextBufferId = BufferId(bufferId.value + 1)), bufferId)
           }
-        }
-        .flatTap { loadedBuffer =>
-          loadedBuffer.language match
-            case Some(languageId) =>
-              val uri  = path.toUri.toString
-              val text = loadedBuffer.content.collect()
-              lspQueue.offer(LspEffect.FileOpened(uri, languageId, text))
-            case None => IO.unit
-        }
-        .flatTap(_ => stateRef.update(s => s.copy(recentFiles = trackRecentFile(s.recentFiles, path))))
-        .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load file at $path"))
-        .void
+          .flatMap(bufferId => fileManager.loadFile(path, bufferId))
+          .flatMap { loadedBuffer =>
+            stateRef.modify { state =>
+              val newBufferId = loadedBuffer.id
+              val stateWithBuffer = state.copy(
+                buffers = state.buffers + (newBufferId -> loadedBuffer)
+              )
+              val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
+              val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
+              val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
+              (focused, loadedBuffer)
+            }
+          }
+          .flatTap { loadedBuffer =>
+            loadedBuffer.language match
+              case Some(languageId) =>
+                val uri  = path.toUri.toString
+                val text = loadedBuffer.content.collect()
+                lspQueue.offer(LspEffect.FileOpened(uri, languageId, text))
+              case None => IO.unit
+          }
+          .flatTap(_ => stateRef.update(s => s.copy(recentFiles = trackRecentFile(s.recentFiles, path))))
+          .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load file at $path"))
+          .void
+    }
 
   protected def saveBufferEffect(bufferId: BufferId): IO[Unit] =
     stateRef.get.flatMap { state =>
@@ -564,6 +568,3 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       ),
       state
     )
-
-  protected def trackRecentFile(current: List[Path], path: Path): List[Path] =
-    (path :: current.filterNot(_ == path)).take(20)

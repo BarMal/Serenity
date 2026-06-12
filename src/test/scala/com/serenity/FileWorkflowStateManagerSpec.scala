@@ -151,6 +151,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       updatedState.focusedBufferId shouldBe Some(openedBufferId)
       updatedState.buffers(openedBufferId).filePath shouldBe Some(targetFile)
       updatedState.buffers(openedBufferId).content.collect() shouldBe "val answer = 42"
+      updatedState.recentFiles shouldBe List(targetFile)
     finally
       Files.deleteIfExists(targetFile)
       Files.deleteIfExists(tempRoot)

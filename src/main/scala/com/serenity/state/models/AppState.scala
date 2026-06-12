@@ -138,10 +138,16 @@ case class AppState(
       case _                        => None
 
   def commandRunnerSurface: Option[UiSurface] =
-    uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.CommandPalette])
+    findSurface {
+      case SurfaceContent.CommandPalette(_) => true
+      case _                                => false
+    }
 
   def commandRunnerSubmenuSurface: Option[UiSurface] =
-    uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.CommandPaletteSubmenu])
+    findSurface {
+      case SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
+      case _                                             => false
+    }
 
   def commandRunnerDomainSurfaceIds: Set[SurfaceId] =
     Set.from(List(commandRunnerSurface.map(_.id), commandRunnerSubmenuSurface.map(_.id)).flatten)
@@ -166,16 +172,28 @@ case class AppState(
       .orElse(commandRunnerSurface.map(surface => Focus.Surface(surface.id)))
 
   def themePickerSurface: Option[UiSurface] =
-    uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.ThemePicker])
+    findSurface {
+      case SurfaceContent.ThemePicker(_) => true
+      case _                             => false
+    }
 
   def fileSearchSurface: Option[UiSurface] =
-    uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.FileSearch])
+    findSurface {
+      case SurfaceContent.FileSearch(_) => true
+      case _                            => false
+    }
 
   def startPageSurface: Option[UiSurface] =
-    uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.StartPage])
+    findSurface {
+      case SurfaceContent.StartPage(_) => true
+      case _                           => false
+    }
 
   def modalSurface: Option[UiSurface] =
-    uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.ModalWorkflow])
+    findSurface {
+      case SurfaceContent.ModalWorkflow(_) => true
+      case _                               => false
+    }
 
   def peekSurface: Option[UiSurface] =
     uiSurfaces.find {
@@ -183,6 +201,9 @@ case class AppState(
         case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) => true
         case _                                                             => false
     }
+
+  private def findSurface(matches: SurfaceContent => Boolean): Option[UiSurface] =
+    uiSurfaces.find(surface => matches(surface.content))
 
   def allocateSurfaceId: (AppState, SurfaceId) =
     val surfaceId = SurfaceId(s"surface-$nextSurfaceId")

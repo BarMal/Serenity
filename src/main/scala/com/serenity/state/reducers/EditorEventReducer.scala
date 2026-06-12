@@ -144,7 +144,9 @@ object EditorEventReducer:
             )
 
           case ReverseTabKey =>
-            reduceTextEventForBuffer(DeleteBackward, buffer, paneId, currentState)
+            ReducerResult.noEffects(
+              updateBufferInState(currentState, applyLineUnindent(buffer, currentState, List(cursor.line)))
+            )
 
           case DeleteBackward =>
             buffer.primarySelection match
@@ -553,7 +555,7 @@ object EditorEventReducer:
         )
       case TabKey =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiSelectionReplacement(buffer, currentState, TabInsertion))
+          updateBufferInState(currentState, applyLineIndent(buffer, currentState, selectionLines(buffer)))
         )
       case NewLine | Enter =>
         ReducerResult.noEffects(
@@ -567,7 +569,11 @@ object EditorEventReducer:
             )
           case None =>
             ReducerResult.noEffects(currentState)
-      case DeleteBackward | DeleteForward | DeleteWordBackward | DeleteWordForward | ReverseTabKey =>
+      case ReverseTabKey =>
+        ReducerResult.noEffects(
+          updateBufferInState(currentState, applyLineUnindent(buffer, currentState, selectionLines(buffer)))
+        )
+      case DeleteBackward | DeleteForward | DeleteWordBackward | DeleteWordForward =>
         ReducerResult.noEffects(
           updateBufferInState(currentState, deleteSelectedRanges(buffer, currentState))
         )
@@ -630,6 +636,10 @@ object EditorEventReducer:
       case DeleteWordForward =>
         ReducerResult.noEffects(
           updateBufferInState(currentState, applyMultiCursorWordDeletion(buffer, currentState, backward = false))
+        )
+      case ReverseTabKey =>
+        ReducerResult.noEffects(
+          updateBufferInState(currentState, applyLineUnindent(buffer, currentState, distinctCursorLines(buffer)))
         )
       case MoveLeft =>
         ReducerResult.noEffects(
@@ -830,6 +840,85 @@ object EditorEventReducer:
           Option.when(entry.offset < end)(MultiCursorEdit(index, entry.offset, end, ""))
     }
     applyMergedDeletionEdits(buffer, currentState, entries.map(_.offset), edits)
+
+  private def applyLineIndent(
+    buffer: Buffer,
+    currentState: AppState,
+    targetLines: List[Int]
+  )(using balance: com.serenity.rope.Balance): Buffer =
+    val lines     = buffer.content.collect().split("\n", -1).toList
+    val targetSet = targetLines.filter(line => line >= 0 && line < lines.length).toSet
+
+    if targetSet.isEmpty then buffer
+    else
+      val updatedText = lines.zipWithIndex
+        .map {
+          case (lineText, lineIndex) =>
+            if targetSet.contains(lineIndex) then TabInsertion + lineText else lineText
+        }
+        .mkString("\n")
+      val updatedContent = Rope(updatedText)
+      val finalCursors = buffer.cursors.map { cursor =>
+        if targetSet.contains(cursor.line) then cursor.copy(column = cursor.column + TabInsertion.length)
+        else cursor
+      }.distinct
+      val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
+      val baseBuffer = buffer.copy(
+        content = updatedContent,
+        isDirty = true,
+        isNewEmpty = false,
+        cursors = finalCursors,
+        selection = None,
+        selections = Nil,
+        preferredColumn = Some(primaryCursor.column),
+        preferredXPx = None,
+        multiCursorVerticalStates = Nil
+      )
+      baseBuffer.copy(viewport = adjustViewportForCursor(baseBuffer, currentState, primaryCursor))
+
+  private def applyLineUnindent(
+    buffer: Buffer,
+    currentState: AppState,
+    targetLines: List[Int]
+  )(using balance: com.serenity.rope.Balance): Buffer =
+    val lines     = buffer.content.collect().split("\n", -1).toList
+    val targetSet = targetLines.filter(line => line >= 0 && line < lines.length).toSet
+    val updatedLines = lines.zipWithIndex.map {
+      case (lineText, lineIndex) =>
+        if targetSet.contains(lineIndex) then
+          val (updatedLine, removed) = unindentLine(lineText)
+          (updatedLine, lineIndex -> removed)
+        else (lineText, lineIndex -> 0)
+    }
+    val updatedText = updatedLines.map(_._1).mkString("\n")
+    val removals    = updatedLines.map(_._2).toMap
+
+    if removals.values.forall(_ == 0) then buffer
+    else
+      val updatedContent = Rope(updatedText)
+      val finalCursors = buffer.cursors
+        .map(cursor => cursor.copy(column = math.max(0, cursor.column - removals.getOrElse(cursor.line, 0))))
+        .distinct
+      val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
+      val baseBuffer = buffer.copy(
+        content = updatedContent,
+        isDirty = true,
+        isNewEmpty = false,
+        cursors = finalCursors,
+        selection = None,
+        selections = Nil,
+        preferredColumn = Some(primaryCursor.column),
+        preferredXPx = None,
+        multiCursorVerticalStates = Nil
+      )
+      baseBuffer.copy(viewport = adjustViewportForCursor(baseBuffer, currentState, primaryCursor))
+
+  private def unindentLine(lineText: String): (String, Int) =
+    if lineText.startsWith("\t") then (lineText.drop(1), 1)
+    else
+      val spacesToRemove = lineText.take(TabInsertion.length).takeWhile(_ == ' ').length
+      if spacesToRemove == 0 then (lineText, 0)
+      else (lineText.drop(spacesToRemove), spacesToRemove)
 
   private def applyMultiCursorLineCut(
     buffer: Buffer,
@@ -1099,6 +1188,12 @@ object EditorEventReducer:
       .sortBy(cursor => (cursor.line, cursor.column))
       .map(_.line)
       .distinct
+
+  private def selectionLines(buffer: Buffer): List[Int] =
+    activeSelections(buffer)
+      .flatMap(selection => selection.start.line to selection.end.line)
+      .distinct
+      .sorted
 
   private def updateBufferInState(state: AppState, buffer: Buffer): AppState =
     state.copy(buffers = state.buffers + (buffer.id -> buffer))

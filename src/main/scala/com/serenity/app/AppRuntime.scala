@@ -109,7 +109,8 @@ object AppRuntime:
               }
             }
 
-        def renderLoop: Stream[IO, Unit] = idlePhase ++ fastPhase ++ renderLoop
+        val renderLoop: Stream[IO, Unit] =
+          Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
 
         val quitSignal = stateManager.awaitQuit.attempt
         val shutdownInputHandler =

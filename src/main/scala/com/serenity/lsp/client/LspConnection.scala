@@ -4,6 +4,7 @@ import java.io.{BufferedInputStream, BufferedOutputStream}
 
 import cats.effect.*
 import cats.effect.std.Queue
+import cats.syntax.all.*
 import com.serenity.lsp.config.{LanguageId, LspServerConfig}
 import com.serenity.lsp.model.Diagnostic
 import fs2.Stream
@@ -15,7 +16,7 @@ class LspConnection private (
     val languageId: LanguageId,
     sendQueue: Queue[IO, Option[Json]],
     idRef: Ref[IO, Long],
-    pendingRef: Ref[IO, Map[Long, Deferred[IO, Json]]],
+    pendingRef: Ref[IO, Map[Long, Deferred[IO, Either[Throwable, Json]]]],
     notifQueue: Queue[IO, Option[Json]],
     logger: Logger[IO]
 ):
@@ -23,7 +24,7 @@ class LspConnection private (
   def sendRequest(method: String, params: Json): IO[Json] =
     for
       id       <- idRef.updateAndGet(_ + 1)
-      deferred <- Deferred[IO, Json]
+      deferred <- Deferred[IO, Either[Throwable, Json]]
       _        <- pendingRef.update(_ + (id -> deferred))
       _ <- sendQueue.offer(
         Some(
@@ -35,7 +36,7 @@ class LspConnection private (
           )
         )
       )
-      result <- deferred.get
+      result <- deferred.get.flatMap(IO.fromEither)
     yield result
 
   def sendNotification(method: String, params: Json): IO[Unit] =
@@ -73,7 +74,7 @@ class LspConnection private (
         case Some(id) =>
           pendingRef.modify { pending =>
             pending.get(id) match
-              case Some(d) => (pending - id, d.complete(json).void)
+              case Some(d) => (pending - id, d.complete(Right(json)).void)
               case None    => (pending, IO.unit)
           }.flatten
         case None => IO.unit
@@ -87,11 +88,17 @@ class LspConnection private (
     Stream.fromQueueNoneTerminated(sendQueue)
 
   private[lsp] def closeQueues: IO[Unit] =
-    sendQueue.offer(None).attempt.void >>
+    failPending(new RuntimeException(s"LSP connection closed for ${languageId.id}")) >>
+      sendQueue.offer(None).attempt.void >>
       notifQueue.offer(None).attempt.void
 
   private[lsp] def completeNotifications: IO[Unit] =
     notifQueue.offer(None).attempt.void
+
+  private def failPending(cause: Throwable): IO[Unit] =
+    pendingRef
+      .modify(pending => (Map.empty, pending.values.toList))
+      .flatMap(_.traverse_(_.complete(Left(cause)).void))
 
 object LspConnection:
 
@@ -107,7 +114,7 @@ object LspConnection:
     for
       sendQueue  <- Queue.bounded[IO, Option[Json]](256)
       idRef      <- Ref.of[IO, Long](0L)
-      pendingRef <- Ref.of[IO, Map[Long, Deferred[IO, Json]]](Map.empty)
+      pendingRef <- Ref.of[IO, Map[Long, Deferred[IO, Either[Throwable, Json]]]](Map.empty)
       notifQueue <- Queue.bounded[IO, Option[Json]](256)
     yield new LspConnection(languageId, sendQueue, idRef, pendingRef, notifQueue, logger)
 

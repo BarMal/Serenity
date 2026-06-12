@@ -38,7 +38,8 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
   "FileManager" should "create and manage buffers" in {
     val fileManager = new FileManager()
 
-    val newBuffer = fileManager.createNewBuffer.unsafeRunSync()
+    val newBuffer = fileManager.createNewBuffer(BufferId(42)).unsafeRunSync()
+    newBuffer.id shouldBe BufferId(42)
     newBuffer.content.collect() shouldBe ""
     newBuffer.filePath shouldBe None
     newBuffer.isDirty shouldBe false
@@ -82,7 +83,8 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
       // Create a buffer from the file
       val fileManager = new FileManager()
-      val buffer      = fileManager.loadFile(tempFile).unsafeRunSync()
+      val buffer      = fileManager.loadFile(tempFile, BufferId(42)).unsafeRunSync()
+      buffer.id shouldBe BufferId(42)
 
       // Modify buffer content
       val modifiedBuffer = buffer.copy(

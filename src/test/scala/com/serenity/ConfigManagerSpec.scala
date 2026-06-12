@@ -1,6 +1,7 @@
 package com.serenity
 
 import java.awt.Color
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 import com.serenity.config.*
@@ -151,4 +152,22 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers:
 
     config.cursorColors.active shouldBe None
     config.cursorColors.inactive shouldBe None
+  }
+
+  it should "close loaded config files and save using UTF-8" in {
+    val configFile = Files.createTempFile("serenity-config-utf8", ".conf")
+    Files.writeString(
+      configFile,
+      """font.text.family = Sérif
+        |""".stripMargin,
+      StandardCharsets.UTF_8
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    config.fontConfig.textFontFamily shouldBe "Sérif"
+
+    Files.delete(configFile)
+
+    ConfigManager.saveConfig(config, configFile) shouldBe true
+    Files.readString(configFile, StandardCharsets.UTF_8) should include("font.text.family = Sérif")
   }

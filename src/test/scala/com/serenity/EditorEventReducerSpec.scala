@@ -92,6 +92,28 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     buffer.cursors shouldBe List(CursorPosition(0, 5), CursorPosition(0, 11))
   }
 
+  it should "remove one indentation level when reverse-tab is pressed with a single cursor" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("    abc"),
+            cursors = List(CursorPosition(0, 6))
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(ReverseTabKey, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.collect() shouldBe "abc"
+    buffer.cursors shouldBe List(CursorPosition(0, 2))
+  }
+
   it should "delete backward at every cursor position when multiple cursors are active" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)
@@ -274,18 +296,18 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     buffer.allSelections shouldBe Nil
   }
 
-  it should "replace every active selection with fixed spaces when tab is pressed with multiple selections" in {
+  it should "indent selected lines when tab is pressed with multiple selections" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)
-    val first    = Selection(CursorPosition(0, 0), CursorPosition(0, 3))
-    val second   = Selection(CursorPosition(0, 8), CursorPosition(0, 11))
+    val first    = Selection(CursorPosition(0, 2), CursorPosition(1, 2))
+    val second   = Selection(CursorPosition(2, 0), CursorPosition(2, 5))
     val initialState = AppState.initial.copy(
       buffers = AppState.initial.buffers.updated(
         bufferId,
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abc def ghi"),
+            content = com.serenity.rope.Rope("alpha\nbeta\ngamma"),
             cursors = List(first.focus, second.focus),
             selection = Some(first),
             selections = List(first, second)
@@ -296,8 +318,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(TabKey, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "     def     "
-    buffer.cursors shouldBe List(CursorPosition(0, 4), CursorPosition(0, 13))
+    buffer.content.collect() shouldBe "    alpha\n    beta\n    gamma"
+    buffer.cursors shouldBe List(CursorPosition(1, 6), CursorPosition(2, 9))
     buffer.allSelections shouldBe Nil
   }
 
@@ -356,18 +378,18 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     buffer.allSelections shouldBe Nil
   }
 
-  it should "delete every active selection when reverse-tab is pressed with multiple selections" in {
+  it should "unindent selected lines when reverse-tab is pressed with multiple selections" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)
-    val first    = Selection(CursorPosition(0, 0), CursorPosition(0, 3))
-    val second   = Selection(CursorPosition(0, 8), CursorPosition(0, 11))
+    val first    = Selection(CursorPosition(0, 4), CursorPosition(1, 2))
+    val second   = Selection(CursorPosition(2, 0), CursorPosition(2, 6))
     val initialState = AppState.initial.copy(
       buffers = AppState.initial.buffers.updated(
         bufferId,
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abc def ghi"),
+            content = com.serenity.rope.Rope("    alpha\n  beta\n\tgamma"),
             cursors = List(first.focus, second.focus),
             selection = Some(first),
             selections = List(first, second)
@@ -378,8 +400,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(ReverseTabKey, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe " def "
-    buffer.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 5))
+    buffer.content.collect() shouldBe "alpha\nbeta\ngamma"
+    buffer.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(2, 5))
     buffer.allSelections shouldBe Nil
   }
 
@@ -535,7 +557,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
   }
 
-  it should "delete backward at every cursor position when reverse-tab is pressed with multiple cursors" in {
+  it should "unindent every cursor line when reverse-tab is pressed with multiple cursors" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)
     val initialState = AppState.initial.copy(
@@ -544,8 +566,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("1a2b3"),
-            cursors = List(CursorPosition(0, 2), CursorPosition(0, 4))
+            content = com.serenity.rope.Rope("    one\n  two\n\tthree"),
+            cursors = List(CursorPosition(0, 4), CursorPosition(1, 2), CursorPosition(2, 6))
           )
       )
     )
@@ -553,8 +575,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(ReverseTabKey, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "123"
-    buffer.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 2))
+    buffer.content.collect() shouldBe "one\ntwo\nthree"
+    buffer.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(1, 0), CursorPosition(2, 5))
   }
 
   it should "move every cursor right when multiple cursors are active" in {
