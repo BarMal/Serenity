@@ -1,7 +1,9 @@
 package com.serenity
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import com.serenity.keystroke.events.*
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.ui.fonts.FontLoader
@@ -12,6 +14,32 @@ import org.scalatest.matchers.should.Matchers
 class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
+
+  final case class CountingRope(delegate: Rope, collectCount: AtomicInteger) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      delegate.rebalance
+
+    override def index(i: Int): Option[Char] =
+      delegate.index(i)
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def collect(): String =
+      collectCount.incrementAndGet()
+      delegate.collect()
 
   "EditorEventReducer" should "insert characters into the focused pane buffer" in {
     val initialState = AppState.initial
@@ -220,6 +248,31 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteWordBackward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
+    buffer.content.collect() shouldBe "alpha  gamma"
+    buffer.cursors shouldBe List(CursorPosition(0, 6))
+  }
+
+  it should "materialise buffer text once while calculating multi-cursor word deletions" in {
+    val paneId       = PaneId(0)
+    val bufferId     = BufferId(0)
+    val collectCount = AtomicInteger(0)
+    val content      = CountingRope(Rope("alpha beta gamma"), collectCount)
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = content,
+            cursors = List(CursorPosition(0, 8), CursorPosition(0, 10))
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(DeleteWordBackward, paneId, initialState).state
+    collectCount.get() shouldBe 1
+
+    val buffer = updatedState.buffers(bufferId)
     buffer.content.collect() shouldBe "alpha  gamma"
     buffer.cursors shouldBe List(CursorPosition(0, 6))
   }
