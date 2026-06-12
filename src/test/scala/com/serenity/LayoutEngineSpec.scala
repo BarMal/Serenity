@@ -1,11 +1,15 @@
 package com.serenity
 
+import com.serenity.config.InterfaceDensity
+import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class LayoutEngineSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
 
   behavior of "LayoutEngine multi-pane layout"
 
@@ -156,4 +160,46 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     focusedPane.x should be >= editorRect.x
     focusedPane.x should be < editorRect.right
     focusedPane.width should be >= minPaneWidth
+  }
+
+  it should "apply interface density to editor spacing and overlay height" in {
+    val runner = com.serenity.command.CommandRunner.empty.activate(
+      com.serenity.command.CommandRegistry.default,
+      com.serenity.config.AppConfig.default
+    )
+    val commandSurface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.BelowCursor)
+    )
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val baseState = AppState.initial.copy(
+      buffers = Map(bufferId -> Buffer.fromString(bufferId, "alpha\nbeta\ngamma")),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.EditorPane(paneId),
+      uiSurfaces = List(commandSurface)
+    )
+    val compact = LayoutEngine.calculateLayout(
+      baseState.copy(config = baseState.config.withInterfaceDensity(InterfaceDensity.Compact)),
+      ViewportSize(120, 30)
+    )
+    val comfortable = LayoutEngine.calculateLayout(baseState, ViewportSize(120, 30))
+    val spacious = LayoutEngine.calculateLayout(
+      baseState.copy(config = baseState.config.withInterfaceDensity(InterfaceDensity.Spacious)),
+      ViewportSize(120, 30)
+    )
+
+    compact.editorPanelRect.x should be < comfortable.editorPanelRect.x
+    compact.editorPanelRect.width should be > comfortable.editorPanelRect.width
+    spacious.editorPanelRect.x should be > comfortable.editorPanelRect.x
+    spacious.editorPanelRect.width should be < comfortable.editorPanelRect.width
+    compact.gutterRect.map(_.height) shouldBe Some(1)
+    spacious.gutterRect.map(_.height) shouldBe Some(2)
+    compact.belowCursorOverlayRect.map(_.height) should be < comfortable.belowCursorOverlayRect.map(_.height)
+    spacious.belowCursorOverlayRect.map(_.height) should be > comfortable.belowCursorOverlayRect.map(_.height)
   }

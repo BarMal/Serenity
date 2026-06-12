@@ -3,7 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandRegistry, CommandRunner, CommandSurfaceItem}
-import com.serenity.config.{AppConfig, CommandRunnerKeyAction, HotkeyAction}
+import com.serenity.config.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.SurfaceContent
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -71,6 +71,16 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     keymapGroup.children.collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "keymap-command-runner-submit" => item.currentValue
     } shouldBe Some("ctrl+enter")
+  }
+
+  it should "expose interface density in the appearance settings group" in {
+    val config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Compact)
+    val runner = CommandRunner.empty.activate(registry, config)
+
+    runner.optionSelections.get("interface-density") shouldBe Some(0)
+    runner.settingsGroups.find(_.id == "settings-appearance").map(_.children.map(_.id)) should contain(
+      List("cursor-mode", "background-style", "interface-density", "blur-radius")
+    )
   }
 
   "ensureCommandRunnerSurface (via closePane)" should "use the current config, not defaults" in {

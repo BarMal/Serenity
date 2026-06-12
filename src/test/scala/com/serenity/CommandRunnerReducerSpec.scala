@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.*
-import com.serenity.config.{AppConfig, BackgroundStyle, CommandRunnerKeyAction}
+import com.serenity.config.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
@@ -305,6 +305,44 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     movedRight.effects.exists {
       case AppEffect.ExecuteCommand(command) =>
         command.intent == CommandIntent.SetBackgroundStyle(BackgroundStyle.Frosted)
+      case _ =>
+        false
+    } shouldBe true
+  }
+
+  it should "adjust the selected interface density inside the appearance submenu" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+      .withSelectedItem("settings-appearance")
+      .enterSelectedGroup
+      .copy(activeSubmenu =
+        Some(com.serenity.command.CommandRunnerSubmenuState("settings-appearance", selectedIndex = 2))
+      )
+    val surface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val submenuSurface = UiSurface(
+      SurfaceId("command-runner-submenu"),
+      SurfaceContent.CommandPaletteSubmenu(runner, "settings-appearance", previewOnly = false),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val state = AppState(
+      buffers = Map.empty,
+      layout = Layout.empty,
+      focus = Focus.Surface(submenuSurface.id),
+      uiSurfaces = List(surface, submenuSurface)
+    )
+
+    val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), state, registry)
+
+    movedRight.effects.exists {
+      case AppEffect.ExecuteCommand(command) =>
+        command.intent == CommandIntent.SetInterfaceDensity(InterfaceDensity.Spacious)
       case _ =>
         false
     } shouldBe true

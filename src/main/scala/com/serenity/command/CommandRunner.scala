@@ -81,11 +81,12 @@ case class CommandRunner(
     selectedItem.collect { case CommandSurfaceItem.CommandItem(command) => command }
 
   def settingsGroups: List[CommandSurfaceItem.GroupItem] =
-    val animationItem       = CommandRunner.animationOptionItem(optionSelections)
-    val cursorModeItem      = CommandRunner.cursorModeOptionItem(optionSelections)
-    val backgroundStyleItem = CommandRunner.backgroundStyleOptionItem(optionSelections)
-    val markdownViewItem    = CommandRunner.markdownViewOptionItem(optionSelections)
-    val keymapItems         = inputItems.filter(_.id.startsWith("keymap-"))
+    val animationItem        = CommandRunner.animationOptionItem(optionSelections)
+    val cursorModeItem       = CommandRunner.cursorModeOptionItem(optionSelections)
+    val backgroundStyleItem  = CommandRunner.backgroundStyleOptionItem(optionSelections)
+    val interfaceDensityItem = CommandRunner.interfaceDensityOptionItem(optionSelections)
+    val markdownViewItem     = CommandRunner.markdownViewOptionItem(optionSelections)
+    val keymapItems          = inputItems.filter(_.id.startsWith("keymap-"))
     List(
       CommandSurfaceItem.GroupItem(
         id = "settings-animation",
@@ -99,9 +100,11 @@ case class CommandRunner(
       CommandSurfaceItem.GroupItem(
         id = "settings-appearance",
         label = "Appearance",
-        children = List(cursorModeItem, backgroundStyleItem) ++ inputItems.filter(_.id == "blur-radius"),
+        children = List(cursorModeItem, backgroundStyleItem, interfaceDensityItem) ++ inputItems.filter(
+          _.id == "blur-radius"
+        ),
         category = CommandCategory.Settings,
-        hint = Some("Cursor, background style, blur")
+        hint = Some("Cursor, background, density, blur")
       ),
       CommandSurfaceItem.GroupItem(
         id = "settings-ui-presets",
@@ -414,16 +417,17 @@ object CommandRunner:
 
   private[command] def defaultOptionSelections(config: AppConfig): Map[String, Int] =
     Map(
-      "animation-mode"   -> animationModeIndex(config),
-      "cursor-mode"      -> cursorModeIndex(config.cursorMode),
-      "background-style" -> backgroundStyleIndex(config.backgroundStyle),
-      "markdown-view"    -> markdownViewModeIndex(config.markdownViewMode),
-      "code-font"        -> codeFontIndex(config.fontConfig.codeFontFamily),
-      "text-font"        -> textFontIndex(config.fontConfig.textFontFamily),
-      "ui-font"          -> uiFontIndex(config.fontConfig.uiFontFamily),
-      "code-ligatures"   -> ligaturesIndex(config.fontConfig.codeLigatures),
-      "text-ligatures"   -> ligaturesIndex(config.fontConfig.textLigatures),
-      "ui-ligatures"     -> ligaturesIndex(config.fontConfig.uiLigatures)
+      "animation-mode"    -> animationModeIndex(config),
+      "cursor-mode"       -> cursorModeIndex(config.cursorMode),
+      "background-style"  -> backgroundStyleIndex(config.backgroundStyle),
+      "interface-density" -> interfaceDensityIndex(config.interfaceDensity),
+      "markdown-view"     -> markdownViewModeIndex(config.markdownViewMode),
+      "code-font"         -> codeFontIndex(config.fontConfig.codeFontFamily),
+      "text-font"         -> textFontIndex(config.fontConfig.textFontFamily),
+      "ui-font"           -> uiFontIndex(config.fontConfig.uiFontFamily),
+      "code-ligatures"    -> ligaturesIndex(config.fontConfig.codeLigatures),
+      "text-ligatures"    -> ligaturesIndex(config.fontConfig.textLigatures),
+      "ui-ligatures"      -> ligaturesIndex(config.fontConfig.uiLigatures)
     )
 
   private[command] def cursorModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -454,6 +458,22 @@ object CommandRunner:
       selectedIndex = optionSelections.getOrElse("background-style", 2),
       category = CommandCategory.Settings,
       hint = Some("Solid, transparent, frosted, or glass")
+    )
+
+  private[command] def interfaceDensityOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "interface-density",
+      label = "Interface Density",
+      options = List(
+        CommandOption("Compact", CommandIntent.SetInterfaceDensity(InterfaceDensity.Compact)),
+        CommandOption("Comfortable", CommandIntent.SetInterfaceDensity(InterfaceDensity.Comfortable)),
+        CommandOption("Spacious", CommandIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
+      ),
+      selectedIndex = optionSelections.getOrElse("interface-density", 1),
+      category = CommandCategory.Settings,
+      hint = Some("Compact, comfortable, or spacious")
     )
 
   private[command] def markdownViewOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -791,6 +811,12 @@ object CommandRunner:
       case BackgroundStyle.Transparent => 1
       case BackgroundStyle.Frosted     => 2
       case BackgroundStyle.GlassLike   => 3
+
+  private def interfaceDensityIndex(density: InterfaceDensity): Int =
+    density match
+      case InterfaceDensity.Compact     => 0
+      case InterfaceDensity.Comfortable => 1
+      case InterfaceDensity.Spacious    => 2
 
   private def markdownViewModeIndex(mode: MarkdownViewMode): Int =
     mode match

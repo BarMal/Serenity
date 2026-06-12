@@ -402,6 +402,15 @@ given Decoder[MarkdownViewMode] = Decoder.decodeString.emap {
   case other          => Left(s"Unknown MarkdownViewMode: $other")
 }
 
+given Encoder[InterfaceDensity] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[InterfaceDensity] = Decoder.decodeString.emap {
+  case "Compact"     => Right(InterfaceDensity.Compact)
+  case "Comfortable" => Right(InterfaceDensity.Comfortable)
+  case "Spacious"    => Right(InterfaceDensity.Spacious)
+  case other         => Left(s"Unknown InterfaceDensity: $other")
+}
+
 given Encoder[PreferredWindowSize] = deriveEncoder
 given Decoder[PreferredWindowSize] = deriveDecoder
 
@@ -440,6 +449,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     cursorColors              <- cursor.getOrElse[CursorColorConfig]("cursorColors")(CursorColorConfig())
     windowChromeMode          <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(WindowChromeMode.Native)
     markdownViewMode          <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
+    interfaceDensity          <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(InterfaceDensity.Comfortable)
     preferredWindowSize       <- cursor.getOrElse[Option[PreferredWindowSize]]("preferredWindowSize")(None)
   yield AppConfig(
     characterAnimation = characterAnimation,
@@ -456,6 +466,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     cursorColors = cursorColors,
     windowChromeMode = windowChromeMode,
     markdownViewMode = markdownViewMode,
+    interfaceDensity = interfaceDensity,
     preferredWindowSize = preferredWindowSize
   )
 }

@@ -135,6 +135,16 @@ object ConfigManager:
               parseColor(value.trim)
                 .map(color => config.withCursorColors(config.cursorColors.copy(inactive = Some(color))))
                 .getOrElse(config)
+            case "interface.density" | "interface_density" =>
+              value.trim.toLowerCase match
+                case "compact" =>
+                  config.withInterfaceDensity(InterfaceDensity.Compact)
+                case "comfortable" =>
+                  config.withInterfaceDensity(InterfaceDensity.Comfortable)
+                case "spacious" =>
+                  config.withInterfaceDensity(InterfaceDensity.Spacious)
+                case _ =>
+                  config
             case "window.preferred.width" | "window_preferred_width" =>
               value.trim.toIntOption
                 .map(width =>
@@ -221,6 +231,9 @@ object ConfigManager:
        |# Cursor colour overrides. Leave empty to use the active theme cursor.
        |cursor.active.color = ${config.cursorColors.active.map(formatColor).getOrElse("")}
        |cursor.inactive.color = ${config.cursorColors.inactive.map(formatColor).getOrElse("")}
+       |
+       |# Interface density: compact, comfortable, spacious
+       |interface.density = ${config.interfaceDensity.configKey}
        |
        |# Preferred desktop window size. Leave empty to use the default.
        |window.preferred.width = ${config.preferredWindowSize.map(_.width).fold("")(_.toString)}
@@ -311,6 +324,9 @@ object ConfigManager:
                           |# Cursor colour overrides. Leave empty to use the active theme cursor.
                           |cursor.active.color =
                           |cursor.inactive.color =
+                          |
+                          |# Interface density: compact, comfortable, spacious
+                          |interface.density = comfortable
                           |
                           |# Preferred desktop window size. Leave empty to use the default.
                           |window.preferred.width =

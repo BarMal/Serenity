@@ -219,6 +219,20 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers:
     ConfigManager.configToString(config) should include("window.preferred.height = 900")
   }
 
+  it should "load and write interface density mode" in {
+    val configFile = Files.createTempFile("serenity-density-config", ".conf")
+    Files.writeString(
+      configFile,
+      """interface.density = spacious
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.interfaceDensity shouldBe InterfaceDensity.Spacious
+    ConfigManager.configToString(config) should include("interface.density = spacious")
+  }
+
   it should "close loaded config files and save using UTF-8" in {
     val configFile = Files.createTempFile("serenity-config-utf8", ".conf")
     Files.writeString(
