@@ -17,9 +17,9 @@ object Main extends IOApp:
 
   def run(args: List[String]): IO[ExitCode] =
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
-    val appConfig                                   = ConfigManager.loadConfig()
 
     for
+      appConfig    <- ConfigManager.loadConfigIO()
       displayState <- RuntimeDisplayState.create(appConfig.fontConfig)
       _ <- SwingWindow.resource(displayState.primaryMetrics, appConfig.windowChromeMode).use { swingWin =>
         def syncDisplayMetrics(): IO[Unit] =
