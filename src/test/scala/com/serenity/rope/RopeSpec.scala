@@ -471,6 +471,15 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     rebalanced.isWeightBalanced shouldBe true
     rebuilt.isWeightBalanced shouldBe true
 
+  it should "rebalance deeply skewed trees without recursive descent" in new ChunkedRopeSpecScope:
+    val skewed = (1 to 100000).foldLeft(Leaf("x"): Rope)((rope, _) => Node(rope, Leaf("x")))
+
+    val rebalanced = skewed.rebalance
+
+    rebalanced.collect() shouldBe "x" * 100001
+    rebalanced.isWeightBalanced shouldBe true
+    rebalanced.isHeightBalanced shouldBe true
+
   it should "handle line operations correctly" in new ChunkedRopeSpecScope:
     val multiline = Rope("line1\nline2\nline3\n")
 
