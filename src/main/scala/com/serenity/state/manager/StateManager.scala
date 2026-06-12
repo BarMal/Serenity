@@ -85,6 +85,7 @@ trait StateManager:
   def createPaneAfter(afterPaneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
   def getTabOrder(): IO[List[PaneId]]
   def splitPaneHorizontal(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
+  def splitPaneVertical(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
 
   // Panel operations
   def switchToPinnedPanel(position: PanelPosition): IO[Unit]

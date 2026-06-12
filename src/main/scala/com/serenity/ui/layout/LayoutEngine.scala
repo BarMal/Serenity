@@ -35,7 +35,8 @@ object LayoutManager:
 object LayoutEngine:
 
   // Default spacer width as percentage of terminal width (15% each side = 30% total)
-  private val DefaultSpacerPercentage = 0.15
+  private val DefaultSpacerPercentage   = 0.15
+  private val MinimumVerticalPaneHeight = 5
 
   def calculateLayout(
     state: AppState,
@@ -384,31 +385,35 @@ object LayoutEngine:
       val paneId = paneIds.head
       Map(paneId -> editorRect)
     else
-      // Multiple panes: split horizontally with minimum width constraints
-      val maxVisiblePanes  = math.max(1, editorRect.width / minWidth)
-      val visiblePaneCount = math.min(paneCount, maxVisiblePanes)
-      val paneWidth        = math.max(minWidth, editorRect.width / visiblePaneCount)
+      state.layout.splitDirection match
+        case PaneSplitDirection.Horizontal =>
+          calculateHorizontalPaneLayouts(state, editorRect, paneIds, minWidth)
+        case PaneSplitDirection.Vertical =>
+          calculateVerticalPaneLayouts(state, editorRect, paneIds)
 
-      // Find focused pane to ensure it's visible
-      val focusedPaneId = state.focus match
-        case Focus.EditorPane(paneId) if state.layout.editorPanes.contains(paneId) => Some(paneId)
-        case _                                                                     => None
+  private def calculateHorizontalPaneLayouts(
+    state: AppState,
+    editorRect: LayoutRect,
+    paneIds: List[PaneId],
+    minWidth: Int
+  ): Map[PaneId, LayoutRect] =
+    val paneCount        = paneIds.size
+    val maxVisiblePanes  = math.max(1, editorRect.width / minWidth)
+    val visiblePaneCount = math.min(paneCount, maxVisiblePanes)
+    val paneWidth        = math.max(minWidth, editorRect.width / visiblePaneCount)
+    val focusedPaneId    = focusedPane(state)
+    val (visibleStartIndex, _) = calculateVisiblePaneWindow(
+      paneIds,
+      focusedPaneId,
+      visiblePaneCount
+    )
 
-      // Calculate which panes should be visible
-      val (visibleStartIndex, visiblePaneIds) = calculateVisiblePaneWindow(
-        paneIds,
-        focusedPaneId,
-        visiblePaneCount
-      )
-
-      // Create layouts for all panes
-      val allPaneLayouts = for ((paneId, globalIndex) <- paneIds.zipWithIndex) yield
+    paneIds.zipWithIndex.map {
+      case (paneId, globalIndex) =>
         val visibleIndex = globalIndex - visibleStartIndex
         val isVisible    = visibleIndex >= 0 && visibleIndex < visiblePaneCount
-
         val paneRect =
           if isVisible then
-            // Visible pane: positioned within editor area
             LayoutRect(
               x = editorRect.x + (visibleIndex * paneWidth),
               y = editorRect.y,
@@ -416,10 +421,9 @@ object LayoutEngine:
               height = editorRect.height
             )
           else
-            // Hidden pane: positioned off-screen
             val offScreenX =
-              if visibleIndex < 0 then editorRect.x - 100 // Off-screen to the left
-              else editorRect.x + editorRect.width + 100  // Off-screen to the right
+              if visibleIndex < 0 then editorRect.x - 100
+              else editorRect.x + editorRect.width + 100
 
             LayoutRect(
               x = offScreenX,
@@ -429,8 +433,61 @@ object LayoutEngine:
             )
 
         paneId -> paneRect
+    }.toMap
 
-      allPaneLayouts.toMap
+  private def calculateVerticalPaneLayouts(
+    state: AppState,
+    editorRect: LayoutRect,
+    paneIds: List[PaneId]
+  ): Map[PaneId, LayoutRect] =
+    val paneCount        = paneIds.size
+    val maxVisiblePanes  = math.max(1, editorRect.height / MinimumVerticalPaneHeight)
+    val visiblePaneCount = math.min(paneCount, maxVisiblePanes)
+    val focusedPaneId    = focusedPane(state)
+    val (visibleStartIndex, _) = calculateVisiblePaneWindow(
+      paneIds,
+      focusedPaneId,
+      visiblePaneCount
+    )
+    val visibleHeights = splitLengths(editorRect.height, visiblePaneCount)
+    val visibleOffsets = visibleHeights.scanLeft(editorRect.y)(_ + _).dropRight(1)
+
+    paneIds.zipWithIndex.map {
+      case (paneId, globalIndex) =>
+        val visibleIndex = globalIndex - visibleStartIndex
+        val isVisible    = visibleIndex >= 0 && visibleIndex < visiblePaneCount
+        val paneRect =
+          if isVisible then
+            LayoutRect(
+              x = editorRect.x,
+              y = visibleOffsets(visibleIndex),
+              width = editorRect.width,
+              height = visibleHeights(visibleIndex)
+            )
+          else
+            val offScreenY =
+              if visibleIndex < 0 then editorRect.y - 100
+              else editorRect.y + editorRect.height + 100
+
+            LayoutRect(
+              x = editorRect.x,
+              y = offScreenY,
+              width = editorRect.width,
+              height = editorRect.height
+            )
+
+        paneId -> paneRect
+    }.toMap
+
+  private def focusedPane(state: AppState): Option[PaneId] =
+    state.focus match
+      case Focus.EditorPane(paneId) if state.layout.editorPanes.contains(paneId) => Some(paneId)
+      case _                                                                     => None
+
+  private def splitLengths(total: Int, count: Int): List[Int] =
+    val base      = total / count
+    val remainder = total % count
+    (0 until count).toList.map(index => base + (if index < remainder then 1 else 0))
 
   /** Calculate which panes should be visible based on focus and capacity */
   private def calculateVisiblePaneWindow(
