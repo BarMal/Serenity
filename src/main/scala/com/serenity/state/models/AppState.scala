@@ -1,7 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.animation.AnimationState
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, CursorInfoBarMode}
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
@@ -115,6 +115,34 @@ case class AppState(
       .flatMap(buffers.get)
       .flatMap(_.cursors.headOption)
 
+  def cursorInfoBarSurface: Option[UiSurface] =
+    config.cursorInfoBarMode match
+      case CursorInfoBarMode.Off => None
+      case mode =>
+        for
+          paneId   <- layout.activeEditorPaneId
+          pane     <- layout.editorPanes.get(paneId)
+          bufferId <- pane.bufferId
+          buffer   <- buffers.get(bufferId)
+          cursor   <- buffer.cursors.headOption
+        yield UiSurface(
+          id = SurfaceId("cursor-info-bar"),
+          content = SurfaceContent.CursorInfoBar(cursorInfoBarText(mode, cursor, buffer)),
+          presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        )
+
+  private def cursorInfoBarText(mode: CursorInfoBarMode, cursor: CursorPosition, buffer: Buffer): String =
+    val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"
+    mode match
+      case CursorInfoBarMode.Off =>
+        ""
+      case CursorInfoBarMode.Position =>
+        position
+      case CursorInfoBarMode.Detailed =>
+        val language = buffer.language.fold("Plain Text")(_.displayName)
+        val fileName = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Unsaved")
+        s"$position | $language | $fileName"
+
   def floatingSurfaces: List[UiSurface] =
     uiSurfaces.filter {
       _.presentation match
@@ -137,7 +165,7 @@ case class AppState(
     }
 
   def surfaceById(surfaceId: SurfaceId): Option[UiSurface] =
-    uiSurfaces.find(_.id == surfaceId)
+    uiSurfaces.find(_.id == surfaceId).orElse(cursorInfoBarSurface.filter(_.id == surfaceId))
 
   def activeSurface: Option[UiSurface] =
     focus match

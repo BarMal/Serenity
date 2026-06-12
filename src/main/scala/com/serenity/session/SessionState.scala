@@ -388,6 +388,15 @@ given Decoder[CursorMode] = Decoder.decodeString.emap {
   case other     => Left(s"Unknown CursorMode: $other")
 }
 
+given Encoder[CursorInfoBarMode] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[CursorInfoBarMode] = Decoder.decodeString.emap {
+  case "Off"      => Right(CursorInfoBarMode.Off)
+  case "Position" => Right(CursorInfoBarMode.Position)
+  case "Detailed" => Right(CursorInfoBarMode.Detailed)
+  case other      => Left(s"Unknown CursorInfoBarMode: $other")
+}
+
 given Encoder[WindowChromeMode] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[WindowChromeMode] = Decoder.decodeString.emap {
@@ -459,6 +468,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     backgroundStyle           <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
     cursorMode                <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
     cursorColors              <- cursor.getOrElse[CursorColorConfig]("cursorColors")(CursorColorConfig())
+    cursorInfoBarMode         <- cursor.getOrElse[CursorInfoBarMode]("cursorInfoBarMode")(CursorInfoBarMode.Off)
     windowChromeMode          <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(WindowChromeMode.Native)
     markdownViewMode          <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
     interfaceDensity          <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(InterfaceDensity.Comfortable)
@@ -478,6 +488,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     backgroundStyle = backgroundStyle,
     cursorMode = cursorMode,
     cursorColors = cursorColors,
+    cursorInfoBarMode = cursorInfoBarMode,
     windowChromeMode = windowChromeMode,
     markdownViewMode = markdownViewMode,
     interfaceDensity = interfaceDensity,

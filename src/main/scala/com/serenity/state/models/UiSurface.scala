@@ -44,6 +44,7 @@ enum SurfaceContent:
   case QuickInfo(text: String)
   case FilePreview(path: Path, content: String)
   case SymbolDefinition(symbol: String, location: Location)
+  case CursorInfoBar(text: String)
   case DirectoryListing(path: Path, entries: List[DirEntry], selectedPath: Option[Path] = None)
   case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None)
   case CommandPalette(runner: CommandRunner)

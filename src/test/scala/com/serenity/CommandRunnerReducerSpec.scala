@@ -266,7 +266,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       .withSelectedItem("settings-appearance")
       .enterSelectedGroup
       .copy(activeSubmenu =
-        Some(com.serenity.command.CommandRunnerSubmenuState("settings-appearance", selectedIndex = 1))
+        Some(com.serenity.command.CommandRunnerSubmenuState("settings-appearance", selectedIndex = 2))
       )
     val surface = UiSurface(
       SurfaceId("command-runner"),
@@ -319,7 +319,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       .withSelectedItem("settings-appearance")
       .enterSelectedGroup
       .copy(activeSubmenu =
-        Some(com.serenity.command.CommandRunnerSubmenuState("settings-appearance", selectedIndex = 2))
+        Some(com.serenity.command.CommandRunnerSubmenuState("settings-appearance", selectedIndex = 3))
       )
     val surface = UiSurface(
       SurfaceId("command-runner"),

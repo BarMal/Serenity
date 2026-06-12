@@ -270,7 +270,8 @@ object LayoutEngine:
             case Some(focused) => List(focused)
             case None          => belowSurfaces.headOption.toList
         case _ =>
-          belowSurfaces.headOption.toList
+          if belowSurfaces.nonEmpty then belowSurfaces.headOption.toList
+          else state.cursorInfoBarSurface.toList
 
   private def calculateBelowCursorOverlayStack(
     surfaces: List[UiSurface],
@@ -326,6 +327,7 @@ object LayoutEngine:
       case SurfaceContent.QuickInfo(text)         => math.max(3, text.linesIterator.size + 2)
       case SurfaceContent.FilePreview(_, content) => math.max(4, math.min(6, content.linesIterator.take(4).size + 2))
       case SurfaceContent.SymbolDefinition(_, _)  => 4
+      case SurfaceContent.CursorInfoBar(_)        => 3
       case SurfaceContent.DirectoryListing(_, entries, _) => math.max(4, math.min(6, entries.take(4).size + 2))
       case SurfaceContent.DirectoryTree(tree, _) =>
         math.max(4, math.min(8, DirectoryTreeData.visibleRows(tree).size + 2))

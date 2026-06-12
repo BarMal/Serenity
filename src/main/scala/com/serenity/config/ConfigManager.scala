@@ -146,6 +146,16 @@ object ConfigManager:
                   config.withInterfaceDensity(InterfaceDensity.Spacious)
                 case _ =>
                   config
+            case "cursor.info_bar" | "cursor.info.bar" | "cursor_info_bar" =>
+              value.trim.toLowerCase match
+                case "off" | "false" | "disabled" =>
+                  config.withCursorInfoBarMode(CursorInfoBarMode.Off)
+                case "position" | "minimal" =>
+                  config.withCursorInfoBarMode(CursorInfoBarMode.Position)
+                case "detailed" | "full" =>
+                  config.withCursorInfoBarMode(CursorInfoBarMode.Detailed)
+                case _ =>
+                  config
             case "window.preferred.width" | "window_preferred_width" =>
               value.trim.toIntOption
                 .map(width =>
@@ -243,6 +253,7 @@ object ConfigManager:
        |# Cursor colour overrides. Leave empty to use the active theme cursor.
        |cursor.active.color = ${config.cursorColors.active.map(formatColor).getOrElse("")}
        |cursor.inactive.color = ${config.cursorColors.inactive.map(formatColor).getOrElse("")}
+       |cursor.info_bar = ${config.cursorInfoBarMode.configKey}
        |
        |# Interface density: compact, comfortable, spacious
        |interface.density = ${config.interfaceDensity.configKey}
@@ -400,6 +411,7 @@ object ConfigManager:
                           |# Cursor colour overrides. Leave empty to use the active theme cursor.
                           |cursor.active.color =
                           |cursor.inactive.color =
+                          |cursor.info_bar = off
                           |
                           |# Interface density: compact, comfortable, spacious
                           |interface.density = comfortable
