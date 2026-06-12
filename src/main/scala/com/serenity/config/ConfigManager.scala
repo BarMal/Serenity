@@ -81,6 +81,14 @@ object ConfigManager:
                   config.withFontConfig(config.fontConfig.copy(enableLigatures = false))
                 case _ =>
                   config
+            case "cursor.active.color" | "cursor_active_color" =>
+              parseColor(value.trim)
+                .map(color => config.withCursorColors(config.cursorColors.copy(active = Some(color))))
+                .getOrElse(config)
+            case "cursor.inactive.color" | "cursor_inactive_color" =>
+              parseColor(value.trim)
+                .map(color => config.withCursorColors(config.cursorColors.copy(inactive = Some(color))))
+                .getOrElse(config)
             case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
               HotkeyAction.values
                 .find(action => s"hotkey.${action.configKey}" == hotkeyKey)
@@ -145,6 +153,10 @@ object ConfigManager:
        |font.ui.size = ${config.fontConfig.uiFontSize}
        |font.ligatures = ${config.fontConfig.enableLigatures}
        |
+       |# Cursor colour overrides. Leave empty to use the active theme cursor.
+       |cursor.active.color = ${config.cursorColors.active.map(formatColor).getOrElse("")}
+       |cursor.inactive.color = ${config.cursorColors.inactive.map(formatColor).getOrElse("")}
+       |
        |# Hotkey overrides
        |hotkey.command_palette = ${config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render}
        |hotkey.file_search = ${config.hotkeyConfig.bindingsFor(HotkeyAction.FileSearch).head.render}
@@ -181,6 +193,25 @@ object ConfigManager:
   private def clampFontSize(size: Float): Float =
     size.max(8.0f).min(48.0f)
 
+  private def parseColor(value: String): Option[java.awt.Color] =
+    val hex = value.stripPrefix("#")
+    Option
+      .when(hex.length == 6 || hex.length == 8)(hex)
+      .filter(_.forall(ch => Character.digit(ch, 16) >= 0))
+      .flatMap { normalized =>
+        scala.util.Try {
+          val red   = Integer.parseInt(normalized.substring(0, 2), 16)
+          val green = Integer.parseInt(normalized.substring(2, 4), 16)
+          val blue  = Integer.parseInt(normalized.substring(4, 6), 16)
+          val alpha = if normalized.length == 8 then Integer.parseInt(normalized.substring(6, 8), 16) else 255
+          java.awt.Color(red, green, blue, alpha)
+        }.toOption
+      }
+
+  private def formatColor(color: java.awt.Color): String =
+    val rgb = f"#${color.getRed}%02X${color.getGreen}%02X${color.getBlue}%02X"
+    if color.getAlpha == 255 then rgb else f"$rgb${color.getAlpha}%02X"
+
   /** Create a sample configuration file */
   def createSampleConfig(path: String): Boolean =
     try
@@ -204,6 +235,10 @@ object ConfigManager:
                           |font.size = 12.0
                           |font.ui.size = 12.0
                           |font.ligatures = true
+                          |
+                          |# Cursor colour overrides. Leave empty to use the active theme cursor.
+                          |cursor.active.color =
+                          |cursor.inactive.color =
                           |
                           |# Hotkey overrides
                           |hotkey.command_palette = ctrl+p

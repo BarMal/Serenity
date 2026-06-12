@@ -7,7 +7,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
-import com.serenity.config.{AppConfig, BackgroundStyle, CursorMode}
+import com.serenity.config.*
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.session.SessionState
@@ -156,6 +156,34 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     val decoded  = SessionState.fromAppState(appState).asJson.as[SessionState]
     decoded.isRight shouldBe true
     decoded.toOption.get.config.cursorMode shouldBe CursorMode.Blink
+  }
+
+  it should "default cursor colour overrides to empty when JSON keys are missing" in {
+    import _root_.io.circe.Encoder
+    val enc                     = summon[Encoder[AppConfig]]
+    val dec                     = summon[_root_.io.circe.Decoder[AppConfig]]
+    val jsonWithoutCursorColors = enc(AppConfig.default).mapObject(_.remove("cursorColors"))
+    val decoded                 = jsonWithoutCursorColors.as[AppConfig](using dec)
+    decoded.isRight shouldBe true
+    decoded.toOption.get.cursorColors shouldBe CursorColorConfig()
+  }
+
+  it should "round-trip configured cursor colours through JSON" in {
+    val active = new Color(0x22, 0x44, 0x88)
+    val inactive = new Color(
+      0x88,
+      0x44,
+      0x22,
+      0x99
+    )
+    val appState = AppState.initial.copy(
+      config = AppConfig.default.withCursorColors(CursorColorConfig(Some(active), Some(inactive)))
+    )
+
+    val decoded = SessionState.fromAppState(appState).asJson.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.cursorColors shouldBe CursorColorConfig(Some(active), Some(inactive))
   }
 
   // ── Renderer cursor color override ───────────────────────────────────────

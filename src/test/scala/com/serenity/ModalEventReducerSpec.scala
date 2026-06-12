@@ -4,6 +4,8 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalEventReducer}
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -192,6 +194,32 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     )
     second.buffers(bufferId).cursors.head shouldBe CursorPosition(1, 0)
     second.focus shouldBe Focus.Surface(SurfaceId("find"))
+  }
+
+  it should "scroll wrapped text to the selected live find match visual row" in {
+    val bufferId = BufferId(0)
+    val prefix   = List.fill(80)("wrapped").mkString(" ")
+    val content  = s"$prefix needle"
+    val initialState =
+      stateWithFindModal("needle", content, viewport = Viewport(0, 0, visibleLines = 3, visibleColumns = 12))
+
+    val updatedState = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+    val cursor       = buffer.cursors.head
+    val font         = FontLoader.previewTextFont(updatedState.config.fontConfig)
+    val metrics      = CellMetrics.fromFont(font)
+    val snapshot =
+      TextLayoutSnapshot.fromBuffer(buffer, buffer.viewport.visibleColumns * metrics.charWidth, font)
+
+    buffer.viewport.topLine shouldBe 0
+    buffer.viewport.topVisualLine should be > 0
+    withClue(
+      s"viewport=${buffer.viewport} cursor=$cursor visualLines=${snapshot.visualLines.map(line => (line.startColumn, line.endColumn))}"
+    ) {
+      snapshot.visualLines.exists(line =>
+        line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
+      ) shouldBe true
+    }
   }
 
   it should "keep stale find state out when live query has no matches" in {
