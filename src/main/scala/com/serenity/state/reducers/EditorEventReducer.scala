@@ -769,20 +769,24 @@ object EditorEventReducer:
       currentState
     )
 
-  private def lineColumnToOffset(rope: Rope, line: Int, column: Int): Int =
-    val content = rope.collect()
-    if content.isEmpty then math.min(column, 0)
-    else
-      case class LineState(currentLine: Int, offset: Int, i: Int)
+  private[reducers] def lineColumnToOffset(rope: Rope, line: Int, column: Int): Int =
+    val content    = rope.collect()
+    val targetLine = math.max(0, line)
+    val targetCol  = math.max(0, column)
 
-      val finalState = (0 until content.length).foldLeft(LineState(0, 0, 0)) { (state, i) =>
-        if state.currentLine >= line then state
-        else if content(i) == '\n' then LineState(state.currentLine + 1, i + 1, i + 1)
-        else state.copy(i = i + 1)
-      }
+    @annotation.tailrec
+    def findLineStart(currentLine: Int, lineStart: Int): Int =
+      if currentLine >= targetLine then lineStart
+      else
+        val nextLineBreak = content.indexOf('\n', lineStart)
+        if nextLineBreak == -1 then content.length
+        else findLineStart(currentLine + 1, nextLineBreak + 1)
 
-      val result = if finalState.currentLine == line then finalState.offset + column else content.length
-      math.min(result, rope.weight)
+    val lineStart = findLineStart(currentLine = 0, lineStart = 0)
+    val lineEnd = content.indexOf('\n', lineStart) match
+      case -1    => content.length
+      case index => index
+    math.min(lineStart + targetCol, lineEnd)
 
   private def findLineEnd(rope: Rope, line: Int): Int =
     val content = rope.collect()
