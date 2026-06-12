@@ -1,6 +1,7 @@
 package com.serenity
 
 import java.awt.Color
+import java.nio.file.Files
 
 import scala.concurrent.duration.*
 
@@ -101,4 +102,33 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     )
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "force a safe quit when a runtime fiber fails" in {
+    given org.typelevel.log4cats.Logger[IO] =
+      LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeFiberFailureSpec"))
+
+    val sessionRoot = Files.createTempDirectory("serenity-runtime-fiber-failure")
+
+    val program = AppRuntime.run(
+      initialViewportSize = ViewportSize(120, 40),
+      makeInputHandler = _ => new SilentInputHandler,
+      checkResize = IO.pure(None),
+      renderFull = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
+      renderCursorOnly =
+        (_: AppState, _: Boolean, _: Option[Color]) => IO.raiseError(new RuntimeException("cursor render failed")),
+      appConfig = AppConfig.default,
+      makeStateManager = Some(logger =>
+        StateManager.apply(
+          logger,
+          policy = SessionManager.SessionPolicy(saveOnAppClose = true),
+          sessionRootOverride = Some(sessionRoot)
+        )
+      ),
+      awaitExternalQuit = IO.never,
+      registerResizeCallback = _ => ()
+    )
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+    Files.exists(sessionRoot.resolve("session-index.json")) shouldBe true
   }
