@@ -3,6 +3,7 @@ package com.serenity.config
 import java.awt.Color
 
 import com.serenity.animation.AnimationConfig
+import com.serenity.lsp.config.LspUserConfig
 import com.serenity.ui.fonts.FontLoader.FontConfig
 
 enum BackgroundStyle:
@@ -111,7 +112,8 @@ case class AppConfig(
     windowChromeMode: WindowChromeMode = WindowChromeMode.Native,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
-    preferredWindowSize: Option[PreferredWindowSize] = None
+    preferredWindowSize: Option[PreferredWindowSize] = None,
+    lspUserConfig: LspUserConfig = LspUserConfig.empty
 ):
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
@@ -206,6 +208,9 @@ case class AppConfig(
 
   def withPreferredWindowSize(size: PreferredWindowSize): AppConfig =
     copy(preferredWindowSize = Some(size.normalized))
+
+  def withLspUserConfig(config: LspUserConfig): AppConfig =
+    copy(lspUserConfig = config)
 
 object AppConfig:
 

@@ -7,10 +7,12 @@ import java.nio.file.Files
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.*
 import com.serenity.keystroke.{InputKey, Modifier}
+import com.serenity.lsp.config.{LanguageId, LspServerOverride}
+import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class ConfigManagerSpec extends AnyFlatSpec with Matchers:
+class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "ConfigManager" should "load configured hotkey overrides from a config file" in {
     val configFile = Files.createTempFile("serenity-config", ".conf")
@@ -231,6 +233,35 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers:
 
     config.interfaceDensity shouldBe InterfaceDensity.Spacious
     ConfigManager.configToString(config) should include("interface.density = spacious")
+  }
+
+  it should "load and write LSP language server overrides" in {
+    val configFile = Files.createTempFile("serenity-lsp-config", ".conf")
+    Files.writeString(
+      configFile,
+      """lsp.scala.enabled = false
+        |lsp.python.command = pylsp
+        |lsp.python.args = --stdio,--log-file,/tmp/pylsp.log
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.lspUserConfig.servers.value(LanguageId.Scala.id) shouldBe LspServerOverride(
+      command = None,
+      args = None,
+      enabled = Some(false)
+    )
+    config.lspUserConfig.servers.value(LanguageId.Python.id) shouldBe LspServerOverride(
+      command = Some("pylsp"),
+      args = Some(List("--stdio", "--log-file", "/tmp/pylsp.log")),
+      enabled = None
+    )
+
+    val written = ConfigManager.configToString(config)
+    written should include("lsp.scala.enabled = false")
+    written should include("lsp.python.command = pylsp")
+    written should include("lsp.python.args = --stdio,--log-file,/tmp/pylsp.log")
   }
 
   it should "close loaded config files and save using UTF-8" in {

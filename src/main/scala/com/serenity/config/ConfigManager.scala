@@ -8,6 +8,7 @@ import scala.util.Using
 
 import cats.effect.IO
 import com.serenity.animation.AnimationConfig
+import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 
 /** Manages loading and saving application configuration */
 object ConfigManager:
@@ -161,6 +162,8 @@ object ConfigManager:
                   )
                 )
                 .getOrElse(config)
+            case lspKey if lspKey.startsWith("lsp.") =>
+              parseLspConfigEntry(config, lspKey, value.trim)
             case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
               HotkeyAction.values
                 .find(action => s"hotkey.${action.configKey}" == hotkeyKey)
@@ -209,6 +212,7 @@ object ConfigManager:
       case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
       case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
       case Some(_)                                          => "custom" // For custom configurations
+    val lspSettings = lspConfigToString(config.lspUserConfig)
 
     s"""# Serenity Editor Configuration
        |# Character animation style: none, quick, smooth, subtle
@@ -238,6 +242,9 @@ object ConfigManager:
        |# Preferred desktop window size. Leave empty to use the default.
        |window.preferred.width = ${config.preferredWindowSize.map(_.width).fold("")(_.toString)}
        |window.preferred.height = ${config.preferredWindowSize.map(_.height).fold("")(_.toString)}
+       |
+       |# LSP server overrides
+       |$lspSettings
        |
        |# Hotkey overrides
        |hotkey.command_palette = ${config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render}
@@ -293,6 +300,63 @@ object ConfigManager:
   private def formatColor(color: java.awt.Color): String =
     val rgb = f"#${color.getRed}%02X${color.getGreen}%02X${color.getBlue}%02X"
     if color.getAlpha == 255 then rgb else f"$rgb${color.getAlpha}%02X"
+
+  private def parseLspConfigEntry(config: AppConfig, key: String, value: String): AppConfig =
+    key.split("\\.", 3).toList match
+      case "lsp" :: languageKey :: field :: Nil =>
+        LanguageId.fromString(languageKey).fold(config) { languageId =>
+          field match
+            case "enabled" =>
+              parseBoolean(value)
+                .map(enabled => updateLspOverride(config, languageId)(_.copy(enabled = Some(enabled))))
+                .getOrElse(config)
+            case "command" =>
+              updateLspOverride(config, languageId)(_.copy(command = Option(value).filter(_.nonEmpty)))
+            case "args" =>
+              val args = value
+                .split(",")
+                .toList
+                .map(_.trim)
+                .filter(_.nonEmpty)
+              updateLspOverride(config, languageId)(_.copy(args = Some(args)))
+            case _ =>
+              config
+        }
+      case _ =>
+        config
+
+  private def updateLspOverride(
+    config: AppConfig,
+    languageId: LanguageId
+  )(update: LspServerOverride => LspServerOverride): AppConfig =
+    val servers  = config.lspUserConfig.servers.getOrElse(Map.empty)
+    val existing = servers.getOrElse(languageId.id, LspServerOverride(command = None, args = None))
+    config.withLspUserConfig(
+      LspUserConfig(
+        servers = Some(servers + (languageId.id -> update(existing)))
+      )
+    )
+
+  private def parseBoolean(value: String): Option[Boolean] =
+    value.toLowerCase match
+      case "true" | "on" | "enabled"    => Some(true)
+      case "false" | "off" | "disabled" => Some(false)
+      case _                            => None
+
+  private def lspConfigToString(config: LspUserConfig): String =
+    config.servers
+      .getOrElse(Map.empty)
+      .toList
+      .sortBy(_._1)
+      .flatMap {
+        case (languageId, override_) =>
+          List(
+            override_.enabled.map(enabled => s"lsp.$languageId.enabled = $enabled"),
+            override_.command.map(command => s"lsp.$languageId.command = $command"),
+            override_.args.map(args => s"lsp.$languageId.args = ${args.mkString(",")}")
+          ).flatten
+      }
+      .mkString("\n")
 
   /** Create a sample configuration file */
   def createSampleConfig(path: String): Boolean =

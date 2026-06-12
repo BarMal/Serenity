@@ -140,7 +140,9 @@ object AppRuntime:
             ).void
           ),
           supervised("input shutdown")(shutdownInputHandler),
-          supervised("LSP loop")(LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger))
+          supervised("LSP loop")(
+            LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger, appConfig.lspUserConfig)
+          )
         ).parMapN((_, _, _, _, _, _, _) => ())
       _ <- logger.info("Serenity editor shutdown complete")
     yield ()
