@@ -94,12 +94,39 @@ trait Rope(using balance: Balance):
       findAll(0, List.empty)
 
   def lineCount: Int =
-    this.collect().count(_ == '\n') + 1
+    foldCharsUntil(1)((count, char) => Left(if char == '\n' then count + 1 else count))
 
   def getLine(lineIndex: Int): Option[String] =
-    val content = this.collect()
-    val lines   = content.split("\n", -1) // Include trailing empty strings
-    if lineIndex >= 0 && lineIndex < lines.length then Some(lines(lineIndex)) else None
+    if lineIndex < 0 then None
+    else
+      case class LineScan(currentLine: Int, value: StringBuilder)
+
+      val scan = foldCharsUntil(LineScan(0, new StringBuilder)) { (state, char) =>
+        if char == '\n' then
+          if state.currentLine == lineIndex then Right(state)
+          else Left(LineScan(state.currentLine + 1, state.value))
+        else if state.currentLine == lineIndex then
+          state.value.append(char)
+          Left(state)
+        else Left(state)
+      }
+
+      if scan.currentLine == lineIndex then Some(scan.value.toString) else None
+
+  def lineColumnToOffset(line: Int, column: Int): Int =
+    case class OffsetScan(currentLine: Int, currentColumn: Int, offset: Int)
+
+    val targetLine = math.max(0, line)
+    val targetCol  = math.max(0, column)
+
+    val scan = foldCharsUntil(OffsetScan(0, 0, 0)) { (state, char) =>
+      if state.currentLine == targetLine && state.currentColumn >= targetCol then Right(state)
+      else if state.currentLine == targetLine && char == '\n' then Right(state)
+      else if char == '\n' then Left(OffsetScan(state.currentLine + 1, 0, state.offset + 1))
+      else Left(OffsetScan(state.currentLine, state.currentColumn + 1, state.offset + 1))
+    }
+
+    scan.offset
 
   def search(term: String): Option[Int] =
     if term.isEmpty then None
@@ -107,6 +134,32 @@ trait Rope(using balance: Balance):
       val content = this.collect()
       val index   = content.indexOf(term)
       if index == -1 then None else Some(index)
+
+  @tailrec
+  private def foldCharsUntil[A](
+    acc: A
+  )(step: (A, Char) => Either[A, A], stack: List[(Rope, Int)] = List((this, 0))): A =
+    stack match
+      case Nil => acc
+      case (head, offset) :: rest =>
+        head match
+          case node: Node =>
+            foldCharsUntil(acc)(step, (node.left, 0) :: (node.right, 0) :: rest)
+          case leaf: Leaf =>
+            if offset >= leaf.value.length then foldCharsUntil(acc)(step, rest)
+            else
+              step(acc, leaf.value.charAt(offset)) match
+                case Right(done) => done
+                case Left(next)  => foldCharsUntil(next)(step, (leaf, offset + 1) :: rest)
+          case other =>
+            if offset >= other.weight then foldCharsUntil(acc)(step, rest)
+            else
+              other.index(offset) match
+                case None => foldCharsUntil(acc)(step, rest)
+                case Some(char) =>
+                  step(acc, char) match
+                    case Right(done) => done
+                    case Left(next)  => foldCharsUntil(next)(step, (other, offset + 1) :: rest)
 
 object Rope:
 
