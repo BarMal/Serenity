@@ -194,8 +194,11 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
           textFontFamily = "SansSerif",
           uiFontFamily = "Dialog",
           fontSize = 15.0f,
+          textFontSize = 16.0f,
           uiFontSize = 13.0f,
-          enableLigatures = false
+          enableLigatures = false,
+          textLigatures = true,
+          uiLigatures = true
         ),
         blurRadius = 0.42f,
         backgroundStyle = BackgroundStyle.GlassLike,
@@ -213,9 +216,12 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.fontConfig.codeFontFamily shouldBe "Monospaced"
     decoded.config.fontConfig.textFontFamily shouldBe "SansSerif"
     decoded.config.fontConfig.uiFontFamily shouldBe "Dialog"
-    decoded.config.fontConfig.fontSize shouldBe 15.0f
+    decoded.config.fontConfig.codeFontSize shouldBe 15.0f
+    decoded.config.fontConfig.textFontSize shouldBe 16.0f
     decoded.config.fontConfig.uiFontSize shouldBe 13.0f
-    decoded.config.fontConfig.enableLigatures shouldBe false
+    decoded.config.fontConfig.codeLigatures shouldBe false
+    decoded.config.fontConfig.textLigatures shouldBe true
+    decoded.config.fontConfig.uiLigatures shouldBe true
     decoded.config.showLineNumbers shouldBe false
     decoded.config.showGutter shouldBe false
     decoded.config.characterAnimation.map(_.steps) shouldBe

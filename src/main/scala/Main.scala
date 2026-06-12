@@ -21,60 +21,64 @@ object Main extends IOApp:
 
     for
       displayState <- RuntimeDisplayState.create(appConfig.fontConfig)
-      _ <- SwingWindow.resource(displayState.primaryMetrics, appConfig.windowChromeMode).use { swingWin =>
-        def syncDisplayMetrics(): IO[Unit] =
-          IO.blocking {
-            val metrics = displayState.primaryMetrics
-            if swingWin.metrics != metrics then swingWin.updateMetrics(metrics)
-          }
+      _ <- SwingWindow
+        .resource(displayState.primaryMetrics, appConfig.windowChromeMode, appConfig.preferredWindowSize)
+        .use { swingWin =>
+          def syncDisplayMetrics(): IO[Unit] =
+            IO.blocking {
+              val metrics = displayState.primaryMetrics
+              if swingWin.metrics != metrics then swingWin.updateMetrics(metrics)
+            }
 
-        AppRuntime.run(
-          initialViewportSize = swingWin.viewportSize,
-          makeInputHandler = router =>
-            new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
-              swingWin.canvas,
-              router,
-              () => swingWin.metrics
-            ),
-          checkResize = IO(swingWin.doResizeIfNecessary()),
-          renderFull = (state, vis, cc) =>
-            syncDisplayMetrics() >> IO.blocking(
-              Renderer.render(
-                state,
-                vis,
-                swingWin,
-                displayState.codeFont,
-                displayState.textFont,
-                displayState.uiFont,
-                displayState.uiMetrics,
-                cc
+          AppRuntime.run(
+            initialViewportSize = swingWin.viewportSize,
+            makeInputHandler = router =>
+              new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
+                swingWin.canvas,
+                router,
+                () => swingWin.metrics
+              ),
+            checkResize = IO(swingWin.doResizeIfNecessary()),
+            renderFull = (state, vis, cc) =>
+              syncDisplayMetrics() >> IO.blocking(
+                Renderer.render(
+                  state,
+                  vis,
+                  swingWin,
+                  displayState.codeFont,
+                  displayState.textFont,
+                  displayState.uiFont,
+                  displayState.uiMetrics,
+                  cc
+                )
+              ),
+            renderCursorOnly = (state, vis, cc) =>
+              syncDisplayMetrics() >> IO.blocking(
+                Renderer.render(
+                  state,
+                  vis,
+                  swingWin,
+                  displayState.codeFont,
+                  displayState.textFont,
+                  displayState.uiFont,
+                  displayState.uiMetrics,
+                  cc
+                )
+              ),
+            appConfig = appConfig,
+            makeStateManager = Some(logger =>
+              com.serenity.state.manager.StateManager.apply(
+                logger,
+                onFontConfigChanged = config =>
+                  displayState.update(config) >>
+                    IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics)),
+                configPersistencePath = Some(ConfigManager.defaultConfigPath),
+                windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
+                onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size))
               )
             ),
-          renderCursorOnly = (state, vis, cc) =>
-            syncDisplayMetrics() >> IO.blocking(
-              Renderer.render(
-                state,
-                vis,
-                swingWin,
-                displayState.codeFont,
-                displayState.textFont,
-                displayState.uiFont,
-                displayState.uiMetrics,
-                cc
-              )
-            ),
-          appConfig = appConfig,
-          makeStateManager = Some(logger =>
-            com.serenity.state.manager.StateManager.apply(
-              logger,
-              onFontConfigChanged = config =>
-                displayState.update(config) >>
-                  IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics)),
-              configPersistencePath = Some(ConfigManager.defaultConfigPath)
-            )
-          ),
-          awaitExternalQuit = swingWin.awaitClose,
-          registerResizeCallback = cb => swingWin.setOnResize(() => cb.unsafeRunAndForget())
-        )
-      }
+            awaitExternalQuit = swingWin.awaitClose,
+            registerResizeCallback = cb => swingWin.setOnResize(() => cb.unsafeRunAndForget())
+          )
+        }
     yield ExitCode.Success

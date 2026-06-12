@@ -4,7 +4,7 @@ import java.awt.Font
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
-import com.serenity.ui.layout.{CellMetrics, LayoutRect}
+import com.serenity.ui.layout.{CellMetrics, LayoutRect, TextLayoutSnapshot}
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -40,6 +40,37 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     surface.getRow(1).slice(1, 11) shouldBe "1234567890"
     surface.fillPixelRectCalls should not be empty
     surface.fillPixelRectCalls.last.xPx should be >= metrics.toPixelX(1)
+  }
+
+  it should "place an editable split row caret after the rendered value segment" in {
+    val surface = new MockRenderSurface(80, 8)
+    val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val query   = "iiiiWWWW"
+    val rowText = s"Find $query"
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 40, 5),
+      rows = List(
+        OverlayRow(
+          plainText = rowText,
+          selected = true,
+          cursorColumn = Some(rowText.length),
+          segments = List(
+            OverlaySegment("Find"),
+            OverlaySegment(query, selected = true)
+          ),
+          layout = OverlayRowLayout.Split
+        )
+      )
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+
+    val valueX          = 1 + math.max(0, 38 - query.length)
+    val caretXs         = TextLayoutSnapshot.caretXsForText(query, font, surface.fontRenderContext.get)
+    val expectedCursorX = metrics.toPixelX(valueX) + math.round(caretXs.last)
+
+    surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorX
   }
 
   it should "render command runner settings rows with stable label, hint, and value columns" in {

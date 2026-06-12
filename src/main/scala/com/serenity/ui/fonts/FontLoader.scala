@@ -15,9 +15,17 @@ object FontLoader:
       textFontFamily: String = Font.SANS_SERIF,
       uiFontFamily: String = Font.SANS_SERIF,
       fontSize: Float = 12.0f,
+      textFontSize: Float = 12.0f,
       uiFontSize: Float = 12.0f,
-      enableLigatures: Boolean = true
-  )
+      enableLigatures: Boolean = true,
+      textLigatures: Boolean = true,
+      uiLigatures: Boolean = false
+  ):
+    def codeFontSize: Float =
+      fontSize
+
+    def codeLigatures: Boolean =
+      enableLigatures
 
   lazy val availableMonospaceFamilies: List[String] =
     (BundledCodeFontFamily :: availableSystemFontFamilies.filter(f =>
@@ -61,12 +69,15 @@ object FontLoader:
 
   def previewTextFont(config: FontConfig): Font =
     applyFontFeatures(
-      Font(config.textFontFamily, Font.PLAIN, config.fontSize.toInt).deriveFont(config.fontSize),
-      config.enableLigatures
+      Font(config.textFontFamily, Font.PLAIN, config.textFontSize.toInt).deriveFont(config.textFontSize),
+      config.textLigatures
     )
 
   def previewUiFont(config: FontConfig): Font =
-    Font(config.uiFontFamily, Font.PLAIN, config.uiFontSize.toInt).deriveFont(config.uiFontSize)
+    applyFontFeatures(
+      Font(config.uiFontFamily, Font.PLAIN, config.uiFontSize.toInt).deriveFont(config.uiFontSize),
+      config.uiLigatures
+    )
 
   def isMonospacedFont(font: Font): Boolean =
     isMonospaced(font)

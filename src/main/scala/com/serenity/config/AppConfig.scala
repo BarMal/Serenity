@@ -24,6 +24,10 @@ enum MarkdownViewMode:
   case SplitPreview
   case InlineLens
 
+case class PreferredWindowSize(width: Int, height: Int):
+  def normalized: PreferredWindowSize =
+    PreferredWindowSize(width.max(400), height.max(300))
+
 case class CursorColorConfig(
     active: Option[Color] = None,
     inactive: Option[Color] = None
@@ -49,7 +53,8 @@ case class AppConfig(
     cursorMode: CursorMode = CursorMode.Blink,
     cursorColors: CursorColorConfig = CursorColorConfig(),
     windowChromeMode: WindowChromeMode = WindowChromeMode.Native,
-    markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source
+    markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
+    preferredWindowSize: Option[PreferredWindowSize] = None
 ):
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
@@ -120,6 +125,9 @@ case class AppConfig(
 
   def withMarkdownViewMode(mode: MarkdownViewMode): AppConfig =
     copy(markdownViewMode = mode)
+
+  def withPreferredWindowSize(size: PreferredWindowSize): AppConfig =
+    copy(preferredWindowSize = Some(size.normalized))
 
 object AppConfig:
 

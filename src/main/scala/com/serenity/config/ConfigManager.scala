@@ -70,20 +70,56 @@ object ConfigManager:
               config.withFontConfig(config.fontConfig.copy(textFontFamily = value.trim))
             case "font.ui.family" | "font_ui_family" =>
               config.withFontConfig(config.fontConfig.copy(uiFontFamily = value.trim))
-            case "font.size" | "font_size" =>
+            case "font.code.size" | "font_code_size" =>
               value.trim.toFloatOption
                 .map(size => config.withFontConfig(config.fontConfig.copy(fontSize = clampFontSize(size))))
+                .getOrElse(config)
+            case "font.text.size" | "font.prose.size" | "font_text_size" | "font_prose_size" =>
+              value.trim.toFloatOption
+                .map(size => config.withFontConfig(config.fontConfig.copy(textFontSize = clampFontSize(size))))
+                .getOrElse(config)
+            case "font.size" | "font_size" =>
+              value.trim.toFloatOption
+                .map(size =>
+                  config.withFontConfig(
+                    config.fontConfig.copy(fontSize = clampFontSize(size), textFontSize = clampFontSize(size))
+                  )
+                )
                 .getOrElse(config)
             case "font.ui.size" | "font_ui_size" =>
               value.trim.toFloatOption
                 .map(size => config.withFontConfig(config.fontConfig.copy(uiFontSize = clampFontSize(size))))
                 .getOrElse(config)
-            case "font.ligatures" | "font_ligatures" =>
+            case "font.code.ligatures" | "font_code_ligatures" =>
               value.trim.toLowerCase match
                 case "true" | "on" | "enabled" =>
                   config.withFontConfig(config.fontConfig.copy(enableLigatures = true))
                 case "false" | "off" | "disabled" =>
                   config.withFontConfig(config.fontConfig.copy(enableLigatures = false))
+                case _ =>
+                  config
+            case "font.text.ligatures" | "font.prose.ligatures" | "font_text_ligatures" | "font_prose_ligatures" =>
+              value.trim.toLowerCase match
+                case "true" | "on" | "enabled" =>
+                  config.withFontConfig(config.fontConfig.copy(textLigatures = true))
+                case "false" | "off" | "disabled" =>
+                  config.withFontConfig(config.fontConfig.copy(textLigatures = false))
+                case _ =>
+                  config
+            case "font.ui.ligatures" | "font_ui_ligatures" =>
+              value.trim.toLowerCase match
+                case "true" | "on" | "enabled" =>
+                  config.withFontConfig(config.fontConfig.copy(uiLigatures = true))
+                case "false" | "off" | "disabled" =>
+                  config.withFontConfig(config.fontConfig.copy(uiLigatures = false))
+                case _ =>
+                  config
+            case "font.ligatures" | "font_ligatures" =>
+              value.trim.toLowerCase match
+                case "true" | "on" | "enabled" =>
+                  config.withFontConfig(config.fontConfig.copy(enableLigatures = true, textLigatures = true))
+                case "false" | "off" | "disabled" =>
+                  config.withFontConfig(config.fontConfig.copy(enableLigatures = false, textLigatures = false))
                 case _ =>
                   config
             case "cursor.active.color" | "cursor_active_color" =>
@@ -93,6 +129,22 @@ object ConfigManager:
             case "cursor.inactive.color" | "cursor_inactive_color" =>
               parseColor(value.trim)
                 .map(color => config.withCursorColors(config.cursorColors.copy(inactive = Some(color))))
+                .getOrElse(config)
+            case "window.preferred.width" | "window_preferred_width" =>
+              value.trim.toIntOption
+                .map(width =>
+                  config.withPreferredWindowSize(
+                    config.preferredWindowSize.getOrElse(PreferredWindowSize(width, 768)).copy(width = width)
+                  )
+                )
+                .getOrElse(config)
+            case "window.preferred.height" | "window_preferred_height" =>
+              value.trim.toIntOption
+                .map(height =>
+                  config.withPreferredWindowSize(
+                    config.preferredWindowSize.getOrElse(PreferredWindowSize(1024, height)).copy(height = height)
+                  )
+                )
                 .getOrElse(config)
             case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
               HotkeyAction.values
@@ -151,16 +203,23 @@ object ConfigManager:
        |syntax.highlighting = ${config.syntaxHighlightingEnabled}
        |
        |# Font configuration
-       |font.code.family = ${config.fontConfig.codeFontFamily}
-       |font.text.family = ${config.fontConfig.textFontFamily}
-       |font.ui.family = ${config.fontConfig.uiFontFamily}
-       |font.size = ${config.fontConfig.fontSize}
-       |font.ui.size = ${config.fontConfig.uiFontSize}
-       |font.ligatures = ${config.fontConfig.enableLigatures}
+        |font.code.family = ${config.fontConfig.codeFontFamily}
+        |font.text.family = ${config.fontConfig.textFontFamily}
+        |font.ui.family = ${config.fontConfig.uiFontFamily}
+        |font.code.size = ${config.fontConfig.codeFontSize}
+        |font.text.size = ${config.fontConfig.textFontSize}
+        |font.ui.size = ${config.fontConfig.uiFontSize}
+        |font.code.ligatures = ${config.fontConfig.codeLigatures}
+        |font.text.ligatures = ${config.fontConfig.textLigatures}
+        |font.ui.ligatures = ${config.fontConfig.uiLigatures}
        |
        |# Cursor colour overrides. Leave empty to use the active theme cursor.
        |cursor.active.color = ${config.cursorColors.active.map(formatColor).getOrElse("")}
        |cursor.inactive.color = ${config.cursorColors.inactive.map(formatColor).getOrElse("")}
+       |
+       |# Preferred desktop window size. Leave empty to use the default.
+       |window.preferred.width = ${config.preferredWindowSize.map(_.width).fold("")(_.toString)}
+       |window.preferred.height = ${config.preferredWindowSize.map(_.height).fold("")(_.toString)}
        |
        |# Hotkey overrides
        |hotkey.command_palette = ${config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render}
@@ -234,16 +293,23 @@ object ConfigManager:
                           |syntax.highlighting = false
                           |
                           |# Font configuration
-                          |font.code.family = Monaspace Neon (Bundled)
-                          |font.text.family = SansSerif
-                          |font.ui.family = SansSerif
-                          |font.size = 12.0
-                          |font.ui.size = 12.0
-                          |font.ligatures = true
+                           |font.code.family = Monaspace Neon (Bundled)
+                           |font.text.family = SansSerif
+                           |font.ui.family = SansSerif
+                           |font.code.size = 12.0
+                           |font.text.size = 12.0
+                           |font.ui.size = 12.0
+                           |font.code.ligatures = true
+                           |font.text.ligatures = true
+                           |font.ui.ligatures = false
                           |
                           |# Cursor colour overrides. Leave empty to use the active theme cursor.
                           |cursor.active.color =
                           |cursor.inactive.color =
+                          |
+                          |# Preferred desktop window size. Leave empty to use the default.
+                          |window.preferred.width =
+                          |window.preferred.height =
                           |
                           |# Hotkey overrides
                           |hotkey.command_palette = ctrl+p

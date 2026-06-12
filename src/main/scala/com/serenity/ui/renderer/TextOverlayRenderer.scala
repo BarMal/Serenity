@@ -135,20 +135,66 @@ object TextOverlayRenderer:
         renderColumnRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font, isAnimating)
 
     if cursorVisible then
-      rowView.row.cursorColumn.foreach { cursorColumn =>
-        if rowView.row.layout == OverlayRowLayout.Plain && shouldUseMeasuredCursor(font, surface) then
-          renderMeasuredCursor(surface, x, y, rowView.row, cursorColumn, theme, font, cellMetrics)
-        else if cursorColumn >= 0 && cursorColumn < width then
-          val cursorX = x + cursorColumn
-          val cursorChar =
-            if cursorColumn < rowView.row.plainText.length then rowView.row.plainText.charAt(cursorColumn)
-            else ' '
-          surface.setForegroundColor(theme.background)
-          surface.setBackgroundColor(theme.cursor)
-          CharacterRenderer.renderChar(surface, cursorX, y, cursorChar)
-      }
+      rowView.row.cursorColumn
+        .flatMap(cursorColumn => cursorPlacement(rowView.row, x, width, cursorColumn))
+        .foreach { placement =>
+          if shouldUseMeasuredCursor(font, surface) then
+            renderMeasuredCursor(surface, placement.x, y, placement.textBeforeCursor, theme, font, cellMetrics)
+          else if placement.cellColumn >= 0 && placement.cellColumn < width then
+            surface.setForegroundColor(theme.background)
+            surface.setBackgroundColor(theme.cursor)
+            CharacterRenderer.renderChar(surface, placement.x + placement.cellColumn, y, ' ')
+        }
 
   private case class OverlayRowView(row: OverlayRow)
+
+  private case class CursorPlacement(x: Int, textBeforeCursor: String):
+    def cellColumn: Int =
+      textBeforeCursor.length
+
+  private def cursorPlacement(row: OverlayRow, x: Int, width: Int, cursorColumn: Int): Option[CursorPlacement] =
+    row.layout match
+      case OverlayRowLayout.Plain =>
+        Some(CursorPlacement(x, row.plainText.take(cursorColumn.max(0).min(row.plainText.length))))
+      case OverlayRowLayout.Split =>
+        splitCursorPlacement(row, x, width, cursorColumn)
+      case OverlayRowLayout.Columns =>
+        columnCursorPlacement(row, x, width)
+      case OverlayRowLayout.Distributed =>
+        None
+
+  private def splitCursorPlacement(
+    row: OverlayRow,
+    x: Int,
+    width: Int,
+    cursorColumn: Int
+  ): Option[CursorPlacement] =
+    row.segments match
+      case left :: rightSegments if rightSegments.nonEmpty =>
+        val rightTexts      = rightSegments.map(_.text)
+        val rightGroupText  = rightTexts.mkString(" ")
+        val rightGroupWidth = math.min(width, rightGroupText.length)
+        val rightStartX     = x + math.max(0, width - rightGroupWidth)
+        val rightStartCol   = left.text.length + 1
+        if cursorColumn <= left.text.length then
+          Some(CursorPlacement(x, left.text.take(cursorColumn.max(0).min(left.text.length))))
+        else
+          val localColumn = (cursorColumn - rightStartCol).max(0).min(rightGroupText.length)
+          Some(CursorPlacement(rightStartX, rightGroupText.take(localColumn)))
+      case _ =>
+        Some(CursorPlacement(x, row.plainText.take(cursorColumn.max(0).min(row.plainText.length))))
+
+  private def columnCursorPlacement(row: OverlayRow, x: Int, width: Int): Option[CursorPlacement] =
+    row.segments match
+      case label :: hint :: value :: Nil if value.selected =>
+        val labelWidth = math.min(22, math.max(8, width / 3))
+        val valueWidth = math.min(18, math.max(8, width / 4))
+        val hintWidth  = math.max(0, width - labelWidth - valueWidth - 2)
+        Some(CursorPlacement(x + labelWidth + hintWidth + 2, value.text.take(valueWidth)))
+      case _ =>
+        row.cursorColumn.map(cursorColumn =>
+          CursorPlacement(x, row.plainText.take(cursorColumn.max(0).min(row.plainText.length)))
+        )
 
   private def scrolledRowView(row: OverlayRow, width: Int): OverlayRowView =
     val scrollOffset =
@@ -444,16 +490,14 @@ object TextOverlayRenderer:
     surface: RenderSurface,
     x: Int,
     y: Int,
-    row: OverlayRow,
-    cursorColumn: Int,
+    textBeforeCursor: String,
     theme: Theme,
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
     val frc          = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
-    val caretXs      = TextLayoutSnapshot.caretXsForText(row.plainText, font, frc)
-    val safeColumn   = cursorColumn.max(0).min(caretXs.length - 1)
-    val xPx          = cellMetrics.toPixelX(x) + math.round(caretXs(safeColumn))
+    val caretXs      = TextLayoutSnapshot.caretXsForText(textBeforeCursor, font, frc)
+    val xPx          = cellMetrics.toPixelX(x) + math.round(caretXs.lastOption.getOrElse(0.0f))
     val yPx          = cellMetrics.toPixelY(y)
     val caretWidthPx = math.max(2, math.round(cellMetrics.charWidth * 0.12f))
     surface.fillPixelRect(xPx, yPx, caretWidthPx, cellMetrics.lineHeight, theme.cursor)

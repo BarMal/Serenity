@@ -6,7 +6,7 @@ import cats.effect.std.Queue
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.animation.{AnimatedCell, CharacterKey, RgbInterpolator}
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
@@ -16,12 +16,14 @@ import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
+import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
 trait StateManager:
   def applyEvent(event: Event): IO[Unit]
+  def executeCommand(command: Command): IO[Unit]
   def getCurrentState: IO[AppState]
   def getCurrentFocus: IO[Focus]
   def switchFocus(newFocus: Focus): IO[Unit]
@@ -116,7 +118,10 @@ object StateManager:
     onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
     sessionRootOverride: Option[Path] = None,
     initialConfig: AppConfig = AppConfig.default,
-    configPersistencePath: Option[Path] = None
+    configPersistencePath: Option[Path] = None,
+    uiPresetStore: UiPresetStore = UiPresetStore.default,
+    windowSizeProvider: IO[Option[PreferredWindowSize]] = IO.pure(None),
+    onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit] = _ => IO.unit
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     for
@@ -139,7 +144,10 @@ object StateManager:
       themeManager,
       lspQueue,
       onFontConfigChanged,
-      configPersistencePath
+      configPersistencePath,
+      uiPresetStore,
+      windowSizeProvider,
+      onPreferredWindowSizeChanged
     )
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
@@ -170,7 +178,10 @@ object StateManager:
       protected val themeManager: AppThemeManager = AppThemeManager.create,
       protected val lspQueue: Queue[IO, LspEffect],
       protected val onFontConfigChanged: FontConfig => IO[Unit],
-      protected val configPersistencePath: Option[Path]
+      protected val configPersistencePath: Option[Path],
+      protected val uiPresetStore: UiPresetStore,
+      protected val windowSizeProvider: IO[Option[PreferredWindowSize]],
+      protected val onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit]
   )(using Balance)
       extends StateManager,
         StateManagerBehavior:
@@ -189,6 +200,9 @@ object StateManager:
       .getOrElse(SessionManager.create(themeManager, logger, policy))
 
     protected val sessionPersistence = new SessionPersistence(sessionManager, policy, logger)
+
+    def executeCommand(command: Command): IO[Unit] =
+      stateRef.get.flatMap(state => interpretCommand(command, state))
 
     // Session persistence operations
     def saveSession(): IO[Unit] =

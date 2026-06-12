@@ -423,7 +423,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "open font family picker submenus and submit UI font choices" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-typography", "ui-font")
+    val state    = settingsStateOnItem("settings-ui-font", "ui-font")
 
     val entered = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val runner  = runnerFrom(entered.state)
@@ -431,7 +431,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       runner.submenuItems("ui-font").collectFirst { case CommandSurfaceItem.CommandItem(command) => command.intent }
 
     runner.activeSubmenu.map(_.groupId) shouldBe Some("ui-font")
-    runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-typography")
+    runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-font")
 
     val submitted = CommandRunnerReducer.reduce(RunnerSubmit, entered.state, registry)
     submitted.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe

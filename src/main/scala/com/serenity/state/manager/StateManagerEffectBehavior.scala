@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.IO
+import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
 import com.serenity.config.MarkdownViewMode
@@ -15,6 +16,7 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.{DirEntry, PanelContent, PanelPosition}
+import com.serenity.ui.presets.UiPreset
 
 private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBehavior:
   this: StateManager =>
@@ -271,11 +273,25 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
         }
       case CommandIntent.IncreaseFontSize =>
-        updateFontConfig(config => config.copy(fontSize = clampFontSize(config.fontSize + 1.0f)))
+        updateFontConfig(config =>
+          config.copy(
+            fontSize = clampFontSize(config.fontSize + 1.0f),
+            textFontSize = clampFontSize(config.textFontSize + 1.0f)
+          )
+        )
       case CommandIntent.DecreaseFontSize =>
-        updateFontConfig(config => config.copy(fontSize = clampFontSize(config.fontSize - 1.0f)))
+        updateFontConfig(config =>
+          config.copy(
+            fontSize = clampFontSize(config.fontSize - 1.0f),
+            textFontSize = clampFontSize(config.textFontSize - 1.0f)
+          )
+        )
       case CommandIntent.SetFontSize(size) =>
+        updateFontConfig(config => config.copy(fontSize = clampFontSize(size), textFontSize = clampFontSize(size)))
+      case CommandIntent.SetCodeFontSize(size) =>
         updateFontConfig(_.copy(fontSize = clampFontSize(size)))
+      case CommandIntent.SetTextFontSize(size) =>
+        updateFontConfig(_.copy(textFontSize = clampFontSize(size)))
       case CommandIntent.SetUiFontSize(size) =>
         updateFontConfig(_.copy(uiFontSize = clampFontSize(size)))
       case CommandIntent.SetCodeFontFamily(family) =>
@@ -285,9 +301,21 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.SetUiFontFamily(family) =>
         updateFontConfig(_.copy(uiFontFamily = family))
       case CommandIntent.SetLigatures(enabled) =>
+        updateFontConfig(_.copy(enableLigatures = enabled, textLigatures = enabled))
+      case CommandIntent.SetCodeLigatures(enabled) =>
         updateFontConfig(_.copy(enableLigatures = enabled))
+      case CommandIntent.SetTextLigatures(enabled) =>
+        updateFontConfig(_.copy(textLigatures = enabled))
+      case CommandIntent.SetUiLigatures(enabled) =>
+        updateFontConfig(_.copy(uiLigatures = enabled))
+      case CommandIntent.SaveUiPreset(name) =>
+        saveUiPresetEffect(name)
+      case CommandIntent.ApplyUiPreset(name) =>
+        applyUiPresetEffect(name)
       case CommandIntent.ToggleLigatures =>
-        updateFontConfig(config => config.copy(enableLigatures = !config.enableLigatures))
+        updateFontConfig(config =>
+          config.copy(enableLigatures = !config.enableLigatures, textLigatures = !config.textLigatures)
+        )
       case CommandIntent.StartupNewSession =>
         createStartupSession()
       case CommandIntent.StartupRestoreSession =>
@@ -331,6 +359,84 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateConfig(_.withPanelKeyOverride(action, binding)).void
       case CommandIntent.SetPeekKeyBinding(action, binding) =>
         updateConfig(_.withPeekKeyOverride(action, binding)).void
+
+  protected def saveUiPresetEffect(name: String): IO[Unit] =
+    normalizedPresetName(name) match
+      case None =>
+        logger.warn("[PRESET] Ignoring empty UI preset name")
+      case Some(presetName) =>
+        for
+          state <- stateRef.get
+          windowSize <- windowSizeProvider.handleErrorWith(error =>
+            logger.error(error)("[PRESET] Window size capture failed").as(None)
+          )
+          preset = UiPreset.capture(presetName, state, windowSize)
+          _ <- uiPresetStore
+            .upsert(preset)
+            .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to save UI preset $presetName"))
+        yield ()
+
+  protected def applyUiPresetEffect(name: String): IO[Unit] =
+    normalizedPresetName(name) match
+      case None =>
+        logger.warn("[PRESET] Ignoring empty UI preset name")
+      case Some(presetName) =>
+        uiPresetStore
+          .find(presetName)
+          .flatMap {
+            case None =>
+              logger.warn(s"[PRESET] UI preset not found: $presetName")
+            case Some(preset) =>
+              for
+                currentState <- stateRef.get
+                theme <- themeManager
+                  .loadTheme(preset.themeName)
+                  .handleErrorWith(error =>
+                    logger.error(error)(s"[PRESET] Failed to load theme ${preset.themeName}; keeping current theme") >>
+                      IO.pure(currentState.theme)
+                  )
+                preferredWindowSize <- stateRef.modify { state =>
+                  val restored = withUpdatedRunnerConfig(UiPreset.applyToState(preset, state, theme), preset.config)
+                  (restored, restored.config.preferredWindowSize)
+                }
+                _ <- persistConfigFile(preset.config)
+                _ <- onFontConfigChanged(preset.config.fontConfig)
+                  .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset font config"))
+                _ <- preferredWindowSize.traverse_(size =>
+                  onPreferredWindowSizeChanged(size)
+                    .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset window size"))
+                )
+                _ <- reloadPresetDirectories(preset)
+                _ <- stateRef.get
+                  .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
+                  .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after preset apply failed"))
+              yield ()
+          }
+          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to apply UI preset $presetName"))
+
+  private def normalizedPresetName(name: String): Option[String] =
+    Option(name.trim).filter(_.nonEmpty)
+
+  private def persistConfigFile(config: com.serenity.config.AppConfig): IO[Unit] =
+    configPersistencePath match
+      case Some(path) =>
+        IO.blocking(com.serenity.config.ConfigManager.saveConfig(config, path)).flatMap {
+          case true  => IO.unit
+          case false => logger.warn(s"[CONFIG] Failed to persist config to $path")
+        }
+      case None =>
+        IO.unit
+
+  private def reloadPresetDirectories(preset: UiPreset): IO[Unit] =
+    preset.pinnedPanels.traverse_ { panel =>
+      panel.content match
+        case UiPreset.PanelContentSnapshot.DirectoryTree(rootPath, _, expandedPaths) =>
+          (rootPath :: expandedPaths).distinct.traverse_(path =>
+            loadPinnedDirectoryEffect(panel.position, Path.of(path))
+          )
+        case _ =>
+          IO.unit
+    }
 
   private def openMarkdownPreview(state: AppState): IO[Unit] =
     state.focusedBufferId

@@ -54,11 +54,18 @@ enum CommandIntent:
   case IncreaseFontSize
   case DecreaseFontSize
   case SetFontSize(size: Float)
+  case SetCodeFontSize(size: Float)
+  case SetTextFontSize(size: Float)
   case SetUiFontSize(size: Float)
   case SetCodeFontFamily(family: String)
   case SetTextFontFamily(family: String)
   case SetUiFontFamily(family: String)
   case SetLigatures(enabled: Boolean)
+  case SetCodeLigatures(enabled: Boolean)
+  case SetTextLigatures(enabled: Boolean)
+  case SetUiLigatures(enabled: Boolean)
+  case SaveUiPreset(name: String)
+  case ApplyUiPreset(name: String)
   case ToggleLigatures
   case StartupNewSession
   case StartupRestoreSession
@@ -148,12 +155,14 @@ object CommandSurfaceItem:
       isDecimal: Boolean,
       parse: String => Option[CommandIntent],
       category: CommandCategory,
-      acceptsBindingText: Boolean = false
+      acceptsBindingText: Boolean = false,
+      acceptsFreeText: Boolean = false
   ) extends CommandSurfaceItem:
     override def searchText: String = s"$label $hint"
 
     def accepts(currentText: String, char: Char): Boolean =
-      if acceptsBindingText then char.isLetterOrDigit || char == '+' || char == '-' || char == '_'
+      if acceptsFreeText then !char.isControl
+      else if acceptsBindingText then char.isLetterOrDigit || char == '+' || char == '-' || char == '_'
       else char.isDigit || (char == '.' && isDecimal && !currentText.contains('.'))
 
     def isOutOfBounds(text: String): Boolean =
