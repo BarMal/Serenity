@@ -9,6 +9,12 @@
     "memory": "8gb",
     "storage": "32gb"
   },
+  "secrets": {
+    "OPENAI_API_KEY": {
+      "description": "Optional. Set this Codespaces secret if you want Codex CLI to authenticate with an API key instead of interactive ChatGPT sign-in.",
+      "documentationUrl": "https://developers.openai.com/codex/quickstart"
+    }
+  },
   "remoteUser": "vscode",
   "customizations": {
     "vscode": {

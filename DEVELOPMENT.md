@@ -37,4 +37,14 @@ Run formatting and Scalafix before committing when changing Scala code:
 sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 ```
 
+## Codex CLI
+
+Codex CLI is installed in the Codespace image. Start it from the repository root:
+
+```bash
+codex
+```
+
+Sign in with ChatGPT when prompted, or add `OPENAI_API_KEY` as a Codespaces secret before creating or rebuilding the Codespace if you prefer API-key auth.
+
 Desktop package checks run in GitHub Actions on PRs. Release publishing is handled by the dedicated desktop publish workflow on `master` or manual dispatch.
