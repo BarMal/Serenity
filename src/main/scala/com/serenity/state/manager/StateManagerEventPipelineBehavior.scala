@@ -60,12 +60,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
                 cats.effect.IO.unit
 
           val result =
-            getTypedLocalHandlerForFocus(prevState.focus, prevState) match
-              case Some(handler) =>
-                handler.processEvent(event, prevState)
-              case None =>
-                val component = getLegacyComponentForFocus(prevState.focus, prevState)
-                component.processEvent(event, prevState)
+            getLocalHandlerForFocus(prevState.focus, prevState).processEvent(event, prevState)
 
           logCommandRunnerEvent >>
             applyComponentResult(result, prevState).flatMap(newState => validateAndUpdateState(newState, prevState))
@@ -186,47 +181,32 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         logger.error(s"State validation failed: ${errors.mkString(", ")}") >>
           stateRef.set(fallbackState)
 
-  private def getTypedLocalHandlerForFocus(focus: Focus, state: AppState): Option[LocalEventHandler] =
-    focus match
-      case Focus.EditorPane(paneId) => Some(new EditorPaneComponent(paneId)(using balance))
-      case Focus.Surface(surfaceId) =>
-        state.surfaceById(surfaceId) match
-          case Some(surface) =>
-            surface.presentation match
-              case SurfacePresentation.Pinned(position, _) =>
-                Some(new PinnedPanelComponent(position))
-              case SurfacePresentation.Floating(_, _) =>
-                surface.content match
-                  case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
-                    val registry = CommandRegistry.withToggleUI
-                    Some(new CommandRunnerComponent(registry))
-                  case SurfaceContent.ThemePicker(_) =>
-                    Some(new ThemePickerComponent())
-                  case SurfaceContent.FileSearch(_) =>
-                    Some(new FileSearchComponent())
-                  case SurfaceContent.StartPage(_) =>
-                    Some(new StartupPageComponent())
-                  case SurfaceContent.ModalWorkflow(modal) =>
-                    Some(new ModalComponent(modalType(modal)))
-                  case _ =>
-                    Some(new PeekOverlayComponent())
-          case None =>
-            None
-
-  private def getLegacyComponentForFocus(focus: Focus, state: AppState): FocusedComponent =
+  private def getLocalHandlerForFocus(focus: Focus, state: AppState): LocalEventHandler =
     focus match
       case Focus.EditorPane(paneId) => new EditorPaneComponent(paneId)(using balance)
       case Focus.Surface(surfaceId) =>
         state.surfaceById(surfaceId) match
           case Some(surface) =>
             surface.presentation match
-              case SurfacePresentation.Pinned(position, _) => new PinnedPanelComponent(position)
+              case SurfacePresentation.Pinned(position, _) =>
+                new PinnedPanelComponent(position)
               case SurfacePresentation.Floating(_, _) =>
                 surface.content match
-                  case SurfaceContent.StartPage(_) => new StartupPageComponent()
-                  case _                           => new PeekOverlayComponent()
+                  case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
+                    val registry = CommandRegistry.withToggleUI
+                    new CommandRunnerComponent(registry)
+                  case SurfaceContent.ThemePicker(_) =>
+                    new ThemePickerComponent()
+                  case SurfaceContent.FileSearch(_) =>
+                    new FileSearchComponent()
+                  case SurfaceContent.StartPage(_) =>
+                    new StartupPageComponent()
+                  case SurfaceContent.ModalWorkflow(modal) =>
+                    new ModalComponent(modalType(modal))
+                  case _ =>
+                    new PeekOverlayComponent()
           case None =>
-            new PeekOverlayComponent()
+            NoOpLocalEventHandler
 
   private def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
     for

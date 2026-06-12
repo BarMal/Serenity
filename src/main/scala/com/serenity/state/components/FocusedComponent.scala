@@ -23,6 +23,15 @@ trait LocalEventHandler:
       case None =>
         processFallbackEvent(event, currentState)
 
+object NoOpLocalEventHandler extends LocalEventHandler:
+  final type E = Nothing
+
+  protected def decodeEvent(event: Event): Option[Nothing] =
+    None
+
+  protected def processTypedEvent(event: Nothing, currentState: AppState): ComponentResult =
+    ComponentResult.noChange
+
 trait TypedFocusedComponent[E0 <: Event] extends FocusedComponent, LocalEventHandler:
   final type E = E0
 
