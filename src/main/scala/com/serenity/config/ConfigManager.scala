@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path, Paths}
 import scala.io.Source
 import scala.util.Using
 
+import cats.effect.IO
 import com.serenity.animation.AnimationConfig
 
 /** Manages loading and saving application configuration */
@@ -34,6 +35,10 @@ object ConfigManager:
           System.err.println(s"[CONFIG] Failed to load config from $path, using defaults")
           AppConfig.default
     else AppConfig.default
+
+  /** Load configuration from file on the Cats Effect blocking pool. */
+  def loadConfigIO(configPath: Option[String] = None): IO[AppConfig] =
+    IO.blocking(loadConfig(configPath))
 
   /** Parse configuration from string */
   private def parseConfig(content: String): AppConfig =

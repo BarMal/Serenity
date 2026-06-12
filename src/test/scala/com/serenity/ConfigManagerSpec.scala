@@ -4,6 +4,7 @@ import java.awt.Color
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
+import cats.effect.unsafe.implicits.global
 import com.serenity.config.*
 import com.serenity.keystroke.{InputKey, Modifier}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -44,6 +45,27 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers:
       character = None,
       modifiers = Set(Modifier.Ctrl, Modifier.Shift)
     )
+  }
+
+  it should "load configuration through the effectful blocking-safe API" in {
+    val configFile = Files.createTempFile("serenity-config-io", ".conf")
+    Files.writeString(
+      configFile,
+      """syntax.highlighting = true
+        |font.size = 18.0
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfigIO(Some(configFile.toString)).unsafeRunSync()
+
+    config.syntaxHighlightingEnabled shouldBe true
+    config.fontConfig.fontSize shouldBe 18.0f
+  }
+
+  it should "return defaults through the effectful API when the config file is missing" in {
+    val missingConfig = Files.createTempDirectory("serenity-missing-config").resolve("missing.conf")
+
+    ConfigManager.loadConfigIO(Some(missingConfig.toString)).unsafeRunSync() shouldBe AppConfig.default
   }
 
   it should "parse richer key trigger names for local keymap overrides" in {
