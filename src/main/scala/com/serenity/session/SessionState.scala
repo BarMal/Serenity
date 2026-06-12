@@ -297,21 +297,27 @@ given Encoder[FontConfig] = deriveEncoder
 
 given Decoder[FontConfig] = Decoder.instance { cursor =>
   for
-    codeFontFamily <- cursor.getOrElse[String]("codeFontFamily")(FontConfig().codeFontFamily)
-    textFontFamily <- cursor.getOrElse[String]("textFontFamily")(FontConfig().textFontFamily)
-    uiFontFamily   <- cursor.getOrElse[String]("uiFontFamily")(Font.SANS_SERIF)
-    fontSize       <- cursor.getOrElse[Float]("fontSize")(FontConfig().fontSize)
-    uiFontSize     <- cursor.getOrElse[Float]("uiFontSize")(FontConfig().uiFontSize)
-    enableLigatures <- cursor.getOrElse[Boolean]("enableLigatures")(
-      FontConfig().enableLigatures
-    )
+    codeFontFamily  <- cursor.getOrElse[String]("codeFontFamily")(FontConfig().codeFontFamily)
+    textFontFamily  <- cursor.getOrElse[String]("textFontFamily")(FontConfig().textFontFamily)
+    uiFontFamily    <- cursor.getOrElse[String]("uiFontFamily")(Font.SANS_SERIF)
+    legacyFontSize  <- cursor.getOrElse[Float]("fontSize")(FontConfig().fontSize)
+    codeFontSize    <- cursor.getOrElse[Float]("codeFontSize")(legacyFontSize)
+    textFontSize    <- cursor.getOrElse[Float]("textFontSize")(legacyFontSize)
+    uiFontSize      <- cursor.getOrElse[Float]("uiFontSize")(FontConfig().uiFontSize)
+    legacyLigatures <- cursor.getOrElse[Boolean]("enableLigatures")(FontConfig().enableLigatures)
+    codeLigatures   <- cursor.getOrElse[Boolean]("codeLigatures")(legacyLigatures)
+    textLigatures   <- cursor.getOrElse[Boolean]("textLigatures")(legacyLigatures)
+    uiLigatures     <- cursor.getOrElse[Boolean]("uiLigatures")(FontConfig().uiLigatures)
   yield FontConfig(
     codeFontFamily = codeFontFamily,
     textFontFamily = textFontFamily,
     uiFontFamily = uiFontFamily,
-    fontSize = fontSize,
+    fontSize = codeFontSize,
+    textFontSize = textFontSize,
     uiFontSize = uiFontSize,
-    enableLigatures = enableLigatures
+    enableLigatures = codeLigatures,
+    textLigatures = textLigatures,
+    uiLigatures = uiLigatures
   )
 }
 
@@ -339,6 +345,9 @@ given Decoder[MarkdownViewMode] = Decoder.decodeString.emap {
   case "InlineLens"   => Right(MarkdownViewMode.InlineLens)
   case other          => Left(s"Unknown MarkdownViewMode: $other")
 }
+
+given Encoder[PreferredWindowSize] = deriveEncoder
+given Decoder[PreferredWindowSize] = deriveDecoder
 
 given Encoder[BackgroundStyle] = Encoder.encodeString.contramap(_.toString)
 
@@ -375,6 +384,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     cursorColors              <- cursor.getOrElse[CursorColorConfig]("cursorColors")(CursorColorConfig())
     windowChromeMode          <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(WindowChromeMode.Native)
     markdownViewMode          <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
+    preferredWindowSize       <- cursor.getOrElse[Option[PreferredWindowSize]]("preferredWindowSize")(None)
   yield AppConfig(
     characterAnimation = characterAnimation,
     syntaxHighlightingEnabled = syntaxHighlightingEnabled,
@@ -389,7 +399,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     cursorMode = cursorMode,
     cursorColors = cursorColors,
     windowChromeMode = windowChromeMode,
-    markdownViewMode = markdownViewMode
+    markdownViewMode = markdownViewMode,
+    preferredWindowSize = preferredWindowSize
   )
 }
 

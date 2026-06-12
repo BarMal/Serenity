@@ -207,7 +207,10 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .map(_.id) shouldBe List(
       "settings-animation",
       "settings-appearance",
-      "settings-typography",
+      "settings-ui-presets",
+      "settings-code-font",
+      "settings-prose-font",
+      "settings-ui-font",
       "settings-markdown",
       "settings-language",
       "settings-keymap"
@@ -216,41 +219,56 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     groupItems.head.children.map(_.id) should contain allOf ("animation-mode", "animation-duration", "animation-steps")
     groupItems(1).label shouldBe "Appearance"
     groupItems(1).children.map(_.id) should contain allOf ("cursor-mode", "background-style", "blur-radius")
-    groupItems(2).label shouldBe "Typography"
-    groupItems(2).children
-      .map(_.id) should contain allOf (
-      "code-font",
-      "text-font",
-      "ui-font",
-      "ligatures",
-      "buffer-font-size",
-      "ui-font-size"
-    )
-    groupItems(2).children
-      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "ui-font" => group }
+    groupItems(2).label shouldBe "UI Presets"
+    groupItems(2).children.map(_.id) should contain allOf ("ui-preset-save", "ui-preset-apply")
+    groupItems(3).label shouldBe "Code Font"
+    groupItems(3).children.map(_.id) should contain allOf ("code-font", "code-ligatures", "code-font-size")
+    groupItems(4).label shouldBe "Prose Font"
+    groupItems(4).children.map(_.id) should contain allOf ("text-font", "text-ligatures", "text-font-size")
+    groupItems(5).label shouldBe "UI Font"
+    groupItems(5).children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
+    groupItems(3).children
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "code-font" => group }
       .map(_.children.map(_.id)) should not be empty
-    groupItems(5).label shouldBe "Keymap"
-    groupItems(5).children.map(_.id) should contain allOf (
+    groupItems(8).label shouldBe "Keymap"
+    groupItems(8).children.map(_.id) should contain allOf (
       "keymap-global-command_palette",
       "keymap-command-runner-submit",
       "keymap-modal-dismiss"
     )
-    groupItems(3).label shouldBe "Markdown"
-    groupItems(3).children.map(_.id) should contain("markdown-view")
-    groupItems(4).label shouldBe "Language"
-    groupItems(4).children.map(_.id) should contain("lang-plain-text")
+    groupItems(6).label shouldBe "Markdown"
+    groupItems(6).children.map(_.id) should contain("markdown-view")
+    groupItems(7).label shouldBe "Language"
+    groupItems(7).children.map(_.id) should contain("lang-plain-text")
   }
 
-  it should "surface typography settings groups ahead of command matches when searching font-related terms" in {
+  it should "surface UI preset save and apply inputs in settings" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+    val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
+
+    val inputs = presetGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
+
+    inputs.map(_.id) shouldBe List("ui-preset-save", "ui-preset-apply")
+    inputs.foreach { item =>
+      item.accepts("", 'W') shouldBe true
+      item.accepts("Work", ' ') shouldBe true
+    }
+  }
+
+  it should "surface font settings groups ahead of command matches when searching font-related terms" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .updateSearchTerm("font")
 
-    runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-typography")
+    runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-code-font")
     runner.visibleItems.exists {
-      case group: CommandSurfaceItem.GroupItem => group.id == "settings-typography"
+      case group: CommandSurfaceItem.GroupItem => group.id == "settings-ui-font"
       case _                                   => false
     } shouldBe true
   }

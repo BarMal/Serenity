@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import javax.swing.*
 
 import cats.effect.{IO, Resource}
-import com.serenity.config.WindowChromeMode
+import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 
 class SwingWindow(
@@ -299,6 +299,23 @@ class SwingWindow(
     val d = pixelSize.get()
     metrics.viewportSize(d.width, d.height)
 
+  def currentPreferredWindowSize: PreferredWindowSize =
+    val d = frame.getSize
+    PreferredWindowSize(d.width, d.height).normalized
+
+  def resizeToPreferred(size: PreferredWindowSize): Unit =
+    val normalized = size.normalized
+    SwingUtilities.invokeLater { () =>
+      val dimension = new Dimension(normalized.width, normalized.height)
+      canvas.setPreferredSize(dimension)
+      frame.setSize(dimension)
+      frame.setLocationRelativeTo(null)
+      pixelSize.set(dimension)
+      pendingResize.set(Some(metrics.viewportSize(dimension.width, dimension.height)))
+      onResizeCallbackRef.get().foreach(_.apply())
+      canvas.requestFocusInWindow()
+    }
+
   def metrics: CellMetrics =
     metricsRef.get()
 
@@ -316,11 +333,13 @@ object SwingWindow:
 
   def resource(
     metrics: CellMetrics = DefaultMetrics,
-    chromeMode: WindowChromeMode = WindowChromeMode.Native
+    chromeMode: WindowChromeMode = WindowChromeMode.Native,
+    preferredWindowSize: Option[PreferredWindowSize] = None
   ): Resource[IO, SwingWindow] =
     Resource.make(
       IO.blocking {
-        val win = new SwingWindow(new Dimension(1024, 768), metrics, chromeMode)
+        val initialSize = preferredWindowSize.map(_.normalized).getOrElse(PreferredWindowSize(1024, 768))
+        val win         = new SwingWindow(new Dimension(initialSize.width, initialSize.height), metrics, chromeMode)
         win.start()
         win
       }

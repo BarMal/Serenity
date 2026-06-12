@@ -89,9 +89,18 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
     after.getSize2D shouldBe before.getSize2D
   }
 
-  it should "apply ligature attributes when enabled" in {
+  it should "apply text ligature attributes when enabled" in {
     val font = FontLoader
-      .loadTextFont(FontConfig(textFontFamily = Font.SANS_SERIF, enableLigatures = true))
+      .loadTextFont(FontConfig(textFontFamily = Font.SANS_SERIF, textLigatures = true))
+      .unsafeRunSync()
+
+    Option(font.getAttributes.get(java.awt.font.TextAttribute.LIGATURES)) shouldBe
+      Some(java.awt.font.TextAttribute.LIGATURES_ON)
+  }
+
+  it should "apply UI ligature attributes independently when enabled" in {
+    val font = FontLoader
+      .loadUiFont(FontConfig(uiFontFamily = Font.SANS_SERIF, uiLigatures = true, textLigatures = false))
       .unsafeRunSync()
 
     Option(font.getAttributes.get(java.awt.font.TextAttribute.LIGATURES)) shouldBe

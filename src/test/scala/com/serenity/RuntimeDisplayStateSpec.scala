@@ -39,6 +39,7 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
           codeFontFamily = "Monospaced",
           textFontFamily = "SansSerif",
           fontSize = 18.0f,
+          textFontSize = 18.0f,
           uiFontSize = 16.0f
         )
       )

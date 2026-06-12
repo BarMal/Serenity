@@ -85,10 +85,6 @@ case class CommandRunner(
     val cursorModeItem      = CommandRunner.cursorModeOptionItem(optionSelections)
     val backgroundStyleItem = CommandRunner.backgroundStyleOptionItem(optionSelections)
     val markdownViewItem    = CommandRunner.markdownViewOptionItem(optionSelections)
-    val codeFontGroup       = CommandRunner.codeFontGroupItem(optionSelections)
-    val textFontGroup       = CommandRunner.textFontGroupItem(optionSelections)
-    val uiFontGroup         = CommandRunner.uiFontGroupItem(optionSelections)
-    val ligaturesItem       = CommandRunner.ligaturesOptionItem(optionSelections)
     val keymapItems         = inputItems.filter(_.id.startsWith("keymap-"))
     List(
       CommandSurfaceItem.GroupItem(
@@ -108,13 +104,41 @@ case class CommandRunner(
         hint = Some("Cursor, background style, blur")
       ),
       CommandSurfaceItem.GroupItem(
-        id = "settings-typography",
-        label = "Typography",
-        children = List(codeFontGroup, textFontGroup, uiFontGroup, ligaturesItem) ++ inputItems.filter(item =>
-          item.id == "buffer-font-size" || item.id == "ui-font-size"
-        ),
+        id = "settings-ui-presets",
+        label = "UI Presets",
+        children = inputItems.filter(item => item.id == "ui-preset-save" || item.id == "ui-preset-apply"),
         category = CommandCategory.Settings,
-        hint = Some("Code, text, UI fonts, ligature shaping, buffer size, UI size")
+        hint = Some("Save or apply named layouts")
+      ),
+      CommandSurfaceItem.GroupItem(
+        id = "settings-code-font",
+        label = "Code Font",
+        children = List(
+          CommandRunner.codeFontGroupItem(optionSelections),
+          CommandRunner.codeLigaturesOptionItem(optionSelections)
+        ) ++ inputItems.filter(_.id == "code-font-size"),
+        category = CommandCategory.Settings,
+        hint = Some("Family, size, ligatures")
+      ),
+      CommandSurfaceItem.GroupItem(
+        id = "settings-prose-font",
+        label = "Prose Font",
+        children = List(
+          CommandRunner.textFontGroupItem(optionSelections),
+          CommandRunner.textLigaturesOptionItem(optionSelections)
+        ) ++ inputItems.filter(_.id == "text-font-size"),
+        category = CommandCategory.Settings,
+        hint = Some("Family, size, ligatures")
+      ),
+      CommandSurfaceItem.GroupItem(
+        id = "settings-ui-font",
+        label = "UI Font",
+        children = List(
+          CommandRunner.uiFontGroupItem(optionSelections),
+          CommandRunner.uiLigaturesOptionItem(optionSelections)
+        ) ++ inputItems.filter(_.id == "ui-font-size"),
+        category = CommandCategory.Settings,
+        hint = Some("Family, size, ligatures")
       ),
       CommandSurfaceItem.GroupItem(
         id = "settings-markdown",
@@ -397,7 +421,9 @@ object CommandRunner:
       "code-font"        -> codeFontIndex(config.fontConfig.codeFontFamily),
       "text-font"        -> textFontIndex(config.fontConfig.textFontFamily),
       "ui-font"          -> uiFontIndex(config.fontConfig.uiFontFamily),
-      "ligatures"        -> ligaturesIndex(config.fontConfig.enableLigatures)
+      "code-ligatures"   -> ligaturesIndex(config.fontConfig.codeLigatures),
+      "text-ligatures"   -> ligaturesIndex(config.fontConfig.textLigatures),
+      "ui-ligatures"     -> ligaturesIndex(config.fontConfig.uiLigatures)
     )
 
   private[command] def cursorModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -517,25 +543,75 @@ object CommandRunner:
       hint = Some(selectedFamily)
     )
 
-  private[command] def ligaturesOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+  private[command] def codeLigaturesOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
-      id = "ligatures",
+      id = "code-ligatures",
       label = "Ligature Shaping",
       options = List(
-        CommandOption("On", CommandIntent.SetLigatures(true)),
-        CommandOption("Off", CommandIntent.SetLigatures(false))
+        CommandOption("On", CommandIntent.SetCodeLigatures(true)),
+        CommandOption("Off", CommandIntent.SetCodeLigatures(false))
       ),
-      selectedIndex = optionSelections.getOrElse("ligatures", 0),
+      selectedIndex = optionSelections.getOrElse("code-ligatures", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Enable or disable glyph ligatures")
+    )
+
+  private[command] def textLigaturesOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "text-ligatures",
+      label = "Ligature Shaping",
+      options = List(
+        CommandOption("On", CommandIntent.SetTextLigatures(true)),
+        CommandOption("Off", CommandIntent.SetTextLigatures(false))
+      ),
+      selectedIndex = optionSelections.getOrElse("text-ligatures", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Enable or disable glyph ligatures")
+    )
+
+  private[command] def uiLigaturesOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "ui-ligatures",
+      label = "Ligature Shaping",
+      options = List(
+        CommandOption("On", CommandIntent.SetUiLigatures(true)),
+        CommandOption("Off", CommandIntent.SetUiLigatures(false))
+      ),
+      selectedIndex = optionSelections.getOrElse("ui-ligatures", 0),
       category = CommandCategory.Settings,
       hint = Some("Enable or disable glyph ligatures")
     )
 
   private[command] def buildInputItems(config: AppConfig): List[CommandSurfaceItem.InputItem] =
-    val durationValue       = config.characterAnimation.map(_.durationMs.toString).getOrElse("0")
-    val stepsValue          = config.characterAnimation.map(_.steps.toString).getOrElse("0")
-    val blurValue           = config.blurRadius.toString
-    val bufferFontSizeValue = config.fontConfig.fontSize.toString
-    val uiFontSizeValue     = config.fontConfig.uiFontSize.toString
+    val durationValue     = config.characterAnimation.map(_.durationMs.toString).getOrElse("0")
+    val stepsValue        = config.characterAnimation.map(_.steps.toString).getOrElse("0")
+    val blurValue         = config.blurRadius.toString
+    val codeFontSizeValue = config.fontConfig.codeFontSize.toString
+    val textFontSizeValue = config.fontConfig.textFontSize.toString
+    val uiFontSizeValue   = config.fontConfig.uiFontSize.toString
+
+    val presetItems = List(
+      CommandSurfaceItem.InputItem(
+        id = "ui-preset-save",
+        label = "Save Current Preset",
+        hint = "Preset name",
+        currentValue = "",
+        isDecimal = false,
+        parse = text => nonEmptyText(text).map(CommandIntent.SaveUiPreset(_)),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "ui-preset-apply",
+        label = "Apply Preset",
+        hint = "Preset name",
+        currentValue = "",
+        isDecimal = false,
+        parse = text => nonEmptyText(text).map(CommandIntent.ApplyUiPreset(_)),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      )
+    )
 
     val numericItems = List(
       CommandSurfaceItem.InputItem(
@@ -575,15 +651,27 @@ object CommandRunner:
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
-        id = "buffer-font-size",
-        label = "Buffer Font Size",
+        id = "code-font-size",
+        label = "Code Font Size",
         hint = "Points (8.0-48.0)",
-        currentValue = bufferFontSizeValue,
+        currentValue = codeFontSizeValue,
         isDecimal = true,
         parse = text =>
           text.toFloatOption
             .filter(v => v >= 8.0f && v <= 48.0f)
-            .map(CommandIntent.SetFontSize(_)),
+            .map(CommandIntent.SetCodeFontSize(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "text-font-size",
+        label = "Prose Font Size",
+        hint = "Points (8.0-48.0)",
+        currentValue = textFontSizeValue,
+        isDecimal = true,
+        parse = text =>
+          text.toFloatOption
+            .filter(v => v >= 8.0f && v <= 48.0f)
+            .map(CommandIntent.SetTextFontSize(_)),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -600,7 +688,10 @@ object CommandRunner:
       )
     )
 
-    numericItems ++ buildKeymapInputItems(config)
+    presetItems ++ numericItems ++ buildKeymapInputItems(config)
+
+  private def nonEmptyText(text: String): Option[String] =
+    Option(text.trim).filter(_.nonEmpty)
 
   private def buildKeymapInputItems(config: AppConfig): List[CommandSurfaceItem.InputItem] =
     List(

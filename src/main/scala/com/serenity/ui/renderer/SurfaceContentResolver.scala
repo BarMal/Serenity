@@ -195,6 +195,8 @@ object SurfaceContentResolver:
     val findRow = OverlayRow(
       plainText = s"Find ${workflow.findText}",
       selected = workflow.activeField == ReplaceWorkflowField.Find,
+      cursorColumn =
+        Option.when(workflow.activeField == ReplaceWorkflowField.Find)(s"Find ${workflow.findText}".length),
       segments = List(
         OverlaySegment("Find"),
         OverlaySegment(workflow.findText, selected = workflow.activeField == ReplaceWorkflowField.Find)
@@ -205,6 +207,9 @@ object SurfaceContentResolver:
     val replaceRow = OverlayRow(
       plainText = s"Replace ${workflow.replacementText}",
       selected = workflow.activeField == ReplaceWorkflowField.ReplaceWith,
+      cursorColumn = Option.when(workflow.activeField == ReplaceWorkflowField.ReplaceWith)(
+        s"Replace ${workflow.replacementText}".length
+      ),
       segments = List(
         OverlaySegment("Replace"),
         OverlaySegment(workflow.replacementText, selected = workflow.activeField == ReplaceWorkflowField.ReplaceWith)

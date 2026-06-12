@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.std.Queue
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
@@ -11,6 +12,7 @@ import com.serenity.session.{SessionManager, SessionPersistence}
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
 import org.typelevel.log4cats.Logger
 
@@ -29,6 +31,9 @@ private[manager] trait StateManagerRuntimeSupport:
   protected def lspQueue: Queue[IO, LspEffect]
   protected def onFontConfigChanged: FontConfig => IO[Unit]
   protected def configPersistencePath: Option[Path]
+  protected def uiPresetStore: UiPresetStore
+  protected def windowSizeProvider: IO[Option[PreferredWindowSize]]
+  protected def onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit]
 
   protected def fileManager: FileManager
   protected def sessionManager: SessionManager

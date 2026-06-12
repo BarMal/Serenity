@@ -18,11 +18,33 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
 
   private val registry = CommandRegistry.default
 
-  "CommandRunner.activate" should "reflect non-default ligature settings in option selections" in {
-    val config = AppConfig.default.withFontConfig(FontConfig(enableLigatures = false))
+  "CommandRunner.activate" should "reflect non-default ligature settings in option selections per font role" in {
+    val config = AppConfig.default.withFontConfig(
+      FontConfig(enableLigatures = false, textLigatures = false, uiLigatures = true)
+    )
     val runner = CommandRunner.empty.activate(registry, config)
 
-    runner.optionSelections.get("ligatures") shouldBe Some(1)
+    runner.optionSelections.get("code-ligatures") shouldBe Some(1)
+    runner.optionSelections.get("text-ligatures") shouldBe Some(1)
+    runner.optionSelections.get("ui-ligatures") shouldBe Some(0)
+  }
+
+  it should "split font settings into code, prose, and UI groups" in {
+    val runner   = CommandRunner.empty.activate(registry, AppConfig.default)
+    val groupIds = runner.settingsGroups.map(_.id)
+
+    groupIds should contain allOf ("settings-code-font", "settings-prose-font", "settings-ui-font")
+    groupIds should not contain "settings-typography"
+
+    runner.settingsGroups.find(_.id == "settings-code-font").map(_.children.map(_.id)) should contain(
+      List("code-font", "code-ligatures", "code-font-size")
+    )
+    runner.settingsGroups.find(_.id == "settings-prose-font").map(_.children.map(_.id)) should contain(
+      List("text-font", "text-ligatures", "text-font-size")
+    )
+    runner.settingsGroups.find(_.id == "settings-ui-font").map(_.children.map(_.id)) should contain(
+      List("ui-font", "ui-ligatures", "ui-font-size")
+    )
   }
 
   it should "reflect non-default code font family in option selections" in {
@@ -56,8 +78,9 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val sm                  = com.serenity.state.manager.StateManager.apply(logger).unsafeRunSync()
 
-    sm.updateState(s => s.copy(config = s.config.withFontConfig(s.config.fontConfig.copy(enableLigatures = false))))
-      .unsafeRunSync()
+    sm.updateState(s =>
+      s.copy(config = s.config.withFontConfig(s.config.fontConfig.copy(enableLigatures = false, textLigatures = false)))
+    ).unsafeRunSync()
 
     val stateBefore = sm.getCurrentState.unsafeRunSync()
     val paneId      = stateBefore.layout.editorPanes.keys.head
@@ -70,5 +93,6 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       .collect { case SurfaceContent.CommandPalette(r) => r }
 
     runner shouldBe defined
-    runner.get.optionSelections.get("ligatures") shouldBe Some(1)
+    runner.get.optionSelections.get("code-ligatures") shouldBe Some(1)
+    runner.get.optionSelections.get("text-ligatures") shouldBe Some(1)
   }
