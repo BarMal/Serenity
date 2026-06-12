@@ -12,6 +12,11 @@ trait RenderSurface:
   def setForegroundColor(color: Color): Unit
   def setBackgroundColor(color: Color): Unit
   def getBackgroundColor: Color
+
+  def clearViewport(color: Color): Unit =
+    setBackgroundColor(color)
+    fillRect(0, 0, viewportWidth, viewportHeight, ' ')
+
   def putString(x: Int, y: Int, s: String): Unit
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit
   def enableStyle(style: TextStyle): Unit
