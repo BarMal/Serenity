@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, Font, RenderingHints}
 import java.io.StringReader
 import java.net.URI
+import java.util.LinkedHashMap
 import javax.xml.parsers.DocumentBuilderFactory
 
 import scala.jdk.CollectionConverters.*
@@ -24,6 +25,24 @@ import org.xml.sax.InputSource
 object MarkdownDocumentPreview:
 
   case class InlinePreviewLine(sourceLine: Option[Int], text: String)
+
+  private val MaxCachedImages = 24
+
+  private case class ImageCacheKey(
+      source: String,
+      title: String,
+      widthPx: Int,
+      heightPx: Int,
+      theme: Theme,
+      font: Font,
+      baseUri: Option[String],
+      panelChrome: Boolean
+  )
+
+  private val imageCache =
+    new LinkedHashMap[ImageCacheKey, BufferedImage](MaxCachedImages, 0.75f, true):
+      override def removeEldestEntry(eldest: java.util.Map.Entry[ImageCacheKey, BufferedImage]): Boolean =
+        size() > MaxCachedImages
 
   private val extensions: java.util.List[Extension] =
     List[Extension](TablesExtension.create(), TaskListItemsExtension.create()).asJava
@@ -56,6 +75,38 @@ object MarkdownDocumentPreview:
   ): BufferedImage =
     val safeWidth  = widthPx.max(1)
     val safeHeight = heightPx.max(1)
+    val key = ImageCacheKey(
+      source = source,
+      title = title,
+      widthPx = safeWidth,
+      heightPx = safeHeight,
+      theme = theme,
+      font = font,
+      baseUri = baseUri.map(_.toString),
+      panelChrome = panelChrome
+    )
+    imageCache
+      .synchronized {
+        Option(imageCache.get(key))
+      }
+      .getOrElse {
+        val rendered = renderImageUncached(source, title, safeWidth, safeHeight, theme, font, baseUri, panelChrome)
+        imageCache.synchronized {
+          imageCache.put(key, rendered)
+        }
+        rendered
+      }
+
+  private def renderImageUncached(
+    source: String,
+    title: String,
+    safeWidth: Int,
+    safeHeight: Int,
+    theme: Theme,
+    font: Font,
+    baseUri: Option[URI],
+    panelChrome: Boolean
+  ): BufferedImage =
     try
       val renderer = Java2DRenderer(
         parseXhtml(renderXhtml(source, title, theme, font, baseUri, panelChrome)),
