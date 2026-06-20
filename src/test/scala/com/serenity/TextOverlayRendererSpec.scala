@@ -1,6 +1,6 @@
 package com.serenity
 
-import java.awt.Font
+import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
@@ -132,4 +132,25 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
 
     surface.setFontCalls.map(_.getFamily) should contain(Font.SERIF)
     surface.setFontCalls.last.getFamily shouldBe font.getFamily
+  }
+
+  it should "use theme panel colours for rows without animation overrides" in {
+    val surface = new MockRenderSurface(24, 6)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val theme = Theme.light.copy(
+      panel = Theme.light.panel.copy(
+        foreground = new Color(0x12, 0x34, 0x56),
+        background = new Color(0xab, 0xcd, 0xef)
+      )
+    )
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 18, 4),
+      rows = List(OverlayRow(plainText = "plain row"))
+    )
+
+    TextOverlayRenderer.render(surface, overlay, theme, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.getFg(1, 1) shouldBe theme.panel.foreground
+    surface.getBg(1, 1) shouldBe theme.panel.background
   }

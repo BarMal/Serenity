@@ -86,8 +86,8 @@ object TextOverlayRenderer:
           row,
           theme,
           cursorVisible,
-          defaultForeground = animFg,
-          defaultBackground = animBg,
+          defaultForeground = Some(animFg),
+          defaultBackground = Some(animBg),
           isAnimating = animated,
           font = font,
           cellMetrics = cellMetrics
@@ -102,15 +102,15 @@ object TextOverlayRenderer:
     row: OverlayRow,
     theme: Theme,
     cursorVisible: Boolean,
-    defaultForeground: Color = null,
-    defaultBackground: Color = null,
+    defaultForeground: Option[Color] = None,
+    defaultBackground: Option[Color] = None,
     isAnimating: Boolean = false,
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
     val rowView = scrolledRowView(row, width)
-    val baseFg  = if defaultForeground != null then defaultForeground else theme.panel.foreground
-    val baseBg  = if defaultBackground != null then defaultBackground else theme.panel.background
+    val baseFg  = defaultForeground.getOrElse(theme.panel.foreground)
+    val baseBg  = defaultBackground.getOrElse(theme.panel.background)
     val rowBackground =
       rowView.row.backgroundColor.getOrElse(
         if rowView.row.selected then theme.highlighted.background else baseBg
