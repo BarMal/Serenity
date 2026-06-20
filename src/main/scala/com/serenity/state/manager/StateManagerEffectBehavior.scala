@@ -219,7 +219,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           interpretEffect(AppEffect.Explorer(ExplorerEffect.OpenRoot(PanelPosition.Left, path, 30)))
         )
       case CommandIntent.PinOutlinePanel =>
-        pinPanel(PanelContent.Outline(outlineSymbols(state)), PanelPosition.Right, 30)
+        val symbols = outlineSymbols(state)
+        pinPanel(PanelContent.Outline(symbols, currentOutlineActiveLocation(symbols, state)), PanelPosition.Right, 30)
       case CommandIntent.PinDiagnosticsPanel =>
         pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 10)
       case CommandIntent.OpenMarkdownPreview =>
@@ -614,6 +615,11 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       .flatMap(state.buffers.get)
       .map(DocumentOutline.forBuffer)
       .getOrElse(Nil)
+
+  private def currentOutlineActiveLocation(symbols: List[Symbol], state: AppState): Option[Location] =
+    state.activeCursorPosition
+      .flatMap(cursor => DocumentNavigation.currentSymbol(symbols, cursor))
+      .map(_.location)
 
   private def navigateDocumentSymbol(
     state: AppState,

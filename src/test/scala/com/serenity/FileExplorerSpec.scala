@@ -80,8 +80,8 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
     state.pinnedSurfaces should have size 2
     state.pinnedSurfaces.map(_.content).exists {
-      case SurfaceContent.Outline(_) => true
-      case _                         => false
+      case SurfaceContent.Outline(_, _) => true
+      case _                            => false
     } shouldBe true
     state.pinnedSurfaces.map(_.content).exists {
       case SurfaceContent.DirectoryTree(tree, _) if tree.rootPath == Paths.get("/repo") => true

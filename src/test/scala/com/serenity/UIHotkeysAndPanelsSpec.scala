@@ -106,7 +106,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val pinned = state.pinnedSurfaces
     pinned should have size 2
     pinned.map(_.content).map {
-      case SurfaceContent.Outline(_)     => "outline"
+      case SurfaceContent.Outline(_, _)  => "outline"
       case SurfaceContent.Diagnostics(_) => "diagnostics"
       case other                         => fail(s"Unexpected pinned content: $other")
     } shouldBe List("outline", "diagnostics")
@@ -127,8 +127,8 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     after.pinnedSurfaces should have size 1
     after.pinnedSurfaces.map(_.id) should not contain focusedSurfaceId
     after.pinnedSurfaces.map(_.content).foreach {
-      case SurfaceContent.Outline(_) => ()
-      case other                     => fail(s"Unexpected pinned content: $other")
+      case SurfaceContent.Outline(_, _) => ()
+      case other                        => fail(s"Unexpected pinned content: $other")
     }
 
   // ── Panel resize ─────────────────────────────────────────────────────────

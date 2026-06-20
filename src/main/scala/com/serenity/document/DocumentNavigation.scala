@@ -17,6 +17,9 @@ object DocumentNavigation:
       case sorted =>
         sorted.reverse.find(symbol => isBefore(symbol, cursor)).orElse(sorted.lastOption)
 
+  def currentSymbol(symbols: List[Symbol], cursor: CursorPosition): Option[Symbol] =
+    sortedSymbols(symbols).reverse.find(symbol => isAtOrBefore(symbol, cursor))
+
   private def sortedSymbols(symbols: List[Symbol]): List[Symbol] =
     symbols.sortBy(symbol => (symbol.location.line, symbol.location.column))
 
@@ -27,3 +30,7 @@ object DocumentNavigation:
   private def isBefore(symbol: Symbol, cursor: CursorPosition): Boolean =
     symbol.location.line < cursor.line ||
       (symbol.location.line == cursor.line && symbol.location.column < cursor.column)
+
+  private def isAtOrBefore(symbol: Symbol, cursor: CursorPosition): Boolean =
+    symbol.location.line < cursor.line ||
+      (symbol.location.line == cursor.line && symbol.location.column <= cursor.column)

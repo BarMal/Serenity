@@ -1,5 +1,6 @@
 package com.serenity.ui.renderer
 
+import com.serenity.document.DocumentNavigation
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -40,6 +41,9 @@ object PinnedPanelViewModel:
   def resolve(surface: UiSurface, rect: LayoutRect): TextPanelView =
     resolve(surface, rect, None)
 
+  def resolve(surface: UiSurface, rect: LayoutRect, state: AppState): TextPanelView =
+    resolve(surface, rect, Some(state))
+
   private def resolve(surface: UiSurface, rect: LayoutRect, state: Option[AppState]): TextPanelView =
     val resolved =
       surface.content match
@@ -49,6 +53,12 @@ object PinnedPanelViewModel:
             .map(_.content.collect())
             .getOrElse("")
           SurfaceContentResolver.resolveMarkdownPreview(title, content, rect, SurfaceRenderMode.Pinned)
+        case SurfaceContent.Outline(symbols, activeLocation) =>
+          SurfaceContentResolver.resolve(
+            SurfaceContent.Outline(symbols, activeOutlineLocation(symbols, activeLocation, state)),
+            rect,
+            SurfaceRenderMode.Pinned
+          )
         case other =>
           SurfaceContentResolver.resolve(other, rect, SurfaceRenderMode.Pinned)
     val rows =
@@ -64,6 +74,17 @@ object PinnedPanelViewModel:
       plainText = row.plainText,
       selected = row.selected
     )
+
+  private def activeOutlineLocation(
+    symbols: List[Symbol],
+    fallback: Option[Location],
+    state: Option[AppState]
+  ): Option[Location] =
+    state
+      .flatMap(_.activeCursorPosition)
+      .flatMap(cursor => DocumentNavigation.currentSymbol(symbols, cursor))
+      .map(_.location)
+      .orElse(fallback)
 
   private def pinnedRect(surface: UiSurface, position: PanelPosition, layout: CalculatedLayout): Option[LayoutRect] =
     layout.pinnedSurfaceRects.get(surface.id).orElse(layout.pinnedPanelRects.get(position))

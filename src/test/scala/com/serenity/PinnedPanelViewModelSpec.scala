@@ -10,6 +10,8 @@ import org.scalatest.matchers.should.Matchers
 
 class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
 
+  given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+
   private val root = Paths.get("/repo")
 
   private val tree = DirectoryTreeData(
@@ -44,16 +46,16 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     presentation = SurfacePresentation.Pinned(PanelPosition.Bottom, 10)
   )
 
+  private val outlineSymbols = List(
+    Symbol("Serenity", SymbolKind.Class, Location(1, 1)),
+    Symbol("render", SymbolKind.Method, Location(10, 3)),
+    Symbol("state", SymbolKind.Variable, Location(20, 5)),
+    Symbol("Chapter 1", SymbolKind.Heading, Location(30, 0))
+  )
+
   private val outlinePanel = UiSurface(
     id = SurfaceId("outline"),
-    content = SurfaceContent.Outline(
-      List(
-        Symbol("Serenity", SymbolKind.Class, Location(1, 1)),
-        Symbol("render", SymbolKind.Method, Location(10, 3)),
-        Symbol("state", SymbolKind.Variable, Location(20, 5)),
-        Symbol("Chapter 1", SymbolKind.Heading, Location(30, 0))
-      )
-    ),
+    content = SurfaceContent.Outline(outlineSymbols),
     presentation = SurfacePresentation.Pinned(PanelPosition.Right, 20)
   )
 
@@ -148,6 +150,41 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
 
     wide.title shouldBe "outline"
     wide.rows.map(_.plainText) shouldBe List("Serenity | render | state | Chapter 1")
+  }
+
+  it should "mark the active outline symbol in tall and wide panel geometry" in {
+    val activePanel = outlinePanel.copy(content = SurfaceContent.Outline(outlineSymbols, Some(Location(10, 3))))
+    val tall        = PinnedPanelViewModel.resolve(activePanel, LayoutRect(0, 0, 18, 40))
+    val wide        = PinnedPanelViewModel.resolve(activePanel, LayoutRect(0, 0, 60, 10))
+
+    tall.rows.map(_.plainText) shouldBe List(
+      "Class Serenity",
+      "> Method render",
+      "Variable state",
+      "Heading Chapter 1"
+    )
+    tall.rows.map(_.selected) shouldBe List(false, true, false, false)
+    wide.rows.map(_.plainText) shouldBe List("Serenity | [render] | state | Chapter 1")
+    wide.rows.map(_.selected) shouldBe List(true)
+  }
+
+  it should "derive the active outline symbol from the editor cursor when state is available" in {
+    val initialState = AppState.initial
+    val state = initialState.copy(
+      buffers = initialState.buffers.updated(
+        BufferId(0),
+        initialState.buffers(BufferId(0)).copy(cursors = List(CursorPosition(12, 1)))
+      )
+    )
+
+    val view = PinnedPanelViewModel.resolve(outlinePanel, LayoutRect(0, 0, 18, 40), state)
+
+    view.rows.map(_.plainText) shouldBe List(
+      "Class Serenity",
+      "> Method render",
+      "Variable state",
+      "Heading Chapter 1"
+    )
   }
 
   it should "shape diagnostics content differently for wide and compact geometry" in {

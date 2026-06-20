@@ -435,15 +435,20 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     val outlineSymbols = updatedState.pinnedSurfaces.collectFirst {
-      case UiSurface(_, SurfaceContent.Outline(symbols), SurfacePresentation.Pinned(PanelPosition.Right, 30), _) =>
-        symbols
+      case UiSurface(
+            _,
+            SurfaceContent.Outline(symbols, activeLocation),
+            SurfacePresentation.Pinned(PanelPosition.Right, 30),
+            _
+          ) =>
+        symbols -> activeLocation
     }
 
     outlineSymbols shouldBe Some(
       List(
         Symbol("Chapter One", SymbolKind.Heading, Location(0, 0)),
         Symbol("Scene Two", SymbolKind.Heading, Location(4, 0))
-      )
+      ) -> Some(Location(0, 0))
     )
   }
 

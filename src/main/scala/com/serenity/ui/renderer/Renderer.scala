@@ -904,7 +904,7 @@ object Renderer:
               case _ =>
                 PinnedPanelRenderer.render(
                   context.surface,
-                  PinnedPanelViewModel.resolve(surface, rect),
+                  PinnedPanelViewModel.resolve(surface, rect, state),
                   state.theme,
                   state.config
                 )
@@ -926,7 +926,7 @@ object Renderer:
             case _ =>
               PinnedPanelRenderer.render(
                 context.surface,
-                PinnedPanelViewModel.resolve(surface, rect),
+                PinnedPanelViewModel.resolve(surface, rect, state),
                 state.theme,
                 state.config
               )

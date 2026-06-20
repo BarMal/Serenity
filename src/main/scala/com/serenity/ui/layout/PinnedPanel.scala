@@ -16,7 +16,7 @@ case class PinnedPanel(
 enum PanelContent:
   case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path])
   case Terminal(buffer: String, cursor: Int)
-  case Outline(symbols: List[Symbol])
+  case Outline(symbols: List[Symbol], activeLocation: Option[Location] = None)
   case Diagnostics(issues: List[Diagnostic])
   case MarkdownPreview(bufferId: BufferId, title: String)
 
