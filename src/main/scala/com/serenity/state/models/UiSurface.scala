@@ -2,7 +2,7 @@ package com.serenity.state.models
 
 import java.nio.file.Path
 
-import com.serenity.command.CommandRunner
+import com.serenity.command.{Command, CommandRunner}
 import com.serenity.ui.layout.*
 
 case class SurfaceId(value: String)
@@ -30,6 +30,26 @@ case class StartupPage(
   def moveSelectionDown: StartupPage =
     withSelectedIndex(selectedIndex + 1)
 
+case class ContextMenuItem(
+    id: String,
+    label: String,
+    command: Command
+)
+
+case class ContextMenu(
+    title: String,
+    targetFocus: Focus,
+    items: List[ContextMenuItem],
+    selectedIndex: Int = 0
+):
+
+  def selectedItem: Option[ContextMenuItem] =
+    items.lift(selectedIndex)
+
+  def withSelectedIndex(index: Int): ContextMenu =
+    val clampedIndex = if items.isEmpty then 0 else ((index % items.size) + items.size) % items.size
+    copy(selectedIndex = clampedIndex)
+
 enum SurfacePlacement:
   case AboveCursor
   case BelowCursor
@@ -51,6 +71,7 @@ enum SurfaceContent:
   case CommandPaletteSubmenu(runner: CommandRunner, groupId: String, previewOnly: Boolean)
   case ThemePicker(state: ThemePickerState)
   case FileSearch(state: FileSearchState)
+  case ContextMenu(menu: com.serenity.state.models.ContextMenu)
   case MarkdownPreview(bufferId: BufferId, title: String)
   case ModalWorkflow(modal: Modal)
   case Terminal(buffer: String, cursor: Int)

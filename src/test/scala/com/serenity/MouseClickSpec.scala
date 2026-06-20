@@ -103,6 +103,86 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     buffer.cursors shouldBe List(CursorPosition(0, 1))
   }
 
+  it should "open an editor context menu on secondary click without moving the cursor" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state
+            .buffers(bufferId)
+            .copy(
+              language = Some(LanguageId.Scala),
+              cursors = List(CursorPosition(0, 1))
+            )
+        )
+      )
+    }.unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    sm.applyEvent(MouseClick(18, 2, button = MouseButton.Secondary)).unsafeRunSync()
+
+    val state  = sm.getCurrentState.unsafeRunSync()
+    val buffer = state.buffers(bufferId)
+    buffer.cursors shouldBe List(CursorPosition(0, 1))
+    val menu = state.contextMenuSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.ContextMenu(menu) => Some(menu)
+          case _                                => None
+      }
+      .getOrElse(fail("Expected editor context menu"))
+    menu.targetFocus shouldBe Focus.EditorPane(PaneId(0))
+    menu.items.map(_.id) should contain allOf ("save", "find", "replace", "goto-line")
+    state.focus shouldBe Focus.Surface(SurfaceId("context-menu"))
+  }
+
+  it should "execute the clicked context menu command against the target editor pane" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    sm.applyEvent(MouseClick(18, 2, button = MouseButton.Secondary)).unsafeRunSync()
+
+    val openedState = sm.getCurrentState.unsafeRunSync()
+    val menu = openedState.contextMenuSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.ContextMenu(menu) => Some(menu)
+          case _                                => None
+      }
+      .getOrElse(fail("Expected editor context menu"))
+    val findIndex = menu.items.indexWhere(_.id == "find")
+    findIndex should be >= 0
+    val (x, y) = contextMenuItemPoint(openedState, findIndex)
+
+    sm.applyEvent(MouseClick(x, y)).unsafeRunSync()
+
+    val after = sm.getCurrentState.unsafeRunSync()
+    after.contextMenuSurface shouldBe None
+    after.focus shouldBe a[Focus.Surface]
+    after.modalSurface.map(_.content) should matchPattern {
+      case Some(SurfaceContent.ModalWorkflow(Modal.Find(_, _, _))) =>
+    }
+  }
+
+  it should "dismiss the context menu on Escape" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+    sm.applyEvent(MouseClick(18, 2, button = MouseButton.Secondary)).unsafeRunSync()
+
+    sm.applyEvent(Escape).unsafeRunSync()
+
+    val after = sm.getCurrentState.unsafeRunSync()
+    after.contextMenuSurface shouldBe None
+    after.focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
   it should "clamp column to line length when clicking past end of line" in {
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hi\nworld").unsafeRunSync()
@@ -453,3 +533,13 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     buffer.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
     buffer.selections shouldBe Nil
   }
+
+  private def contextMenuItemPoint(state: AppState, itemIndex: Int): (Int, Int) =
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val surface  = state.contextMenuSurface.getOrElse(fail("Expected context menu surface"))
+    val rect = LayoutEngine
+      .calculateLayoutWithUI(state, viewport)
+      .belowCursorOverlayStack
+      .collectFirst { case (`surface`.id, rect) => rect }
+      .getOrElse(fail("Expected context menu overlay rect"))
+    (rect.x + 2, rect.y + 2 + itemIndex)

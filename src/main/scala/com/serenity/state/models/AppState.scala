@@ -218,6 +218,12 @@ case class AppState(
       case _                            => false
     }
 
+  def contextMenuSurface: Option[UiSurface] =
+    findSurface {
+      case SurfaceContent.ContextMenu(_) => true
+      case _                             => false
+    }
+
   def startPageSurface: Option[UiSurface] =
     findSurface {
       case SurfaceContent.StartPage(_) => true
