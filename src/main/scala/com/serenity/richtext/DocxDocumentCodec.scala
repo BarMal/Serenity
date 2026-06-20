@@ -202,10 +202,25 @@ object DocxDocumentCodec:
 
   private def runsXml(runs: List[RichTextRun]): String =
     runs
-      .map(run =>
-        s"""      <w:r>${runPropertiesXml(run.style)}<w:t xml:space="preserve">${escapeText(run.text)}</w:t></w:r>"""
-      )
+      .map(run => s"""      <w:r>${runPropertiesXml(run.style)}${runTextXml(run.text)}</w:r>""")
       .mkString("\n")
+
+  private def runTextXml(text: String): String =
+    text
+      .foldLeft((StringBuilder(), List.empty[String])) {
+        case ((chunk, acc), '\t') =>
+          (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<w:tab/>")
+        case ((chunk, acc), '\n') =>
+          (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<w:br/>")
+        case ((chunk, acc), char) =>
+          chunk.append(char)
+          (chunk, acc)
+      } match
+      case (chunk, acc) =>
+        (acc ++ textChunkXml(chunk)).mkString
+
+  private def textChunkXml(chunk: StringBuilder): Option[String] =
+    Option.when(chunk.nonEmpty)(s"""<w:t xml:space="preserve">${escapeText(chunk.toString)}</w:t>""")
 
   private def runPropertiesXml(style: RichTextStyle): String =
     val properties = List(
