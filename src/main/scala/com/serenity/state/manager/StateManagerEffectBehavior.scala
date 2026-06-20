@@ -14,6 +14,7 @@ import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.project.*
 import com.serenity.session.SessionSaveTrigger
+import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
@@ -138,6 +139,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     updateConfig(config => config.withFontConfig(update(config.fontConfig)))
       .flatMap(config => onFontConfigChanged(config.fontConfig))
 
+  protected def updateSpellCheckConfig(
+    update: com.serenity.config.SpellCheckConfig => com.serenity.config.SpellCheckConfig
+  ): IO[Unit] =
+    updateConfig(config => config.withSpellCheck(update(config.spellCheck))).void >>
+      stateRef.update(SpellChecker.refreshDiagnostics)
+
   protected def clampFontSize(size: Float): Float =
     size.max(8.0f).min(48.0f)
 
@@ -237,6 +244,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         openMarkdownPreview(state)
       case CommandIntent.SetMarkdownViewMode(mode) =>
         setMarkdownViewMode(state, mode)
+      case CommandIntent.SetSpellCheckEnabled(enabled) =>
+        updateSpellCheckConfig(_.copy(enabled = enabled))
+      case CommandIntent.SetSpellCheckLanguages(languages) =>
+        updateSpellCheckConfig(_.copy(languages = languages))
+      case CommandIntent.SetSpellCheckWords(words) =>
+        updateSpellCheckConfig(_.copy(additionalWords = words))
       case CommandIntent.SetInterfaceDensity(density) =>
         updateConfig(_.withInterfaceDensity(density)).void
       case CommandIntent.FocusPanel(position) =>
