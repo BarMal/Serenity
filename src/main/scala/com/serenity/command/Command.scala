@@ -23,6 +23,7 @@ enum CommandCategory:
 enum CommandIntent:
   case SaveCurrentFile
   case SaveCurrentFileAs
+  case SaveConfig
   case SaveSession
   case RestoreSession
   case ClearSession

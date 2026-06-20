@@ -113,6 +113,13 @@ object CommandRegistry:
       label = "Save As"
     ),
     Command.typed(
+      "save-config",
+      "Write the current settings using the latest config format.",
+      CommandIntent.SaveConfig,
+      CommandCategory.Settings,
+      label = "Save Config"
+    ),
+    Command.typed(
       "save-session",
       "Save the current editor session.",
       CommandIntent.SaveSession,

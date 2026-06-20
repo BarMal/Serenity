@@ -161,6 +161,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           case None           => logger.debug("[CMD] No focused buffer to save")
       case CommandIntent.SaveCurrentFileAs =>
         requestSaveAsFileDialog(state, state.focusedBufferId)
+      case CommandIntent.SaveConfig =>
+        persistConfigFile(state.config)
       case CommandIntent.SaveSession =>
         saveSession()
       case CommandIntent.RestoreSession =>
