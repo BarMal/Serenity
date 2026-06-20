@@ -16,6 +16,7 @@ case class CalculatedLayout(
     leftSpacerRect: LayoutRect,
     rightSpacerRect: LayoutRect,
     pinnedPanelRects: Map[PanelPosition, LayoutRect] = Map.empty,
+    pinnedSurfaceRects: Map[SurfaceId, LayoutRect] = Map.empty,
     floatingPanelRect: Option[LayoutRect] = None,
     expandedPanelRect: Option[LayoutRect] = None,
     aboveCursorOverlayRect: Option[LayoutRect] = None,
@@ -55,11 +56,12 @@ object LayoutEngine:
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
     val gutterHeight   = if state.config.showGutter then densityMetrics.gutterHeight else 0
     val contentHeight  = math.max(1, viewportSize.height - gutterHeight)
-    val pinnedPanelRects = calculatePinnedPanelRects(
+    val pinnedPanelLayout = calculatePinnedPanelLayout(
       state.pinnedSurfaces,
       viewportSize.width,
       contentHeight
     )
+    val pinnedPanelRects = pinnedPanelLayout.panelRects
 
     val topPinnedHeight =
       pinnedPanelRects.get(PanelPosition.Top).map(_.height).getOrElse(0)
@@ -132,6 +134,7 @@ object LayoutEngine:
       leftSpacerRect = leftSpacerRect,
       rightSpacerRect = rightSpacerRect,
       pinnedPanelRects = pinnedPanelRects,
+      pinnedSurfaceRects = pinnedPanelLayout.surfaceRects,
       expandedPanelRect = state.expandedPanelSurface.map(_ => editorPanelRect),
       lineNumberRect = lineNumberRect,
       gutterRect = gutterRect
@@ -157,27 +160,36 @@ object LayoutEngine:
       collapsedFloatingSurfaceIds = belowLayout.collapsedSurfaceIds
     )
 
-  private def calculatePinnedPanelRects(
+  private case class PinnedPanelLayout(
+      panelRects: Map[PanelPosition, LayoutRect],
+      surfaceRects: Map[SurfaceId, LayoutRect]
+  )
+
+  private def calculatePinnedPanelLayout(
     panels: List[UiSurface],
     terminalWidth: Int,
     contentHeight: Int
-  ): Map[PanelPosition, LayoutRect] =
-    val panelsByPosition = panels.flatMap {
-      _.presentation match
-        case SurfacePresentation.Pinned(position, size) => Some(position -> size)
-        case _                                          => None
-    }.toMap
-    val topHeight = panelsByPosition.get(PanelPosition.Top).map(size => math.min(size, contentHeight)).getOrElse(0)
+  ): PinnedPanelLayout =
+    val panelsByPosition = panels.foldLeft(Map.empty[PanelPosition, List[(UiSurface, Int)]]) {
+      case (acc, surface) =>
+        surface.presentation match
+          case SurfacePresentation.Pinned(position, size) =>
+            acc.updated(position, acc.getOrElse(position, Nil) :+ (surface -> size))
+          case _ =>
+            acc
+    }
+    val panelSizes        = panelsByPosition.view.mapValues(_.map(_._2).max).toMap
+    val topHeight         = panelSizes.get(PanelPosition.Top).map(size => math.min(size, contentHeight)).getOrElse(0)
     val remainingAfterTop = math.max(1, contentHeight - topHeight)
     val bottomHeight =
-      panelsByPosition.get(PanelPosition.Bottom).map(size => math.min(size, remainingAfterTop)).getOrElse(0)
+      panelSizes.get(PanelPosition.Bottom).map(size => math.min(size, remainingAfterTop)).getOrElse(0)
     val verticalZoneY      = topHeight
     val verticalZoneHeight = math.max(1, contentHeight - topHeight - bottomHeight)
 
-    val leftWidth = panelsByPosition.get(PanelPosition.Left).map(size => math.min(size, terminalWidth)).getOrElse(0)
+    val leftWidth          = panelSizes.get(PanelPosition.Left).map(size => math.min(size, terminalWidth)).getOrElse(0)
     val remainingAfterLeft = math.max(1, terminalWidth - leftWidth)
     val rightWidth =
-      panelsByPosition.get(PanelPosition.Right).map(size => math.min(size, remainingAfterLeft)).getOrElse(0)
+      panelSizes.get(PanelPosition.Right).map(size => math.min(size, remainingAfterLeft)).getOrElse(0)
 
     val rects = List.newBuilder[(PanelPosition, LayoutRect)]
 
@@ -193,7 +205,49 @@ object LayoutEngine:
         verticalZoneHeight
       )
 
-    rects.result().toMap
+    val panelRects   = rects.result().toMap
+    val surfaceRects = calculatePinnedSurfaceRects(panelsByPosition, panelRects)
+
+    PinnedPanelLayout(panelRects, surfaceRects)
+
+  private def calculatePinnedSurfaceRects(
+    panelsByPosition: Map[PanelPosition, List[(UiSurface, Int)]],
+    panelRects: Map[PanelPosition, LayoutRect]
+  ): Map[SurfaceId, LayoutRect] =
+    panelsByPosition.toList.flatMap {
+      case (position, panelsAtPosition) =>
+        panelRects.get(position).toList.flatMap { panelRect =>
+          splitPanelRect(position, panelRect, panelsAtPosition.size).zip(panelsAtPosition).map {
+            case (rect, (surface, _)) => surface.id -> rect
+          }
+        }
+    }.toMap
+
+  private def splitPanelRect(position: PanelPosition, rect: LayoutRect, panelCount: Int): List[LayoutRect] =
+    if panelCount <= 0 then Nil
+    else
+      position match
+        case PanelPosition.Left | PanelPosition.Right =>
+          splitSegments(rect.y, rect.height, panelCount).map {
+            case (y, height) =>
+              rect.copy(y = y, height = height)
+          }
+        case PanelPosition.Top | PanelPosition.Bottom =>
+          splitSegments(rect.x, rect.width, panelCount).map {
+            case (x, width) =>
+              rect.copy(x = x, width = width)
+          }
+
+  private def splitSegments(start: Int, total: Int, count: Int): List[(Int, Int)] =
+    val base      = total / count
+    val remainder = total % count
+    (0 until count).toList
+      .foldLeft((start, List.empty[(Int, Int)])) {
+        case ((currentStart, acc), index) =>
+          val size = base + (if index < remainder then 1 else 0)
+          (currentStart + size, acc :+ (currentStart -> size))
+      }
+      ._2
 
   private def calculateLineNumberWidth(state: AppState): Int =
     // Find the maximum line count across all buffers to determine width needed

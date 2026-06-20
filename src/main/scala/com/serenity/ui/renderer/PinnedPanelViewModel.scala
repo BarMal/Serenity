@@ -20,7 +20,7 @@ object PinnedPanelViewModel:
   def fromState(state: AppState, layout: CalculatedLayout): List[TextPanelView] =
     state.uiSurfaces.flatMap {
       case surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, _), _) =>
-        layout.pinnedPanelRects.get(position).map(rect => resolve(surface, rect, Some(state)))
+        pinnedRect(surface, position, layout).map(rect => resolve(surface, rect, Some(state)))
       case surface @ UiSurface(_, _, SurfacePresentation.Expanded(_, _), _) =>
         layout.expandedPanelRect.map(rect => resolve(surface, rect, Some(state)))
       case _ =>
@@ -30,7 +30,7 @@ object PinnedPanelViewModel:
   def fromLayout(layout: CalculatedLayout, surfaces: List[UiSurface]): List[TextPanelView] =
     surfaces.flatMap {
       case surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, _), _) =>
-        layout.pinnedPanelRects.get(position).map(rect => resolve(surface, rect, None))
+        pinnedRect(surface, position, layout).map(rect => resolve(surface, rect, None))
       case surface @ UiSurface(_, _, SurfacePresentation.Expanded(_, _), _) =>
         layout.expandedPanelRect.map(rect => resolve(surface, rect, None))
       case _ =>
@@ -64,3 +64,6 @@ object PinnedPanelViewModel:
       plainText = row.plainText,
       selected = row.selected
     )
+
+  private def pinnedRect(surface: UiSurface, position: PanelPosition, layout: CalculatedLayout): Option[LayoutRect] =
+    layout.pinnedSurfaceRects.get(surface.id).orElse(layout.pinnedPanelRects.get(position))

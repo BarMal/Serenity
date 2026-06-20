@@ -76,4 +76,56 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     layout.expandedPanelRect shouldBe Some(layout.editorPanelRect)
     layout.editorPanelRect shouldBe LayoutEngine.calculateLayout(baseState, ViewportSize(120, 40)).editorPanelRect
   }
+
+  it should "split same-side left and right panels into per-surface rects" in {
+    val state = baseState.copy(
+      uiSurfaces = List(
+        UiSurface.fromPanelContent(
+          SurfaceId("left-one"),
+          PanelContent.Outline(Nil),
+          PanelPosition.Left,
+          20
+        ),
+        UiSurface.fromPanelContent(
+          SurfaceId("left-two"),
+          PanelContent.Diagnostics(Nil),
+          PanelPosition.Left,
+          24
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 31))
+
+    layout.pinnedPanelRects(PanelPosition.Left) shouldBe LayoutRect(0, 0, 24, 30)
+    layout.pinnedSurfaceRects(SurfaceId("left-one")) shouldBe LayoutRect(0, 0, 24, 15)
+    layout.pinnedSurfaceRects(SurfaceId("left-two")) shouldBe LayoutRect(0, 15, 24, 15)
+    layout.editorPanelRect.x shouldBe 38
+  }
+
+  it should "split same-side top and bottom panels into per-surface rects" in {
+    val state = baseState.copy(
+      uiSurfaces = List(
+        UiSurface.fromPanelContent(
+          SurfaceId("bottom-one"),
+          PanelContent.Terminal("build", 0),
+          PanelPosition.Bottom,
+          6
+        ),
+        UiSurface.fromPanelContent(
+          SurfaceId("bottom-two"),
+          PanelContent.Diagnostics(Nil),
+          PanelPosition.Bottom,
+          8
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(80, 25))
+
+    layout.pinnedPanelRects(PanelPosition.Bottom) shouldBe LayoutRect(0, 16, 80, 8)
+    layout.pinnedSurfaceRects(SurfaceId("bottom-one")) shouldBe LayoutRect(0, 16, 40, 8)
+    layout.pinnedSurfaceRects(SurfaceId("bottom-two")) shouldBe LayoutRect(40, 16, 40, 8)
+    layout.editorPanelRect.bottom shouldBe 16
+  }
 end PinnedPanelLayoutSpec

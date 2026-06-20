@@ -52,12 +52,33 @@ private[manager] trait StateManagerSurfaceFacadeBehavior extends StateManagerEdi
     }
     val tree    = DirectoryTreeData(rootPath, entries = Map(rootPath -> entries))
     val content = PanelContent.DirectoryTree(tree, selectedPath = None)
-    pinPanel(content, PanelPosition.Left, 30)
+    stateRef.get.flatMap { state =>
+      val maybeExistingExplorer = state.pinnedSurfaces.reverse.find { surface =>
+        surface.content match
+          case SurfaceContent.DirectoryTree(_, _) =>
+            surface.presentation match
+              case SurfacePresentation.Pinned(PanelPosition.Left, _) => true
+              case _                                                 => false
+          case _ =>
+            false
+      }
+      val updated =
+        maybeExistingExplorer match
+          case Some(surface) =>
+            val nextSurface = surface.copy(
+              content = SurfaceContent.DirectoryTree(tree, selectedPath = None),
+              presentation = SurfacePresentation.Pinned(PanelPosition.Left, 30)
+            )
+            state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ nextSurface)
+          case None =>
+            PanelStateReducer.pin(content, PanelPosition.Left, 30, state).state
+      validateAndUpdateState(updated, state)
+    }
 
   def selectFileInExplorer(filePath: String): IO[Unit] =
     val targetPath = Path.of(filePath)
     stateRef.get.flatMap { state =>
-      val updated = state.pinnedSurfaces
+      val updated = state.pinnedSurfaces.reverse
         .find { surface =>
           surface.presentation match
             case SurfacePresentation.Pinned(PanelPosition.Left, _) => true

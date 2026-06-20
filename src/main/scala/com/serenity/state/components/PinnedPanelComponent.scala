@@ -143,12 +143,24 @@ class PinnedPanelComponent(
       .getOrElse(0)
 
   private def activeDirectorySurface(currentState: AppState) =
-    currentState.uiSurfaces.find {
+    focusedPinnedSurface(currentState).orElse(currentState.uiSurfaces.reverse.find {
       _.presentation match
         case SurfacePresentation.Pinned(pos, _) if pos == position   => true
         case SurfacePresentation.Expanded(pos, _) if pos == position => true
         case _                                                       => false
-    }
+    })
+
+  private def focusedPinnedSurface(currentState: AppState) =
+    currentState.focus match
+      case Focus.Surface(surfaceId) =>
+        currentState.surfaceById(surfaceId).filter { surface =>
+          surface.presentation match
+            case SurfacePresentation.Pinned(pos, _) if pos == position   => true
+            case SurfacePresentation.Expanded(pos, _) if pos == position => true
+            case _                                                       => false
+        }
+      case _ =>
+        None
 
   private def replaceSurface(currentState: AppState, updated: com.serenity.state.models.UiSurface): AppState =
     currentState.copy(uiSurfaces = currentState.uiSurfaces.filterNot(_.id == updated.id) :+ updated)

@@ -98,14 +98,38 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     positions should contain(PanelPosition.Right)
     positions should contain(PanelPosition.Bottom)
 
-  it should "replace a pinned panel when a new one occupies the same position" in new UIFixture:
+  it should "append pinned panels when a new one occupies the same position" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
     stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
     val pinned = state.pinnedSurfaces
-    pinned should have size 1
-    pinned.head.content shouldBe a[SurfaceContent.Diagnostics]
+    pinned should have size 2
+    pinned.map(_.content).map {
+      case SurfaceContent.Outline(_)     => "outline"
+      case SurfaceContent.Diagnostics(_) => "diagnostics"
+      case other                         => fail(s"Unexpected pinned content: $other")
+    } shouldBe List("outline", "diagnostics")
+
+  it should "unpin one same-side panel at a time starting with the focused panel" in new UIFixture:
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
+    stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30).unsafeRunSync()
+    stateManager.switchToPinnedPanel(PanelPosition.Right).unsafeRunSync()
+
+    val before = stateManager.getCurrentState.unsafeRunSync()
+    val focusedSurfaceId = before.focus match
+      case Focus.Surface(id) => id
+      case other             => fail(s"Expected focus on pinned surface, got $other")
+
+    stateManager.unpinPanel(PanelPosition.Right).unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.pinnedSurfaces should have size 1
+    after.pinnedSurfaces.map(_.id) should not contain focusedSurfaceId
+    after.pinnedSurfaces.map(_.content).foreach {
+      case SurfaceContent.Outline(_) => ()
+      case other                     => fail(s"Unexpected pinned content: $other")
+    }
 
   // ── Panel resize ─────────────────────────────────────────────────────────
 
