@@ -326,10 +326,13 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       val currentPanels = animatedPanelSurfaces(currentState)
       val openedPanels =
         currentPanels.filter(surface => !prevPanels.exists(_.id == surface.id))
+      val closedPanels =
+        prevPanels.filter(surface => !currentPanels.exists(_.id == surface.id))
 
       openedSurfaces.traverse_(surface => applyCommandRunnerOpenAnimation(surface, currentState)) >>
         closedSurfaces.traverse_(surface => applyCommandRunnerCloseAnimation(surface, prevState, currentState)) >>
-        openedPanels.traverse_(surface => applyPinnedPanelOpenAnimation(surface))
+        openedPanels.traverse_(surface => applyPinnedPanelOpenAnimation(surface)) >>
+        closedPanels.traverse_(surface => applyPinnedPanelCloseAnimation(surface, prevState))
     }
 
   private def applyCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): cats.effect.IO[Unit] =
@@ -447,6 +450,32 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         .getOrElse(state)
     }
 
+  private def applyPinnedPanelCloseAnimation(closedSurface: UiSurface, prevState: AppState): cats.effect.IO[Unit] =
+    stateRef.update { state =>
+      val tSize          = prevState.viewportSize.orElse(state.viewportSize).getOrElse(ViewportSize(80, 24))
+      val previousLayout = LayoutEngine.calculateLayoutWithUI(prevState, tSize)
+      val maybeGhost =
+        for
+          position  <- panelPosition(closedSurface)
+          rect      <- panelRectForSurface(previousLayout, closedSurface)
+          animation <- pinnedPanelCloseAnimation(position, rect, state)
+        yield
+          val (stateWithId, ghostId) = state.allocateSurfaceId
+          val ghostSurface = UiSurface(
+            id = ghostId,
+            content = SurfaceContent.GhostOverlay(closedSurface.content, rect),
+            presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+          stateWithId.copy(
+            uiSurfaces = stateWithId.uiSurfaces :+ ghostSurface,
+            surfaceAnimations = stateWithId.surfaceAnimations
+              - closedSurface.id
+              + (ghostId -> animation)
+          )
+
+      maybeGhost.getOrElse(state)
+    }
+
   private def pinnedPanelOpenAnimation(
     position: PanelPosition,
     rect: LayoutRect,
@@ -467,6 +496,26 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       )
     )
 
+  private def pinnedPanelCloseAnimation(
+    position: PanelPosition,
+    rect: LayoutRect,
+    state: AppState
+  ): Option[SurfaceAnimationState] =
+    val plan = ElementTransitionPlanner.plan(
+      ElementTransitionRequest(TransitionScope.PanelClose, Some(position)),
+      state.config.elementTransitionSettings
+    )
+    val animationState = ElementTransitionLowerer.lower(plan, pinnedPanelCloseCells(rect, state), tickRateMs = 16)
+    Option.when(animationState.hasActiveAnimations)(
+      SurfaceAnimationState(
+        phase = SurfacePhase.Exiting,
+        animationState = animationState,
+        overlayHeight = rect.height,
+        bufferFadeLength = 0,
+        phaseTick = 0
+      )
+    )
+
   private def pinnedPanelOpenCells(rect: LayoutRect, state: AppState): ElementTransitionCells =
     val transparentPanelForeground = transparent(state.theme.panel.foreground)
     val transparentBorder          = transparent(state.theme.border)
@@ -477,6 +526,20 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         (0 until math.max(0, rect.width - 2)).map { column =>
           CharacterKey(column, row) ->
             CellAnimation(' ', transparentPanelForeground, state.theme.panel.foreground)
+        }
+      }.toMap
+    ElementTransitionCells(frame = Map(borderCell), content = contentCells)
+
+  private def pinnedPanelCloseCells(rect: LayoutRect, state: AppState): ElementTransitionCells =
+    val transparentPanelForeground = transparent(state.theme.panel.foreground)
+    val transparentBorder          = transparent(state.theme.border)
+    val borderCell =
+      CharacterKey(-1, -1) -> CellAnimation(' ', state.theme.border, transparentBorder)
+    val contentCells =
+      (0 until math.max(0, rect.height - 1)).flatMap { row =>
+        (0 until math.max(0, rect.width - 2)).map { column =>
+          CharacterKey(column, row) ->
+            CellAnimation(' ', state.theme.panel.foreground, transparentPanelForeground)
         }
       }.toMap
     ElementTransitionCells(frame = Map(borderCell), content = contentCells)

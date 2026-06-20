@@ -29,7 +29,10 @@ private[manager] trait StateManagerSurfaceFacadeBehavior extends StateManagerEdi
     }
 
   def unpinPanel(position: PanelPosition): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.unpin(position, state).state, state))
+    stateRef.get.flatMap { state =>
+      validateAndUpdateState(PanelStateReducer.unpin(position, state).state, state)
+        .flatMap(_ => applyAnimationHooks(state))
+    }
 
   def expandPinnedPanel(position: PanelPosition): IO[Unit] =
     stateRef.get.flatMap { state =>

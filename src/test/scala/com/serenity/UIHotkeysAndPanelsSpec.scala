@@ -151,6 +151,42 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
   // ── Panel resize ─────────────────────────────────────────────────────────
 
+  it should "create an exiting ghost overlay when unpinning a panel" in new UIFixture:
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
+    advanceAnimations(80)
+
+    stateManager.unpinPanel(PanelPosition.Right).unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    val ghost = state.uiSurfaces.collectFirst {
+      case surface @ UiSurface(_, SurfaceContent.GhostOverlay(SurfaceContent.Outline(_, _), _), _, _) => surface
+    }
+    ghost shouldBe defined
+    ghost.flatMap(surface => state.surfaceAnimations.get(surface.id).map(_.phase)) shouldBe Some(SurfacePhase.Exiting)
+
+  it should "remove a panel ghost overlay when its close animation completes" in new UIFixture:
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
+    advanceAnimations(80)
+    stateManager.unpinPanel(PanelPosition.Right).unsafeRunSync()
+
+    advanceAnimations(120)
+
+    stateManager.getCurrentState.unsafeRunSync().uiSurfaces.exists {
+      _.content match
+        case SurfaceContent.GhostOverlay(SurfaceContent.Outline(_, _), _) => true
+        case _                                                            => false
+    } shouldBe false
+
+  it should "skip panel close ghosts when reduced motion is enabled" in new UIFixture:
+    stateManager.updateState(_.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Reduced))).unsafeRunSync()
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
+
+    stateManager.unpinPanel(PanelPosition.Right).unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.surfaceAnimations shouldBe empty
+    state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
+
   it should "resize a pinned panel to a new size" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
     stateManager.resizePinnedPanel(PanelPosition.Right, 50).unsafeRunSync()
@@ -248,3 +284,6 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val stateManager: StateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
+
+    def advanceAnimations(ticks: Int): Unit =
+      (1 to ticks).foreach(_ => stateManager.advanceAnimationsOnTick().unsafeRunSync())
