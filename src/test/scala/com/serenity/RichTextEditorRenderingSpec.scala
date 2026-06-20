@@ -3,7 +3,7 @@ package com.serenity
 import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
-import com.serenity.richtext.{InlineMark, RichTextDocument}
+import com.serenity.richtext.{InlineMark, ParagraphRole, RichTextDocument}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
@@ -107,6 +107,43 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
     styled.map(_.style.fontSize) shouldBe List(Some(18.0f))
   }
 
+  it should "apply default heading styles from paragraph roles" in {
+    val document = RichTextDocument(
+      List(
+        com.serenity.richtext.RichTextParagraph.plain(
+          "Chapter One",
+          role = ParagraphRole.Heading(1)
+        )
+      )
+    )
+
+    val styled = RichTextStyling.styledLine(document, 0, 0, 11, Theme.light)
+
+    styled.map(_.style.isBold) shouldBe List(true)
+    styled.map(_.style.fontSize) shouldBe List(Some(22.0f))
+  }
+
+  it should "let explicit run font size override heading defaults" in {
+    val document = RichTextDocument(
+      List(
+        com.serenity.richtext.RichTextParagraph(
+          List(
+            com.serenity.richtext.RichTextRun(
+              "Scene",
+              com.serenity.richtext.RichTextStyle(fontSize = Some(15.0f))
+            )
+          ),
+          role = ParagraphRole.Heading(2)
+        )
+      )
+    )
+
+    val styled = RichTextStyling.styledLine(document, 0, 0, 5, Theme.light)
+
+    styled.map(_.style.isBold) shouldBe List(true)
+    styled.map(_.style.fontSize) shouldBe List(Some(15.0f))
+  }
+
   "Renderer" should "apply rich text marks to editor text" in {
     val buffer = Buffer
       .fromString(BufferId(1), richDocument.plainText)
@@ -172,5 +209,27 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
 
     surface.styleCalls should contain(
       surface.StyleCall("enable", TextStyle(fontFamily = Some(Font.SERIF), fontSize = Some(18.0f)))
+    )
+  }
+
+  it should "render rich text heading paragraph roles" in {
+    val document = RichTextDocument(
+      List(
+        com.serenity.richtext.RichTextParagraph.plain(
+          "Chapter One",
+          role = ParagraphRole.Heading(1)
+        )
+      )
+    )
+    val buffer = Buffer
+      .fromString(BufferId(1), document.plainText)
+      .copy(richTextDocument = Some(document))
+    val state   = buildState(buffer)
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, textFont, monoMetrics, None)
+
+    surface.styleCalls should contain(
+      surface.StyleCall("enable", TextStyle(isBold = true, fontSize = Some(22.0f)))
     )
   }
