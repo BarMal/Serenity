@@ -325,7 +325,12 @@ object LayoutEngine:
             case None          => belowSurfaces.headOption.toList
         case _ =>
           if belowSurfaces.nonEmpty then belowSurfaces.headOption.toList
-          else state.cursorInfoBarSurface.toList
+          else
+            state.cursorInfoBarSurface.filter {
+              _.presentation match
+                case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
+                case _                                                             => false
+            }.toList
 
   private def calculateBelowCursorOverlayStack(
     surfaces: List[UiSurface],

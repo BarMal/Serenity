@@ -1,9 +1,9 @@
 package com.serenity.state.models
 
 import com.serenity.animation.AnimationState
-import com.serenity.config.{AppConfig, CursorInfoBarMode}
+import com.serenity.config.{AppConfig, CursorInfoBarMode, CursorInfoBarPlacement}
 import com.serenity.lsp.model.Diagnostic
-import com.serenity.ui.layout.{Layout, ViewportSize}
+import com.serenity.ui.layout.{Layout, PanelPosition, ViewportSize}
 import com.serenity.ui.theme.Theme
 
 enum SurfacePhase:
@@ -136,8 +136,15 @@ case class AppState(
         yield UiSurface(
           id = SurfaceId("cursor-info-bar"),
           content = SurfaceContent.CursorInfoBar(cursorInfoBarText(mode, cursor, buffer)),
-          presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          presentation = cursorInfoBarPresentation(cursor)
         )
+
+  private def cursorInfoBarPresentation(cursor: CursorPosition): SurfacePresentation =
+    config.cursorInfoBarPlacement match
+      case CursorInfoBarPlacement.Floating =>
+        SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+      case CursorInfoBarPlacement.PinnedBottom =>
+        SurfacePresentation.Pinned(PanelPosition.Bottom, 3)
 
   private def cursorInfoBarText(mode: CursorInfoBarMode, cursor: CursorPosition, buffer: Buffer): String =
     val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"
@@ -159,7 +166,12 @@ case class AppState(
     }
 
   def pinnedSurfaces: List[UiSurface] =
-    uiSurfaces.filter {
+    val storedPinned = uiSurfaces.filter {
+      _.presentation match
+        case SurfacePresentation.Pinned(_, _) => true
+        case _                                => false
+    }
+    storedPinned ++ cursorInfoBarSurface.filter {
       _.presentation match
         case SurfacePresentation.Pinned(_, _) => true
         case _                                => false
@@ -316,7 +328,7 @@ case class AppState(
     focus match
       case Focus.EditorPane(paneId) if !layout.editorPanes.contains(paneId) =>
         errors += s"Focus points to non-existent pane: $paneId"
-      case Focus.Surface(surfaceId) if !uiSurfaces.exists(_.id == surfaceId) =>
+      case Focus.Surface(surfaceId) if surfaceById(surfaceId).isEmpty =>
         errors += s"Focus points to non-existent surface: $surfaceId"
       case _ => // Valid focus
     // Buffer-Pane consistency

@@ -64,6 +64,10 @@ enum CursorInfoBarMode:
       case Position => "position"
       case Detailed => "detailed"
 
+enum CursorInfoBarPlacement(val configKey: String):
+  case Floating     extends CursorInfoBarPlacement("floating")
+  case PinnedBottom extends CursorInfoBarPlacement("pinned-bottom")
+
 enum WindowChromeMode:
   case Native
   case Custom
@@ -204,6 +208,7 @@ case class AppConfig(
     cursorMode: CursorMode = CursorMode.Blink,
     cursorColors: CursorColorConfig = CursorColorConfig(),
     cursorInfoBarMode: CursorInfoBarMode = CursorInfoBarMode.Off,
+    cursorInfoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating,
     windowChromeMode: WindowChromeMode = WindowChromeMode.Native,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
@@ -317,6 +322,9 @@ case class AppConfig(
 
   def withCursorInfoBarMode(mode: CursorInfoBarMode): AppConfig =
     copy(cursorInfoBarMode = mode)
+
+  def withCursorInfoBarPlacement(placement: CursorInfoBarPlacement): AppConfig =
+    copy(cursorInfoBarPlacement = placement)
 
   def withWindowChromeMode(mode: WindowChromeMode): AppConfig =
     copy(windowChromeMode = mode)

@@ -79,7 +79,14 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
 
     runner.optionSelections.get("interface-density") shouldBe Some(0)
     runner.settingsGroups.find(_.id == "settings-appearance").map(_.children.map(_.id)) should contain(
-      List("cursor-mode", "cursor-info-bar", "background-style", "interface-density", "blur-radius")
+      List(
+        "cursor-mode",
+        "cursor-info-bar",
+        "background-style",
+        "interface-density",
+        "blur-radius",
+        "cursor-info-bar-placement"
+      )
     )
   }
 
@@ -89,8 +96,28 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
 
     runner.optionSelections.get("cursor-info-bar") shouldBe Some(2)
     runner.settingsGroups.find(_.id == "settings-appearance").map(_.children.map(_.id)) should contain(
-      List("cursor-mode", "cursor-info-bar", "background-style", "interface-density", "blur-radius")
+      List(
+        "cursor-mode",
+        "cursor-info-bar",
+        "background-style",
+        "interface-density",
+        "blur-radius",
+        "cursor-info-bar-placement"
+      )
     )
+  }
+
+  it should "expose cursor info bar placement in the appearance settings group" in {
+    val config = AppConfig.default.withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+    val runner = CommandRunner.empty.activate(registry, config)
+
+    runner.optionSelections.get("cursor-info-bar-placement") shouldBe Some(1)
+    runner.settingsGroups
+      .find(_.id == "settings-appearance")
+      .map(_.children.collect {
+        case item: CommandSurfaceItem.OptionItem if item.id == "cursor-info-bar-placement" =>
+          item.selectedOption -> item.options.map(_.label)
+      }) should contain(List("Pinned Bottom" -> List("Floating", "Pinned Bottom")))
   }
 
   it should "expose material and motion presets with current selections" in {

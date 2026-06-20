@@ -19,7 +19,11 @@ case class TextPanelView(
 object PinnedPanelViewModel:
 
   def fromState(state: AppState, layout: CalculatedLayout): List[TextPanelView] =
-    state.uiSurfaces.flatMap {
+    (state.pinnedSurfaces ++ state.uiSurfaces.filter {
+      _.presentation match
+        case SurfacePresentation.Expanded(_, _) => true
+        case _                                  => false
+    }).flatMap {
       case surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, _), _) =>
         pinnedRect(surface, position, layout).map(rect => resolve(surface, rect, Some(state)))
       case surface @ UiSurface(_, _, SurfacePresentation.Expanded(_, _), _) =>

@@ -156,6 +156,14 @@ object ConfigManager:
                   config.withCursorInfoBarMode(CursorInfoBarMode.Detailed)
                 case _ =>
                   config
+            case "cursor.info_bar.placement" | "cursor.info.bar.placement" | "cursor_info_bar_placement" =>
+              value.trim.toLowerCase match
+                case "floating" | "float" =>
+                  config.withCursorInfoBarPlacement(CursorInfoBarPlacement.Floating)
+                case "pinned-bottom" | "bottom" | "pinned" =>
+                  config.withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+                case _ =>
+                  config
             case "ui.material" | "ui_material" | "material.preset" | "material_preset" =>
               parseMaterialPreset(value.trim).map(config.withMaterialPreset).getOrElse(config)
             case "ui.motion" | "ui_motion" | "motion.preset" | "motion_preset" =>
@@ -266,6 +274,7 @@ object ConfigManager:
        |cursor.active.color = ${config.cursorColors.active.map(formatColor).getOrElse("")}
        |cursor.inactive.color = ${config.cursorColors.inactive.map(formatColor).getOrElse("")}
        |cursor.info_bar = ${config.cursorInfoBarMode.configKey}
+       |cursor.info_bar.placement = ${config.cursorInfoBarPlacement.configKey}
        |
        |# Interface density: compact, comfortable, spacious
        |interface.density = ${config.interfaceDensity.configKey}
