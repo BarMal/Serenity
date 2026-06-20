@@ -1,5 +1,7 @@
 package com.serenity.state.core
 
+import com.serenity.config.{AppConfig, DefaultDocumentMode}
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
@@ -18,6 +20,32 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
     updatedState.bufferOrder shouldBe List(BufferId(0), BufferId(1))
     updatedState.focusedBufferId shouldBe Some(BufferId(1))
     updatedState.buffers(BufferId(1)).isNewEmpty shouldBe true
+  }
+
+  it should "create new Markdown buffers when configured as the default document mode" in {
+    val updatedState = EditorState.openNewTab(
+      AppState.initial.copy(
+        viewportSize = Some(ViewportSize(200, 24)),
+        config = AppConfig.default.withDefaultDocumentMode(DefaultDocumentMode.Markdown)
+      )
+    )
+
+    val buffer = updatedState.buffers(BufferId(1))
+    buffer.language shouldBe Some(LanguageId.Markdown)
+    buffer.richTextDocument shouldBe None
+  }
+
+  it should "create new rich text buffers when configured as the default document mode" in {
+    val updatedState = EditorState.openNewTab(
+      AppState.initial.copy(
+        viewportSize = Some(ViewportSize(200, 24)),
+        config = AppConfig.default.withDefaultDocumentMode(DefaultDocumentMode.RichText)
+      )
+    )
+
+    val buffer = updatedState.buffers(BufferId(1))
+    buffer.language shouldBe None
+    buffer.richTextDocument.map(_.plainText) shouldBe Some("")
   }
 
   it should "insert a new buffer after the currently focused buffer" in {

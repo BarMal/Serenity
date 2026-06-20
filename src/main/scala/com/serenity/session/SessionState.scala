@@ -434,6 +434,15 @@ given Decoder[MarkdownViewMode] = Decoder.decodeString.emap {
   case other          => Left(s"Unknown MarkdownViewMode: $other")
 }
 
+given Encoder[DefaultDocumentMode] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[DefaultDocumentMode] = Decoder.decodeString.emap {
+  case "PlainText" => Right(DefaultDocumentMode.PlainText)
+  case "Markdown"  => Right(DefaultDocumentMode.Markdown)
+  case "RichText"  => Right(DefaultDocumentMode.RichText)
+  case other       => Left(s"Unknown DefaultDocumentMode: $other")
+}
+
 given Encoder[InterfaceDensity] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[InterfaceDensity] = Decoder.decodeString.emap {
@@ -573,6 +582,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     )
     windowChromeMode    <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(WindowChromeMode.Native)
     markdownViewMode    <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
+    defaultDocumentMode <- cursor.getOrElse[DefaultDocumentMode]("defaultDocumentMode")(DefaultDocumentMode.PlainText)
     interfaceDensity    <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(InterfaceDensity.Comfortable)
     textAreaInsets      <- cursor.getOrElse[TextAreaInsets]("textAreaInsets")(TextAreaInsets())
     preferredWindowSize <- cursor.getOrElse[Option[PreferredWindowSize]]("preferredWindowSize")(None)
@@ -597,6 +607,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     cursorInfoBarPlacement = cursorInfoBarPlacement,
     windowChromeMode = windowChromeMode,
     markdownViewMode = markdownViewMode,
+    defaultDocumentMode = defaultDocumentMode,
     interfaceDensity = interfaceDensity,
     textAreaInsets = textAreaInsets,
     preferredWindowSize = preferredWindowSize,

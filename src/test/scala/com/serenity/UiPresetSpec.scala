@@ -101,13 +101,16 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     writing.config.showLineNumbers shouldBe false
     writing.config.showGutter shouldBe false
     writing.config.motionPreset shouldBe MotionPreset.Subtle
+    writing.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
     writing.pinnedPanels.map(panel => panel.position -> panel.content) should contain(
       PanelPosition.Left -> UiPreset.PanelContentSnapshot.Outline(Nil)
     )
 
     docs.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
+    docs.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
     docs.pinnedPanels.map(_.content) should contain(UiPreset.PanelContentSnapshot.Outline(Nil))
 
+    code.config.defaultDocumentMode shouldBe DefaultDocumentMode.PlainText
     code.config.motionPreset shouldBe MotionPreset.Reduced
     code.config.showLineNumbers shouldBe true
     code.pinnedPanels.map(_.position) should contain(PanelPosition.Left)
