@@ -3,7 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Font
 
 import com.serenity.animation.ThemeInterpolator
-import com.serenity.config.{AppConfig, MarkdownViewMode}
+import com.serenity.config.{AppConfig, CursorInfoBarPlacement, MarkdownViewMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.spellcheck.SpellChecker
@@ -1097,25 +1097,29 @@ object Renderer:
     }
 
   private def renderGutter(state: AppState, context: RenderContext): Unit =
-    if state.config.showGutter then
+    context.layout.gutterRect.foreach { gutterRect =>
       context.surface.setFont(context.uiFont)
-      context.layout.gutterRect foreach { gutterRect =>
-        val surface = context.surface
+      val surface = context.surface
 
-        surface.setBackgroundColor(state.theme.panel.background)
-        surface.setForegroundColor(state.theme.panel.foreground)
+      surface.setBackgroundColor(state.theme.panel.background)
+      surface.setForegroundColor(state.theme.panel.foreground)
 
-        surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
+      surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
 
-        val gutterContent = buildGutterContent(state)
-        val displayContent =
-          if gutterContent.length > gutterRect.width then gutterContent.take(gutterRect.width - 3) + "..."
-          else gutterContent.padTo(gutterRect.width, ' ')
+      val gutterContent = buildGutterContent(state)
+      val displayContent =
+        if gutterContent.length > gutterRect.width then gutterContent.take(gutterRect.width - 3) + "..."
+        else gutterContent.padTo(gutterRect.width, ' ')
 
-        surface.putString(gutterRect.x, gutterRect.y, displayContent)
-      }
+      surface.putString(gutterRect.x, gutterRect.y, displayContent)
+    }
 
   private def buildGutterContent(state: AppState): String =
+    if state.config.cursorInfoBarPlacement == CursorInfoBarPlacement.PinnedBottom then
+      state.cursorInfoBarText.map(text => s" $text ").getOrElse(legacyGutterContent(state))
+    else legacyGutterContent(state)
+
+  private def legacyGutterContent(state: AppState): String =
     state.focus match
       case Focus.EditorPane(paneId) =>
         state.layout.editorPanes

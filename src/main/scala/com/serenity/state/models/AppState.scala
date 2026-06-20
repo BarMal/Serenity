@@ -3,7 +3,7 @@ package com.serenity.state.models
 import com.serenity.animation.AnimationState
 import com.serenity.config.{AppConfig, CursorInfoBarMode, CursorInfoBarPlacement}
 import com.serenity.lsp.model.Diagnostic
-import com.serenity.ui.layout.{Layout, PanelPosition, ViewportSize}
+import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
 
 enum SurfacePhase:
@@ -134,26 +134,35 @@ case class AppState(
     config.cursorInfoBarMode match
       case CursorInfoBarMode.Off => None
       case mode =>
+        config.cursorInfoBarPlacement match
+          case CursorInfoBarPlacement.Floating =>
+            for
+              paneId   <- layout.activeEditorPaneId
+              pane     <- layout.editorPanes.get(paneId)
+              bufferId <- pane.bufferId
+              buffer   <- buffers.get(bufferId)
+              cursor   <- buffer.cursors.headOption
+            yield UiSurface(
+              id = SurfaceId("cursor-info-bar"),
+              content = SurfaceContent.CursorInfoBar(formatCursorInfoBarText(mode, cursor, buffer)),
+              presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+            )
+          case CursorInfoBarPlacement.PinnedBottom =>
+            None
+
+  def cursorInfoBarText: Option[String] =
+    config.cursorInfoBarMode match
+      case CursorInfoBarMode.Off => None
+      case mode =>
         for
           paneId   <- layout.activeEditorPaneId
           pane     <- layout.editorPanes.get(paneId)
           bufferId <- pane.bufferId
           buffer   <- buffers.get(bufferId)
           cursor   <- buffer.cursors.headOption
-        yield UiSurface(
-          id = SurfaceId("cursor-info-bar"),
-          content = SurfaceContent.CursorInfoBar(cursorInfoBarText(mode, cursor, buffer)),
-          presentation = cursorInfoBarPresentation(cursor)
-        )
+        yield formatCursorInfoBarText(mode, cursor, buffer)
 
-  private def cursorInfoBarPresentation(cursor: CursorPosition): SurfacePresentation =
-    config.cursorInfoBarPlacement match
-      case CursorInfoBarPlacement.Floating =>
-        SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
-      case CursorInfoBarPlacement.PinnedBottom =>
-        SurfacePresentation.Pinned(PanelPosition.Bottom, 3)
-
-  private def cursorInfoBarText(mode: CursorInfoBarMode, cursor: CursorPosition, buffer: Buffer): String =
+  private def formatCursorInfoBarText(mode: CursorInfoBarMode, cursor: CursorPosition, buffer: Buffer): String =
     val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"
     mode match
       case CursorInfoBarMode.Off =>
