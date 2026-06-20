@@ -40,7 +40,7 @@ case class CommandRunner(
     previewedGroupId: Option[String] = None,
     activeSubmenu: Option[CommandRunnerSubmenuState] = None,
     statusMessage: Option[String] = None,
-    uiPresetNames: List[String] = Nil
+    uiPresetPreviews: List[UiPreset.Preview] = Nil
 ):
 
   def visibleItems: List[CommandSurfaceItem] =
@@ -125,7 +125,7 @@ case class CommandRunner(
         id = "settings-ui-presets",
         label = "UI Presets",
         children = List(CommandRunner.builtInUiPresetOptionItem) ++
-          CommandRunner.customUiPresetOptionItem(uiPresetNames).toList ++
+          CommandRunner.customUiPresetOptionItem(uiPresetPreviews).toList ++
           inputItems.filter(_.id.startsWith("ui-preset-")),
         category = CommandCategory.Settings,
         hint = Some("Save or apply named layouts")
@@ -399,7 +399,10 @@ case class CommandRunner(
     ).syncEditMode.normalizeSubmenuEditMode
 
   def withUiPresetNames(names: List[String]): CommandRunner =
-    copy(uiPresetNames = CommandRunner.normalizedUiPresetNames(names)).syncEditMode.normalizeSubmenuEditMode
+    withUiPresetPreviews(CommandRunner.normalizedUiPresetNames(names).map(UiPreset.Preview.fromName))
+
+  def withUiPresetPreviews(previews: List[UiPreset.Preview]): CommandRunner =
+    copy(uiPresetPreviews = CommandRunner.normalizedUiPresetPreviews(previews)).syncEditMode.normalizeSubmenuEditMode
 
   /** Deactivate the command runner */
   def deactivate: CommandRunner =
@@ -416,7 +419,7 @@ case class CommandRunner(
       submenuSelections = Map.empty,
       previewedGroupId = None,
       activeSubmenu = None,
-      uiPresetNames = Nil
+      uiPresetPreviews = Nil
     )
 
   /** Enter edit mode on the currently selected InputItem, or clear edit state otherwise */
@@ -651,22 +654,29 @@ object CommandRunner:
     CommandSurfaceItem.OptionItem(
       id = "ui-preset-built-in",
       label = "Built-In Preset",
-      options = UiPreset.builtInNames.map(name => CommandOption(name, CommandIntent.ApplyUiPreset(name))),
+      options = UiPreset.builtIns.map { preset =>
+        val preview = UiPreset.Preview.fromPreset(preset)
+        CommandOption(preview.name, CommandIntent.ApplyUiPreset(preview.name), hint = Some(preview.hint))
+      },
       selectedIndex = 0,
       category = CommandCategory.Settings,
       hint = Some("Writing, docs, code, review")
     )
 
-  private[command] def customUiPresetOptionItem(names: List[String]): Option[CommandSurfaceItem.OptionItem] =
-    normalizedUiPresetNames(names) match
+  private[command] def customUiPresetOptionItem(
+    previews: List[UiPreset.Preview]
+  ): Option[CommandSurfaceItem.OptionItem] =
+    normalizedUiPresetPreviews(previews) match
       case Nil =>
         None
-      case normalizedNames =>
+      case normalizedPreviews =>
         Some(
           CommandSurfaceItem.OptionItem(
             id = "ui-preset-custom",
             label = "Custom Presets",
-            options = normalizedNames.map(name => CommandOption(name, CommandIntent.ApplyUiPreset(name))),
+            options = normalizedPreviews.map(preview =>
+              CommandOption(preview.name, CommandIntent.ApplyUiPreset(preview.name), hint = Some(preview.hint))
+            ),
             selectedIndex = 0,
             category = CommandCategory.Settings,
             hint = Some("Saved workspace setups")
@@ -679,6 +689,13 @@ object CommandRunner:
       .filter(_.nonEmpty)
       .distinctBy(_.toLowerCase)
       .sortBy(_.toLowerCase)
+
+  private[command] def normalizedUiPresetPreviews(previews: List[UiPreset.Preview]): List[UiPreset.Preview] =
+    previews
+      .map(preview => preview.copy(name = preview.name.trim, hint = preview.hint.trim))
+      .filter(_.name.nonEmpty)
+      .distinctBy(_.name.toLowerCase)
+      .sortBy(_.name.toLowerCase)
 
   private[command] def codeFontGroupItem(optionSelections: Map[String, Int]): CommandSurfaceItem.GroupItem =
     fontFamilyGroupItem(

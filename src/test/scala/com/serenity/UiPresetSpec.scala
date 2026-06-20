@@ -115,6 +115,15 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     review.pinnedPanels.map(_.content) should contain(UiPreset.PanelContentSnapshot.Diagnostics(Nil))
   }
 
+  it should "summarize presets for command runner previews" in {
+    val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
+
+    UiPreset.Preview.fromPreset(writing) shouldBe UiPreset.Preview(
+      "Writing",
+      "dark; subtle motion; frosted material; Serif 18pt prose; Left outline 28"
+    )
+  }
+
   "UiPresetStore" should "persist named presets to disk and replace an existing preset by name" in {
     val path  = Files.createTempDirectory("ui-preset-store").resolve("ui-presets.json")
     val store = UiPresetStore(path)
