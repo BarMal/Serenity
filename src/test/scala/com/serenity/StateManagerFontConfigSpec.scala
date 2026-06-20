@@ -16,7 +16,7 @@ import org.scalatest.matchers.should.Matchers
 class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private val CodeFontSettingsMoves = 5
-  private val UiFontSettingsMoves   = 7
+  private val UiFontSettingsMoves   = 8
 
   private def executeCommandThroughRunner(
     stateManager: StateManager,

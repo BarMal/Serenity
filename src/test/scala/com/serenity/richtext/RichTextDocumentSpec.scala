@@ -205,3 +205,28 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
     )
     updated.plainText shouldBe document.plainText
   }
+
+  it should "set inline font family, size, and colour across a range" in {
+    val document = RichTextDocument.oneParagraph("alpha beta gamma")
+
+    val styled = document
+      .setFontFamily(
+        RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 10)),
+        "Serif"
+      )
+      .setFontSize(
+        RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 10)),
+        18.0f
+      )
+      .setColor(
+        RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 10)),
+        "#336699"
+      )
+
+    styled.paragraphs.head.runs shouldBe List(
+      RichTextRun("alpha ", RichTextStyle.empty),
+      RichTextRun("beta", RichTextStyle(fontFamily = Some("Serif"), fontSize = Some(18.0f), color = Some("#336699"))),
+      RichTextRun(" gamma", RichTextStyle.empty)
+    )
+    styled.plainText shouldBe document.plainText
+  }

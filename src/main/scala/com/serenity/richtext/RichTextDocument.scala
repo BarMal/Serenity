@@ -32,6 +32,18 @@ case class RichTextStyle(
   def withoutMark(mark: InlineMark): RichTextStyle =
     copy(marks = marks - mark)
 
+  /** Return this style with the given font family metadata. */
+  def withFontFamily(family: String): RichTextStyle =
+    copy(fontFamily = Some(family.trim).filter(_.nonEmpty))
+
+  /** Return this style with the given font size metadata. */
+  def withFontSize(size: Float): RichTextStyle =
+    copy(fontSize = Some(size.max(1.0f)))
+
+  /** Return this style with the given text colour metadata. */
+  def withColor(color: String): RichTextStyle =
+    copy(color = Some(color.trim).filter(_.nonEmpty))
+
 object RichTextStyle:
   val empty: RichTextStyle = RichTextStyle()
 
@@ -87,6 +99,13 @@ case class RichTextParagraph(
         if enabled then (style: RichTextStyle) => style.withMark(mark)
         else (style: RichTextStyle) => style.withoutMark(mark)
       copy(runs = mergeRuns(splitAndTransform(start, end, transform)))
+
+  /** Transform inline style across a paragraph range. */
+  def updateStyle(startOffset: Int, endOffset: Int)(transform: RichTextStyle => RichTextStyle): RichTextParagraph =
+    val start = startOffset.max(0).min(plainText.length)
+    val end   = endOffset.max(start).min(plainText.length)
+    if start == end then this
+    else copy(runs = mergeRuns(splitAndTransform(start, end, transform)))
 
   /** True when the non-empty paragraph range is fully covered by the given mark. */
   def hasMarkThroughout(startOffset: Int, endOffset: Int, mark: InlineMark): Boolean =
@@ -202,6 +221,18 @@ case class RichTextDocument(paragraphs: List[RichTextParagraph]):
         paragraph.setMark(startOffset, endOffset, mark, enabled = !shouldRemove)
     })
 
+  /** Set the font family for every inline run touched by the range. */
+  def setFontFamily(range: RichTextRange, family: String): RichTextDocument =
+    updateInlineStyle(range)(_.withFontFamily(family))
+
+  /** Set the font size for every inline run touched by the range. */
+  def setFontSize(range: RichTextRange, size: Float): RichTextDocument =
+    updateInlineStyle(range)(_.withFontSize(size))
+
+  /** Set the text colour for every inline run touched by the range. */
+  def setColor(range: RichTextRange, color: String): RichTextDocument =
+    updateInlineStyle(range)(_.withColor(color))
+
   /** Set the structural role for every paragraph touched by the range. */
   def setParagraphRole(range: RichTextRange, role: ParagraphRole): RichTextDocument =
     updateParagraphs(range)(_.copy(role = role))
@@ -225,6 +256,20 @@ case class RichTextDocument(paragraphs: List[RichTextParagraph]):
         case (paragraph, index) if index >= startIndex && index <= endIndex => update(paragraph)
         case (paragraph, _)                                                 => paragraph
       })
+
+  private def updateInlineStyle(range: RichTextRange)(transform: RichTextStyle => RichTextStyle): RichTextDocument =
+    val normalizedRange = range.normalized
+    copy(paragraphs = paragraphs.zipWithIndex.map {
+      case (paragraph, index)
+          if index < normalizedRange.start.paragraphIndex || index > normalizedRange.end.paragraphIndex =>
+        paragraph
+      case (paragraph, index) =>
+        val startOffset =
+          if index == normalizedRange.start.paragraphIndex then normalizedRange.start.offset else 0
+        val endOffset =
+          if index == normalizedRange.end.paragraphIndex then normalizedRange.end.offset else paragraph.plainText.length
+        paragraph.updateStyle(startOffset, endOffset)(transform)
+    })
 
 object RichTextDocument:
   def oneParagraph(text: String): RichTextDocument =

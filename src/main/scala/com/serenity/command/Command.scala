@@ -37,6 +37,9 @@ enum CommandIntent:
   case ReplaceInCurrentFile
   case ReplaceAllInCurrentFile
   case ToggleRichTextMark(mark: InlineMark)
+  case SetRichTextFontFamily(family: String)
+  case SetRichTextFontSize(size: Float)
+  case SetRichTextColor(color: String)
   case SetRichTextParagraphRole(role: ParagraphRole)
   case SetRichTextParagraphAlignment(alignment: ParagraphAlignment)
   case ToggleCommentLens
