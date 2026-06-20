@@ -224,6 +224,12 @@ case class AppState(
       case _                             => false
     }
 
+  def commentLensSurface: Option[UiSurface] =
+    findSurface {
+      case SurfaceContent.CommentLens(_) => true
+      case _                             => false
+    }
+
   def startPageSurface: Option[UiSurface] =
     findSurface {
       case SurfaceContent.StartPage(_) => true

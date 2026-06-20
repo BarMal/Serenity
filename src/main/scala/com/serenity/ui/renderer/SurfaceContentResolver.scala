@@ -107,6 +107,15 @@ object SurfaceContentResolver:
         resolveFileSearch(state, rect, mode)
       case SurfaceContent.ContextMenu(menu) =>
         resolveContextMenu(menu, rect, mode)
+      case SurfaceContent.CommentLens(comment) =>
+        ResolvedSurfaceContent(
+          title = titleFor(mode, "comment"),
+          header = Some(OverlayRow("comment")),
+          rows = List(
+            OverlayRow(comment.inlineMarkdown),
+            OverlayRow(comment.raw)
+          )
+        )
       case SurfaceContent.MarkdownPreview(_, title) =>
         ResolvedSurfaceContent(title = titleFor(mode, s"Preview: $title"))
       case SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
