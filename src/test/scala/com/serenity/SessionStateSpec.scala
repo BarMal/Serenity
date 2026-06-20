@@ -445,6 +445,21 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.interfaceDensity shouldBe InterfaceDensity.Comfortable
   }
 
+  it should "default UI element gap to zero when loading older JSON without the field" in {
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val jsonWithoutUiElementGap =
+      originalJson.mapObject(
+        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("uiElementGap")))
+      )
+
+    val decoded = jsonWithoutUiElementGap.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.uiElementGap shouldBe 0
+  }
+
   it should "default cursorInfoBarMode to Off when loading older JSON without the field" in {
     val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
     val configObject =

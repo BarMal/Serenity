@@ -69,6 +69,50 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     paneLayouts(PaneId(0)) shouldBe calculatedLayout.editorPanelRect
   }
 
+  it should "apply configured gaps between pinned panels and the editor workspace" in {
+    val state = AppState.initial.copy(
+      config = AppConfig.default.copy(
+        uiElementGap = 2,
+        showLineNumbers = false,
+        textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0)
+      ),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("left-panel"),
+          SurfaceContent.Outline(Nil),
+          SurfacePresentation.Pinned(PanelPosition.Left, 10)
+        ),
+        UiSurface(
+          SurfaceId("right-panel"),
+          SurfaceContent.Diagnostics(Nil),
+          SurfacePresentation.Pinned(PanelPosition.Right, 20)
+        ),
+        UiSurface(
+          SurfaceId("top-panel"),
+          SurfaceContent.Terminal("Build", 0),
+          SurfacePresentation.Pinned(PanelPosition.Top, 3)
+        ),
+        UiSurface(
+          SurfaceId("bottom-panel"),
+          SurfaceContent.Diagnostics(Nil),
+          SurfacePresentation.Pinned(PanelPosition.Bottom, 4)
+        )
+      )
+    )
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+
+    calculatedLayout.pinnedPanelRects(PanelPosition.Left) shouldBe LayoutRect(0, 3, 10, 22)
+    calculatedLayout.pinnedPanelRects(PanelPosition.Right) shouldBe LayoutRect(80, 3, 20, 22)
+    calculatedLayout.pinnedPanelRects(PanelPosition.Top) shouldBe LayoutRect(0, 0, 100, 3)
+    calculatedLayout.pinnedPanelRects(PanelPosition.Bottom) shouldBe LayoutRect(0, 25, 100, 4)
+    calculatedLayout.editorPanelRect.x shouldBe 12
+    calculatedLayout.editorPanelRect.y shouldBe 5
+    calculatedLayout.editorPanelRect.height shouldBe 18
+    calculatedLayout.editorPanelRect.right shouldBe 78
+    calculatedLayout.editorPanelRect.bottom shouldBe 23
+  }
+
   it should "split editor area between two panes horizontally" in {
     // Given: State with two panes
     val pane1 = EditorPane.empty(PaneId(0))

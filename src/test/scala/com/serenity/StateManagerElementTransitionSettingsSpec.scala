@@ -35,3 +35,20 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
 
     stateManager.getCurrentState.unsafeRunSync().config.elementTransitionSpeedScale shouldBe 2.25
   }
+
+  it should "update the UI element gap config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "ui-element-gap",
+          "Set UI element gap",
+          CommandIntent.SetUiElementGap(3),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.uiElementGap shouldBe 3
+  }

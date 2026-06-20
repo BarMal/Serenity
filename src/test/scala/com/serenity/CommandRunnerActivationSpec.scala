@@ -74,7 +74,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expose interface density in the appearance settings group" in {
-    val config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Compact)
+    val config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Compact).withUiElementGap(2)
     val runner = CommandRunner.empty.activate(registry, config)
 
     runner.optionSelections.get("interface-density") shouldBe Some(0)
@@ -85,9 +85,18 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "background-style",
         "interface-density",
         "blur-radius",
+        "ui-element-gap",
         "cursor-info-bar-placement"
       )
     )
+    runner.settingsGroups
+      .find(_.id == "settings-appearance")
+      .flatMap(
+        _.children.collectFirst {
+          case item: CommandSurfaceItem.InputItem if item.id == "ui-element-gap" =>
+            (item.currentValue, item.hint, item.parse("3"), item.parse("9"))
+        }
+      ) shouldBe Some(("2", "Cells (0-8)", Some(CommandIntent.SetUiElementGap(3)), None))
   }
 
   it should "expose cursor info bar mode in the appearance settings group" in {
@@ -102,6 +111,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "background-style",
         "interface-density",
         "blur-radius",
+        "ui-element-gap",
         "cursor-info-bar-placement"
       )
     )

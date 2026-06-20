@@ -111,7 +111,7 @@ case class CommandRunner(
         id = "settings-appearance",
         label = "Appearance",
         children = List(cursorModeItem, cursorInfoBarItem, backgroundStyleItem, interfaceDensityItem) ++
-          inputItems.filter(_.id == "blur-radius") :+ cursorInfoPlacement,
+          inputItems.filter(item => item.id == "blur-radius" || item.id == "ui-element-gap") :+ cursorInfoPlacement,
         category = CommandCategory.Settings,
         hint = Some("Cursor, info bar, background, density, blur")
       ),
@@ -824,6 +824,7 @@ object CommandRunner:
     val textAreaLeftValue  = f"${config.textAreaInsets.leftPercent}%.1f"
     val textAreaRightValue = f"${config.textAreaInsets.rightPercent}%.1f"
     val speedScaleValue    = f"${config.elementTransitionSpeedScale}%.2f"
+    val elementGapValue    = config.uiElementGap.toString
     val spellCheck         = config.spellCheck.normalized
 
     val richTextItems = List(
@@ -1034,6 +1035,18 @@ object CommandRunner:
           text.toFloatOption
             .filter(v => v >= 0.0f && v <= 1.0f)
             .map(CommandIntent.SetBlurRadius(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "ui-element-gap",
+        label = "UI Element Gap",
+        hint = s"Cells (${AppConfig.MinUiElementGap}-${AppConfig.MaxUiElementGap})",
+        currentValue = elementGapValue,
+        isDecimal = false,
+        parse = text =>
+          text.toIntOption
+            .filter(value => value >= AppConfig.MinUiElementGap && value <= AppConfig.MaxUiElementGap)
+            .map(CommandIntent.SetUiElementGap(_)),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(

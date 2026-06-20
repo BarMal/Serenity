@@ -157,6 +157,8 @@ object ConfigManager:
                   config.withInterfaceDensity(InterfaceDensity.Spacious)
                 case _ =>
                   config
+            case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
+              parseUiElementGap(value.trim).map(config.withUiElementGap).getOrElse(config)
             case "cursor.info_bar" | "cursor.info.bar" | "cursor_info_bar" =>
               value.trim.toLowerCase match
                 case "off" | "false" | "disabled" =>
@@ -299,6 +301,7 @@ object ConfigManager:
        |
        |# Interface density: compact, comfortable, spacious
        |interface.density = ${config.interfaceDensity.configKey}
+       |ui.element_gap = ${config.uiElementGap}
        |
        |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
        |ui.material = ${config.materialPreset.configKey}
@@ -429,6 +432,8 @@ object ConfigManager:
           parseMotionPreset(value).isEmpty
         case "ui.motion.speed_scale" | "motion.speed_scale" | "ui_motion_speed_scale" | "motion_speed_scale" =>
           parseElementTransitionSpeedScale(value).isEmpty
+        case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
+          parseUiElementGap(value).isEmpty
         case "window.preferred.width" | "window_preferred_width" | "window.preferred.height" |
             "window_preferred_height" =>
           value.trim.nonEmpty && value.trim.toIntOption.isEmpty
@@ -469,6 +474,8 @@ object ConfigManager:
       "motion.preset",
       "ui.motion.speed_scale",
       "motion.speed_scale",
+      "ui.element_gap",
+      "ui.element.gap",
       "document.default_mode",
       "document.default.mode",
       "window.preferred.width",
@@ -510,6 +517,7 @@ object ConfigManager:
       "motion_preset"             -> "motion.preset",
       "ui_motion_speed_scale"     -> "ui.motion.speed_scale",
       "motion_speed_scale"        -> "motion.speed_scale",
+      "ui_element_gap"            -> "ui.element_gap",
       "document_default_mode"     -> "document.default_mode",
       "window_preferred_width"    -> "window.preferred.width",
       "window_preferred_height"   -> "window.preferred.height",
@@ -554,6 +562,9 @@ object ConfigManager:
         scale >= AppConfig.MinElementTransitionSpeedScale &&
           scale <= AppConfig.MaxElementTransitionSpeedScale
       )
+
+  private def parseUiElementGap(value: String): Option[Int] =
+    value.toIntOption.filter(gap => gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap)
 
   private def parseColor(value: String): Option[java.awt.Color] =
     val hex = value.stripPrefix("#")
