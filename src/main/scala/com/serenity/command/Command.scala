@@ -60,6 +60,7 @@ enum CommandIntent:
   case SetAnimationMode(mode: AnimationMode)
   case SetMaterialPreset(preset: MaterialPreset)
   case SetMotionPreset(preset: MotionPreset)
+  case SetElementTransitionSpeedScale(scale: Double)
   case SetBackgroundStyle(style: BackgroundStyle)
   case SetBlurRadius(r: Float)
   case SetAnimationDuration(ms: Int)

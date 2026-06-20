@@ -335,6 +335,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
       configFile,
       """ui.material = crystal
         |ui.motion = reduced
+        |ui.motion.speed_scale = 1.75
         |""".stripMargin
     )
 
@@ -344,9 +345,11 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     config.backgroundStyle shouldBe BackgroundStyle.GlassLike
     config.blurRadius shouldBe 0.65f
     config.motionPreset shouldBe MotionPreset.Reduced
+    config.elementTransitionSpeedScale shouldBe 1.75
     config.characterAnimation shouldBe None
     ConfigManager.configToString(config) should include("ui.material = crystal")
     ConfigManager.configToString(config) should include("ui.motion = reduced")
+    ConfigManager.configToString(config) should include("ui.motion.speed_scale = 1.75")
   }
 
   it should "load and write the default document mode" in {

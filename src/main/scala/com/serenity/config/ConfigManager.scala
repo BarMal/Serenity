@@ -179,6 +179,10 @@ object ConfigManager:
               parseMaterialPreset(value.trim).map(config.withMaterialPreset).getOrElse(config)
             case "ui.motion" | "ui_motion" | "motion.preset" | "motion_preset" =>
               parseMotionPreset(value.trim).map(config.withMotionPreset).getOrElse(config)
+            case "ui.motion.speed_scale" | "motion.speed_scale" | "ui_motion_speed_scale" | "motion_speed_scale" =>
+              parseElementTransitionSpeedScale(value.trim)
+                .map(config.withElementTransitionSpeedScale)
+                .getOrElse(config)
             case "document.default_mode" | "document.default.mode" | "document_default_mode" =>
               parseDefaultDocumentMode(value.trim).map(config.withDefaultDocumentMode).getOrElse(config)
             case "window.preferred.width" | "window_preferred_width" =>
@@ -299,6 +303,7 @@ object ConfigManager:
        |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
        |ui.material = ${config.materialPreset.configKey}
        |ui.motion = ${config.motionPreset.configKey}
+       |ui.motion.speed_scale = ${config.elementTransitionSpeedScale}
        |
        |# Default mode for new buffers: plain-text, markdown, rich-text
        |document.default_mode = ${config.defaultDocumentMode.configKey}
@@ -422,6 +427,8 @@ object ConfigManager:
           parseMaterialPreset(value).isEmpty
         case "ui.motion" | "ui_motion" | "motion.preset" | "motion_preset" =>
           parseMotionPreset(value).isEmpty
+        case "ui.motion.speed_scale" | "motion.speed_scale" | "ui_motion_speed_scale" | "motion_speed_scale" =>
+          parseElementTransitionSpeedScale(value).isEmpty
         case "window.preferred.width" | "window_preferred_width" | "window.preferred.height" |
             "window_preferred_height" =>
           value.trim.nonEmpty && value.trim.toIntOption.isEmpty
@@ -460,6 +467,8 @@ object ConfigManager:
       "material.preset",
       "ui.motion",
       "motion.preset",
+      "ui.motion.speed_scale",
+      "motion.speed_scale",
       "document.default_mode",
       "document.default.mode",
       "window.preferred.width",
@@ -499,6 +508,8 @@ object ConfigManager:
       "material_preset"           -> "material.preset",
       "ui_motion"                 -> "ui.motion",
       "motion_preset"             -> "motion.preset",
+      "ui_motion_speed_scale"     -> "ui.motion.speed_scale",
+      "motion_speed_scale"        -> "motion.speed_scale",
       "document_default_mode"     -> "document.default_mode",
       "window_preferred_width"    -> "window.preferred.width",
       "window_preferred_height"   -> "window.preferred.height",
@@ -536,6 +547,13 @@ object ConfigManager:
       case "markdown" | "md"                             => Some(DefaultDocumentMode.Markdown)
       case "rich-text" | "richtext" | "rich" | "rtf"     => Some(DefaultDocumentMode.RichText)
       case _                                             => None
+
+  private def parseElementTransitionSpeedScale(value: String): Option[Double] =
+    value.toDoubleOption
+      .filter(scale =>
+        scale >= AppConfig.MinElementTransitionSpeedScale &&
+          scale <= AppConfig.MaxElementTransitionSpeedScale
+      )
 
   private def parseColor(value: String): Option[java.awt.Color] =
     val hex = value.stripPrefix("#")
@@ -661,6 +679,7 @@ object ConfigManager:
                           |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
                           |ui.material = frosted
                           |ui.motion = smooth
+                          |ui.motion.speed_scale = 1.0
                           |
                           |# Preferred desktop window size. Leave empty to use the default.
                           |window.preferred.width =
