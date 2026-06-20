@@ -203,6 +203,27 @@ object CommandRegistry:
       label = "Replace All"
     ),
     Command.typed(
+      "bold",
+      "Toggle bold formatting on the active selection.",
+      CommandIntent.ToggleRichTextMark(com.serenity.richtext.InlineMark.Bold),
+      CommandCategory.Edit,
+      label = "Bold"
+    ),
+    Command.typed(
+      "italic",
+      "Toggle italic formatting on the active selection.",
+      CommandIntent.ToggleRichTextMark(com.serenity.richtext.InlineMark.Italic),
+      CommandCategory.Edit,
+      label = "Italic"
+    ),
+    Command.typed(
+      "underline",
+      "Toggle underline formatting on the active selection.",
+      CommandIntent.ToggleRichTextMark(com.serenity.richtext.InlineMark.Underline),
+      CommandCategory.Edit,
+      label = "Underline"
+    ),
+    Command.typed(
       "comment-lens",
       "Show or hide the rendered comment at the cursor.",
       CommandIntent.ToggleCommentLens,

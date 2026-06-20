@@ -377,19 +377,19 @@ object Renderer:
     visualLine: TextVisualLine,
     theme: Theme
   ): Option[List[StyledText]] =
-    if buffer.isDirty then None
-    else
-      buffer.richTextDocument
-        .map(document =>
-          RichTextStyling.styledLine(
-            document,
-            visualLine.bufferLine,
-            visualLine.startColumn,
-            visualLine.endColumn,
-            theme
-          )
+    val text = buffer.content.collect()
+    buffer.richTextDocument
+      .filter(_.matchesPlainText(text))
+      .map(document =>
+        RichTextStyling.styledLine(
+          document,
+          visualLine.bufferLine,
+          visualLine.startColumn,
+          visualLine.endColumn,
+          theme
         )
-        .filter(segments => segments.map(_.content).mkString == visualLine.text)
+      )
+      .filter(segments => segments.map(_.content).mkString == visualLine.text)
 
   private def renderInlineMarkdownPreview(
     buffer: Buffer,

@@ -190,6 +190,7 @@ object SessionState:
 object SessionBuffer:
 
   def fromBuffer(buffer: Buffer, persistUnsaved: Boolean = true): SessionBuffer =
+    val text = buffer.content.toString
     SessionBuffer(
       id = buffer.id.value,
       filePath = buffer.filePath.map(_.toString),
@@ -199,9 +200,9 @@ object SessionBuffer:
       cursors = buffer.cursors.map(SessionCursorPosition.fromCursorPosition),
       viewport = SessionViewport.fromViewport(buffer.viewport),
       unsavedContent =
-        if persistUnsaved || (!buffer.isDirty && !buffer.isNewEmpty) then Some(buffer.content.toString)
+        if persistUnsaved || (!buffer.isDirty && !buffer.isNewEmpty) then Some(text)
         else None,
-      richTextDocument = Option.when(!buffer.isDirty)(buffer.richTextDocument).flatten,
+      richTextDocument = buffer.richTextDocument.filter(_.matchesPlainText(text)),
       findState = buffer.findState.map(SessionFindState.fromFindState),
       bookmarks = buffer.bookmarks.map(SessionCursorPosition.fromCursorPosition)
     )

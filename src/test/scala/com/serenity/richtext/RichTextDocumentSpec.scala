@@ -112,3 +112,36 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
     marked.paragraphs.head.alignment shouldBe ParagraphAlignment.Center
     marked.paragraphs.head.runs.head.style.marks shouldBe Set(InlineMark.Bold)
   }
+
+  it should "toggle an absent inline mark on across the range" in {
+    val document = RichTextDocument.oneParagraph("alpha beta gamma")
+
+    val marked = document.toggleMark(
+      RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 10)),
+      InlineMark.Bold
+    )
+
+    marked.paragraphs.head.runs shouldBe List(
+      RichTextRun("alpha ", RichTextStyle.empty),
+      RichTextRun("beta", RichTextStyle(marks = Set(InlineMark.Bold))),
+      RichTextRun(" gamma", RichTextStyle.empty)
+    )
+  }
+
+  it should "toggle an existing inline mark off when the whole range already has it" in {
+    val document = RichTextDocument
+      .oneParagraph("alpha beta gamma")
+      .applyMark(
+        RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 10)),
+        InlineMark.Bold
+      )
+
+    val unmarked = document.toggleMark(
+      RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 10)),
+      InlineMark.Bold
+    )
+
+    unmarked.paragraphs.head.runs shouldBe List(
+      RichTextRun("alpha beta gamma", RichTextStyle.empty)
+    )
+  }

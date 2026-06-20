@@ -227,6 +227,40 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restoredBuffer.richTextDocument shouldBe None
   }
 
+  it should "preserve aligned rich text metadata for dirty formatting-only buffers" in {
+    val richDocument = RichTextDocument(
+      List(
+        RichTextParagraph(
+          List(
+            RichTextRun("plain ", RichTextStyle.empty),
+            RichTextRun("bold", RichTextStyle(marks = Set(InlineMark.Bold)))
+          )
+        )
+      )
+    )
+    val buffer = Buffer
+      .fromString(BufferId(26), richDocument.plainText)
+      .copy(isDirty = true, richTextDocument = Some(richDocument))
+    val appState = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = Layout(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0))
+      ),
+      focus = Focus.EditorPane(PaneId(0)),
+      nextBufferId = BufferId(27),
+      nextPaneId = PaneId(1)
+    )
+
+    val restoredBuffer = SessionState
+      .toAppState(SessionState.fromAppState(appState), Theme.default)
+      .buffers(buffer.id)
+
+    restoredBuffer.content.toString shouldBe "plain bold"
+    restoredBuffer.richTextDocument shouldBe Some(richDocument)
+  }
+
   it should "restore legacy session find state that only stored result lines" in {
     val decoded = _root_.io.circe.parser
       .parse("""{"query":"legacy","resultLines":[2,4],"currentIndex":1}""")

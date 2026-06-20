@@ -102,9 +102,22 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
     surface.styleCalls should contain(surface.StyleCall("disable", TextStyle.underlined))
   }
 
-  it should "ignore rich text marks when buffer text is dirty" in {
+  it should "render rich text marks when dirty buffer text still matches rich metadata" in {
     val buffer = Buffer
       .fromString(BufferId(1), richDocument.plainText)
+      .copy(richTextDocument = Some(richDocument), isDirty = true)
+    val state   = buildState(buffer)
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, textFont, monoMetrics, None)
+
+    surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.bold))
+    surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.underlined))
+  }
+
+  it should "ignore rich text marks when dirty buffer text no longer matches rich metadata" in {
+    val buffer = Buffer
+      .fromString(BufferId(1), "edited text")
       .copy(richTextDocument = Some(richDocument), isDirty = true)
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
