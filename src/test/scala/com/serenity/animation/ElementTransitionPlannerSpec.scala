@@ -1,5 +1,6 @@
 package com.serenity.animation
 
+import com.serenity.config.MotionPreset
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -62,4 +63,35 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
 
     plan.kind shouldBe TransitionKind.DirectionalSweep
     plan.timing shouldBe TransitionTiming(durationMs = 320, staggerMs = 24, delayMs = 0, speedScale = 2.0)
+  }
+
+  it should "map reduced motion presets to disabled element transitions" in {
+    val settings = MotionPreset.Reduced.elementTransitionSettings
+    val plan     = ElementTransitionPlanner.plan(ElementTransitionRequest(TransitionScope.PanelOpen), settings)
+
+    settings shouldBe ElementTransitionSettings.disabled
+    plan.kind shouldBe TransitionKind.Disabled
+    plan.timing shouldBe TransitionTiming.immediate
+  }
+
+  it should "map motion presets to deterministic element transition timings" in {
+    MotionPreset.Subtle.elementTransitionSettings.baseTiming shouldBe TransitionTiming(
+      durationMs = 160,
+      staggerMs = 12,
+      delayMs = 0,
+      speedScale = 1.0
+    )
+    MotionPreset.Smooth.elementTransitionSettings.baseTiming shouldBe TransitionTiming(
+      durationMs = 220,
+      staggerMs = 16,
+      delayMs = 0,
+      speedScale = 1.0
+    )
+    MotionPreset.Expressive.elementTransitionSettings.baseTiming shouldBe TransitionTiming(
+      durationMs = 280,
+      staggerMs = 22,
+      delayMs = 20,
+      speedScale = 1.0
+    )
+    MotionPreset.Custom.elementTransitionSettings shouldBe MotionPreset.Smooth.elementTransitionSettings
   }

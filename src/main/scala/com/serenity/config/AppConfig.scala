@@ -2,7 +2,7 @@ package com.serenity.config
 
 import java.awt.Color
 
-import com.serenity.animation.AnimationConfig
+import com.serenity.animation.{AnimationConfig, ElementTransitionSettings}
 import com.serenity.lsp.config.LspUserConfig
 import com.serenity.ui.fonts.FontLoader.FontConfig
 
@@ -48,6 +48,14 @@ enum MotionPreset(val configKey: String):
       case Smooth     => AnimationConfig.smooth
       case Expressive => AnimationConfig.quick
       case Custom     => AnimationConfig.smooth
+
+  def elementTransitionSettings: ElementTransitionSettings =
+    this match
+      case Reduced    => ElementTransitionSettings.disabled
+      case Subtle     => ElementTransitionSettings.subtle
+      case Smooth     => ElementTransitionSettings.smooth
+      case Expressive => ElementTransitionSettings.expressive
+      case Custom     => ElementTransitionSettings.smooth
 
 enum CursorMode:
   case Blink
