@@ -186,7 +186,7 @@ object DocumentFormat:
         DocumentFormatCapabilities(
           canOpen = true,
           canSave = true,
-          canRender = false,
+          canRender = true,
           canEdit = true,
           preservesRichFormatting = true
         )
