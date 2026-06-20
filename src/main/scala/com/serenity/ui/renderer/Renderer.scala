@@ -938,6 +938,11 @@ object Renderer:
           .get(surface.id)
           .orElse(context.layout.pinnedPanelRects.get(position))
           .foreach { rect =>
+            val animationState =
+              state.surfaceAnimations
+                .get(surface.id)
+                .map(_.animationState)
+                .getOrElse(com.serenity.animation.AnimationState.empty)
             val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
             if blurRadius > 0f then
               context.surface.blurRegion(
@@ -949,17 +954,23 @@ object Renderer:
               )
             content match
               case SurfaceContent.MarkdownPreview(bufferId, title) =>
-                renderMarkdownPreviewPanel(bufferId, title, rect, state, context)
+                renderMarkdownPreviewPanel(bufferId, title, rect, state, context, animationState)
               case _ =>
                 PinnedPanelRenderer.render(
                   context.surface,
                   PinnedPanelViewModel.resolve(surface, rect, state),
                   state.theme,
-                  state.config
+                  state.config,
+                  animationState
                 )
           }
       case surface @ UiSurface(_, content, SurfacePresentation.Expanded(_, _), _) =>
         context.layout.expandedPanelRect.foreach { rect =>
+          val animationState =
+            state.surfaceAnimations
+              .get(surface.id)
+              .map(_.animationState)
+              .getOrElse(com.serenity.animation.AnimationState.empty)
           val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
           if blurRadius > 0f then
             context.surface.blurRegion(
@@ -971,13 +982,14 @@ object Renderer:
             )
           content match
             case SurfaceContent.MarkdownPreview(bufferId, title) =>
-              renderMarkdownPreviewPanel(bufferId, title, rect, state, context)
+              renderMarkdownPreviewPanel(bufferId, title, rect, state, context, animationState)
             case _ =>
               PinnedPanelRenderer.render(
                 context.surface,
                 PinnedPanelViewModel.resolve(surface, rect, state),
                 state.theme,
-                state.config
+                state.config,
+                animationState
               )
         }
       case _ => ()
@@ -988,10 +1000,11 @@ object Renderer:
     title: String,
     rect: LayoutRect,
     state: AppState,
-    context: RenderContext
+    context: RenderContext,
+    animationState: com.serenity.animation.AnimationState
   ): Unit =
     val shell = TextPanelView(rect, s"Preview: $title", Nil)
-    PinnedPanelRenderer.render(context.surface, shell, state.theme, state.config)
+    PinnedPanelRenderer.render(context.surface, shell, state.theme, state.config, animationState)
 
     val contentWidthCells  = math.max(1, rect.width - 2)
     val contentHeightCells = math.max(1, rect.height - 2)

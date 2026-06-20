@@ -1,5 +1,8 @@
 package com.serenity
 
+import java.awt.Color
+
+import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
 import com.serenity.config.{AppConfig, BackgroundStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -43,6 +46,27 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getBg(panel.rect.x + 1, panel.rect.y + 2) shouldBe Theme.light.highlighted.background
     surface.getFg(panel.rect.x + 1, panel.rect.y + 2) shouldBe Theme.light.highlighted.foreground
     surface.getBg(panel.rect.x + 1, panel.rect.y + 1) shouldBe Theme.light.panel.background
+  }
+
+  it should "apply active animation foreground colors to panel text" in {
+    val surface            = new MockRenderSurface(40, 12)
+    val animatedForeground = new Color(10, 20, 30, 96)
+    val panel = TextPanelView(
+      rect = LayoutRect(2, 2, 20, 6),
+      title = "outline",
+      rows = List(TextPanelRow("Item 1"))
+    )
+    val animationState = AnimationState(
+      Map(
+        CharacterKey(-1, -1) -> AnimatedCell(None, List(animatedForeground), Nil),
+        CharacterKey(0, 1)   -> AnimatedCell(Some('I'), List(animatedForeground), Nil)
+      )
+    )
+
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default, animationState)
+
+    surface.strokeRoundRectCalls.map(_.color) should contain(animatedForeground)
+    surface.getFg(panel.rect.x + 1, panel.rect.y + 1) shouldBe animatedForeground
   }
 
   it should "request backdrop blur for pinned panels using the configured blur radius" in {

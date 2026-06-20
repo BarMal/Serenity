@@ -314,7 +314,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         case None           => cats.effect.IO.unit
     }
 
-  private def applyAnimationHooks(prevState: AppState): cats.effect.IO[Unit] =
+  protected def applyAnimationHooks(prevState: AppState): cats.effect.IO[Unit] =
     stateRef.get.flatMap { currentState =>
       val prevSurfaces    = animatedCommandSurfaces(prevState)
       val currentSurfaces = animatedCommandSurfaces(currentState)
@@ -322,9 +322,14 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         currentSurfaces.filter(surface => !prevSurfaces.exists(_.id == surface.id))
       val closedSurfaces =
         prevSurfaces.filter(surface => !currentSurfaces.exists(_.id == surface.id))
+      val prevPanels    = animatedPanelSurfaces(prevState)
+      val currentPanels = animatedPanelSurfaces(currentState)
+      val openedPanels =
+        currentPanels.filter(surface => !prevPanels.exists(_.id == surface.id))
 
       openedSurfaces.traverse_(surface => applyCommandRunnerOpenAnimation(surface, currentState)) >>
-        closedSurfaces.traverse_(surface => applyCommandRunnerCloseAnimation(surface, prevState, currentState))
+        closedSurfaces.traverse_(surface => applyCommandRunnerCloseAnimation(surface, prevState, currentState)) >>
+        openedPanels.traverse_(surface => applyPinnedPanelOpenAnimation(surface))
     }
 
   private def applyCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): cats.effect.IO[Unit] =
@@ -416,6 +421,83 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         case SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
         case _                                             => false
     }
+
+  private def animatedPanelSurfaces(state: AppState): List[UiSurface] =
+    state.uiSurfaces.filter {
+      _.presentation match
+        case SurfacePresentation.Pinned(_, _)   => true
+        case SurfacePresentation.Expanded(_, _) => true
+        case _                                  => false
+    }
+
+  private def applyPinnedPanelOpenAnimation(surface: UiSurface): cats.effect.IO[Unit] =
+    stateRef.update { state =>
+      val maybeAnimation =
+        for
+          position <- panelPosition(surface)
+          rect <- panelRectForSurface(
+            LayoutEngine.calculateLayoutWithUI(state, state.viewportSize.getOrElse(ViewportSize(80, 24))),
+            surface
+          )
+          animation <- pinnedPanelOpenAnimation(position, rect, state)
+        yield animation
+
+      maybeAnimation
+        .map(animation => state.copy(surfaceAnimations = state.surfaceAnimations + (surface.id -> animation)))
+        .getOrElse(state)
+    }
+
+  private def pinnedPanelOpenAnimation(
+    position: PanelPosition,
+    rect: LayoutRect,
+    state: AppState
+  ): Option[SurfaceAnimationState] =
+    val plan = ElementTransitionPlanner.plan(
+      ElementTransitionRequest(TransitionScope.PanelOpen, Some(position)),
+      state.config.elementTransitionSettings
+    )
+    val animationState = ElementTransitionLowerer.lower(plan, pinnedPanelOpenCells(rect, state), tickRateMs = 16)
+    Option.when(animationState.hasActiveAnimations)(
+      SurfaceAnimationState(
+        phase = SurfacePhase.Visible,
+        animationState = animationState,
+        overlayHeight = rect.height,
+        bufferFadeLength = 0,
+        phaseTick = 0
+      )
+    )
+
+  private def pinnedPanelOpenCells(rect: LayoutRect, state: AppState): ElementTransitionCells =
+    val transparentPanelForeground = transparent(state.theme.panel.foreground)
+    val transparentBorder          = transparent(state.theme.border)
+    val borderCell =
+      CharacterKey(-1, -1) -> CellAnimation(' ', transparentBorder, state.theme.border)
+    val contentCells =
+      (0 until math.max(0, rect.height - 1)).flatMap { row =>
+        (0 until math.max(0, rect.width - 2)).map { column =>
+          CharacterKey(column, row) ->
+            CellAnimation(' ', transparentPanelForeground, state.theme.panel.foreground)
+        }
+      }.toMap
+    ElementTransitionCells(frame = Map(borderCell), content = contentCells)
+
+  private def transparent(color: Color): Color =
+    new Color(color.getRed, color.getGreen, color.getBlue, 0)
+
+  private def panelPosition(surface: UiSurface): Option[PanelPosition] =
+    surface.presentation match
+      case SurfacePresentation.Pinned(position, _)   => Some(position)
+      case SurfacePresentation.Expanded(position, _) => Some(position)
+      case _                                         => None
+
+  private def panelRectForSurface(layout: CalculatedLayout, surface: UiSurface): Option[LayoutRect] =
+    surface.presentation match
+      case SurfacePresentation.Pinned(position, _) =>
+        layout.pinnedSurfaceRects.get(surface.id).orElse(layout.pinnedPanelRects.get(position))
+      case SurfacePresentation.Expanded(_, _) =>
+        layout.expandedPanelRect
+      case _ =>
+        None
 
   private def overlayRectForSurface(layout: CalculatedLayout, surfaceId: SurfaceId): Option[LayoutRect] =
     layout.aboveCursorOverlayStack

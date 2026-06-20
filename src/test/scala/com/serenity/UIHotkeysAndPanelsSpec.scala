@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -110,6 +111,23 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       case SurfaceContent.Diagnostics(_) => "diagnostics"
       case other                         => fail(s"Unexpected pinned content: $other")
     } shouldBe List("outline", "diagnostics")
+
+  it should "start an element transition animation when pinning a panel" in new UIFixture:
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
+
+    val state     = stateManager.getCurrentState.unsafeRunSync()
+    val panel     = state.pinnedSurfaces.headOption.getOrElse(fail("Expected pinned panel"))
+    val animation = state.surfaceAnimations.get(panel.id).getOrElse(fail("Expected panel animation"))
+
+    animation.animationState.activeAnimationCount should be > 0
+    animation.overlayHeight should be > 0
+
+  it should "skip panel transition animation when reduced motion is enabled" in new UIFixture:
+    stateManager.updateState(_.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Reduced))).unsafeRunSync()
+
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().surfaceAnimations shouldBe empty
 
   it should "unpin one same-side panel at a time starting with the focused panel" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
