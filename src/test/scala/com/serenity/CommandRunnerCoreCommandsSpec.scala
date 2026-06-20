@@ -553,6 +553,45 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(0, 3))
   }
 
+  it should "record document jumps in navigation history and move backward and forward" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+            language = Some(LanguageId.Markdown),
+            cursors = List(CursorPosition(1, 2))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
+
+    val afterJump = stateManager.getCurrentState.unsafeRunSync()
+    afterJump.buffers(bufferId).cursors shouldBe List(CursorPosition(4, 0))
+    afterJump.navigationBackStack shouldBe List(NavigationPoint(PaneId(0), bufferId, CursorPosition(1, 2)))
+    afterJump.navigationForwardStack shouldBe Nil
+
+    executeCommandThroughRunner(stateManager, "navigate-back", "navigate-back")
+
+    val afterBack = stateManager.getCurrentState.unsafeRunSync()
+    afterBack.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 2))
+    afterBack.navigationBackStack shouldBe Nil
+    afterBack.navigationForwardStack shouldBe List(NavigationPoint(PaneId(0), bufferId, CursorPosition(4, 0)))
+
+    executeCommandThroughRunner(stateManager, "navigate-forward", "navigate-forward")
+
+    val afterForward = stateManager.getCurrentState.unsafeRunSync()
+    afterForward.buffers(bufferId).cursors shouldBe List(CursorPosition(4, 0))
+    afterForward.navigationBackStack shouldBe List(NavigationPoint(PaneId(0), bufferId, CursorPosition(1, 2)))
+    afterForward.navigationForwardStack shouldBe Nil
+  }
+
   it should "include explicit bookmarks in the outline panel" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)

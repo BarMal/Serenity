@@ -206,6 +206,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         navigateDocumentSymbol(state, DocumentNavigation.nextSymbol)
       case CommandIntent.PreviousDocumentSymbol =>
         navigateDocumentSymbol(state, DocumentNavigation.previousSymbol)
+      case CommandIntent.NavigateBack =>
+        navigateHistoryBack()
+      case CommandIntent.NavigateForward =>
+        navigateHistoryForward()
       case CommandIntent.RequestLspHover =>
         requestLspHover(state)
       case CommandIntent.RequestLspDefinition =>
@@ -654,30 +658,83 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         case (paneId, buffer) =>
           val cursor  = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
           val symbols = symbolsForBuffer(buffer)
-          chooseSymbol(symbols, cursor).map(symbol => (paneId, buffer.id, symbol.location))
+          chooseSymbol(symbols, cursor).map { symbol =>
+            val before = NavigationPoint(paneId, buffer.id, cursor)
+            val after = NavigationPoint(paneId, buffer.id, CursorPosition(symbol.location.line, symbol.location.column))
+            before -> after
+          }
       } match
-      case Some((paneId, bufferId, location)) =>
+      case Some((before, after)) if before != after =>
         updateState { current =>
-          current.buffers.get(bufferId) match
-            case Some(buffer) =>
-              val cursor = CursorPosition(location.line, location.column)
-              val updatedBuffer = buffer.copy(
-                cursors = List(cursor),
-                selection = None,
-                selections = Nil,
-                preferredColumn = Some(cursor.column),
-                preferredXPx = None,
-                multiCursorVerticalStates = Nil
-              )
-              current.copy(
-                buffers = current.buffers + (bufferId -> updatedBuffer),
-                layout = current.layout.copy(activeEditorPaneId = Some(paneId)),
-                focus = Focus.EditorPane(paneId)
-              )
-            case None => current
+          moveToNavigationPoint(current, after).copy(
+            navigationBackStack = pushNavigationPoint(before, current.navigationBackStack),
+            navigationForwardStack = Nil
+          )
         }
+      case Some(_) =>
+        logger.debug(s"[CMD] $label navigation requested for the current location")
       case None =>
         logger.debug(s"[CMD] $label navigation requested without a target")
+
+  private def navigateHistoryBack(): IO[Unit] =
+    updateState { current =>
+      current.navigationBackStack match
+        case target :: remaining =>
+          currentNavigationPoint(current) match
+            case Some(point) =>
+              moveToNavigationPoint(current, target).copy(
+                navigationBackStack = remaining,
+                navigationForwardStack = pushNavigationPoint(point, current.navigationForwardStack)
+              )
+            case None => current
+        case Nil => current
+    }
+
+  private def navigateHistoryForward(): IO[Unit] =
+    updateState { current =>
+      current.navigationForwardStack match
+        case target :: remaining =>
+          currentNavigationPoint(current) match
+            case Some(point) =>
+              moveToNavigationPoint(current, target).copy(
+                navigationBackStack = pushNavigationPoint(point, current.navigationBackStack),
+                navigationForwardStack = remaining
+              )
+            case None => current
+        case Nil => current
+    }
+
+  private def currentNavigationPoint(state: AppState): Option[NavigationPoint] =
+    activeEditorBuffer(state).flatMap {
+      case (paneId, buffer) =>
+        buffer.cursors.headOption.map(cursor => NavigationPoint(paneId, buffer.id, cursor))
+    }
+
+  private def pushNavigationPoint(point: NavigationPoint, stack: List[NavigationPoint]): List[NavigationPoint] =
+    stack match
+      case head :: _ if head == point => stack
+      case _                          => point :: stack
+
+  private def moveToNavigationPoint(state: AppState, point: NavigationPoint): AppState =
+    (state.layout.editorPanes.get(point.paneId), state.buffers.get(point.bufferId)) match
+      case (Some(pane), Some(buffer)) =>
+        val updatedBuffer = buffer.copy(
+          cursors = List(point.cursor),
+          selection = None,
+          selections = Nil,
+          preferredColumn = Some(point.cursor.column),
+          preferredXPx = None,
+          multiCursorVerticalStates = Nil
+        )
+        state.copy(
+          buffers = state.buffers + (point.bufferId -> updatedBuffer),
+          layout = state.layout.copy(
+            editorPanes = state.layout.editorPanes + (point.paneId -> pane.copy(bufferId = Some(point.bufferId))),
+            activeEditorPaneId = Some(point.paneId)
+          ),
+          focus = Focus.EditorPane(point.paneId)
+        )
+      case _ => state
 
   private def toggleBookmark(state: AppState): IO[Unit] =
     activeEditorBuffer(state) match

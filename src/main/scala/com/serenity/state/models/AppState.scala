@@ -83,6 +83,12 @@ case class ThemeTransition(previousTheme: Theme, currentStep: Int, totalSteps: I
   def advance: ThemeTransition = copy(currentStep = currentStep + 1)
   def isComplete: Boolean      = currentStep >= totalSteps
 
+case class NavigationPoint(
+    paneId: PaneId,
+    bufferId: BufferId,
+    cursor: CursorPosition
+)
+
 case class AppState(
     layout: Layout,
     buffers: Map[BufferId, Buffer],
@@ -101,7 +107,9 @@ case class AppState(
     clipboard: Option[String] = None, // not persisted between sessions
     recentFiles: List[java.nio.file.Path] = Nil,
     diagnostics: Map[String, List[Diagnostic]] = Map.empty,
-    focusHistory: List[Focus] = List.empty
+    focusHistory: List[Focus] = List.empty,
+    navigationBackStack: List[NavigationPoint] = Nil,
+    navigationForwardStack: List[NavigationPoint] = Nil
 ):
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled

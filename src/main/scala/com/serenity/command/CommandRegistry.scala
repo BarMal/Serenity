@@ -238,6 +238,20 @@ object CommandRegistry:
       label = "Previous Bookmark"
     ),
     Command.typed(
+      "navigate-back",
+      "Go back to the previous document navigation point.",
+      CommandIntent.NavigateBack,
+      CommandCategory.View,
+      label = "Navigate Back"
+    ),
+    Command.typed(
+      "navigate-forward",
+      "Go forward to the next document navigation point.",
+      CommandIntent.NavigateForward,
+      CommandCategory.View,
+      label = "Navigate Forward"
+    ),
+    Command.typed(
       "next-document-symbol",
       "Go to the next document symbol.",
       CommandIntent.NextDocumentSymbol,
