@@ -25,21 +25,32 @@ object ConfigManager:
 
   /** Load configuration from file or return default */
   def loadConfig(configPath: Option[String] = None): AppConfig =
+    loadConfigResult(configPath).config
+
+  /** Load configuration from file with migration/deprecation report or return defaults. */
+  def loadConfigResult(configPath: Option[String] = None): ConfigLoadResult =
     val path = configPath.map(Paths.get(_)).getOrElse(defaultConfigPath)
     if Files.exists(path) then
       try
         Using.resource(Source.fromFile(path.toFile, StandardCharsets.UTF_8.name())) { source =>
-          parseConfig(source.mkString)
+          parseConfigResult(source.mkString)
         }
       catch
         case _: Exception =>
           System.err.println(s"[CONFIG] Failed to load config from $path, using defaults")
-          AppConfig.default
-    else AppConfig.default
+          ConfigLoadResult(AppConfig.default, ConfigMigrationReport.empty)
+    else ConfigLoadResult(AppConfig.default, ConfigMigrationReport.empty)
 
   /** Load configuration from file on the Cats Effect blocking pool. */
   def loadConfigIO(configPath: Option[String] = None): IO[AppConfig] =
     IO.blocking(loadConfig(configPath))
+
+  /** Load configuration with migration/deprecation report on the Cats Effect blocking pool. */
+  def loadConfigResultIO(configPath: Option[String] = None): IO[ConfigLoadResult] =
+    IO.blocking(loadConfigResult(configPath))
+
+  private def parseConfigResult(content: String): ConfigLoadResult =
+    ConfigLoadResult(parseConfig(content), inspectConfig(content))
 
   /** Parse configuration from string */
   private def parseConfig(content: String): AppConfig =
@@ -236,6 +247,8 @@ object ConfigManager:
                 .find(action => s"keymap.peek.${action.configKey}" == keymapKey)
                 .map(action => config.withPeekKeyOverride(action, value.trim))
                 .getOrElse(config)
+            case "config.version" =>
+              config
             case _ =>
               config // Unknown key, ignore
         case _ =>
@@ -253,6 +266,8 @@ object ConfigManager:
     val lspSettings = lspConfigToString(config.lspUserConfig)
 
     s"""# Serenity Editor Configuration
+       |config.version = ${ConfigVersion.Current.value}
+       |
        |# Character animation style: none, quick, smooth, subtle
        |character.animation = $animationSetting
        |
@@ -331,6 +346,160 @@ object ConfigManager:
 
   /** List available preset names */
   def availablePresets: List[String] = List("none", "quick", "smooth", "subtle")
+
+  private def inspectConfig(content: String): ConfigMigrationReport =
+    val entries = configEntries(content)
+    val deprecatedEntries = entries
+      .flatMap((key, _) => deprecatedReplacement(key).map(replacement => DeprecatedConfigEntry(key, replacement)))
+      .distinctBy(_.key)
+    val unknownKeys = entries
+      .map(_._1)
+      .filterNot(isKnownConfigKey)
+      .distinct
+    val invalidEntries = entries.flatMap { case (key, value) => invalidEntry(key, value) }
+
+    ConfigMigrationReport(
+      version = ConfigVersion.Current,
+      deprecatedEntries = deprecatedEntries,
+      unknownKeys = unknownKeys,
+      invalidEntries = invalidEntries
+    )
+
+  private def configEntries(content: String): List[(String, String)] =
+    content
+      .split("\n")
+      .toList
+      .map(_.trim)
+      .filter(line => line.nonEmpty && !line.startsWith("#"))
+      .flatMap { line =>
+        line.split("=", 2).toList match
+          case key :: value :: Nil => Some(key.trim.toLowerCase -> value.trim)
+          case _                   => None
+      }
+
+  private def deprecatedReplacement(key: String): Option[String] =
+    DeprecatedConfigKeys.get(key)
+
+  private def isKnownConfigKey(key: String): Boolean =
+    CurrentConfigKeys.contains(key) ||
+      DeprecatedConfigKeys.contains(key) ||
+      key.startsWith("lsp.") ||
+      key.startsWith("hotkey.") ||
+      key.startsWith("keymap.editor.") ||
+      key.startsWith("keymap.command_runner.") ||
+      key.startsWith("keymap.modal.") ||
+      key.startsWith("keymap.panel.") ||
+      key.startsWith("keymap.peek.")
+
+  private def invalidEntry(key: String, value: String): Option[InvalidConfigEntry] =
+    val normalizedValue = value.trim.toLowerCase
+    val invalid =
+      key match
+        case "character.animation" | "character_animation" =>
+          !Set("none", "false", "off", "disabled", "quick", "smooth", "subtle").contains(normalizedValue)
+        case "syntax.highlighting" | "syntax_highlighting" | "font.code.ligatures" | "font_code_ligatures" |
+            "font.text.ligatures" | "font.prose.ligatures" | "font_text_ligatures" | "font_prose_ligatures" |
+            "font.ui.ligatures" | "font_ui_ligatures" | "font.ligatures" | "font_ligatures" | "spellcheck.enabled" |
+            "spellcheck_enabled" =>
+          parseBoolean(value).isEmpty
+        case "font.code.size" | "font_code_size" | "font.text.size" | "font.prose.size" | "font_text_size" |
+            "font_prose_size" | "font.size" | "font_size" | "font.ui.size" | "font_ui_size" =>
+          value.trim.toFloatOption.isEmpty
+        case "cursor.active.color" | "cursor_active_color" | "cursor.inactive.color" | "cursor_inactive_color" =>
+          value.nonEmpty && parseColor(value).isEmpty
+        case "interface.density" | "interface_density" =>
+          !Set("compact", "comfortable", "spacious").contains(normalizedValue)
+        case "cursor.info_bar" | "cursor.info.bar" | "cursor_info_bar" =>
+          !Set("off", "false", "disabled", "position", "minimal", "detailed", "full").contains(normalizedValue)
+        case "cursor.info_bar.placement" | "cursor.info.bar.placement" | "cursor_info_bar_placement" =>
+          !Set("floating", "float", "pinned-bottom", "bottom", "pinned").contains(normalizedValue)
+        case "ui.material" | "ui_material" | "material.preset" | "material_preset" =>
+          parseMaterialPreset(value).isEmpty
+        case "ui.motion" | "ui_motion" | "motion.preset" | "motion_preset" =>
+          parseMotionPreset(value).isEmpty
+        case "window.preferred.width" | "window_preferred_width" | "window.preferred.height" |
+            "window_preferred_height" =>
+          value.trim.nonEmpty && value.trim.toIntOption.isEmpty
+        case "text_area.left.percent" | "text.area.left.percent" | "text_area_left_percent" |
+            "text_area.right.percent" | "text.area.right.percent" | "text_area_right_percent" =>
+          value.trim.toDoubleOption.isEmpty
+        case _ =>
+          false
+
+    Option.when(invalid)(InvalidConfigEntry(key, value, "Invalid value for supported config key"))
+
+  private val CurrentConfigKeys: Set[String] =
+    Set(
+      "config.version",
+      "character.animation",
+      "syntax.highlighting",
+      "font.code.family",
+      "font.text.family",
+      "font.ui.family",
+      "font.code.size",
+      "font.text.size",
+      "font.prose.size",
+      "font.ui.size",
+      "font.code.ligatures",
+      "font.text.ligatures",
+      "font.prose.ligatures",
+      "font.ui.ligatures",
+      "cursor.active.color",
+      "cursor.inactive.color",
+      "cursor.info_bar",
+      "cursor.info.bar",
+      "cursor.info_bar.placement",
+      "cursor.info.bar.placement",
+      "interface.density",
+      "ui.material",
+      "material.preset",
+      "ui.motion",
+      "motion.preset",
+      "window.preferred.width",
+      "window.preferred.height",
+      "text_area.left.percent",
+      "text.area.left.percent",
+      "text_area.right.percent",
+      "text.area.right.percent",
+      "spellcheck.enabled",
+      "spellcheck.languages",
+      "spellcheck.words"
+    )
+
+  private val DeprecatedConfigKeys: Map[String, String] =
+    Map(
+      "character_animation"       -> "character.animation",
+      "syntax_highlighting"       -> "syntax.highlighting",
+      "font_code_family"          -> "font.code.family",
+      "font_text_family"          -> "font.text.family",
+      "font_ui_family"            -> "font.ui.family",
+      "font_code_size"            -> "font.code.size",
+      "font_text_size"            -> "font.text.size",
+      "font_prose_size"           -> "font.text.size",
+      "font_size"                 -> "font.code.size and font.text.size",
+      "font_ui_size"              -> "font.ui.size",
+      "font_code_ligatures"       -> "font.code.ligatures",
+      "font_text_ligatures"       -> "font.text.ligatures",
+      "font_prose_ligatures"      -> "font.text.ligatures",
+      "font_ligatures"            -> "font.code.ligatures and font.text.ligatures",
+      "font_ui_ligatures"         -> "font.ui.ligatures",
+      "cursor_active_color"       -> "cursor.active.color",
+      "cursor_inactive_color"     -> "cursor.inactive.color",
+      "cursor_info_bar"           -> "cursor.info_bar",
+      "cursor_info_bar_placement" -> "cursor.info_bar.placement",
+      "interface_density"         -> "interface.density",
+      "ui_material"               -> "ui.material",
+      "material_preset"           -> "material.preset",
+      "ui_motion"                 -> "ui.motion",
+      "motion_preset"             -> "motion.preset",
+      "window_preferred_width"    -> "window.preferred.width",
+      "window_preferred_height"   -> "window.preferred.height",
+      "text_area_left_percent"    -> "text_area.left.percent",
+      "text_area_right_percent"   -> "text_area.right.percent",
+      "spellcheck_enabled"        -> "spellcheck.enabled",
+      "spellcheck_languages"      -> "spellcheck.languages",
+      "spellcheck_words"          -> "spellcheck.words"
+    )
 
   private def clampFontSize(size: Float): Float =
     size.max(8.0f).min(48.0f)
@@ -442,6 +611,8 @@ object ConfigManager:
     try
       val sampleConfig = """# Serenity Editor Configuration
                           |# This is a sample configuration file
+                          |config.version = 1
+                          |
                           |
                           |# Character animation style: none, quick, smooth, subtle
                           |# - none: No character animations (best performance)

@@ -64,6 +64,36 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     config.fontConfig.fontSize shouldBe 18.0f
   }
 
+  it should "load configuration with a structured migration report" in {
+    val configFile = Files.createTempFile("serenity-config-result", ".conf")
+    Files.writeString(
+      configFile,
+      """font_size = 18.0
+        |unknown.setting = yes
+        |syntax.highlighting = maybe
+        |""".stripMargin
+    )
+
+    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+
+    result.config.fontConfig.codeFontSize shouldBe 18.0f
+    result.config.fontConfig.textFontSize shouldBe 18.0f
+    result.report.deprecatedEntries.map(_.key) should contain("font_size")
+    result.report.deprecatedEntries.map(_.replacement) should contain("font.code.size and font.text.size")
+    result.report.unknownKeys should contain("unknown.setting")
+    result.report.invalidEntries.map(_.key) should contain("syntax.highlighting")
+    result.report.hasWarnings shouldBe true
+  }
+
+  it should "return default config result with an empty report when the config file is missing" in {
+    val missingConfig = Files.createTempDirectory("serenity-missing-config-result").resolve("missing.conf")
+
+    val result = ConfigManager.loadConfigResult(Some(missingConfig.toString))
+
+    result.config shouldBe AppConfig.default
+    result.report.hasWarnings shouldBe false
+  }
+
   it should "return defaults through the effectful API when the config file is missing" in {
     val missingConfig = Files.createTempDirectory("serenity-missing-config").resolve("missing.conf")
 
@@ -153,6 +183,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("font.code.size = 15.0")
     ConfigManager.configToString(config) should include("font.text.size = 16.0")
     ConfigManager.configToString(config) should include("font.ui.ligatures = true")
+    ConfigManager.configToString(config) should include("config.version = 1")
   }
 
   it should "load legacy shared font size and ligature keys for code and prose fonts" in {
