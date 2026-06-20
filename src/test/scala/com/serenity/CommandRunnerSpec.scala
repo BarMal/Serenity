@@ -329,6 +329,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
+      .withUiPresetNames(List("Drafting", "Research Notes"))
       .withActiveCategory(CommandCategory.Settings)
     val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
 
@@ -337,10 +338,17 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
         case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-built-in" => item
       }
       .getOrElse(fail("missing built-in preset picker"))
+    val customPreset = presetGroup.children
+      .collectFirst {
+        case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-custom" => item
+      }
+      .getOrElse(fail("missing custom preset picker"))
     val inputs = presetGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
 
     builtInPreset.options.map(_.label) shouldBe List("Writing", "Documentation", "Code", "Review")
     builtInPreset.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Writing"))
+    customPreset.options.map(_.label) shouldBe List("Drafting", "Research Notes")
+    customPreset.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Research Notes"))
     inputs.map(_.id) shouldBe List(
       "ui-preset-save",
       "ui-preset-apply",
