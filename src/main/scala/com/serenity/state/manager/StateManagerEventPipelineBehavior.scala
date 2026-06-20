@@ -70,6 +70,9 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           val registry = CommandRegistry.withToggleUI
           applyReducerResult(AppEventReducer.reduce(appEvent, prevState, registry)(using balance), prevState) >>
             (appEvent match
+              case ToggleCommandRunner => hydrateCommandRunnerUiPresets
+              case _                   => cats.effect.IO.unit) >>
+            (appEvent match
               case NextTab     => applyPaneFlowAnimation(SweepDirection.Backward)
               case PreviousTab => applyPaneFlowAnimation(SweepDirection.Forward)
               case _           => cats.effect.IO.unit)
@@ -250,6 +253,33 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       _ <- validateAndUpdateState(result.state, fallbackState)
       _ <- result.effects.traverse_(interpretEffect)
     yield ()
+
+  private def hydrateCommandRunnerUiPresets: cats.effect.IO[Unit] =
+    uiPresetStore
+      .list()
+      .map(_.map(_.name))
+      .handleErrorWith(error => logger.error(error)("[PRESET] Failed to list UI presets").map(_ => Nil))
+      .flatMap(names => stateRef.update(state => updateCommandRunnerUiPresetNames(state, names)))
+
+  private def updateCommandRunnerUiPresetNames(state: AppState, names: List[String]): AppState =
+    state.commandRunnerSurface match
+      case Some(surface) =>
+        surface.content match
+          case SurfaceContent.CommandPalette(runner) =>
+            val updatedRunner = runner.withUiPresetNames(names)
+            val updatedSurfaces = state.uiSurfaces.map {
+              case current if current.id == surface.id =>
+                current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+              case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
+                current.copy(content = SurfaceContent.CommandPaletteSubmenu(updatedRunner, groupId, previewOnly))
+              case current =>
+                current
+            }
+            state.copy(uiSurfaces = updatedSurfaces)
+          case _ =>
+            state
+      case None =>
+        state
 
   private def normalizeCommandRunnerFocus(state: AppState): AppState =
     if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then

@@ -39,7 +39,8 @@ case class CommandRunner(
     submenuSelections: Map[String, Int] = Map.empty,
     previewedGroupId: Option[String] = None,
     activeSubmenu: Option[CommandRunnerSubmenuState] = None,
-    statusMessage: Option[String] = None
+    statusMessage: Option[String] = None,
+    uiPresetNames: List[String] = Nil
 ):
 
   def visibleItems: List[CommandSurfaceItem] =
@@ -124,6 +125,7 @@ case class CommandRunner(
         id = "settings-ui-presets",
         label = "UI Presets",
         children = List(CommandRunner.builtInUiPresetOptionItem) ++
+          CommandRunner.customUiPresetOptionItem(uiPresetNames).toList ++
           inputItems.filter(_.id.startsWith("ui-preset-")),
         category = CommandCategory.Settings,
         hint = Some("Save or apply named layouts")
@@ -396,6 +398,9 @@ case class CommandRunner(
       optionSelections = CommandRunner.defaultOptionSelections(config)
     ).syncEditMode.normalizeSubmenuEditMode
 
+  def withUiPresetNames(names: List[String]): CommandRunner =
+    copy(uiPresetNames = CommandRunner.normalizedUiPresetNames(names)).syncEditMode.normalizeSubmenuEditMode
+
   /** Deactivate the command runner */
   def deactivate: CommandRunner =
     copy(
@@ -410,7 +415,8 @@ case class CommandRunner(
       editingText = "",
       submenuSelections = Map.empty,
       previewedGroupId = None,
-      activeSubmenu = None
+      activeSubmenu = None,
+      uiPresetNames = Nil
     )
 
   /** Enter edit mode on the currently selected InputItem, or clear edit state otherwise */
@@ -650,6 +656,29 @@ object CommandRunner:
       category = CommandCategory.Settings,
       hint = Some("Writing, docs, code, review")
     )
+
+  private[command] def customUiPresetOptionItem(names: List[String]): Option[CommandSurfaceItem.OptionItem] =
+    normalizedUiPresetNames(names) match
+      case Nil =>
+        None
+      case normalizedNames =>
+        Some(
+          CommandSurfaceItem.OptionItem(
+            id = "ui-preset-custom",
+            label = "Custom Presets",
+            options = normalizedNames.map(name => CommandOption(name, CommandIntent.ApplyUiPreset(name))),
+            selectedIndex = 0,
+            category = CommandCategory.Settings,
+            hint = Some("Saved workspace setups")
+          )
+        )
+
+  private[command] def normalizedUiPresetNames(names: List[String]): List[String] =
+    names
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .distinctBy(_.toLowerCase)
+      .sortBy(_.toLowerCase)
 
   private[command] def codeFontGroupItem(optionSelections: Map[String, Int]): CommandSurfaceItem.GroupItem =
     fontFamilyGroupItem(

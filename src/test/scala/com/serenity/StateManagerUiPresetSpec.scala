@@ -7,11 +7,12 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.{AppConfig, BackgroundStyle, PreferredWindowSize}
+import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{PanelContent, PanelPosition}
-import com.serenity.ui.presets.UiPresetStore
+import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -174,4 +175,39 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     store.find("Drafting").unsafeRunSync() shouldBe None
     com.serenity.ui.presets.UiPreset.builtIn("Writing") should not be empty
+  }
+
+  it should "list custom UI presets in the command runner when opened" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-list").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+    val preset = UiPreset(
+      name = "Drafting",
+      config = AppConfig.default,
+      themeName = Theme.dark.name,
+      pinnedPanels = Nil
+    )
+    store.upsert(preset).unsafeRunSync()
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val runner = sm.getCurrentState
+      .map(
+        _.commandRunnerSurface.flatMap {
+          _.content match
+            case SurfaceContent.CommandPalette(runner) => Some(runner)
+            case _                                     => None
+        }
+      )
+      .unsafeRunSync()
+      .getOrElse(fail("command runner should be open"))
+    val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
+    val customPreset = presetGroup.children
+      .collectFirst {
+        case item: com.serenity.command.CommandSurfaceItem.OptionItem if item.id == "ui-preset-custom" => item
+      }
+      .getOrElse(fail("missing custom preset picker"))
+
+    customPreset.options.map(_.label) shouldBe List("Drafting")
+    customPreset.options.headOption.map(_.intent) shouldBe Some(CommandIntent.ApplyUiPreset("Drafting"))
   }
