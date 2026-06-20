@@ -81,3 +81,29 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
 
     highlightedLetters.mkString shouldBe "alphagamma"
   }
+
+  it should "paint a subtle background on the hovered editor line" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val buffer   = Buffer.fromString(bufferId, "alpha\nbeta")
+    val pane     = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      hoveredEditorTarget = Some(HoveredEditorTarget(paneId, bufferId, CursorPosition(1, 0))),
+      theme = Theme.light,
+      config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
+    )
+
+    val surface = new MockRenderSurface(100, 30)
+
+    Renderer.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+
+    val hoveredLineBackgrounds = (0 until surface.width).count(x => surface.getBg(x, 2) == state.theme.panel.background)
+
+    hoveredLineBackgrounds should be > 0
+  }

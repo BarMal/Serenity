@@ -615,9 +615,24 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
 
   private def handleMouseMove(move: MouseMove, state: AppState): cats.effect.IO[Unit] =
     handleContextMenuMouseHover(move, state).flatMap {
-      case true  => cats.effect.IO.unit
-      case false => handleCommandRunnerMouseHover(move, state).map(_ => ())
+      case true => clearEditorHoverTarget
+      case false =>
+        handleCommandRunnerMouseHover(move, state).flatMap {
+          case true  => clearEditorHoverTarget
+          case false => updateEditorHoverTarget(move, state)
+        }
     }
+
+  private def updateEditorHoverTarget(move: MouseMove, state: AppState): cats.effect.IO[Unit] =
+    resolveMouseTarget(move, state).flatMap {
+      case Some((paneId, buffer, cursor)) =>
+        stateRef.update(_.copy(hoveredEditorTarget = Some(HoveredEditorTarget(paneId, buffer.id, cursor))))
+      case None =>
+        clearEditorHoverTarget
+    }
+
+  private def clearEditorHoverTarget: cats.effect.IO[Unit] =
+    stateRef.update(_.copy(hoveredEditorTarget = None))
 
   private def openEditorContextMenu(click: MouseClick, state: AppState): cats.effect.IO[Unit] =
     resolveMouseTarget(click, state).flatMap {

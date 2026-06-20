@@ -89,6 +89,12 @@ case class NavigationPoint(
     cursor: CursorPosition
 )
 
+case class HoveredEditorTarget(
+    paneId: PaneId,
+    bufferId: BufferId,
+    cursor: CursorPosition
+)
+
 case class AppState(
     layout: Layout,
     buffers: Map[BufferId, Buffer],
@@ -109,7 +115,8 @@ case class AppState(
     diagnostics: Map[String, List[Diagnostic]] = Map.empty,
     focusHistory: List[Focus] = List.empty,
     navigationBackStack: List[NavigationPoint] = Nil,
-    navigationForwardStack: List[NavigationPoint] = Nil
+    navigationForwardStack: List[NavigationPoint] = Nil,
+    hoveredEditorTarget: Option[HoveredEditorTarget] = None
 ):
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled

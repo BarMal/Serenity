@@ -218,6 +218,31 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     buffer.cursors.headOption.map(_.column) shouldBe Some(2)
   }
 
+  it should "track the editor position under the pointer on mouse move" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    sm.applyEvent(MouseMove(18, 2)).unsafeRunSync()
+
+    sm.getCurrentState.unsafeRunSync().hoveredEditorTarget shouldBe Some(
+      HoveredEditorTarget(PaneId(0), bufferId, CursorPosition(1, 5))
+    )
+  }
+
+  it should "clear the editor hover target when the pointer leaves editor panes" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    sm.applyEvent(MouseMove(18, 2)).unsafeRunSync()
+    sm.applyEvent(MouseMove(5, 5)).unsafeRunSync()
+
+    sm.getCurrentState.unsafeRunSync().hoveredEditorTarget shouldBe None
+  }
+
   it should "ignore clicks in the pane header row" in {
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello").unsafeRunSync()

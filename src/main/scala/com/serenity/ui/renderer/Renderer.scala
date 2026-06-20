@@ -318,7 +318,14 @@ object Renderer:
               screenY < rect.bottom &&
               screenX < rect.right
           then
-            val styledSegments = richTextStyledSegments(buffer, visualLine, state.theme)
+            val lineTheme =
+              if isHoveredEditorLine(pane.id, buffer.id, visualLine, state) then
+                state.theme.copy(background = state.theme.panel.background)
+              else state.theme
+            if lineTheme.background == state.theme.panel.background then
+              context.surface.setBackgroundColor(state.theme.panel.background)
+              context.surface.fillRect(rect.x, screenY, rect.width, 1, ' ')
+            val styledSegments = richTextStyledSegments(buffer, visualLine, lineTheme)
             if snapshot.usesMeasuredLayout then
               CharacterRenderer.renderMeasuredLineWithAnimation(
                 context.surface,
@@ -327,7 +334,7 @@ object Renderer:
                 snapshot.lineHeightPx,
                 snapshot.ascentPx,
                 visualLine,
-                state.theme,
+                lineTheme,
                 buffer.animations,
                 state.syntaxHighlightingEnabled,
                 buffer.language,
@@ -339,7 +346,7 @@ object Renderer:
                 screenX,
                 screenY,
                 visualLine.text,
-                state.theme,
+                lineTheme,
                 buffer.animations,
                 state.syntaxHighlightingEnabled,
                 buffer.language,
@@ -371,6 +378,18 @@ object Renderer:
                   context.surface.putString(bgScreenX, screenY, " ")
               }
     }
+
+  private def isHoveredEditorLine(
+    paneId: PaneId,
+    bufferId: BufferId,
+    visualLine: TextVisualLine,
+    state: AppState
+  ): Boolean =
+    state.hoveredEditorTarget.exists(target =>
+      target.paneId == paneId &&
+        target.bufferId == bufferId &&
+        target.cursor.line == visualLine.bufferLine
+    )
 
   private def richTextStyledSegments(
     buffer: Buffer,
