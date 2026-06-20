@@ -375,6 +375,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         renameUiPresetEffect(sourceName, targetName)
       case CommandIntent.DeleteUiPreset(name) =>
         deleteUiPresetEffect(name)
+      case CommandIntent.ResetUiPreset(name) =>
+        resetUiPresetEffect(name)
       case CommandIntent.SetTextAreaLeftInset(value) =>
         updateConfig(_.withTextAreaLeftInset(value)).void
       case CommandIntent.SetTextAreaRightInset(value) =>
@@ -644,6 +646,19 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         uiPresetStore
           .delete(presetName)
           .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to delete UI preset $presetName"))
+      case None =>
+        logger.warn("[PRESET] Ignoring empty UI preset name")
+
+  protected def resetUiPresetEffect(name: String): IO[Unit] =
+    normalizedPresetName(name) match
+      case Some(presetName) =>
+        UiPreset.builtIn(presetName) match
+          case Some(_) =>
+            uiPresetStore
+              .delete(presetName)
+              .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to reset UI preset $presetName"))
+          case None =>
+            logger.warn(s"[PRESET] Built-in UI preset not found: $presetName")
       case None =>
         logger.warn("[PRESET] Ignoring empty UI preset name")
 

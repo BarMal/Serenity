@@ -211,3 +211,39 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     customPreset.options.map(_.label) shouldBe List("Drafting")
     customPreset.options.headOption.map(_.intent) shouldBe Some(CommandIntent.ApplyUiPreset("Drafting"))
   }
+
+  it should "reset a custom built-in preset override to the built-in defaults" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-reset").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+    val customWriting = UiPreset(
+      name = "Writing",
+      config = AppConfig.default.copy(backgroundStyle = BackgroundStyle.Solid),
+      themeName = Theme.dark.name,
+      pinnedPanels = Nil
+    )
+    store.upsert(customWriting).unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "reset-writing-preset",
+        "Reset writing preset",
+        CommandIntent.ResetUiPreset("Writing"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "apply-writing-preset",
+        "Apply writing preset",
+        CommandIntent.ApplyUiPreset("Writing"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+
+    store.find("Writing").unsafeRunSync() shouldBe None
+    state.config.fontConfig.textFontFamily shouldBe Font.SERIF
+    state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Left, 28))
+  }
