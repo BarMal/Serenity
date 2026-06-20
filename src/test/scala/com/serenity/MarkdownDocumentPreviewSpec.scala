@@ -168,4 +168,48 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     Color(image.getRGB(1, 1), true) shouldBe theme.background
   }
 
+  it should "reuse rendered images for identical preview inputs" in {
+    val font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+    val first = MarkdownDocumentPreview.renderImage(
+      source = "# Cached",
+      title = "cached.md",
+      widthPx = 240,
+      heightPx = 160,
+      theme = Theme.default,
+      font = font
+    )
+    val second = MarkdownDocumentPreview.renderImage(
+      source = "# Cached",
+      title = "cached.md",
+      widthPx = 240,
+      heightPx = 160,
+      theme = Theme.default,
+      font = font
+    )
+
+    second should be theSameInstanceAs first
+  }
+
+  it should "not reuse cached preview images when markdown content changes" in {
+    val font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+    val first = MarkdownDocumentPreview.renderImage(
+      source = "# Cached",
+      title = "cached.md",
+      widthPx = 240,
+      heightPx = 160,
+      theme = Theme.default,
+      font = font
+    )
+    val second = MarkdownDocumentPreview.renderImage(
+      source = "# Changed",
+      title = "cached.md",
+      widthPx = 240,
+      heightPx = 160,
+      theme = Theme.default,
+      font = font
+    )
+
+    second should not be theSameInstanceAs(first)
+  }
+
 end MarkdownDocumentPreviewSpec
