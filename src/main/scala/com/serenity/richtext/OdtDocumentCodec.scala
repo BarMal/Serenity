@@ -275,10 +275,26 @@ object OdtDocumentCodec:
 
   private def runsXml(runs: List[RichTextRun], textStyleNames: Map[RichTextStyle, String]): String =
     runs.map { run =>
-      val text = escapeText(run.text)
-      if run.style == RichTextStyle.empty then text
-      else s"""<text:span text:style-name="${textStyleNames(run.style)}">$text</text:span>"""
+      if run.style == RichTextStyle.empty then runTextXml(run.text)
+      else s"""<text:span text:style-name="${textStyleNames(run.style)}">${runTextXml(run.text)}</text:span>"""
     }.mkString
+
+  private def runTextXml(text: String): String =
+    text
+      .foldLeft((StringBuilder(), List.empty[String])) {
+        case ((chunk, acc), '\t') =>
+          (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<text:tab/>")
+        case ((chunk, acc), '\n') =>
+          (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<text:line-break/>")
+        case ((chunk, acc), char) =>
+          chunk.append(char)
+          (chunk, acc)
+      } match
+      case (chunk, acc) =>
+        (acc ++ textChunkXml(chunk)).mkString
+
+  private def textChunkXml(chunk: StringBuilder): Option[String] =
+    Option.when(chunk.nonEmpty)(escapeText(chunk.toString))
 
   private def manifestXml: String =
     """<?xml version="1.0" encoding="UTF-8"?>

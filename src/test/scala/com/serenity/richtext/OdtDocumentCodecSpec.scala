@@ -2,7 +2,7 @@ package com.serenity.richtext
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
-import java.util.zip.{ZipEntry, ZipOutputStream}
+import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
 
 import cats.effect.unsafe.implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
@@ -130,6 +130,18 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
     decodedStyle.flatMap(_.color) shouldBe Some("#336699")
   }
 
+  it should "write tabs and line breaks as native ODT text elements" in {
+    val source = RichTextDocument.oneParagraph("alpha\tbeta\ngamma")
+
+    val bytes      = OdtDocumentCodec.writeBytes(source)
+    val contentXml = zipEntryText(bytes, "content.xml")
+    val decoded    = OdtDocumentCodec.readBytes(bytes)
+
+    contentXml should include("<text:tab/>")
+    contentXml should include("<text:line-break/>")
+    singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
+  }
+
   it should "read and write ODT files through IO" in {
     val path   = Files.createTempFile("serenity-rich-text", ".odt")
     val source = RichTextDocument.oneParagraph("Saved text")
@@ -152,6 +164,21 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
       zip.closeEntry()
     finally zip.close()
     output.toByteArray
+
+  private def zipEntryText(bytes: Array[Byte], name: String): String =
+    val input = ZipInputStream(java.io.ByteArrayInputStream(bytes))
+    try
+      Iterator
+        .continually(input.getNextEntry)
+        .takeWhile(_ != null)
+        .find(_.getName == name)
+        .map { _ =>
+          val output = java.io.ByteArrayOutputStream()
+          input.transferTo(output)
+          output.toString(StandardCharsets.UTF_8)
+        }
+        .getOrElse(fail(s"Missing zip entry: $name"))
+    finally input.close()
 
   private def marksForText(paragraph: RichTextParagraph, text: String): Set[InlineMark] =
     paragraph.runs
