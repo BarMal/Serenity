@@ -21,6 +21,14 @@ case class CellMetrics(charWidth: Int, lineHeight: Int, ascent: Int):
 
 object CellMetrics:
 
+  def max(metrics: CellMetrics*): CellMetrics =
+    val nonEmpty = metrics.toList
+    CellMetrics(
+      charWidth = nonEmpty.map(_.charWidth).maxOption.getOrElse(1),
+      lineHeight = nonEmpty.map(_.lineHeight).maxOption.getOrElse(1),
+      ascent = nonEmpty.map(_.ascent).maxOption.getOrElse(1)
+    )
+
   /** Derive cell metrics from a java.awt.Font. Uses M-width as the nominal charWidth (consistent across monospaced and
     * variable-width fonts).
     */

@@ -37,7 +37,7 @@ final class RuntimeDisplayState private (
     uiMetricsRef.get()
 
   def primaryMetrics: CellMetrics =
-    codeMetricsRef.get()
+    CellMetrics.max(codeMetricsRef.get(), textMetricsRef.get(), uiMetricsRef.get())
 
   def update(config: FontConfig)(using logger: Logger[IO]): IO[Unit] =
     RuntimeDisplayState
