@@ -92,11 +92,11 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       preservesRichFormatting = true
     )
     DocumentFormat.capabilities(FileType.WordOpenXmlDocument) shouldBe DocumentFormatCapabilities(
-      canOpen = false,
-      canSave = false,
+      canOpen = true,
+      canSave = true,
       canRender = false,
-      canEdit = false,
-      preservesRichFormatting = false
+      canEdit = true,
+      preservesRichFormatting = true
     )
   }
 
@@ -112,32 +112,32 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "raise a clear error instead of opening rich documents as plain text" in {
     val fileManager = new FileManager()
-    val docxFile    = Files.createTempFile("serenity-rich-open", ".docx")
+    val docFile     = Files.createTempFile("serenity-rich-open", ".doc")
 
     try
-      Files.writeString(docxFile, "not a real docx")
+      Files.writeString(docFile, "not a real doc")
 
-      val result = fileManager.loadFile(docxFile, BufferId(99)).attempt.unsafeRunSync()
+      val result = fileManager.loadFile(docFile, BufferId(99)).attempt.unsafeRunSync()
 
       result.left.map(_.getMessage) shouldBe Left(
-        "Unsupported document format for open: Word Open XML Document"
+        "Unsupported document format for open: Word Document"
       )
-    finally Files.deleteIfExists(docxFile)
+    finally Files.deleteIfExists(docFile)
   }
 
   it should "raise a clear error instead of saving text buffers as rich documents" in {
     val fileManager = new FileManager()
-    val docxFile    = Files.createTempDirectory("serenity-rich-save").resolve("draft.docx")
+    val docFile     = Files.createTempDirectory("serenity-rich-save").resolve("draft.doc")
     val buffer      = Buffer.fromString(BufferId(99), "plain text")
 
     try
-      val result = fileManager.saveBuffer(buffer, docxFile).attempt.unsafeRunSync()
+      val result = fileManager.saveBuffer(buffer, docFile).attempt.unsafeRunSync()
 
       result.left.map(_.getMessage) shouldBe Left(
-        "Unsupported document format for save: Word Open XML Document"
+        "Unsupported document format for save: Word Document"
       )
-      Files.exists(docxFile) shouldBe false
-    finally Files.deleteIfExists(docxFile.getParent)
+      Files.exists(docFile) shouldBe false
+    finally Files.deleteIfExists(docFile.getParent)
   }
 
   it should "open RTF files as editable plain text with rich document metadata" in {
@@ -289,6 +289,70 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     try
       val savedBuffer = fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
       val saved       = com.serenity.richtext.OdtDocumentCodec.read(savedFile).unsafeRunSync()
+
+      saved.plainText shouldBe "plain bold"
+      saved.paragraphs.headOption.map(_.alignment) shouldBe Some(com.serenity.richtext.ParagraphAlignment.Center)
+      saved.paragraphs.headOption.map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
+      savedBuffer.richTextDocument shouldBe Some(document.normalized)
+    finally Files.deleteIfExists(savedFile)
+  }
+
+  it should "open DOCX files as editable plain text with rich document metadata" in {
+    val fileManager = new FileManager()
+    val docxFile    = Files.createTempFile("serenity-docx-open", ".docx")
+    val source = com.serenity.richtext.RichTextDocument(
+      List(
+        com.serenity.richtext.RichTextParagraph(
+          List(
+            com.serenity.richtext.RichTextRun("plain "),
+            com.serenity.richtext.RichTextRun(
+              "bold",
+              com.serenity.richtext.RichTextStyle(marks = Set(InlineMark.Bold))
+            )
+          )
+        )
+      )
+    )
+
+    try
+      com.serenity.richtext.DocxDocumentCodec.write(source, docxFile).unsafeRunSync()
+
+      val buffer = fileManager.loadFile(docxFile, BufferId(105)).unsafeRunSync()
+
+      buffer.content.collect() shouldBe "plain bold"
+      buffer.richTextDocument.map(_.plainText) shouldBe Some("plain bold")
+      buffer.richTextDocument
+        .flatMap(_.paragraphs.headOption)
+        .map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
+      buffer.filePath shouldBe Some(docxFile)
+      buffer.isDirty shouldBe false
+    finally Files.deleteIfExists(docxFile)
+  }
+
+  it should "save DOCX buffers with aligned rich formatting metadata" in {
+    val fileManager = new FileManager()
+    val savedFile   = Files.createTempFile("serenity-docx-save", ".docx")
+    val document = com.serenity.richtext.RichTextDocument(
+      List(
+        com.serenity.richtext.RichTextParagraph(
+          List(
+            com.serenity.richtext.RichTextRun("plain "),
+            com.serenity.richtext.RichTextRun(
+              "bold",
+              com.serenity.richtext.RichTextStyle(marks = Set(InlineMark.Bold))
+            )
+          ),
+          alignment = com.serenity.richtext.ParagraphAlignment.Center
+        )
+      )
+    )
+    val buffer = Buffer
+      .fromString(BufferId(106), "plain bold")
+      .copy(isDirty = true, richTextDocument = Some(document))
+
+    try
+      val savedBuffer = fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
+      val saved       = com.serenity.richtext.DocxDocumentCodec.read(savedFile).unsafeRunSync()
 
       saved.plainText shouldBe "plain bold"
       saved.paragraphs.headOption.map(_.alignment) shouldBe Some(com.serenity.richtext.ParagraphAlignment.Center)
