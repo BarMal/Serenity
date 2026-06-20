@@ -863,6 +863,16 @@ object CommandRunner:
 
     val presetItems = List(
       CommandSurfaceItem.InputItem(
+        id = "ui-preset-create",
+        label = "Create Preset",
+        hint = "New preset name",
+        currentValue = "",
+        isDecimal = false,
+        parse = text => nonEmptyText(text).map(CommandIntent.SaveUiPreset(_)),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
         id = "ui-preset-save",
         label = "Save Current Preset",
         hint = "Preset name",

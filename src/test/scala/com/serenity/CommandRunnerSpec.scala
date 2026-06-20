@@ -381,6 +381,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     customPreset.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Research Notes"))
     customPreset.options.map(_.hint) shouldBe List(Some("Saved workspace setup"), Some("Saved workspace setup"))
     inputs.map(_.id) shouldBe List(
+      "ui-preset-create",
       "ui-preset-save",
       "ui-preset-apply",
       "ui-preset-duplicate",
@@ -388,10 +389,13 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "ui-preset-delete",
       "ui-preset-reset"
     )
-    inputs(2).parse("Writing -> My Writing") shouldBe Some(CommandIntent.DuplicateUiPreset("Writing", "My Writing"))
-    inputs(3).parse("Draft -> Final") shouldBe Some(CommandIntent.RenameUiPreset("Draft", "Final"))
-    inputs(4).parse("Old Preset") shouldBe Some(CommandIntent.DeleteUiPreset("Old Preset"))
-    inputs(5).parse("Writing") shouldBe Some(CommandIntent.ResetUiPreset("Writing"))
+    inputs.head.label shouldBe "Create Preset"
+    inputs.head.hint shouldBe "New preset name"
+    inputs.head.parse("Longform Writing") shouldBe Some(CommandIntent.SaveUiPreset("Longform Writing"))
+    inputs(3).parse("Writing -> My Writing") shouldBe Some(CommandIntent.DuplicateUiPreset("Writing", "My Writing"))
+    inputs(4).parse("Draft -> Final") shouldBe Some(CommandIntent.RenameUiPreset("Draft", "Final"))
+    inputs(5).parse("Old Preset") shouldBe Some(CommandIntent.DeleteUiPreset("Old Preset"))
+    inputs(6).parse("Writing") shouldBe Some(CommandIntent.ResetUiPreset("Writing"))
     inputs.foreach { item =>
       item.accepts("", 'W') shouldBe true
       item.accepts("Work", ' ') shouldBe true
