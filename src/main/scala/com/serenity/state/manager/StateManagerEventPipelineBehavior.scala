@@ -31,6 +31,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       "toggle-bookmark",
       "next-bookmark",
       "previous-bookmark",
+      "navigate-back",
+      "navigate-forward",
       "next-document-symbol",
       "previous-document-symbol",
       "markdown-preview",

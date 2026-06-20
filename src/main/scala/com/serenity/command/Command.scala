@@ -42,6 +42,8 @@ enum CommandIntent:
   case PreviousBookmark
   case NextDocumentSymbol
   case PreviousDocumentSymbol
+  case NavigateBack
+  case NavigateForward
   case RequestLspHover
   case RequestLspDefinition
   case ToggleTheme
