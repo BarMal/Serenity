@@ -60,6 +60,20 @@ object ElementTransitionSettings:
       speedScale = 1.0
     )
 
+  val smooth: ElementTransitionSettings =
+    ElementTransitionSettings(
+      enabled = true,
+      baseTiming = TransitionTiming(durationMs = 220, staggerMs = 16, delayMs = 0, speedScale = 1.0),
+      speedScale = 1.0
+    )
+
+  val expressive: ElementTransitionSettings =
+    ElementTransitionSettings(
+      enabled = true,
+      baseTiming = TransitionTiming(durationMs = 280, staggerMs = 22, delayMs = 20, speedScale = 1.0),
+      speedScale = 1.0
+    )
+
 /** Semantic request for a transition plan. */
 case class ElementTransitionRequest(
     scope: TransitionScope,
