@@ -72,12 +72,18 @@ object LayoutEngine:
     val rightPinnedWidth =
       pinnedPanelRects.get(PanelPosition.Right).map(_.width).getOrElse(0)
 
-    val workspaceX = leftPinnedWidth
-    val workspaceY = topPinnedHeight
+    val uiElementGap = state.config.uiElementGap
+    val leftGap      = if leftPinnedWidth > 0 then uiElementGap else 0
+    val rightGap     = if rightPinnedWidth > 0 then uiElementGap else 0
+    val topGap       = if topPinnedHeight > 0 then uiElementGap else 0
+    val bottomGap    = if bottomPinnedHeight > 0 then uiElementGap else 0
+
+    val workspaceX = leftPinnedWidth + leftGap
+    val workspaceY = topPinnedHeight + topGap
     val workspaceWidth =
-      math.max(1, viewportSize.width - leftPinnedWidth - rightPinnedWidth)
+      math.max(1, viewportSize.width - leftPinnedWidth - rightPinnedWidth - leftGap - rightGap)
     val workspaceHeight =
-      math.max(1, contentHeight - topPinnedHeight - bottomPinnedHeight)
+      math.max(1, contentHeight - topPinnedHeight - bottomPinnedHeight - topGap - bottomGap)
 
     val textAreaInsets =
       if spacerPercentage == DefaultSpacerPercentage then

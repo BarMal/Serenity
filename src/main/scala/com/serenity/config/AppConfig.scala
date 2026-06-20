@@ -228,6 +228,7 @@ case class AppConfig(
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     defaultDocumentMode: DefaultDocumentMode = DefaultDocumentMode.PlainText,
     interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
+    uiElementGap: Int = 0,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     preferredWindowSize: Option[PreferredWindowSize] = None,
     lspUserConfig: LspUserConfig = LspUserConfig.empty,
@@ -364,6 +365,9 @@ case class AppConfig(
   def withInterfaceDensity(density: InterfaceDensity): AppConfig =
     copy(interfaceDensity = density)
 
+  def withUiElementGap(gap: Int): AppConfig =
+    copy(uiElementGap = AppConfig.clampUiElementGap(gap))
+
   def withTextAreaInsets(insets: TextAreaInsets): AppConfig =
     copy(textAreaInsets = insets.normalized)
 
@@ -386,9 +390,14 @@ object AppConfig:
 
   val MinElementTransitionSpeedScale: Double = 0.0
   val MaxElementTransitionSpeedScale: Double = 4.0
+  val MinUiElementGap: Int                   = 0
+  val MaxUiElementGap: Int                   = 8
 
   def clampElementTransitionSpeedScale(scale: Double): Double =
     scale.max(MinElementTransitionSpeedScale).min(MaxElementTransitionSpeedScale)
+
+  def clampUiElementGap(gap: Int): Int =
+    gap.max(MinUiElementGap).min(MaxUiElementGap)
 
   /** Default configuration with smooth animations and syntax highlighting disabled */
   val default: AppConfig = AppConfig(
