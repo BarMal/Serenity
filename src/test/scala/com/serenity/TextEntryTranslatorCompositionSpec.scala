@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.config.{AppConfig, EditorKeyAction, HotkeyAction}
 import com.serenity.keystroke.events.*
-import com.serenity.keystroke.translators.TextEntryTranslator
+import com.serenity.keystroke.translators.{LocalKeymapConverters, TextEntryTranslator, TextHotkeyConverters}
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -85,4 +85,24 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
       .isInstanceOf[
         UnhandledEvent[?]
       ] shouldBe true
+  }
+
+  it should "leave unmatched local keymap partial functions undefined" in {
+    val converter = LocalKeymapConverters.converter(
+      Map(EditorKeyAction.PageDown -> List(com.serenity.config.HotkeyTrigger(InputKey.PageDown, None, Set.empty)))
+    )
+    val unmatched = KeyStrokeInfo(InputKey.F1, None, Set.empty)
+
+    converter.isDefinedAt(unmatched) shouldBe false
+    converter.applyOrElse[KeyStrokeInfo, Any](unmatched, _ => "fallback") shouldBe "fallback"
+    a[MatchError] should be thrownBy converter(unmatched)
+  }
+
+  it should "leave unmatched text hotkey partial functions undefined" in {
+    val converter = TextHotkeyConverters.hotkeyConverter()
+    val unmatched = KeyStrokeInfo(InputKey.F1, None, Set.empty)
+
+    converter.isDefinedAt(unmatched) shouldBe false
+    converter.applyOrElse[KeyStrokeInfo, Any](unmatched, _ => "fallback") shouldBe "fallback"
+    a[MatchError] should be thrownBy converter(unmatched)
   }

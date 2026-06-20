@@ -26,12 +26,7 @@ object TextHotkeyConverters:
   )
 
   def hotkeyConverter(config: AppConfig = AppConfig.default): PartialFunction[KeyStrokeInfo, TextEntryEvent] =
-    new PartialFunction[KeyStrokeInfo, TextEntryEvent]:
-      private val bindings =
-        actionEvents.flatMap((action, event) => config.hotkeyConfig.bindingsFor(action).map(_ -> event))
+    val bindings =
+      actionEvents.flatMap((action, event) => config.hotkeyConfig.bindingsFor(action).map(_ -> event))
 
-      override def isDefinedAt(info: KeyStrokeInfo): Boolean =
-        bindings.exists { case (trigger, _) => trigger.matches(info) }
-
-      override def apply(info: KeyStrokeInfo): TextEntryEvent =
-        bindings.collectFirst { case (trigger, event) if trigger.matches(info) => event }.get
+    Function.unlift(info => bindings.collectFirst { case (trigger, event) if trigger.matches(info) => event })
