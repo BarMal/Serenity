@@ -508,6 +508,28 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(4, 0))
   }
 
+  it should "navigate between plaintext sections from the command runner" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("Opening\nbody\n\nSecond\nbody\n\nThird"),
+            language = None,
+            cursors = List(CursorPosition(1, 0))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(3, 0))
+  }
+
   it should "toggle a bookmark at the active cursor from the command runner" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
