@@ -103,6 +103,7 @@ enum CommandIntent:
   case DuplicateUiPreset(sourceName: String, targetName: String)
   case RenameUiPreset(sourceName: String, targetName: String)
   case DeleteUiPreset(name: String)
+  case ResetUiPreset(name: String)
   case RunProjectTask(kind: ProjectTaskKind)
   case ToggleLigatures
   case StartupNewSession

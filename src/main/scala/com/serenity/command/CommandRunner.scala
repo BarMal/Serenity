@@ -874,6 +874,16 @@ object CommandRunner:
         parse = text => nonEmptyText(text).map(CommandIntent.DeleteUiPreset(_)),
         category = CommandCategory.Settings,
         acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "ui-preset-reset",
+        label = "Reset Preset",
+        hint = "Built-in preset name",
+        currentValue = "",
+        isDecimal = false,
+        parse = text => nonEmptyText(text).map(CommandIntent.ResetUiPreset(_)),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
       )
     )
 
