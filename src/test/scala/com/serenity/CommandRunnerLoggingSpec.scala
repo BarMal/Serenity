@@ -33,7 +33,7 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
     StateManager
       .describeCommandRunnerEvent(InsertChar('t'), runner)
       .shouldBe(
-        "event=InsertChar(t) mode=search query=toggle category=All selected=command:toggle-theme"
+        "event=InsertChar(t) mode=search query=toggle category=All selected=command:toggle-bookmark"
       )
   }
 

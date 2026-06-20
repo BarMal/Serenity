@@ -89,7 +89,7 @@ case class Symbol(
 )
 
 enum SymbolKind:
-  case Function, Class, Method, Variable, Constant, Heading
+  case Function, Class, Method, Variable, Constant, Heading, Bookmark
 
 case class Location(
     line: Int,

@@ -217,6 +217,27 @@ object CommandRegistry:
       label = "Go to Line"
     ),
     Command.typed(
+      "toggle-bookmark",
+      "Add or remove a bookmark at the current cursor.",
+      CommandIntent.ToggleBookmark,
+      CommandCategory.View,
+      label = "Toggle Bookmark"
+    ),
+    Command.typed(
+      "next-bookmark",
+      "Go to the next bookmark.",
+      CommandIntent.NextBookmark,
+      CommandCategory.View,
+      label = "Next Bookmark"
+    ),
+    Command.typed(
+      "previous-bookmark",
+      "Go to the previous bookmark.",
+      CommandIntent.PreviousBookmark,
+      CommandCategory.View,
+      label = "Previous Bookmark"
+    ),
+    Command.typed(
       "next-document-symbol",
       "Go to the next document symbol.",
       CommandIntent.NextDocumentSymbol,

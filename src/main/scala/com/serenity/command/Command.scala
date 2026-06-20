@@ -37,6 +37,9 @@ enum CommandIntent:
   case ReplaceAllInCurrentFile
   case ToggleCommentLens
   case OpenGotoLine
+  case ToggleBookmark
+  case NextBookmark
+  case PreviousBookmark
   case NextDocumentSymbol
   case PreviousDocumentSymbol
   case RequestLspHover

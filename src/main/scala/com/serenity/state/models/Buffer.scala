@@ -51,7 +51,8 @@ case class Buffer(
     multiCursorVerticalStates: List[VerticalCursorState] = Nil,
     viewport: Viewport = Viewport.default,
     findState: Option[FindState] = None,
-    selections: List[Selection] = Nil
+    selections: List[Selection] = Nil,
+    bookmarks: List[CursorPosition] = Nil
 ):
 
   def typographyRole: TypographyRole =

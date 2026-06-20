@@ -140,6 +140,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       "find",
       "replace",
       "goto-line",
+      "toggle-bookmark",
       "next-document-symbol",
       "previous-document-symbol"
     )

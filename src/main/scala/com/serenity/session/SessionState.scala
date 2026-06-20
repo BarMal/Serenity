@@ -42,7 +42,8 @@ case class SessionBuffer(
     viewport: SessionViewport,
     // Persist buffer text so restore does not depend on disk reads
     unsavedContent: Option[String] = None,
-    findState: Option[SessionFindState] = None
+    findState: Option[SessionFindState] = None,
+    bookmarks: List[SessionCursorPosition] = Nil
 )
 
 /** Persistent layout information
@@ -198,7 +199,8 @@ object SessionBuffer:
       unsavedContent =
         if persistUnsaved || (!buffer.isDirty && !buffer.isNewEmpty) then Some(buffer.content.toString)
         else None,
-      findState = buffer.findState.map(SessionFindState.fromFindState)
+      findState = buffer.findState.map(SessionFindState.fromFindState),
+      bookmarks = buffer.bookmarks.map(SessionCursorPosition.fromCursorPosition)
     )
 
   def toBuffer(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): Buffer =
@@ -214,7 +216,8 @@ object SessionBuffer:
       isNewEmpty = sessionBuffer.isNewEmpty,
       cursors = sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition),
       viewport = SessionViewport.toViewport(sessionBuffer.viewport),
-      findState = sessionBuffer.findState.map(SessionFindState.toFindState)
+      findState = sessionBuffer.findState.map(SessionFindState.toFindState),
+      bookmarks = sessionBuffer.bookmarks.map(SessionCursorPosition.toCursorPosition)
     )
 
   def toBufferIO(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): IO[Buffer] =
