@@ -1,7 +1,7 @@
 package com.serenity.document
 
 import com.serenity.state.models.CursorPosition
-import com.serenity.ui.layout.Symbol
+import com.serenity.ui.layout.{Location, Symbol, SymbolKind}
 
 object DocumentNavigation:
 
@@ -20,8 +20,20 @@ object DocumentNavigation:
   def currentSymbol(symbols: List[Symbol], cursor: CursorPosition): Option[Symbol] =
     sortedSymbols(symbols).reverse.find(symbol => isAtOrBefore(symbol, cursor))
 
+  def bookmarkSymbols(bookmarks: List[CursorPosition]): List[Symbol] =
+    sortedPositions(bookmarks).map { cursor =>
+      Symbol(
+        name = s"Bookmark ${cursor.line + 1}:${cursor.column + 1}",
+        kind = SymbolKind.Bookmark,
+        location = Location(cursor.line, cursor.column)
+      )
+    }
+
   private def sortedSymbols(symbols: List[Symbol]): List[Symbol] =
     symbols.sortBy(symbol => (symbol.location.line, symbol.location.column))
+
+  private def sortedPositions(bookmarks: List[CursorPosition]): List[CursorPosition] =
+    bookmarks.distinct.sortBy(cursor => (cursor.line, cursor.column))
 
   private def isAfter(symbol: Symbol, cursor: CursorPosition): Boolean =
     symbol.location.line > cursor.line ||

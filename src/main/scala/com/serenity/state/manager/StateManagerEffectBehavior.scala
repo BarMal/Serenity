@@ -196,6 +196,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         toggleCommentLens(state)
       case CommandIntent.OpenGotoLine =>
         updateState(current => ModalStateReducer.show(Modal.GotoLine(""), current).state)
+      case CommandIntent.ToggleBookmark =>
+        toggleBookmark(state)
+      case CommandIntent.NextBookmark =>
+        navigateBookmark(state, DocumentNavigation.nextSymbol)
+      case CommandIntent.PreviousBookmark =>
+        navigateBookmark(state, DocumentNavigation.previousSymbol)
       case CommandIntent.NextDocumentSymbol =>
         navigateDocumentSymbol(state, DocumentNavigation.nextSymbol)
       case CommandIntent.PreviousDocumentSymbol =>
@@ -613,8 +619,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   private def outlineSymbols(state: AppState): List[Symbol] =
     state.focusedBufferId
       .flatMap(state.buffers.get)
-      .map(DocumentOutline.forBuffer)
+      .map(outlineSymbolsForBuffer)
       .getOrElse(Nil)
+
+  private def outlineSymbolsForBuffer(buffer: Buffer): List[Symbol] =
+    (DocumentOutline.forBuffer(buffer) ++ DocumentNavigation.bookmarkSymbols(buffer.bookmarks))
+      .sortBy(symbol => (symbol.location.line, symbol.location.column, symbol.name))
 
   private def currentOutlineActiveLocation(symbols: List[Symbol], state: AppState): Option[Location] =
     state.activeCursorPosition
@@ -625,11 +635,25 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     state: AppState,
     chooseSymbol: (List[Symbol], CursorPosition) => Option[Symbol]
   ): IO[Unit] =
+    navigateSymbols(state, outlineSymbolsForBuffer, chooseSymbol, "Document symbol")
+
+  private def navigateBookmark(
+    state: AppState,
+    chooseSymbol: (List[Symbol], CursorPosition) => Option[Symbol]
+  ): IO[Unit] =
+    navigateSymbols(state, buffer => DocumentNavigation.bookmarkSymbols(buffer.bookmarks), chooseSymbol, "Bookmark")
+
+  private def navigateSymbols(
+    state: AppState,
+    symbolsForBuffer: Buffer => List[Symbol],
+    chooseSymbol: (List[Symbol], CursorPosition) => Option[Symbol],
+    label: String
+  ): IO[Unit] =
     activeEditorBuffer(state)
       .flatMap {
         case (paneId, buffer) =>
           val cursor  = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
-          val symbols = DocumentOutline.forBuffer(buffer)
+          val symbols = symbolsForBuffer(buffer)
           chooseSymbol(symbols, cursor).map(symbol => (paneId, buffer.id, symbol.location))
       } match
       case Some((paneId, bufferId, location)) =>
@@ -653,7 +677,24 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             case None => current
         }
       case None =>
-        logger.debug("[CMD] Document symbol navigation requested without a target")
+        logger.debug(s"[CMD] $label navigation requested without a target")
+
+  private def toggleBookmark(state: AppState): IO[Unit] =
+    activeEditorBuffer(state) match
+      case Some((_, buffer)) =>
+        val cursor = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+        updateState { current =>
+          current.buffers.get(buffer.id) match
+            case Some(currentBuffer) =>
+              val bookmarks =
+                if currentBuffer.bookmarks.contains(cursor) then currentBuffer.bookmarks.filterNot(_ == cursor)
+                else (cursor :: currentBuffer.bookmarks).distinct.sortBy(position => (position.line, position.column))
+
+              current.copy(buffers = current.buffers + (buffer.id -> currentBuffer.copy(bookmarks = bookmarks)))
+            case None => current
+        }
+      case None =>
+        logger.debug("[CMD] Toggle bookmark requested without an active editor buffer")
 
   private def activeEditorBuffer(state: AppState): Option[(PaneId, Buffer)] =
     for

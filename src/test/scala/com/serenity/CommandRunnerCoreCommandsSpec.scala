@@ -508,6 +508,85 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(4, 0))
   }
 
+  it should "toggle a bookmark at the active cursor from the command runner" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(bufferId).copy(cursors = List(CursorPosition(2, 4)))
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "toggle-bookmark", "toggle-bookmark")
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).bookmarks shouldBe List(CursorPosition(2, 4))
+
+    executeCommandThroughRunner(stateManager, "toggle-bookmark", "toggle-bookmark")
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).bookmarks shouldBe Nil
+  }
+
+  it should "navigate between explicit bookmarks from command runner commands" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            cursors = List(CursorPosition(2, 0)),
+            bookmarks = List(CursorPosition(0, 3), CursorPosition(4, 1))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "next-bookmark", "next-bookmark")
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(4, 1))
+
+    executeCommandThroughRunner(stateManager, "previous-bookmark", "previous-bookmark")
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(0, 3))
+  }
+
+  it should "include explicit bookmarks in the outline panel" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+            language = Some(LanguageId.Markdown),
+            cursors = List(CursorPosition(2, 4)),
+            bookmarks = List(CursorPosition(2, 4))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "pin-outline", "pin-outline")
+
+    val outlineSymbols = stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.collectFirst {
+      case UiSurface(_, SurfaceContent.Outline(symbols, _), SurfacePresentation.Pinned(PanelPosition.Right, 30), _) =>
+        symbols
+    }
+
+    outlineSymbols shouldBe Some(
+      List(
+        Symbol("Chapter One", SymbolKind.Heading, Location(0, 0)),
+        Symbol("Bookmark 3:5", SymbolKind.Bookmark, Location(2, 4)),
+        Symbol("Scene Two", SymbolKind.Heading, Location(4, 0))
+      )
+    )
+  }
+
   it should "leave the cursor unchanged when document symbol navigation has no target" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)

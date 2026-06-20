@@ -34,6 +34,13 @@ class DocumentNavigationSpec extends AnyFlatSpec with Matchers:
     DocumentNavigation.currentSymbol(symbols, CursorPosition(6, 3)) shouldBe Some(symbols(1))
   }
 
+  it should "build sorted bookmark symbols from cursor positions" in {
+    DocumentNavigation.bookmarkSymbols(List(CursorPosition(7, 2), CursorPosition(1, 4))) shouldBe List(
+      Symbol("Bookmark 2:5", SymbolKind.Bookmark, Location(1, 4)),
+      Symbol("Bookmark 8:3", SymbolKind.Bookmark, Location(7, 2))
+    )
+  }
+
   it should "leave cursors before the first document symbol without a current symbol" in {
     DocumentNavigation.currentSymbol(symbols, CursorPosition(0, 0)) shouldBe Some(symbols.head)
     DocumentNavigation.currentSymbol(symbols, CursorPosition(0, -1)) shouldBe None

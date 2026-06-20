@@ -131,7 +131,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       .copy(
         cursors = List(CursorPosition(3, 7)),
         viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 24, visibleColumns = 80),
-        findState = Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1))
+        findState = Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1)),
+        bookmarks = List(CursorPosition(1, 2), CursorPosition(8, 0))
       )
     val appState = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
@@ -158,6 +159,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restoredBuffer.viewport.topLine shouldBe 2
     restoredBuffer.viewport.leftColumn shouldBe 1
     restoredBuffer.findState shouldBe Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1))
+    restoredBuffer.bookmarks shouldBe List(CursorPosition(1, 2), CursorPosition(8, 0))
   }
 
   it should "restore legacy session find state that only stored result lines" in {
