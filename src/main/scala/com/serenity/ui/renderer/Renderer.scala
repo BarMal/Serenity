@@ -9,7 +9,7 @@ import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.theme.Theme
+import com.serenity.ui.theme.{RichTextStyling, StyledText, Theme}
 
 case class RenderContext(
     surface: RenderSurface,
@@ -318,6 +318,7 @@ object Renderer:
               screenY < rect.bottom &&
               screenX < rect.right
           then
+            val styledSegments = richTextStyledSegments(buffer, visualLine, state.theme)
             if snapshot.usesMeasuredLayout then
               CharacterRenderer.renderMeasuredLineWithAnimation(
                 context.surface,
@@ -329,7 +330,8 @@ object Renderer:
                 state.theme,
                 buffer.animations,
                 state.syntaxHighlightingEnabled,
-                buffer.language
+                buffer.language,
+                styledSegments
               )
             else
               CharacterRenderer.renderStringWithAnimation(
@@ -342,7 +344,8 @@ object Renderer:
                 state.syntaxHighlightingEnabled,
                 buffer.language,
                 bufferLine = visualLine.bufferLine,
-                bufferStartColumn = visualLine.startColumn
+                bufferStartColumn = visualLine.startColumn,
+                styledSegments = styledSegments
               )
 
             renderSelectionHighlights(
@@ -368,6 +371,25 @@ object Renderer:
                   context.surface.putString(bgScreenX, screenY, " ")
               }
     }
+
+  private def richTextStyledSegments(
+    buffer: Buffer,
+    visualLine: TextVisualLine,
+    theme: Theme
+  ): Option[List[StyledText]] =
+    if buffer.isDirty then None
+    else
+      buffer.richTextDocument
+        .map(document =>
+          RichTextStyling.styledLine(
+            document,
+            visualLine.bufferLine,
+            visualLine.startColumn,
+            visualLine.endColumn,
+            theme
+          )
+        )
+        .filter(segments => segments.map(_.content).mkString == visualLine.text)
 
   private def renderInlineMarkdownPreview(
     buffer: Buffer,

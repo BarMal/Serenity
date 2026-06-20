@@ -80,31 +80,44 @@ object CharacterRenderer:
     syntaxHighlightingEnabled: Boolean = true,
     language: Option[LanguageId] = None,
     bufferLine: Int = 0,
-    bufferStartColumn: Int = 0
+    bufferStartColumn: Int = 0,
+    styledSegments: Option[List[StyledText]] = None
   ): Unit =
-    if syntaxHighlightingEnabled then
-      val styledTexts = com.serenity.ui.theme.ThemeManager.highlightLine(content, theme, language)
-      renderStyledLineWithAnimation(
-        surface,
-        x,
-        y,
-        styledTexts,
-        theme,
-        screenAnimations,
-        bufferLine,
-        bufferStartColumn
-      )
-    else
-      renderStringWithAnimationPlain(
-        surface,
-        x,
-        y,
-        content,
-        theme,
-        screenAnimations,
-        bufferLine = bufferLine,
-        bufferStartColumn = bufferStartColumn
-      )
+    styledSegments match
+      case Some(styledTexts) =>
+        renderStyledLineWithAnimation(
+          surface,
+          x,
+          y,
+          styledTexts,
+          theme,
+          screenAnimations,
+          bufferLine,
+          bufferStartColumn
+        )
+      case None if syntaxHighlightingEnabled =>
+        val styledTexts = com.serenity.ui.theme.ThemeManager.highlightLine(content, theme, language)
+        renderStyledLineWithAnimation(
+          surface,
+          x,
+          y,
+          styledTexts,
+          theme,
+          screenAnimations,
+          bufferLine,
+          bufferStartColumn
+        )
+      case None =>
+        renderStringWithAnimationPlain(
+          surface,
+          x,
+          y,
+          content,
+          theme,
+          screenAnimations,
+          bufferLine = bufferLine,
+          bufferStartColumn = bufferStartColumn
+        )
 
   def renderStringWithAnimationPlain(
     surface: RenderSurface,
@@ -140,14 +153,17 @@ object CharacterRenderer:
     theme: Theme,
     animations: AnimationState,
     syntaxHighlightingEnabled: Boolean = false,
-    language: Option[LanguageId] = None
+    language: Option[LanguageId] = None,
+    styledSegments: Option[List[StyledText]] = None
   ): Unit =
     val text = visualLine.text
     if text.nonEmpty then
       val stops = visualLine.caretStops
-      val styledSegments =
-        if syntaxHighlightingEnabled then com.serenity.ui.theme.ThemeManager.highlightLine(text, theme, language)
-        else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
+      val styledSegments0 =
+        styledSegments.getOrElse {
+          if syntaxHighlightingEnabled then com.serenity.ui.theme.ThemeManager.highlightLine(text, theme, language)
+          else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
+        }
 
       def stopXPx(localIndex: Int): Float =
         stops.find(_.column == visualLine.startColumn + localIndex).map(_.xPx).getOrElse(0.0f)
@@ -170,7 +186,7 @@ object CharacterRenderer:
           surface.drawRunPx(run.startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text)
         }
 
-      val chars = styledSegments.flatMap(segment =>
+      val chars = styledSegments0.flatMap(segment =>
         segment.content.map(char => (char, segment.foregroundColor, segment.backgroundColor, segment.style))
       )
 
