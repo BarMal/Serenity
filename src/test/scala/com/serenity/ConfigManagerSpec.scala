@@ -343,6 +343,20 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("ui.element_gap = 3")
   }
 
+  it should "load and write UI corner radius" in {
+    val configFile = Files.createTempFile("serenity-ui-corner-radius-config", ".conf")
+    Files.writeString(
+      configFile,
+      """ui.corner_radius = 14
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.uiCornerRadiusPx shouldBe 14
+    ConfigManager.configToString(config) should include("ui.corner_radius = 14")
+  }
+
   it should "load and write material and motion presets" in {
     val configFile = Files.createTempFile("serenity-material-motion-config", ".conf")
     Files.writeString(

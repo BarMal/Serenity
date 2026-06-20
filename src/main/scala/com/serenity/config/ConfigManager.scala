@@ -159,6 +159,8 @@ object ConfigManager:
                   config
             case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
               parseUiElementGap(value.trim).map(config.withUiElementGap).getOrElse(config)
+            case "ui.corner_radius" | "ui.corner.radius" | "ui_corner_radius" =>
+              parseUiCornerRadiusPx(value.trim).map(config.withUiCornerRadiusPx).getOrElse(config)
             case "cursor.info_bar" | "cursor.info.bar" | "cursor_info_bar" =>
               value.trim.toLowerCase match
                 case "off" | "false" | "disabled" =>
@@ -302,6 +304,7 @@ object ConfigManager:
        |# Interface density: compact, comfortable, spacious
        |interface.density = ${config.interfaceDensity.configKey}
        |ui.element_gap = ${config.uiElementGap}
+       |ui.corner_radius = ${config.uiCornerRadiusPx}
        |
        |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
        |ui.material = ${config.materialPreset.configKey}
@@ -434,6 +437,8 @@ object ConfigManager:
           parseElementTransitionSpeedScale(value).isEmpty
         case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
           parseUiElementGap(value).isEmpty
+        case "ui.corner_radius" | "ui.corner.radius" | "ui_corner_radius" =>
+          parseUiCornerRadiusPx(value).isEmpty
         case "window.preferred.width" | "window_preferred_width" | "window.preferred.height" |
             "window_preferred_height" =>
           value.trim.nonEmpty && value.trim.toIntOption.isEmpty
@@ -476,6 +481,8 @@ object ConfigManager:
       "motion.speed_scale",
       "ui.element_gap",
       "ui.element.gap",
+      "ui.corner_radius",
+      "ui.corner.radius",
       "document.default_mode",
       "document.default.mode",
       "window.preferred.width",
@@ -518,6 +525,7 @@ object ConfigManager:
       "ui_motion_speed_scale"     -> "ui.motion.speed_scale",
       "motion_speed_scale"        -> "motion.speed_scale",
       "ui_element_gap"            -> "ui.element_gap",
+      "ui_corner_radius"          -> "ui.corner_radius",
       "document_default_mode"     -> "document.default_mode",
       "window_preferred_width"    -> "window.preferred.width",
       "window_preferred_height"   -> "window.preferred.height",
@@ -565,6 +573,11 @@ object ConfigManager:
 
   private def parseUiElementGap(value: String): Option[Int] =
     value.toIntOption.filter(gap => gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap)
+
+  private def parseUiCornerRadiusPx(value: String): Option[Int] =
+    value.toIntOption.filter(radius =>
+      radius >= AppConfig.MinUiCornerRadiusPx && radius <= AppConfig.MaxUiCornerRadiusPx
+    )
 
   private def parseColor(value: String): Option[java.awt.Color] =
     val hex = value.stripPrefix("#")

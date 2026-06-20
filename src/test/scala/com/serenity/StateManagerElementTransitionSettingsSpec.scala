@@ -52,3 +52,20 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
 
     stateManager.getCurrentState.unsafeRunSync().config.uiElementGap shouldBe 3
   }
+
+  it should "update the UI corner radius config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "ui-corner-radius",
+          "Set UI corner radius",
+          CommandIntent.SetUiCornerRadiusPx(14),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.uiCornerRadiusPx shouldBe 14
+  }
