@@ -76,6 +76,7 @@ enum CommandIntent:
   case PinDiagnosticsPanel
   case OpenMarkdownPreview
   case SetMarkdownViewMode(mode: MarkdownViewMode)
+  case SetDefaultDocumentMode(mode: DefaultDocumentMode)
   case SetSpellCheckEnabled(enabled: Boolean)
   case SetSpellCheckLanguages(languages: List[String])
   case SetSpellCheckWords(words: List[String])

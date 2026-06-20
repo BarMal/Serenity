@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.*
-import com.serenity.config.{AppConfig, SpellCheckConfig}
+import com.serenity.config.{AppConfig, DefaultDocumentMode, SpellCheckConfig}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.{CommandRunnerComponent, ComponentResult}
@@ -270,7 +270,34 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     groupItems(9).label shouldBe "Markdown"
     groupItems(9).children.map(_.id) should contain("markdown-view")
     groupItems(10).label shouldBe "Language"
-    groupItems(10).children.map(_.id) should contain("lang-plain-text")
+    groupItems(10).children.map(_.id) should contain allOf ("default-document-mode", "lang-plain-text")
+  }
+
+  it should "surface default document mode as a typed language setting" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default.withDefaultDocumentMode(DefaultDocumentMode.RichText))
+      .withActiveCategory(CommandCategory.Settings)
+
+    val languageGroup =
+      runner.settingsGroups.find(_.id == "settings-language").getOrElse(fail("missing language group"))
+
+    val documentMode =
+      languageGroup.children
+        .collectFirst {
+          case item: CommandSurfaceItem.OptionItem if item.id == "default-document-mode" =>
+            item
+        }
+        .getOrElse(fail("missing default document mode option"))
+
+    documentMode.selectedOption shouldBe "Rich Text"
+    documentMode.options.map(_.label) shouldBe List("Plain Text", "Markdown", "Rich Text")
+    documentMode.options.map(_.intent) shouldBe List(
+      CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.PlainText),
+      CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown),
+      CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.RichText)
+    )
   }
 
   it should "surface rich text inline style inputs in settings" in {

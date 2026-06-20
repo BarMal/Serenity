@@ -94,6 +94,7 @@ case class CommandRunner(
     val materialPresetItem   = CommandRunner.materialPresetOptionItem(optionSelections)
     val motionPresetItem     = CommandRunner.motionPresetOptionItem(optionSelections)
     val markdownViewItem     = CommandRunner.markdownViewOptionItem(optionSelections)
+    val defaultDocumentItem  = CommandRunner.defaultDocumentModeOptionItem(optionSelections)
     val spellCheckItem       = CommandRunner.spellCheckOptionItem(optionSelections)
     val keymapItems          = inputItems.filter(_.id.startsWith("keymap-"))
     List(
@@ -184,9 +185,9 @@ case class CommandRunner(
       CommandSurfaceItem.GroupItem(
         id = "settings-language",
         label = "Language",
-        children = CommandRunner.languageItems,
+        children = CommandRunner.languageItems :+ defaultDocumentItem,
         category = CommandCategory.Settings,
-        hint = Some("Set the current buffer language mode")
+        hint = Some("Set new document defaults and current buffer language")
       ),
       CommandSurfaceItem.GroupItem(
         id = "settings-spellcheck",
@@ -491,6 +492,7 @@ object CommandRunner:
       "background-style"          -> backgroundStyleIndex(config.backgroundStyle),
       "interface-density"         -> interfaceDensityIndex(config.interfaceDensity),
       "markdown-view"             -> markdownViewModeIndex(config.markdownViewMode),
+      "default-document-mode"     -> defaultDocumentModeIndex(config.defaultDocumentMode),
       "spellcheck-enabled"        -> spellCheckEnabledIndex(config.spellCheck.enabled),
       "code-font"                 -> codeFontIndex(config.fontConfig.codeFontFamily),
       "text-font"                 -> textFontIndex(config.fontConfig.textFontFamily),
@@ -621,6 +623,22 @@ object CommandRunner:
       selectedIndex = optionSelections.getOrElse("markdown-view", 0),
       category = CommandCategory.Settings,
       hint = Some("Source, side preview, or inline editing lens")
+    )
+
+  private[command] def defaultDocumentModeOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "default-document-mode",
+      label = "Default Document",
+      options = List(
+        CommandOption("Plain Text", CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.PlainText)),
+        CommandOption("Markdown", CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown)),
+        CommandOption("Rich Text", CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.RichText))
+      ),
+      selectedIndex = optionSelections.getOrElse("default-document-mode", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Mode for newly-created documents")
     )
 
   private[command] def spellCheckOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -1202,6 +1220,12 @@ object CommandRunner:
       case MarkdownViewMode.Source       => 0
       case MarkdownViewMode.SplitPreview => 1
       case MarkdownViewMode.InlineLens   => 2
+
+  private def defaultDocumentModeIndex(mode: DefaultDocumentMode): Int =
+    mode match
+      case DefaultDocumentMode.PlainText => 0
+      case DefaultDocumentMode.Markdown  => 1
+      case DefaultDocumentMode.RichText  => 2
 
   private def spellCheckEnabledIndex(enabled: Boolean): Int =
     if enabled then 1 else 0

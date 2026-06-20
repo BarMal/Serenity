@@ -259,6 +259,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         openMarkdownPreview(state)
       case CommandIntent.SetMarkdownViewMode(mode) =>
         setMarkdownViewMode(state, mode)
+      case CommandIntent.SetDefaultDocumentMode(mode) =>
+        updateConfig(_.withDefaultDocumentMode(mode)).void
       case CommandIntent.SetSpellCheckEnabled(enabled) =>
         updateSpellCheckConfig(_.copy(enabled = enabled))
       case CommandIntent.SetSpellCheckLanguages(languages) =>
