@@ -1,5 +1,6 @@
 package com.serenity
 
+import java.awt.Font
 import java.nio.file.{Files, Path}
 
 import cats.effect.IO
@@ -888,6 +889,20 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     saved should include("config.version = 1")
     saved should include("ui.motion = smooth")
     stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface shouldBe None
+  }
+
+  it should "apply a built-in writing preset from a searchable command" in {
+    val stateManager = createStateManager()
+
+    executeCommandThroughRunner(stateManager, "apply-writing-preset", "apply-writing-preset")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.commandRunnerSurface shouldBe None
+    updatedState.config.fontConfig.textFontFamily shouldBe Font.SERIF
+    updatedState.config.showLineNumbers shouldBe false
+    updatedState.config.showGutter shouldBe false
+    updatedState.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Left, 28))
+    updatedState.pinnedSurfaces.headOption.map(_.content) shouldBe Some(SurfaceContent.Outline(Nil))
   }
 
   it should "focus the left panel from the command runner" in {

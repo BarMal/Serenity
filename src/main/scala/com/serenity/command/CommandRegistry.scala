@@ -5,6 +5,7 @@ import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{ParagraphAlignment, ParagraphRole}
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.layout.PanelPosition
+import com.serenity.ui.presets.UiPreset
 
 /** Registry of all available commands */
 class CommandRegistry(private val commands: List[Command]):
@@ -567,4 +568,16 @@ object CommandRegistry:
       CommandCategory.Project,
       label = "Project Dependencies"
     )
-  )
+  ) ++ builtInPresetCommands
+
+  private def builtInPresetCommands: List[Command] =
+    UiPreset.builtIns.map { preset =>
+      val preview = UiPreset.Preview.fromPreset(preset)
+      Command.typed(
+        name = s"apply-${preset.name.toLowerCase.replace(' ', '-')}-preset",
+        description = s"Apply the ${preset.name} workspace preset: ${preview.hint}.",
+        intent = CommandIntent.ApplyUiPreset(preset.name),
+        category = CommandCategory.Settings,
+        label = s"Apply ${preset.name} Preset"
+      )
+    }
