@@ -4,38 +4,34 @@ import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.IO
 import pureconfig.*
+import pureconfig.error.ConfigReaderFailures
 
 class ThemeConfigLoader:
 
   /** Load theme configuration from a file path */
   def loadThemeFromFile(path: Path): IO[ThemeConfig] =
-    IO.blocking {
-      if !Files.exists(path) then throw new RuntimeException(s"Theme file not found: $path")
-
-      val configSource = ConfigSource.file(path).at("theme")
-      configSource.load[ThemeConfig] match
-        case Right(config)  => config
-        case Left(failures) => throw new RuntimeException(s"Failed to load theme config: ${failures.prettyPrint()}")
-    }
+    for
+      exists <- IO.blocking(Files.exists(path))
+      _      <- IO.unlessA(exists)(IO.raiseError(new RuntimeException(s"Theme file not found: $path")))
+      config <- loadThemeConfig(
+        ConfigSource.file(path),
+        failures => s"Failed to load theme config: ${failures.prettyPrint()}"
+      )
+    yield config
 
   /** Load theme configuration from classpath resource */
   def loadThemeFromResource(resourcePath: String): IO[ThemeConfig] =
-    IO.blocking {
-      val configSource = ConfigSource.resources(resourcePath).at("theme")
-      configSource.load[ThemeConfig] match
-        case Right(config) => config
-        case Left(failures) =>
-          throw new RuntimeException(s"Failed to load theme config from resource: ${failures.prettyPrint()}")
-    }
+    loadThemeConfig(
+      ConfigSource.resources(resourcePath),
+      failures => s"Failed to load theme config from resource: ${failures.prettyPrint()}"
+    )
 
   /** Load theme configuration from string (useful for testing) */
   def loadThemeFromString(configString: String): IO[ThemeConfig] =
-    IO.blocking {
-      val configSource = ConfigSource.string(configString).at("theme")
-      configSource.load[ThemeConfig] match
-        case Right(config)  => config
-        case Left(failures) => throw new RuntimeException(s"Failed to parse theme config: ${failures.prettyPrint()}")
-    }
+    loadThemeConfig(
+      ConfigSource.string(configString),
+      failures => s"Failed to parse theme config: ${failures.prettyPrint()}"
+    )
 
   /** List available theme files in a directory */
   def listAvailableThemes(themesDir: Path): IO[List[Path]] =
@@ -93,4 +89,13 @@ class ThemeConfigLoader:
             // If we can't read from resources (e.g., in JAR), return known themes
             List("dark", "light")
       else List.empty
+    }
+
+  private def loadThemeConfig(
+    configSource: ConfigSource,
+    errorMessage: ConfigReaderFailures => String
+  ): IO[ThemeConfig] =
+    IO.blocking(configSource.at("theme").load[ThemeConfig]).flatMap {
+      case Right(config)  => IO.pure(config)
+      case Left(failures) => IO.raiseError(new RuntimeException(errorMessage(failures)))
     }

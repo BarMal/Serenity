@@ -189,6 +189,27 @@ class ConfigDrivenThemingSpec extends AnyFlatSpec with Matchers:
     finally Files.deleteIfExists(tempFile)
   }
 
+  it should "raise a clear error when a theme file is missing" in {
+    val loader      = new ThemeConfigLoader()
+    val missingFile = Files.createTempDirectory("serenity-missing-theme").resolve("missing.conf")
+
+    try
+      val result = loader.loadThemeFromFile(missingFile).attempt.unsafeRunSync()
+
+      result.left.map(_.getMessage) shouldBe Left(s"Theme file not found: $missingFile")
+    finally Files.deleteIfExists(missingFile.getParent)
+  }
+
+  it should "raise a clear error when parsing malformed theme config text" in {
+    val loader = new ThemeConfigLoader()
+
+    val result = loader.loadThemeFromString("theme { name = 42").attempt.unsafeRunSync()
+
+    result match
+      case Left(error) => error.getMessage should startWith("Failed to parse theme config:")
+      case Right(_)    => fail("Expected malformed theme config to fail")
+  }
+
   "ConfigurableThemeManager" should "convert config to Theme object" in {
     val themeConfig = ThemeConfig(
       name = "test",

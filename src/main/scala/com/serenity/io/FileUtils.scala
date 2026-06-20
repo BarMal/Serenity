@@ -21,10 +21,11 @@ object FileUtils:
 
   /** Read file content as string */
   def readFileContent(path: Path): IO[String] =
-    IO.blocking {
-      if !isReadableFile(path) then throw new RuntimeException(s"File not readable: $path")
-      Files.readString(path)
-    }
+    for
+      readable <- IO.blocking(isReadableFile(path))
+      _        <- IO.unlessA(readable)(IO.raiseError(new RuntimeException(s"File not readable: $path")))
+      content  <- IO.blocking(Files.readString(path))
+    yield content
 
   /** Write content to file */
   def writeFileContent(path: Path, content: String): IO[Unit] =
