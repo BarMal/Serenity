@@ -70,6 +70,43 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
     marksForText(paragraph, "world") should contain allOf (InlineMark.Bold, InlineMark.Underline)
   }
 
+  it should "read and write heading paragraph roles" in {
+    val source = RichTextDocument(
+      List(
+        RichTextParagraph.plain("Chapter One", role = ParagraphRole.Heading(2)),
+        RichTextParagraph.plain("Body")
+      )
+    )
+
+    val decoded = OdtDocumentCodec.readBytes(OdtDocumentCodec.writeBytes(source))
+
+    decoded.paragraphs.map(_.plainText) shouldBe List("Chapter One", "Body")
+    decoded.paragraphs.map(_.role) shouldBe List(ParagraphRole.Heading(2), ParagraphRole.Body)
+  }
+
+  it should "read existing ODT heading elements as rich text heading roles" in {
+    val contentXml =
+      """<?xml version="1.0" encoding="UTF-8"?>
+        |<office:document-content
+        |    xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+        |    xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+        |    xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+        |    xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0">
+        |  <office:automatic-styles/>
+        |  <office:body>
+        |    <office:text>
+        |      <text:h text:outline-level="3">Scene Three</text:h>
+        |      <text:p>Body</text:p>
+        |    </office:text>
+        |  </office:body>
+        |</office:document-content>""".stripMargin
+
+    val document = OdtDocumentCodec.readBytes(odtBytes(contentXml))
+
+    document.paragraphs.map(_.plainText) shouldBe List("Scene Three", "Body")
+    document.paragraphs.map(_.role) shouldBe List(ParagraphRole.Heading(3), ParagraphRole.Body)
+  }
+
   it should "preserve explicit font size, family, and colour metadata" in {
     val source = RichTextDocument(
       List(

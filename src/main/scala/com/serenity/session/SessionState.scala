@@ -514,6 +514,27 @@ given Decoder[RichTextStyle] = deriveDecoder
 given Encoder[RichTextRun] = deriveEncoder
 given Decoder[RichTextRun] = deriveDecoder
 
+given Encoder[ParagraphRole] = Encoder.instance {
+  case ParagraphRole.Body =>
+    io.circe.Json.obj("type" -> io.circe.Json.fromString("body"))
+  case ParagraphRole.Heading(level) =>
+    io.circe.Json.obj(
+      "type"  -> io.circe.Json.fromString("heading"),
+      "level" -> io.circe.Json.fromInt(level.max(1))
+    )
+}
+
+given Decoder[ParagraphRole] = Decoder.instance { cursor =>
+  cursor.downField("type").as[Option[String]].flatMap {
+    case Some("heading") =>
+      cursor.downField("level").as[Option[Int]].map(level => ParagraphRole.Heading(level.getOrElse(1).max(1)))
+    case Some("body") | None =>
+      Right(ParagraphRole.Body)
+    case Some(other) =>
+      Left(io.circe.DecodingFailure(s"Unknown paragraph role: $other", cursor.history))
+  }
+}
+
 given Encoder[RichTextParagraph] = deriveEncoder
 given Decoder[RichTextParagraph] = deriveDecoder
 

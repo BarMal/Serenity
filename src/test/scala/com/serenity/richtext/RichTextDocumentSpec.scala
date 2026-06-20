@@ -113,6 +113,22 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
     marked.paragraphs.head.runs.head.style.marks shouldBe Set(InlineMark.Bold)
   }
 
+  it should "preserve paragraph roles independently from inline marks" in {
+    val document = RichTextDocument(
+      List(
+        RichTextParagraph.plain("Chapter One", role = ParagraphRole.Heading(1))
+      )
+    )
+
+    val marked = document.applyMark(
+      RichTextRange(RichTextPosition(0, 0), RichTextPosition(0, 11)),
+      InlineMark.Bold
+    )
+
+    marked.paragraphs.head.role shouldBe ParagraphRole.Heading(1)
+    marked.paragraphs.head.runs.head.style.marks shouldBe Set(InlineMark.Bold)
+  }
+
   it should "toggle an absent inline mark on across the range" in {
     val document = RichTextDocument.oneParagraph("alpha beta gamma")
 
