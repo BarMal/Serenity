@@ -715,10 +715,15 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           }
       } match
       case Some((before, after)) if before != after =>
+        val sweep = navigationSweep(before, after)
         updateState { current =>
-          moveToNavigationPoint(current, after).copy(
-            navigationBackStack = pushNavigationPoint(before, current.navigationBackStack),
-            navigationForwardStack = Nil
+          animateNavigationTarget(
+            moveToNavigationPoint(current, after).copy(
+              navigationBackStack = pushNavigationPoint(before, current.navigationBackStack),
+              navigationForwardStack = Nil
+            ),
+            after,
+            sweep
           )
         }
       case Some(_) =>
@@ -726,15 +731,70 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case None =>
         logger.debug(s"[CMD] $label navigation requested without a target")
 
+  private def navigationSweep(before: NavigationPoint, after: NavigationPoint): com.serenity.animation.SweepDirection =
+    if after.cursor.line < before.cursor.line ||
+        (after.cursor.line == before.cursor.line && after.cursor.column < before.cursor.column)
+    then com.serenity.animation.SweepDirection.Backward
+    else com.serenity.animation.SweepDirection.Forward
+
+  private def animateNavigationTarget(
+    state: AppState,
+    point: NavigationPoint,
+    sweep: com.serenity.animation.SweepDirection
+  ): AppState =
+    state.buffers.get(point.bufferId) match
+      case Some(buffer) =>
+        val viewport = buffer.viewport
+        val cells = (viewport.topLine until (viewport.topLine + viewport.visibleLines)).flatMap { line =>
+          buffer.content.getLine(line).toList.flatMap { text =>
+            text.zipWithIndex.take(viewport.visibleColumns).map { (char, column) =>
+              com.serenity.animation.CharacterKey(column, line) ->
+                com.serenity.animation.CellAnimation(char, state.theme.background, state.theme.foreground)
+            }
+          }
+        }.toMap
+
+        if cells.isEmpty then state
+        else
+          val animated = com.serenity.animation.FlowAnimationBuilder.build(
+            cells,
+            com.serenity.animation.FlowDirection.ByRow,
+            sweep,
+            AnimationConfig.smooth.get.steps
+          )
+          val updatedBuffer = buffer.copy(animations = buffer.animations.clearAll().mergeAnimations(animated))
+          state.copy(buffers = state.buffers + (point.bufferId -> updatedBuffer))
+      case None =>
+        state
+
+  private def updateNavigationHistory(
+    state: AppState,
+    target: NavigationPoint,
+    backStack: List[NavigationPoint],
+    forwardStack: List[NavigationPoint],
+    sweep: com.serenity.animation.SweepDirection
+  ): AppState =
+    animateNavigationTarget(
+      moveToNavigationPoint(state, target).copy(
+        navigationBackStack = backStack,
+        navigationForwardStack = forwardStack
+      ),
+      target,
+      sweep
+    )
+
   private def navigateHistoryBack(): IO[Unit] =
     updateState { current =>
       current.navigationBackStack match
         case target :: remaining =>
           currentNavigationPoint(current) match
             case Some(point) =>
-              moveToNavigationPoint(current, target).copy(
-                navigationBackStack = remaining,
-                navigationForwardStack = pushNavigationPoint(point, current.navigationForwardStack)
+              updateNavigationHistory(
+                current,
+                target,
+                remaining,
+                pushNavigationPoint(point, current.navigationForwardStack),
+                navigationSweep(point, target)
               )
             case None => current
         case Nil => current
@@ -746,9 +806,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         case target :: remaining =>
           currentNavigationPoint(current) match
             case Some(point) =>
-              moveToNavigationPoint(current, target).copy(
-                navigationBackStack = pushNavigationPoint(point, current.navigationBackStack),
-                navigationForwardStack = remaining
+              updateNavigationHistory(
+                current,
+                target,
+                pushNavigationPoint(point, current.navigationBackStack),
+                remaining,
+                navigationSweep(point, target)
               )
             case None => current
         case Nil => current
@@ -768,13 +831,15 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   private def moveToNavigationPoint(state: AppState, point: NavigationPoint): AppState =
     (state.layout.editorPanes.get(point.paneId), state.buffers.get(point.bufferId)) match
       case (Some(pane), Some(buffer)) =>
+        val viewport = CursorViewport.adjustForCursor(buffer, state, point.cursor)
         val updatedBuffer = buffer.copy(
           cursors = List(point.cursor),
           selection = None,
           selections = Nil,
           preferredColumn = Some(point.cursor.column),
           preferredXPx = None,
-          multiCursorVerticalStates = Nil
+          multiCursorVerticalStates = Nil,
+          viewport = viewport
         )
         state.copy(
           buffers = state.buffers + (point.bufferId -> updatedBuffer),
