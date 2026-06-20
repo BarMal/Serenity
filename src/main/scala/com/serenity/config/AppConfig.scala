@@ -219,6 +219,7 @@ case class AppConfig(
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
     motionPreset: MotionPreset = MotionPreset.Reduced,
+    elementTransitionSpeedScale: Double = 1.0,
     cursorMode: CursorMode = CursorMode.Blink,
     cursorColors: CursorColorConfig = CursorColorConfig(),
     cursorInfoBarMode: CursorInfoBarMode = CursorInfoBarMode.Off,
@@ -329,6 +330,15 @@ case class AppConfig(
           characterAnimation = preset.animationConfig
         )
 
+  /** Transition policy derived from the selected motion preset and global speed scale. */
+  def elementTransitionSettings: ElementTransitionSettings =
+    val baseSettings = motionPreset.elementTransitionSettings
+    if !baseSettings.enabled then baseSettings
+    else baseSettings.copy(speedScale = elementTransitionSpeedScale)
+
+  def withElementTransitionSpeedScale(scale: Double): AppConfig =
+    copy(elementTransitionSpeedScale = AppConfig.clampElementTransitionSpeedScale(scale))
+
   def withCursorMode(mode: CursorMode): AppConfig =
     copy(cursorMode = mode)
 
@@ -373,6 +383,12 @@ case class AppConfig(
     copy(spellCheck = config.normalized)
 
 object AppConfig:
+
+  val MinElementTransitionSpeedScale: Double = 0.0
+  val MaxElementTransitionSpeedScale: Double = 4.0
+
+  def clampElementTransitionSpeedScale(scale: Double): Double =
+    scale.max(MinElementTransitionSpeedScale).min(MaxElementTransitionSpeedScale)
 
   /** Default configuration with smooth animations and syntax highlighting disabled */
   val default: AppConfig = AppConfig(

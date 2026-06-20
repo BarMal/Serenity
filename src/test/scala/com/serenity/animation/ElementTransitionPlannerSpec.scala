@@ -1,6 +1,6 @@
 package com.serenity.animation
 
-import com.serenity.config.MotionPreset
+import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -63,6 +63,32 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
 
     plan.kind shouldBe TransitionKind.DirectionalSweep
     plan.timing shouldBe TransitionTiming(durationMs = 320, staggerMs = 24, delayMs = 0, speedScale = 2.0)
+  }
+
+  it should "derive scaled element transition settings from app config" in {
+    val config = AppConfig.default
+      .withMotionPreset(MotionPreset.Subtle)
+      .withElementTransitionSpeedScale(1.5)
+
+    val plan =
+      ElementTransitionPlanner.plan(ElementTransitionRequest(TransitionScope.Row), config.elementTransitionSettings)
+
+    plan.timing shouldBe TransitionTiming(durationMs = 240, staggerMs = 18, delayMs = 0, speedScale = 1.5)
+  }
+
+  it should "keep reduced motion disabled even when app config has a custom speed scale" in {
+    val config = AppConfig.default
+      .withMotionPreset(MotionPreset.Reduced)
+      .withElementTransitionSpeedScale(2.0)
+
+    val plan = ElementTransitionPlanner.plan(
+      ElementTransitionRequest(TransitionScope.PanelOpen),
+      config.elementTransitionSettings
+    )
+
+    config.elementTransitionSettings shouldBe ElementTransitionSettings.disabled
+    plan.kind shouldBe TransitionKind.Disabled
+    plan.timing shouldBe TransitionTiming.immediate
   }
 
   it should "map reduced motion presets to disabled element transitions" in {

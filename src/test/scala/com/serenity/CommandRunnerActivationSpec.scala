@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{CommandRegistry, CommandRunner, CommandSurfaceItem}
+import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.SurfaceContent
@@ -124,6 +124,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withMaterialPreset(MaterialPreset.Crystal)
       .withMotionPreset(MotionPreset.Reduced)
+      .withElementTransitionSpeedScale(1.5)
     val runner = CommandRunner.empty.activate(registry, config)
 
     val materialGroup = runner.settingsGroups.find(_.id == "settings-material-motion").getOrElse {
@@ -137,6 +138,10 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       case item: CommandSurfaceItem.OptionItem if item.id == "motion-preset" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Reduced" -> List("Reduced", "Subtle", "Smooth", "Expressive", "Custom"))
+    materialGroup.children.collectFirst {
+      case item: CommandSurfaceItem.InputItem if item.id == "element-transition-speed-scale" =>
+        (item.currentValue, item.hint, item.parse("2.25"))
+    } shouldBe Some(("1.50", "Scale (0.0-4.0)", Some(CommandIntent.SetElementTransitionSpeedScale(2.25))))
   }
 
   "ensureCommandRunnerSurface (via closePane)" should "use the current config, not defaults" in {

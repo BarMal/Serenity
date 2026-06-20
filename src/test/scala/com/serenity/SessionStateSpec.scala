@@ -306,6 +306,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         backgroundStyle = BackgroundStyle.GlassLike,
         materialPreset = MaterialPreset.Crystal,
         motionPreset = MotionPreset.Reduced,
+        elementTransitionSpeedScale = 1.75,
         windowChromeMode = WindowChromeMode.Custom,
         interfaceDensity = InterfaceDensity.Spacious,
         cursorInfoBarMode = CursorInfoBarMode.Detailed,
@@ -333,6 +334,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
     decoded.config.materialPreset shouldBe MaterialPreset.Crystal
     decoded.config.motionPreset shouldBe MotionPreset.Reduced
+    decoded.config.elementTransitionSpeedScale shouldBe 1.75
     decoded.config.windowChromeMode shouldBe WindowChromeMode.Custom
     decoded.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     decoded.config.cursorInfoBarMode shouldBe CursorInfoBarMode.Detailed
@@ -396,6 +398,21 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.isRight shouldBe true
     decoded.toOption.get.config.materialPreset shouldBe MaterialPreset.Frosted
     decoded.toOption.get.config.motionPreset shouldBe MotionPreset.Smooth
+  }
+
+  it should "default element transition speed scale when loading older JSON without the field" in {
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val jsonWithoutSpeedScale =
+      originalJson.mapObject(
+        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("elementTransitionSpeedScale")))
+      )
+
+    val decoded = jsonWithoutSpeedScale.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.elementTransitionSpeedScale shouldBe 1.0
   }
 
   it should "default windowChromeMode to Native when loading older JSON without the field" in {

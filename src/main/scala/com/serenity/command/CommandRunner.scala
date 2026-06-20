@@ -118,9 +118,10 @@ case class CommandRunner(
       CommandSurfaceItem.GroupItem(
         id = "settings-material-motion",
         label = "Material & Motion",
-        children = List(materialPresetItem, motionPresetItem),
+        children = List(materialPresetItem, motionPresetItem) ++
+          inputItems.filter(_.id == "element-transition-speed-scale"),
         category = CommandCategory.Settings,
-        hint = Some("Named UI material and animation presets")
+        hint = Some("Named UI material and animation timing")
       ),
       CommandSurfaceItem.GroupItem(
         id = "settings-ui-presets",
@@ -822,6 +823,7 @@ object CommandRunner:
     val uiFontSizeValue    = config.fontConfig.uiFontSize.toString
     val textAreaLeftValue  = f"${config.textAreaInsets.leftPercent}%.1f"
     val textAreaRightValue = f"${config.textAreaInsets.rightPercent}%.1f"
+    val speedScaleValue    = f"${config.elementTransitionSpeedScale}%.2f"
     val spellCheck         = config.spellCheck.normalized
 
     val richTextItems = List(
@@ -995,6 +997,21 @@ object CommandRunner:
           text.toIntOption
             .filter(v => v >= 0 && v <= 100)
             .map(CommandIntent.SetAnimationSteps(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "element-transition-speed-scale",
+        label = "Motion Speed Scale",
+        hint = "Scale (0.0-4.0)",
+        currentValue = speedScaleValue,
+        isDecimal = true,
+        parse = text =>
+          text.toDoubleOption
+            .filter(value =>
+              value >= AppConfig.MinElementTransitionSpeedScale &&
+                value <= AppConfig.MaxElementTransitionSpeedScale
+            )
+            .map(CommandIntent.SetElementTransitionSpeedScale(_)),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(

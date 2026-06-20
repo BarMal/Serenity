@@ -574,9 +574,12 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     backgroundStyle           <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
     materialPreset            <- cursor.getOrElse[MaterialPreset]("materialPreset")(MaterialPreset.Frosted)
     motionPreset              <- cursor.getOrElse[MotionPreset]("motionPreset")(MotionPreset.Smooth)
-    cursorMode                <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
-    cursorColors              <- cursor.getOrElse[CursorColorConfig]("cursorColors")(CursorColorConfig())
-    cursorInfoBarMode         <- cursor.getOrElse[CursorInfoBarMode]("cursorInfoBarMode")(CursorInfoBarMode.Off)
+    elementTransitionSpeedScale <- cursor
+      .getOrElse[Double]("elementTransitionSpeedScale")(1.0)
+      .map(AppConfig.clampElementTransitionSpeedScale)
+    cursorMode        <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
+    cursorColors      <- cursor.getOrElse[CursorColorConfig]("cursorColors")(CursorColorConfig())
+    cursorInfoBarMode <- cursor.getOrElse[CursorInfoBarMode]("cursorInfoBarMode")(CursorInfoBarMode.Off)
     cursorInfoBarPlacement <- cursor.getOrElse[CursorInfoBarPlacement]("cursorInfoBarPlacement")(
       CursorInfoBarPlacement.Floating
     )
@@ -601,6 +604,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     backgroundStyle = backgroundStyle,
     materialPreset = materialPreset,
     motionPreset = motionPreset,
+    elementTransitionSpeedScale = elementTransitionSpeedScale,
     cursorMode = cursorMode,
     cursorColors = cursorColors,
     cursorInfoBarMode = cursorInfoBarMode,
