@@ -84,6 +84,13 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       canEdit = true,
       preservesRichFormatting = true
     )
+    DocumentFormat.capabilities(FileType.OpenDocumentText) shouldBe DocumentFormatCapabilities(
+      canOpen = true,
+      canSave = true,
+      canRender = false,
+      canEdit = true,
+      preservesRichFormatting = true
+    )
     DocumentFormat.capabilities(FileType.WordOpenXmlDocument) shouldBe DocumentFormatCapabilities(
       canOpen = false,
       canSave = false,
@@ -224,6 +231,70 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     finally
       Files.deleteIfExists(sourceFile)
       Files.deleteIfExists(savedFile)
+  }
+
+  it should "open ODT files as editable plain text with rich document metadata" in {
+    val fileManager = new FileManager()
+    val odtFile     = Files.createTempFile("serenity-odt-open", ".odt")
+    val source = com.serenity.richtext.RichTextDocument(
+      List(
+        com.serenity.richtext.RichTextParagraph(
+          List(
+            com.serenity.richtext.RichTextRun("plain "),
+            com.serenity.richtext.RichTextRun(
+              "bold",
+              com.serenity.richtext.RichTextStyle(marks = Set(InlineMark.Bold))
+            )
+          )
+        )
+      )
+    )
+
+    try
+      com.serenity.richtext.OdtDocumentCodec.write(source, odtFile).unsafeRunSync()
+
+      val buffer = fileManager.loadFile(odtFile, BufferId(103)).unsafeRunSync()
+
+      buffer.content.collect() shouldBe "plain bold"
+      buffer.richTextDocument.map(_.plainText) shouldBe Some("plain bold")
+      buffer.richTextDocument
+        .flatMap(_.paragraphs.headOption)
+        .map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
+      buffer.filePath shouldBe Some(odtFile)
+      buffer.isDirty shouldBe false
+    finally Files.deleteIfExists(odtFile)
+  }
+
+  it should "save ODT buffers with aligned rich formatting metadata" in {
+    val fileManager = new FileManager()
+    val savedFile   = Files.createTempFile("serenity-odt-save", ".odt")
+    val document = com.serenity.richtext.RichTextDocument(
+      List(
+        com.serenity.richtext.RichTextParagraph(
+          List(
+            com.serenity.richtext.RichTextRun("plain "),
+            com.serenity.richtext.RichTextRun(
+              "bold",
+              com.serenity.richtext.RichTextStyle(marks = Set(InlineMark.Bold))
+            )
+          ),
+          alignment = com.serenity.richtext.ParagraphAlignment.Center
+        )
+      )
+    )
+    val buffer = Buffer
+      .fromString(BufferId(104), "plain bold")
+      .copy(isDirty = true, richTextDocument = Some(document))
+
+    try
+      val savedBuffer = fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
+      val saved       = com.serenity.richtext.OdtDocumentCodec.read(savedFile).unsafeRunSync()
+
+      saved.plainText shouldBe "plain bold"
+      saved.paragraphs.headOption.map(_.alignment) shouldBe Some(com.serenity.richtext.ParagraphAlignment.Center)
+      saved.paragraphs.headOption.map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
+      savedBuffer.richTextDocument shouldBe Some(document.normalized)
+    finally Files.deleteIfExists(savedFile)
   }
 
   "FileUtils" should "handle file operations" in {

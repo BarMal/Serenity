@@ -182,7 +182,7 @@ object DocumentFormat:
 
   def capabilities(fileType: FileType): DocumentFormatCapabilities =
     fileType match
-      case FileType.RichText =>
+      case FileType.RichText | FileType.OpenDocumentText =>
         DocumentFormatCapabilities(
           canOpen = true,
           canSave = true,

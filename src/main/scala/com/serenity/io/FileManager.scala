@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import com.serenity.lsp.config.{FileExtension, LanguageId}
-import com.serenity.richtext.{RichTextDocument, RtfDocumentCodec}
+import com.serenity.richtext.{OdtDocumentCodec, RichTextDocument, RtfDocumentCodec}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 
@@ -16,6 +16,8 @@ class FileManager(using balance: Balance):
     FileUtils.detectFileType(path) match
       case FileType.RichText =>
         RtfDocumentCodec.read(path).map(document => bufferFromRichText(bufferId, path, document))
+      case FileType.OpenDocumentText =>
+        OdtDocumentCodec.read(path).map(document => bufferFromRichText(bufferId, path, document))
       case _ =>
         ensureSupported(path, _.canOpen, "open") >>
           FileUtils.readFileContent(path).map(content => bufferFromContent(bufferId, path, content))
@@ -26,6 +28,9 @@ class FileManager(using balance: Balance):
       case FileType.RichText =>
         val document = richTextDocumentForSave(buffer)
         RtfDocumentCodec.write(document, path).as(savedBuffer(buffer, path, Some(document)))
+      case FileType.OpenDocumentText =>
+        val document = richTextDocumentForSave(buffer)
+        OdtDocumentCodec.write(document, path).as(savedBuffer(buffer, path, Some(document)))
       case _ =>
         for
           _ <- ensureSupported(path, _.canSave, "save")
