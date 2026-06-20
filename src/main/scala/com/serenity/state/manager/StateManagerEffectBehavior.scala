@@ -7,7 +7,7 @@ import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
 import com.serenity.config.MarkdownViewMode
-import com.serenity.document.{CommentRendering, DocumentOutline}
+import com.serenity.document.{CommentRendering, DocumentNavigation, DocumentOutline}
 import com.serenity.io.{FileEntry, FileUtils}
 import com.serenity.keystroke.events.ExplorerEvent
 import com.serenity.lsp.LspEffect
@@ -196,6 +196,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         toggleCommentLens(state)
       case CommandIntent.OpenGotoLine =>
         updateState(current => ModalStateReducer.show(Modal.GotoLine(""), current).state)
+      case CommandIntent.NextDocumentSymbol =>
+        navigateDocumentSymbol(state, DocumentNavigation.nextSymbol)
+      case CommandIntent.PreviousDocumentSymbol =>
+        navigateDocumentSymbol(state, DocumentNavigation.previousSymbol)
       case CommandIntent.RequestLspHover =>
         requestLspHover(state)
       case CommandIntent.RequestLspDefinition =>
@@ -610,6 +614,48 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       .flatMap(state.buffers.get)
       .map(DocumentOutline.forBuffer)
       .getOrElse(Nil)
+
+  private def navigateDocumentSymbol(
+    state: AppState,
+    chooseSymbol: (List[Symbol], CursorPosition) => Option[Symbol]
+  ): IO[Unit] =
+    activeEditorBuffer(state)
+      .flatMap {
+        case (paneId, buffer) =>
+          val cursor  = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+          val symbols = DocumentOutline.forBuffer(buffer)
+          chooseSymbol(symbols, cursor).map(symbol => (paneId, buffer.id, symbol.location))
+      } match
+      case Some((paneId, bufferId, location)) =>
+        updateState { current =>
+          current.buffers.get(bufferId) match
+            case Some(buffer) =>
+              val cursor = CursorPosition(location.line, location.column)
+              val updatedBuffer = buffer.copy(
+                cursors = List(cursor),
+                selection = None,
+                selections = Nil,
+                preferredColumn = Some(cursor.column),
+                preferredXPx = None,
+                multiCursorVerticalStates = Nil
+              )
+              current.copy(
+                buffers = current.buffers + (bufferId -> updatedBuffer),
+                layout = current.layout.copy(activeEditorPaneId = Some(paneId)),
+                focus = Focus.EditorPane(paneId)
+              )
+            case None => current
+        }
+      case None =>
+        logger.debug("[CMD] Document symbol navigation requested without a target")
+
+  private def activeEditorBuffer(state: AppState): Option[(PaneId, Buffer)] =
+    for
+      paneId   <- state.layout.activeEditorPaneId
+      pane     <- state.layout.editorPanes.get(paneId)
+      bufferId <- pane.bufferId
+      buffer   <- state.buffers.get(bufferId)
+    yield (paneId, buffer)
 
   private def setMarkdownViewMode(state: AppState, mode: MarkdownViewMode): IO[Unit] =
     val updateConfig = updateState { s =>
