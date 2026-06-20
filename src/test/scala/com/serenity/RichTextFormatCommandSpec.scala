@@ -136,6 +136,54 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "apply rich text font family, size, and colour to the active selection" in {
+    val (stateManager, bufferId) =
+      selectedStateManager(
+        "alpha beta",
+        Selection(com.serenity.state.models.CursorPosition(0, 6), com.serenity.state.models.CursorPosition(0, 10))
+      )
+
+    stateManager
+      .executeCommand(
+        com.serenity.command.Command.typed(
+          "rich-text-font-family",
+          "Set selection font family.",
+          CommandIntent.SetRichTextFontFamily("Serif")
+        )
+      )
+      .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        com.serenity.command.Command.typed(
+          "rich-text-font-size",
+          "Set selection font size.",
+          CommandIntent.SetRichTextFontSize(18.0f)
+        )
+      )
+      .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        com.serenity.command.Command.typed(
+          "rich-text-color",
+          "Set selection colour.",
+          CommandIntent.SetRichTextColor("#336699")
+        )
+      )
+      .unsafeRunSync()
+
+    val betaStyle = stateManager.getCurrentState
+      .unsafeRunSync()
+      .buffers(bufferId)
+      .richTextDocument
+      .flatMap(_.paragraphs.headOption)
+      .flatMap(_.runs.find(_.text == "beta"))
+      .map(_.style)
+
+    betaStyle.flatMap(_.fontFamily) shouldBe Some("Serif")
+    betaStyle.flatMap(_.fontSize) shouldBe Some(18.0f)
+    betaStyle.flatMap(_.color) shouldBe Some("#336699")
+  }
+
   it should "make formatted rich text headings available to document navigation" in {
     val stateManager = createStateManager()
     val bufferId     = stateManager.createBuffer("Chapter One\nBody").unsafeRunSync()

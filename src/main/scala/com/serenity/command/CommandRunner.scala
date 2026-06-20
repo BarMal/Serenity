@@ -154,6 +154,13 @@ case class CommandRunner(
         hint = Some("Family, size, ligatures")
       ),
       CommandSurfaceItem.GroupItem(
+        id = "settings-rich-text",
+        label = "Rich Text",
+        children = inputItems.filter(_.id.startsWith("rich-text-")),
+        category = CommandCategory.Settings,
+        hint = Some("Selection font, size, colour")
+      ),
+      CommandSurfaceItem.GroupItem(
         id = "settings-ui-font",
         label = "UI Font",
         children = List(
@@ -741,6 +748,41 @@ object CommandRunner:
     val textAreaRightValue = f"${config.textAreaInsets.rightPercent}%.1f"
     val spellCheck         = config.spellCheck.normalized
 
+    val richTextItems = List(
+      CommandSurfaceItem.InputItem(
+        id = "rich-text-font-family",
+        label = "Selection Font Family",
+        hint = "Family name",
+        currentValue = "",
+        isDecimal = false,
+        parse = text => nonEmptyText(text).map(CommandIntent.SetRichTextFontFamily(_)),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "rich-text-font-size",
+        label = "Selection Font Size",
+        hint = "Points (1.0-144.0)",
+        currentValue = "",
+        isDecimal = true,
+        parse = text =>
+          text.toFloatOption
+            .filter(v => v >= 1.0f && v <= 144.0f)
+            .map(CommandIntent.SetRichTextFontSize(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "rich-text-color",
+        label = "Selection Text Colour",
+        hint = "#RRGGBB",
+        currentValue = "",
+        isDecimal = false,
+        parse = text => normalizeHexColor(text).map(CommandIntent.SetRichTextColor(_)),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      )
+    )
+
     val presetItems = List(
       CommandSurfaceItem.InputItem(
         id = "ui-preset-save",
@@ -889,10 +931,20 @@ object CommandRunner:
       )
     )
 
-    presetItems ++ textAreaItems ++ spellCheckItems ++ numericItems ++ buildKeymapInputItems(config)
+    presetItems ++ richTextItems ++ textAreaItems ++ spellCheckItems ++ numericItems ++ buildKeymapInputItems(config)
 
   private def nonEmptyText(text: String): Option[String] =
     Option(text.trim).filter(_.nonEmpty)
+
+  private def normalizeHexColor(text: String): Option[String] =
+    val normalized = text.trim.stripPrefix("#")
+    Option
+      .when(normalized.length == 6 && normalized.forall(isHexDigit))("#" + normalized.toLowerCase)
+
+  private def isHexDigit(char: Char): Boolean =
+    char.isDigit ||
+      (char >= 'a' && char <= 'f') ||
+      (char >= 'A' && char <= 'F')
 
   private def nonEmptyCommaList(text: String): Option[List[String]] =
     Option(commaList(text)).filter(_.nonEmpty)

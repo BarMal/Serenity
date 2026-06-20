@@ -202,6 +202,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         )
       case CommandIntent.ToggleRichTextMark(mark) =>
         updateState(current => toggleRichTextMark(current, mark))
+      case CommandIntent.SetRichTextFontFamily(family) =>
+        updateState(current => setRichTextFontFamily(current, family))
+      case CommandIntent.SetRichTextFontSize(size) =>
+        updateState(current => setRichTextFontSize(current, size))
+      case CommandIntent.SetRichTextColor(color) =>
+        updateState(current => setRichTextColor(current, color))
       case CommandIntent.SetRichTextParagraphRole(role) =>
         updateState(current => setRichTextParagraphRole(current, role))
       case CommandIntent.SetRichTextParagraphAlignment(alignment) =>
@@ -463,6 +469,43 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
 
   private def setRichTextParagraphAlignment(state: AppState, alignment: ParagraphAlignment): AppState =
     updateRichTextParagraphs(state)((document, range) => document.setParagraphAlignment(range, alignment))
+
+  private def setRichTextFontFamily(state: AppState, family: String): AppState =
+    updateRichTextInlineStyles(state)((document, range) => document.setFontFamily(range, family))
+
+  private def setRichTextFontSize(state: AppState, size: Float): AppState =
+    updateRichTextInlineStyles(state)((document, range) => document.setFontSize(range, size))
+
+  private def setRichTextColor(state: AppState, color: String): AppState =
+    updateRichTextInlineStyles(state)((document, range) => document.setColor(range, color))
+
+  private def updateRichTextInlineStyles(
+    state: AppState
+  )(update: (RichTextDocument, RichTextRange) => RichTextDocument): AppState =
+    state.focusedBufferId.flatMap(state.buffers.get) match
+      case Some(buffer) =>
+        val ranges = buffer.allSelections.filter(selection => selection.start != selection.end).map(richTextRange)
+        if ranges.isEmpty then state
+        else
+          val text = buffer.content.collect()
+          val baseDocument = buffer.richTextDocument
+            .filter(_.matchesPlainText(text))
+            .getOrElse(RichTextDocument.fromPlainText(text))
+          val updatedDocument = ranges.foldLeft(baseDocument)(update).normalized
+          if updatedDocument == baseDocument.normalized then state
+          else
+            state.copy(
+              buffers = state.buffers.updated(
+                buffer.id,
+                buffer.copy(
+                  isDirty = true,
+                  isNewEmpty = false,
+                  richTextDocument = Some(updatedDocument)
+                )
+              )
+            )
+      case None =>
+        state
 
   private def updateRichTextParagraphs(
     state: AppState

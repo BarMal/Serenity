@@ -223,6 +223,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-text-area",
       "settings-code-font",
       "settings-prose-font",
+      "settings-rich-text",
       "settings-ui-font",
       "settings-markdown",
       "settings-language",
@@ -243,27 +244,51 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     groupItems(5).children.map(_.id) should contain allOf ("code-font", "code-ligatures", "code-font-size")
     groupItems(6).label shouldBe "Prose Font"
     groupItems(6).children.map(_.id) should contain allOf ("text-font", "text-ligatures", "text-font-size")
-    groupItems(7).label shouldBe "UI Font"
-    groupItems(7).children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
+    groupItems(7).label shouldBe "Rich Text"
+    groupItems(7).children.map(_.id) should contain allOf (
+      "rich-text-font-family",
+      "rich-text-font-size",
+      "rich-text-color"
+    )
+    groupItems(8).label shouldBe "UI Font"
+    groupItems(8).children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
     groupItems(5).children
       .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "code-font" => group }
       .map(_.children.map(_.id)) should not be empty
-    groupItems(10).label shouldBe "Spell Check"
-    groupItems(10).children.map(_.id) should contain allOf (
+    groupItems(11).label shouldBe "Spell Check"
+    groupItems(11).children.map(_.id) should contain allOf (
       "spellcheck-enabled",
       "spellcheck-languages",
       "spellcheck-words"
     )
-    groupItems(11).label shouldBe "Keymap"
-    groupItems(11).children.map(_.id) should contain allOf (
+    groupItems(12).label shouldBe "Keymap"
+    groupItems(12).children.map(_.id) should contain allOf (
       "keymap-global-command_palette",
       "keymap-command-runner-submit",
       "keymap-modal-dismiss"
     )
-    groupItems(8).label shouldBe "Markdown"
-    groupItems(8).children.map(_.id) should contain("markdown-view")
-    groupItems(9).label shouldBe "Language"
-    groupItems(9).children.map(_.id) should contain("lang-plain-text")
+    groupItems(9).label shouldBe "Markdown"
+    groupItems(9).children.map(_.id) should contain("markdown-view")
+    groupItems(10).label shouldBe "Language"
+    groupItems(10).children.map(_.id) should contain("lang-plain-text")
+  }
+
+  it should "surface rich text inline style inputs in settings" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+
+    val richTextGroup =
+      runner.settingsGroups.find(_.id == "settings-rich-text").getOrElse(fail("missing rich text group"))
+    val inputs = richTextGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
+
+    inputs.map(_.id) shouldBe List("rich-text-font-family", "rich-text-font-size", "rich-text-color")
+    inputs.head.parse("Serif") shouldBe Some(CommandIntent.SetRichTextFontFamily("Serif"))
+    inputs(1).parse("18") shouldBe Some(CommandIntent.SetRichTextFontSize(18.0f))
+    inputs(2).parse("#336699") shouldBe Some(CommandIntent.SetRichTextColor("#336699"))
+    inputs(2).parse("not-a-colour") shouldBe None
   }
 
   it should "surface spell-check settings as typed controls" in {
