@@ -369,6 +369,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         saveUiPresetEffect(name)
       case CommandIntent.ApplyUiPreset(name) =>
         applyUiPresetEffect(name)
+      case CommandIntent.DuplicateUiPreset(sourceName, targetName) =>
+        duplicateUiPresetEffect(sourceName, targetName)
+      case CommandIntent.RenameUiPreset(sourceName, targetName) =>
+        renameUiPresetEffect(sourceName, targetName)
+      case CommandIntent.DeleteUiPreset(name) =>
+        deleteUiPresetEffect(name)
       case CommandIntent.SetTextAreaLeftInset(value) =>
         updateConfig(_.withTextAreaLeftInset(value)).void
       case CommandIntent.SetTextAreaRightInset(value) =>
@@ -606,6 +612,40 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
               yield ()
           }
           .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to apply UI preset $presetName"))
+
+  protected def duplicateUiPresetEffect(sourceName: String, targetName: String): IO[Unit] =
+    (normalizedPresetName(sourceName), normalizedPresetName(targetName)) match
+      case (Some(source), Some(target)) =>
+        uiPresetStore
+          .find(source)
+          .map(_.orElse(UiPreset.builtIn(source)))
+          .flatMap {
+            case Some(preset) =>
+              uiPresetStore.upsert(preset.copy(name = target))
+            case None =>
+              logger.warn(s"[PRESET] UI preset not found: $source")
+          }
+          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to duplicate UI preset $source"))
+      case _ =>
+        logger.warn("[PRESET] Ignoring duplicate request with empty UI preset name")
+
+  protected def renameUiPresetEffect(sourceName: String, targetName: String): IO[Unit] =
+    (normalizedPresetName(sourceName), normalizedPresetName(targetName)) match
+      case (Some(source), Some(target)) =>
+        uiPresetStore
+          .rename(source, target)
+          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to rename UI preset $source"))
+      case _ =>
+        logger.warn("[PRESET] Ignoring rename request with empty UI preset name")
+
+  protected def deleteUiPresetEffect(name: String): IO[Unit] =
+    normalizedPresetName(name) match
+      case Some(presetName) =>
+        uiPresetStore
+          .delete(presetName)
+          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to delete UI preset $presetName"))
+      case None =>
+        logger.warn("[PRESET] Ignoring empty UI preset name")
 
   private def normalizedPresetName(name: String): Option[String] =
     Option(name.trim).filter(_.nonEmpty)

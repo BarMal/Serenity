@@ -297,6 +297,23 @@ case class UiPresetIndex(presets: List[UiPreset]):
   def upsert(preset: UiPreset): UiPresetIndex =
     copy(presets = presets.filterNot(_.name.equalsIgnoreCase(preset.name)) :+ preset)
 
+  def delete(name: String): UiPresetIndex =
+    copy(presets = presets.filterNot(_.name.equalsIgnoreCase(name.trim)))
+
+  def rename(sourceName: String, targetName: String): UiPresetIndex =
+    val normalizedTarget = targetName.trim
+    find(sourceName)
+      .filter(_ => normalizedTarget.nonEmpty)
+      .map(preset => delete(sourceName).upsert(preset.copy(name = normalizedTarget)))
+      .getOrElse(this)
+
+  def duplicate(sourceName: String, targetName: String): UiPresetIndex =
+    val normalizedTarget = targetName.trim
+    find(sourceName)
+      .filter(_ => normalizedTarget.nonEmpty)
+      .map(preset => upsert(preset.copy(name = normalizedTarget)))
+      .getOrElse(this)
+
   def find(name: String): Option[UiPreset] =
     presets.find(_.name.equalsIgnoreCase(name.trim))
 
@@ -329,6 +346,15 @@ class UiPresetStore private (path: Path):
 
   def upsert(preset: UiPreset): IO[Unit] =
     load().flatMap(index => save(index.upsert(preset)))
+
+  def delete(name: String): IO[Unit] =
+    load().flatMap(index => save(index.delete(name)))
+
+  def rename(sourceName: String, targetName: String): IO[Unit] =
+    load().flatMap(index => save(index.rename(sourceName, targetName)))
+
+  def duplicate(sourceName: String, targetName: String): IO[Unit] =
+    load().flatMap(index => save(index.duplicate(sourceName, targetName)))
 
   def find(name: String): IO[Option[UiPreset]] =
     load().map(_.find(name))
