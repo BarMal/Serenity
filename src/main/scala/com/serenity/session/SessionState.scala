@@ -10,6 +10,7 @@ import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.*
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
+import com.serenity.richtext.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{Layout, PaneSplitDirection}
@@ -42,6 +43,7 @@ case class SessionBuffer(
     viewport: SessionViewport,
     // Persist buffer text so restore does not depend on disk reads
     unsavedContent: Option[String] = None,
+    richTextDocument: Option[RichTextDocument] = None,
     findState: Option[SessionFindState] = None,
     bookmarks: List[SessionCursorPosition] = Nil
 )
@@ -199,6 +201,7 @@ object SessionBuffer:
       unsavedContent =
         if persistUnsaved || (!buffer.isDirty && !buffer.isNewEmpty) then Some(buffer.content.toString)
         else None,
+      richTextDocument = Option.when(!buffer.isDirty)(buffer.richTextDocument).flatten,
       findState = buffer.findState.map(SessionFindState.fromFindState),
       bookmarks = buffer.bookmarks.map(SessionCursorPosition.fromCursorPosition)
     )
@@ -217,7 +220,8 @@ object SessionBuffer:
       cursors = sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition),
       viewport = SessionViewport.toViewport(sessionBuffer.viewport),
       findState = sessionBuffer.findState.map(SessionFindState.toFindState),
-      bookmarks = sessionBuffer.bookmarks.map(SessionCursorPosition.toCursorPosition)
+      bookmarks = sessionBuffer.bookmarks.map(SessionCursorPosition.toCursorPosition),
+      richTextDocument = sessionBuffer.richTextDocument
     )
 
   def toBufferIO(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): IO[Buffer] =
@@ -228,14 +232,18 @@ object SessionBuffer:
       case Some(_) =>
         IO.pure(toBuffer(sessionBuffer))
       case None =>
-        sessionBuffer.filePath match
-          case Some(pathText) =>
-            val path = Paths.get(pathText)
-            IO.blocking(Files.readString(path))
-              .map(diskContent => toBuffer(sessionBuffer).copy(content = Rope(diskContent), isDirty = false))
-              .handleError(_ => toBuffer(sessionBuffer))
+        sessionBuffer.richTextDocument match
+          case Some(document) =>
+            IO.pure(toBuffer(sessionBuffer).copy(content = Rope(document.plainText), isDirty = false))
           case None =>
-            IO.pure(toBuffer(sessionBuffer))
+            sessionBuffer.filePath match
+              case Some(pathText) =>
+                val path = Paths.get(pathText)
+                IO.blocking(Files.readString(path))
+                  .map(diskContent => toBuffer(sessionBuffer).copy(content = Rope(diskContent), isDirty = false))
+                  .handleError(_ => toBuffer(sessionBuffer))
+              case None =>
+                IO.pure(toBuffer(sessionBuffer))
 
 object SessionLayout:
 
@@ -479,6 +487,37 @@ given Decoder[LspUserConfig] = deriveDecoder
 
 given Encoder[SpellCheckConfig] = deriveEncoder
 given Decoder[SpellCheckConfig] = deriveDecoder
+
+given Encoder[InlineMark] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[InlineMark] = Decoder.decodeString.emap {
+  case "Bold"      => Right(InlineMark.Bold)
+  case "Italic"    => Right(InlineMark.Italic)
+  case "Underline" => Right(InlineMark.Underline)
+  case other       => Left(s"Unknown InlineMark: $other")
+}
+
+given Encoder[ParagraphAlignment] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[ParagraphAlignment] = Decoder.decodeString.emap {
+  case "Left"    => Right(ParagraphAlignment.Left)
+  case "Center"  => Right(ParagraphAlignment.Center)
+  case "Right"   => Right(ParagraphAlignment.Right)
+  case "Justify" => Right(ParagraphAlignment.Justify)
+  case other     => Left(s"Unknown ParagraphAlignment: $other")
+}
+
+given Encoder[RichTextStyle] = deriveEncoder
+given Decoder[RichTextStyle] = deriveDecoder
+
+given Encoder[RichTextRun] = deriveEncoder
+given Decoder[RichTextRun] = deriveDecoder
+
+given Encoder[RichTextParagraph] = deriveEncoder
+given Decoder[RichTextParagraph] = deriveDecoder
+
+given Encoder[RichTextDocument] = deriveEncoder
+given Decoder[RichTextDocument] = deriveDecoder
 
 given Encoder[AppConfig] = deriveEncoder
 
