@@ -98,6 +98,13 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       canEdit = true,
       preservesRichFormatting = true
     )
+    DocumentFormat.capabilities(FileType.WordDocument) shouldBe DocumentFormatCapabilities(
+      canOpen = false,
+      canSave = false,
+      canRender = false,
+      canEdit = false,
+      preservesRichFormatting = false
+    )
   }
 
   "FileManager" should "create and manage buffers" in {
@@ -120,7 +127,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       val result = fileManager.loadFile(docFile, BufferId(99)).attempt.unsafeRunSync()
 
       result.left.map(_.getMessage) shouldBe Left(
-        "Unsupported document format for open: Word Document"
+        "Unsupported document format for open: Legacy Word Document (.doc, unsupported)"
       )
     finally Files.deleteIfExists(docFile)
   }
@@ -134,7 +141,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       val result = fileManager.saveBuffer(buffer, docFile).attempt.unsafeRunSync()
 
       result.left.map(_.getMessage) shouldBe Left(
-        "Unsupported document format for save: Word Document"
+        "Unsupported document format for save: Legacy Word Document (.doc, unsupported)"
       )
       Files.exists(docFile) shouldBe false
     finally Files.deleteIfExists(docFile.getParent)

@@ -85,7 +85,7 @@ object FileType:
     case FileType.Markdown   => "Markdown"
     case FileType.Text       => "Text"
     case FileType.WordDocument =>
-      "Word Document"
+      "Legacy Word Document (.doc, unsupported)"
     case FileType.WordOpenXmlDocument =>
       "Word Open XML Document"
     case FileType.OpenDocumentText =>
