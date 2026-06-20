@@ -34,11 +34,19 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(
     sessionRootOverride: Option[Path] = None,
+    configPersistencePath: Option[Path] = None,
     fileDialog: FileDialog = FileDialog.unavailable
   ): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerCoreCommandsSpec"))
-    StateManager.apply(logger, sessionRootOverride = sessionRootOverride, fileDialog = fileDialog).unsafeRunSync()
+    StateManager
+      .apply(
+        logger,
+        sessionRootOverride = sessionRootOverride,
+        configPersistencePath = configPersistencePath,
+        fileDialog = fileDialog
+      )
+      .unsafeRunSync()
 
   private def executeCommandThroughRunner(
     stateManager: StateManager,
@@ -868,6 +876,18 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "clear-session", "clear-session")
     stateManager.sessionExists.unsafeRunSync() shouldBe false
+  }
+
+  it should "write the current upgraded config from the command runner" in {
+    val configFile   = Files.createTempDirectory("serenity-save-config").resolve("config.conf")
+    val stateManager = createStateManager(configPersistencePath = Some(configFile))
+
+    executeCommandThroughRunner(stateManager, "save-config", "save-config")
+
+    val saved = Files.readString(configFile)
+    saved should include("config.version = 1")
+    saved should include("ui.motion = smooth")
+    stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface shouldBe None
   }
 
   it should "focus the left panel from the command runner" in {
