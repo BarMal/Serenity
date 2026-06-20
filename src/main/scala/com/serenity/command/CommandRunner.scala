@@ -4,6 +4,7 @@ import com.serenity.animation.AnimationConfig
 import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.presets.UiPreset
 
 case class CommandRunnerSubmenuState(
     groupId: String,
@@ -122,7 +123,8 @@ case class CommandRunner(
       CommandSurfaceItem.GroupItem(
         id = "settings-ui-presets",
         label = "UI Presets",
-        children = inputItems.filter(item => item.id == "ui-preset-save" || item.id == "ui-preset-apply"),
+        children = List(CommandRunner.builtInUiPresetOptionItem) ++
+          inputItems.filter(item => item.id == "ui-preset-save" || item.id == "ui-preset-apply"),
         category = CommandCategory.Settings,
         hint = Some("Save or apply named layouts")
       ),
@@ -637,6 +639,16 @@ object CommandRunner:
       selectedIndex = optionSelections.getOrElse("animation-mode", 2),
       category = CommandCategory.Settings,
       hint = Some("None, subtle, or full")
+    )
+
+  private[command] def builtInUiPresetOptionItem: CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "ui-preset-built-in",
+      label = "Built-In Preset",
+      options = UiPreset.builtInNames.map(name => CommandOption(name, CommandIntent.ApplyUiPreset(name))),
+      selectedIndex = 0,
+      category = CommandCategory.Settings,
+      hint = Some("Writing, docs, code, review")
     )
 
   private[command] def codeFontGroupItem(optionSelections: Map[String, Int]): CommandSurfaceItem.GroupItem =
