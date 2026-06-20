@@ -261,7 +261,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.rows.find(_.selected).map(_.plainText) shouldBe Some(
       "JavaScript - Use JavaScript mode for the current buffer."
     )
-    floating.footer.map(_.plainText) shouldBe Some("11/23")
+    floating.footer.map(_.plainText) shouldBe Some("11/24")
   }
 
   it should "render focused submenu search text and filtered results" in {
