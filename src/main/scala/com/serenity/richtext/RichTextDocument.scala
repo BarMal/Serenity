@@ -121,3 +121,7 @@ case class RichTextDocument(paragraphs: List[RichTextParagraph]):
 object RichTextDocument:
   def oneParagraph(text: String): RichTextDocument =
     RichTextDocument(List(RichTextParagraph.plain(text)))
+
+  /** Build a plain rich text document from newline-separated text. */
+  def fromPlainText(text: String): RichTextDocument =
+    RichTextDocument(text.split("\n", -1).toList.map(line => RichTextParagraph.plain(line)))

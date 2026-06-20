@@ -3,7 +3,8 @@ package com.serenity.io
 import java.nio.file.Path
 
 import cats.effect.IO
-import com.serenity.lsp.config.FileExtension
+import com.serenity.lsp.config.{FileExtension, LanguageId}
+import com.serenity.richtext.{RichTextDocument, RtfDocumentCodec}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 
@@ -12,26 +13,24 @@ class FileManager(using balance: Balance):
 
   /** Load file into a new buffer */
   def loadFile(path: Path, bufferId: BufferId): IO[Buffer] =
-    ensureSupported(path, _.canOpen, "open") >>
-      FileUtils.readFileContent(path).map(content => bufferFromContent(bufferId, path, content))
+    FileUtils.detectFileType(path) match
+      case FileType.RichText =>
+        RtfDocumentCodec.read(path).map(document => bufferFromRichText(bufferId, path, document))
+      case _ =>
+        ensureSupported(path, _.canOpen, "open") >>
+          FileUtils.readFileContent(path).map(content => bufferFromContent(bufferId, path, content))
 
   /** Save buffer to file */
   def saveBuffer(buffer: Buffer, path: Path): IO[Buffer] =
-    for
-      _ <- ensureSupported(path, _.canSave, "save")
-      _ <- FileUtils.writeFileContent(path, buffer.content.collect())
-    yield buffer.copy(
-      filePath = Some(path),
-      isDirty = false,
-      language = Option(path.getFileName)
-        .map(_.toString)
-        .flatMap(n =>
-          n.lastIndexOf('.') match
-            case -1 => None;
-            case i  => Some(n.substring(i + 1))
-        )
-        .flatMap(FileExtension.languageIdFor)
-    )
+    FileUtils.detectFileType(path) match
+      case FileType.RichText =>
+        val document = richTextDocumentForSave(buffer)
+        RtfDocumentCodec.write(document, path).as(savedBuffer(buffer, path, Some(document)))
+      case _ =>
+        for
+          _ <- ensureSupported(path, _.canSave, "save")
+          _ <- FileUtils.writeFileContent(path, buffer.content.collect())
+        yield savedBuffer(buffer, path, None)
 
   /** Save buffer to its existing file path */
   def saveBuffer(buffer: Buffer): IO[Buffer] =
@@ -78,15 +77,41 @@ class FileManager(using balance: Balance):
       content = com.serenity.rope.Rope(content),
       filePath = Some(path),
       isDirty = false,
-      language = Option(path.getFileName)
-        .map(_.toString)
-        .flatMap(n =>
-          n.lastIndexOf('.') match
-            case -1 => None
-            case i  => Some(n.substring(i + 1))
-        )
-        .flatMap(FileExtension.languageIdFor)
+      language = languageFromPath(path)
     )
+
+  private def bufferFromRichText(bufferId: BufferId, path: Path, document: RichTextDocument): Buffer =
+    val normalized = document.normalized
+    Buffer(
+      id = bufferId,
+      content = com.serenity.rope.Rope(normalized.plainText),
+      filePath = Some(path),
+      isDirty = false,
+      language = None,
+      richTextDocument = Some(normalized)
+    )
+
+  private def savedBuffer(buffer: Buffer, path: Path, richTextDocument: Option[RichTextDocument]): Buffer =
+    buffer.copy(
+      filePath = Some(path),
+      isDirty = false,
+      language = languageFromPath(path),
+      richTextDocument = richTextDocument.map(_.normalized)
+    )
+
+  private def richTextDocumentForSave(buffer: Buffer): RichTextDocument =
+    if buffer.isDirty then RichTextDocument.fromPlainText(buffer.content.collect())
+    else buffer.richTextDocument.getOrElse(RichTextDocument.fromPlainText(buffer.content.collect()))
+
+  private def languageFromPath(path: Path): Option[LanguageId] =
+    Option(path.getFileName)
+      .map(_.toString)
+      .flatMap(n =>
+        n.lastIndexOf('.') match
+          case -1 => None
+          case i  => Some(n.substring(i + 1))
+      )
+      .flatMap(FileExtension.languageIdFor)
 
   private def ensureSupported(
     path: Path,
@@ -94,8 +119,7 @@ class FileManager(using balance: Balance):
     operationName: String
   ): IO[Unit] =
     val fileType     = FileUtils.detectFileType(path)
-    val format       = DocumentFormat.fromFileType(fileType)
-    val capabilities = DocumentFormat.capabilities(format)
+    val capabilities = DocumentFormat.capabilities(fileType)
     IO.unlessA(operationSupported(capabilities))(
       IO.raiseError(new RuntimeException(s"Unsupported document format for $operationName: ${fileType.displayName}"))
     )
