@@ -24,15 +24,58 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     StateManager.apply(logger).unsafeRunSync()
 
   "FileType detection" should "work correctly for common extensions" in {
-    val scalaPath   = java.nio.file.Paths.get("test.scala")
-    val javaPath    = java.nio.file.Paths.get("test.java")
-    val jsPath      = java.nio.file.Paths.get("test.js")
-    val unknownPath = java.nio.file.Paths.get("test.xyz")
+    val scalaPath    = java.nio.file.Paths.get("test.scala")
+    val javaPath     = java.nio.file.Paths.get("test.java")
+    val jsPath       = java.nio.file.Paths.get("test.js")
+    val markdownPath = java.nio.file.Paths.get("notes.markdown")
+    val docPath      = java.nio.file.Paths.get("draft.doc")
+    val docxPath     = java.nio.file.Paths.get("draft.docx")
+    val odtPath      = java.nio.file.Paths.get("draft.odt")
+    val rtfPath      = java.nio.file.Paths.get("draft.rtf")
+    val unknownPath  = java.nio.file.Paths.get("test.xyz")
 
     FileType.fromPath(scalaPath) shouldBe FileType.Scala
     FileType.fromPath(javaPath) shouldBe FileType.Java
     FileType.fromPath(jsPath) shouldBe FileType.JavaScript
+    FileType.fromPath(markdownPath) shouldBe FileType.Markdown
+    FileType.fromPath(docPath) shouldBe FileType.WordDocument
+    FileType.fromPath(docxPath) shouldBe FileType.WordOpenXmlDocument
+    FileType.fromPath(odtPath) shouldBe FileType.OpenDocumentText
+    FileType.fromPath(rtfPath) shouldBe FileType.RichText
     FileType.fromPath(unknownPath) shouldBe FileType.Unknown
+  }
+
+  "DocumentFormat" should "classify text, markdown, source, structured, and rich document formats" in {
+    DocumentFormat.fromPath(Path.of("draft.txt")) shouldBe DocumentFormat.PlainText
+    DocumentFormat.fromPath(Path.of("draft.md")) shouldBe DocumentFormat.Markdown
+    DocumentFormat.fromPath(Path.of("draft.scala")) shouldBe DocumentFormat.SourceCode
+    DocumentFormat.fromPath(Path.of("draft.json")) shouldBe DocumentFormat.StructuredText
+    DocumentFormat.fromPath(Path.of("draft.docx")) shouldBe DocumentFormat.RichTextDocument
+    DocumentFormat.fromPath(Path.of("draft.odt")) shouldBe DocumentFormat.RichTextDocument
+  }
+
+  it should "report only implemented document operation capabilities" in {
+    DocumentFormat.capabilities(DocumentFormat.PlainText) shouldBe DocumentFormatCapabilities(
+      canOpen = true,
+      canSave = true,
+      canRender = true,
+      canEdit = true,
+      preservesRichFormatting = false
+    )
+    DocumentFormat.capabilities(DocumentFormat.Markdown) shouldBe DocumentFormatCapabilities(
+      canOpen = true,
+      canSave = true,
+      canRender = true,
+      canEdit = true,
+      preservesRichFormatting = false
+    )
+    DocumentFormat.capabilities(DocumentFormat.RichTextDocument) shouldBe DocumentFormatCapabilities(
+      canOpen = false,
+      canSave = false,
+      canRender = false,
+      canEdit = false,
+      preservesRichFormatting = false
+    )
   }
 
   "FileManager" should "create and manage buffers" in {
@@ -43,6 +86,36 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     newBuffer.content.collect() shouldBe ""
     newBuffer.filePath shouldBe None
     newBuffer.isDirty shouldBe false
+  }
+
+  it should "raise a clear error instead of opening rich documents as plain text" in {
+    val fileManager = new FileManager()
+    val docxFile    = Files.createTempFile("serenity-rich-open", ".docx")
+
+    try
+      Files.writeString(docxFile, "not a real docx")
+
+      val result = fileManager.loadFile(docxFile, BufferId(99)).attempt.unsafeRunSync()
+
+      result.left.map(_.getMessage) shouldBe Left(
+        "Unsupported document format for open: Word Open XML Document"
+      )
+    finally Files.deleteIfExists(docxFile)
+  }
+
+  it should "raise a clear error instead of saving text buffers as rich documents" in {
+    val fileManager = new FileManager()
+    val docxFile    = Files.createTempDirectory("serenity-rich-save").resolve("draft.docx")
+    val buffer      = Buffer.fromString(BufferId(99), "plain text")
+
+    try
+      val result = fileManager.saveBuffer(buffer, docxFile).attempt.unsafeRunSync()
+
+      result.left.map(_.getMessage) shouldBe Left(
+        "Unsupported document format for save: Word Open XML Document"
+      )
+      Files.exists(docxFile) shouldBe false
+    finally Files.deleteIfExists(docxFile.getParent)
   }
 
   "FileUtils" should "handle file operations" in {

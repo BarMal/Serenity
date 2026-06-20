@@ -4,12 +4,12 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.io.FileUtils
+import com.serenity.io.{FileDialog, FileUtils}
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.PanelPosition
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -19,10 +19,23 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
-  private def createStateManager(sessionRootOverride: Option[Path] = None): StateManager =
+  private case class TestFileDialog(
+      openSelection: Option[Path] = None,
+      saveSelection: Option[Path] = None
+  ) extends FileDialog:
+    override def chooseOpenFile(initialDirectory: Option[Path]): IO[Option[Path]] =
+      IO.pure(openSelection)
+
+    override def chooseSaveFile(initialDirectory: Option[Path], suggestedFileName: Option[String]): IO[Option[Path]] =
+      IO.pure(saveSelection)
+
+  private def createStateManager(
+    sessionRootOverride: Option[Path] = None,
+    fileDialog: FileDialog = FileDialog.unavailable
+  ): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerCoreCommandsSpec"))
-    StateManager.apply(logger, sessionRootOverride = sessionRootOverride).unsafeRunSync()
+    StateManager.apply(logger, sessionRootOverride = sessionRootOverride, fileDialog = fileDialog).unsafeRunSync()
 
   private def executeCommandThroughRunner(
     stateManager: StateManager,
@@ -214,14 +227,21 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.theme.name shouldBe "light"
   }
 
-  it should "open a save-as file workflow modal seeded from the focused buffer path" in {
-    val stateManager = createStateManager()
+  it should "save the focused buffer through the native save-as file dialog" in {
+    val targetPath   = Files.createTempDirectory("serenity-save-as").resolve("notes-copy.scala")
+    val stateManager = createStateManager(fileDialog = TestFileDialog(saveSelection = Some(targetPath)))
     val bufferId     = BufferId(0)
     val filePath     = Path.of("temp", "notes.scala")
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(filePath = Some(filePath))
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("saved through dialog"),
+            filePath = Some(filePath),
+            isDirty = true
+          )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -230,57 +250,41 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
-    updatedState.modalSurface.map(_.content) shouldBe Some(
-      SurfaceContent.ModalWorkflow(
-        Modal.FileWorkflow(
-          com.serenity.state.models.FileWorkflowState(
-            mode = FileWorkflowMode.SaveAs,
-            filename = "notes.scala",
-            path = filePath.getParent.toString
-          )
-        )
-      )
-    )
+    updatedState.modalSurface shouldBe None
+    updatedState.buffers(bufferId).filePath shouldBe Some(targetPath)
+    updatedState.buffers(bufferId).isDirty shouldBe false
+    Files.readString(targetPath) shouldBe "saved through dialog"
   }
 
-  it should "open an open-file workflow modal rooted at the current working directory" in {
-    val stateManager     = createStateManager()
-    val currentDirectory = FileUtils.getCurrentDirectory.unsafeRunSync().toString
+  it should "open a selected file through the native open-file dialog" in {
+    val sourcePath = Files.createTempDirectory("serenity-open").resolve("notes.md")
+    Files.writeString(sourcePath, "# Notes")
+    val stateManager = createStateManager(fileDialog = TestFileDialog(openSelection = Some(sourcePath)))
 
     executeCommandThroughRunner(stateManager, "open", "open")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
-    updatedState.modalSurface.map(_.content) shouldBe Some(
-      SurfaceContent.ModalWorkflow(
-        Modal.FileWorkflow(
-          com.serenity.state.models.FileWorkflowState(
-            mode = FileWorkflowMode.Open,
-            path = currentDirectory
-          )
-        )
-      )
-    )
+    updatedState.modalSurface shouldBe None
+    val openedBuffer = updatedState.buffers.values.find(_.filePath.contains(sourcePath))
+    openedBuffer.map(_.content.collect()) shouldBe Some("# Notes")
+    openedBuffer.flatMap(_.language) shouldBe Some(LanguageId.Markdown)
   }
 
-  it should "fall back to a save-as file workflow modal when save is invoked for an unsaved buffer" in {
-    val stateManager     = createStateManager()
-    val currentDirectory = FileUtils.getCurrentDirectory.unsafeRunSync().toString
+  it should "save an unsaved buffer through the native save-as file dialog" in {
+    val targetPath   = Files.createTempDirectory("serenity-unsaved-save").resolve("draft.txt")
+    val stateManager = createStateManager(fileDialog = TestFileDialog(saveSelection = Some(targetPath)))
+
+    stateManager.updateBuffer(BufferId(0), "draft body").unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "save", "save")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
-    updatedState.modalSurface.map(_.content) shouldBe Some(
-      SurfaceContent.ModalWorkflow(
-        Modal.FileWorkflow(
-          com.serenity.state.models.FileWorkflowState(
-            mode = FileWorkflowMode.SaveAs,
-            path = currentDirectory
-          )
-        )
-      )
-    )
+    updatedState.modalSurface shouldBe None
+    updatedState.buffers(BufferId(0)).filePath shouldBe Some(targetPath)
+    updatedState.buffers(BufferId(0)).isDirty shouldBe false
+    Files.readString(targetPath) shouldBe "draft body"
   }
 
   it should "open an unsaved-changes workflow for the close command when the current buffer is dirty" in {
@@ -408,6 +412,38 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       _.presentation == com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Right, 30)
     } shouldBe true
     updatedState.pinnedSurfaces.exists(_.content == SurfaceContent.Outline(Nil)) shouldBe true
+  }
+
+  it should "pin Markdown headings in the outline panel from the command runner" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .updateState { state =>
+        val bufferId = BufferId(0)
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+            language = Some(LanguageId.Markdown)
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "pin-outline", "pin-outline")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    val outlineSymbols = updatedState.pinnedSurfaces.collectFirst {
+      case UiSurface(_, SurfaceContent.Outline(symbols), SurfacePresentation.Pinned(PanelPosition.Right, 30), _) =>
+        symbols
+    }
+
+    outlineSymbols shouldBe Some(
+      List(
+        Symbol("Chapter One", SymbolKind.Heading, Location(0, 0)),
+        Symbol("Scene Two", SymbolKind.Heading, Location(4, 0))
+      )
+    )
   }
 
   it should "pin the diagnostics panel from the command runner" in {

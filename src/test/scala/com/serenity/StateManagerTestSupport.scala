@@ -4,6 +4,7 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.io.FileDialog
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -20,19 +21,22 @@ trait StateManagerTestSupport:
 
   protected def createStateManagerIO(
     loggerName: String,
-    onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit
+    onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
+    fileDialog: FileDialog = FileDialog.unavailable
   ): IO[StateManager] =
     IO.blocking(Files.createTempDirectory(s"${loggerName.toLowerCase}-state-manager"))
       .flatMap(root =>
         StateManager.apply(
           testLogger(loggerName),
           onFontConfigChanged = onFontConfigChanged,
-          sessionRootOverride = Some(root)
+          sessionRootOverride = Some(root),
+          fileDialog = fileDialog
         )
       )
 
   protected def createStateManager(
     loggerName: String,
-    onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit
+    onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
+    fileDialog: FileDialog = FileDialog.unavailable
   ): StateManager =
-    createStateManagerIO(loggerName, onFontConfigChanged).unsafeRunSync()
+    createStateManagerIO(loggerName, onFontConfigChanged, fileDialog).unsafeRunSync()

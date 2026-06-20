@@ -7,6 +7,7 @@ import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
 import com.serenity.config.MarkdownViewMode
+import com.serenity.document.DocumentOutline
 import com.serenity.io.{FileEntry, FileUtils}
 import com.serenity.keystroke.events.ExplorerEvent
 import com.serenity.lsp.LspEffect
@@ -72,9 +73,9 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   private def interpretWorkflowEffect(effect: WorkflowEffect): IO[Unit] =
     effect match
       case WorkflowEffect.RequestOpenFile =>
-        stateRef.get.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))
+        stateRef.get.flatMap(requestOpenFileDialog)
       case WorkflowEffect.RequestSaveAs =>
-        stateRef.get.flatMap(state => openFileWorkflowModal(FileWorkflowMode.SaveAs, state))
+        stateRef.get.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
       case WorkflowEffect.RefreshFileWorkflow(surfaceId) =>
         refreshFileWorkflowEffect(surfaceId)
       case WorkflowEffect.SubmitFileWorkflow(surfaceId) =>
@@ -151,7 +152,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           case Some(bufferId) => saveBufferEffect(bufferId)
           case None           => logger.debug("[CMD] No focused buffer to save")
       case CommandIntent.SaveCurrentFileAs =>
-        openFileWorkflowModal(FileWorkflowMode.SaveAs, state)
+        requestSaveAsFileDialog(state, state.focusedBufferId)
       case CommandIntent.SaveSession =>
         saveSession()
       case CommandIntent.RestoreSession =>
@@ -162,7 +163,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.ClearSession =>
         clearSession()
       case CommandIntent.OpenFile =>
-        openFileWorkflowModal(FileWorkflowMode.Open, state)
+        requestOpenFileDialog(state)
       case CommandIntent.QuitApp =>
         beginCloseAction(CloseScope.Quit, state)
       case CommandIntent.CloseAll =>
@@ -212,7 +213,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           interpretEffect(AppEffect.Explorer(ExplorerEffect.OpenRoot(PanelPosition.Left, path, 30)))
         )
       case CommandIntent.PinOutlinePanel =>
-        pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30)
+        pinPanel(PanelContent.Outline(outlineSymbols(state)), PanelPosition.Right, 30)
       case CommandIntent.PinDiagnosticsPanel =>
         pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 10)
       case CommandIntent.OpenMarkdownPreview =>
@@ -338,7 +339,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.StartupRestoreSession =>
         restoreStartupSession()
       case CommandIntent.StartupOpenFile =>
-        openFileWorkflowModal(FileWorkflowMode.Open, state)
+        requestOpenFileDialog(state)
       case CommandIntent.SetBufferLanguage(language) =>
         state.focusedBufferId match
           case Some(bufferId) =>
@@ -562,6 +563,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       }
       .getOrElse(logger.debug("[CMD] Markdown preview requested without an active Markdown buffer"))
 
+  private def outlineSymbols(state: AppState): List[Symbol] =
+    state.focusedBufferId
+      .flatMap(state.buffers.get)
+      .map(DocumentOutline.forBuffer)
+      .getOrElse(Nil)
+
   private def setMarkdownViewMode(state: AppState, mode: MarkdownViewMode): IO[Unit] =
     val updateConfig = updateState { s =>
       val newConfig = s.config.withMarkdownViewMode(mode)
@@ -665,11 +672,22 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             )
             .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId"))
         case Some(_) =>
-          logger.debug(s"[FILE] Buffer $bufferId has no file path; opening Save As workflow") >>
-            openFileWorkflowModal(FileWorkflowMode.SaveAs, state, Some(bufferId))
+          logger.debug(s"[FILE] Buffer $bufferId has no file path; opening native Save As dialog") >>
+            requestSaveAsFileDialog(state, Some(bufferId))
         case None =>
           logger.debug(s"[FILE] Buffer $bufferId not found for save")
     }
+
+  protected def requestOpenFileDialog(state: AppState): IO[Unit] =
+    FileUtils.getCurrentDirectory
+      .flatMap(currentDirectory => fileDialog.chooseOpenFile(Some(currentDirectory)))
+      .flatMap {
+        case Some(path) =>
+          updateState(_.copy(uiSurfaces = List.empty)) >> directLoadFileEffect(path)
+        case None =>
+          IO.unit
+      }
+      .handleErrorWith(ex => logger.error(ex)("[FILE] Native open-file dialog failed"))
 
   protected def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
     stateRef.get.flatMap { state =>

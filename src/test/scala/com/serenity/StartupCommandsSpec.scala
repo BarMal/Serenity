@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
+import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
@@ -16,11 +17,24 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
 
   behavior of "Startup Commands"
 
-  it should "open file workflow when third option (Open file) is selected" in {
+  private case class TestFileDialog(openSelection: Option[java.nio.file.Path]) extends FileDialog:
+    override def chooseOpenFile(initialDirectory: Option[java.nio.file.Path]): IO[Option[java.nio.file.Path]] =
+      IO.pure(openSelection)
+
+    override def chooseSaveFile(
+      initialDirectory: Option[java.nio.file.Path],
+      suggestedFileName: Option[String]
+    ): IO[Option[java.nio.file.Path]] =
+      IO.pure(None)
+
+  it should "open the selected native-dialog file when third option (Open file) is selected" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
+    val selectedFile = java.nio.file.Files.createTempFile("serenity-startup-open", ".txt")
+    java.nio.file.Files.writeString(selectedFile, "opened from startup")
+
     val program = for
-      stateManager <- createStateManagerIO("StartupCommandsSpec")
+      stateManager <- createStateManagerIO("StartupCommandsSpec", fileDialog = TestFileDialog(Some(selectedFile)))
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
@@ -35,28 +49,22 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
       _          <- stateManager.applyEvent(Enter)
       finalState <- stateManager.getCurrentState
     yield
-      // Startup page remains as the back-destination while the file modal is open
-      finalState.startPageSurface should not be None
-
-      // File workflow modal is open alongside the startup page
-      val hasFileWorkflow = finalState.uiSurfaces.exists { surface =>
-        surface.content match
-          case SurfaceContent.ModalWorkflow(modal) =>
-            modal match
-              case Modal.FileWorkflow(_) => true
-              case _                     => false
-          case _ => false
-      }
-      hasFileWorkflow shouldBe true
+      finalState.startPageSurface shouldBe None
+      finalState.modalSurface shouldBe None
+      finalState.buffers.values.find(_.filePath.contains(selectedFile)).map(_.content.collect()) shouldBe Some(
+        "opened from startup"
+      )
+      finalState.focus should matchPattern { case Focus.EditorPane(_) => }
 
     program.unsafeRunSync()
+    java.nio.file.Files.deleteIfExists(selectedFile)
   }
 
-  it should "return to startup page when Escape is pressed in the file workflow" in {
+  it should "keep the startup page focused when the native open-file dialog is cancelled" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      stateManager <- createStateManagerIO("StartupCommandsSpec")
+      stateManager <- createStateManagerIO("StartupCommandsSpec", fileDialog = TestFileDialog(None))
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
@@ -64,19 +72,10 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
       _          <- stateManager.applyEvent(MoveDown)
       _          <- stateManager.applyEvent(MoveDown)
       _          <- stateManager.applyEvent(Enter)
-      _          <- stateManager.applyEvent(Escape)
       finalState <- stateManager.getCurrentState
     yield
       finalState.startPageSurface should not be None
-      val hasFileWorkflow = finalState.uiSurfaces.exists { surface =>
-        surface.content match
-          case SurfaceContent.ModalWorkflow(modal) =>
-            modal match
-              case Modal.FileWorkflow(_) => true
-              case _                     => false
-          case _ => false
-      }
-      hasFileWorkflow shouldBe false
+      finalState.modalSurface shouldBe None
       finalState.focus match
         case Focus.Surface(_) => succeed
         case other            => fail(s"Expected startup page focus, got $other")

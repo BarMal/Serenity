@@ -4,6 +4,7 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -18,9 +19,19 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-  private def createStateManager(): StateManager =
+  private case class TestFileDialog(saveSelection: Option[java.nio.file.Path]) extends FileDialog:
+    override def chooseOpenFile(initialDirectory: Option[java.nio.file.Path]): IO[Option[java.nio.file.Path]] =
+      IO.pure(None)
+
+    override def chooseSaveFile(
+      initialDirectory: Option[java.nio.file.Path],
+      suggestedFileName: Option[String]
+    ): IO[Option[java.nio.file.Path]] =
+      IO.pure(saveSelection)
+
+  private def createStateManager(fileDialog: FileDialog = FileDialog.unavailable): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("CloseWorkflowStateManagerSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    StateManager.apply(logger, fileDialog = fileDialog).unsafeRunSync()
 
   private def executeCommandThroughRunner(
     stateManager: StateManager,
@@ -133,14 +144,14 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       Files.deleteIfExists(tempRoot)
   }
 
-  it should "route save for an unsaved buffer into the save-as workflow and resume closure after submit" in {
+  it should "route save for an unsaved buffer through the native save-as dialog and resume closure" in {
     val tempRoot   = Files.createTempDirectory("close-workflow-save-as")
     val targetDir  = tempRoot.resolve("nested")
     val targetFile = targetDir.resolve("notes.scala")
     val bufferId   = BufferId(0)
 
     try
-      val stateManager = createStateManager()
+      val stateManager = createStateManager(TestFileDialog(Some(targetFile)))
       stateManager
         .updateState { state =>
           val buffer = state
@@ -156,37 +167,6 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       executeCommandThroughRunner(stateManager, "close", "close")
       stateManager.applyEvent(Enter).unsafeRunSync()
 
-      stateManager.getCurrentState
-        .unsafeRunSync()
-        .modalSurface
-        .flatMap(_.content match
-          case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow.mode)
-          case _ => None) shouldBe Some(com.serenity.state.models.FileWorkflowMode.SaveAs)
-
-      stateManager
-        .updateState { state =>
-          state.modalSurface match
-            case Some(surface) =>
-              state.copy(
-                uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ surface.copy(
-                  content = SurfaceContent.ModalWorkflow(
-                    Modal.FileWorkflow(
-                      com.serenity.state.models.FileWorkflowState(
-                        mode = com.serenity.state.models.FileWorkflowMode.SaveAs,
-                        filename = "notes.scala",
-                        path = targetDir.toString
-                      )
-                    )
-                  )
-                )
-              )
-            case None => state
-        }
-        .unsafeRunSync()
-
-      stateManager.applyEvent(Enter).unsafeRunSync()
-      stateManager.applyEvent(Enter).unsafeRunSync()
-
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
       updatedState.modalSurface shouldBe None
       updatedState.buffers should not contain key(bufferId)
@@ -195,6 +175,31 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       Files.deleteIfExists(targetFile)
       Files.deleteIfExists(targetDir)
       Files.deleteIfExists(tempRoot)
+  }
+
+  it should "keep the close workflow open when native save-as is cancelled" in {
+    val stateManager = createStateManager(TestFileDialog(None))
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("object Notes"),
+            isDirty = true
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "close", "close")
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    currentCloseWorkflow(stateManager).currentBufferId shouldBe bufferId
+    updatedState.buffers should contain key bufferId
+    updatedState.buffers(bufferId).isDirty shouldBe true
   }
 
   it should "open sequential unsaved-changes prompts for close-all" in {

@@ -15,6 +15,10 @@ enum FileType:
   case Header
   case Markdown
   case Text
+  case WordDocument
+  case WordOpenXmlDocument
+  case OpenDocumentText
+  case RichText
   case Json
   case Xml
   case Yaml
@@ -23,6 +27,9 @@ enum FileType:
   case Sql
   case Shell
   case Unknown
+
+  def displayName: String =
+    FileType.displayName(this)
 
 object FileType:
 
@@ -48,8 +55,12 @@ object FileType:
       case "c"                  => FileType.C
       case "cpp" | "cc" | "cxx" => FileType.Cpp
       case "h" | "hpp"          => FileType.Header
-      case "md"                 => FileType.Markdown
+      case "md" | "markdown"    => FileType.Markdown
       case "txt"                => FileType.Text
+      case "doc"                => FileType.WordDocument
+      case "docx"               => FileType.WordOpenXmlDocument
+      case "odt"                => FileType.OpenDocumentText
+      case "rtf"                => FileType.RichText
       case "json"               => FileType.Json
       case "xml"                => FileType.Xml
       case "yaml" | "yml"       => FileType.Yaml
@@ -73,11 +84,98 @@ object FileType:
     case FileType.Header     => "Header"
     case FileType.Markdown   => "Markdown"
     case FileType.Text       => "Text"
-    case FileType.Json       => "JSON"
-    case FileType.Xml        => "XML"
-    case FileType.Yaml       => "YAML"
-    case FileType.Toml       => "TOML"
-    case FileType.Config     => "Config"
-    case FileType.Sql        => "SQL"
-    case FileType.Shell      => "Shell"
-    case FileType.Unknown    => "Unknown"
+    case FileType.WordDocument =>
+      "Word Document"
+    case FileType.WordOpenXmlDocument =>
+      "Word Open XML Document"
+    case FileType.OpenDocumentText =>
+      "OpenDocument Text"
+    case FileType.RichText =>
+      "Rich Text"
+    case FileType.Json    => "JSON"
+    case FileType.Xml     => "XML"
+    case FileType.Yaml    => "YAML"
+    case FileType.Toml    => "TOML"
+    case FileType.Config  => "Config"
+    case FileType.Sql     => "SQL"
+    case FileType.Shell   => "Shell"
+    case FileType.Unknown => "Unknown"
+
+enum DocumentFormat:
+  case PlainText
+  case Markdown
+  case RichTextDocument
+  case SourceCode
+  case StructuredText
+  case Unknown
+
+case class DocumentFormatCapabilities(
+    canOpen: Boolean,
+    canSave: Boolean,
+    canRender: Boolean,
+    canEdit: Boolean,
+    preservesRichFormatting: Boolean
+)
+
+object DocumentFormat:
+
+  def fromFileType(fileType: FileType): DocumentFormat =
+    fileType match
+      case FileType.Text =>
+        DocumentFormat.PlainText
+      case FileType.Markdown =>
+        DocumentFormat.Markdown
+      case FileType.WordDocument | FileType.WordOpenXmlDocument | FileType.OpenDocumentText | FileType.RichText =>
+        DocumentFormat.RichTextDocument
+      case FileType.Json | FileType.Xml | FileType.Yaml | FileType.Toml | FileType.Config | FileType.Sql =>
+        DocumentFormat.StructuredText
+      case FileType.Unknown =>
+        DocumentFormat.Unknown
+      case _ =>
+        DocumentFormat.SourceCode
+
+  def fromPath(path: Path): DocumentFormat =
+    fromFileType(FileType.fromPath(path))
+
+  def capabilities(format: DocumentFormat): DocumentFormatCapabilities =
+    format match
+      case DocumentFormat.PlainText =>
+        DocumentFormatCapabilities(
+          canOpen = true,
+          canSave = true,
+          canRender = true,
+          canEdit = true,
+          preservesRichFormatting = false
+        )
+      case DocumentFormat.Markdown =>
+        DocumentFormatCapabilities(
+          canOpen = true,
+          canSave = true,
+          canRender = true,
+          canEdit = true,
+          preservesRichFormatting = false
+        )
+      case DocumentFormat.SourceCode | DocumentFormat.StructuredText =>
+        DocumentFormatCapabilities(
+          canOpen = true,
+          canSave = true,
+          canRender = true,
+          canEdit = true,
+          preservesRichFormatting = false
+        )
+      case DocumentFormat.Unknown =>
+        DocumentFormatCapabilities(
+          canOpen = true,
+          canSave = true,
+          canRender = true,
+          canEdit = true,
+          preservesRichFormatting = false
+        )
+      case DocumentFormat.RichTextDocument =>
+        DocumentFormatCapabilities(
+          canOpen = false,
+          canSave = false,
+          canRender = false,
+          canEdit = false,
+          preservesRichFormatting = false
+        )

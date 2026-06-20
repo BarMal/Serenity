@@ -35,6 +35,7 @@ private[manager] trait StateManagerRuntimeSupport:
   protected def uiPresetStore: UiPresetStore                                  = runtime.uiPresetStore
   protected def windowSizeProvider: IO[Option[PreferredWindowSize]]           = runtime.windowSizeProvider
   protected def onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit] = runtime.onPreferredWindowSizeChanged
+  protected def fileDialog: com.serenity.io.FileDialog                        = runtime.fileDialog
 
   protected def mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]] = runtime.mouseTargetCacheRef
 
