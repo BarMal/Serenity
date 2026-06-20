@@ -161,3 +161,47 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
       RichTextRun("alpha beta gamma", RichTextStyle.empty)
     )
   }
+
+  it should "set paragraph roles across the selected paragraph range" in {
+    val document = RichTextDocument(
+      List(
+        RichTextParagraph.plain("Chapter One"),
+        RichTextParagraph.plain("Opening body"),
+        RichTextParagraph.plain("Scene Two")
+      )
+    )
+
+    val updated = document.setParagraphRole(
+      RichTextRange(RichTextPosition(0, 3), RichTextPosition(1, 7)),
+      ParagraphRole.Heading(1)
+    )
+
+    updated.paragraphs.map(_.role) shouldBe List(
+      ParagraphRole.Heading(1),
+      ParagraphRole.Heading(1),
+      ParagraphRole.Body
+    )
+    updated.plainText shouldBe document.plainText
+  }
+
+  it should "set paragraph alignment across the selected paragraph range" in {
+    val document = RichTextDocument(
+      List(
+        RichTextParagraph.plain("Lead"),
+        RichTextParagraph.plain("Centered"),
+        RichTextParagraph.plain("Tail")
+      )
+    )
+
+    val updated = document.setParagraphAlignment(
+      RichTextRange(RichTextPosition(1, 0), RichTextPosition(2, 2)),
+      ParagraphAlignment.Center
+    )
+
+    updated.paragraphs.map(_.alignment) shouldBe List(
+      ParagraphAlignment.Left,
+      ParagraphAlignment.Center,
+      ParagraphAlignment.Center
+    )
+    updated.plainText shouldBe document.plainText
+  }

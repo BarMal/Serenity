@@ -13,6 +13,7 @@ import com.serenity.keystroke.events.ExplorerEvent
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.project.*
+import com.serenity.richtext.*
 import com.serenity.session.SessionSaveTrigger
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.core.EditorState
@@ -201,6 +202,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         )
       case CommandIntent.ToggleRichTextMark(mark) =>
         updateState(current => toggleRichTextMark(current, mark))
+      case CommandIntent.SetRichTextParagraphRole(role) =>
+        updateState(current => setRichTextParagraphRole(current, role))
+      case CommandIntent.SetRichTextParagraphAlignment(alignment) =>
+        updateState(current => setRichTextParagraphAlignment(current, alignment))
       case CommandIntent.ToggleCommentLens =>
         toggleCommentLens(state)
       case CommandIntent.OpenGotoLine =>
@@ -452,6 +457,51 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           )
       case None =>
         state
+
+  private def setRichTextParagraphRole(state: AppState, role: ParagraphRole): AppState =
+    updateRichTextParagraphs(state)((document, range) => document.setParagraphRole(range, role))
+
+  private def setRichTextParagraphAlignment(state: AppState, alignment: ParagraphAlignment): AppState =
+    updateRichTextParagraphs(state)((document, range) => document.setParagraphAlignment(range, alignment))
+
+  private def updateRichTextParagraphs(
+    state: AppState
+  )(update: (RichTextDocument, RichTextRange) => RichTextDocument): AppState =
+    state.focusedBufferId.flatMap(state.buffers.get) match
+      case Some(buffer) =>
+        val ranges = richTextParagraphRanges(buffer)
+        if ranges.isEmpty then state
+        else
+          val text = buffer.content.collect()
+          val baseDocument = buffer.richTextDocument
+            .filter(_.matchesPlainText(text))
+            .getOrElse(RichTextDocument.fromPlainText(text))
+          val updatedDocument = ranges.foldLeft(baseDocument)(update).normalized
+          if updatedDocument == baseDocument.normalized then state
+          else
+            state.copy(
+              buffers = state.buffers.updated(
+                buffer.id,
+                buffer.copy(
+                  isDirty = true,
+                  isNewEmpty = false,
+                  richTextDocument = Some(updatedDocument)
+                )
+              )
+            )
+      case None =>
+        state
+
+  private def richTextParagraphRanges(buffer: Buffer): List[RichTextRange] =
+    val selections = buffer.allSelections.filter(selection => selection.start != selection.end).map(richTextRange)
+    if selections.nonEmpty then selections
+    else
+      buffer.cursors.distinct.map { cursor =>
+        RichTextRange(
+          start = com.serenity.richtext.RichTextPosition(cursor.line, cursor.column),
+          end = com.serenity.richtext.RichTextPosition(cursor.line, cursor.column)
+        )
+      }
 
   private def richTextRange(selection: Selection): com.serenity.richtext.RichTextRange =
     com.serenity.richtext.RichTextRange(

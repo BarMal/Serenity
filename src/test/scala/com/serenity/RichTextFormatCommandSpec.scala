@@ -3,7 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandIntent, CommandRegistry}
-import com.serenity.richtext.InlineMark
+import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{BufferId, Selection}
@@ -47,6 +47,15 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     registry.findCommand("underline").map(_.intent) shouldBe Some(
       CommandIntent.ToggleRichTextMark(InlineMark.Underline)
     )
+    registry.findCommand("heading-1").map(_.intent) shouldBe Some(
+      CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(1))
+    )
+    registry.findCommand("paragraph-body").map(_.intent) shouldBe Some(
+      CommandIntent.SetRichTextParagraphRole(ParagraphRole.Body)
+    )
+    registry.findCommand("align-center").map(_.intent) shouldBe Some(
+      CommandIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Center)
+    )
   }
 
   it should "apply bold to the active selection" in {
@@ -83,4 +92,81 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     buffer.richTextDocument
       .flatMap(_.paragraphs.headOption)
       .map(_.runs) shouldBe Some(List(com.serenity.richtext.RichTextRun("alpha beta")))
+  }
+
+  it should "apply heading roles to the active cursor paragraph" in {
+    val stateManager = createStateManager()
+    val bufferId     = stateManager.createBuffer("Chapter One\nBody").unsafeRunSync()
+    stateManager.setBufferForPane(com.serenity.state.models.PaneId(0), bufferId).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        state.copy(
+          buffers = state.buffers.updated(
+            bufferId,
+            state.buffers(bufferId).copy(cursors = List(com.serenity.state.models.CursorPosition(0, 3)))
+          )
+        )
+      }
+      .unsafeRunSync()
+    val command = CommandRegistry.withToggleUI.findCommand("heading-1").getOrElse(fail("missing heading-1"))
+
+    stateManager.executeCommand(command).unsafeRunSync()
+
+    val buffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.isDirty shouldBe true
+    buffer.richTextDocument.map(_.paragraphs.map(_.role)) shouldBe Some(
+      List(ParagraphRole.Heading(1), ParagraphRole.Body)
+    )
+  }
+
+  it should "apply paragraph alignment across the active selection" in {
+    val (stateManager, bufferId) =
+      selectedStateManager(
+        "Lead\nCentered\nTail",
+        Selection(com.serenity.state.models.CursorPosition(1, 0), com.serenity.state.models.CursorPosition(2, 2))
+      )
+    val command = CommandRegistry.withToggleUI.findCommand("align-center").getOrElse(fail("missing align-center"))
+
+    stateManager.executeCommand(command).unsafeRunSync()
+
+    val buffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.isDirty shouldBe true
+    buffer.richTextDocument.map(_.paragraphs.map(_.alignment)) shouldBe Some(
+      List(ParagraphAlignment.Left, ParagraphAlignment.Center, ParagraphAlignment.Center)
+    )
+  }
+
+  it should "make formatted rich text headings available to document navigation" in {
+    val stateManager = createStateManager()
+    val bufferId     = stateManager.createBuffer("Chapter One\nBody").unsafeRunSync()
+    stateManager.setBufferForPane(com.serenity.state.models.PaneId(0), bufferId).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        state.copy(
+          buffers = state.buffers.updated(
+            bufferId,
+            state.buffers(bufferId).copy(cursors = List(com.serenity.state.models.CursorPosition(0, 0)))
+          )
+        )
+      }
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(CommandRegistry.withToggleUI.findCommand("heading-1").getOrElse(fail("missing heading-1")))
+      .unsafeRunSync()
+    stateManager
+      .executeCommand(CommandRegistry.withToggleUI.findCommand("pin-outline").getOrElse(fail("missing pin-outline")))
+      .unsafeRunSync()
+
+    val outlineSymbols = stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.collectFirst {
+      case com.serenity.state.models.UiSurface(
+            _,
+            com.serenity.state.models.SurfaceContent.Outline(symbols, _),
+            _,
+            _
+          ) =>
+        symbols
+    }
+
+    outlineSymbols.map(_.map(_.name)) shouldBe Some(List("Chapter One"))
   }

@@ -202,9 +202,29 @@ case class RichTextDocument(paragraphs: List[RichTextParagraph]):
         paragraph.setMark(startOffset, endOffset, mark, enabled = !shouldRemove)
     })
 
+  /** Set the structural role for every paragraph touched by the range. */
+  def setParagraphRole(range: RichTextRange, role: ParagraphRole): RichTextDocument =
+    updateParagraphs(range)(_.copy(role = role))
+
+  /** Set the alignment for every paragraph touched by the range. */
+  def setParagraphAlignment(range: RichTextRange, alignment: ParagraphAlignment): RichTextDocument =
+    updateParagraphs(range)(_.copy(alignment = alignment))
+
   /** True when the rich document still represents the provided plain text exactly. */
   def matchesPlainText(text: String): Boolean =
     plainText == text
+
+  private def updateParagraphs(range: RichTextRange)(update: RichTextParagraph => RichTextParagraph): RichTextDocument =
+    if paragraphs.isEmpty then this
+    else
+      val normalizedRange = range.normalized
+      val lastIndex       = paragraphs.length - 1
+      val startIndex      = normalizedRange.start.paragraphIndex.max(0).min(lastIndex)
+      val endIndex        = normalizedRange.end.paragraphIndex.max(startIndex).min(lastIndex)
+      copy(paragraphs = paragraphs.zipWithIndex.map {
+        case (paragraph, index) if index >= startIndex && index <= endIndex => update(paragraph)
+        case (paragraph, _)                                                 => paragraph
+      })
 
 object RichTextDocument:
   def oneParagraph(text: String): RichTextDocument =
