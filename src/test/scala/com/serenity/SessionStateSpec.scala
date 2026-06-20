@@ -309,6 +309,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         windowChromeMode = WindowChromeMode.Custom,
         interfaceDensity = InterfaceDensity.Spacious,
         cursorInfoBarMode = CursorInfoBarMode.Detailed,
+        cursorInfoBarPlacement = CursorInfoBarPlacement.PinnedBottom,
         showLineNumbers = false,
         showGutter = false,
         lspUserConfig = LspUserConfig(
@@ -335,6 +336,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.windowChromeMode shouldBe WindowChromeMode.Custom
     decoded.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     decoded.config.cursorInfoBarMode shouldBe CursorInfoBarMode.Detailed
+    decoded.config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.PinnedBottom
     decoded.config.fontConfig.codeFontFamily shouldBe "Monospaced"
     decoded.config.fontConfig.textFontFamily shouldBe "SansSerif"
     decoded.config.fontConfig.uiFontFamily shouldBe "Dialog"
@@ -439,6 +441,21 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.cursorInfoBarMode shouldBe CursorInfoBarMode.Off
+  }
+
+  it should "default cursorInfoBarPlacement to Floating when loading older JSON without the field" in {
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val jsonWithoutCursorInfoBarPlacement =
+      originalJson.mapObject(
+        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("cursorInfoBarPlacement")))
+      )
+
+    val decoded = jsonWithoutCursorInfoBarPlacement.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.Floating
   }
 
   it should "default uiFontFamily to SansSerif when loading older JSON without the field" in {

@@ -905,7 +905,11 @@ object Renderer:
 
   private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =
     context.surface.setFont(context.uiFont)
-    state.uiSurfaces.foreach {
+    (state.pinnedSurfaces ++ state.uiSurfaces.filter {
+      _.presentation match
+        case SurfacePresentation.Expanded(_, _) => true
+        case _                                  => false
+    }).foreach {
       case surface @ UiSurface(_, content, SurfacePresentation.Pinned(position, _), _) =>
         context.layout.pinnedSurfaceRects
           .get(surface.id)

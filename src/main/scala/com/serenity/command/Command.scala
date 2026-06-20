@@ -62,6 +62,7 @@ enum CommandIntent:
   case ToggleGutter
   case SetCursorMode(mode: CursorMode)
   case SetCursorInfoBarMode(mode: CursorInfoBarMode)
+  case SetCursorInfoBarPlacement(placement: CursorInfoBarPlacement)
   case OpenThemeChooser
   case ReloadThemes
   case PinExplorerPanel

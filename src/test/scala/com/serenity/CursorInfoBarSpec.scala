@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.{CommandRegistry, CommandRunner}
-import com.serenity.config.{AppConfig, CursorInfoBarMode}
+import com.serenity.config.{AppConfig, CursorInfoBarMode, CursorInfoBarPlacement}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -44,6 +44,20 @@ class CursorInfoBarSpec extends AnyFlatSpec with Matchers:
     surface.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
   }
 
+  it should "derive a bottom pinned surface when configured for pinned placement" in {
+    val config = AppConfig.default
+      .withCursorInfoBarMode(CursorInfoBarMode.Position)
+      .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+    val state = editorState(CursorPosition(1, 2), config)
+
+    val surface = state.cursorInfoBarSurface.getOrElse(fail("Expected cursor info bar surface"))
+
+    surface.content shouldBe SurfaceContent.CursorInfoBar("Line 2, Col 3")
+    surface.presentation shouldBe SurfacePresentation.Pinned(PanelPosition.Bottom, 3)
+    state.pinnedSurfaces.map(_.id) should contain(SurfaceId("cursor-info-bar"))
+    state.surfaceById(SurfaceId("cursor-info-bar")) shouldBe Some(surface)
+  }
+
   it should "be disabled when the config mode is off" in {
     val state = editorState(config = AppConfig.default.withCursorInfoBarMode(CursorInfoBarMode.Off))
 
@@ -54,6 +68,17 @@ class CursorInfoBarSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(editorState(), ViewportSize(80, 24))
 
     layout.belowCursorOverlayStack.map(_._1) should contain(SurfaceId("cursor-info-bar"))
+  }
+
+  it should "reserve pinned panel space for a bottom pinned cursor info bar" in {
+    val config = AppConfig.default
+      .withCursorInfoBarMode(CursorInfoBarMode.Detailed)
+      .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+    val state  = editorState(config = config)
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+
+    layout.pinnedSurfaceRects.get(SurfaceId("cursor-info-bar")) shouldBe Some(LayoutRect(0, 20, 80, 3))
+    layout.belowCursorOverlayStack.map(_._1) should not contain SurfaceId("cursor-info-bar")
   }
 
   it should "hide the cursor info bar behind command runner overlays" in {
@@ -78,4 +103,16 @@ class CursorInfoBarSpec extends AnyFlatSpec with Matchers:
     )
 
     resolved.rows.map(_.plainText) shouldBe List("Line 1, Col 1")
+  }
+
+  "PinnedPanelViewModel" should "include the derived pinned cursor info bar from app state" in {
+    val config = AppConfig.default
+      .withCursorInfoBarMode(CursorInfoBarMode.Position)
+      .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+    val state  = editorState(config = config)
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+
+    val panels = com.serenity.ui.renderer.PinnedPanelViewModel.fromState(state, layout)
+
+    panels.map(_.lines) should contain(List("Line 1, Col 1"))
   }

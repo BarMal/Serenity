@@ -409,6 +409,14 @@ given Decoder[CursorInfoBarMode] = Decoder.decodeString.emap {
   case other      => Left(s"Unknown CursorInfoBarMode: $other")
 }
 
+given Encoder[CursorInfoBarPlacement] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[CursorInfoBarPlacement] = Decoder.decodeString.emap {
+  case "Floating"     => Right(CursorInfoBarPlacement.Floating)
+  case "PinnedBottom" => Right(CursorInfoBarPlacement.PinnedBottom)
+  case other          => Left(s"Unknown CursorInfoBarPlacement: $other")
+}
+
 given Encoder[WindowChromeMode] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[WindowChromeMode] = Decoder.decodeString.emap {
@@ -560,13 +568,16 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     cursorMode                <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
     cursorColors              <- cursor.getOrElse[CursorColorConfig]("cursorColors")(CursorColorConfig())
     cursorInfoBarMode         <- cursor.getOrElse[CursorInfoBarMode]("cursorInfoBarMode")(CursorInfoBarMode.Off)
-    windowChromeMode          <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(WindowChromeMode.Native)
-    markdownViewMode          <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
-    interfaceDensity          <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(InterfaceDensity.Comfortable)
-    textAreaInsets            <- cursor.getOrElse[TextAreaInsets]("textAreaInsets")(TextAreaInsets())
-    preferredWindowSize       <- cursor.getOrElse[Option[PreferredWindowSize]]("preferredWindowSize")(None)
-    lspUserConfig             <- cursor.getOrElse[LspUserConfig]("lspUserConfig")(LspUserConfig.empty)
-    spellCheck                <- cursor.getOrElse[SpellCheckConfig]("spellCheck")(SpellCheckConfig())
+    cursorInfoBarPlacement <- cursor.getOrElse[CursorInfoBarPlacement]("cursorInfoBarPlacement")(
+      CursorInfoBarPlacement.Floating
+    )
+    windowChromeMode    <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(WindowChromeMode.Native)
+    markdownViewMode    <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
+    interfaceDensity    <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(InterfaceDensity.Comfortable)
+    textAreaInsets      <- cursor.getOrElse[TextAreaInsets]("textAreaInsets")(TextAreaInsets())
+    preferredWindowSize <- cursor.getOrElse[Option[PreferredWindowSize]]("preferredWindowSize")(None)
+    lspUserConfig       <- cursor.getOrElse[LspUserConfig]("lspUserConfig")(LspUserConfig.empty)
+    spellCheck          <- cursor.getOrElse[SpellCheckConfig]("spellCheck")(SpellCheckConfig())
   yield AppConfig(
     characterAnimation = characterAnimation,
     syntaxHighlightingEnabled = syntaxHighlightingEnabled,
@@ -583,6 +594,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     cursorMode = cursorMode,
     cursorColors = cursorColors,
     cursorInfoBarMode = cursorInfoBarMode,
+    cursorInfoBarPlacement = cursorInfoBarPlacement,
     windowChromeMode = windowChromeMode,
     markdownViewMode = markdownViewMode,
     interfaceDensity = interfaceDensity,

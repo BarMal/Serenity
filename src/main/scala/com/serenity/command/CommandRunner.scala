@@ -86,6 +86,7 @@ case class CommandRunner(
     val animationItem        = CommandRunner.animationOptionItem(optionSelections)
     val cursorModeItem       = CommandRunner.cursorModeOptionItem(optionSelections)
     val cursorInfoBarItem    = CommandRunner.cursorInfoBarOptionItem(optionSelections)
+    val cursorInfoPlacement  = CommandRunner.cursorInfoBarPlacementOptionItem(optionSelections)
     val backgroundStyleItem  = CommandRunner.backgroundStyleOptionItem(optionSelections)
     val interfaceDensityItem = CommandRunner.interfaceDensityOptionItem(optionSelections)
     val materialPresetItem   = CommandRunner.materialPresetOptionItem(optionSelections)
@@ -106,10 +107,8 @@ case class CommandRunner(
       CommandSurfaceItem.GroupItem(
         id = "settings-appearance",
         label = "Appearance",
-        children =
-          List(cursorModeItem, cursorInfoBarItem, backgroundStyleItem, interfaceDensityItem) ++ inputItems.filter(
-            _.id == "blur-radius"
-          ),
+        children = List(cursorModeItem, cursorInfoBarItem, backgroundStyleItem, interfaceDensityItem) ++
+          inputItems.filter(_.id == "blur-radius") :+ cursorInfoPlacement,
         category = CommandCategory.Settings,
         hint = Some("Cursor, info bar, background, density, blur")
       ),
@@ -465,21 +464,22 @@ object CommandRunner:
 
   private[command] def defaultOptionSelections(config: AppConfig): Map[String, Int] =
     Map(
-      "animation-mode"     -> animationModeIndex(config),
-      "material-preset"    -> materialPresetIndex(config.materialPreset),
-      "motion-preset"      -> motionPresetIndex(config.motionPreset),
-      "cursor-mode"        -> cursorModeIndex(config.cursorMode),
-      "cursor-info-bar"    -> cursorInfoBarModeIndex(config.cursorInfoBarMode),
-      "background-style"   -> backgroundStyleIndex(config.backgroundStyle),
-      "interface-density"  -> interfaceDensityIndex(config.interfaceDensity),
-      "markdown-view"      -> markdownViewModeIndex(config.markdownViewMode),
-      "spellcheck-enabled" -> spellCheckEnabledIndex(config.spellCheck.enabled),
-      "code-font"          -> codeFontIndex(config.fontConfig.codeFontFamily),
-      "text-font"          -> textFontIndex(config.fontConfig.textFontFamily),
-      "ui-font"            -> uiFontIndex(config.fontConfig.uiFontFamily),
-      "code-ligatures"     -> ligaturesIndex(config.fontConfig.codeLigatures),
-      "text-ligatures"     -> ligaturesIndex(config.fontConfig.textLigatures),
-      "ui-ligatures"       -> ligaturesIndex(config.fontConfig.uiLigatures)
+      "animation-mode"            -> animationModeIndex(config),
+      "material-preset"           -> materialPresetIndex(config.materialPreset),
+      "motion-preset"             -> motionPresetIndex(config.motionPreset),
+      "cursor-mode"               -> cursorModeIndex(config.cursorMode),
+      "cursor-info-bar"           -> cursorInfoBarModeIndex(config.cursorInfoBarMode),
+      "cursor-info-bar-placement" -> cursorInfoBarPlacementIndex(config.cursorInfoBarPlacement),
+      "background-style"          -> backgroundStyleIndex(config.backgroundStyle),
+      "interface-density"         -> interfaceDensityIndex(config.interfaceDensity),
+      "markdown-view"             -> markdownViewModeIndex(config.markdownViewMode),
+      "spellcheck-enabled"        -> spellCheckEnabledIndex(config.spellCheck.enabled),
+      "code-font"                 -> codeFontIndex(config.fontConfig.codeFontFamily),
+      "text-font"                 -> textFontIndex(config.fontConfig.textFontFamily),
+      "ui-font"                   -> uiFontIndex(config.fontConfig.uiFontFamily),
+      "code-ligatures"            -> ligaturesIndex(config.fontConfig.codeLigatures),
+      "text-ligatures"            -> ligaturesIndex(config.fontConfig.textLigatures),
+      "ui-ligatures"              -> ligaturesIndex(config.fontConfig.uiLigatures)
     )
 
   private[command] def cursorModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -507,6 +507,21 @@ object CommandRunner:
       selectedIndex = optionSelections.getOrElse("cursor-info-bar", 0),
       category = CommandCategory.Settings,
       hint = Some("Off, position, or detailed")
+    )
+
+  private[command] def cursorInfoBarPlacementOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "cursor-info-bar-placement",
+      label = "Cursor Info Placement",
+      options = List(
+        CommandOption("Floating", CommandIntent.SetCursorInfoBarPlacement(CursorInfoBarPlacement.Floating)),
+        CommandOption("Pinned Bottom", CommandIntent.SetCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom))
+      ),
+      selectedIndex = optionSelections.getOrElse("cursor-info-bar-placement", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Floating or pinned")
     )
 
   private[command] def backgroundStyleOptionItem(
@@ -987,6 +1002,11 @@ object CommandRunner:
       case CursorInfoBarMode.Off      => 0
       case CursorInfoBarMode.Position => 1
       case CursorInfoBarMode.Detailed => 2
+
+  private def cursorInfoBarPlacementIndex(placement: CursorInfoBarPlacement): Int =
+    placement match
+      case CursorInfoBarPlacement.Floating     => 0
+      case CursorInfoBarPlacement.PinnedBottom => 1
 
   private def backgroundStyleIndex(style: BackgroundStyle): Int =
     style match

@@ -195,13 +195,16 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     Files.writeString(
       configFile,
       """cursor.info_bar = detailed
+        |cursor.info_bar.placement = pinned-bottom
         |""".stripMargin
     )
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
     config.cursorInfoBarMode shouldBe CursorInfoBarMode.Detailed
+    config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.PinnedBottom
     ConfigManager.configToString(config) should include("cursor.info_bar = detailed")
+    ConfigManager.configToString(config) should include("cursor.info_bar.placement = pinned-bottom")
   }
 
   it should "ignore invalid cursor colour overrides" in {
