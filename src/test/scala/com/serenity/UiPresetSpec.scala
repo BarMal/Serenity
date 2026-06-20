@@ -136,3 +136,30 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       matched.flatMap(_.config.preferredWindowSize) shouldBe Some(PreferredWindowSize(1200, 900))
     ).unsafeRunSync()
   }
+
+  it should "delete, rename, and duplicate custom presets" in {
+    val path  = Files.createTempDirectory("ui-preset-store-management").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val focus = UiPreset(
+      name = "Focus",
+      config = AppConfig.default.copy(preferredWindowSize = Some(PreferredWindowSize(1000, 700))),
+      themeName = "dark",
+      pinnedPanels = Nil
+    )
+    val review = focus.copy(name = "Review")
+
+    (for
+      _       <- store.upsert(focus)
+      _       <- store.upsert(review)
+      _       <- store.duplicate("Focus", "Focus Copy")
+      _       <- store.rename("Review", "Review Notes")
+      _       <- store.delete("Focus")
+      loaded  <- store.load()
+      copied  <- store.find("Focus Copy")
+      renamed <- store.find("Review Notes")
+    yield
+      loaded.names.sorted shouldBe List("Focus Copy", "Review Notes")
+      copied.flatMap(_.config.preferredWindowSize) shouldBe Some(PreferredWindowSize(1000, 700))
+      renamed.map(_.themeName) shouldBe Some("dark")
+    ).unsafeRunSync()
+  }

@@ -136,3 +136,42 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Left, 28))
     state.pinnedSurfaces.headOption.map(_.content) shouldBe Some(SurfaceContent.Outline(Nil))
   }
+
+  it should "duplicate, rename, and delete UI presets from commands" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-management").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.executeCommand(
+      Command.typed(
+        "duplicate-writing-preset",
+        "Duplicate writing preset",
+        CommandIntent.DuplicateUiPreset("Writing", "Personal Writing"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    store.find("Personal Writing").unsafeRunSync() should not be empty
+
+    sm.executeCommand(
+      Command.typed(
+        "rename-writing-preset",
+        "Rename writing preset",
+        CommandIntent.RenameUiPreset("Personal Writing", "Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    store.find("Personal Writing").unsafeRunSync() shouldBe None
+    store.find("Drafting").unsafeRunSync() should not be empty
+
+    sm.executeCommand(
+      Command.typed(
+        "delete-writing-preset",
+        "Delete writing preset",
+        CommandIntent.DeleteUiPreset("Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    store.find("Drafting").unsafeRunSync() shouldBe None
+    com.serenity.ui.presets.UiPreset.builtIn("Writing") should not be empty
+  }

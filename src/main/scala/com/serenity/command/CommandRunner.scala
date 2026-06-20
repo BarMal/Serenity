@@ -124,7 +124,7 @@ case class CommandRunner(
         id = "settings-ui-presets",
         label = "UI Presets",
         children = List(CommandRunner.builtInUiPresetOptionItem) ++
-          inputItems.filter(item => item.id == "ui-preset-save" || item.id == "ui-preset-apply"),
+          inputItems.filter(_.id.startsWith("ui-preset-")),
         category = CommandCategory.Settings,
         hint = Some("Save or apply named layouts")
       ),
@@ -815,6 +815,36 @@ object CommandRunner:
         parse = text => nonEmptyText(text).map(CommandIntent.ApplyUiPreset(_)),
         category = CommandCategory.Settings,
         acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "ui-preset-duplicate",
+        label = "Duplicate Preset",
+        hint = "Source -> Copy",
+        currentValue = "",
+        isDecimal = false,
+        parse = text => namedPair(text).map(CommandIntent.DuplicateUiPreset.apply),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "ui-preset-rename",
+        label = "Rename Preset",
+        hint = "Current -> New",
+        currentValue = "",
+        isDecimal = false,
+        parse = text => namedPair(text).map(CommandIntent.RenameUiPreset.apply),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "ui-preset-delete",
+        label = "Delete Preset",
+        hint = "Preset name",
+        currentValue = "",
+        isDecimal = false,
+        parse = text => nonEmptyText(text).map(CommandIntent.DeleteUiPreset(_)),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
       )
     )
 
@@ -947,6 +977,16 @@ object CommandRunner:
 
   private def nonEmptyText(text: String): Option[String] =
     Option(text.trim).filter(_.nonEmpty)
+
+  private def namedPair(text: String): Option[(String, String)] =
+    text.split("->", 2).toList match
+      case source :: target :: Nil =>
+        for
+          normalizedSource <- nonEmptyText(source)
+          normalizedTarget <- nonEmptyText(target)
+        yield (normalizedSource, normalizedTarget)
+      case _ =>
+        None
 
   private def normalizeHexColor(text: String): Option[String] =
     val normalized = text.trim.stripPrefix("#")

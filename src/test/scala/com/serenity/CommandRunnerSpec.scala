@@ -341,7 +341,16 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     builtInPreset.options.map(_.label) shouldBe List("Writing", "Documentation", "Code", "Review")
     builtInPreset.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Writing"))
-    inputs.map(_.id) shouldBe List("ui-preset-save", "ui-preset-apply")
+    inputs.map(_.id) shouldBe List(
+      "ui-preset-save",
+      "ui-preset-apply",
+      "ui-preset-duplicate",
+      "ui-preset-rename",
+      "ui-preset-delete"
+    )
+    inputs(2).parse("Writing -> My Writing") shouldBe Some(CommandIntent.DuplicateUiPreset("Writing", "My Writing"))
+    inputs(3).parse("Draft -> Final") shouldBe Some(CommandIntent.RenameUiPreset("Draft", "Final"))
+    inputs(4).parse("Old Preset") shouldBe Some(CommandIntent.DeleteUiPreset("Old Preset"))
     inputs.foreach { item =>
       item.accepts("", 'W') shouldBe true
       item.accepts("Work", ' ') shouldBe true
