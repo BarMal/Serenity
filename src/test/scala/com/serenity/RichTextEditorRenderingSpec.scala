@@ -3,7 +3,7 @@ package com.serenity
 import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
-import com.serenity.richtext.{InlineMark, ParagraphRole, RichTextDocument}
+import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
@@ -232,4 +232,25 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
     surface.styleCalls should contain(
       surface.StyleCall("enable", TextStyle(isBold = true, fontSize = Some(22.0f)))
     )
+  }
+
+  it should "render rich text paragraph alignment through the editor layout" in {
+    val document = RichTextDocument(
+      List(
+        com.serenity.richtext.RichTextParagraph.plain(
+          "Centered",
+          alignment = ParagraphAlignment.Center
+        )
+      )
+    )
+    val buffer = Buffer
+      .fromString(BufferId(1), document.plainText)
+      .copy(richTextDocument = Some(document))
+    val state   = buildState(buffer)
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, textFont, monoMetrics, None)
+
+    val drawCall = surface.drawRunPxCalls.find(_.s == "Centered").getOrElse(fail("expected centered rich text draw"))
+    drawCall.xPx should be > 0.0f
   }

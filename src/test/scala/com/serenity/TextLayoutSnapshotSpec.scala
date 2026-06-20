@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.richtext.{ParagraphAlignment, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
@@ -83,6 +84,51 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     } shouldBe true
     line.xForColumn(0) shouldBe Some(0.0f)
     line.xForColumn(6) shouldBe Some(line.widthPx)
+  }
+
+  it should "offset center-aligned rich text caret stops within the panel width" in {
+    val document = RichTextDocument(
+      List(RichTextParagraph.plain("abcd", alignment = ParagraphAlignment.Center))
+    )
+    val buffer = Buffer
+      .fromString(BufferId(10), document.plainText)
+      .copy(
+        richTextDocument = Some(document),
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2)
+      )
+    val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val metrics = CellMetrics.fromFont(font)
+
+    val snapshot       = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 10, font)
+    val line           = snapshot.visualLines.head
+    val expectedOffset = ((metrics.charWidth * 10).toFloat - line.widthPx) / 2.0f
+
+    line.xOffsetPx shouldBe expectedOffset
+    line.xForColumn(0) shouldBe Some(expectedOffset)
+    line.xForColumn(4) shouldBe Some(expectedOffset + line.widthPx)
+    snapshot.cursorForVisualRowAndXPx(0, expectedOffset) shouldBe Some(CursorPosition(0, 0))
+  }
+
+  it should "offset right-aligned rich text caret stops within the panel width" in {
+    val document = RichTextDocument(
+      List(RichTextParagraph.plain("abcd", alignment = ParagraphAlignment.Right))
+    )
+    val buffer = Buffer
+      .fromString(BufferId(11), document.plainText)
+      .copy(
+        richTextDocument = Some(document),
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2)
+      )
+    val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val metrics = CellMetrics.fromFont(font)
+
+    val snapshot       = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 10, font)
+    val line           = snapshot.visualLines.head
+    val expectedOffset = (metrics.charWidth * 10).toFloat - line.widthPx
+
+    line.xOffsetPx shouldBe expectedOffset
+    line.xForColumn(0) shouldBe Some(expectedOffset)
+    line.xForColumn(4) shouldBe Some(expectedOffset + line.widthPx)
   }
 
   it should "capture non-uniform caret advances for proportional text fonts" in {

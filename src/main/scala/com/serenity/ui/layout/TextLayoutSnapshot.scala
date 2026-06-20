@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage
 import java.awt.{Font, RenderingHints}
 import java.text.AttributedString
 
+import com.serenity.richtext.{ParagraphAlignment, RichTextDocument}
 import com.serenity.state.models.Buffer
 import com.serenity.ui.fonts.FontLoader
 
@@ -16,7 +17,8 @@ case class TextVisualLine(
     endColumn: Int,
     text: String,
     widthPx: Float,
-    caretStops: Vector[TextCaretStop]
+    caretStops: Vector[TextCaretStop],
+    xOffsetPx: Float = 0.0f
 ):
   def xForColumn(column: Int): Option[Float] =
     caretStops.find(_.column == column).map(_.xPx)
@@ -120,6 +122,8 @@ object TextLayoutSnapshot:
       math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getHeight.toDouble).toInt)
     val ascentPx =
       math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getAscent.toDouble).toInt)
+    val richDocument =
+      buffer.richTextDocument.filter(_.matchesPlainText(buffer.content.collect()))
     val visualLineLimit = buffer.viewport.topVisualLine + buffer.viewport.visibleLines
     val visualLines =
       collectVisualLines(
@@ -128,7 +132,8 @@ object TextLayoutSnapshot:
         font,
         fontRenderContext,
         measuredLayout,
-        visualLineLimit
+        visualLineLimit,
+        richDocument
       ).drop(buffer.viewport.topVisualLine).take(buffer.viewport.visibleLines)
 
     TextLayoutSnapshot(
@@ -146,7 +151,8 @@ object TextLayoutSnapshot:
     font: Font,
     frc: FontRenderContext,
     measuredLayout: Boolean,
-    visualLineLimit: Int
+    visualLineLimit: Int,
+    richDocument: Option[RichTextDocument]
   ): Vector[TextVisualLine] =
     @annotation.tailrec
     def loop(lineIndex: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
@@ -167,7 +173,8 @@ object TextLayoutSnapshot:
             measuredLayout,
             startColumn
           )
-        loop(lineIndex + 1, acc ++ wrapped)
+        val aligned = applyParagraphAlignment(wrapped, lineIndex, panelWidthPx, richDocument)
+        loop(lineIndex + 1, acc ++ aligned)
 
     loop(buffer.viewport.topLine, Vector.empty)
 
@@ -236,6 +243,38 @@ object TextLayoutSnapshot:
           TextCaretStop(startColumn + index, x)
       }.toVector
     )
+
+  private def applyParagraphAlignment(
+    lines: Vector[TextVisualLine],
+    lineIndex: Int,
+    panelWidthPx: Int,
+    richDocument: Option[RichTextDocument]
+  ): Vector[TextVisualLine] =
+    val alignment = richDocument
+      .flatMap(_.paragraphs.lift(lineIndex))
+      .map(_.alignment)
+      .getOrElse(ParagraphAlignment.Left)
+
+    lines.map(line => applyAlignment(line, alignment, panelWidthPx))
+
+  private def applyAlignment(
+    line: TextVisualLine,
+    alignment: ParagraphAlignment,
+    panelWidthPx: Int
+  ): TextVisualLine =
+    val availablePx = math.max(0.0f, panelWidthPx.toFloat - line.widthPx)
+    val offsetPx =
+      alignment match
+        case ParagraphAlignment.Left | ParagraphAlignment.Justify => 0.0f
+        case ParagraphAlignment.Center                            => availablePx / 2.0f
+        case ParagraphAlignment.Right                             => availablePx
+
+    if offsetPx <= 0.0f then line
+    else
+      line.copy(
+        caretStops = line.caretStops.map(stop => stop.copy(xPx = stop.xPx + offsetPx)),
+        xOffsetPx = offsetPx
+      )
 
   private def caretXs(text: String, font: Font, frc: FontRenderContext, measuredLayout: Boolean): Vector[Float] =
     if text.isEmpty then Vector(0.0f)

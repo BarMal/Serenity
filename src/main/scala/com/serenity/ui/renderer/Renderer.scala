@@ -307,7 +307,7 @@ object Renderer:
       case (visualLine, screenLineIndex) =>
         if screenLineIndex < rect.height then
           val screenY = rect.y + screenLineIndex
-          val screenX = rect.x
+          val screenX = rect.x + visualLineCellOffset(visualLine, context)
 
           context.surface.setForegroundColor(state.theme.foreground)
 
@@ -371,13 +371,17 @@ object Renderer:
             lineAnims
               .filter((col, cell) => col >= stringEnd && cell.currentBackground.isDefined)
               .foreach { (col, cell) =>
-                val bgScreenX = rect.x + (col - visualLine.startColumn)
+                val bgScreenX = rect.x + visualLineCellOffset(visualLine, context) + (col - visualLine.startColumn)
                 if bgScreenX >= 0 && bgScreenX < rect.right then
                   context.surface.setForegroundColor(state.theme.foreground)
                   context.surface.setBackgroundColor(cell.currentBackground.get)
                   context.surface.putString(bgScreenX, screenY, " ")
               }
     }
+
+  private def visualLineCellOffset(visualLine: TextVisualLine, context: RenderContext): Int =
+    if visualLine.xOffsetPx <= 0.0f then 0
+    else math.round(visualLine.xOffsetPx / context.cellMetrics.charWidth.toFloat).max(0)
 
   private def isHoveredEditorLine(
     paneId: PaneId,
@@ -466,7 +470,7 @@ object Renderer:
           else
             (selectionStart until selectionEnd).foreach { bufferColumn =>
               val relativeColumn = bufferColumn - visualLine.startColumn
-              val screenX        = rect.x + relativeColumn
+              val screenX        = rect.x + visualLineCellOffset(visualLine, context) + relativeColumn
               if screenX >= rect.x && screenX < rect.right then
                 val charIndex = bufferColumn - visualLine.startColumn
                 val charToRender =
