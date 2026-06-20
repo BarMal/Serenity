@@ -1,5 +1,6 @@
 package com.serenity
 
+import java.awt.Font
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
@@ -111,4 +112,27 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     state.theme.name shouldBe Theme.dark.name
     state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Right, 36))
     observedWindowSize.get.unsafeRunSync() shouldBe Some(PreferredWindowSize(1280, 720))
+  }
+
+  it should "apply a built-in writing preset when no custom preset exists" in {
+    val path  = Files.createTempDirectory("state-manager-built-in-ui-preset").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.executeCommand(
+      Command.typed(
+        "apply-writing-preset",
+        "Apply writing preset",
+        CommandIntent.ApplyUiPreset("Writing"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+
+    state.config.fontConfig.textFontFamily shouldBe Font.SERIF
+    state.config.showLineNumbers shouldBe false
+    state.config.showGutter shouldBe false
+    state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Left, 28))
+    state.pinnedSurfaces.headOption.map(_.content) shouldBe Some(SurfaceContent.Outline(Nil))
   }

@@ -1,9 +1,10 @@
 package com.serenity
 
+import java.awt.Font
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{AppConfig, BackgroundStyle, PreferredWindowSize}
+import com.serenity.config.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -85,6 +86,33 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     restored.pinnedSurfaces should have size 1
     restored.pinnedSurfaces.head.presentation shouldBe SurfacePresentation.Pinned(PanelPosition.Right, 44)
     restored.pinnedSurfaces.head.content shouldBe a[SurfaceContent.DirectoryTree]
+  }
+
+  it should "provide built-in task presets for writing, documentation, code, and review" in {
+    UiPreset.builtInNames shouldBe List("Writing", "Documentation", "Code", "Review")
+
+    val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
+    val docs    = UiPreset.builtIn("Documentation").getOrElse(fail("missing Documentation preset"))
+    val code    = UiPreset.builtIn("Code").getOrElse(fail("missing Code preset"))
+    val review  = UiPreset.builtIn("Review").getOrElse(fail("missing Review preset"))
+
+    writing.config.fontConfig.textFontFamily shouldBe Font.SERIF
+    writing.config.fontConfig.textFontSize should be > AppConfig.default.fontConfig.textFontSize
+    writing.config.showLineNumbers shouldBe false
+    writing.config.showGutter shouldBe false
+    writing.config.motionPreset shouldBe MotionPreset.Subtle
+    writing.pinnedPanels.map(panel => panel.position -> panel.content) should contain(
+      PanelPosition.Left -> UiPreset.PanelContentSnapshot.Outline(Nil)
+    )
+
+    docs.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
+    docs.pinnedPanels.map(_.content) should contain(UiPreset.PanelContentSnapshot.Outline(Nil))
+
+    code.config.motionPreset shouldBe MotionPreset.Reduced
+    code.config.showLineNumbers shouldBe true
+    code.pinnedPanels.map(_.position) should contain(PanelPosition.Left)
+
+    review.pinnedPanels.map(_.content) should contain(UiPreset.PanelContentSnapshot.Diagnostics(Nil))
   }
 
   "UiPresetStore" should "persist named presets to disk and replace an existing preset by name" in {

@@ -575,6 +575,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case Some(presetName) =>
         uiPresetStore
           .find(presetName)
+          .map(_.orElse(UiPreset.builtIn(presetName)))
           .flatMap {
             case None =>
               logger.warn(s"[PRESET] UI preset not found: $presetName")
