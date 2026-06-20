@@ -37,6 +37,27 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     SpellChecker.check("wurld", SpellCheckConfig(enabled = false)) shouldBe Nil
   }
 
+  it should "accept configured French and Greek dictionaries with diacritics and non-Latin letters" in {
+    val french = "bonjour caf\u00e9 fran\u00e7ais r\u00e9sum\u00e9"
+    val greek  = "\u03ba\u03cc\u03c3\u03bc\u03bf\u03c2 \u03b3\u03b5\u03b9\u03ac"
+    val config = SpellCheckConfig(
+      enabled = true,
+      languages = List("en", "fr", "el")
+    )
+
+    val diagnostics = SpellChecker.check(s"$french\n$greek\nwrld", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: wrld")
+  }
+
+  it should "keep words joined by a curly apostrophe in one diagnostic range" in {
+    val diagnostics = SpellChecker.check("l\u2019amour", SpellCheckConfig(enabled = true))
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: l\u2019amour")
+    diagnostics.head.range.start.character shouldBe 0
+    diagnostics.head.range.end.character shouldBe 7
+  }
+
   it should "ignore code-like tokens and short words" in {
     val config = SpellCheckConfig(enabled = true)
 
