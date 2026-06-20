@@ -179,6 +179,8 @@ object ConfigManager:
               parseMaterialPreset(value.trim).map(config.withMaterialPreset).getOrElse(config)
             case "ui.motion" | "ui_motion" | "motion.preset" | "motion_preset" =>
               parseMotionPreset(value.trim).map(config.withMotionPreset).getOrElse(config)
+            case "document.default_mode" | "document.default.mode" | "document_default_mode" =>
+              parseDefaultDocumentMode(value.trim).map(config.withDefaultDocumentMode).getOrElse(config)
             case "window.preferred.width" | "window_preferred_width" =>
               value.trim.toIntOption
                 .map(width =>
@@ -297,6 +299,9 @@ object ConfigManager:
        |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
        |ui.material = ${config.materialPreset.configKey}
        |ui.motion = ${config.motionPreset.configKey}
+       |
+       |# Default mode for new buffers: plain-text, markdown, rich-text
+       |document.default_mode = ${config.defaultDocumentMode.configKey}
        |
        |# Preferred desktop window size. Leave empty to use the default.
        |window.preferred.width = ${config.preferredWindowSize.map(_.width).fold("")(_.toString)}
@@ -455,6 +460,8 @@ object ConfigManager:
       "material.preset",
       "ui.motion",
       "motion.preset",
+      "document.default_mode",
+      "document.default.mode",
       "window.preferred.width",
       "window.preferred.height",
       "text_area.left.percent",
@@ -492,6 +499,7 @@ object ConfigManager:
       "material_preset"           -> "material.preset",
       "ui_motion"                 -> "ui.motion",
       "motion_preset"             -> "motion.preset",
+      "document_default_mode"     -> "document.default_mode",
       "window_preferred_width"    -> "window.preferred.width",
       "window_preferred_height"   -> "window.preferred.height",
       "text_area_left_percent"    -> "text_area.left.percent",
@@ -521,6 +529,13 @@ object ConfigManager:
       case "expressive" | "full" | "quick"         => Some(MotionPreset.Expressive)
       case "custom"                                => Some(MotionPreset.Custom)
       case _                                       => None
+
+  private def parseDefaultDocumentMode(value: String): Option[DefaultDocumentMode] =
+    value.toLowerCase match
+      case "plain-text" | "plaintext" | "plain" | "text" => Some(DefaultDocumentMode.PlainText)
+      case "markdown" | "md"                             => Some(DefaultDocumentMode.Markdown)
+      case "rich-text" | "richtext" | "rich" | "rtf"     => Some(DefaultDocumentMode.RichText)
+      case _                                             => None
 
   private def parseColor(value: String): Option[java.awt.Color] =
     val hex = value.stripPrefix("#")

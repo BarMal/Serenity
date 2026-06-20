@@ -80,6 +80,7 @@ object UiPreset:
         .withGutter(false)
         .withMotionPreset(MotionPreset.Subtle)
         .withMaterialPreset(MaterialPreset.Frosted)
+        .withDefaultDocumentMode(DefaultDocumentMode.RichText)
         .withInterfaceDensity(InterfaceDensity.Spacious)
         .withTextAreaInsets(TextAreaInsets.fromPercent(22.0, 22.0))
         .copy(
@@ -102,6 +103,7 @@ object UiPreset:
         .withGutter(false)
         .withMotionPreset(MotionPreset.Subtle)
         .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
+        .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
         .copy(
           fontConfig = AppConfig.default.fontConfig.copy(
             textFontFamily = Font.SANS_SERIF,

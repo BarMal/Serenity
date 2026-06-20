@@ -1,5 +1,8 @@
 package com.serenity.state.core
 
+import com.serenity.config.DefaultDocumentMode
+import com.serenity.lsp.config.LanguageId
+import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 
@@ -14,7 +17,7 @@ object EditorState:
 
   def createNewEmptyBuffer(state: AppState)(using com.serenity.rope.Balance): (AppState, BufferId) =
     val bufferId = state.nextBufferId
-    val buffer   = Buffer.newEmpty(bufferId)
+    val buffer   = newEmptyBuffer(bufferId, state.config.defaultDocumentMode)
     (
       state.copy(
         buffers = state.buffers + (bufferId -> buffer),
@@ -22,6 +25,16 @@ object EditorState:
       ),
       bufferId
     )
+
+  private def newEmptyBuffer(bufferId: BufferId, mode: DefaultDocumentMode)(using com.serenity.rope.Balance): Buffer =
+    val buffer = Buffer.newEmpty(bufferId)
+    mode match
+      case DefaultDocumentMode.PlainText =>
+        buffer
+      case DefaultDocumentMode.Markdown =>
+        buffer.copy(language = Some(LanguageId.Markdown))
+      case DefaultDocumentMode.RichText =>
+        buffer.copy(richTextDocument = Some(RichTextDocument.fromPlainText("")))
 
   def insertBufferInOrder(state: AppState, newBufferId: BufferId): AppState =
     state.focusedBufferId match

@@ -85,6 +85,12 @@ enum MarkdownViewMode:
   case SplitPreview
   case InlineLens
 
+/** Default document mode for newly-created empty buffers. */
+enum DefaultDocumentMode(val configKey: String):
+  case PlainText extends DefaultDocumentMode("plain-text")
+  case Markdown  extends DefaultDocumentMode("markdown")
+  case RichText  extends DefaultDocumentMode("rich-text")
+
 enum InterfaceDensity:
   case Compact
   case Comfortable
@@ -219,6 +225,7 @@ case class AppConfig(
     cursorInfoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating,
     windowChromeMode: WindowChromeMode = WindowChromeMode.Native,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
+    defaultDocumentMode: DefaultDocumentMode = DefaultDocumentMode.PlainText,
     interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     preferredWindowSize: Option[PreferredWindowSize] = None,
@@ -339,6 +346,10 @@ case class AppConfig(
 
   def withMarkdownViewMode(mode: MarkdownViewMode): AppConfig =
     copy(markdownViewMode = mode)
+
+  /** Create a new config with the default mode used for new empty buffers. */
+  def withDefaultDocumentMode(mode: DefaultDocumentMode): AppConfig =
+    copy(defaultDocumentMode = mode)
 
   def withInterfaceDensity(density: InterfaceDensity): AppConfig =
     copy(interfaceDensity = density)

@@ -349,6 +349,20 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("ui.motion = reduced")
   }
 
+  it should "load and write the default document mode" in {
+    val configFile = Files.createTempFile("serenity-default-document-mode", ".conf")
+    Files.writeString(
+      configFile,
+      """document.default_mode = markdown
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
+    ConfigManager.configToString(config) should include("document.default_mode = markdown")
+  }
+
   it should "load and write spell-check configuration" in {
     val configFile = Files.createTempFile("serenity-spell-config", ".conf")
     Files.writeString(
