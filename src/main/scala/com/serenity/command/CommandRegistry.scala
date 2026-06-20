@@ -2,6 +2,7 @@ package com.serenity.command
 
 import com.serenity.command.CommandSurfaceItem.CommandItem
 import com.serenity.project.ProjectTaskKind
+import com.serenity.richtext.{ParagraphAlignment, ParagraphRole}
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.layout.PanelPosition
 
@@ -222,6 +223,62 @@ object CommandRegistry:
       CommandIntent.ToggleRichTextMark(com.serenity.richtext.InlineMark.Underline),
       CommandCategory.Edit,
       label = "Underline"
+    ),
+    Command.typed(
+      "paragraph-body",
+      "Set the active paragraph to body text.",
+      CommandIntent.SetRichTextParagraphRole(ParagraphRole.Body),
+      CommandCategory.Edit,
+      label = "Body Text"
+    ),
+    Command.typed(
+      "heading-1",
+      "Set the active paragraph to heading level 1.",
+      CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(1)),
+      CommandCategory.Edit,
+      label = "Heading 1"
+    ),
+    Command.typed(
+      "heading-2",
+      "Set the active paragraph to heading level 2.",
+      CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(2)),
+      CommandCategory.Edit,
+      label = "Heading 2"
+    ),
+    Command.typed(
+      "heading-3",
+      "Set the active paragraph to heading level 3.",
+      CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(3)),
+      CommandCategory.Edit,
+      label = "Heading 3"
+    ),
+    Command.typed(
+      "align-left",
+      "Align the active paragraph to the left.",
+      CommandIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Left),
+      CommandCategory.Edit,
+      label = "Align Left"
+    ),
+    Command.typed(
+      "align-center",
+      "Center the active paragraph.",
+      CommandIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Center),
+      CommandCategory.Edit,
+      label = "Align Center"
+    ),
+    Command.typed(
+      "align-right",
+      "Align the active paragraph to the right.",
+      CommandIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Right),
+      CommandCategory.Edit,
+      label = "Align Right"
+    ),
+    Command.typed(
+      "align-justify",
+      "Justify the active paragraph.",
+      CommandIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Justify),
+      CommandCategory.Edit,
+      label = "Justify"
     ),
     Command.typed(
       "comment-lens",
