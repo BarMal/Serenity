@@ -6,6 +6,7 @@ import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.config.PreferredWindowSize
+import com.serenity.io.FileDialog
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
@@ -49,7 +50,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         configPersistencePath = None,
         uiPresetStore = UiPresetStore.default,
         windowSizeProvider = IO.pure(Some(PreferredWindowSize(1000, 700))),
-        onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit
+        onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
+        fileDialog = FileDialog.unavailable
       )
     yield
       runtime.stateRef shouldBe stateRef
@@ -60,6 +62,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.mouseTargetCacheRef shouldBe mouseTargetCacheRef
       runtime.sessionManager.sessionExists.unsafeRunSync() shouldBe false
       runtime.fileManager should not be null
+      runtime.fileDialog shouldBe FileDialog.unavailable
       runtime.sessionPersistence should not be null
 
     program.unsafeRunSync()

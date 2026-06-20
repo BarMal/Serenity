@@ -5,7 +5,7 @@ import java.nio.file.Path
 import cats.effect.std.Queue
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.config.PreferredWindowSize
-import com.serenity.io.FileManager
+import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
@@ -31,6 +31,7 @@ private[manager] case class StateManagerRuntime(
     uiPresetStore: UiPresetStore,
     windowSizeProvider: IO[Option[PreferredWindowSize]],
     onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit],
+    fileDialog: FileDialog,
     fileManager: FileManager,
     sessionManager: SessionManager,
     sessionPersistence: SessionPersistence
@@ -53,7 +54,8 @@ private[manager] object StateManagerRuntime:
     configPersistencePath: Option[Path],
     uiPresetStore: UiPresetStore,
     windowSizeProvider: IO[Option[PreferredWindowSize]],
-    onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit]
+    onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit],
+    fileDialog: FileDialog
   )(using Balance): StateManagerRuntime =
     val sessionManager = sessionRootOverride
       .map(root => SessionManager.create(root, themeManager, logger, policy))
@@ -73,6 +75,7 @@ private[manager] object StateManagerRuntime:
       uiPresetStore = uiPresetStore,
       windowSizeProvider = windowSizeProvider,
       onPreferredWindowSizeChanged = onPreferredWindowSizeChanged,
+      fileDialog = fileDialog,
       fileManager = new FileManager(),
       sessionManager = sessionManager,
       sessionPersistence = new SessionPersistence(sessionManager, policy, logger)

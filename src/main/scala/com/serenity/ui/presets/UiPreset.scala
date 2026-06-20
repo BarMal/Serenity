@@ -172,6 +172,7 @@ object UiPreset:
     case "Method"   => Right(SymbolKind.Method)
     case "Variable" => Right(SymbolKind.Variable)
     case "Constant" => Right(SymbolKind.Constant)
+    case "Heading"  => Right(SymbolKind.Heading)
     case other      => Left(s"Unknown SymbolKind: $other")
   }
 

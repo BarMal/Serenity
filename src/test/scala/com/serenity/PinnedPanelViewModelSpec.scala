@@ -50,7 +50,8 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
       List(
         Symbol("Serenity", SymbolKind.Class, Location(1, 1)),
         Symbol("render", SymbolKind.Method, Location(10, 3)),
-        Symbol("state", SymbolKind.Variable, Location(20, 5))
+        Symbol("state", SymbolKind.Variable, Location(20, 5)),
+        Symbol("Chapter 1", SymbolKind.Heading, Location(30, 0))
       )
     ),
     presentation = SurfacePresentation.Pinned(PanelPosition.Right, 20)
@@ -138,10 +139,15 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     val wide = PinnedPanelViewModel.resolve(outlinePanel, LayoutRect(0, 0, 60, 10))
 
     tall.title shouldBe "outline"
-    tall.rows.map(_.plainText) shouldBe List("Class Serenity", "Method render", "Variable state")
+    tall.rows.map(_.plainText) shouldBe List(
+      "Class Serenity",
+      "Method render",
+      "Variable state",
+      "Heading Chapter 1"
+    )
 
     wide.title shouldBe "outline"
-    wide.rows.map(_.plainText) shouldBe List("Serenity | render | state")
+    wide.rows.map(_.plainText) shouldBe List("Serenity | render | state | Chapter 1")
   }
 
   it should "shape diagnostics content differently for wide and compact geometry" in {

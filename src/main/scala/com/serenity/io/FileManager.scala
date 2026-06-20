@@ -12,11 +12,14 @@ class FileManager(using balance: Balance):
 
   /** Load file into a new buffer */
   def loadFile(path: Path, bufferId: BufferId): IO[Buffer] =
-    FileUtils.readFileContent(path).map(content => bufferFromContent(bufferId, path, content))
+    ensureSupported(path, _.canOpen, "open") >>
+      FileUtils.readFileContent(path).map(content => bufferFromContent(bufferId, path, content))
 
   /** Save buffer to file */
   def saveBuffer(buffer: Buffer, path: Path): IO[Buffer] =
-    for _ <- FileUtils.writeFileContent(path, buffer.content.collect())
+    for
+      _ <- ensureSupported(path, _.canSave, "save")
+      _ <- FileUtils.writeFileContent(path, buffer.content.collect())
     yield buffer.copy(
       filePath = Some(path),
       isDirty = false,
@@ -83,6 +86,18 @@ class FileManager(using balance: Balance):
             case i  => Some(n.substring(i + 1))
         )
         .flatMap(FileExtension.languageIdFor)
+    )
+
+  private def ensureSupported(
+    path: Path,
+    operationSupported: DocumentFormatCapabilities => Boolean,
+    operationName: String
+  ): IO[Unit] =
+    val fileType     = FileUtils.detectFileType(path)
+    val format       = DocumentFormat.fromFileType(fileType)
+    val capabilities = DocumentFormat.capabilities(format)
+    IO.unlessA(operationSupported(capabilities))(
+      IO.raiseError(new RuntimeException(s"Unsupported document format for $operationName: ${fileType.displayName}"))
     )
 
 case class FileInfo(

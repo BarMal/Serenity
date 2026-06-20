@@ -113,9 +113,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
                       stateRef.set(nextState) >> continueCloseWorkflow(workflow, nextState)
                     }
                 case Some(_) =>
-                  val dismissedState = withCloseAction(dismissModalSurface(state), workflow)
-                  stateRef.set(dismissedState) >>
-                    openFileWorkflowModal(FileWorkflowMode.SaveAs, dismissedState, Some(workflow.currentBufferId))
+                  requestSaveAsFileDialog(state, Some(workflow.currentBufferId))
                 case None =>
                   stateRef.set(clearCloseActions(dismissModalSurface(state)))
         case None =>
@@ -498,6 +496,43 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
           }
       case None =>
         logger.debug("[FILE-WORKFLOW] No focused buffer available for save-as")
+
+  protected def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
+    bufferIdOverride.orElse(state.focusedBufferId) match
+      case Some(bufferId) =>
+        val focusedPath = state.buffers.get(bufferId).flatMap(_.filePath)
+        val initialDirectory =
+          focusedPath
+            .flatMap(path => Option(path.getParent).map(IO.pure))
+            .getOrElse(FileUtils.getCurrentDirectory)
+        val suggestedFileName = focusedPath.flatMap(path => Option(path.getFileName).map(_.toString))
+
+        initialDirectory
+          .flatMap(directory => fileDialog.chooseSaveFile(Some(directory), suggestedFileName))
+          .flatMap {
+            case Some(path) =>
+              saveBufferAsEffect(bufferId, path) >> continueCloseAfterNativeSaveAs(bufferId)
+            case None =>
+              IO.unit
+          }
+          .handleErrorWith(ex => logger.error(ex)(s"[FILE] Native save-as dialog failed for buffer $bufferId"))
+      case None =>
+        logger.debug("[FILE] Save As requested without a focused buffer")
+
+  private def continueCloseAfterNativeSaveAs(bufferId: BufferId): IO[Unit] =
+    stateRef.get.flatMap { savedState =>
+      savedState.actionStack.collectFirst {
+        case AppAction.CloseWorkflow(closeWorkflow) if closeWorkflow.currentBufferId == bufferId => closeWorkflow
+      } match
+        case Some(closeWorkflow) =>
+          val dismissedState = dismissModalSurface(savedState)
+          val nextState =
+            if closeWorkflow.scope == CloseScope.Quit then dismissedState
+            else closeBufferUsingExistingFlow(dismissedState, bufferId)
+          stateRef.set(nextState) >> continueCloseWorkflow(closeWorkflow, nextState)
+        case None =>
+          IO.unit
+    }
 
   protected def activeEditorBufferId(state: AppState): Option[BufferId] =
     state.layout.activeEditorPaneId

@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
+import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
@@ -16,8 +17,21 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
 
   behavior of "Startup Options End-to-End"
 
+  private case class TestFileDialog(openSelection: Option[java.nio.file.Path]) extends FileDialog:
+    override def chooseOpenFile(initialDirectory: Option[java.nio.file.Path]): IO[Option[java.nio.file.Path]] =
+      IO.pure(openSelection)
+
+    override def chooseSaveFile(
+      initialDirectory: Option[java.nio.file.Path],
+      suggestedFileName: Option[String]
+    ): IO[Option[java.nio.file.Path]] =
+      IO.pure(None)
+
   it should "handle all three startup options correctly" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val selectedFile = java.nio.file.Files.createTempFile("serenity-startup-options-open", ".txt")
+    java.nio.file.Files.writeString(selectedFile, "opened from startup options")
 
     val program = for
       // Test Option 1: New Session
@@ -49,7 +63,10 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
         restoreSessionState.focus should matchPattern { case Focus.EditorPane(_) => }
 
       // Test Option 3: Open File
-      stateManager3 <- createStateManagerIO("StartupOptionsEndToEndSpec")
+      stateManager3 <- createStateManagerIO(
+        "StartupOptionsEndToEndSpec",
+        fileDialog = TestFileDialog(Some(selectedFile))
+      )
       _             <- AppStartup.initializeState(stateManager3, theme, viewportSize)
       _             <- stateManager3.applyEvent(MoveDown) // Move to option 2
       _             <- stateManager3.applyEvent(MoveDown) // Move to option 3
@@ -57,24 +74,16 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
       openFileState <- stateManager3.getCurrentState
 
       _ =
-        // Startup page remains as the back-destination while the file modal is open
-        openFileState.startPageSurface should not be None
-
-        // Should have file workflow modal open
-        val hasFileWorkflow = openFileState.uiSurfaces.exists { surface =>
-          surface.content match
-            case SurfaceContent.ModalWorkflow(modal) =>
-              modal match
-                case Modal.FileWorkflow(_) => true
-                case _                     => false
-            case _ => false
-        }
-        hasFileWorkflow shouldBe true
-
-        openFileState.focus should matchPattern { case Focus.Surface(_) => }
+        openFileState.startPageSurface shouldBe None
+        openFileState.modalSurface shouldBe None
+        openFileState.buffers.values.find(_.filePath.contains(selectedFile)).map(_.content.collect()) shouldBe Some(
+          "opened from startup options"
+        )
+        openFileState.focus should matchPattern { case Focus.EditorPane(_) => }
     yield succeed
 
     program.unsafeRunSync()
+    java.nio.file.Files.deleteIfExists(selectedFile)
   }
 
   it should "handle navigation between all options correctly" in {

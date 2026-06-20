@@ -3,6 +3,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.app.{AppRuntime, RuntimeDisplayState}
 import com.serenity.config.ConfigManager
 import com.serenity.input.SwingInputHandler
+import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.terminal.SwingWindow
@@ -74,7 +75,8 @@ object Main extends IOApp:
                     IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics)),
                 configPersistencePath = Some(ConfigManager.defaultConfigPath),
                 windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
-                onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size))
+                onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
+                fileDialog = SwingFileDialog(swingWin.canvas)
               )
             ),
             awaitExternalQuit = swingWin.awaitClose,

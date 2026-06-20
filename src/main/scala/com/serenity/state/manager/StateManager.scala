@@ -7,6 +7,7 @@ import cats.effect.{Deferred, IO, Ref}
 import com.serenity.animation.{AnimatedCell, CharacterKey, RgbInterpolator}
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
+import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
@@ -123,7 +124,8 @@ object StateManager:
     configPersistencePath: Option[Path] = None,
     uiPresetStore: UiPresetStore = UiPresetStore.default,
     windowSizeProvider: IO[Option[PreferredWindowSize]] = IO.pure(None),
-    onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit] = _ => IO.unit
+    onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit] = _ => IO.unit,
+    fileDialog: FileDialog = FileDialog.unavailable
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     for
@@ -151,7 +153,8 @@ object StateManager:
         configPersistencePath = configPersistencePath,
         uiPresetStore = uiPresetStore,
         windowSizeProvider = windowSizeProvider,
-        onPreferredWindowSizeChanged = onPreferredWindowSizeChanged
+        onPreferredWindowSizeChanged = onPreferredWindowSizeChanged,
+        fileDialog = fileDialog
       )
     yield new StateManagerImpl(runtime)
 
