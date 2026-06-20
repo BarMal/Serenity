@@ -54,7 +54,7 @@ object LayoutEngine:
     spacerPercentage: Double = DefaultSpacerPercentage
   ): CalculatedLayout =
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
-    val gutterHeight   = if state.config.showGutter then densityMetrics.gutterHeight else 0
+    val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
     val contentHeight  = math.max(1, viewportSize.height - gutterHeight)
     val pinnedPanelLayout = calculatePinnedPanelLayout(
       state.pinnedSurfaces,
@@ -125,7 +125,7 @@ object LayoutEngine:
       )
 
     val gutterRect =
-      if state.config.showGutter then
+      if usesBottomGutter(state) then
         Some(LayoutRect(0, viewportSize.height - gutterHeight, viewportSize.width, gutterHeight))
       else None
 
@@ -159,6 +159,11 @@ object LayoutEngine:
       belowCursorOverlayStack = belowLayout.stack,
       collapsedFloatingSurfaceIds = belowLayout.collapsedSurfaceIds
     )
+
+  private def usesBottomGutter(state: AppState): Boolean =
+    state.config.showGutter ||
+      (state.config.cursorInfoBarMode != com.serenity.config.CursorInfoBarMode.Off &&
+        state.config.cursorInfoBarPlacement == com.serenity.config.CursorInfoBarPlacement.PinnedBottom)
 
   private case class PinnedPanelLayout(
       panelRects: Map[PanelPosition, LayoutRect],

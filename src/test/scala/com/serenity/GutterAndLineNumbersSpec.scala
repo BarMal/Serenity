@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.{CursorInfoBarMode, CursorInfoBarPlacement}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -304,6 +305,39 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       checkGutterStyling() shouldBe "black_background"
 
     program.unsafeRunSync()
+  }
+
+  it should "render pinned cursor info in the gutter without a pinned panel shell" in {
+    val buffer = Buffer
+      .fromString(BufferId(4), "alpha\nbeta")
+      .copy(cursors = List(CursorPosition(1, 2)))
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.EditorPane(PaneId(0)),
+      config = AppState.initial.config
+        .withCursorInfoBarMode(CursorInfoBarMode.Position)
+        .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+        .copy(showGutter = false),
+      theme = Theme.light
+    )
+    val surface  = new MockRenderSurface(80, 24)
+    val viewport = ViewportSize(80, 24)
+    val layout   = LayoutEngine.calculateLayout(state, viewport)
+    val gutter   = layout.gutterRect.getOrElse(fail("Expected cursor info gutter rect"))
+
+    Renderer.render(state, cursorVisible = true, surface, viewport)
+
+    val renderedGutter =
+      (gutter.x until gutter.right).map(x => surface.getChar(x, gutter.y)).mkString
+
+    renderedGutter should include("Line 2, Col 3")
+    layout.pinnedSurfaceRects.get(SurfaceId("cursor-info-bar")) shouldBe None
   }
 
   // Helper functions that will need to be implemented
