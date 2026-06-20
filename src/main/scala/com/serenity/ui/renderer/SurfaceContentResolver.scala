@@ -111,10 +111,7 @@ object SurfaceContentResolver:
         ResolvedSurfaceContent(
           title = titleFor(mode, "comment"),
           header = Some(OverlayRow("comment")),
-          rows = List(
-            OverlayRow(comment.inlineMarkdown),
-            OverlayRow(comment.raw)
-          )
+          rows = commentRows(comment.inlineMarkdown) ++ commentRows(comment.raw)
         )
       case SurfaceContent.MarkdownPreview(_, title) =>
         ResolvedSurfaceContent(title = titleFor(mode, s"Preview: $title"))
@@ -142,6 +139,11 @@ object SurfaceContentResolver:
     mode match
       case SurfaceRenderMode.Floating => None
       case SurfaceRenderMode.Pinned   => Some(title)
+
+  private def commentRows(text: String): List[OverlayRow] =
+    text.linesIterator.toList match
+      case Nil   => List(OverlayRow(""))
+      case lines => lines.map(OverlayRow(_))
 
   private def modalLines(modal: Modal): List[String] =
     modal match

@@ -34,6 +34,26 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
     comment.inlineMarkdown shouldBe "Draft note"
   }
 
+  it should "extract multiline block comments from code buffers" in {
+    val buffer = Buffer
+      .fromString(
+        BufferId(1),
+        """val x = 1
+          |/*
+          | * **Review** this value
+          | * before release
+          | */
+          |val y = 2""".stripMargin
+      )
+      .copy(language = Some(LanguageId.Scala), cursors = List(CursorPosition(2, 6)))
+
+    val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
+
+    comment.sourceLine shouldBe 1
+    comment.raw shouldBe "/*\n* **Review** this value\n* before release\n*/"
+    comment.inlineMarkdown shouldBe "Review this value\nbefore release"
+  }
+
   it should "extract prose comments from markdown buffers" in {
     val buffer = Buffer
       .fromString(BufferId(1), "<!-- **Review** this paragraph -->")
@@ -43,6 +63,25 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
 
     comment.raw shouldBe "<!-- **Review** this paragraph -->"
     comment.inlineMarkdown shouldBe "Review this paragraph"
+  }
+
+  it should "extract multiline prose comments from markdown buffers" in {
+    val buffer = Buffer
+      .fromString(
+        BufferId(1),
+        """# Notes
+          |<!--
+          |**Review** this paragraph
+          |before publishing
+          |-->""".stripMargin
+      )
+      .copy(language = Some(LanguageId.Markdown), cursors = List(CursorPosition(2, 4)))
+
+    val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
+
+    comment.sourceLine shouldBe 1
+    comment.raw shouldBe "<!--\n**Review** this paragraph\nbefore publishing\n-->"
+    comment.inlineMarkdown shouldBe "Review this paragraph\nbefore publishing"
   }
 
   it should "return no comment for ordinary source lines" in {

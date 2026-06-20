@@ -4,6 +4,7 @@ import java.nio.file.Paths
 
 import com.serenity.command.*
 import com.serenity.config.AppConfig
+import com.serenity.document.RenderedComment
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, LayoutRect}
@@ -129,6 +130,30 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.rows.map(_.plainText) shouldBe List("Save", "Find")
     floating.rows.map(_.selected) shouldBe List(false, true)
     floating.footer.map(_.plainText) shouldBe Some("2/2")
+  }
+
+  it should "resolve multiline comment lenses into separate inline and raw rows" in {
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.CommentLens(
+        RenderedComment(
+          sourceLine = 4,
+          raw = "/*\n* **Review** this value\n*/",
+          inlineMarkdown = "Review this value\nbefore release"
+        )
+      ),
+      LayoutRect(0, 0, 28, 8),
+      SurfaceRenderMode.Floating
+    )
+
+    floating.title shouldBe None
+    floating.header.map(_.plainText) shouldBe Some("comment")
+    floating.rows.map(_.plainText) shouldBe List(
+      "Review this value",
+      "before release",
+      "/*",
+      "* **Review** this value",
+      "*/"
+    )
   }
 
   it should "resolve browse mode into distributed category tabs and grouped settings rows without bracket markers" in {
