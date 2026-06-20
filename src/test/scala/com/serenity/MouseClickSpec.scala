@@ -135,7 +135,14 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       }
       .getOrElse(fail("Expected editor context menu"))
     menu.targetFocus shouldBe Focus.EditorPane(PaneId(0))
-    menu.items.map(_.id) should contain allOf ("save", "find", "replace", "goto-line")
+    menu.items.map(_.id) should contain allOf (
+      "save",
+      "find",
+      "replace",
+      "goto-line",
+      "next-document-symbol",
+      "previous-document-symbol"
+    )
     state.focus shouldBe Focus.Surface(SurfaceId("context-menu"))
   }
 

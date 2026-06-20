@@ -217,6 +217,20 @@ object CommandRegistry:
       label = "Go to Line"
     ),
     Command.typed(
+      "next-document-symbol",
+      "Go to the next document symbol.",
+      CommandIntent.NextDocumentSymbol,
+      CommandCategory.View,
+      label = "Next Document Symbol"
+    ),
+    Command.typed(
+      "previous-document-symbol",
+      "Go to the previous document symbol.",
+      CommandIntent.PreviousDocumentSymbol,
+      CommandCategory.View,
+      label = "Previous Document Symbol"
+    ),
+    Command.typed(
       "lsp-hover",
       "Show language-server hover information at the cursor.",
       CommandIntent.RequestLspHover,

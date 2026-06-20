@@ -20,8 +20,19 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
   this: StateManager =>
 
   private val ContextMenuSurfaceId = SurfaceId("context-menu")
+
   private val EditorContextMenuCommands =
-    List("save", "save-as", "find", "replace", "goto-line", "markdown-preview", "pin-outline")
+    List(
+      "save",
+      "save-as",
+      "find",
+      "replace",
+      "goto-line",
+      "next-document-symbol",
+      "previous-document-symbol",
+      "markdown-preview",
+      "pin-outline"
+    )
 
   def applyEvent(event: Event): cats.effect.IO[Unit] =
     stateRef.get.flatMap { rawState =>

@@ -447,6 +447,83 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "navigate to the next Markdown heading from the command runner" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two\n\nText\n\n### Beat Three"),
+            language = Some(LanguageId.Markdown),
+            cursors = List(CursorPosition(1, 2))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
+
+    val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    updatedBuffer.cursors shouldBe List(CursorPosition(4, 0))
+    updatedBuffer.selection shouldBe None
+    updatedBuffer.selections shouldBe Nil
+  }
+
+  it should "navigate to the previous Markdown heading from a command" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+            language = Some(LanguageId.Markdown),
+            cursors = List(CursorPosition(0, 0))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "previous-document-symbol",
+          "Go to the previous document symbol.",
+          CommandIntent.PreviousDocumentSymbol,
+          CommandCategory.View
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(4, 0))
+  }
+
+  it should "leave the cursor unchanged when document symbol navigation has no target" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("# Plain text only"),
+            cursors = List(CursorPosition(0, 7))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(0, 7))
+  }
+
   it should "pin the diagnostics panel from the command runner" in {
     val stateManager = createStateManager()
 
