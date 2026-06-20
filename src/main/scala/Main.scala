@@ -1,7 +1,7 @@
 import cats.effect.*
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.{AppRuntime, RuntimeDisplayState}
-import com.serenity.config.ConfigManager
+import com.serenity.config.{ConfigManager, ConfigMigrationWarning}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
@@ -20,7 +20,11 @@ object Main extends IOApp:
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
 
     for
-      appConfig    <- ConfigManager.loadConfigIO()
+      configLoad <- ConfigManager.loadConfigResultIO()
+      _ <- ConfigMigrationWarning
+        .message(ConfigManager.defaultConfigPath, configLoad.report)
+        .fold(IO.unit)(message => logger.warn(message))
+      appConfig = configLoad.config
       displayState <- RuntimeDisplayState.create(appConfig.fontConfig)
       _ <- SwingWindow
         .resource(displayState.primaryMetrics, appConfig.windowChromeMode, appConfig.preferredWindowSize)
