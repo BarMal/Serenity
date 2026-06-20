@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.*
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.{CommandRunnerComponent, ComponentResult}
@@ -226,6 +226,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-ui-font",
       "settings-markdown",
       "settings-language",
+      "settings-spellcheck",
       "settings-keymap"
     )
     groupItems.head.label shouldBe "Animation"
@@ -247,8 +248,14 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     groupItems(5).children
       .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "code-font" => group }
       .map(_.children.map(_.id)) should not be empty
-    groupItems(10).label shouldBe "Keymap"
+    groupItems(10).label shouldBe "Spell Check"
     groupItems(10).children.map(_.id) should contain allOf (
+      "spellcheck-enabled",
+      "spellcheck-languages",
+      "spellcheck-words"
+    )
+    groupItems(11).label shouldBe "Keymap"
+    groupItems(11).children.map(_.id) should contain allOf (
       "keymap-global-command_palette",
       "keymap-command-runner-submit",
       "keymap-modal-dismiss"
@@ -257,6 +264,39 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     groupItems(8).children.map(_.id) should contain("markdown-view")
     groupItems(9).label shouldBe "Language"
     groupItems(9).children.map(_.id) should contain("lang-plain-text")
+  }
+
+  it should "surface spell-check settings as typed controls" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(
+        registry,
+        AppConfig.default.withSpellCheck(
+          SpellCheckConfig(enabled = true, languages = List("en", "fr"), additionalWords = List("serenity"))
+        )
+      )
+      .withActiveCategory(CommandCategory.Settings)
+
+    val spellGroup =
+      runner.settingsGroups.find(_.id == "settings-spellcheck").getOrElse(fail("missing spell-check group"))
+
+    val enabledOption =
+      spellGroup.children
+        .collectFirst {
+          case item: CommandSurfaceItem.OptionItem if item.id == "spellcheck-enabled" =>
+            item
+        }
+        .getOrElse(fail("missing spell-check enabled option"))
+    val inputs = spellGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
+
+    enabledOption.selectedOption shouldBe "On"
+    enabledOption.selectedIntent shouldBe Some(CommandIntent.SetSpellCheckEnabled(true))
+    inputs.map(_.id) shouldBe List("spellcheck-languages", "spellcheck-words")
+    inputs.head.currentValue shouldBe "en,fr"
+    inputs.head.parse("fr,en") shouldBe Some(CommandIntent.SetSpellCheckLanguages(List("fr", "en")))
+    inputs(1).currentValue shouldBe "serenity"
+    inputs(1).parse("Serenity,caf\u00e9") shouldBe Some(CommandIntent.SetSpellCheckWords(List("serenity", "caf\u00e9")))
   }
 
   it should "surface UI preset save and apply inputs in settings" in {

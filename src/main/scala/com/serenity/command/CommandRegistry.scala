@@ -364,6 +364,20 @@ object CommandRegistry:
       label = "Markdown View Inline Lens"
     ),
     Command.typed(
+      "spellcheck-on",
+      "Enable spell-checking for prose buffers.",
+      CommandIntent.SetSpellCheckEnabled(true),
+      CommandCategory.Settings,
+      label = "Spell Check On"
+    ),
+    Command.typed(
+      "spellcheck-off",
+      "Disable spell-checking for prose buffers.",
+      CommandIntent.SetSpellCheckEnabled(false),
+      CommandCategory.Settings,
+      label = "Spell Check Off"
+    ),
+    Command.typed(
       "focus-left-panel",
       "Focus the left pinned panel.",
       CommandIntent.FocusPanel(PanelPosition.Left),

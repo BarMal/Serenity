@@ -5,9 +5,11 @@ import java.nio.file.{Files, Path}
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.config.SpellCheckConfig
 import com.serenity.io.{FileDialog, FileUtils}
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.lsp.config.LanguageId
+import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -226,6 +228,31 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
     updatedState.theme.name shouldBe "light"
+  }
+
+  it should "enable spell-checking from the command runner and refresh diagnostics immediately" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(bufferId).copy(content = com.serenity.rope.Rope("wurld"))
+        state.copy(
+          buffers = state.buffers + (bufferId -> buffer),
+          config = state.config.withSpellCheck(SpellCheckConfig(enabled = false))
+        )
+      }
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().diagnostics shouldBe empty
+
+    executeCommandThroughRunner(stateManager, "spellcheck-on", "spellcheck-on")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    val diagnostics  = updatedState.diagnostics.getOrElse(SpellChecker.bufferDiagnosticsUri(bufferId), Nil)
+
+    updatedState.config.spellCheck.enabled shouldBe true
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: wurld")
   }
 
   it should "save the focused buffer through the native save-as file dialog" in {

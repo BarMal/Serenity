@@ -91,6 +91,7 @@ case class CommandRunner(
     val materialPresetItem   = CommandRunner.materialPresetOptionItem(optionSelections)
     val motionPresetItem     = CommandRunner.motionPresetOptionItem(optionSelections)
     val markdownViewItem     = CommandRunner.markdownViewOptionItem(optionSelections)
+    val spellCheckItem       = CommandRunner.spellCheckOptionItem(optionSelections)
     val keymapItems          = inputItems.filter(_.id.startsWith("keymap-"))
     List(
       CommandSurfaceItem.GroupItem(
@@ -176,6 +177,15 @@ case class CommandRunner(
         children = CommandRunner.languageItems,
         category = CommandCategory.Settings,
         hint = Some("Set the current buffer language mode")
+      ),
+      CommandSurfaceItem.GroupItem(
+        id = "settings-spellcheck",
+        label = "Spell Check",
+        children = List(spellCheckItem) ++ inputItems.filter(item =>
+          item.id == "spellcheck-languages" || item.id == "spellcheck-words"
+        ),
+        category = CommandCategory.Settings,
+        hint = Some("Enable, languages, accepted words")
       ),
       CommandSurfaceItem.GroupItem(
         id = "settings-keymap",
@@ -455,20 +465,21 @@ object CommandRunner:
 
   private[command] def defaultOptionSelections(config: AppConfig): Map[String, Int] =
     Map(
-      "animation-mode"    -> animationModeIndex(config),
-      "material-preset"   -> materialPresetIndex(config.materialPreset),
-      "motion-preset"     -> motionPresetIndex(config.motionPreset),
-      "cursor-mode"       -> cursorModeIndex(config.cursorMode),
-      "cursor-info-bar"   -> cursorInfoBarModeIndex(config.cursorInfoBarMode),
-      "background-style"  -> backgroundStyleIndex(config.backgroundStyle),
-      "interface-density" -> interfaceDensityIndex(config.interfaceDensity),
-      "markdown-view"     -> markdownViewModeIndex(config.markdownViewMode),
-      "code-font"         -> codeFontIndex(config.fontConfig.codeFontFamily),
-      "text-font"         -> textFontIndex(config.fontConfig.textFontFamily),
-      "ui-font"           -> uiFontIndex(config.fontConfig.uiFontFamily),
-      "code-ligatures"    -> ligaturesIndex(config.fontConfig.codeLigatures),
-      "text-ligatures"    -> ligaturesIndex(config.fontConfig.textLigatures),
-      "ui-ligatures"      -> ligaturesIndex(config.fontConfig.uiLigatures)
+      "animation-mode"     -> animationModeIndex(config),
+      "material-preset"    -> materialPresetIndex(config.materialPreset),
+      "motion-preset"      -> motionPresetIndex(config.motionPreset),
+      "cursor-mode"        -> cursorModeIndex(config.cursorMode),
+      "cursor-info-bar"    -> cursorInfoBarModeIndex(config.cursorInfoBarMode),
+      "background-style"   -> backgroundStyleIndex(config.backgroundStyle),
+      "interface-density"  -> interfaceDensityIndex(config.interfaceDensity),
+      "markdown-view"      -> markdownViewModeIndex(config.markdownViewMode),
+      "spellcheck-enabled" -> spellCheckEnabledIndex(config.spellCheck.enabled),
+      "code-font"          -> codeFontIndex(config.fontConfig.codeFontFamily),
+      "text-font"          -> textFontIndex(config.fontConfig.textFontFamily),
+      "ui-font"            -> uiFontIndex(config.fontConfig.uiFontFamily),
+      "code-ligatures"     -> ligaturesIndex(config.fontConfig.codeLigatures),
+      "text-ligatures"     -> ligaturesIndex(config.fontConfig.textLigatures),
+      "ui-ligatures"       -> ligaturesIndex(config.fontConfig.uiLigatures)
     )
 
   private[command] def cursorModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -577,6 +588,19 @@ object CommandRunner:
       selectedIndex = optionSelections.getOrElse("markdown-view", 0),
       category = CommandCategory.Settings,
       hint = Some("Source, side preview, or inline editing lens")
+    )
+
+  private[command] def spellCheckOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "spellcheck-enabled",
+      label = "Spell Check",
+      options = List(
+        CommandOption("Off", CommandIntent.SetSpellCheckEnabled(false)),
+        CommandOption("On", CommandIntent.SetSpellCheckEnabled(true))
+      ),
+      selectedIndex = optionSelections.getOrElse("spellcheck-enabled", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Check prose buffers")
     )
 
   private[command] def animationOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -700,6 +724,7 @@ object CommandRunner:
     val uiFontSizeValue    = config.fontConfig.uiFontSize.toString
     val textAreaLeftValue  = f"${config.textAreaInsets.leftPercent}%.1f"
     val textAreaRightValue = f"${config.textAreaInsets.rightPercent}%.1f"
+    val spellCheck         = config.spellCheck.normalized
 
     val presetItems = List(
       CommandSurfaceItem.InputItem(
@@ -748,6 +773,29 @@ object CommandRunner:
             .filter(value => value >= 0.0 && value <= 45.0)
             .map(value => CommandIntent.SetTextAreaRightInset(value / 100.0)),
         category = CommandCategory.Settings
+      )
+    )
+
+    val spellCheckItems = List(
+      CommandSurfaceItem.InputItem(
+        id = "spellcheck-languages",
+        label = "Spell Check Languages",
+        hint = "Comma-separated codes",
+        currentValue = spellCheck.languages.mkString(","),
+        isDecimal = false,
+        parse = text => nonEmptyCommaList(text).map(CommandIntent.SetSpellCheckLanguages(_)),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "spellcheck-words",
+        label = "Accepted Words",
+        hint = "Comma-separated words",
+        currentValue = spellCheck.additionalWords.mkString(","),
+        isDecimal = false,
+        parse = text => Some(CommandIntent.SetSpellCheckWords(commaList(text))),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
       )
     )
 
@@ -826,10 +874,21 @@ object CommandRunner:
       )
     )
 
-    presetItems ++ textAreaItems ++ numericItems ++ buildKeymapInputItems(config)
+    presetItems ++ textAreaItems ++ spellCheckItems ++ numericItems ++ buildKeymapInputItems(config)
 
   private def nonEmptyText(text: String): Option[String] =
     Option(text.trim).filter(_.nonEmpty)
+
+  private def nonEmptyCommaList(text: String): Option[List[String]] =
+    Option(commaList(text)).filter(_.nonEmpty)
+
+  private def commaList(text: String): List[String] =
+    text
+      .split(",")
+      .toList
+      .map(_.trim.toLowerCase)
+      .filter(_.nonEmpty)
+      .distinct
 
   private def buildKeymapInputItems(config: AppConfig): List[CommandSurfaceItem.InputItem] =
     List(
@@ -963,6 +1022,9 @@ object CommandRunner:
       case MarkdownViewMode.Source       => 0
       case MarkdownViewMode.SplitPreview => 1
       case MarkdownViewMode.InlineLens   => 2
+
+  private def spellCheckEnabledIndex(enabled: Boolean): Int =
+    if enabled then 1 else 0
 
   private def codeFontIndex(family: String): Int =
     FontLoader.availableMonospaceFamilies.indexOf(family) match
