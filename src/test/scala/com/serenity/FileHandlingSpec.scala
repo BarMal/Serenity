@@ -62,6 +62,16 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     finally Files.deleteIfExists(tempFile)
   }
 
+  it should "raise a clear error when reading a missing file" in {
+    val missingFile = Files.createTempDirectory("serenity-missing-file").resolve("missing.txt")
+
+    try
+      val result = FileUtils.readFileContent(missingFile).attempt.unsafeRunSync()
+
+      result.left.map(_.getMessage) shouldBe Left(s"File not readable: $missingFile")
+    finally Files.deleteIfExists(missingFile.getParent)
+  }
+
   "FileBrowser" should "list directory contents" in {
     val fileBrowser = new FileBrowser()
 
@@ -71,6 +81,17 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     val entries = fileBrowser.listCurrentDirectory.unsafeRunSync()
     entries should not be null
     // Should contain at least some entries (directories or files)
+  }
+
+  it should "raise a clear error when changing to a missing directory" in {
+    val fileBrowser      = new FileBrowser()
+    val missingDirectory = Files.createTempDirectory("serenity-missing-directory").resolve("missing")
+
+    try
+      val result = fileBrowser.changeDirectory(missingDirectory).attempt.unsafeRunSync()
+
+      result.left.map(_.getMessage) shouldBe Left(s"Directory does not exist: $missingDirectory")
+    finally Files.deleteIfExists(missingDirectory.getParent)
   }
 
   "StateManager" should "handle save file events through the active editor pane" in {

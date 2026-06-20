@@ -20,10 +20,10 @@ case class FileBrowser(currentDirectory: Path = Paths.get(System.getProperty("us
 
   /** Change to specified directory */
   def changeDirectory(path: Path): IO[FileBrowser] =
-    IO.blocking {
-      if java.nio.file.Files.exists(path) && java.nio.file.Files.isDirectory(path) then FileBrowser(path.normalize())
-      else throw new RuntimeException(s"Directory does not exist: $path")
-    }
+    for
+      exists <- IO.blocking(java.nio.file.Files.exists(path) && java.nio.file.Files.isDirectory(path))
+      _      <- IO.unlessA(exists)(IO.raiseError(new RuntimeException(s"Directory does not exist: $path")))
+    yield FileBrowser(path.normalize())
 
   /** List files and directories in current directory */
   def listCurrentDirectory: IO[List[FileEntry]] =
