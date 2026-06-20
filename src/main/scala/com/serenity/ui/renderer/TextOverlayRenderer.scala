@@ -42,7 +42,7 @@ object TextOverlayRenderer:
     applyGlassSheen(surface, rect, theme, config)
 
     val animated = overlay.animationState.animations.nonEmpty
-    drawBorder(surface, overlay, theme)
+    drawBorder(surface, overlay, theme, config)
     drawContent(surface, overlay, theme, cursorVisible, rowColors, animated, font, cellMetrics)
 
     surface.setAlpha(1.0f)
@@ -52,11 +52,12 @@ object TextOverlayRenderer:
   private def drawBorder(
     surface: RenderSurface,
     overlay: TextOverlayView,
-    theme: Theme
+    theme: Theme,
+    config: AppConfig
   ): Unit =
     val rect = overlay.rect
     if rect.width >= 2 && rect.height >= 2 then
-      surface.strokeRoundRect(rect.x, rect.y, rect.width, rect.height, arcPx = 8, theme.border)
+      surface.strokeRoundRect(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx, theme.border)
 
   private def drawContent(
     surface: RenderSurface,

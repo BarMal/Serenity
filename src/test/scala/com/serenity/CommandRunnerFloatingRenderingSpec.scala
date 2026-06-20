@@ -316,8 +316,10 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "draw the floating border with the rounded stroke even while animating" in {
-    val commands  = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
-    val baseState = stateWithRunner(Theme.light, "op", commands)
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val baseState = stateWithRunner(Theme.light, "op", commands).copy(
+      config = AppConfig.default.withUiCornerRadiusPx(12)
+    )
     val surfaceId = SurfaceId("command-runner")
     val animationState = AnimationState.empty.mergeAnimations(
       Map(
@@ -341,6 +343,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     surface.strokeRoundRectCalls should not be empty
+    surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
   }
 
   it should "request backdrop blur for the floating overlay using the configured blur radius" in {

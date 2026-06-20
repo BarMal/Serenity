@@ -229,6 +229,7 @@ case class AppConfig(
     defaultDocumentMode: DefaultDocumentMode = DefaultDocumentMode.PlainText,
     interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
     uiElementGap: Int = 0,
+    uiCornerRadiusPx: Int = 8,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     preferredWindowSize: Option[PreferredWindowSize] = None,
     lspUserConfig: LspUserConfig = LspUserConfig.empty,
@@ -368,6 +369,9 @@ case class AppConfig(
   def withUiElementGap(gap: Int): AppConfig =
     copy(uiElementGap = AppConfig.clampUiElementGap(gap))
 
+  def withUiCornerRadiusPx(radius: Int): AppConfig =
+    copy(uiCornerRadiusPx = AppConfig.clampUiCornerRadiusPx(radius))
+
   def withTextAreaInsets(insets: TextAreaInsets): AppConfig =
     copy(textAreaInsets = insets.normalized)
 
@@ -392,12 +396,17 @@ object AppConfig:
   val MaxElementTransitionSpeedScale: Double = 4.0
   val MinUiElementGap: Int                   = 0
   val MaxUiElementGap: Int                   = 8
+  val MinUiCornerRadiusPx: Int               = 0
+  val MaxUiCornerRadiusPx: Int               = 32
 
   def clampElementTransitionSpeedScale(scale: Double): Double =
     scale.max(MinElementTransitionSpeedScale).min(MaxElementTransitionSpeedScale)
 
   def clampUiElementGap(gap: Int): Int =
     gap.max(MinUiElementGap).min(MaxUiElementGap)
+
+  def clampUiCornerRadiusPx(radius: Int): Int =
+    radius.max(MinUiCornerRadiusPx).min(MaxUiCornerRadiusPx)
 
   /** Default configuration with smooth animations and syntax highlighting disabled */
   val default: AppConfig = AppConfig(

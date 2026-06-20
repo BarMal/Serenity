@@ -30,6 +30,19 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     surface.strokeRoundRectCalls.map(_.color) should contain(Theme.light.border)
   }
 
+  it should "use the configured UI corner radius for pinned panel borders" in {
+    val surface = new MockRenderSurface(40, 12)
+    val panel = TextPanelView(
+      rect = LayoutRect(2, 2, 20, 6),
+      title = "outline",
+      rows = List(TextPanelRow("Item 1"))
+    )
+
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default.withUiCornerRadiusPx(14))
+
+    surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(14)
+  }
+
   it should "render selected rows using the theme highlight colors" in {
     val surface = new MockRenderSurface(40, 12)
     val panel = TextPanelView(

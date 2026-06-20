@@ -111,7 +111,9 @@ case class CommandRunner(
         id = "settings-appearance",
         label = "Appearance",
         children = List(cursorModeItem, cursorInfoBarItem, backgroundStyleItem, interfaceDensityItem) ++
-          inputItems.filter(item => item.id == "blur-radius" || item.id == "ui-element-gap") :+ cursorInfoPlacement,
+          inputItems.filter(item =>
+            item.id == "blur-radius" || item.id == "ui-element-gap" || item.id == "ui-corner-radius"
+          ) :+ cursorInfoPlacement,
         category = CommandCategory.Settings,
         hint = Some("Cursor, info bar, background, density, blur")
       ),
@@ -825,6 +827,7 @@ object CommandRunner:
     val textAreaRightValue = f"${config.textAreaInsets.rightPercent}%.1f"
     val speedScaleValue    = f"${config.elementTransitionSpeedScale}%.2f"
     val elementGapValue    = config.uiElementGap.toString
+    val cornerRadiusValue  = config.uiCornerRadiusPx.toString
     val spellCheck         = config.spellCheck.normalized
 
     val richTextItems = List(
@@ -1047,6 +1050,18 @@ object CommandRunner:
           text.toIntOption
             .filter(value => value >= AppConfig.MinUiElementGap && value <= AppConfig.MaxUiElementGap)
             .map(CommandIntent.SetUiElementGap(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "ui-corner-radius",
+        label = "UI Corner Radius",
+        hint = s"Pixels (${AppConfig.MinUiCornerRadiusPx}-${AppConfig.MaxUiCornerRadiusPx})",
+        currentValue = cornerRadiusValue,
+        isDecimal = false,
+        parse = text =>
+          text.toIntOption
+            .filter(value => value >= AppConfig.MinUiCornerRadiusPx && value <= AppConfig.MaxUiCornerRadiusPx)
+            .map(CommandIntent.SetUiCornerRadiusPx(_)),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(

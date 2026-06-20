@@ -71,6 +71,7 @@ enum CommandIntent:
   case SetCursorInfoBarMode(mode: CursorInfoBarMode)
   case SetCursorInfoBarPlacement(placement: CursorInfoBarPlacement)
   case SetUiElementGap(gap: Int)
+  case SetUiCornerRadiusPx(radius: Int)
   case OpenThemeChooser
   case ReloadThemes
   case PinExplorerPanel

@@ -25,7 +25,7 @@ object PinnedPanelRenderer:
     for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
 
     applyGlassSheen(surface, panel, theme, config)
-    drawBorder(surface, panel, theme, animationState)
+    drawBorder(surface, panel, theme, config, animationState)
     drawTitle(surface, panel, theme, animationState)
     drawLines(surface, panel, theme, animationState)
 
@@ -37,13 +37,14 @@ object PinnedPanelRenderer:
     surface: RenderSurface,
     panel: TextPanelView,
     theme: Theme,
+    config: AppConfig,
     animationState: AnimationState
   ): Unit =
     val rect = panel.rect
     if rect.width >= 2 && rect.height >= 2 then
       val borderColor =
         animationForeground(animationState, BorderAnimationColumn, BorderAnimationRow).getOrElse(theme.border)
-      surface.strokeRoundRect(rect.x, rect.y, rect.width, rect.height, arcPx = 8, borderColor)
+      surface.strokeRoundRect(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx, borderColor)
 
   private def drawTitle(
     surface: RenderSurface,

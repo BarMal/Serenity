@@ -337,6 +337,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateConfig(_.withCursorInfoBarPlacement(placement)).void
       case CommandIntent.SetUiElementGap(gap) =>
         updateConfig(_.withUiElementGap(gap)).void
+      case CommandIntent.SetUiCornerRadiusPx(radius) =>
+        updateConfig(_.withUiCornerRadiusPx(radius)).void
       case CommandIntent.IncreaseFontSize =>
         updateFontConfig(config =>
           config.copy(
