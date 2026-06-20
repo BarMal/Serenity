@@ -16,7 +16,9 @@ object FlowAnimationBuilder:
     cells: Map[CharacterKey, CellAnimation],
     direction: FlowDirection,
     sweep: SweepDirection,
-    steps: Int
+    steps: Int,
+    staggerFrames: Int = 1,
+    delayFrames: Int = 0
   ): Map[CharacterKey, AnimatedCell] =
     if cells.isEmpty then Map.empty
     else
@@ -33,6 +35,6 @@ object FlowAnimationBuilder:
           case (FlowDirection.ByRow, SweepDirection.Backward)    => maxRow - key.line
 
         val fade    = RgbInterpolator.interpolateRgba(cell.startColor, cell.endColor, steps)
-        val padding = List.fill(offset)(cell.startColor)
+        val padding = List.fill(delayFrames.max(0) + offset * staggerFrames.max(0))(cell.startColor)
         key -> AnimatedCell(content = Some(cell.char), foregroundSteps = padding ++ fade, backgroundSteps = List.empty)
       }
