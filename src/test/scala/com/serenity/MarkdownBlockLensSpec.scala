@@ -100,3 +100,10 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
 
     MarkdownBlockLens.currentBlock(lines, activeLine = 1) shouldBe (1 to 1)
   }
+
+  it should "clamp out-of-range active lines before resolving a block" in {
+    val lines = Vector("Only paragraph")
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = -10) shouldBe (0 to 0)
+    MarkdownBlockLens.currentBlock(lines, activeLine = 10) shouldBe (0 to 0)
+  }

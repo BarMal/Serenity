@@ -42,32 +42,37 @@ object MarkdownBlockLens:
     activeLine: Int,
     belongs: String => Boolean
   ): Option[Range.Inclusive] =
-    if !belongs(lines(activeLine)) then None
-    else
-      val start = Iterator
-        .iterate(activeLine)(_ - 1)
-        .takeWhile(index => index >= 0 && belongs(lines(index)))
-        .toList
-        .last
-      val end = Iterator
-        .iterate(activeLine)(_ + 1)
-        .takeWhile(index => index < lines.length && belongs(lines(index)))
-        .toList
-        .last
-      Some(start to end)
+    Option.when(belongs(lines(activeLine)))(blockSpan(lines, activeLine, belongs))
 
   private def paragraphBlock(lines: Vector[String], activeLine: Int): Range.Inclusive =
-    val start = Iterator
+    blockSpan(lines, activeLine, isParagraphLine)
+
+  private def blockSpan(
+    lines: Vector[String],
+    activeLine: Int,
+    belongs: String => Boolean
+  ): Range.Inclusive =
+    blockStart(lines, activeLine, belongs) to blockEnd(lines, activeLine, belongs)
+
+  private def blockStart(
+    lines: Vector[String],
+    activeLine: Int,
+    belongs: String => Boolean
+  ): Int =
+    Iterator
       .iterate(activeLine)(_ - 1)
-      .takeWhile(index => index >= 0 && isParagraphLine(lines(index)))
-      .toList
-      .last
-    val end = Iterator
+      .takeWhile(index => index >= 0 && belongs(lines(index)))
+      .foldLeft(activeLine)((_, index) => index)
+
+  private def blockEnd(
+    lines: Vector[String],
+    activeLine: Int,
+    belongs: String => Boolean
+  ): Int =
+    Iterator
       .iterate(activeLine)(_ + 1)
-      .takeWhile(index => index < lines.length && isParagraphLine(lines(index)))
-      .toList
-      .last
-    start to end
+      .takeWhile(index => index < lines.length && belongs(lines(index)))
+      .foldLeft(activeLine)((_, index) => index)
 
   private def isParagraphLine(line: String): Boolean =
     val trimmed = line.trim
