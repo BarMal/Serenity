@@ -100,8 +100,10 @@ class FileManager(using balance: Balance):
     )
 
   private def richTextDocumentForSave(buffer: Buffer): RichTextDocument =
-    if buffer.isDirty then RichTextDocument.fromPlainText(buffer.content.collect())
-    else buffer.richTextDocument.getOrElse(RichTextDocument.fromPlainText(buffer.content.collect()))
+    val text = buffer.content.collect()
+    buffer.richTextDocument
+      .filter(_.matchesPlainText(text))
+      .getOrElse(RichTextDocument.fromPlainText(text))
 
   private def languageFromPath(path: Path): Option[LanguageId] =
     Option(path.getFileName)

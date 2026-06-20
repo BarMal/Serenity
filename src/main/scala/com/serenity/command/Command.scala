@@ -3,6 +3,7 @@ package com.serenity.command
 import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.project.ProjectTaskKind
+import com.serenity.richtext.InlineMark
 import com.serenity.ui.layout.PanelPosition
 
 enum AnimationMode:
@@ -35,6 +36,7 @@ enum CommandIntent:
   case FindAllInCurrentFile
   case ReplaceInCurrentFile
   case ReplaceAllInCurrentFile
+  case ToggleRichTextMark(mark: InlineMark)
   case ToggleCommentLens
   case OpenGotoLine
   case ToggleBookmark

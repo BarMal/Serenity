@@ -199,6 +199,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             )
             .state
         )
+      case CommandIntent.ToggleRichTextMark(mark) =>
+        updateState(current => toggleRichTextMark(current, mark))
       case CommandIntent.ToggleCommentLens =>
         toggleCommentLens(state)
       case CommandIntent.OpenGotoLine =>
@@ -419,6 +421,41 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateConfig(_.resetPanelKeyOverride(action)).void
       case CommandIntent.ResetPeekKeyBinding(action) =>
         updateConfig(_.resetPeekKeyOverride(action)).void
+
+  private def toggleRichTextMark(
+    state: AppState,
+    mark: com.serenity.richtext.InlineMark
+  ): AppState =
+    state.focusedBufferId.flatMap(state.buffers.get) match
+      case Some(buffer) =>
+        val selections = buffer.allSelections.filter(selection => selection.start != selection.end)
+        if selections.isEmpty then state
+        else
+          val text = buffer.content.collect()
+          val baseDocument = buffer.richTextDocument
+            .filter(_.matchesPlainText(text))
+            .getOrElse(com.serenity.richtext.RichTextDocument.fromPlainText(text))
+          val updatedDocument = selections
+            .foldLeft(baseDocument)((document, selection) => document.toggleMark(richTextRange(selection), mark))
+            .normalized
+          state.copy(
+            buffers = state.buffers.updated(
+              buffer.id,
+              buffer.copy(
+                isDirty = true,
+                isNewEmpty = false,
+                richTextDocument = Some(updatedDocument)
+              )
+            )
+          )
+      case None =>
+        state
+
+  private def richTextRange(selection: Selection): com.serenity.richtext.RichTextRange =
+    com.serenity.richtext.RichTextRange(
+      start = com.serenity.richtext.RichTextPosition(selection.start.line, selection.start.column),
+      end = com.serenity.richtext.RichTextPosition(selection.end.line, selection.end.column)
+    )
 
   protected def saveUiPresetEffect(name: String): IO[Unit] =
     normalizedPresetName(name) match

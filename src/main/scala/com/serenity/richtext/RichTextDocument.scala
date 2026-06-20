@@ -23,6 +23,10 @@ case class RichTextStyle(
   def withMark(mark: InlineMark): RichTextStyle =
     copy(marks = marks + mark)
 
+  /** Return this style without the given inline mark. */
+  def withoutMark(mark: InlineMark): RichTextStyle =
+    copy(marks = marks - mark)
+
 object RichTextStyle:
   val empty: RichTextStyle = RichTextStyle()
 
@@ -58,9 +62,37 @@ case class RichTextParagraph(
     val start = startOffset.max(0).min(plainText.length)
     val end   = endOffset.max(start).min(plainText.length)
     if start == end then this
-    else copy(runs = mergeRuns(splitAndMark(start, end, mark)))
+    else copy(runs = mergeRuns(splitAndTransform(start, end, _.withMark(mark))))
 
-  private def splitAndMark(startOffset: Int, endOffset: Int, mark: InlineMark): List[RichTextRun] =
+  /** Toggle a mark across a paragraph range, removing it only when every covered run already has it. */
+  def toggleMark(startOffset: Int, endOffset: Int, mark: InlineMark): RichTextParagraph =
+    val start = startOffset.max(0).min(plainText.length)
+    val end   = endOffset.max(start).min(plainText.length)
+    if start == end then this
+    else setMark(start, end, mark, enabled = !hasMarkThroughout(start, end, mark))
+
+  /** Set or clear a mark across a paragraph range. */
+  def setMark(startOffset: Int, endOffset: Int, mark: InlineMark, enabled: Boolean): RichTextParagraph =
+    val start = startOffset.max(0).min(plainText.length)
+    val end   = endOffset.max(start).min(plainText.length)
+    if start == end then this
+    else
+      val transform =
+        if enabled then (style: RichTextStyle) => style.withMark(mark)
+        else (style: RichTextStyle) => style.withoutMark(mark)
+      copy(runs = mergeRuns(splitAndTransform(start, end, transform)))
+
+  /** True when the non-empty paragraph range is fully covered by the given mark. */
+  def hasMarkThroughout(startOffset: Int, endOffset: Int, mark: InlineMark): Boolean =
+    val start = startOffset.max(0).min(plainText.length)
+    val end   = endOffset.max(start).min(plainText.length)
+    start < end && stylesInRange(start, end).forall(_.marks.contains(mark))
+
+  private def splitAndTransform(
+    startOffset: Int,
+    endOffset: Int,
+    transform: RichTextStyle => RichTextStyle
+  ): List[RichTextRun] =
     runs
       .foldLeft((0, List.empty[RichTextRun])) {
         case ((currentOffset, acc), run) =>
@@ -77,10 +109,22 @@ case class RichTextParagraph(
             val after      = run.text.drop(localEnd)
             val splitRuns = List(
               Option.when(before.nonEmpty)(RichTextRun(before, run.style)),
-              Option.when(middle.nonEmpty)(RichTextRun(middle, run.style.withMark(mark))),
+              Option.when(middle.nonEmpty)(RichTextRun(middle, transform(run.style))),
               Option.when(after.nonEmpty)(RichTextRun(after, run.style))
             ).flatten
             (nextOffset, acc ++ splitRuns)
+      }
+      ._2
+
+  private def stylesInRange(startOffset: Int, endOffset: Int): List[RichTextStyle] =
+    runs
+      .foldLeft((0, List.empty[RichTextStyle])) {
+        case ((currentOffset, acc), run) =>
+          val runStart   = currentOffset
+          val runEnd     = currentOffset + run.text.length
+          val nextOffset = runEnd
+          if runEnd <= startOffset || runStart >= endOffset then (nextOffset, acc)
+          else (nextOffset, run.style :: acc)
       }
       ._2
 
@@ -117,6 +161,39 @@ case class RichTextDocument(paragraphs: List[RichTextParagraph]):
           if index == normalizedRange.end.paragraphIndex then normalizedRange.end.offset else paragraph.plainText.length
         paragraph.applyMark(startOffset, endOffset, mark)
     })
+
+  /** Toggle a mark across a document range, using one add/remove decision for the whole range. */
+  def toggleMark(range: RichTextRange, mark: InlineMark): RichTextDocument =
+    val normalizedRange = range.normalized
+    val shouldRemove = paragraphs.zipWithIndex
+      .filter {
+        case (_, index) =>
+          index >= normalizedRange.start.paragraphIndex && index <= normalizedRange.end.paragraphIndex
+      }
+      .forall {
+        case (paragraph, index) =>
+          val startOffset =
+            if index == normalizedRange.start.paragraphIndex then normalizedRange.start.offset else 0
+          val endOffset =
+            if index == normalizedRange.end.paragraphIndex then normalizedRange.end.offset
+            else paragraph.plainText.length
+          paragraph.hasMarkThroughout(startOffset, endOffset, mark)
+      }
+    copy(paragraphs = paragraphs.zipWithIndex.map {
+      case (paragraph, index)
+          if index < normalizedRange.start.paragraphIndex || index > normalizedRange.end.paragraphIndex =>
+        paragraph
+      case (paragraph, index) =>
+        val startOffset =
+          if index == normalizedRange.start.paragraphIndex then normalizedRange.start.offset else 0
+        val endOffset =
+          if index == normalizedRange.end.paragraphIndex then normalizedRange.end.offset else paragraph.plainText.length
+        paragraph.setMark(startOffset, endOffset, mark, enabled = !shouldRemove)
+    })
+
+  /** True when the rich document still represents the provided plain text exactly. */
+  def matchesPlainText(text: String): Boolean =
+    plainText == text
 
 object RichTextDocument:
   def oneParagraph(text: String): RichTextDocument =

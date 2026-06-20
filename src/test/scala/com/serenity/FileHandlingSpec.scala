@@ -195,6 +195,37 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       Files.deleteIfExists(savedFile)
   }
 
+  it should "save dirty RTF buffers with aligned rich formatting metadata" in {
+    val fileManager = new FileManager()
+    val sourceFile  = Files.createTempFile("serenity-rich-format-source", ".rtf")
+    val savedFile   = Files.createTempFile("serenity-rich-format-saved", ".rtf")
+
+    try
+      Files.writeString(sourceFile, """{\rtf1\ansi plain bold\par}""")
+
+      val loadedBuffer = fileManager.loadFile(sourceFile, BufferId(102)).unsafeRunSync()
+      val formattedDocument = loadedBuffer.richTextDocument
+        .getOrElse(fail("expected rich text metadata"))
+        .applyMark(
+          com.serenity.richtext.RichTextRange(
+            com.serenity.richtext.RichTextPosition(0, 6),
+            com.serenity.richtext.RichTextPosition(0, 10)
+          ),
+          InlineMark.Bold
+        )
+      val formattingDirtyBuffer = loadedBuffer.copy(isDirty = true, richTextDocument = Some(formattedDocument))
+
+      val savedBuffer = fileManager.saveBuffer(formattingDirtyBuffer, savedFile).unsafeRunSync()
+      val saved       = RtfDocumentCodec.read(savedFile).unsafeRunSync()
+
+      saved.plainText shouldBe "plain bold"
+      saved.paragraphs.headOption.map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
+      savedBuffer.richTextDocument shouldBe Some(formattedDocument.normalized)
+    finally
+      Files.deleteIfExists(sourceFile)
+      Files.deleteIfExists(savedFile)
+  }
+
   "FileUtils" should "handle file operations" in {
     // Create a temporary file
     val tempFile = Files.createTempFile("test", ".txt")
