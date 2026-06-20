@@ -504,6 +504,34 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     updatedBuffer.selections shouldBe Nil
   }
 
+  it should "animate the target buffer after document symbol navigation" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope(
+              "# Chapter One\n\nBody\n\nMore\n\nStill more\n\nEven more\n\n## Scene Two\n\nText"
+            ),
+            language = Some(LanguageId.Markdown),
+            cursors = List(CursorPosition(1, 2)),
+            viewport = Viewport.default.copy(visibleLines = 4, visibleColumns = 40)
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
+
+    val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    updatedBuffer.cursors shouldBe List(CursorPosition(10, 0))
+    updatedBuffer.viewport.topLine should be > 0
+    updatedBuffer.animations.activeAnimationCount should be > 0
+  }
+
   it should "navigate to the previous Markdown heading from a command" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
@@ -600,6 +628,31 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "previous-bookmark", "previous-bookmark")
 
     stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(0, 3))
+  }
+
+  it should "animate the target buffer after bookmark navigation" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha\nbravo\ncharlie\ndelta\necho"),
+            cursors = List(CursorPosition(1, 0)),
+            bookmarks = List(CursorPosition(4, 1)),
+            viewport = Viewport.default.copy(visibleLines = 8, visibleColumns = 40)
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "next-bookmark", "next-bookmark")
+
+    val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    updatedBuffer.cursors shouldBe List(CursorPosition(4, 1))
+    updatedBuffer.animations.activeAnimationCount should be > 0
   }
 
   it should "record document jumps in navigation history and move backward and forward" in {
