@@ -380,6 +380,22 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     customPreset.options.map(_.label) shouldBe List("Drafting", "Research Notes")
     customPreset.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Research Notes"))
     customPreset.options.map(_.hint) shouldBe List(Some("Saved workspace setup"), Some("Saved workspace setup"))
+    val configurePreset = presetGroup.children
+      .collectFirst {
+        case item: CommandSurfaceItem.GroupItem if item.id == "ui-preset-configure" => item
+      }
+      .getOrElse(fail("missing preset options group"))
+
+    configurePreset.label shouldBe "Preset Options"
+    configurePreset.children.map(_.id) should contain allOf (
+      "settings-language",
+      "settings-markdown",
+      "settings-text-area",
+      "settings-prose-font",
+      "settings-material-motion",
+      "settings-appearance"
+    )
+
     inputs.map(_.id) shouldBe List(
       "ui-preset-create",
       "ui-preset-save",
@@ -400,6 +416,18 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       item.accepts("", 'W') shouldBe true
       item.accepts("Work", ' ') shouldBe true
     }
+  }
+
+  it should "prioritize direct settings child matches over nested preset option matches" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("lang-markdown")
+
+    runner.visibleItems.collectFirst { case group: CommandSurfaceItem.GroupItem => group.id } shouldBe Some(
+      "settings-language"
+    )
   }
 
   it should "preserve selected built-in and custom UI presets in the settings submenu" in {

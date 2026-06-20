@@ -476,6 +476,23 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       firstUiFontIntent
   }
 
+  it should "enter the preset options submenu from UI presets" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-ui-presets", "ui-preset-configure")
+
+    val entered = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
+    val runner  = runnerFrom(entered.state)
+
+    runner.activeSubmenu.map(_.groupId) shouldBe Some("ui-preset-configure")
+    runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-presets")
+    runner.focusedSubmenuItems.map(_.id) should contain allOf (
+      "settings-language",
+      "settings-markdown",
+      "settings-prose-font",
+      "settings-material-motion"
+    )
+  }
+
   it should "clear submenu search with escape before leaving the submenu" in {
     val registry = CommandRegistry.default
     val searched = List('j', 'a').foldLeft(settingsStateOnItem("settings-language", "lang-plain-text")) { (s, char) =>
