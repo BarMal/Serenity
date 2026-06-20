@@ -390,6 +390,11 @@ object LayoutEngine:
           densityMetrics.commandSurfaceMaxHeight,
           math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1)
         )
+      case SurfaceContent.ContextMenu(menu) =>
+        math.min(
+          densityMetrics.commandSurfaceMaxHeight,
+          math.max(4, menu.items.length + densityMetrics.commandSurfaceVerticalPadding)
+        )
       case SurfaceContent.CommandPaletteSubmenu(runner, groupId, _) =>
         val allItems = runner.submenuItems(groupId)
         val itemCount = runner.activeSubmenu

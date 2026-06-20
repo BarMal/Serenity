@@ -105,6 +105,32 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.footer.map(_.plainText) shouldBe Some("1/1")
   }
 
+  it should "resolve context menus into a selected command list" in {
+    val save = Command.typed("save", "Save file", CommandIntent.SaveCurrentFile, label = "Save")
+    val find = Command.typed("find", "Find text", CommandIntent.FindInCurrentFile, label = "Find")
+    val menu = ContextMenu(
+      title = "editor",
+      targetFocus = Focus.EditorPane(PaneId(0)),
+      items = List(
+        ContextMenuItem(save.name, save.label, save),
+        ContextMenuItem(find.name, find.label, find)
+      ),
+      selectedIndex = 1
+    )
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.ContextMenu(menu),
+      LayoutRect(0, 0, 28, 8),
+      SurfaceRenderMode.Floating
+    )
+
+    floating.title shouldBe None
+    floating.header.map(_.plainText) shouldBe Some("editor")
+    floating.rows.map(_.plainText) shouldBe List("Save", "Find")
+    floating.rows.map(_.selected) shouldBe List(false, true)
+    floating.footer.map(_.plainText) shouldBe Some("2/2")
+  }
+
   it should "resolve browse mode into distributed category tabs and grouped settings rows without bracket markers" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry

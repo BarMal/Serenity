@@ -19,6 +19,10 @@ import com.serenity.ui.layout.*
 private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEffectBehavior:
   this: StateManager =>
 
+  private val ContextMenuSurfaceId = SurfaceId("context-menu")
+  private val EditorContextMenuCommands =
+    List("save", "save-as", "find", "replace", "goto-line", "markdown-preview", "pin-outline")
+
   def applyEvent(event: Event): cats.effect.IO[Unit] =
     stateRef.get.flatMap { rawState =>
       val prevState = normalizeCommandRunnerFocus(rawState)
@@ -472,42 +476,52 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       .pushFocus(Focus.Surface(surfaceId))
 
   private def handleMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Unit] =
-    if click.button != MouseButton.Primary then cats.effect.IO.unit
-    else
-      handleCommandRunnerMouseClick(click, state).flatMap {
-        case true => cats.effect.IO.unit
-        case false =>
-          resolveMouseTarget(click, state).flatMap {
-            _.fold(cats.effect.IO.unit) { (paneId, buffer, clickedCursor) =>
-              stateRef.update { s =>
-                s.buffers.get(buffer.id) match
-                  case Some(current) =>
-                    val selection =
-                      if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
-                      else if click.clickCount >= 3 then lineSelectionAtCursor(current, clickedCursor)
-                      else if click.clickCount >= 2 then wordSelectionAtCursor(current, clickedCursor)
-                      else None
-                    val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
-                    s.copy(
-                      buffers = s.buffers.updated(
-                        buffer.id,
-                        current.copy(
-                          cursors = List(focusCursor),
-                          selection = selection,
-                          selections = Nil,
-                          preferredColumn = Some(focusCursor.column),
-                          preferredXPx = None,
-                          multiCursorVerticalStates = Nil
-                        )
-                      ),
-                      focus = Focus.EditorPane(paneId),
-                      layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-                    )
-                  case None => s
-              }
+    click.button match
+      case MouseButton.Secondary =>
+        openEditorContextMenu(click, state)
+      case MouseButton.Primary =>
+        handleContextMenuMouseClick(click, state).flatMap {
+          case true => cats.effect.IO.unit
+          case false =>
+            handleCommandRunnerMouseClick(click, state).flatMap {
+              case true => cats.effect.IO.unit
+              case false =>
+                resolveMouseTarget(click, state).flatMap {
+                  _.fold(dismissContextMenuIfOpen(state)) { (paneId, buffer, clickedCursor) =>
+                    stateRef.update { s =>
+                      s.buffers.get(buffer.id) match
+                        case Some(current) =>
+                          val selection =
+                            if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
+                            else if click.clickCount >= 3 then lineSelectionAtCursor(current, clickedCursor)
+                            else if click.clickCount >= 2 then wordSelectionAtCursor(current, clickedCursor)
+                            else None
+                          val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
+                          dismissContextMenu(
+                            s.copy(
+                              buffers = s.buffers.updated(
+                                buffer.id,
+                                current.copy(
+                                  cursors = List(focusCursor),
+                                  selection = selection,
+                                  selections = Nil,
+                                  preferredColumn = Some(focusCursor.column),
+                                  preferredXPx = None,
+                                  multiCursorVerticalStates = Nil
+                                )
+                              ),
+                              focus = Focus.EditorPane(paneId),
+                              layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                            )
+                          )
+                        case None => dismissContextMenu(s)
+                    }
+                  }
+                }
             }
-          }
-      }
+        }
+      case _ =>
+        cats.effect.IO.unit
 
   private def handleMousePress(press: MousePress, state: AppState): cats.effect.IO[Unit] =
     if press.button != MouseButton.Primary then cats.effect.IO.unit
@@ -581,7 +595,94 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       }
 
   private def handleMouseMove(move: MouseMove, state: AppState): cats.effect.IO[Unit] =
-    handleCommandRunnerMouseHover(move, state).map(_ => ())
+    handleContextMenuMouseHover(move, state).flatMap {
+      case true  => cats.effect.IO.unit
+      case false => handleCommandRunnerMouseHover(move, state).map(_ => ())
+    }
+
+  private def openEditorContextMenu(click: MouseClick, state: AppState): cats.effect.IO[Unit] =
+    resolveMouseTarget(click, state).flatMap {
+      case Some((paneId, _, clickedCursor)) =>
+        editorContextMenu(Focus.EditorPane(paneId)) match
+          case Some(menu) =>
+            stateRef.update { current =>
+              val surface = UiSurface(
+                id = ContextMenuSurfaceId,
+                content = SurfaceContent.ContextMenu(menu),
+                presentation = SurfacePresentation.Floating(Some(clickedCursor), SurfacePlacement.BelowCursor)
+              )
+              current
+                .copy(uiSurfaces = current.uiSurfaces.filterNot(isContextMenuSurface) :+ surface)
+                .pushFocus(Focus.Surface(ContextMenuSurfaceId))
+            }
+          case None =>
+            cats.effect.IO.unit
+      case None =>
+        dismissContextMenuIfOpen(state)
+    }
+
+  private def handleContextMenuMouseHover(event: MouseInputEvent, state: AppState): cats.effect.IO[Boolean] =
+    contextMenuSelectionAt(event, state) match
+      case Some((surface, menu, index)) =>
+        stateRef
+          .update { current =>
+            current.copy(uiSurfaces = current.uiSurfaces.map {
+              case existing if existing.id == surface.id =>
+                existing.copy(content = SurfaceContent.ContextMenu(menu.withSelectedIndex(index)))
+              case existing => existing
+            })
+          }
+          .as(true)
+      case None =>
+        cats.effect.IO.pure(false)
+
+  private def handleContextMenuMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =
+    contextMenuSelectionAt(click, state) match
+      case Some((_, menu, index)) =>
+        menu.items.lift(index) match
+          case Some(item) =>
+            stateRef.update(current => dismissContextMenu(current).copy(focus = menu.targetFocus)) >>
+              executeCommand(item.command).as(true)
+          case None =>
+            cats.effect.IO.pure(false)
+      case None if state.contextMenuSurface.isDefined =>
+        stateRef.update(dismissContextMenu).as(true)
+      case None =>
+        cats.effect.IO.pure(false)
+
+  private def contextMenuSelectionAt(
+    event: MouseInputEvent,
+    state: AppState
+  ): Option[(UiSurface, ContextMenu, Int)] =
+    for
+      viewportSize <- state.viewportSize
+      surface      <- state.contextMenuSurface
+      menu <- surface.content match
+        case SurfaceContent.ContextMenu(menu) => Some(menu)
+        case _                                => None
+      layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      rect  <- overlayRectForSurface(layout, surface.id)
+      index <- overlayItemIndex(event, rect, menu.items.length, menu.selectedIndex)
+    yield (surface, menu, index)
+
+  private def editorContextMenu(targetFocus: Focus): Option[ContextMenu] =
+    val registry = CommandRegistry.withToggleUI
+    val items = EditorContextMenuCommands.flatMap { name =>
+      registry.findCommand(name).map(command => ContextMenuItem(command.name, command.label, command))
+    }
+    Option.when(items.nonEmpty)(ContextMenu("editor", targetFocus, items))
+
+  private def dismissContextMenuIfOpen(state: AppState): cats.effect.IO[Unit] =
+    if state.contextMenuSurface.isDefined then stateRef.update(dismissContextMenu)
+    else cats.effect.IO.unit
+
+  private def dismissContextMenu(state: AppState): AppState =
+    state.copy(uiSurfaces = state.uiSurfaces.filterNot(isContextMenuSurface)).popFocus
+
+  private def isContextMenuSurface(surface: UiSurface): Boolean =
+    surface.content match
+      case SurfaceContent.ContextMenu(_) => true
+      case _                             => false
 
   private def handleCommandRunnerMouseHover(event: MouseInputEvent, state: AppState): cats.effect.IO[Boolean] =
     commandRunnerSelectionAt(event, state) match

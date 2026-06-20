@@ -105,6 +105,8 @@ object SurfaceContentResolver:
         resolveThemePicker(state, mode)
       case SurfaceContent.FileSearch(state) =>
         resolveFileSearch(state, rect, mode)
+      case SurfaceContent.ContextMenu(menu) =>
+        resolveContextMenu(menu, rect, mode)
       case SurfaceContent.MarkdownPreview(_, title) =>
         ResolvedSurfaceContent(title = titleFor(mode, s"Preview: $title"))
       case SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
@@ -678,6 +680,33 @@ object SurfaceContentResolver:
       title = titleFor(mode, "Search"),
       header = Some(headerRow),
       rows = resultRows
+    )
+
+  private def resolveContextMenu(
+    menu: ContextMenu,
+    rect: LayoutRect,
+    mode: SurfaceRenderMode
+  ): ResolvedSurfaceContent =
+    val maxRows = math.max(1, rect.height - 4)
+    val offset =
+      if menu.items.size <= maxRows then 0
+      else
+        val half = maxRows / 2
+        math.max(0, math.min(menu.selectedIndex - half, menu.items.size - maxRows))
+    val visibleItems = menu.items.slice(offset, offset + maxRows)
+    val rows = visibleItems.zipWithIndex.map {
+      case (item, index) =>
+        OverlayRow(
+          plainText = item.label,
+          selected = index + offset == menu.selectedIndex
+        )
+    }
+
+    ResolvedSurfaceContent(
+      title = titleFor(mode, menu.title),
+      header = Some(OverlayRow(menu.title)),
+      rows = rows,
+      footer = Option.when(menu.items.nonEmpty)(OverlayRow(s"${menu.selectedIndex + 1}/${menu.items.length}"))
     )
 
   def resolveMarkdownPreview(
