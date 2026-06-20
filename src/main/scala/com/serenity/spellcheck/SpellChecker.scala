@@ -45,12 +45,16 @@ object SpellChecker:
     ),
     "fr" -> Set(
       "bonjour",
-      "café",
-      "français",
+      "caf\u00e9",
+      "fran\u00e7ais",
       "langue",
       "monde",
-      "résumé",
+      "r\u00e9sum\u00e9",
       "texte"
+    ),
+    "el" -> Set(
+      "\u03b3\u03b5\u03b9\u03ac",
+      "\u03ba\u03cc\u03c3\u03bc\u03bf\u03c2"
     )
   )
 
