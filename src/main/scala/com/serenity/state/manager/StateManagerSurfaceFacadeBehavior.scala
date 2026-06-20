@@ -17,23 +17,31 @@ private[manager] trait StateManagerSurfaceFacadeBehavior extends StateManagerEdi
     stateRef.get.flatMap(state => validateAndUpdateState(PeekStateReducer.dismiss(state).state, state))
 
   def peekToPin(position: PanelPosition): IO[Unit] =
-    stateRef.get.flatMap(state =>
+    stateRef.get.flatMap { state =>
       validateAndUpdateState(PanelStateReducer.pinPeekOverlay(position, state).state, state)
-    )
+        .flatMap(_ => applyAnimationHooks(state))
+    }
 
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
-    stateRef.get.flatMap(state =>
+    stateRef.get.flatMap { state =>
       validateAndUpdateState(PanelStateReducer.pin(content, position, size, state).state, state)
-    )
+        .flatMap(_ => applyAnimationHooks(state))
+    }
 
   def unpinPanel(position: PanelPosition): IO[Unit] =
     stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.unpin(position, state).state, state))
 
   def expandPinnedPanel(position: PanelPosition): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.expand(position, state).state, state))
+    stateRef.get.flatMap { state =>
+      validateAndUpdateState(PanelStateReducer.expand(position, state).state, state)
+        .flatMap(_ => applyAnimationHooks(state))
+    }
 
   def collapseExpandedPanel(): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.collapseExpandedPanel(state).state, state))
+    stateRef.get.flatMap { state =>
+      validateAndUpdateState(PanelStateReducer.collapseExpandedPanel(state).state, state)
+        .flatMap(_ => applyAnimationHooks(state))
+    }
 
   def showModal(modal: Modal): IO[Unit] =
     stateRef.get.flatMap(state => validateAndUpdateState(ModalStateReducer.show(modal, state).state, state))
@@ -72,7 +80,7 @@ private[manager] trait StateManagerSurfaceFacadeBehavior extends StateManagerEdi
             state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ nextSurface)
           case None =>
             PanelStateReducer.pin(content, PanelPosition.Left, 30, state).state
-      validateAndUpdateState(updated, state)
+      validateAndUpdateState(updated, state).flatMap(_ => applyAnimationHooks(state))
     }
 
   def selectFileInExplorer(filePath: String): IO[Unit] =
