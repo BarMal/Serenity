@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.io.{FileDialog, FileUtils}
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.lsp.config.LanguageId
@@ -500,6 +501,51 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.pinnedSurfaces shouldBe before.pinnedSurfaces
+  }
+
+  it should "toggle a cursor-attached comment lens for the active comment" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("val x = 1\n// **Review** this value"),
+            language = Some(LanguageId.Scala),
+            cursors = List(CursorPosition(1, 3))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "comment-lens", "comment-lens")
+
+    val shownState = stateManager.getCurrentState.unsafeRunSync()
+    val lens = shownState.commentLensSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommentLens(comment) => Some(comment)
+          case _                                   => None
+      }
+      .getOrElse(fail("Expected comment lens"))
+
+    lens.raw shouldBe "// **Review** this value"
+    lens.inlineMarkdown shouldBe "Review this value"
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "comment-lens",
+          "Toggle comment lens.",
+          CommandIntent.ToggleCommentLens,
+          CommandCategory.View
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().commentLensSurface shouldBe None
   }
 
   it should "save, restore, and clear the current session from command runner commands" in {

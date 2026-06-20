@@ -7,7 +7,7 @@ import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
 import com.serenity.config.MarkdownViewMode
-import com.serenity.document.DocumentOutline
+import com.serenity.document.{CommentRendering, DocumentOutline}
 import com.serenity.io.{FileEntry, FileUtils}
 import com.serenity.keystroke.events.ExplorerEvent
 import com.serenity.lsp.LspEffect
@@ -192,6 +192,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             )
             .state
         )
+      case CommandIntent.ToggleCommentLens =>
+        toggleCommentLens(state)
       case CommandIntent.OpenGotoLine =>
         updateState(current => ModalStateReducer.show(Modal.GotoLine(""), current).state)
       case CommandIntent.RequestLspHover =>
@@ -546,6 +548,46 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         case _ =>
           IO.unit
     }
+
+  private def toggleCommentLens(state: AppState): IO[Unit] =
+    state.commentLensSurface match
+      case Some(_) =>
+        updateState(dismissCommentLens)
+      case None =>
+        activeEditorComment(state) match
+          case Some((cursor, comment)) =>
+            updateState { current =>
+              val surface = UiSurface(
+                id = SurfaceId("comment-lens"),
+                content = SurfaceContent.CommentLens(comment),
+                presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor),
+                dismissOnMove = true
+              )
+              current
+                .copy(uiSurfaces = current.uiSurfaces.filterNot(isCommentLensSurface) :+ surface)
+                .pushFocus(Focus.Surface(surface.id))
+            }
+          case None =>
+            logger.debug("[CMD] Comment lens requested without an active comment")
+
+  private def activeEditorComment(state: AppState): Option[(CursorPosition, com.serenity.document.RenderedComment)] =
+    for
+      paneId   <- state.layout.activeEditorPaneId
+      pane     <- state.layout.editorPanes.get(paneId)
+      bufferId <- pane.bufferId
+      buffer   <- state.buffers.get(bufferId)
+      cursor   <- buffer.cursors.headOption
+      comment  <- CommentRendering.atCursor(buffer)
+    yield (cursor, comment)
+
+  private def dismissCommentLens(state: AppState): AppState =
+    val nextFocus = state.layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(state.focus)
+    state.copy(uiSurfaces = state.uiSurfaces.filterNot(isCommentLensSurface), focus = nextFocus)
+
+  private def isCommentLensSurface(surface: UiSurface): Boolean =
+    surface.content match
+      case SurfaceContent.CommentLens(_) => true
+      case _                             => false
 
   private def openMarkdownPreview(state: AppState): IO[Unit] =
     state.focusedBufferId

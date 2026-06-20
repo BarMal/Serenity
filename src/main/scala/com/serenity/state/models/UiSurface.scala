@@ -3,6 +3,7 @@ package com.serenity.state.models
 import java.nio.file.Path
 
 import com.serenity.command.{Command, CommandRunner}
+import com.serenity.document.RenderedComment
 import com.serenity.ui.layout.*
 
 case class SurfaceId(value: String)
@@ -72,6 +73,7 @@ enum SurfaceContent:
   case ThemePicker(state: ThemePickerState)
   case FileSearch(state: FileSearchState)
   case ContextMenu(menu: com.serenity.state.models.ContextMenu)
+  case CommentLens(comment: RenderedComment)
   case MarkdownPreview(bufferId: BufferId, title: String)
   case ModalWorkflow(modal: Modal)
   case Terminal(buffer: String, cursor: Int)

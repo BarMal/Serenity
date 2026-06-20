@@ -203,6 +203,13 @@ object CommandRegistry:
       label = "Replace All"
     ),
     Command.typed(
+      "comment-lens",
+      "Show or hide the rendered comment at the cursor.",
+      CommandIntent.ToggleCommentLens,
+      CommandCategory.View,
+      label = "Comment Lens"
+    ),
+    Command.typed(
       "goto-line",
       "Go to a specific line number.",
       CommandIntent.OpenGotoLine,
