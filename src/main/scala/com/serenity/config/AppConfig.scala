@@ -129,6 +129,18 @@ object InterfaceDensityMetrics:
           commandSurfaceVerticalPadding = 4
         )
 
+case class SpellCheckConfig(
+    enabled: Boolean = false,
+    languages: List[String] = List("en"),
+    additionalWords: List[String] = Nil
+):
+
+  def normalized: SpellCheckConfig =
+    copy(
+      languages = languages.map(_.trim.toLowerCase).filter(_.nonEmpty).distinct,
+      additionalWords = additionalWords.map(_.trim.toLowerCase).filter(_.nonEmpty).distinct
+    )
+
 case class PreferredWindowSize(width: Int, height: Int):
   def normalized: PreferredWindowSize =
     PreferredWindowSize(width.max(400), height.max(300))
@@ -197,7 +209,8 @@ case class AppConfig(
     interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     preferredWindowSize: Option[PreferredWindowSize] = None,
-    lspUserConfig: LspUserConfig = LspUserConfig.empty
+    lspUserConfig: LspUserConfig = LspUserConfig.empty,
+    spellCheck: SpellCheckConfig = SpellCheckConfig()
 ):
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
@@ -328,6 +341,9 @@ case class AppConfig(
 
   def withLspUserConfig(config: LspUserConfig): AppConfig =
     copy(lspUserConfig = config)
+
+  def withSpellCheck(config: SpellCheckConfig): AppConfig =
+    copy(spellCheck = config.normalized)
 
 object AppConfig:
 

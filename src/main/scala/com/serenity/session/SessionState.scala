@@ -474,6 +474,9 @@ given Decoder[LspServerOverride] = deriveDecoder
 given Encoder[LspUserConfig] = deriveEncoder
 given Decoder[LspUserConfig] = deriveDecoder
 
+given Encoder[SpellCheckConfig] = deriveEncoder
+given Decoder[SpellCheckConfig] = deriveDecoder
+
 given Encoder[AppConfig] = deriveEncoder
 
 given Decoder[AppConfig] = Decoder.instance { cursor =>
@@ -499,6 +502,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     textAreaInsets            <- cursor.getOrElse[TextAreaInsets]("textAreaInsets")(TextAreaInsets())
     preferredWindowSize       <- cursor.getOrElse[Option[PreferredWindowSize]]("preferredWindowSize")(None)
     lspUserConfig             <- cursor.getOrElse[LspUserConfig]("lspUserConfig")(LspUserConfig.empty)
+    spellCheck                <- cursor.getOrElse[SpellCheckConfig]("spellCheck")(SpellCheckConfig())
   yield AppConfig(
     characterAnimation = characterAnimation,
     syntaxHighlightingEnabled = syntaxHighlightingEnabled,
@@ -520,7 +524,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     interfaceDensity = interfaceDensity,
     textAreaInsets = textAreaInsets,
     preferredWindowSize = preferredWindowSize,
-    lspUserConfig = lspUserConfig
+    lspUserConfig = lspUserConfig,
+    spellCheck = spellCheck.normalized
   )
 }
 

@@ -315,6 +315,28 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("ui.motion = reduced")
   }
 
+  it should "load and write spell-check configuration" in {
+    val configFile = Files.createTempFile("serenity-spell-config", ".conf")
+    Files.writeString(
+      configFile,
+      """spellcheck.enabled = true
+        |spellcheck.languages = en,fr
+        |spellcheck.words = Serenity,κόσμος,café
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.spellCheck.enabled shouldBe true
+    config.spellCheck.languages shouldBe List("en", "fr")
+    config.spellCheck.additionalWords shouldBe List("serenity", "κόσμος", "café")
+
+    val written = ConfigManager.configToString(config)
+    written should include("spellcheck.enabled = true")
+    written should include("spellcheck.languages = en,fr")
+    written should include("spellcheck.words = serenity,κόσμος,café")
+  }
+
   it should "close loaded config files and save using UTF-8" in {
     val configFile = Files.createTempFile("serenity-config-utf8", ".conf")
     Files.writeString(
