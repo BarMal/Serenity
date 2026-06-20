@@ -7,6 +7,7 @@ import _root_.io.circe.syntax.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.*
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
+import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.session.given
 import com.serenity.session.{SessionFindResult, SessionFindState, SessionState}
@@ -160,6 +161,70 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restoredBuffer.viewport.leftColumn shouldBe 1
     restoredBuffer.findState shouldBe Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1))
     restoredBuffer.bookmarks shouldBe List(CursorPosition(1, 2), CursorPosition(8, 0))
+  }
+
+  it should "preserve clean rich text metadata through JSON round trip" in {
+    val richDocument = RichTextDocument(
+      List(
+        RichTextParagraph(
+          runs = List(
+            RichTextRun("plain ", RichTextStyle.empty),
+            RichTextRun("bold", RichTextStyle(marks = Set(InlineMark.Bold)))
+          ),
+          alignment = ParagraphAlignment.Center
+        )
+      )
+    )
+    val buffer = Buffer
+      .fromString(BufferId(22), richDocument.plainText)
+      .copy(richTextDocument = Some(richDocument))
+    val appState = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = Layout(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0))
+      ),
+      focus = Focus.EditorPane(PaneId(0)),
+      nextBufferId = BufferId(23),
+      nextPaneId = PaneId(1)
+    )
+
+    val decoded = SessionState.fromAppState(appState).asJson.as[SessionState]
+
+    decoded.isRight shouldBe true
+
+    val restoredBuffer = SessionState
+      .toAppState(decoded.toOption.get, Theme.default)
+      .buffers(buffer.id)
+
+    restoredBuffer.content.toString shouldBe "plain bold"
+    restoredBuffer.richTextDocument shouldBe Some(richDocument)
+  }
+
+  it should "drop stale rich text metadata for dirty buffers" in {
+    val richDocument = RichTextDocument.oneParagraph("old text")
+    val buffer = Buffer
+      .fromString(BufferId(24), "edited text")
+      .copy(isDirty = true, richTextDocument = Some(richDocument))
+    val appState = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = Layout(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0))
+      ),
+      focus = Focus.EditorPane(PaneId(0)),
+      nextBufferId = BufferId(25),
+      nextPaneId = PaneId(1)
+    )
+
+    val restoredBuffer = SessionState
+      .toAppState(SessionState.fromAppState(appState), Theme.default)
+      .buffers(buffer.id)
+
+    restoredBuffer.content.toString shouldBe "edited text"
+    restoredBuffer.richTextDocument shouldBe None
   }
 
   it should "restore legacy session find state that only stored result lines" in {
