@@ -179,3 +179,16 @@ object DocumentFormat:
           canEdit = false,
           preservesRichFormatting = false
         )
+
+  def capabilities(fileType: FileType): DocumentFormatCapabilities =
+    fileType match
+      case FileType.RichText =>
+        DocumentFormatCapabilities(
+          canOpen = true,
+          canSave = true,
+          canRender = false,
+          canEdit = true,
+          preservesRichFormatting = true
+        )
+      case _ =>
+        capabilities(fromFileType(fileType))

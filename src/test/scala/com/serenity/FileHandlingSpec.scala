@@ -6,6 +6,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.io.*
 import com.serenity.keystroke.events.SaveFile
+import com.serenity.richtext.{InlineMark, RichTextParagraph, RtfDocumentCodec}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -76,6 +77,20 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       canEdit = false,
       preservesRichFormatting = false
     )
+    DocumentFormat.capabilities(FileType.RichText) shouldBe DocumentFormatCapabilities(
+      canOpen = true,
+      canSave = true,
+      canRender = false,
+      canEdit = true,
+      preservesRichFormatting = true
+    )
+    DocumentFormat.capabilities(FileType.WordOpenXmlDocument) shouldBe DocumentFormatCapabilities(
+      canOpen = false,
+      canSave = false,
+      canRender = false,
+      canEdit = false,
+      preservesRichFormatting = false
+    )
   }
 
   "FileManager" should "create and manage buffers" in {
@@ -118,6 +133,68 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     finally Files.deleteIfExists(docxFile.getParent)
   }
 
+  it should "open RTF files as editable plain text with rich document metadata" in {
+    val fileManager = new FileManager()
+    val rtfFile     = Files.createTempFile("serenity-rich-open", ".rtf")
+
+    try
+      Files.writeString(rtfFile, """{\rtf1\ansi plain \b bold\b0\par}""")
+
+      val buffer = fileManager.loadFile(rtfFile, BufferId(99)).unsafeRunSync()
+
+      buffer.content.collect() shouldBe "plain bold"
+      buffer.richTextDocument.map(_.plainText) shouldBe Some("plain bold")
+      buffer.richTextDocument
+        .flatMap(_.paragraphs.headOption)
+        .map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
+      buffer.filePath shouldBe Some(rtfFile)
+      buffer.isDirty shouldBe false
+    finally Files.deleteIfExists(rtfFile)
+  }
+
+  it should "save clean RTF buffers without dropping rich formatting" in {
+    val fileManager = new FileManager()
+    val sourceFile  = Files.createTempFile("serenity-rich-source", ".rtf")
+    val savedFile   = Files.createTempFile("serenity-rich-saved", ".rtf")
+
+    try
+      Files.writeString(sourceFile, """{\rtf1\ansi plain \b bold\b0\par}""")
+
+      val buffer = fileManager.loadFile(sourceFile, BufferId(100)).unsafeRunSync()
+      fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
+
+      val saved = RtfDocumentCodec.read(savedFile).unsafeRunSync()
+
+      saved.plainText shouldBe "plain bold"
+      saved.paragraphs.headOption.map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
+    finally
+      Files.deleteIfExists(sourceFile)
+      Files.deleteIfExists(savedFile)
+  }
+
+  it should "save dirty RTF buffers from current text instead of stale rich metadata" in {
+    val fileManager = new FileManager()
+    val sourceFile  = Files.createTempFile("serenity-rich-dirty-source", ".rtf")
+    val savedFile   = Files.createTempFile("serenity-rich-dirty-saved", ".rtf")
+
+    try
+      Files.writeString(sourceFile, """{\rtf1\ansi plain \b bold\b0\par}""")
+
+      val buffer = fileManager
+        .loadFile(sourceFile, BufferId(101))
+        .unsafeRunSync()
+        .copy(content = com.serenity.rope.Rope("edited text"), isDirty = true)
+      val savedBuffer = fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
+      val saved       = RtfDocumentCodec.read(savedFile).unsafeRunSync()
+
+      saved.plainText shouldBe "edited text"
+      saved.paragraphs.headOption.map(marksForText(_, "edited")) shouldBe Some(Set.empty)
+      savedBuffer.richTextDocument.map(_.plainText) shouldBe Some("edited text")
+    finally
+      Files.deleteIfExists(sourceFile)
+      Files.deleteIfExists(savedFile)
+  }
+
   "FileUtils" should "handle file operations" in {
     // Create a temporary file
     val tempFile = Files.createTempFile("test", ".txt")
@@ -134,6 +211,12 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
     finally Files.deleteIfExists(tempFile)
   }
+
+  private def marksForText(paragraph: RichTextParagraph, text: String): Set[InlineMark] =
+    paragraph.runs
+      .find(_.text.contains(text))
+      .map(_.style.marks)
+      .getOrElse(Set.empty)
 
   it should "raise a clear error when reading a missing file" in {
     val missingFile = Files.createTempDirectory("serenity-missing-file").resolve("missing.txt")

@@ -16,6 +16,17 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
     document.plainText shouldBe "First paragraph\nSecond paragraph"
   }
 
+  it should "build plain rich text documents from newline-separated text" in {
+    val document = RichTextDocument.fromPlainText("First\n\nThird")
+
+    document.paragraphs shouldBe List(
+      RichTextParagraph.plain("First"),
+      RichTextParagraph.plain(""),
+      RichTextParagraph.plain("Third")
+    )
+    document.plainText shouldBe "First\n\nThird"
+  }
+
   it should "normalize empty runs and merge adjacent runs with the same style" in {
     val bold = RichTextStyle(marks = Set(InlineMark.Bold))
     val document = RichTextDocument(
