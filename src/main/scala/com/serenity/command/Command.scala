@@ -36,6 +36,8 @@ enum CommandIntent:
   case ReplaceInCurrentFile
   case ReplaceAllInCurrentFile
   case OpenGotoLine
+  case RequestLspHover
+  case RequestLspDefinition
   case ToggleTheme
   case ReloadTheme
   case FormatCurrentFile

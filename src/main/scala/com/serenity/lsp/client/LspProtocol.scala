@@ -8,6 +8,7 @@ object LspProtocol:
 
   case class JsonRpcRequest(id: Long, method: String, params: Json)
   case class JsonRpcNotification(method: String, params: Json)
+  case class LspLocation(uri: String, range: LspRange)
 
   def request(id: Long, method: String, params: Json): Json =
     Json.obj(
@@ -86,11 +87,56 @@ object LspProtocol:
   def completionParams(uri: String, line: Int, character: Int): Json =
     textDocumentPositionParams(uri, line, character)
 
-  private def textDocumentPositionParams(uri: String, line: Int, character: Int): Json =
+  def textDocumentPositionParams(uri: String, line: Int, character: Int): Json =
     Json.obj(
       "textDocument" -> Json.obj("uri" -> uri.asJson),
-      "position"     -> Json.obj("line" -> line.asJson, "character" -> character.asJson)
+      "position" -> Json.obj(
+        "line"      -> line.asJson,
+        "character" -> character.asJson
+      )
     )
+
+  def parseHoverText(json: Json): Option[String] =
+    json.hcursor
+      .downField("result")
+      .focus
+      .flatMap(_.hcursor.downField("contents").focus)
+      .flatMap(parseHoverContents)
+      .map(_.trim)
+      .filter(_.nonEmpty)
+
+  private def parseHoverContents(json: Json): Option[String] =
+    json.asString
+      .orElse(markupContentValue(json))
+      .orElse(markedStringValue(json))
+      .orElse(
+        json.asArray
+          .map(_.toList.flatMap(parseHoverContents))
+          .map(_.mkString("\n\n"))
+      )
+
+  private def markupContentValue(json: Json): Option[String] =
+    json.hcursor.downField("kind").as[String].toOption.flatMap(_ => json.hcursor.downField("value").as[String].toOption)
+
+  private def markedStringValue(json: Json): Option[String] =
+    json.hcursor.downField("language").as[String].toOption.flatMap { _ =>
+      json.hcursor.downField("value").as[String].toOption
+    }
+
+  def parseDefinitionLocation(json: Json): Option[LspLocation] =
+    json.hcursor.downField("result").focus.flatMap { result =>
+      parseLocation(result).orElse(result.asArray.flatMap(_.toList.view.flatMap(parseLocation).headOption))
+    }
+
+  private def parseLocation(json: Json): Option[LspLocation] =
+    val c = json.hcursor
+    for
+      uri       <- c.downField("uri").as[String].toOption
+      startLine <- c.downField("range").downField("start").downField("line").as[Int].toOption
+      startChar <- c.downField("range").downField("start").downField("character").as[Int].toOption
+      endLine   <- c.downField("range").downField("end").downField("line").as[Int].toOption
+      endChar   <- c.downField("range").downField("end").downField("character").as[Int].toOption
+    yield LspLocation(uri, LspRange(LspPosition(startLine, startChar), LspPosition(endLine, endChar)))
 
   // ── PublishDiagnostics ──────────────────────────────────────────────────────
 

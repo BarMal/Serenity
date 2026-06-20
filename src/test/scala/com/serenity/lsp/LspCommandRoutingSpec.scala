@@ -1,0 +1,113 @@
+package com.serenity.lsp
+
+import java.nio.file.Files
+
+import scala.concurrent.duration.*
+
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
+import com.serenity.command.*
+import com.serenity.lsp.config.LanguageId
+import com.serenity.rope.Balance
+import com.serenity.state.manager.StateManager
+import com.serenity.state.models.{BufferId, CursorPosition}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+
+class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
+
+  given Balance           = Balance.default
+  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+  private def createStateManager(): StateManager =
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("LspCommandRoutingSpec"))
+    StateManager.apply(logger).unsafeRunSync()
+
+  "LSP command routing" should "register hover and definition commands" in {
+    val commandNames = CommandRegistry.default.getAllCommands.map(_.name)
+
+    commandNames should contain("lsp-hover")
+    commandNames should contain("lsp-definition")
+  }
+
+  it should "enqueue a hover request for the active language buffer" in {
+    val stateManager = createStateManager()
+    val file         = Files.createTempFile("lsp-hover", ".scala")
+    try
+      stateManager
+        .updateState { state =>
+          val buffer = state
+            .buffers(BufferId(0))
+            .copy(
+              filePath = Some(file),
+              language = Some(LanguageId.Scala),
+              cursors = List(CursorPosition(3, 7))
+            )
+          state.copy(buffers = state.buffers + (BufferId(0) -> buffer))
+        }
+        .unsafeRunSync()
+
+      stateManager
+        .executeCommand(
+          Command.typed(
+            "lsp-hover",
+            "Show LSP hover information.",
+            CommandIntent.RequestLspHover,
+            CommandCategory.Edit
+          )
+        )
+        .unsafeRunSync()
+
+      val effect = stateManager.lspEffectStream.take(1).compile.lastOrError.timeout(3.seconds).unsafeRunSync()
+      effect shouldBe LspEffect.HoverRequested(
+        uri = file.toUri.toString,
+        languageId = LanguageId.Scala,
+        line = 3,
+        character = 7,
+        anchor = CursorPosition(3, 7)
+      )
+    finally Files.deleteIfExists(file)
+  }
+
+  it should "enqueue a definition request with the word under the active cursor" in {
+    val stateManager = createStateManager()
+    val file         = Files.createTempFile("lsp-definition", ".scala")
+    try
+      stateManager
+        .updateState { state =>
+          val buffer = state
+            .buffers(BufferId(0))
+            .copy(
+              content = com.serenity.rope.Rope("val total = subtotal + 1"),
+              filePath = Some(file),
+              language = Some(LanguageId.Scala),
+              cursors = List(CursorPosition(0, 14))
+            )
+          state.copy(buffers = state.buffers + (BufferId(0) -> buffer))
+        }
+        .unsafeRunSync()
+
+      stateManager
+        .executeCommand(
+          Command.typed(
+            "lsp-definition",
+            "Go to the symbol definition.",
+            CommandIntent.RequestLspDefinition,
+            CommandCategory.Edit
+          )
+        )
+        .unsafeRunSync()
+
+      val effect = stateManager.lspEffectStream.take(1).compile.lastOrError.timeout(3.seconds).unsafeRunSync()
+      effect shouldBe LspEffect.DefinitionRequested(
+        uri = file.toUri.toString,
+        languageId = LanguageId.Scala,
+        line = 0,
+        character = 14,
+        anchor = CursorPosition(0, 14),
+        symbol = "subtotal"
+      )
+    finally Files.deleteIfExists(file)
+  }

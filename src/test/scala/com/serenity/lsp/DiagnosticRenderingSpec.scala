@@ -8,6 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.state.reducers.SystemEventReducer
+import com.serenity.ui.layout.Location
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -63,6 +64,35 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
     val result = SystemEventReducer.reduce(LspEvent.LspDiagnosticsReceived(uri, Nil), state)
     result.state.diagnostics(uri) shouldBe empty
+  }
+
+  it should "show LSP hover text as a quick-info peek surface" in {
+    given Balance = Balance.default
+    val result = SystemEventReducer.reduce(
+      LspEvent.LspHoverReceived("def map[B](f: A => B): List[B]", CursorPosition(2, 4)),
+      AppState.initial
+    )
+
+    val surface = result.state.uiSurfaces.headOption.getOrElse(fail("Expected hover surface"))
+    surface.content shouldBe SurfaceContent.QuickInfo("def map[B](f: A => B): List[B]")
+    surface.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(2, 4)), SurfacePlacement.AboveCursor)
+    result.state.focus shouldBe Focus.Surface(surface.id)
+  }
+
+  it should "show LSP definition locations as symbol-definition peek surfaces" in {
+    given Balance = Balance.default
+    val event = LspEvent.LspDefinitionReceived(
+      symbol = "map",
+      uri = "file:///workspace/Foo.scala",
+      position = LspPosition(9, 2),
+      anchor = CursorPosition(1, 3)
+    )
+
+    val result  = SystemEventReducer.reduce(event, AppState.initial)
+    val surface = result.state.uiSurfaces.headOption.getOrElse(fail("Expected definition surface"))
+
+    surface.content shouldBe SurfaceContent.SymbolDefinition("map @ file:///workspace/Foo.scala", Location(9, 2))
+    surface.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(1, 3)), SurfacePlacement.AboveCursor)
   }
 
   "Theme" should "have error and warning colors" in {

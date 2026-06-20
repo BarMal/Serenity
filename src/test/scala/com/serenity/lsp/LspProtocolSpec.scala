@@ -160,3 +160,50 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     completion.hcursor.downField("position").downField("line").as[Int].toOption shouldBe Some(9)
     completion.hcursor.downField("position").downField("character").as[Int].toOption shouldBe Some(6)
   }
+
+  it should "parse hover text from markup content responses" in {
+    val response = Json.obj(
+      "jsonrpc" -> "2.0".asJson,
+      "id"      -> 2.asJson,
+      "result" -> Json.obj(
+        "contents" -> Json.obj(
+          "kind"  -> "markdown".asJson,
+          "value" -> "```scala\nmap[B](f: A => B): List[B]\n```".asJson
+        )
+      )
+    )
+
+    LspProtocol.parseHoverText(response) shouldBe Some("```scala\nmap[B](f: A => B): List[B]\n```")
+  }
+
+  it should "parse hover text from marked string arrays" in {
+    val response = Json.obj(
+      "jsonrpc" -> "2.0".asJson,
+      "id"      -> 3.asJson,
+      "result" -> Json.obj(
+        "contents" -> Json.arr(
+          "List.map".asJson,
+          Json.obj("language" -> "scala".asJson, "value" -> "def map[B](f: A => B): List[B]".asJson)
+        )
+      )
+    )
+
+    LspProtocol.parseHoverText(response) shouldBe Some("List.map\n\ndef map[B](f: A => B): List[B]")
+  }
+
+  it should "parse the first definition location from object or array responses" in {
+    val location = Json.obj(
+      "uri" -> "file:///foo/Bar.scala".asJson,
+      "range" -> Json.obj(
+        "start" -> Json.obj("line" -> 7.asJson, "character" -> 4.asJson),
+        "end"   -> Json.obj("line" -> 7.asJson, "character" -> 10.asJson)
+      )
+    )
+
+    val objectResponse = Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 4.asJson, "result" -> location)
+    val arrayResponse  = Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 5.asJson, "result" -> Json.arr(location))
+
+    LspProtocol.parseDefinitionLocation(objectResponse).map(_.uri) shouldBe Some("file:///foo/Bar.scala")
+    LspProtocol.parseDefinitionLocation(arrayResponse).map(_.range.start.line) shouldBe Some(7)
+    LspProtocol.parseDefinitionLocation(arrayResponse).map(_.range.start.character) shouldBe Some(4)
+  }
