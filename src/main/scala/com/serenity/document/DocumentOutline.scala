@@ -1,6 +1,7 @@
 package com.serenity.document
 
 import com.serenity.lsp.config.LanguageId
+import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.Buffer
 import com.serenity.ui.layout.{Location, Symbol, SymbolKind}
 
@@ -10,13 +11,32 @@ object DocumentOutline:
   private val MaxPlainTextSectionNameLength = 54
 
   def forBuffer(buffer: Buffer): List[Symbol] =
-    buffer.language match
-      case Some(LanguageId.Markdown) =>
-        markdownHeadings(buffer.content.collect())
+    val content = buffer.content.collect()
+    richTextHeadings(buffer.richTextDocument.filter(_.matchesPlainText(content))).filter(_.nonEmpty) match
+      case Some(symbols) => symbols
       case None =>
-        plainTextSections(buffer.content.collect())
-      case _ =>
-        Nil
+        buffer.language match
+          case Some(LanguageId.Markdown) =>
+            markdownHeadings(content)
+          case None =>
+            plainTextSections(content)
+          case _ =>
+            Nil
+
+  private def richTextHeadings(document: Option[RichTextDocument]): Option[List[Symbol]] =
+    document.map(_.paragraphs.zipWithIndex.collect {
+      case (paragraph, line) if isHeading(paragraph.role) && paragraph.plainText.trim.nonEmpty =>
+        Symbol(
+          name = paragraph.plainText.trim,
+          kind = SymbolKind.Heading,
+          location = Location(line, 0)
+        )
+    })
+
+  private def isHeading(role: ParagraphRole): Boolean =
+    role match
+      case ParagraphRole.Heading(_) => true
+      case ParagraphRole.Body       => false
 
   private def markdownHeadings(content: String): List[Symbol] =
     content.linesIterator.zipWithIndex.collect {

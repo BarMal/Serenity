@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.document.DocumentOutline
 import com.serenity.lsp.config.LanguageId
+import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 import com.serenity.ui.layout.{Location, Symbol, SymbolKind}
@@ -55,6 +56,24 @@ class DocumentOutlineSpec extends AnyFlatSpec with Matchers:
       Symbol("Opening line", SymbolKind.Section, Location(0, 0)),
       Symbol("Second section", SymbolKind.Section, Location(3, 0)),
       Symbol("A very long section title that should be clipped be...", SymbolKind.Section, Location(6, 0))
+    )
+  }
+
+  it should "extract rich text heading paragraphs as document navigation symbols" in {
+    val richDocument = RichTextDocument(
+      List(
+        RichTextParagraph.plain("Chapter One", role = ParagraphRole.Heading(1)),
+        RichTextParagraph.plain("Body"),
+        RichTextParagraph.plain("Scene Two", role = ParagraphRole.Heading(2))
+      )
+    )
+    val buffer = Buffer
+      .fromString(BufferId(1), "Chapter One\nBody\nScene Two")
+      .copy(richTextDocument = Some(richDocument))
+
+    DocumentOutline.forBuffer(buffer) shouldBe List(
+      Symbol("Chapter One", SymbolKind.Heading, Location(0, 0)),
+      Symbol("Scene Two", SymbolKind.Heading, Location(2, 0))
     )
   }
 

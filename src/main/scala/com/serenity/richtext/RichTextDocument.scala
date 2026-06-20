@@ -13,6 +13,11 @@ enum ParagraphAlignment:
   case Right
   case Justify
 
+/** Paragraph-level structural role used for document navigation and rich document round-tripping. */
+enum ParagraphRole:
+  case Body
+  case Heading(level: Int)
+
 /** Inline style for a contiguous text run. */
 case class RichTextStyle(
     marks: Set[InlineMark] = Set.empty,
@@ -50,7 +55,8 @@ case class RichTextRange(start: RichTextPosition, end: RichTextPosition):
 /** One paragraph of rich text with inline runs and paragraph formatting. */
 case class RichTextParagraph(
     runs: List[RichTextRun],
-    alignment: ParagraphAlignment = ParagraphAlignment.Left
+    alignment: ParagraphAlignment = ParagraphAlignment.Left,
+    role: ParagraphRole = ParagraphRole.Body
 ):
   def plainText: String =
     runs.map(_.text).mkString
@@ -137,8 +143,13 @@ case class RichTextParagraph(
     }
 
 object RichTextParagraph:
-  def plain(text: String, alignment: ParagraphAlignment = ParagraphAlignment.Left): RichTextParagraph =
-    RichTextParagraph(List(RichTextRun(text)), alignment)
+
+  def plain(
+    text: String,
+    alignment: ParagraphAlignment = ParagraphAlignment.Left,
+    role: ParagraphRole = ParagraphRole.Body
+  ): RichTextParagraph =
+    RichTextParagraph(List(RichTextRun(text)), alignment, role)
 
 /** Rich text document model for document-format adapters and future rich editing surfaces. */
 case class RichTextDocument(paragraphs: List[RichTextParagraph]):

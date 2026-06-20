@@ -151,7 +151,12 @@ object OdtDocumentCodec:
     val alignment = attribute(element, TextNs, "style-name")
       .flatMap(styles.paragraphStyles.get)
       .getOrElse(ParagraphAlignment.Left)
-    RichTextParagraph(runsFromChildren(element, RichTextStyle.empty, styles), alignment).normalized
+    val role = Option
+      .when(element.getNamespaceURI == TextNs && element.getLocalName == "h") {
+        ParagraphRole.Heading(attribute(element, TextNs, "outline-level").flatMap(_.toIntOption).getOrElse(1).max(1))
+      }
+      .getOrElse(ParagraphRole.Body)
+    RichTextParagraph(runsFromChildren(element, RichTextStyle.empty, styles), alignment, role).normalized
 
   private def runsFromChildren(element: Element, currentStyle: RichTextStyle, styles: OdtStyles): List[RichTextRun] =
     childNodes(element).flatMap(runsFromNode(_, currentStyle, styles))
@@ -260,7 +265,11 @@ object OdtDocumentCodec:
     document.paragraphs
       .map(paragraph =>
         val styleName = paragraphStyleNames(paragraph.alignment)
-        s"""      <text:p text:style-name="$styleName">${runsXml(paragraph.runs, textStyleNames)}</text:p>"""
+        paragraph.role match
+          case ParagraphRole.Body =>
+            s"""      <text:p text:style-name="$styleName">${runsXml(paragraph.runs, textStyleNames)}</text:p>"""
+          case ParagraphRole.Heading(level) =>
+            s"""      <text:h text:outline-level="${level.max(1)}" text:style-name="$styleName">${runsXml(paragraph.runs, textStyleNames)}</text:h>"""
       )
       .mkString("\n")
 
