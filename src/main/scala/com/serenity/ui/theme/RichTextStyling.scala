@@ -2,7 +2,7 @@ package com.serenity.ui.theme
 
 import java.awt.Color
 
-import com.serenity.richtext.{InlineMark, RichTextDocument}
+import com.serenity.richtext.{InlineMark, ParagraphRole, RichTextDocument}
 
 object RichTextStyling:
 
@@ -20,7 +20,7 @@ object RichTextStyling:
           .foldLeft((0, List.empty[StyledText])) {
             case ((offset, acc), run) =>
               val nextOffset = offset + run.text.length
-              val segment    = sliceRun(run, offset, startColumn, endColumn, theme)
+              val segment    = sliceRun(run, paragraph.role, offset, startColumn, endColumn, theme)
               (nextOffset, segment.fold(acc)(_ :: acc))
           }
           ._2
@@ -30,6 +30,7 @@ object RichTextStyling:
 
   private def sliceRun(
     run: com.serenity.richtext.RichTextRun,
+    role: ParagraphRole,
     runStart: Int,
     startColumn: Int,
     endColumn: Int,
@@ -44,20 +45,39 @@ object RichTextStyling:
       Option.when(content.nonEmpty)(
         StyledText(
           content,
-          textStyle(run.style),
+          textStyle(run.style, role),
           foregroundColor(run.style, theme),
           theme.background
         )
       )
 
-  private def textStyle(style: com.serenity.richtext.RichTextStyle): TextStyle =
-    TextStyle(
-      isBold = style.marks.contains(InlineMark.Bold),
-      isItalic = style.marks.contains(InlineMark.Italic),
-      isUnderlined = style.marks.contains(InlineMark.Underline),
-      fontFamily = style.fontFamily,
-      fontSize = style.fontSize
+  private def textStyle(style: com.serenity.richtext.RichTextStyle, role: ParagraphRole): TextStyle =
+    headingStyle(role).combine(
+      TextStyle(
+        isBold = style.marks.contains(InlineMark.Bold),
+        isItalic = style.marks.contains(InlineMark.Italic),
+        isUnderlined = style.marks.contains(InlineMark.Underline),
+        fontFamily = style.fontFamily,
+        fontSize = style.fontSize
+      )
     )
+
+  private def headingStyle(role: ParagraphRole): TextStyle =
+    role match
+      case ParagraphRole.Body =>
+        TextStyle.normal
+      case ParagraphRole.Heading(level) =>
+        TextStyle(
+          isBold = true,
+          fontSize = Some(headingFontSize(level))
+        )
+
+  private def headingFontSize(level: Int): Float =
+    level match
+      case 1 => 22.0f
+      case 2 => 18.0f
+      case 3 => 16.0f
+      case _ => 14.0f
 
   private def foregroundColor(style: com.serenity.richtext.RichTextStyle, theme: Theme): Color =
     style.color.flatMap(hexColor).getOrElse(theme.foreground)
