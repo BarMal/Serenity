@@ -87,6 +87,26 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
     styled.map(_.foregroundColor) shouldBe List(Color(0x33, 0x66, 0x99))
   }
 
+  it should "carry run font family and size metadata into styled text" in {
+    val document = RichTextDocument(
+      List(
+        com.serenity.richtext.RichTextParagraph(
+          List(
+            com.serenity.richtext.RichTextRun(
+              "serif",
+              com.serenity.richtext.RichTextStyle(fontFamily = Some(Font.SERIF), fontSize = Some(18.0f))
+            )
+          )
+        )
+      )
+    )
+
+    val styled = RichTextStyling.styledLine(document, 0, 0, 5, Theme.light)
+
+    styled.map(_.style.fontFamily) shouldBe List(Some(Font.SERIF))
+    styled.map(_.style.fontSize) shouldBe List(Some(18.0f))
+  }
+
   "Renderer" should "apply rich text marks to editor text" in {
     val buffer = Buffer
       .fromString(BufferId(1), richDocument.plainText)
@@ -126,4 +146,31 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
 
     surface.styleCalls should not contain surface.StyleCall("enable", TextStyle.bold)
     surface.styleCalls should not contain surface.StyleCall("enable", TextStyle.underlined)
+  }
+
+  it should "apply rich text font metadata to editor text" in {
+    val document = RichTextDocument(
+      List(
+        com.serenity.richtext.RichTextParagraph(
+          List(
+            com.serenity.richtext.RichTextRun("plain "),
+            com.serenity.richtext.RichTextRun(
+              "serif",
+              com.serenity.richtext.RichTextStyle(fontFamily = Some(Font.SERIF), fontSize = Some(18.0f))
+            )
+          )
+        )
+      )
+    )
+    val buffer = Buffer
+      .fromString(BufferId(1), document.plainText)
+      .copy(richTextDocument = Some(document))
+    val state   = buildState(buffer)
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, textFont, monoMetrics, None)
+
+    surface.styleCalls should contain(
+      surface.StyleCall("enable", TextStyle(fontFamily = Some(Font.SERIF), fontSize = Some(18.0f)))
+    )
   }

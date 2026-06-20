@@ -54,7 +54,9 @@ object RichTextStyling:
     TextStyle(
       isBold = style.marks.contains(InlineMark.Bold),
       isItalic = style.marks.contains(InlineMark.Italic),
-      isUnderlined = style.marks.contains(InlineMark.Underline)
+      isUnderlined = style.marks.contains(InlineMark.Underline),
+      fontFamily = style.fontFamily,
+      fontSize = style.fontSize
     )
 
   private def foregroundColor(style: com.serenity.richtext.RichTextStyle, theme: Theme): Color =

@@ -97,12 +97,14 @@ class Java2DRenderSurface(
       }
 
   def enableStyle(style: TextStyle): Unit =
-    val styled = baseFontRef
-      .get()
-      .deriveFont(
-        (if style.isBold then java.awt.Font.BOLD else 0) |
-          (if style.isItalic then java.awt.Font.ITALIC else 0)
-      )
+    val base     = baseFontRef.get()
+    val fontMode = style.fontMode
+    val size     = style.fontSize.getOrElse(base.getSize2D).max(1.0f)
+    val styled = style.fontFamily match
+      case Some(family) =>
+        Font(family, fontMode, size.round.max(1)).deriveFont(fontMode, size)
+      case None =>
+        base.deriveFont(fontMode, size)
     val derived =
       if style.isUnderlined then styled.deriveFont(Map(TextAttribute.UNDERLINE -> TextAttribute.UNDERLINE_ON).asJava)
       else styled
