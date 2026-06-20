@@ -128,8 +128,8 @@ case class CommandRunner(
       CommandSurfaceItem.GroupItem(
         id = "settings-ui-presets",
         label = "UI Presets",
-        children = List(CommandRunner.builtInUiPresetOptionItem) ++
-          CommandRunner.customUiPresetOptionItem(uiPresetPreviews).toList ++
+        children = List(CommandRunner.builtInUiPresetOptionItem(optionSelections)) ++
+          CommandRunner.customUiPresetOptionItem(uiPresetPreviews, optionSelections).toList ++
           inputItems.filter(_.id.startsWith("ui-preset-")),
         category = CommandCategory.Settings,
         hint = Some("Save or apply named layouts")
@@ -671,38 +671,47 @@ object CommandRunner:
       hint = Some("None, subtle, or full")
     )
 
-  private[command] def builtInUiPresetOptionItem: CommandSurfaceItem.OptionItem =
+  private[command] def builtInUiPresetOptionItem(
+    optionSelections: Map[String, Int] = Map.empty
+  ): CommandSurfaceItem.OptionItem =
+    val options = UiPreset.builtIns.map { preset =>
+      val preview = UiPreset.Preview.fromPreset(preset)
+      CommandOption(preview.name, CommandIntent.ApplyUiPreset(preview.name), hint = Some(preview.hint))
+    }
     CommandSurfaceItem.OptionItem(
       id = "ui-preset-built-in",
       label = "Built-In Preset",
-      options = UiPreset.builtIns.map { preset =>
-        val preview = UiPreset.Preview.fromPreset(preset)
-        CommandOption(preview.name, CommandIntent.ApplyUiPreset(preview.name), hint = Some(preview.hint))
-      },
-      selectedIndex = 0,
+      options = options,
+      selectedIndex = boundedOptionIndex(optionSelections.getOrElse("ui-preset-built-in", 0), options),
       category = CommandCategory.Settings,
       hint = Some("Writing, docs, code, review")
     )
 
   private[command] def customUiPresetOptionItem(
-    previews: List[UiPreset.Preview]
+    previews: List[UiPreset.Preview],
+    optionSelections: Map[String, Int] = Map.empty
   ): Option[CommandSurfaceItem.OptionItem] =
     normalizedUiPresetPreviews(previews) match
       case Nil =>
         None
       case normalizedPreviews =>
+        val options = normalizedPreviews.map(preview =>
+          CommandOption(preview.name, CommandIntent.ApplyUiPreset(preview.name), hint = Some(preview.hint))
+        )
         Some(
           CommandSurfaceItem.OptionItem(
             id = "ui-preset-custom",
             label = "Custom Presets",
-            options = normalizedPreviews.map(preview =>
-              CommandOption(preview.name, CommandIntent.ApplyUiPreset(preview.name), hint = Some(preview.hint))
-            ),
-            selectedIndex = 0,
+            options = options,
+            selectedIndex = boundedOptionIndex(optionSelections.getOrElse("ui-preset-custom", 0), options),
             category = CommandCategory.Settings,
             hint = Some("Saved workspace setups")
           )
         )
+
+  private def boundedOptionIndex(index: Int, options: List[CommandOption]): Int =
+    if options.isEmpty then 0
+    else index.max(0).min(options.length - 1)
 
   private[command] def normalizedUiPresetNames(names: List[String]): List[String] =
     names

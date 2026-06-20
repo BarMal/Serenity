@@ -449,6 +449,7 @@ object SurfaceContentResolver:
           layout = OverlayRowLayout.Columns
         )
     }
+    val detailRows = presetPreviewRow(groupId, items.lift(selectedIndex))
     val footer =
       runner.statusMessage
         .map(OverlayRow(_))
@@ -466,9 +467,26 @@ object SurfaceContentResolver:
           case None =>
             OverlayRow(g.label)
       },
-      rows = rows,
+      rows = rows ++ detailRows,
       footer = footer
     )
+
+  private def presetPreviewRow(groupId: String, selectedItem: Option[CommandSurfaceItem]): List[OverlayRow] =
+    selectedItem.collect {
+      case option: CommandSurfaceItem.OptionItem
+          if groupId == "settings-ui-presets" &&
+            (option.id == "ui-preset-built-in" || option.id == "ui-preset-custom") =>
+        val hint = option.selectedHint.getOrElse("")
+        OverlayRow(
+          plainText = s"Preset Preview ${option.selectedOption} - $hint",
+          segments = List(
+            OverlaySegment("Preset Preview"),
+            OverlaySegment(option.selectedOption, selected = true),
+            OverlaySegment(hint, tone = OverlayTone.Normal)
+          ).filterNot(_.text.isEmpty),
+          layout = OverlayRowLayout.Columns
+        )
+    }.toList
 
   private def categoryTabs(activeCategory: CommandCategory): OverlayRow =
     val categories = List(

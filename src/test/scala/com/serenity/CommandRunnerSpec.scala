@@ -402,6 +402,31 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "preserve selected built-in and custom UI presets in the settings submenu" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withUiPresetNames(List("Drafting", "Research Notes"))
+      .copy(optionSelections = Map("ui-preset-built-in" -> 2, "ui-preset-custom" -> 1))
+      .withActiveCategory(CommandCategory.Settings)
+
+    val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
+    val builtInPreset = presetGroup.children
+      .collectFirst {
+        case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-built-in" => item
+      }
+      .getOrElse(fail("missing built-in preset picker"))
+    val customPreset = presetGroup.children
+      .collectFirst {
+        case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-custom" => item
+      }
+      .getOrElse(fail("missing custom preset picker"))
+
+    builtInPreset.selectedOption shouldBe "Code"
+    customPreset.selectedOption shouldBe "Research Notes"
+  }
+
   it should "surface font settings groups ahead of command matches when searching font-related terms" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
