@@ -18,6 +18,8 @@ class FileManager(using balance: Balance):
         RtfDocumentCodec.read(path).map(document => bufferFromRichText(bufferId, path, document))
       case FileType.OpenDocumentText =>
         OdtDocumentCodec.read(path).map(document => bufferFromRichText(bufferId, path, document))
+      case FileType.WordOpenXmlDocument =>
+        com.serenity.richtext.DocxDocumentCodec.read(path).map(document => bufferFromRichText(bufferId, path, document))
       case _ =>
         ensureSupported(path, _.canOpen, "open") >>
           FileUtils.readFileContent(path).map(content => bufferFromContent(bufferId, path, content))
@@ -31,6 +33,9 @@ class FileManager(using balance: Balance):
       case FileType.OpenDocumentText =>
         val document = richTextDocumentForSave(buffer)
         OdtDocumentCodec.write(document, path).as(savedBuffer(buffer, path, Some(document)))
+      case FileType.WordOpenXmlDocument =>
+        val document = richTextDocumentForSave(buffer)
+        com.serenity.richtext.DocxDocumentCodec.write(document, path).as(savedBuffer(buffer, path, Some(document)))
       case _ =>
         for
           _ <- ensureSupported(path, _.canSave, "save")
