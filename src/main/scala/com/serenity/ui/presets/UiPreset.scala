@@ -34,6 +34,44 @@ object UiPreset:
   def builtIn(name: String): Option[UiPreset] =
     builtIns.find(_.name.equalsIgnoreCase(name.trim))
 
+  case class Preview(name: String, hint: String)
+
+  object Preview:
+
+    def fromPreset(preset: UiPreset): Preview =
+      Preview(preset.name, previewHint(preset))
+
+    def fromName(name: String): Preview =
+      Preview(name.trim, "Saved workspace setup")
+
+  private def previewHint(preset: UiPreset): String =
+    List(
+      Option(preset.themeName).filter(_.nonEmpty),
+      Some(s"${preset.config.motionPreset.configKey} motion"),
+      Some(s"${preset.config.materialPreset.configKey} material"),
+      Some(proseFontSummary(preset.config)),
+      panelSummary(preset.pinnedPanels)
+    ).flatten.mkString("; ")
+
+  private def proseFontSummary(config: AppConfig): String =
+    s"${config.fontConfig.textFontFamily} ${formatPointSize(config.fontConfig.textFontSize)} prose"
+
+  private def formatPointSize(size: Float): String =
+    if size == size.round.toFloat then size.toInt.toString + "pt"
+    else f"$size%.1fpt"
+
+  private def panelSummary(panels: List[PinnedPanel]): Option[String] =
+    Option(panels.map(panel => s"${panel.position} ${panelContentName(panel.content)} ${panel.size}").mkString(", "))
+      .filter(_.nonEmpty)
+
+  private def panelContentName(content: PanelContentSnapshot): String =
+    content match
+      case PanelContentSnapshot.DirectoryTree(_, _, _) => "files"
+      case PanelContentSnapshot.Terminal(_, _)         => "terminal"
+      case PanelContentSnapshot.Outline(_)             => "outline"
+      case PanelContentSnapshot.Diagnostics(_)         => "diagnostics"
+      case PanelContentSnapshot.MarkdownPreview(_, _)  => "markdown preview"
+
   private def writingPreset: UiPreset =
     UiPreset(
       name = "Writing",

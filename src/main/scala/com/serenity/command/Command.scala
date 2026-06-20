@@ -153,7 +153,8 @@ object Command:
 
 case class CommandOption(
     label: String,
-    intent: CommandIntent
+    intent: CommandIntent,
+    hint: Option[String] = None
 )
 
 sealed trait CommandSurfaceItem:
@@ -177,10 +178,13 @@ object CommandSurfaceItem:
       hint: Option[String] = None
   ) extends CommandSurfaceItem:
     override def searchText: String =
-      s"$label ${options.map(_.label).mkString(" ")}"
+      s"$label ${options.map(option => s"${option.label} ${option.hint.getOrElse("")}").mkString(" ")}"
 
     def selectedOption: String =
       options.lift(selectedIndex).map(_.label).getOrElse("")
+
+    def selectedHint: Option[String] =
+      options.lift(selectedIndex).flatMap(_.hint).orElse(hint)
 
     def selectedIntent: Option[CommandIntent] =
       options.lift(selectedIndex).map(_.intent)

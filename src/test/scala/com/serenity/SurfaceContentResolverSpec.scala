@@ -186,6 +186,32 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     optionRow.segments(1).tone shouldBe OverlayTone.Normal
   }
 
+  it should "resolve option rows with selected option preview hints" in {
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(
+        activeCategory = CommandCategory.Settings,
+        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets")),
+        inputItems = Nil
+      )
+
+    val row = SurfaceContentResolver
+      .resolve(
+        SurfaceContent.CommandPaletteSubmenu(
+          runner,
+          "settings-ui-presets",
+          previewOnly = false
+        ),
+        LayoutRect(0, 0, 80, 10),
+        SurfaceRenderMode.Floating
+      )
+      .rows
+      .headOption
+      .getOrElse(fail("Expected preset option row"))
+
+    row.plainText should include("dark; subtle motion; frosted material; Serif 18pt prose; Left outline 28")
+  }
+
   it should "return no floating rows for inactive command palettes" in {
     val resolved = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(CommandRunner.empty),

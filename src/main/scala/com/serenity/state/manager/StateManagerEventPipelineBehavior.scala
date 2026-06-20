@@ -15,6 +15,7 @@ import com.serenity.text.TextEditing
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
+import com.serenity.ui.presets.UiPreset
 
 private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEffectBehavior:
   this: StateManager =>
@@ -257,16 +258,16 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
   private def hydrateCommandRunnerUiPresets: cats.effect.IO[Unit] =
     uiPresetStore
       .list()
-      .map(_.map(_.name))
+      .map(_.map(UiPreset.Preview.fromPreset))
       .handleErrorWith(error => logger.error(error)("[PRESET] Failed to list UI presets").map(_ => Nil))
-      .flatMap(names => stateRef.update(state => updateCommandRunnerUiPresetNames(state, names)))
+      .flatMap(previews => stateRef.update(state => updateCommandRunnerUiPresetPreviews(state, previews)))
 
-  private def updateCommandRunnerUiPresetNames(state: AppState, names: List[String]): AppState =
+  private def updateCommandRunnerUiPresetPreviews(state: AppState, previews: List[UiPreset.Preview]): AppState =
     state.commandRunnerSurface match
       case Some(surface) =>
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
-            val updatedRunner = runner.withUiPresetNames(names)
+            val updatedRunner = runner.withUiPresetPreviews(previews)
             val updatedSurfaces = state.uiSurfaces.map {
               case current if current.id == surface.id =>
                 current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
