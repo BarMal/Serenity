@@ -212,6 +212,32 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     row.plainText should include("dark; subtle motion; frosted material; Serif 18pt prose; Left outline 28")
   }
 
+  it should "append a selected UI preset detail row in the preset submenu" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(
+        activeCategory = CommandCategory.Settings,
+        optionSelections = Map("ui-preset-built-in" -> 1),
+        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets"))
+      )
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPaletteSubmenu(
+        runner,
+        "settings-ui-presets",
+        previewOnly = false
+      ),
+      LayoutRect(0, 0, 90, 12),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.lastOption.map(_.plainText) shouldBe Some(
+      "Preset Preview Documentation - dark; subtle motion; frosted material; SansSerif 14pt prose; Left outline 30"
+    )
+  }
+
   it should "return no floating rows for inactive command palettes" in {
     val resolved = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(CommandRunner.empty),
