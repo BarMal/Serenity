@@ -8,7 +8,8 @@ import cats.effect.{IO, Ref}
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.{AppConfig, BackgroundStyle, PreferredWindowSize}
 import com.serenity.keystroke.events.ToggleCommandRunner
-import com.serenity.rope.Balance
+import com.serenity.lsp.config.LanguageId
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{PanelContent, PanelPosition}
@@ -136,6 +137,46 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     state.config.showGutter shouldBe false
     state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Left, 28))
     state.pinnedSurfaces.headOption.map(_.content) shouldBe Some(SurfaceContent.Outline(Nil))
+  }
+
+  it should "apply the built-in documentation preset with a live markdown preview for the active markdown buffer" in {
+    val path  = Files.createTempDirectory("state-manager-documentation-ui-preset").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.updateState { state =>
+      val bufferId = BufferId(0)
+      val buffer = state
+        .buffers(bufferId)
+        .copy(
+          content = Rope("# Notes\n\nDraft"),
+          language = Some(LanguageId.Markdown)
+        )
+      state.copy(buffers = state.buffers + (bufferId -> buffer))
+    }.unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "apply-documentation-preset",
+        "Apply documentation preset",
+        CommandIntent.ApplyUiPreset("Documentation"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+
+    state.config.defaultDocumentMode shouldBe com.serenity.config.DefaultDocumentMode.Markdown
+    state.pinnedSurfaces.map(_.content) should contain(SurfaceContent.Outline(Nil))
+    state.pinnedSurfaces.collectFirst {
+      case UiSurface(
+            _,
+            SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"),
+            SurfacePresentation.Pinned(PanelPosition.Right, 40),
+            _
+          ) =>
+        true
+    } shouldBe Some(true)
   }
 
   it should "duplicate, rename, and delete UI presets from commands" in {

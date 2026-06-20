@@ -618,12 +618,17 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
                     .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset window size"))
                 )
                 _ <- reloadPresetDirectories(preset)
+                _ <- openPresetMarkdownPreviewIfNeeded(preset)
                 _ <- stateRef.get
                   .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
                   .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after preset apply failed"))
               yield ()
           }
           .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to apply UI preset $presetName"))
+
+  private def openPresetMarkdownPreviewIfNeeded(preset: UiPreset): IO[Unit] =
+    if preset.config.markdownViewMode == MarkdownViewMode.SplitPreview then stateRef.get.flatMap(openMarkdownPreview)
+    else IO.unit
 
   protected def duplicateUiPresetEffect(sourceName: String, targetName: String): IO[Unit] =
     (normalizedPresetName(sourceName), normalizedPresetName(targetName)) match
