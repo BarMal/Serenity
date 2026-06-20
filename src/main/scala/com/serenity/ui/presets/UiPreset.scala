@@ -76,7 +76,7 @@ object UiPreset:
       val surfaceContent = content match
         case PanelContent.DirectoryTree(tree, selectedPath) => SurfaceContent.DirectoryTree(tree, selectedPath)
         case PanelContent.Terminal(buffer, cursor)          => SurfaceContent.Terminal(buffer, cursor)
-        case PanelContent.Outline(symbols)                  => SurfaceContent.Outline(symbols)
+        case PanelContent.Outline(symbols, activeLocation)  => SurfaceContent.Outline(symbols, activeLocation)
         case PanelContent.Diagnostics(issues)               => SurfaceContent.Diagnostics(issues)
         case PanelContent.MarkdownPreview(bufferId, title)  => SurfaceContent.MarkdownPreview(bufferId, title)
 
@@ -101,7 +101,7 @@ object UiPreset:
           )
         case SurfaceContent.Terminal(buffer, cursor) =>
           Some(PanelContentSnapshot.Terminal(buffer, cursor))
-        case SurfaceContent.Outline(symbols) =>
+        case SurfaceContent.Outline(symbols, _) =>
           Some(PanelContentSnapshot.Outline(symbols))
         case SurfaceContent.Diagnostics(issues) =>
           Some(PanelContentSnapshot.Diagnostics(issues))

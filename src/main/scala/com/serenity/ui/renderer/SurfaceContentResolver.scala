@@ -4,7 +4,7 @@ import java.awt.Color
 
 import com.serenity.command.{CommandCategory, CommandSurfaceItem}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutRect, SurfaceLayoutKind}
+import com.serenity.ui.layout.*
 
 enum SurfaceRenderMode:
   case Floating
@@ -97,8 +97,8 @@ object SurfaceContentResolver:
         resolveModalWorkflow(modal, rect, mode)
       case SurfaceContent.Terminal(buffer, cursor) =>
         resolveTerminal(rect, mode, buffer, cursor)
-      case SurfaceContent.Outline(symbols) =>
-        resolveOutline(rect, mode, symbols.map(symbol => (symbol.kind.toString, symbol.name)))
+      case SurfaceContent.Outline(symbols, activeLocation) =>
+        resolveOutline(rect, mode, symbols, activeLocation)
       case SurfaceContent.Diagnostics(issues) =>
         resolveDiagnostics(rect, mode, issues)
       case SurfaceContent.ThemePicker(state) =>
@@ -628,19 +628,37 @@ object SurfaceContentResolver:
   private def resolveOutline(
     rect: LayoutRect,
     mode: SurfaceRenderMode,
-    symbols: List[(String, String)]
+    symbols: List[Symbol],
+    activeLocation: Option[Location]
   ): ResolvedSurfaceContent =
-    val shaped = SurfaceLayoutKind.classify(rect) match
+    val shaped: List[OverlayRow] = SurfaceLayoutKind.classify(rect) match
       case SurfaceLayoutKind.Horizontal =>
-        List(symbols.take(4).map(_._2).mkString(" | ")).filter(_.nonEmpty)
+        val visibleSymbols = symbols.take(4)
+        val activeVisible  = visibleSymbols.exists(symbol => activeLocation.contains(symbol.location))
+        List(
+          visibleSymbols
+            .map(symbol => if activeLocation.contains(symbol.location) then s"[${symbol.name}]" else symbol.name)
+            .mkString(" | ")
+        ).filter(_.nonEmpty).map(text => OverlayRow(text, selected = activeVisible))
       case SurfaceLayoutKind.Vertical =>
-        symbols.take(math.max(1, rect.height - 2)).map { case (kind, name) => s"$kind $name" }
+        symbols.take(math.max(1, rect.height - 2)).map { symbol =>
+          val active = activeLocation.contains(symbol.location)
+          val prefix = if active then "> " else ""
+          OverlayRow(s"$prefix${symbol.kind} ${symbol.name}", selected = active)
+        }
       case SurfaceLayoutKind.Square =>
-        symbols.take(math.max(1, rect.height - 2)).map(_._2)
+        symbols.take(math.max(1, rect.height - 2)).map { symbol =>
+          val active = activeLocation.contains(symbol.location)
+          val prefix = if active then "> " else ""
+          OverlayRow(s"$prefix${symbol.name}", selected = active)
+        }
       case SurfaceLayoutKind.Compact =>
-        List(s"${symbols.length} symbols")
+        val current = activeLocation.flatMap(location => symbols.find(_.location == location)).map(_.name)
+        current match
+          case Some(name) => List(OverlayRow(s"${symbols.length} symbols", selected = true), OverlayRow(name))
+          case None       => List(OverlayRow(s"${symbols.length} symbols"))
 
-    ResolvedSurfaceContent(titleFor(mode, "outline"), rows = shaped.map(OverlayRow(_)))
+    ResolvedSurfaceContent(titleFor(mode, "outline"), rows = shaped)
 
   private def resolveDiagnostics(
     rect: LayoutRect,

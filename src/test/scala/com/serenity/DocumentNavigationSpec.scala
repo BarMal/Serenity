@@ -30,8 +30,18 @@ class DocumentNavigationSpec extends AnyFlatSpec with Matchers:
     DocumentNavigation.previousSymbol(symbols, CursorPosition(0, 0)) shouldBe Some(symbols.last)
   }
 
+  it should "find the current document symbol at or before the current cursor" in {
+    DocumentNavigation.currentSymbol(symbols, CursorPosition(6, 3)) shouldBe Some(symbols(1))
+  }
+
+  it should "leave cursors before the first document symbol without a current symbol" in {
+    DocumentNavigation.currentSymbol(symbols, CursorPosition(0, 0)) shouldBe Some(symbols.head)
+    DocumentNavigation.currentSymbol(symbols, CursorPosition(0, -1)) shouldBe None
+  }
+
   it should "leave empty symbol lists without a navigation target" in {
     DocumentNavigation.nextSymbol(Nil, CursorPosition(0, 0)) shouldBe None
     DocumentNavigation.previousSymbol(Nil, CursorPosition(0, 0)) shouldBe None
+    DocumentNavigation.currentSymbol(Nil, CursorPosition(0, 0)) shouldBe None
   }
 end DocumentNavigationSpec
