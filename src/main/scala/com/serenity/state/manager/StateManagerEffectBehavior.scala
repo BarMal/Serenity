@@ -290,7 +290,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.OpenMarkdownPreview =>
         openMarkdownPreview(state)
       case CommandIntent.SetMarkdownViewMode(mode) =>
-        setMarkdownViewMode(state, mode)
+        setMarkdownViewMode(mode)
       case CommandIntent.SetDefaultDocumentMode(mode) =>
         updateConfig(_.withDefaultDocumentMode(mode)).void
       case CommandIntent.SetSpellCheckEnabled(enabled) =>
@@ -1220,16 +1220,13 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       buffer   <- state.buffers.get(bufferId)
     yield (paneId, buffer)
 
-  private def setMarkdownViewMode(state: AppState, mode: MarkdownViewMode): IO[Unit] =
-    val updateConfig = updateState { s =>
-      val newConfig = s.config.withMarkdownViewMode(mode)
-      withUpdatedRunnerConfig(s.copy(config = newConfig), newConfig)
-    }
+  private def setMarkdownViewMode(mode: MarkdownViewMode): IO[Unit] =
+    val updateConfigEffect = updateConfig(_.withMarkdownViewMode(mode)).void
     mode match
       case MarkdownViewMode.SplitPreview =>
-        updateConfig >> openMarkdownPreview(state)
+        updateConfigEffect >> stateRef.get.flatMap(openMarkdownPreview)
       case MarkdownViewMode.Source | MarkdownViewMode.InlineLens =>
-        updateConfig >> unpinMarkdownPreviewPanel()
+        updateConfigEffect >> unpinMarkdownPreviewPanel()
 
   private def unpinMarkdownPreviewPanel(): IO[Unit] =
     updateState { state =>
