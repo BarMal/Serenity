@@ -118,23 +118,33 @@ class Java2DRenderSurface(
 
   override def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
     if radius > 0f then
-      val px       = metrics.toPixelX(x)
-      val py       = metrics.toPixelY(y)
-      val pw       = width * metrics.charWidth
-      val ph       = height * metrics.lineHeight
-      val clampedX = px.max(0).min(image.getWidth - 1)
-      val clampedY = py.max(0).min(image.getHeight - 1)
-      val clampedW = pw.min(image.getWidth - clampedX)
-      val clampedH = ph.min(image.getHeight - clampedY)
-      if clampedW > 0 && clampedH > 0 then
-        val size    = (radius * 10).toInt.max(1) * 2 + 1
-        val weight  = 1.0f / (size * size)
-        val data    = Array.fill(size * size)(weight)
-        val kernel  = new Kernel(size, size, data)
-        val op      = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP, null)
-        val src     = image.getSubimage(clampedX, clampedY, clampedW, clampedH)
-        val blurred = op.filter(src, null)
-        g.drawImage(blurred, clampedX, clampedY, null)
+      val px = metrics.toPixelX(x)
+      val py = metrics.toPixelY(y)
+      val pw = width * metrics.charWidth
+      val ph = height * metrics.lineHeight
+      Java2DRenderSurface
+        .deviceRegionFor(
+          logicalX = px,
+          logicalY = py,
+          logicalWidth = pw,
+          logicalHeight = ph,
+          imageWidth = image.getWidth,
+          imageHeight = image.getHeight,
+          deviceScaleX = deviceScaleX,
+          deviceScaleY = deviceScaleY
+        )
+        .foreach { region =>
+          val size        = (radius * 10).toInt.max(1) * 2 + 1
+          val weight      = 1.0f / (size * size)
+          val data        = Array.fill(size * size)(weight)
+          val kernel      = new Kernel(size, size, data)
+          val op          = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP, null)
+          val src         = image.getSubimage(region.xPx, region.yPx, region.widthPx, region.heightPx)
+          val blurred     = op.filter(src, null)
+          val rawGraphics = image.createGraphics()
+          try rawGraphics.drawImage(blurred, region.xPx, region.yPx, null)
+          finally rawGraphics.dispose()
+        }
 
   override def strokeRoundRect(
     x: Int,
@@ -189,6 +199,7 @@ class Java2DRenderSurface(
 object Java2DRenderSurface:
 
   private[serenity] case class DeviceScale(x: Double, y: Double)
+  private[serenity] case class DeviceRegion(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)
 
   def forFrame(
     metrics: CellMetrics,
@@ -217,6 +228,28 @@ object Java2DRenderSurface:
 
   private[serenity] def deviceImageDimension(logicalDimensionPx: Int, deviceScale: Double): Int =
     math.ceil(logicalDimensionPx.max(1) * deviceScale.max(1.0)).toInt.max(1)
+
+  private[serenity] def deviceRegionFor(
+    logicalX: Int,
+    logicalY: Int,
+    logicalWidth: Int,
+    logicalHeight: Int,
+    imageWidth: Int,
+    imageHeight: Int,
+    deviceScaleX: Double,
+    deviceScaleY: Double
+  ): Option[DeviceRegion] =
+    val x0 = scaledFloor(logicalX, deviceScaleX).max(0).min(imageWidth)
+    val y0 = scaledFloor(logicalY, deviceScaleY).max(0).min(imageHeight)
+    val x1 = scaledCeil(logicalX + logicalWidth, deviceScaleX).max(0).min(imageWidth)
+    val y1 = scaledCeil(logicalY + logicalHeight, deviceScaleY).max(0).min(imageHeight)
+    Option.when(x1 > x0 && y1 > y0)(DeviceRegion(x0, y0, x1 - x0, y1 - y0))
+
+  private def scaledFloor(logicalPx: Int, deviceScale: Double): Int =
+    math.floor(logicalPx.toDouble * deviceScale.max(1.0)).toInt
+
+  private def scaledCeil(logicalPx: Int, deviceScale: Double): Int =
+    math.ceil(logicalPx.toDouble * deviceScale.max(1.0)).toInt
 
   private def deviceScaleFor(canvas: javax.swing.JPanel): DeviceScale =
     Option(canvas.getGraphicsConfiguration)
