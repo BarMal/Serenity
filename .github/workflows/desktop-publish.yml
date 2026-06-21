@@ -259,7 +259,8 @@ jobs:
             gh release edit desktop-latest \
               --title "Latest desktop build" \
               --notes-file dist/release-notes.md \
-              --prerelease
+              --prerelease \
+              --target "$GITHUB_SHA"
           else
             gh release create desktop-latest \
               dist/Serenity.jar \
