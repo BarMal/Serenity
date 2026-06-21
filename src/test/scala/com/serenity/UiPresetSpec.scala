@@ -4,6 +4,7 @@ import java.awt.Font
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.animation.TransitionKind
 import com.serenity.config.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -101,6 +102,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     writing.config.showLineNumbers shouldBe false
     writing.config.showGutter shouldBe false
     writing.config.motionPreset shouldBe MotionPreset.Subtle
+    writing.config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
     writing.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
     writing.pinnedPanels.map(panel => panel.position -> panel.content) should contain(
       PanelPosition.Left -> UiPreset.PanelContentSnapshot.Outline(Nil)
@@ -108,10 +110,12 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     docs.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
     docs.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
+    docs.config.editorInsertionTransitionKind shouldBe TransitionKind.LineAndCharacterTandem
     docs.pinnedPanels.map(_.content) should contain(UiPreset.PanelContentSnapshot.Outline(Nil))
 
     code.config.defaultDocumentMode shouldBe DefaultDocumentMode.PlainText
     code.config.motionPreset shouldBe MotionPreset.Reduced
+    code.config.editorInsertionTransitionKind shouldBe TransitionKind.Disabled
     code.config.showLineNumbers shouldBe true
     code.pinnedPanels.map(_.position) should contain(PanelPosition.Left)
 
@@ -123,7 +127,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     UiPreset.Preview.fromPreset(writing) shouldBe UiPreset.Preview(
       "Writing",
-      "rich text default; dark; subtle motion; frosted material; Serif 18pt prose; Left outline 28"
+      "rich text default; dark; subtle motion; typed text reveal; frosted material; Serif 18pt prose; Left outline 28"
     )
   }
 
