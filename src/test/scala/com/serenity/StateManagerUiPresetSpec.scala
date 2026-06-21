@@ -12,7 +12,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Layout, PanelContent, PanelPosition}
+import com.serenity.ui.layout.*
 import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -221,7 +221,9 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     state.config.defaultDocumentMode shouldBe com.serenity.config.DefaultDocumentMode.Markdown
-    state.pinnedSurfaces.map(_.content) should contain(SurfaceContent.Outline(Nil))
+    state.pinnedSurfaces.map(_.content) should contain(
+      SurfaceContent.Outline(List(Symbol("Notes", SymbolKind.Heading, Location(0, 0))), Some(Location(0, 0)))
+    )
     state.pinnedSurfaces.collectFirst {
       case UiSurface(
             _,
@@ -231,6 +233,87 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
           ) =>
         true
     } shouldBe Some(true)
+  }
+
+  it should "hydrate the documentation preset outline from the active markdown buffer" in {
+    val path  = Files.createTempDirectory("state-manager-documentation-outline-ui-preset").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.updateState { state =>
+      val bufferId = BufferId(0)
+      val buffer = state
+        .buffers(bufferId)
+        .copy(
+          content = Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+          language = Some(LanguageId.Markdown),
+          bookmarks = List(CursorPosition(2, 4))
+        )
+      state.copy(buffers = state.buffers + (bufferId -> buffer))
+    }.unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "apply-documentation-preset",
+        "Apply documentation preset",
+        CommandIntent.ApplyUiPreset("Documentation"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val outlineSymbols = sm.getCurrentState.unsafeRunSync().pinnedSurfaces.collectFirst {
+      case UiSurface(_, SurfaceContent.Outline(symbols, _), SurfacePresentation.Pinned(PanelPosition.Left, 30), _) =>
+        symbols
+    }
+
+    outlineSymbols shouldBe Some(
+      List(
+        Symbol("Chapter One", SymbolKind.Heading, Location(0, 0)),
+        Symbol("Bookmark 3:5", SymbolKind.Bookmark, Location(2, 4)),
+        Symbol("Scene Two", SymbolKind.Heading, Location(4, 0))
+      )
+    )
+  }
+
+  it should "hydrate the review preset outline from active bookmarks and headings" in {
+    val path  = Files.createTempDirectory("state-manager-review-outline-ui-preset").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.updateState { state =>
+      val bufferId = BufferId(0)
+      val buffer = state
+        .buffers(bufferId)
+        .copy(
+          content = Rope("# Finding\n\nNeeds review"),
+          language = Some(LanguageId.Markdown),
+          bookmarks = List(CursorPosition(2, 0))
+        )
+      state.copy(buffers = state.buffers + (bufferId -> buffer))
+    }.unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "apply-review-preset",
+        "Apply review preset",
+        CommandIntent.ApplyUiPreset("Review"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    val outlineSymbols = state.pinnedSurfaces.collectFirst {
+      case UiSurface(_, SurfaceContent.Outline(symbols, _), SurfacePresentation.Pinned(PanelPosition.Left, 30), _) =>
+        symbols
+    }
+
+    outlineSymbols shouldBe Some(
+      List(
+        Symbol("Finding", SymbolKind.Heading, Location(0, 0)),
+        Symbol("Bookmark 3:1", SymbolKind.Bookmark, Location(2, 0))
+      )
+    )
+    state.pinnedSurfaces.map(_.content) should contain(SurfaceContent.Diagnostics(Nil))
   }
 
   it should "duplicate, rename, and delete UI presets from commands" in {
