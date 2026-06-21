@@ -634,6 +634,36 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     saved.config.motionPreset shouldBe MotionPreset.Subtle
   }
 
+  it should "persist theme changes to the preset currently being edited" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-edit-theme").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.updateState(_.copy(theme = Theme.light)).unsafeRunSync()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "ui-preset-create",
+        "Create preset",
+        CommandIntent.SaveUiPreset("Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "toggle-drafting-theme",
+        "Toggle drafting theme",
+        CommandIntent.ToggleTheme,
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
+
+    saved.themeName shouldBe Theme.dark.name
+  }
+
   it should "persist markdown preview mode changes to the preset currently being edited" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-markdown").resolve("ui-presets.json")
     val store = UiPresetStore(path)
