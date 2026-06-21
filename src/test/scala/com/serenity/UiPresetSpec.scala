@@ -123,7 +123,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     UiPreset.Preview.fromPreset(writing) shouldBe UiPreset.Preview(
       "Writing",
-      "dark; subtle motion; frosted material; Serif 18pt prose; Left outline 28"
+      "rich text default; dark; subtle motion; frosted material; Serif 18pt prose; Left outline 28"
     )
   }
 
