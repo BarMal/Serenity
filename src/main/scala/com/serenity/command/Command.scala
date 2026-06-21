@@ -37,6 +37,10 @@ enum CommandIntent:
   case FindAllInCurrentFile
   case ReplaceInCurrentFile
   case ReplaceAllInCurrentFile
+  case Copy
+  case Cut
+  case Paste
+  case SelectAll
   case ToggleRichTextMark(mark: InlineMark)
   case SetRichTextFontFamily(family: String)
   case SetRichTextFontSize(size: Float)

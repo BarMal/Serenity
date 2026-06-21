@@ -212,6 +212,34 @@ object CommandRegistry:
       label = "Replace All"
     ),
     Command.typed(
+      "copy",
+      "Copy the active selection or current line.",
+      CommandIntent.Copy,
+      CommandCategory.Edit,
+      label = "Copy"
+    ),
+    Command.typed(
+      "cut",
+      "Cut the active selection or current line.",
+      CommandIntent.Cut,
+      CommandCategory.Edit,
+      label = "Cut"
+    ),
+    Command.typed(
+      "paste",
+      "Paste clipboard text at the cursor.",
+      CommandIntent.Paste,
+      CommandCategory.Edit,
+      label = "Paste"
+    ),
+    Command.typed(
+      "select-all",
+      "Select all text in the current file.",
+      CommandIntent.SelectAll,
+      CommandCategory.Edit,
+      label = "Select All"
+    ),
+    Command.typed(
       "bold",
       "Toggle bold formatting on the active selection.",
       CommandIntent.ToggleRichTextMark(com.serenity.richtext.InlineMark.Bold),

@@ -24,6 +24,10 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
 
   private val EditorContextMenuCommands =
     List(
+      "copy",
+      "cut",
+      "paste",
+      "select-all",
       "save",
       "save-as",
       "find",

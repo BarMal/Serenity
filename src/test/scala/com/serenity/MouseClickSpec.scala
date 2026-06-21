@@ -136,6 +136,10 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected editor context menu"))
     menu.targetFocus shouldBe Focus.EditorPane(PaneId(0))
     menu.items.map(_.id) should contain allOf (
+      "copy",
+      "cut",
+      "paste",
+      "select-all",
       "save",
       "find",
       "replace",
@@ -176,18 +180,16 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
           case _                                => None
       }
       .getOrElse(fail("Expected editor context menu"))
-    val findIndex = menu.items.indexWhere(_.id == "find")
-    findIndex should be >= 0
-    val (x, y) = contextMenuItemPoint(openedState, findIndex)
+    val copyIndex = menu.items.indexWhere(_.id == "copy")
+    copyIndex should be >= 0
+    val (x, y) = contextMenuItemPoint(openedState, copyIndex)
 
     sm.applyEvent(MouseClick(x, y)).unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.contextMenuSurface shouldBe None
-    after.focus shouldBe a[Focus.Surface]
-    after.modalSurface.map(_.content) should matchPattern {
-      case Some(SurfaceContent.ModalWorkflow(Modal.Find(_, _, _))) =>
-    }
+    after.focus shouldBe Focus.EditorPane(PaneId(0))
+    after.clipboard shouldBe Some("hello")
   }
 
   it should "dismiss the context menu on Escape" in {
