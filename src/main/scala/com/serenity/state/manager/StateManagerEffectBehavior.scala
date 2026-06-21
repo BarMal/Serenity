@@ -281,14 +281,19 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.PinExplorerPanel =>
         FileUtils.getCurrentDirectory.flatMap(path =>
           interpretEffect(AppEffect.Explorer(ExplorerEffect.OpenRoot(PanelPosition.Left, path, 30)))
-        )
+        ) >> persistEditedUiPresetFromCommandRunner
       case CommandIntent.PinOutlinePanel =>
         val symbols = outlineSymbols(state)
-        pinPanel(PanelContent.Outline(symbols, currentOutlineActiveLocation(symbols, state)), PanelPosition.Right, 30)
+        pinPanel(
+          PanelContent.Outline(symbols, currentOutlineActiveLocation(symbols, state)),
+          PanelPosition.Right,
+          30
+        ) >>
+          persistEditedUiPresetFromCommandRunner
       case CommandIntent.PinDiagnosticsPanel =>
-        pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 10)
+        pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 10) >> persistEditedUiPresetFromCommandRunner
       case CommandIntent.OpenMarkdownPreview =>
-        openMarkdownPreview(state)
+        openMarkdownPreview(state) >> persistEditedUiPresetFromCommandRunner
       case CommandIntent.SetMarkdownViewMode(mode) =>
         setMarkdownViewMode(mode)
       case CommandIntent.SetDefaultDocumentMode(mode) =>
@@ -304,7 +309,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.FocusPanel(position) =>
         switchToPinnedPanel(position)
       case CommandIntent.UnpinPanel(position) =>
-        unpinPanel(position)
+        unpinPanel(position) >> persistEditedUiPresetFromCommandRunner
       case CommandIntent.ExpandPanel(position) =>
         expandPinnedPanel(position)
       case CommandIntent.CollapseExpandedPanel =>
@@ -1222,11 +1227,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
 
   private def setMarkdownViewMode(mode: MarkdownViewMode): IO[Unit] =
     val updateConfigEffect = updateConfig(_.withMarkdownViewMode(mode)).void
-    mode match
+    val updateModeEffect = mode match
       case MarkdownViewMode.SplitPreview =>
         updateConfigEffect >> stateRef.get.flatMap(openMarkdownPreview)
       case MarkdownViewMode.Source | MarkdownViewMode.InlineLens =>
         updateConfigEffect >> unpinMarkdownPreviewPanel()
+    updateModeEffect >> persistEditedUiPresetFromCommandRunner
 
   private def unpinMarkdownPreviewPanel(): IO[Unit] =
     updateState { state =>

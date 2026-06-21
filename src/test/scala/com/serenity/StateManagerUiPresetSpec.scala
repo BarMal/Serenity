@@ -600,6 +600,82 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     saved.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
   }
 
+  it should "persist pinned panel changes to the preset currently being edited" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-edit-panels").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "ui-preset-create",
+        "Create preset",
+        CommandIntent.SaveUiPreset("Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "pin-drafting-outline",
+        "Pin drafting outline",
+        CommandIntent.PinOutlinePanel,
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "pin-drafting-diagnostics",
+        "Pin drafting diagnostics",
+        CommandIntent.PinDiagnosticsPanel,
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
+
+    saved.pinnedPanels.map(panel => panel.position -> panel.content) should contain allOf (
+      PanelPosition.Right  -> UiPreset.PanelContentSnapshot.Outline(Nil),
+      PanelPosition.Bottom -> UiPreset.PanelContentSnapshot.Diagnostics(Nil)
+    )
+  }
+
+  it should "persist unpinned panel changes to the preset currently being edited" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-edit-unpin").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "ui-preset-create",
+        "Create preset",
+        CommandIntent.SaveUiPreset("Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "pin-drafting-outline",
+        "Pin drafting outline",
+        CommandIntent.PinOutlinePanel,
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "unpin-drafting-outline",
+        "Unpin drafting outline",
+        CommandIntent.UnpinPanel(PanelPosition.Right),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
+
+    saved.pinnedPanels.map(_.position) should not contain PanelPosition.Right
+  }
+
   it should "reset a custom built-in preset override to the built-in defaults" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-reset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
