@@ -449,7 +449,7 @@ object SurfaceContentResolver:
           layout = OverlayRowLayout.Columns
         )
     }
-    val detailRows = presetPreviewRow(groupId, items.lift(selectedIndex))
+    val detailRows = presetPreviewRow(runner, groupId, items.lift(selectedIndex))
     val footer =
       runner.statusMessage
         .map(OverlayRow(_))
@@ -471,13 +471,20 @@ object SurfaceContentResolver:
       footer = footer
     )
 
-  private def presetPreviewRow(groupId: String, selectedItem: Option[CommandSurfaceItem]): List[OverlayRow] =
+  private def presetPreviewRow(
+    runner: com.serenity.command.CommandRunner,
+    groupId: String,
+    selectedItem: Option[CommandSurfaceItem]
+  ): List[OverlayRow] =
     selectedItem.collect {
       case item: CommandSurfaceItem.InputItem if groupId == "settings-ui-presets" && item.id == "ui-preset-create" =>
         presetPreviewDetail("Create Preset", "name and save the current workspace setup")
       case group: CommandSurfaceItem.GroupItem
           if groupId == "settings-ui-presets" && group.id == "ui-preset-configure" =>
-        presetPreviewDetail("Preset Options", "document, layout, typography, motion, appearance")
+        presetPreviewDetail(
+          runner.editingPresetName.getOrElse("Preset Options"),
+          "document, layout, typography, motion, appearance"
+        )
       case option: CommandSurfaceItem.OptionItem
           if groupId == "settings-ui-presets" &&
             (option.id == "ui-preset-built-in" || option.id == "ui-preset-custom") =>

@@ -382,6 +382,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     runner.activeSubmenu.map(_.groupId) shouldBe Some("ui-preset-configure")
     runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-presets")
+    runner.editingPresetName shouldBe Some("Drafting")
     runner.statusMessage shouldBe Some("Preset saved. Configure workspace options.")
     state.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
     submenu shouldBe Some("ui-preset-configure" -> false)

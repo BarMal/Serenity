@@ -394,7 +394,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       }
       .getOrElse(fail("missing preset options group"))
 
-    configurePreset.label shouldBe "Preset Options"
+    configurePreset.label shouldBe "Preset Options: Writing"
+    configurePreset.hint shouldBe Some("Editing Writing")
     configurePreset.children.map(_.id) should contain allOf (
       "settings-workspace-layout",
       "settings-language",

@@ -41,7 +41,8 @@ case class CommandRunner(
     previewedGroupId: Option[String] = None,
     activeSubmenu: Option[CommandRunnerSubmenuState] = None,
     statusMessage: Option[String] = None,
-    uiPresetPreviews: List[UiPreset.Preview] = Nil
+    uiPresetPreviews: List[UiPreset.Preview] = Nil,
+    editingPresetName: Option[String] = None
 ):
 
   def visibleItems: List[CommandSurfaceItem] =
@@ -207,9 +208,10 @@ case class CommandRunner(
       category = CommandCategory.Settings,
       hint = Some("Inspect and edit bindings")
     )
+    val editingPreset = presetEditContextName
     val presetOptionsGroup = CommandSurfaceItem.GroupItem(
       id = "ui-preset-configure",
-      label = "Preset Options",
+      label = editingPreset.fold("Preset Options")(name => s"Preset Options: $name"),
       children = List(
         workspaceLayoutGroup,
         languageGroup,
@@ -224,7 +226,7 @@ case class CommandRunner(
         richTextGroup
       ),
       category = CommandCategory.Settings,
-      hint = Some("Document, layout, typography, motion")
+      hint = Some(editingPreset.fold("Document, layout, typography, motion")(name => s"Editing $name"))
     )
     val presetInputItems     = inputItems.filter(_.id.startsWith("ui-preset-"))
     val createPresetItems    = presetInputItems.filter(_.id == "ui-preset-create")
@@ -265,9 +267,13 @@ case class CommandRunner(
     selectedItem match
       case Some(group: CommandSurfaceItem.GroupItem) =>
         val rememberedIndex = submenuSelections.getOrElse(group.id, 0)
+        val editContext =
+          if group.id == "ui-preset-configure" then presetEditContextName
+          else editingPresetName
         copy(
           previewedGroupId = Some(group.id),
-          activeSubmenu = Some(CommandRunnerSubmenuState(group.id, selectedIndex = rememberedIndex))
+          activeSubmenu = Some(CommandRunnerSubmenuState(group.id, selectedIndex = rememberedIndex)),
+          editingPresetName = editContext
         )
       case _ => this
 
@@ -468,7 +474,8 @@ case class CommandRunner(
       submenuSelections = Map.empty,
       previewedGroupId = None,
       activeSubmenu = None,
-      uiPresetPreviews = Nil
+      uiPresetPreviews = Nil,
+      editingPresetName = None
     )
 
   /** Enter edit mode on the currently selected InputItem, or clear edit state otherwise */
@@ -526,6 +533,24 @@ case class CommandRunner(
           group.children.exists(child => CommandRunner.directItemSearchText(child).contains(lowerTerm))
         )
       directMatches ++ directChildMatches ++ nestedMatches
+
+  private def presetEditContextName: Option[String] =
+    editingPresetName
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .orElse(
+        optionSelections
+          .get("ui-preset-custom")
+          .flatMap(index => uiPresetPreviews.lift(index))
+          .map(_.name)
+      )
+      .orElse(
+        optionSelections
+          .get("ui-preset-built-in")
+          .flatMap(index => UiPreset.builtIns.lift(index))
+          .map(_.name)
+      )
+      .orElse(UiPreset.builtIns.headOption.map(_.name))
 
   /** Store the focus that should be restored when runner closes */
 

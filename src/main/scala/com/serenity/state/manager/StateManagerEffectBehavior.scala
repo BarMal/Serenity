@@ -388,7 +388,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.SetUiLigatures(enabled) =>
         updateFontConfig(_.copy(uiLigatures = enabled))
       case CommandIntent.SaveUiPreset(name) if command.name == "ui-preset-create" =>
-        saveUiPresetEffect(name) >> focusCreatedPresetOptions
+        saveUiPresetEffect(name) >> focusCreatedPresetOptions(name)
       case CommandIntent.SaveUiPreset(name) =>
         saveUiPresetEffect(name)
       case CommandIntent.ApplyUiPreset(name) =>
@@ -743,7 +743,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case None =>
         state
 
-  private def focusCreatedPresetOptions: IO[Unit] =
+  private def focusCreatedPresetOptions(name: String): IO[Unit] =
     stateRef.update { state =>
       state.commandRunnerSurface match
         case Some(surface) =>
@@ -760,6 +760,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
                 submenuSelections = runner.submenuSelections + ("settings-ui-presets" -> 1),
                 editingItemId = None,
                 editingText = "",
+                editingPresetName = Some(name.trim),
                 statusMessage = Some("Preset saved. Configure workspace options.")
               )
               val submenuSurface = UiSurface(
