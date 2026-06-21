@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.IO
+import com.serenity.animation.TransitionKind
 import com.serenity.config.*
 import com.serenity.session.given
 import com.serenity.state.models.*
@@ -49,6 +50,7 @@ object UiPreset:
       Some(documentModeSummary(preset.config)),
       Option(preset.themeName).filter(_.nonEmpty),
       Some(s"${preset.config.motionPreset.configKey} motion"),
+      Some(s"${textRevealSummary(preset.config.editorInsertionTransitionKind)} text reveal"),
       Some(s"${preset.config.materialPreset.configKey} material"),
       Some(proseFontSummary(preset.config)),
       panelSummary(preset.pinnedPanels)
@@ -68,6 +70,15 @@ object UiPreset:
 
   private def proseFontSummary(config: AppConfig): String =
     s"${config.fontConfig.textFontFamily} ${formatPointSize(config.fontConfig.textFontSize)} prose"
+
+  private def textRevealSummary(kind: TransitionKind): String =
+    kind match
+      case TransitionKind.Disabled               => "off"
+      case TransitionKind.Fade                   => "fade"
+      case TransitionKind.TypedText              => "typed"
+      case TransitionKind.DirectionalSweep       => "directional"
+      case TransitionKind.LineAndCharacterTandem => "tandem"
+      case TransitionKind.OutlineThenContent     => "outline"
 
   private def formatPointSize(size: Float): String =
     if size == size.round.toFloat then size.toInt.toString + "pt"
@@ -92,6 +103,7 @@ object UiPreset:
         .withLineNumbers(false)
         .withGutter(false)
         .withMotionPreset(MotionPreset.Subtle)
+        .withEditorInsertionTransitionKind(TransitionKind.TypedText)
         .withMaterialPreset(MaterialPreset.Frosted)
         .withDefaultDocumentMode(DefaultDocumentMode.RichText)
         .withInterfaceDensity(InterfaceDensity.Spacious)
@@ -115,6 +127,7 @@ object UiPreset:
         .withLineNumbers(true)
         .withGutter(false)
         .withMotionPreset(MotionPreset.Subtle)
+        .withEditorInsertionTransitionKind(TransitionKind.LineAndCharacterTandem)
         .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
         .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
         .copy(
@@ -135,6 +148,7 @@ object UiPreset:
         .withLineNumbers(true)
         .withGutter(true)
         .withMotionPreset(MotionPreset.Reduced)
+        .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Compact)
         .copy(syntaxHighlightingEnabled = true, fontConfig = FontConfig()),
       themeName = Theme.dark.name,
@@ -154,6 +168,7 @@ object UiPreset:
         .withLineNumbers(true)
         .withGutter(true)
         .withMotionPreset(MotionPreset.Reduced)
+        .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Comfortable)
         .copy(cursorInfoBarMode = CursorInfoBarMode.Detailed),
       themeName = Theme.dark.name,
