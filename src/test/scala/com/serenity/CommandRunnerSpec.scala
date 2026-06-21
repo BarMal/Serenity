@@ -400,6 +400,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     configurePreset.children.map(_.id) should contain allOf (
       "settings-preset-identity",
       "settings-workspace-layout",
+      "settings-navigation",
       "settings-language",
       "settings-markdown",
       "settings-text-area",
@@ -436,6 +437,24 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.PinDiagnosticsPanel,
       CommandIntent.UnpinPanel(PanelPosition.Left),
       CommandIntent.CollapseExpandedPanel
+    )
+    val navigation = configurePreset.children
+      .collectFirst {
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-navigation" => group
+      }
+      .getOrElse(fail("missing navigation group"))
+    navigation.label shouldBe "Navigation"
+    navigation.children.collect {
+      case CommandSurfaceItem.CommandItem(command) => command.intent
+    } should contain allOf (
+      CommandIntent.ToggleCommentLens,
+      CommandIntent.ToggleBookmark,
+      CommandIntent.NextBookmark,
+      CommandIntent.PreviousBookmark,
+      CommandIntent.NextDocumentSymbol,
+      CommandIntent.PreviousDocumentSymbol,
+      CommandIntent.NavigateBack,
+      CommandIntent.NavigateForward
     )
 
     inputs.map(_.id) shouldBe List(
