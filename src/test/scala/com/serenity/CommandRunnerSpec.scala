@@ -6,6 +6,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.{CommandRunnerComponent, ComponentResult}
 import com.serenity.state.models.*
+import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -395,12 +396,29 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     configurePreset.label shouldBe "Preset Options"
     configurePreset.children.map(_.id) should contain allOf (
+      "settings-workspace-layout",
       "settings-language",
       "settings-markdown",
       "settings-text-area",
       "settings-prose-font",
       "settings-material-motion",
       "settings-appearance"
+    )
+    val workspaceLayout = configurePreset.children
+      .collectFirst {
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-workspace-layout" => group
+      }
+      .getOrElse(fail("missing workspace layout group"))
+    workspaceLayout.label shouldBe "Workspace Layout"
+    workspaceLayout.children.collect {
+      case CommandSurfaceItem.CommandItem(command) => command.intent
+    } should contain allOf (
+      CommandIntent.PinOutlinePanel,
+      CommandIntent.OpenMarkdownPreview,
+      CommandIntent.PinExplorerPanel,
+      CommandIntent.PinDiagnosticsPanel,
+      CommandIntent.UnpinPanel(PanelPosition.Left),
+      CommandIntent.CollapseExpandedPanel
     )
 
     inputs.map(_.id) shouldBe List(
