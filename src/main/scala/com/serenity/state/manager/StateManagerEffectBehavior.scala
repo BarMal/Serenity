@@ -625,7 +625,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
                   val restoredPresetState = UiPreset.applyToState(preset, state, theme)
                   val restoredDocumentState =
                     applyPresetDocumentModeToActiveEmptyBuffer(restoredPresetState, preset.config.defaultDocumentMode)
-                  val restored = withUpdatedRunnerConfig(restoredDocumentState, preset.config)
+                  val restoredOutlineState = hydratePresetOutlinePanels(restoredDocumentState)
+                  val restored             = withUpdatedRunnerConfig(restoredOutlineState, preset.config)
                   (restored, restored.config.preferredWindowSize)
                 }
                 _ <- persistConfigFile(preset.config)
@@ -658,6 +659,17 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
       case _ =>
         state
+
+  private def hydratePresetOutlinePanels(state: AppState): AppState =
+    val symbols        = outlineSymbols(state)
+    val activeLocation = currentOutlineActiveLocation(symbols, state)
+    val hydratedSurfaces = state.uiSurfaces.map {
+      case surface @ UiSurface(_, SurfaceContent.Outline(_, _), SurfacePresentation.Pinned(_, _), _) =>
+        surface.copy(content = SurfaceContent.Outline(symbols, activeLocation))
+      case surface =>
+        surface
+    }
+    state.copy(uiSurfaces = hydratedSurfaces)
 
   private def openPresetMarkdownPreviewIfNeeded(preset: UiPreset): IO[Unit] =
     if preset.config.markdownViewMode == MarkdownViewMode.SplitPreview then stateRef.get.flatMap(openMarkdownPreview)
