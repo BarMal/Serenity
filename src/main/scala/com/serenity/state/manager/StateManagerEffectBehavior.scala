@@ -202,7 +202,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   protected def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
   ): IO[Unit] =
-    updateConfig(config => config.withFontConfig(update(config.fontConfig)))
+    updateConfigWithEditedPresetPersistence(
+      config => config.withFontConfig(update(config.fontConfig)),
+      config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.Typography(config))
+    )
       .flatMap(config => onFontConfigChanged(config.fontConfig))
 
   protected def updateSpellCheckConfig(
