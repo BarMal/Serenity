@@ -123,7 +123,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     bufferIds should have size 4
 
     // When: Navigate to different buffers using buffer navigation
-    val initialFocusedBuffer = state.focusedBufferId.get
+    state.focusedBufferId.get
 
     @annotation.tailrec
     def navigateUntil(targetBufferId: BufferId, event: com.serenity.keystroke.events.Event): Unit =

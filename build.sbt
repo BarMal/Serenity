@@ -8,7 +8,19 @@ ThisBuild / scalaVersion := "3.8.4"
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 
-scalacOptions ++= Seq(
+Compile / scalacOptions ++= Seq(
+  "-Wunused:all",
+  "-Wvalue-discard",
+  "-Wnonunit-statement"
+)
+
+Test / scalacOptions --= Seq(
+  "-Wunused:all",
+  "-Wvalue-discard",
+  "-Wnonunit-statement"
+)
+
+Test / scalacOptions ++= Seq(
   "-Wunused:imports"
 )
 

@@ -72,7 +72,7 @@ class EndToEndConfigThemingSpec extends AnyFlatSpec with Matchers:
 
     // Set up application with content
     val bufferId = stateManager.createBuffer("val x = 42\nval y = \"hello\"").unsafeRunSync()
-    val paneId   = stateManager.createPane(Some(bufferId)).unsafeRunSync()
+    stateManager.createPane(Some(bufferId)).unsafeRunSync()
 
     // Apply initial theme
     val initialTheme = themeManager.loadTheme("dark").unsafeRunSync()
@@ -82,7 +82,7 @@ class EndToEndConfigThemingSpec extends AnyFlatSpec with Matchers:
 
     // Reload theme (simulating config file change)
     themeManager.reloadCurrentTheme.unsafeRunSync() match
-      case Some((reloadedTheme, themeUpdate)) =>
+      case Some((_, themeUpdate)) =>
         stateManager.updateState(themeUpdate).unsafeRunSync()
 
         val stateAfterReload = stateManager.getCurrentState.unsafeRunSync()

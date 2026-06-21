@@ -4,7 +4,6 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.std.Queue
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.animation.{AnimatedCell, CharacterKey, RgbInterpolator}
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileDialog
@@ -223,58 +222,3 @@ object StateManager:
             .fixedRate[IO](interval)
             .interruptWhen(Stream.eval(quitSignal.get).as(true))
             .evalMap(_ => stateRef.get.flatMap(sessionPersistence.maybeSaveSession(_, SessionSaveTrigger.Interval)))
-
-    private def buildBufferFadeOut(state: AppState, steps: Int): AppState =
-      (for
-        paneId   <- state.layout.activeEditorPaneId
-        pane     <- state.layout.editorPanes.get(paneId)
-        bufferId <- pane.bufferId
-        buffer   <- state.buffers.get(bufferId)
-      yield
-        val vp        = buffer.viewport
-        val theme     = state.theme
-        val lineRange = vp.topLine until math.min(vp.topLine + vp.visibleLines, buffer.content.lineCount)
-        val newAnims = lineRange.flatMap { bufferLine =>
-          val lineContent = buffer.content.getLine(bufferLine).getOrElse("")
-          (vp.leftColumn until (vp.leftColumn + vp.visibleColumns)).map { bufferCol =>
-            val char = if bufferCol < lineContent.length then lineContent(bufferCol) else ' '
-            CharacterKey(bufferCol, bufferLine) -> AnimatedCell(
-              content = Some(char),
-              foregroundSteps = RgbInterpolator.interpolateRgba(state.theme.foreground, theme.background, steps),
-              backgroundSteps = List.empty
-            )
-          }
-        }.toMap
-        if newAnims.isEmpty then state
-        else
-          val updatedBuffer = buffer.copy(animations = buffer.animations.mergeAnimations(newAnims))
-          state.copy(buffers = state.buffers.updated(bufferId, updatedBuffer))
-      ).getOrElse(state)
-
-    private def buildBufferFadeIn(state: AppState, delayTicks: Int, steps: Int): AppState =
-      (for
-        paneId   <- state.layout.activeEditorPaneId
-        pane     <- state.layout.editorPanes.get(paneId)
-        bufferId <- pane.bufferId
-        buffer   <- state.buffers.get(bufferId)
-      yield
-        val vp        = buffer.viewport
-        val theme     = state.theme
-        val lineRange = vp.topLine until math.min(vp.topLine + vp.visibleLines, buffer.content.lineCount)
-        val newAnims = lineRange.flatMap { bufferLine =>
-          val lineContent = buffer.content.getLine(bufferLine).getOrElse("")
-          (vp.leftColumn until (vp.leftColumn + vp.visibleColumns)).map { bufferCol =>
-            val char = if bufferCol < lineContent.length then lineContent(bufferCol) else ' '
-            CharacterKey(bufferCol, bufferLine) -> AnimatedCell(
-              content = Some(char),
-              foregroundSteps = List.fill(delayTicks)(theme.background) ++
-                RgbInterpolator.interpolateRgba(theme.background, theme.foreground, steps),
-              backgroundSteps = List.empty
-            )
-          }
-        }.toMap
-        if newAnims.isEmpty then state
-        else
-          val updatedBuffer = buffer.copy(animations = buffer.animations.mergeAnimations(newAnims))
-          state.copy(buffers = state.buffers.updated(bufferId, updatedBuffer))
-      ).getOrElse(state)

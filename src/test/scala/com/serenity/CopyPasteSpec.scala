@@ -42,7 +42,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     getState.buffers(bufferId).isDirty shouldBe false
 
   it should "copy the correct line when cursor is on a non-first line" in new ClipFixture:
-    val bufferId = setupBuffer("first\nsecond\nthird")
+    setupBuffer("first\nsecond\nthird")
     setCursor(1, 0) // position on "second"
 
     applyEvent(Copy)
@@ -53,7 +53,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     setupBuffer("line one")
     applyEvent(Copy)
 
-    val bufferId2 = setupBuffer("line two")
+    setupBuffer("line two")
     applyEvent(Copy)
 
     getClipboard shouldBe Some("line two")
@@ -115,7 +115,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     getContent(bufferId) shouldBe "unchanged"
 
   it should "advance the cursor past the pasted text" in new ClipFixture:
-    val bufferId = setupBuffer("")
+    setupBuffer("")
     stateManager.updateState(_.copy(clipboard = Some("hi"))).unsafeRunSync()
 
     applyEvent(Paste)

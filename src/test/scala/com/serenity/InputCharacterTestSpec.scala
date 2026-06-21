@@ -182,8 +182,8 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
     getBufferContent(bufferId).shouldBe(problematicSequence)
 
   it should "maintain cursor position correctly during character insertion" in new InputFixture:
-    val bufferId = setupBuffer("")
-    val text     = "Hello"
+    setupBuffer("")
+    val text = "Hello"
 
     text.zipWithIndex.foreach {
       case (char, index) =>

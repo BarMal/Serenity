@@ -208,7 +208,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "validate state consistency after complex operations" in new EditorFixture:
     // Given: Multiple buffers and operations
-    val buffer1 = stateManager.createBuffer("Buffer 1").unsafeRunSync()
+    stateManager.createBuffer("Buffer 1").unsafeRunSync()
     val buffer2 = stateManager.createBuffer("Buffer 2").unsafeRunSync()
     val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 

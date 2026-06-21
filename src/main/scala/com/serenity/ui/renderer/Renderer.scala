@@ -489,12 +489,6 @@ object Renderer:
   private def markdownSourceLines(buffer: Buffer): Vector[String] =
     (0 until buffer.content.lineCount).toVector.map(line => buffer.content.getLine(line).getOrElse(""))
 
-  private def activeMarkdownBlockLineSet(lines: Vector[String], cursors: List[CursorPosition]): Set[Int] =
-    cursors
-      .map(_.line)
-      .flatMap(line => MarkdownBlockLens.activeBlockLineSet(lines, Some(line)))
-      .toSet
-
   private def activeMarkdownBlockRanges(lines: Vector[String], cursors: List[CursorPosition]): List[Range.Inclusive] =
     cursors
       .map(_.line)

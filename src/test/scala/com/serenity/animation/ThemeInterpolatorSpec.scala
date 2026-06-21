@@ -10,8 +10,8 @@ class ThemeInterpolatorSpec extends AnyFlatSpec with Matchers:
 
   private val black = new Color(0, 0, 0)
   private val white = new Color(255, 255, 255)
-  private val red   = new Color(255, 0, 0)
-  private val blue  = new Color(0, 0, 255)
+  new Color(255, 0, 0)
+  new Color(0, 0, 255)
 
   private def makeTheme(fg: Color, bg: Color): Theme =
     Theme(

@@ -24,11 +24,6 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     val logger = LoggerFactory[IO].getLogger(using LoggerName("LspQueueSpec"))
     StateManager.apply(logger).unsafeRunSync()
 
-  private def executeCommandThroughRunner(stateManager: StateManager, searchTerm: String): Unit =
-    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.applyEvent(Enter).unsafeRunSync()
-
   private def setBufferLanguageThroughRunner(stateManager: StateManager, searchTerm: String, submenuIndex: Int): Unit =
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())

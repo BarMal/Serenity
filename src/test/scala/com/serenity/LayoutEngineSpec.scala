@@ -220,8 +220,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val paneLayouts      = LayoutEngine.calculatePaneLayoutsWithMinWidth(state, calculatedLayout, minPaneWidth)
 
     // Then: Only panes that fit should be visible, others should be off-screen but tracked
-    val editorWidth     = calculatedLayout.editorPanelRect.width
-    val maxVisiblePanes = editorWidth / minPaneWidth
+    val editorWidth = calculatedLayout.editorPanelRect.width
+    editorWidth / minPaneWidth
 
     // Should return layouts for all panes, but only some visible
     paneLayouts should have size 5

@@ -98,7 +98,7 @@ class SimplifiedEditorSpec extends AnyFlatSpec with Matchers:
 
   it should "handle focus transitions correctly" in new EditorFixture:
     // Given: Multiple panes
-    val buffer1 = stateManager.createBuffer("Buffer 1").unsafeRunSync()
+    stateManager.createBuffer("Buffer 1").unsafeRunSync()
     val buffer2 = stateManager.createBuffer("Buffer 2").unsafeRunSync()
     val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 

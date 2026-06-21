@@ -83,14 +83,11 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
 
     val stateAfterScrolling = stateManager.getCurrentState.unsafeRunSync()
     val firstBufferId       = stateAfterScrolling.bufferOrder.head
-    val firstBuffer         = stateAfterScrolling.buffers(firstBufferId)
-    val firstViewport       = firstBuffer.viewport
 
     // Create second buffer (should have default viewport)
     stateManager.applyEvent(NewTab).unsafeRunSync()
     val stateWithSecondBuffer = stateManager.getCurrentState.unsafeRunSync()
     val secondBufferId        = stateWithSecondBuffer.bufferOrder.last
-    val secondBuffer          = stateWithSecondBuffer.buffers(secondBufferId)
 
     // When: Switch back to first buffer
     stateManager.applyEvent(PreviousTab).unsafeRunSync()

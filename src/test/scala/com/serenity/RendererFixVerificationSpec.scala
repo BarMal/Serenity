@@ -48,7 +48,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     val panelRect  = layout.editorPanelRect
 
     // The fix should ensure that content is clipped to panel width regardless of viewport.visibleColumns
-    val pane     = finalState.layout.editorPanes(paneId)
+    finalState.layout.editorPanes(paneId)
     val buffer   = finalState.buffers(bufferId)
     val viewport = buffer.viewport
 
@@ -104,8 +104,8 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     buffer.content.collect() shouldBe longText
 
     // Viewport should scroll to keep cursor visible
-    val finalPane = finalState.layout.editorPanes(paneId)
-    val cursor    = buffer.cursors.head
+    finalState.layout.editorPanes(paneId)
+    val cursor = buffer.cursors.head
     cursor.column shouldBe longText.length
 
     // With the fix, the Renderer will clip content to panelRect.width
@@ -150,10 +150,10 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     veryLongText.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val finalPane  = finalState.layout.editorPanes(paneId)
-    val buffer     = finalState.buffers(bufferId)
-    val cursor     = buffer.cursors.head
-    val viewport   = buffer.viewport
+    finalState.layout.editorPanes(paneId)
+    val buffer   = finalState.buffers(bufferId)
+    val cursor   = buffer.cursors.head
+    val viewport = buffer.viewport
 
     // Cursor should be at end
     cursor.column shouldBe veryLongText.length
@@ -206,9 +206,9 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
       if lineNum < 5 then stateManager.applyEvent(NewLine).unsafeRunSync()
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val finalPane  = finalState.layout.editorPanes(paneId)
-    val buffer     = finalState.buffers(bufferId)
-    val cursor     = buffer.cursors.head
+    finalState.layout.editorPanes(paneId)
+    val buffer = finalState.buffers(bufferId)
+    val cursor = buffer.cursors.head
 
     // Should be on last line
     cursor.line shouldBe 4
