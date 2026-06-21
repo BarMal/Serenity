@@ -21,7 +21,8 @@ case class UiPreset(
     name: String,
     config: AppConfig,
     themeName: String,
-    pinnedPanels: List[UiPreset.PinnedPanel]
+    pinnedPanels: List[UiPreset.PinnedPanel],
+    targetEditorPaneCount: Option[Int] = None
 )
 
 object UiPreset:
@@ -117,7 +118,8 @@ object UiPreset:
           cursorInfoBarMode = CursorInfoBarMode.Position
         ),
       themeName = Theme.dark.name,
-      pinnedPanels = List(PinnedPanel(PanelPosition.Left, 28, PanelContentSnapshot.Outline(Nil)))
+      pinnedPanels = List(PinnedPanel(PanelPosition.Left, 28, PanelContentSnapshot.Outline(Nil))),
+      targetEditorPaneCount = Some(1)
     )
 
   private def documentationPreset: UiPreset =
@@ -138,7 +140,8 @@ object UiPreset:
           )
         ),
       themeName = Theme.dark.name,
-      pinnedPanels = List(PinnedPanel(PanelPosition.Left, 30, PanelContentSnapshot.Outline(Nil)))
+      pinnedPanels = List(PinnedPanel(PanelPosition.Left, 30, PanelContentSnapshot.Outline(Nil))),
+      targetEditorPaneCount = Some(1)
     )
 
   private def codePreset: UiPreset =
@@ -300,13 +303,49 @@ object UiPreset:
           (nextState, panels :+ surface)
       }
 
-    stateWithPanels.copy(
+    val restoredState = stateWithPanels.copy(
       config = preset.config,
       theme = theme,
       uiSurfaces = unpinnedSurfaces ++ restoredPanels,
       focus = withoutPinnedFocus,
       surfaceAnimations =
         stateWithPanels.surfaceAnimations.filterNot((surfaceId, _) => state.pinnedSurfaces.exists(_.id == surfaceId))
+    )
+
+    applyEditorPaneTarget(restoredState, preset.targetEditorPaneCount)
+
+  private def applyEditorPaneTarget(state: AppState, targetEditorPaneCount: Option[Int]): AppState =
+    targetEditorPaneCount match
+      case Some(1) => collapseToSingleEditorPane(state)
+      case _       => state
+
+  private def collapseToSingleEditorPane(state: AppState): AppState =
+    val keptPaneId = state.layout.activeEditorPaneId
+      .filter(state.layout.editorPanes.contains)
+      .orElse(state.layout.orderedPaneIds.find(state.layout.editorPanes.contains))
+      .getOrElse(PaneId(0))
+    val keptBufferId = state.layout.editorPanes
+      .get(keptPaneId)
+      .flatMap(_.bufferId)
+      .orElse(state.focusedBufferId)
+      .orElse(state.bufferOrder.find(state.buffers.contains))
+    val basePane = state.layout.editorPanes.getOrElse(keptPaneId, EditorPane.empty(keptPaneId))
+    val keptPane = basePane.copy(id = keptPaneId, bufferId = keptBufferId)
+    val nextFocus = state.focus match
+      case Focus.EditorPane(`keptPaneId`) =>
+        state.focus
+      case Focus.Surface(surfaceId) if state.surfaceById(surfaceId).nonEmpty =>
+        state.focus
+      case _ =>
+        Focus.EditorPane(keptPaneId)
+
+    state.copy(
+      layout = state.layout.copy(
+        editorPanes = Map(keptPaneId -> keptPane),
+        activeEditorPaneId = Some(keptPaneId),
+        paneOrder = List(keptPaneId)
+      ),
+      focus = nextFocus
     )
 
   given Encoder[PanelPosition] = Encoder.encodeString.contramap(_.toString)

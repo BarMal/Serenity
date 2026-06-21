@@ -12,7 +12,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{PanelContent, PanelPosition}
+import com.serenity.ui.layout.{Layout, PanelContent, PanelPosition}
 import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -121,6 +121,28 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
 
+    sm.updateState { state =>
+      val primaryBufferId   = BufferId(0)
+      val secondaryBufferId = BufferId(1)
+      val pane0             = PaneId(0)
+      val pane1             = PaneId(1)
+      state.copy(
+        buffers = state.buffers + (secondaryBufferId -> Buffer.newEmpty(secondaryBufferId)),
+        bufferOrder = List(primaryBufferId, secondaryBufferId),
+        layout = Layout(
+          editorPanes = Map(
+            pane0 -> EditorPane.withBuffer(pane0, primaryBufferId),
+            pane1 -> EditorPane.withBuffer(pane1, secondaryBufferId)
+          ),
+          activeEditorPaneId = Some(pane1),
+          paneOrder = List(pane0, pane1)
+        ),
+        focus = Focus.EditorPane(pane1),
+        nextBufferId = BufferId(2),
+        nextPaneId = PaneId(2)
+      )
+    }.unsafeRunSync()
+
     sm.executeCommand(
       Command.typed(
         "apply-writing-preset",
@@ -135,7 +157,10 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     state.config.fontConfig.textFontFamily shouldBe Font.SERIF
     state.config.showLineNumbers shouldBe false
     state.config.showGutter shouldBe false
-    state.buffers(BufferId(0)).richTextDocument should not be empty
+    state.layout.editorPanes should have size 1
+    state.layout.activeEditorPaneId shouldBe Some(PaneId(1))
+    state.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(BufferId(1))
+    state.buffers(BufferId(1)).richTextDocument should not be empty
     state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Left, 28))
     state.pinnedSurfaces.headOption.map(_.content) shouldBe Some(SurfaceContent.Outline(Nil))
   }
