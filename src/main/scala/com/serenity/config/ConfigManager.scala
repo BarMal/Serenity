@@ -7,7 +7,7 @@ import scala.io.Source
 import scala.util.Using
 
 import cats.effect.IO
-import com.serenity.animation.AnimationConfig
+import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 
 /** Manages loading and saving application configuration */
@@ -187,6 +187,10 @@ object ConfigManager:
               parseElementTransitionSpeedScale(value.trim)
                 .map(config.withElementTransitionSpeedScale)
                 .getOrElse(config)
+            case "ui.motion.editor_text" | "ui.motion.editor.text" | "ui_motion_editor_text" =>
+              parseEditorInsertionTransitionKind(value.trim)
+                .map(config.withEditorInsertionTransitionKind)
+                .getOrElse(config)
             case "document.default_mode" | "document.default.mode" | "document_default_mode" =>
               parseDefaultDocumentMode(value.trim).map(config.withDefaultDocumentMode).getOrElse(config)
             case "window.preferred.width" | "window_preferred_width" =>
@@ -310,6 +314,7 @@ object ConfigManager:
        |ui.material = ${config.materialPreset.configKey}
        |ui.motion = ${config.motionPreset.configKey}
        |ui.motion.speed_scale = ${config.elementTransitionSpeedScale}
+       |ui.motion.editor_text = ${editorInsertionTransitionConfigKey(config.editorInsertionTransitionKind)}
        |
        |# Default mode for new buffers: plain-text, markdown, rich-text
        |document.default_mode = ${config.defaultDocumentMode.configKey}
@@ -435,6 +440,8 @@ object ConfigManager:
           parseMotionPreset(value).isEmpty
         case "ui.motion.speed_scale" | "motion.speed_scale" | "ui_motion_speed_scale" | "motion_speed_scale" =>
           parseElementTransitionSpeedScale(value).isEmpty
+        case "ui.motion.editor_text" | "ui.motion.editor.text" | "ui_motion_editor_text" =>
+          parseEditorInsertionTransitionKind(value).isEmpty
         case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
           parseUiElementGap(value).isEmpty
         case "ui.corner_radius" | "ui.corner.radius" | "ui_corner_radius" =>
@@ -479,6 +486,8 @@ object ConfigManager:
       "motion.preset",
       "ui.motion.speed_scale",
       "motion.speed_scale",
+      "ui.motion.editor_text",
+      "ui.motion.editor.text",
       "ui.element_gap",
       "ui.element.gap",
       "ui.corner_radius",
@@ -523,6 +532,7 @@ object ConfigManager:
       "ui_motion"                 -> "ui.motion",
       "motion_preset"             -> "motion.preset",
       "ui_motion_speed_scale"     -> "ui.motion.speed_scale",
+      "ui_motion_editor_text"     -> "ui.motion.editor_text",
       "motion_speed_scale"        -> "motion.speed_scale",
       "ui_element_gap"            -> "ui.element_gap",
       "ui_corner_radius"          -> "ui.corner_radius",
@@ -556,6 +566,24 @@ object ConfigManager:
       case "expressive" | "full" | "quick"         => Some(MotionPreset.Expressive)
       case "custom"                                => Some(MotionPreset.Custom)
       case _                                       => None
+
+  private def parseEditorInsertionTransitionKind(value: String): Option[TransitionKind] =
+    value.toLowerCase match
+      case "fade"                                             => Some(TransitionKind.Fade)
+      case "typed" | "typed-text" | "type"                    => Some(TransitionKind.TypedText)
+      case "directional" | "directional-sweep" | "sweep"      => Some(TransitionKind.DirectionalSweep)
+      case "tandem" | "line-and-character" | "line-character" => Some(TransitionKind.LineAndCharacterTandem)
+      case "off" | "none" | "disabled"                        => Some(TransitionKind.Disabled)
+      case _                                                  => None
+
+  private def editorInsertionTransitionConfigKey(kind: TransitionKind): String =
+    kind match
+      case TransitionKind.Fade                   => "fade"
+      case TransitionKind.TypedText              => "typed"
+      case TransitionKind.DirectionalSweep       => "directional"
+      case TransitionKind.LineAndCharacterTandem => "tandem"
+      case TransitionKind.Disabled               => "off"
+      case TransitionKind.OutlineThenContent     => "fade"
 
   private def parseDefaultDocumentMode(value: String): Option[DefaultDocumentMode] =
     value.toLowerCase match
@@ -704,6 +732,7 @@ object ConfigManager:
                           |ui.material = frosted
                           |ui.motion = smooth
                           |ui.motion.speed_scale = 1.0
+                          |ui.motion.editor_text = fade
                           |
                           |# Preferred desktop window size. Leave empty to use the default.
                           |window.preferred.width =

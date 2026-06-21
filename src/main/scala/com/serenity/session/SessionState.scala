@@ -7,7 +7,7 @@ import scala.concurrent.duration.FiniteDuration
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.serenity.animation.AnimationConfig
+import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
@@ -16,6 +16,7 @@ import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{Layout, PaneSplitDirection}
 import com.serenity.ui.theme.Theme
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import io.circe.syntax.given
 import io.circe.{Decoder, Encoder}
 
 /** Represents the persistent session state that survives application restarts. This is a subset of AppState containing
@@ -490,6 +491,18 @@ given Decoder[MotionPreset] = Decoder.decodeString.emap {
   case other        => Left(s"Unknown MotionPreset: $other")
 }
 
+given Encoder[TransitionKind] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[TransitionKind] = Decoder.decodeString.emap {
+  case "Disabled"               => Right(TransitionKind.Disabled)
+  case "Fade"                   => Right(TransitionKind.Fade)
+  case "TypedText"              => Right(TransitionKind.TypedText)
+  case "DirectionalSweep"       => Right(TransitionKind.DirectionalSweep)
+  case "OutlineThenContent"     => Right(TransitionKind.OutlineThenContent)
+  case "LineAndCharacterTandem" => Right(TransitionKind.LineAndCharacterTandem)
+  case other                    => Left(s"Unknown TransitionKind: $other")
+}
+
 given Encoder[Color] = Encoder.encodeString.contramap(formatColor)
 
 given Decoder[Color] = Decoder.decodeString.emap(value => parseColor(value).toRight(s"Invalid colour value: $value"))
@@ -558,7 +571,38 @@ given Decoder[RichTextParagraph] = deriveDecoder
 given Encoder[RichTextDocument] = deriveEncoder
 given Decoder[RichTextDocument] = deriveDecoder
 
-given Encoder[AppConfig] = deriveEncoder
+given Encoder[AppConfig] = Encoder.instance { config =>
+  io.circe.Json.obj(
+    "characterAnimation"            -> config.characterAnimation.asJson,
+    "syntaxHighlightingEnabled"     -> config.syntaxHighlightingEnabled.asJson,
+    "hotkeyConfig"                  -> config.hotkeyConfig.asJson,
+    "focusedKeymapConfig"           -> config.focusedKeymapConfig.asJson,
+    "fontConfig"                    -> config.fontConfig.asJson,
+    "minimumPaneWidth"              -> config.minimumPaneWidth.asJson,
+    "showLineNumbers"               -> config.showLineNumbers.asJson,
+    "showGutter"                    -> config.showGutter.asJson,
+    "blurRadius"                    -> config.blurRadius.asJson,
+    "backgroundStyle"               -> config.backgroundStyle.asJson,
+    "materialPreset"                -> config.materialPreset.asJson,
+    "motionPreset"                  -> config.motionPreset.asJson,
+    "elementTransitionSpeedScale"   -> config.elementTransitionSpeedScale.asJson,
+    "editorInsertionTransitionKind" -> config.editorInsertionTransitionKind.asJson,
+    "cursorMode"                    -> config.cursorMode.asJson,
+    "cursorColors"                  -> config.cursorColors.asJson,
+    "cursorInfoBarMode"             -> config.cursorInfoBarMode.asJson,
+    "cursorInfoBarPlacement"        -> config.cursorInfoBarPlacement.asJson,
+    "windowChromeMode"              -> config.windowChromeMode.asJson,
+    "markdownViewMode"              -> config.markdownViewMode.asJson,
+    "defaultDocumentMode"           -> config.defaultDocumentMode.asJson,
+    "interfaceDensity"              -> config.interfaceDensity.asJson,
+    "uiElementGap"                  -> config.uiElementGap.asJson,
+    "uiCornerRadiusPx"              -> config.uiCornerRadiusPx.asJson,
+    "textAreaInsets"                -> config.textAreaInsets.asJson,
+    "preferredWindowSize"           -> config.preferredWindowSize.asJson,
+    "lspUserConfig"                 -> config.lspUserConfig.asJson,
+    "spellCheck"                    -> config.spellCheck.asJson
+  )
+}
 
 given Decoder[AppConfig] = Decoder.instance { cursor =>
   for
@@ -577,6 +621,9 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     elementTransitionSpeedScale <- cursor
       .getOrElse[Double]("elementTransitionSpeedScale")(1.0)
       .map(AppConfig.clampElementTransitionSpeedScale)
+    editorInsertionTransitionKind <- cursor.getOrElse[TransitionKind]("editorInsertionTransitionKind")(
+      TransitionKind.Fade
+    )
     cursorMode        <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
     cursorColors      <- cursor.getOrElse[CursorColorConfig]("cursorColors")(CursorColorConfig())
     cursorInfoBarMode <- cursor.getOrElse[CursorInfoBarMode]("cursorInfoBarMode")(CursorInfoBarMode.Off)
@@ -587,6 +634,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     markdownViewMode    <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
     defaultDocumentMode <- cursor.getOrElse[DefaultDocumentMode]("defaultDocumentMode")(DefaultDocumentMode.PlainText)
     interfaceDensity    <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(InterfaceDensity.Comfortable)
+    uiElementGap        <- cursor.getOrElse[Int]("uiElementGap")(0)
+    uiCornerRadiusPx    <- cursor.getOrElse[Int]("uiCornerRadiusPx")(8)
     textAreaInsets      <- cursor.getOrElse[TextAreaInsets]("textAreaInsets")(TextAreaInsets())
     preferredWindowSize <- cursor.getOrElse[Option[PreferredWindowSize]]("preferredWindowSize")(None)
     lspUserConfig       <- cursor.getOrElse[LspUserConfig]("lspUserConfig")(LspUserConfig.empty)
@@ -605,6 +654,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     materialPreset = materialPreset,
     motionPreset = motionPreset,
     elementTransitionSpeedScale = elementTransitionSpeedScale,
+    editorInsertionTransitionKind = editorInsertionTransitionKind,
     cursorMode = cursorMode,
     cursorColors = cursorColors,
     cursorInfoBarMode = cursorInfoBarMode,
@@ -613,6 +663,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     markdownViewMode = markdownViewMode,
     defaultDocumentMode = defaultDocumentMode,
     interfaceDensity = interfaceDensity,
+    uiElementGap = AppConfig.clampUiElementGap(uiElementGap),
+    uiCornerRadiusPx = AppConfig.clampUiCornerRadiusPx(uiCornerRadiusPx),
     textAreaInsets = textAreaInsets,
     preferredWindowSize = preferredWindowSize,
     lspUserConfig = lspUserConfig,

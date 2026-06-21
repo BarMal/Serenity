@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.animation.TransitionKind
 import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.rope.Balance
@@ -147,6 +148,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withMaterialPreset(MaterialPreset.Crystal)
       .withMotionPreset(MotionPreset.Reduced)
+      .withEditorInsertionTransitionKind(TransitionKind.TypedText)
       .withElementTransitionSpeedScale(1.5)
     val runner = CommandRunner.empty.activate(registry, config)
 
@@ -165,6 +167,10 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       case item: CommandSurfaceItem.InputItem if item.id == "element-transition-speed-scale" =>
         (item.currentValue, item.hint, item.parse("2.25"))
     } shouldBe Some(("1.50", "Scale (0.0-4.0)", Some(CommandIntent.SetElementTransitionSpeedScale(2.25))))
+    materialGroup.children.collectFirst {
+      case item: CommandSurfaceItem.OptionItem if item.id == "editor-text-transition" =>
+        (item.selectedOption, item.options.map(_.label))
+    } shouldBe Some("Typed" -> List("Fade", "Typed", "Directional", "Tandem", "Off"))
   }
 
   "ensureCommandRunnerSurface (via closePane)" should "use the current config, not defaults" in {

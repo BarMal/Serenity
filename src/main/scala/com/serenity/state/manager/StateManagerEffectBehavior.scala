@@ -301,6 +301,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateConfig(_.withMotionPreset(preset)).void
       case CommandIntent.SetElementTransitionSpeedScale(scale) =>
         updateConfig(_.withElementTransitionSpeedScale(scale)).void
+      case CommandIntent.SetEditorInsertionTransitionKind(kind) =>
+        updateConfig(_.withEditorInsertionTransitionKind(kind)).void
       case CommandIntent.SetBackgroundStyle(style) =>
         updateConfig(_.withBackgroundStyle(style)).void
       case CommandIntent.SetBlurRadius(r) =>

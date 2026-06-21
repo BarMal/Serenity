@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.animation.TransitionKind
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -34,6 +35,23 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().config.elementTransitionSpeedScale shouldBe 2.25
+  }
+
+  it should "update the editor text transition kind config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "editor-text-transition",
+          "Set editor text transition",
+          CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.TypedText),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
   }
 
   it should "update the UI element gap config" in {

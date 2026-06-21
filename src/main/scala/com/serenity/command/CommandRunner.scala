@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.animation.AnimationConfig
+import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.fonts.FontLoader
@@ -93,6 +93,7 @@ case class CommandRunner(
     val interfaceDensityItem = CommandRunner.interfaceDensityOptionItem(optionSelections)
     val materialPresetItem   = CommandRunner.materialPresetOptionItem(optionSelections)
     val motionPresetItem     = CommandRunner.motionPresetOptionItem(optionSelections)
+    val editorTextItem       = CommandRunner.editorTextTransitionOptionItem(optionSelections)
     val markdownViewItem     = CommandRunner.markdownViewOptionItem(optionSelections)
     val defaultDocumentItem  = CommandRunner.defaultDocumentModeOptionItem(optionSelections)
     val spellCheckItem       = CommandRunner.spellCheckOptionItem(optionSelections)
@@ -119,7 +120,7 @@ case class CommandRunner(
     val materialMotionGroup = CommandSurfaceItem.GroupItem(
       id = "settings-material-motion",
       label = "Material & Motion",
-      children = List(materialPresetItem, motionPresetItem) ++
+      children = List(materialPresetItem, motionPresetItem, editorTextItem) ++
         inputItems.filter(_.id == "element-transition-speed-scale"),
       category = CommandCategory.Settings,
       hint = Some("Named UI material and animation timing")
@@ -543,6 +544,7 @@ object CommandRunner:
       "animation-mode"            -> animationModeIndex(config),
       "material-preset"           -> materialPresetIndex(config.materialPreset),
       "motion-preset"             -> motionPresetIndex(config.motionPreset),
+      "editor-text-transition"    -> editorTextTransitionIndex(config.editorInsertionTransitionKind),
       "cursor-mode"               -> cursorModeIndex(config.cursorMode),
       "cursor-info-bar"           -> cursorInfoBarModeIndex(config.cursorInfoBarMode),
       "cursor-info-bar-placement" -> cursorInfoBarPlacementIndex(config.cursorInfoBarPlacement),
@@ -570,6 +572,27 @@ object CommandRunner:
       selectedIndex = optionSelections.getOrElse("cursor-mode", 0),
       category = CommandCategory.Settings,
       hint = Some("Blink or breathe")
+    )
+
+  private[command] def editorTextTransitionOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "editor-text-transition",
+      label = "Text Reveal",
+      options = List(
+        CommandOption("Fade", CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.Fade)),
+        CommandOption("Typed", CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.TypedText)),
+        CommandOption("Directional", CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.DirectionalSweep)),
+        CommandOption(
+          "Tandem",
+          CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.LineAndCharacterTandem)
+        ),
+        CommandOption("Off", CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.Disabled))
+      ),
+      selectedIndex = optionSelections.getOrElse("editor-text-transition", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Editor insertion reveal style")
     )
 
   private[command] def cursorInfoBarOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -1332,6 +1355,15 @@ object CommandRunner:
       case MotionPreset.Smooth     => 2
       case MotionPreset.Expressive => 3
       case MotionPreset.Custom     => 4
+
+  private def editorTextTransitionIndex(kind: TransitionKind): Int =
+    kind match
+      case TransitionKind.Fade                   => 0
+      case TransitionKind.TypedText              => 1
+      case TransitionKind.DirectionalSweep       => 2
+      case TransitionKind.LineAndCharacterTandem => 3
+      case TransitionKind.Disabled               => 4
+      case TransitionKind.OutlineThenContent     => 0
 
   private def markdownViewModeIndex(mode: MarkdownViewMode): Int =
     mode match
