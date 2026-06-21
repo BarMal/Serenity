@@ -3,13 +3,15 @@ package com.serenity
 import java.awt.Font
 import java.nio.file.Files
 
+import _root_.io.circe.parser.decode
+import _root_.io.circe.syntax.*
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.TransitionKind
 import com.serenity.config.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
+import com.serenity.ui.layout.*
 import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -104,6 +106,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     writing.config.motionPreset shouldBe MotionPreset.Subtle
     writing.config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
     writing.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
+    writing.targetEditorPaneCount shouldBe Some(1)
     writing.pinnedPanels.map(panel => panel.position -> panel.content) should contain(
       PanelPosition.Left -> UiPreset.PanelContentSnapshot.Outline(Nil)
     )
@@ -111,6 +114,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     docs.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
     docs.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
     docs.config.editorInsertionTransitionKind shouldBe TransitionKind.LineAndCharacterTandem
+    docs.targetEditorPaneCount shouldBe Some(1)
     docs.pinnedPanels.map(_.content) should contain(UiPreset.PanelContentSnapshot.Outline(Nil))
 
     code.config.defaultDocumentMode shouldBe DefaultDocumentMode.PlainText
@@ -129,6 +133,60 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       "Writing",
       "rich text default; dark; subtle motion; typed text reveal; frosted material; Serif 18pt prose; Left outline 28"
     )
+  }
+
+  it should "collapse editor panes when a preset targets one editor pane" in {
+    val primaryBufferId   = BufferId(0)
+    val secondaryBufferId = BufferId(1)
+    val pane0             = PaneId(0)
+    val pane1             = PaneId(1)
+    val secondaryBuffer   = Buffer.newEmpty(secondaryBufferId)
+    val state = AppState.initial.copy(
+      buffers = AppState.initial.buffers + (secondaryBufferId -> secondaryBuffer),
+      bufferOrder = List(primaryBufferId, secondaryBufferId),
+      layout = Layout(
+        editorPanes = Map(
+          pane0 -> EditorPane.withBuffer(pane0, primaryBufferId),
+          pane1 -> EditorPane.withBuffer(pane1, secondaryBufferId)
+        ),
+        activeEditorPaneId = Some(pane1),
+        paneOrder = List(pane0, pane1)
+      ),
+      focus = Focus.EditorPane(pane1),
+      nextBufferId = BufferId(2),
+      nextPaneId = PaneId(2)
+    )
+    val preset = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
+
+    val restored = UiPreset.applyToState(preset, state, Theme.dark)
+
+    restored.layout.editorPanes should have size 1
+    restored.layout.activeEditorPaneId shouldBe Some(pane1)
+    restored.layout.paneOrder shouldBe List(pane1)
+    restored.layout.editorPanes(pane1).bufferId shouldBe Some(secondaryBufferId)
+    restored.buffers.keySet should contain allOf (primaryBufferId, secondaryBufferId)
+    restored.bufferOrder shouldBe List(primaryBufferId, secondaryBufferId)
+  }
+
+  it should "decode saved presets that do not include editor pane layout intent" in {
+    import UiPreset.given
+
+    val preset = UiPreset(
+      name = "Legacy",
+      config = AppConfig.default,
+      themeName = Theme.dark.name,
+      pinnedPanels = Nil
+    )
+    val legacyJson = preset.asJson.hcursor
+      .downField("targetEditorPaneCount")
+      .delete
+      .top
+      .getOrElse(fail("expected preset json"))
+      .noSpaces
+
+    val decoded = decode[UiPreset](legacyJson).getOrElse(fail("legacy preset should decode"))
+
+    decoded.targetEditorPaneCount shouldBe None
   }
 
   "UiPresetStore" should "persist named presets to disk and replace an existing preset by name" in {
