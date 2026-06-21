@@ -97,117 +97,153 @@ case class CommandRunner(
     val defaultDocumentItem  = CommandRunner.defaultDocumentModeOptionItem(optionSelections)
     val spellCheckItem       = CommandRunner.spellCheckOptionItem(optionSelections)
     val keymapItems          = inputItems.filter(_.id.startsWith("keymap-"))
+    val animationGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-animation",
+      label = "Animation",
+      children = List(animationItem) ++ inputItems.filter(item =>
+        item.id == "animation-duration" || item.id == "animation-steps"
+      ),
+      category = CommandCategory.Settings,
+      hint = Some("Style, duration, steps")
+    )
+    val appearanceGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-appearance",
+      label = "Appearance",
+      children = List(cursorModeItem, cursorInfoBarItem, backgroundStyleItem, interfaceDensityItem) ++
+        inputItems.filter(item =>
+          item.id == "blur-radius" || item.id == "ui-element-gap" || item.id == "ui-corner-radius"
+        ) :+ cursorInfoPlacement,
+      category = CommandCategory.Settings,
+      hint = Some("Cursor, info bar, background, density, blur")
+    )
+    val materialMotionGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-material-motion",
+      label = "Material & Motion",
+      children = List(materialPresetItem, motionPresetItem) ++
+        inputItems.filter(_.id == "element-transition-speed-scale"),
+      category = CommandCategory.Settings,
+      hint = Some("Named UI material and animation timing")
+    )
+    val textAreaGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-text-area",
+      label = "Text Area",
+      children = inputItems.filter(item => item.id == "text-area-left" || item.id == "text-area-right"),
+      category = CommandCategory.Settings,
+      hint = Some("Resize editor margins")
+    )
+    val codeFontGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-code-font",
+      label = "Code Font",
+      children = List(
+        CommandRunner.codeFontGroupItem(optionSelections),
+        CommandRunner.codeLigaturesOptionItem(optionSelections)
+      ) ++ inputItems.filter(_.id == "code-font-size"),
+      category = CommandCategory.Settings,
+      hint = Some("Family, size, ligatures")
+    )
+    val proseFontGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-prose-font",
+      label = "Prose Font",
+      children = List(
+        CommandRunner.textFontGroupItem(optionSelections),
+        CommandRunner.textLigaturesOptionItem(optionSelections)
+      ) ++ inputItems.filter(_.id == "text-font-size"),
+      category = CommandCategory.Settings,
+      hint = Some("Family, size, ligatures")
+    )
+    val richTextGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-rich-text",
+      label = "Rich Text",
+      children = inputItems.filter(_.id.startsWith("rich-text-")),
+      category = CommandCategory.Settings,
+      hint = Some("Selection font, size, colour")
+    )
+    val uiFontGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-ui-font",
+      label = "UI Font",
+      children = List(
+        CommandRunner.uiFontGroupItem(optionSelections),
+        CommandRunner.uiLigaturesOptionItem(optionSelections)
+      ) ++ inputItems.filter(_.id == "ui-font-size"),
+      category = CommandCategory.Settings,
+      hint = Some("Family, size, ligatures")
+    )
+    val markdownGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-markdown",
+      label = "Markdown",
+      children = List(markdownViewItem),
+      category = CommandCategory.Settings,
+      hint = Some("Source, split preview, or inline lens")
+    )
+    val languageGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-language",
+      label = "Language",
+      children = CommandRunner.languageItems :+ defaultDocumentItem,
+      category = CommandCategory.Settings,
+      hint = Some("Set new document defaults and current buffer language")
+    )
+    val spellCheckGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-spellcheck",
+      label = "Spell Check",
+      children = List(spellCheckItem) ++ inputItems.filter(item =>
+        item.id == "spellcheck-languages" || item.id == "spellcheck-words"
+      ),
+      category = CommandCategory.Settings,
+      hint = Some("Enable, languages, accepted words")
+    )
+    val keymapGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-keymap",
+      label = "Keymap",
+      children = keymapItems,
+      category = CommandCategory.Settings,
+      hint = Some("Inspect and edit bindings")
+    )
+    val presetOptionsGroup = CommandSurfaceItem.GroupItem(
+      id = "ui-preset-configure",
+      label = "Preset Options",
+      children = List(
+        languageGroup,
+        markdownGroup,
+        textAreaGroup,
+        proseFontGroup,
+        codeFontGroup,
+        uiFontGroup,
+        materialMotionGroup,
+        appearanceGroup,
+        spellCheckGroup,
+        richTextGroup
+      ),
+      category = CommandCategory.Settings,
+      hint = Some("Document, layout, typography, motion")
+    )
+    val presetInputItems     = inputItems.filter(_.id.startsWith("ui-preset-"))
+    val createPresetItems    = presetInputItems.filter(_.id == "ui-preset-create")
+    val remainingPresetItems = presetInputItems.filterNot(_.id == "ui-preset-create")
+    val uiPresetsGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-ui-presets",
+      label = "UI Presets",
+      children = List(CommandRunner.builtInUiPresetOptionItem(optionSelections)) ++
+        CommandRunner.customUiPresetOptionItem(uiPresetPreviews, optionSelections).toList ++
+        createPresetItems ++
+        List(presetOptionsGroup) ++
+        remainingPresetItems,
+      category = CommandCategory.Settings,
+      hint = Some("Save or apply named layouts")
+    )
     List(
-      CommandSurfaceItem.GroupItem(
-        id = "settings-animation",
-        label = "Animation",
-        children = List(animationItem) ++ inputItems.filter(item =>
-          item.id == "animation-duration" || item.id == "animation-steps"
-        ),
-        category = CommandCategory.Settings,
-        hint = Some("Style, duration, steps")
-      ),
-      CommandSurfaceItem.GroupItem(
-        id = "settings-appearance",
-        label = "Appearance",
-        children = List(cursorModeItem, cursorInfoBarItem, backgroundStyleItem, interfaceDensityItem) ++
-          inputItems.filter(item =>
-            item.id == "blur-radius" || item.id == "ui-element-gap" || item.id == "ui-corner-radius"
-          ) :+ cursorInfoPlacement,
-        category = CommandCategory.Settings,
-        hint = Some("Cursor, info bar, background, density, blur")
-      ),
-      CommandSurfaceItem.GroupItem(
-        id = "settings-material-motion",
-        label = "Material & Motion",
-        children = List(materialPresetItem, motionPresetItem) ++
-          inputItems.filter(_.id == "element-transition-speed-scale"),
-        category = CommandCategory.Settings,
-        hint = Some("Named UI material and animation timing")
-      ),
-      CommandSurfaceItem.GroupItem(
-        id = "settings-ui-presets",
-        label = "UI Presets",
-        children = List(CommandRunner.builtInUiPresetOptionItem(optionSelections)) ++
-          CommandRunner.customUiPresetOptionItem(uiPresetPreviews, optionSelections).toList ++
-          inputItems.filter(_.id.startsWith("ui-preset-")),
-        category = CommandCategory.Settings,
-        hint = Some("Save or apply named layouts")
-      ),
-      CommandSurfaceItem.GroupItem(
-        id = "settings-text-area",
-        label = "Text Area",
-        children = inputItems.filter(item => item.id == "text-area-left" || item.id == "text-area-right"),
-        category = CommandCategory.Settings,
-        hint = Some("Resize editor margins")
-      ),
-      CommandSurfaceItem.GroupItem(
-        id = "settings-code-font",
-        label = "Code Font",
-        children = List(
-          CommandRunner.codeFontGroupItem(optionSelections),
-          CommandRunner.codeLigaturesOptionItem(optionSelections)
-        ) ++ inputItems.filter(_.id == "code-font-size"),
-        category = CommandCategory.Settings,
-        hint = Some("Family, size, ligatures")
-      ),
-      CommandSurfaceItem.GroupItem(
-        id = "settings-prose-font",
-        label = "Prose Font",
-        children = List(
-          CommandRunner.textFontGroupItem(optionSelections),
-          CommandRunner.textLigaturesOptionItem(optionSelections)
-        ) ++ inputItems.filter(_.id == "text-font-size"),
-        category = CommandCategory.Settings,
-        hint = Some("Family, size, ligatures")
-      ),
-      CommandSurfaceItem.GroupItem(
-        id = "settings-rich-text",
-        label = "Rich Text",
-        children = inputItems.filter(_.id.startsWith("rich-text-")),
-        category = CommandCategory.Settings,
-        hint = Some("Selection font, size, colour")
-      ),
-      CommandSurfaceItem.GroupItem(
-        id = "settings-ui-font",
-        label = "UI Font",
-        children = List(
-          CommandRunner.uiFontGroupItem(optionSelections),
-          CommandRunner.uiLigaturesOptionItem(optionSelections)
-        ) ++ inputItems.filter(_.id == "ui-font-size"),
-        category = CommandCategory.Settings,
-        hint = Some("Family, size, ligatures")
-      ),
-      CommandSurfaceItem.GroupItem(
-        id = "settings-markdown",
-        label = "Markdown",
-        children = List(markdownViewItem),
-        category = CommandCategory.Settings,
-        hint = Some("Source, split preview, or inline lens")
-      ),
-      CommandSurfaceItem.GroupItem(
-        id = "settings-language",
-        label = "Language",
-        children = CommandRunner.languageItems :+ defaultDocumentItem,
-        category = CommandCategory.Settings,
-        hint = Some("Set new document defaults and current buffer language")
-      ),
-      CommandSurfaceItem.GroupItem(
-        id = "settings-spellcheck",
-        label = "Spell Check",
-        children = List(spellCheckItem) ++ inputItems.filter(item =>
-          item.id == "spellcheck-languages" || item.id == "spellcheck-words"
-        ),
-        category = CommandCategory.Settings,
-        hint = Some("Enable, languages, accepted words")
-      ),
-      CommandSurfaceItem.GroupItem(
-        id = "settings-keymap",
-        label = "Keymap",
-        children = keymapItems,
-        category = CommandCategory.Settings,
-        hint = Some("Inspect and edit bindings")
-      )
+      animationGroup,
+      appearanceGroup,
+      materialMotionGroup,
+      uiPresetsGroup,
+      textAreaGroup,
+      codeFontGroup,
+      proseFontGroup,
+      richTextGroup,
+      uiFontGroup,
+      markdownGroup,
+      languageGroup,
+      spellCheckGroup,
+      keymapGroup
     )
 
   def previewGroup(groupId: String): CommandRunner =
@@ -472,7 +508,15 @@ case class CommandRunner(
   private def matchingSettingsGroups(term: String): List[CommandSurfaceItem.GroupItem] =
     val lowerTerm = term.toLowerCase
     if lowerTerm.length < 3 then Nil
-    else settingsGroups.filter(_.searchText.toLowerCase.contains(lowerTerm))
+    else
+      val matches = settingsGroups.filter(_.searchText.toLowerCase.contains(lowerTerm))
+      val (directMatches, remainingMatches) =
+        matches.partition(group => CommandRunner.directGroupSearchText(group).contains(lowerTerm))
+      val (directChildMatches, nestedMatches) =
+        remainingMatches.partition(group =>
+          group.children.exists(child => CommandRunner.directItemSearchText(child).contains(lowerTerm))
+        )
+      directMatches ++ directChildMatches ++ nestedMatches
 
   /** Store the focus that should be restored when runner closes */
 
@@ -483,6 +527,16 @@ object CommandRunner:
     val nameLower  = command.name.toLowerCase
     val labelLower = command.label.toLowerCase
     nameLower.startsWith(lowerTerm) || labelLower.startsWith(lowerTerm)
+
+  private[command] def directGroupSearchText(group: CommandSurfaceItem.GroupItem): String =
+    s"${group.id} ${group.label} ${group.hint.getOrElse("")}".toLowerCase
+
+  private[command] def directItemSearchText(item: CommandSurfaceItem): String =
+    item match
+      case group: CommandSurfaceItem.GroupItem =>
+        CommandRunner.directGroupSearchText(group)
+      case other =>
+        s"${other.id} ${other.searchText}".toLowerCase
 
   private[command] def defaultOptionSelections(config: AppConfig): Map[String, Int] =
     Map(
