@@ -210,7 +210,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
           surfaceId,
           workflow.copy(statusMessage = Some("No active buffer"))
         )
-      case Some(bufferId) if workflow.findText.isEmpty =>
+      case Some(_) if workflow.findText.isEmpty =>
         updateReplaceWorkflowSurface(
           surfaceId,
           workflow.copy(statusMessage = Some("Enter text to find"))
@@ -281,7 +281,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
           surfaceId,
           workflow.copy(statusMessage = Some("No active buffer"))
         )
-      case Some(bufferId) if workflow.findText.isEmpty =>
+      case Some(_) if workflow.findText.isEmpty =>
         updateReplaceWorkflowSurface(
           surfaceId,
           workflow.copy(statusMessage = Some("Enter text to find"))

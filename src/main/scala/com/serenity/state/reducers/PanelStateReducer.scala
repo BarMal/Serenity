@@ -132,18 +132,6 @@ object PanelStateReducer:
   private def replaceSurface(surfaces: List[UiSurface], updated: UiSurface): List[UiSurface] =
     surfaces.filterNot(_.id == updated.id) :+ updated
 
-  private def replacePinnedAtPosition(
-    surfaces: List[UiSurface],
-    position: PanelPosition,
-    updated: UiSurface
-  ): List[UiSurface] =
-    surfaces.filterNot {
-      _.presentation match
-        case SurfacePresentation.Pinned(pos, _) if pos == position   => true
-        case SurfacePresentation.Expanded(pos, _) if pos == position => true
-        case _                                                       => false
-    } :+ updated
-
   private def panelToUnpin(position: PanelPosition, state: AppState): Option[UiSurface] =
     focusedPinnedSurfaceAt(position, state).orElse(newestPinnedSurfaceAt(position, state))
 

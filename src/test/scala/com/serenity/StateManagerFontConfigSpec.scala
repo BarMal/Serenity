@@ -18,22 +18,6 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
   private val CodeFontSettingsMoves = 5
   private val UiFontSettingsMoves   = 8
 
-  private def executeCommandThroughRunner(
-    stateManager: StateManager,
-    searchTerm: String,
-    expectedCommandName: String
-  ): Unit =
-    openRunner(stateManager)
-    searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-
-    stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface.flatMap {
-      _.content match
-        case com.serenity.state.models.SurfaceContent.CommandPalette(runner) => runner.selectedCommand.map(_.name)
-        case _                                                               => None
-    } shouldBe Some(expectedCommandName)
-
-    stateManager.applyEvent(Enter).unsafeRunSync()
-
   private def openRunner(stateManager: StateManager): Unit =
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 

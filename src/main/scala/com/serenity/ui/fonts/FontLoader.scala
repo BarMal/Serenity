@@ -106,24 +106,6 @@ object FontLoader:
   private def loadBundledMonospace(size: Float)(using Logger[IO]): IO[Font] =
     IO.pure(bundledMonospace(size).getOrElse(defaultSystemMonospace(size)))
 
-  private def loadFontFromResource(resourcePath: String, size: Float): IO[Option[Font]] =
-    IO.blocking {
-      Option(getClass.getResourceAsStream(resourcePath)).flatMap { stream =>
-        try Some(Font.createFont(Font.TRUETYPE_FONT, stream).deriveFont(size))
-        catch case _: Exception => None
-        finally stream.close()
-      }
-    }
-
-  private def loadVariableFont(size: Float): IO[Option[Font]] =
-    IO.blocking {
-      Option(getClass.getResourceAsStream("/fonts/MonaspaceNeonVarVF[wght,wdth,slnt].ttf")).flatMap { stream =>
-        try Some(Font.createFont(Font.TRUETYPE_FONT, stream).deriveFont(size))
-        catch case _: Exception => None
-        finally stream.close()
-      }
-    }
-
   private def bundledMonospace(size: Float): Option[Font] =
     bundledFontBase.map(_.deriveFont(size))
 

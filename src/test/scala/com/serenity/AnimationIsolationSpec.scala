@@ -67,7 +67,7 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     val stateAfterType2 = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Now buffer2 should have new animations, buffer1's should be separate
-    val buffer1Final = stateAfterType2.buffers(buffer1Id)
+    stateAfterType2.buffers(buffer1Id)
     val buffer2Final = stateAfterType2.buffers(buffer2Id)
 
     val buffer2HasNewAnimations = hasActiveAnimations(buffer2Final, stateAfterType2)

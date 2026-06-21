@@ -44,7 +44,7 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     // Given: Initial state with one buffer
     val initialState        = stateManager.getCurrentState.unsafeRunSync()
     val originalBufferCount = initialState.buffers.size
-    val originalPaneCount   = initialState.layout.editorPanes.size
+    initialState.layout.editorPanes.size
 
     // When: Press Ctrl+T (NewTab command)
     stateManager.applyEvent(NewTab).unsafeRunSync()
@@ -243,8 +243,8 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     val pane1Id = paneIds.head
     val pane2Id = paneIds.last
 
-    val pane1 = stateWith2Buffers.layout.editorPanes(pane1Id)
-    val pane2 = stateWith2Buffers.layout.editorPanes(pane2Id)
+    stateWith2Buffers.layout.editorPanes(pane1Id)
+    stateWith2Buffers.layout.editorPanes(pane2Id)
 
     // Initially, focus should be on one pane
     val focusedPaneId = stateWith2Buffers.focus match
@@ -254,7 +254,7 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     // The focused pane should have a cursor, non-focused should not
     val focusedPane      = stateWith2Buffers.layout.editorPanes(focusedPaneId)
     val nonFocusedPaneId = if focusedPaneId == pane1Id then pane2Id else pane1Id
-    val nonFocusedPane   = stateWith2Buffers.layout.editorPanes(nonFocusedPaneId)
+    stateWith2Buffers.layout.editorPanes(nonFocusedPaneId)
 
     // Focused pane should have cursors
     focusedPane.cursors should not be empty

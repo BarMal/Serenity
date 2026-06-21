@@ -338,7 +338,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
     val surface = new MockRenderSurface(100, 30)
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
-    val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+    layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
 
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 

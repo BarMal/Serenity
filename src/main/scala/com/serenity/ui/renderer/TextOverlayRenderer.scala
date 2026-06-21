@@ -187,7 +187,7 @@ object TextOverlayRenderer:
 
   private def columnCursorPlacement(row: OverlayRow, x: Int, width: Int): Option[CursorPlacement] =
     row.segments match
-      case label :: hint :: value :: Nil if value.selected =>
+      case _ :: _ :: value :: Nil if value.selected =>
         val labelWidth = math.min(22, math.max(8, width / 3))
         val valueWidth = math.min(18, math.max(8, width / 4))
         val hintWidth  = math.max(0, width - labelWidth - valueWidth - 2)

@@ -270,11 +270,9 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
   it should "preserve tab state across sessions (simulated)" in new MultiFileFixture:
     // Given: Create buffers with file paths (simulating open files)
-    val buffer1 =
-      stateManager.createBuffer("File 1 content", Some(java.nio.file.Paths.get("/tmp/file1.txt"))).unsafeRunSync()
-    val buffer2 =
-      stateManager.createBuffer("File 2 content", Some(java.nio.file.Paths.get("/tmp/file2.txt"))).unsafeRunSync()
-    val buffer3 = stateManager.createBuffer("Untitled buffer", None).unsafeRunSync()
+    stateManager.createBuffer("File 1 content", Some(java.nio.file.Paths.get("/tmp/file1.txt"))).unsafeRunSync()
+    stateManager.createBuffer("File 2 content", Some(java.nio.file.Paths.get("/tmp/file2.txt"))).unsafeRunSync()
+    stateManager.createBuffer("Untitled buffer", None).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
 

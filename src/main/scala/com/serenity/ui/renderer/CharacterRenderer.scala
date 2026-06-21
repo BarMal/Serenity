@@ -385,25 +385,6 @@ object CharacterRenderer:
 
     finalState.completed.reverse
 
-  private def renderCharAtPosition(
-    surface: RenderSurface,
-    x: Int,
-    y: Int,
-    char: Char,
-    theme: Theme,
-    screenAnimations: AnimationState,
-    bufferLine: Int,
-    bufferColumn: Int
-  ): Unit =
-    val cell = screenAnimations.getCell(bufferColumn, bufferLine)
-    cell.flatMap(_.currentForeground) match
-      case Some(fg) => surface.setForegroundColor(fg)
-      case None     => surface.setForegroundColor(theme.foreground)
-    cell.flatMap(_.currentBackground) match
-      case Some(bg) => surface.setBackgroundColor(bg)
-      case None     => surface.setBackgroundColor(theme.background)
-    renderChar(surface, x, y, char)
-
   private def blendColors(foreground: Color, background: Color, opacity: Double): Color =
     val t = opacity.max(0.0).min(1.0)
     new Color(

@@ -568,9 +568,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected command runner surface"))
 
   it should "select an input item without auto-entering edit mode" in {
-    val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-animation", "animation-duration")
-    val runner   = runnerFrom(state)
+    CommandRegistry.default
+    val state  = settingsStateOnItem("settings-animation", "animation-duration")
+    val runner = runnerFrom(state)
 
     runner.activeSubmenu.flatMap(_.editingItemId) shouldBe None
     runner.activeSubmenu.map(_.editingText) shouldBe Some("")

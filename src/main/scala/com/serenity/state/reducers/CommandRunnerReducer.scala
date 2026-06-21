@@ -285,18 +285,15 @@ object CommandRunnerReducer:
               else ReducerResult.noEffects(state)
 
       case RunnerNavigate(Direction.Up) =>
-        given CommandRegistry = registry
         if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.moveSubmenuSelection(-1)))
         else
           ReducerResult.noEffects(replaceRunner(state, runner => updatePreviewForSelection(runner.moveSelection(-1))))
 
       case RunnerNavigate(Direction.Down) =>
-        given CommandRegistry = registry
         if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.moveSubmenuSelection(1)))
         else ReducerResult.noEffects(replaceRunner(state, runner => updatePreviewForSelection(runner.moveSelection(1))))
 
       case RunnerSelectVisibleItem(index) =>
-        given CommandRegistry = registry
         val mainFocusedState = state.commandRunnerSurface
           .map(surface => state.copy(focus = Focus.Surface(surface.id)))
           .getOrElse(state)
@@ -316,7 +313,6 @@ object CommandRunnerReducer:
         )
 
       case RunnerNavigate(Direction.Left) =>
-        given CommandRegistry = registry
         if submenuHasFocus(state) then
           currentRunner(state) match
             case Some(runner) =>
@@ -352,7 +348,6 @@ object CommandRunnerReducer:
               ReducerResult.noEffects(state)
 
       case RunnerNavigate(Direction.Right) =>
-        given CommandRegistry = registry
         if submenuHasFocus(state) then
           currentRunner(state) match
             case Some(runner) =>
@@ -398,22 +393,6 @@ object CommandRunnerReducer:
             ReducerResult.noEffects(replaceRunner(state, r => updatePreviewForSelection(r.switchCategory(-1))))
           case _ =>
             ReducerResult.noEffects(state)
-
-  private def activate(state: AppState, registry: CommandRegistry): AppState =
-    val activatedRunner = CommandRunner.empty
-      .activate(registry, state.config)
-    val (stateWithId, surfaceId) =
-      state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
-    val surface = UiSurface(
-      id = surfaceId,
-      content = SurfaceContent.CommandPalette(activatedRunner),
-      presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
-    )
-    stateWithId
-      .copy(
-        uiSurfaces = upsertSurface(stateWithId.uiSurfaces, surface)
-      )
-      .pushFocus(Focus.Surface(surfaceId))
 
   private def deactivate(state: AppState): AppState =
     state
@@ -559,6 +538,3 @@ object CommandRunnerReducer:
         )
       case None =>
         state.copy(uiSurfaces = baseSurfaces, focus = Focus.Surface(mainSurfaceId))
-
-  private def upsertSurface(surfaces: List[UiSurface], surface: UiSurface): List[UiSurface] =
-    surfaces.filterNot(_.id == surface.id) :+ surface

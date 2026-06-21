@@ -19,7 +19,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "maintain immutable state throughout event processing" in new FunctionalFixture:
     // Given: Initial state
-    val bufferId             = stateManager.createBuffer("Initial").unsafeRunSync()
+    stateManager.createBuffer("Initial").unsafeRunSync()
     val initialState         = stateManager.getCurrentState.unsafeRunSync()
     val initialStateSnapshot = initialState.copy() // Snapshot for comparison
 
@@ -40,8 +40,8 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "demonstrate referential transparency in event processing" in new FunctionalFixture:
     // Given: Same initial state and events
-    val bufferId1 = stateManager.createBuffer("Test").unsafeRunSync()
-    val state1    = stateManager.getCurrentState.unsafeRunSync()
+    stateManager.createBuffer("Test").unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync()
 
     // Create second state manager with same initial state
 //    given LoggerFactory[IO] = Slf4jFactory.create[IO]
@@ -49,8 +49,8 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
     val stateManager2 = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
-    val bufferId2 = stateManager2.createBuffer("Test").unsafeRunSync()
-    val state2    = stateManager2.getCurrentState.unsafeRunSync()
+    stateManager2.createBuffer("Test").unsafeRunSync()
+    stateManager2.getCurrentState.unsafeRunSync()
 
     // When: Apply identical event sequences to both
     val eventSequence = List(
@@ -107,7 +107,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
   it should "handle state transitions through monadic composition" in new FunctionalFixture:
     // Given: Initial state wrapped in IO
     val bufferId = stateManager.createBuffer("monad").unsafeRunSync()
-    val paneId   = stateManager.createPane(Some(bufferId)).unsafeRunSync()
+    stateManager.createPane(Some(bufferId)).unsafeRunSync()
 
     // When: Chain operations using IO monad
     val monadicChain = for

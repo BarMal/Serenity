@@ -302,8 +302,8 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
     applyEvent(InsertChar('!'))
 
-    val bufferId2 = setupAnotherBuffer("pane two")
-    val pane2     = getPaneId
+    setupAnotherBuffer("pane two")
+    getPaneId
 
     // Focus is on pane2; undo should snap back to pane1
     applyEvent(Undo)

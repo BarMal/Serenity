@@ -692,11 +692,11 @@ object EditorEventReducer:
         )
       case PageUp =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorPageNavigation(buffer, currentState, direction = -1))
+          updateBufferInState(currentState, applyMultiCursorPageNavigation(buffer, direction = -1))
         )
       case PageDown =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorPageNavigation(buffer, currentState, direction = 1))
+          updateBufferInState(currentState, applyMultiCursorPageNavigation(buffer, direction = 1))
         )
       case MoveToStartOfFile =>
         ReducerResult.noEffects(
@@ -803,9 +803,6 @@ object EditorEventReducer:
       case -1    => content.length
       case index => index
     math.min(lineStart + targetCol, lineEnd)
-
-  private def findLineEnd(rope: Rope, line: Int): Int =
-    rope.getLine(line).fold(0)(_.length)
 
   private def findLineEnd(content: String, line: Int): Int =
     getLine(content, line).fold(0)(_.length)
@@ -1197,7 +1194,6 @@ object EditorEventReducer:
 
   private def applyMultiCursorPageNavigation(
     buffer: Buffer,
-    currentState: AppState,
     direction: Int
   ): Buffer =
     val totalLines = countLines(buffer.content)
@@ -1372,7 +1368,6 @@ object EditorEventReducer:
   ): CursorPosition =
     if cursor.line == 0 && cursor.column < panelWidth then cursor.copy(column = 0)
     else
-      val currentLineContent        = rope.getLine(cursor.line).getOrElse("")
       val currentVisualLineInBuffer = cursor.column / panelWidth
 
       if currentVisualLineInBuffer > 0 then
@@ -1438,11 +1433,6 @@ object EditorEventReducer:
     val viewportSize = currentState.viewportSize.getOrElse(com.serenity.ui.layout.ViewportSize(80, 24))
     val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, viewportSize)
     layout.editorPanelRect.width
-
-  private def preferredVisualXPx(buffer: Buffer, currentState: AppState, cursor: CursorPosition): Float =
-    buffer.preferredXPx.getOrElse {
-      measuredCursorXPx(buffer, currentState, cursor)
-    }
 
   private def measuredCursorXPx(buffer: Buffer, currentState: AppState, cursor: CursorPosition): Float =
     val font         = previewFontForBuffer(buffer, currentState.config.fontConfig)
@@ -1534,9 +1524,7 @@ object EditorEventReducer:
   ): java.awt.Font =
     FontLoader.previewFontForRole(config, buffer.typographyRole)
 
-  private def replaceSelectionOrInsert(buffer: Buffer, cursor: CursorPosition, insertedText: String)(using
-    balance: com.serenity.rope.Balance
-  ): Buffer =
+  private def replaceSelectionOrInsert(buffer: Buffer, cursor: CursorPosition, insertedText: String): Buffer =
     val (baseContent, insertionStart, startOffset) = buffer.primarySelection match
       case Some(selection) =>
         val contentText = buffer.content.collect()
@@ -1615,9 +1603,6 @@ object EditorEventReducer:
     val text = buffer.content.collect()
     mergedActiveSelectionRanges(buffer, text).map { case (start, end) => text.slice(start, end) }
 
-  private def mergedActiveSelectionRanges(buffer: Buffer): List[(Int, Int)] =
-    mergedActiveSelectionRanges(buffer, buffer.content.collect())
-
   private def mergedActiveSelectionRanges(buffer: Buffer, text: String): List[(Int, Int)] =
     val ranges = activeSelections(buffer)
       .map(selection => (selectionStartOffset(selection, text), selectionEndOffset(selection, text)))
@@ -1635,14 +1620,8 @@ object EditorEventReducer:
       }
       .reverse
 
-  private def selectionStartOffset(buffer: Buffer, selection: Selection): Int =
-    lineColumnToOffset(buffer.content, selection.start.line, selection.start.column)
-
   private def selectionStartOffset(selection: Selection, text: String): Int =
     lineColumnToOffset(text, selection.start.line, selection.start.column)
-
-  private def selectionEndOffset(buffer: Buffer, selection: Selection): Int =
-    lineColumnToOffset(buffer.content, selection.end.line, selection.end.column)
 
   private def selectionEndOffset(selection: Selection, text: String): Int =
     lineColumnToOffset(text, selection.end.line, selection.end.column)
