@@ -741,7 +741,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     afterForward.navigationForwardStack shouldBe Nil
   }
 
-  it should "include explicit bookmarks in the outline panel" in {
+  it should "include explicit bookmarks and document comments in the outline panel" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
 
@@ -753,7 +753,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
             content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
             language = Some(LanguageId.Markdown),
             cursors = List(CursorPosition(2, 4)),
-            bookmarks = List(CursorPosition(2, 4))
+            bookmarks = List(CursorPosition(2, 4)),
+            documentComments = List(DocumentComment(CursorPosition(3, 0), CursorPosition(3, 3), "Revise bridge"))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -770,6 +771,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       List(
         Symbol("Chapter One", SymbolKind.Heading, Location(0, 0)),
         Symbol("Bookmark 3:5", SymbolKind.Bookmark, Location(2, 4)),
+        Symbol("Comment: Revise bridge", SymbolKind.Comment, Location(3, 0)),
         Symbol("Scene Two", SymbolKind.Heading, Location(4, 0))
       )
     )
@@ -895,6 +897,60 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().commentLensSurface shouldBe None
+  }
+
+  it should "add, navigate, render, and delete authored document comments" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph"),
+            cursors = List(CursorPosition(0, 2)),
+            selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 7)))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "add-document-comment", "add-document-comment")
+
+    val commentedBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    commentedBuffer.documentComments shouldBe List(
+      DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Comment")
+    )
+    commentedBuffer.isDirty shouldBe true
+
+    executeCommandThroughRunner(stateManager, "comment-lens", "comment-lens")
+
+    val lens = stateManager.getCurrentState
+      .unsafeRunSync()
+      .commentLensSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommentLens(comment) => Some(comment)
+          case _                                   => None
+      }
+      .getOrElse(fail("Expected comment lens"))
+    lens.raw shouldBe "Comment"
+
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(bufferId).copy(cursors = List(CursorPosition(1, 0)), selection = None)
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "next-document-comment", "next-document-comment")
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0))
+
+    executeCommandThroughRunner(stateManager, "delete-document-comment", "delete-document-comment")
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).documentComments shouldBe Nil
   }
 
   it should "save, restore, and clear the current session from command runner commands" in {

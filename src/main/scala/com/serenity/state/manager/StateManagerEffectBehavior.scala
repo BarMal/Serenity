@@ -300,6 +300,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateState(current => setRichTextParagraphAlignment(current, alignment))
       case CommandIntent.ToggleCommentLens =>
         toggleCommentLens(state)
+      case CommandIntent.AddDocumentComment(text) =>
+        addDocumentComment(state, text)
+      case CommandIntent.DeleteDocumentComment =>
+        deleteDocumentComment(state)
       case CommandIntent.OpenGotoLine =>
         updateState(current => ModalStateReducer.show(Modal.GotoLine(""), current).state)
       case CommandIntent.ToggleBookmark =>
@@ -308,6 +312,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         navigateBookmark(state, DocumentNavigation.nextSymbol)
       case CommandIntent.PreviousBookmark =>
         navigateBookmark(state, DocumentNavigation.previousSymbol)
+      case CommandIntent.NextDocumentComment =>
+        navigateDocumentComment(state, DocumentNavigation.nextSymbol)
+      case CommandIntent.PreviousDocumentComment =>
+        navigateDocumentComment(state, DocumentNavigation.previousSymbol)
       case CommandIntent.NextDocumentSymbol =>
         navigateDocumentSymbol(state, DocumentNavigation.nextSymbol)
       case CommandIntent.PreviousDocumentSymbol =>
@@ -1094,7 +1102,11 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       .getOrElse(Nil)
 
   private def outlineSymbolsForBuffer(buffer: Buffer): List[Symbol] =
-    (DocumentOutline.forBuffer(buffer) ++ DocumentNavigation.bookmarkSymbols(buffer.bookmarks))
+    (
+      DocumentOutline.forBuffer(buffer) ++
+        DocumentNavigation.bookmarkSymbols(buffer.bookmarks) ++
+        DocumentNavigation.commentSymbols(buffer.documentComments)
+    )
       .sortBy(symbol => (symbol.location.line, symbol.location.column, symbol.name))
 
   private def currentOutlineActiveLocation(symbols: List[Symbol], state: AppState): Option[Location] =
@@ -1113,6 +1125,17 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     chooseSymbol: (List[Symbol], CursorPosition) => Option[Symbol]
   ): IO[Unit] =
     navigateSymbols(state, buffer => DocumentNavigation.bookmarkSymbols(buffer.bookmarks), chooseSymbol, "Bookmark")
+
+  private def navigateDocumentComment(
+    state: AppState,
+    chooseSymbol: (List[Symbol], CursorPosition) => Option[Symbol]
+  ): IO[Unit] =
+    navigateSymbols(
+      state,
+      buffer => DocumentNavigation.commentSymbols(buffer.documentComments),
+      chooseSymbol,
+      "Document comment"
+    )
 
   private def navigateSymbols(
     state: AppState,
@@ -1284,6 +1307,48 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         }
       case None =>
         logger.debug("[CMD] Toggle bookmark requested without an active editor buffer")
+
+  private def addDocumentComment(state: AppState, text: String): IO[Unit] =
+    activeEditorBuffer(state) match
+      case Some((_, buffer)) =>
+        val cursor = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+        val range = buffer.primarySelection
+          .map(selection => selection.start -> selection.end)
+          .getOrElse(cursor -> cursor)
+        val commentText = Option(text.trim).filter(_.nonEmpty).getOrElse("Comment")
+        val comment     = DocumentComment(range._1, range._2, commentText)
+        updateState: current =>
+          current.buffers.get(buffer.id) match
+            case Some(currentBuffer) =>
+              val comments = (comment :: currentBuffer.documentComments.filterNot(existing =>
+                existing.start == comment.start && existing.end == comment.end
+              )).sortBy(existing => (existing.start.line, existing.start.column, existing.text))
+              current.copy(
+                buffers =
+                  current.buffers + (buffer.id -> currentBuffer.copy(documentComments = comments, isDirty = true))
+              )
+            case None => current
+      case None =>
+        logger.debug("[CMD] Add document comment requested without an active editor buffer")
+
+  private def deleteDocumentComment(state: AppState): IO[Unit] =
+    activeEditorBuffer(state) match
+      case Some((_, buffer)) =>
+        val cursor = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+        updateState: current =>
+          current.buffers.get(buffer.id) match
+            case Some(currentBuffer) =>
+              val comments = currentBuffer.documentComments.filterNot(_.contains(cursor))
+              current.copy(
+                buffers = current.buffers + (buffer.id ->
+                  currentBuffer.copy(
+                    documentComments = comments,
+                    isDirty = currentBuffer.isDirty || comments != currentBuffer.documentComments
+                  ))
+              )
+            case None => current
+      case None =>
+        logger.debug("[CMD] Delete document comment requested without an active editor buffer")
 
   private def activeEditorBuffer(state: AppState): Option[(PaneId, Buffer)] =
     for

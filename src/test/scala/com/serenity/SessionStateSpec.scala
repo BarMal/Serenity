@@ -133,7 +133,10 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         cursors = List(CursorPosition(3, 7)),
         viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 24, visibleColumns = 80),
         findState = Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1)),
-        bookmarks = List(CursorPosition(1, 2), CursorPosition(8, 0))
+        bookmarks = List(CursorPosition(1, 2), CursorPosition(8, 0)),
+        documentComments = List(
+          DocumentComment(CursorPosition(2, 0), CursorPosition(2, 9), "Review this paragraph.")
+        )
       )
     val appState = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
@@ -161,6 +164,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restoredBuffer.viewport.leftColumn shouldBe 1
     restoredBuffer.findState shouldBe Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1))
     restoredBuffer.bookmarks shouldBe List(CursorPosition(1, 2), CursorPosition(8, 0))
+    restoredBuffer.documentComments shouldBe List(
+      DocumentComment(CursorPosition(2, 0), CursorPosition(2, 9), "Review this paragraph.")
+    )
   }
 
   it should "preserve clean rich text metadata through JSON round trip" in {

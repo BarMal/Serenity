@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.document.CommentRendering
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
-import com.serenity.state.models.{Buffer, BufferId, CursorPosition}
+import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -63,6 +63,27 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
 
     comment.raw shouldBe "<!-- **Review** this paragraph -->"
     comment.inlineMarkdown shouldBe "Review this paragraph"
+  }
+
+  it should "render authored document comments at the cursor" in {
+    val buffer = Buffer
+      .fromString(BufferId(1), "Chapter text")
+      .copy(
+        cursors = List(CursorPosition(0, 4)),
+        documentComments = List(
+          DocumentComment(
+            anchor = CursorPosition(0, 0),
+            focus = CursorPosition(0, 7),
+            text = "**Tighten** this opening."
+          )
+        )
+      )
+
+    val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
+
+    comment.sourceLine shouldBe 0
+    comment.raw shouldBe "**Tighten** this opening."
+    comment.inlineMarkdown shouldBe "Tighten this opening."
   }
 
   it should "extract multiline prose comments from markdown buffers" in {

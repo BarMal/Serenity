@@ -324,6 +324,20 @@ object CommandRegistry:
       label = "Comment Lens"
     ),
     Command.typed(
+      "add-document-comment",
+      "Add a document comment at the current cursor or selection.",
+      CommandIntent.AddDocumentComment("Comment"),
+      CommandCategory.Edit,
+      label = "Add Document Comment"
+    ),
+    Command.typed(
+      "delete-document-comment",
+      "Delete the document comment at the current cursor.",
+      CommandIntent.DeleteDocumentComment,
+      CommandCategory.Edit,
+      label = "Delete Document Comment"
+    ),
+    Command.typed(
       "goto-line",
       "Go to a specific line number.",
       CommandIntent.OpenGotoLine,
@@ -350,6 +364,20 @@ object CommandRegistry:
       CommandIntent.PreviousBookmark,
       CommandCategory.View,
       label = "Previous Bookmark"
+    ),
+    Command.typed(
+      "next-document-comment",
+      "Go to the next document comment.",
+      CommandIntent.NextDocumentComment,
+      CommandCategory.View,
+      label = "Next Document Comment"
+    ),
+    Command.typed(
+      "previous-document-comment",
+      "Go to the previous document comment.",
+      CommandIntent.PreviousDocumentComment,
+      CommandCategory.View,
+      label = "Previous Document Comment"
     ),
     Command.typed(
       "navigate-back",

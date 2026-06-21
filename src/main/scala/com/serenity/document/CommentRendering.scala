@@ -15,8 +15,23 @@ object CommentRendering:
   def atCursor(buffer: Buffer): Option[RenderedComment] =
     for
       cursor  <- buffer.cursors.headOption
-      comment <- commentAtLine(buffer, cursor.line)
+      comment <- authoredCommentAt(buffer, cursor).orElse(commentAtLine(buffer, cursor.line))
     yield comment
+
+  private def authoredCommentAt(
+    buffer: Buffer,
+    cursor: com.serenity.state.models.CursorPosition
+  ): Option[RenderedComment] =
+    buffer.documentComments
+      .find(_.contains(cursor))
+      .map { comment =>
+        val lines = comment.text.linesIterator.toVector
+        RenderedComment(
+          sourceLine = comment.start.line,
+          raw = comment.text,
+          inlineMarkdown = renderInlineCommentLines(lines).mkString("\n")
+        )
+      }
 
   private def commentAtLine(buffer: Buffer, lineIndex: Int): Option[RenderedComment] =
     val lines = bufferLines(buffer)

@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.document.DocumentNavigation
-import com.serenity.state.models.CursorPosition
+import com.serenity.state.models.{CursorPosition, DocumentComment}
 import com.serenity.ui.layout.{Location, Symbol, SymbolKind}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -38,6 +38,18 @@ class DocumentNavigationSpec extends AnyFlatSpec with Matchers:
     DocumentNavigation.bookmarkSymbols(List(CursorPosition(7, 2), CursorPosition(1, 4))) shouldBe List(
       Symbol("Bookmark 2:5", SymbolKind.Bookmark, Location(1, 4)),
       Symbol("Bookmark 8:3", SymbolKind.Bookmark, Location(7, 2))
+    )
+  }
+
+  it should "build sorted comment symbols from authored document comments" in {
+    val comments = List(
+      DocumentComment(CursorPosition(5, 2), CursorPosition(5, 8), "Later beat"),
+      DocumentComment(CursorPosition(2, 0), CursorPosition(2, 4), "**Opening** note")
+    )
+
+    DocumentNavigation.commentSymbols(comments) shouldBe List(
+      Symbol("Comment: **Opening** note", SymbolKind.Comment, Location(2, 0)),
+      Symbol("Comment: Later beat", SymbolKind.Comment, Location(5, 2))
     )
   }
 
