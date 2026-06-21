@@ -360,6 +360,13 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .withActiveCategory(CommandCategory.Settings)
     val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
 
+    presetGroup.children.take(4).map(_.id) shouldBe List(
+      "ui-preset-create",
+      "ui-preset-configure",
+      "ui-preset-built-in",
+      "ui-preset-custom"
+    )
+
     val builtInPreset = presetGroup.children
       .collectFirst {
         case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-built-in" => item

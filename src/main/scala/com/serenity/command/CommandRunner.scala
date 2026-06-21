@@ -223,10 +223,9 @@ case class CommandRunner(
     val uiPresetsGroup = CommandSurfaceItem.GroupItem(
       id = "settings-ui-presets",
       label = "UI Presets",
-      children = List(CommandRunner.builtInUiPresetOptionItem(optionSelections)) ++
+      children = createPresetItems ++
+        List(presetOptionsGroup, CommandRunner.builtInUiPresetOptionItem(optionSelections)) ++
         CommandRunner.customUiPresetOptionItem(uiPresetPreviews, optionSelections).toList ++
-        createPresetItems ++
-        List(presetOptionsGroup) ++
         remainingPresetItems,
       category = CommandCategory.Settings,
       hint = Some("Save or apply named layouts")
