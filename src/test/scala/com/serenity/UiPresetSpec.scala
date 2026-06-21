@@ -195,6 +195,32 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     patched.targetEditorPaneCount shouldBe Some(1)
   }
 
+  it should "patch motion fields without replacing preset layout snapshots" in {
+    val panel = UiPreset.PinnedPanel
+      .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)
+      .getOrElse(fail("outline should be capturable"))
+    val preset = UiPreset(
+      name = "Drafting",
+      config = AppConfig.default.withMotionPreset(MotionPreset.Reduced),
+      themeName = Theme.dark.name,
+      pinnedPanels = List(panel),
+      targetEditorPaneCount = Some(1)
+    )
+    val sourceConfig = AppConfig.default
+      .withMotionPreset(MotionPreset.Subtle)
+      .withElementTransitionSpeedScale(2.25)
+      .withEditorInsertionTransitionKind(TransitionKind.TypedText)
+
+    val patched = UiPreset.Patch.Motion(sourceConfig).applyTo(preset)
+
+    patched.config.motionPreset shouldBe MotionPreset.Subtle
+    patched.config.characterAnimation shouldBe MotionPreset.Subtle.animationConfig
+    patched.config.elementTransitionSpeedScale shouldBe 2.25
+    patched.config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
+    patched.pinnedPanels shouldBe List(panel)
+    patched.targetEditorPaneCount shouldBe Some(1)
+  }
+
   it should "collapse editor panes when a preset targets one editor pane" in {
     val primaryBufferId   = BufferId(0)
     val secondaryBufferId = BufferId(1)
