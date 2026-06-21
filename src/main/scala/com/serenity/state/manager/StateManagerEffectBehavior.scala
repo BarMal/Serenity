@@ -1423,7 +1423,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             if state.theme == newTheme then None
             else Some(ThemeTransition(state.theme, 0, AnimationConfig.smooth.get.steps))
           state.copy(theme = newTheme, themeTransition = transition)
-        }
+        } >> persistEditedUiPresetFromCommandRunner
       }
       .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to switch theme to $themeName"))
 
