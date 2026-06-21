@@ -107,6 +107,13 @@ case class CommandRunner(
       category = CommandCategory.Settings,
       hint = Some("Panels, outline, preview, diagnostics")
     )
+    val navigationGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-navigation",
+      label = "Navigation",
+      children = CommandRunner.navigationItems,
+      category = CommandCategory.Settings,
+      hint = Some("Comments, bookmarks, headings, history")
+    )
     val animationGroup = CommandSurfaceItem.GroupItem(
       id = "settings-animation",
       label = "Animation",
@@ -226,6 +233,7 @@ case class CommandRunner(
       children = List(
         presetIdentityGroup,
         workspaceLayoutGroup,
+        navigationGroup,
         languageGroup,
         markdownGroup,
         textAreaGroup,
@@ -901,6 +909,66 @@ object CommandRunner:
         CommandIntent.CollapseExpandedPanel,
         CommandCategory.View,
         label = "Collapse Expanded Panel"
+      )
+    ).map(CommandSurfaceItem.CommandItem(_))
+
+  private[command] val navigationItems: List[CommandSurfaceItem.CommandItem] =
+    List(
+      Command.typed(
+        "comment-lens",
+        "Show or hide the rendered comment at the cursor.",
+        CommandIntent.ToggleCommentLens,
+        CommandCategory.View,
+        label = "Comment Lens"
+      ),
+      Command.typed(
+        "toggle-bookmark",
+        "Add or remove a bookmark at the current cursor.",
+        CommandIntent.ToggleBookmark,
+        CommandCategory.View,
+        label = "Toggle Bookmark"
+      ),
+      Command.typed(
+        "next-bookmark",
+        "Go to the next bookmark.",
+        CommandIntent.NextBookmark,
+        CommandCategory.View,
+        label = "Next Bookmark"
+      ),
+      Command.typed(
+        "previous-bookmark",
+        "Go to the previous bookmark.",
+        CommandIntent.PreviousBookmark,
+        CommandCategory.View,
+        label = "Previous Bookmark"
+      ),
+      Command.typed(
+        "next-document-symbol",
+        "Go to the next document symbol.",
+        CommandIntent.NextDocumentSymbol,
+        CommandCategory.View,
+        label = "Next Document Symbol"
+      ),
+      Command.typed(
+        "previous-document-symbol",
+        "Go to the previous document symbol.",
+        CommandIntent.PreviousDocumentSymbol,
+        CommandCategory.View,
+        label = "Previous Document Symbol"
+      ),
+      Command.typed(
+        "navigate-back",
+        "Go back to the previous document navigation point.",
+        CommandIntent.NavigateBack,
+        CommandCategory.View,
+        label = "Navigate Back"
+      ),
+      Command.typed(
+        "navigate-forward",
+        "Go forward to the next document navigation point.",
+        CommandIntent.NavigateForward,
+        CommandCategory.View,
+        label = "Navigate Forward"
       )
     ).map(CommandSurfaceItem.CommandItem(_))
 
