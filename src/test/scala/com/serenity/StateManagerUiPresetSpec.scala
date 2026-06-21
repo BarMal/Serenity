@@ -135,8 +135,37 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     state.config.fontConfig.textFontFamily shouldBe Font.SERIF
     state.config.showLineNumbers shouldBe false
     state.config.showGutter shouldBe false
+    state.buffers(BufferId(0)).richTextDocument should not be empty
     state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Left, 28))
     state.pinnedSurfaces.headOption.map(_.content) shouldBe Some(SurfaceContent.Outline(Nil))
+  }
+
+  it should "apply the built-in documentation preset to the active empty buffer" in {
+    val path  = Files.createTempDirectory("state-manager-documentation-empty-ui-preset").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.executeCommand(
+      Command.typed(
+        "apply-documentation-preset",
+        "Apply documentation preset",
+        CommandIntent.ApplyUiPreset("Documentation"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+
+    state.buffers(BufferId(0)).language shouldBe Some(LanguageId.Markdown)
+    state.pinnedSurfaces.collectFirst {
+      case UiSurface(
+            _,
+            SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"),
+            SurfacePresentation.Pinned(PanelPosition.Right, 40),
+            _
+          ) =>
+        true
+    } shouldBe Some(true)
   }
 
   it should "apply the built-in documentation preset with a live markdown preview for the active markdown buffer" in {
