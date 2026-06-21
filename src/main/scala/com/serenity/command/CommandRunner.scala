@@ -228,7 +228,8 @@ case class CommandRunner(
       category = CommandCategory.Settings,
       hint = Some(editingPreset.fold("Document, layout, typography, motion")(name => s"Editing $name"))
     )
-    val presetInputItems     = inputItems.filter(_.id.startsWith("ui-preset-"))
+    val presetInputItems =
+      inputItems.filter(_.id.startsWith("ui-preset-")).map(withPresetInputContext(_, editingPreset))
     val createPresetItems    = presetInputItems.filter(_.id == "ui-preset-create")
     val remainingPresetItems = presetInputItems.filterNot(_.id == "ui-preset-create")
     val uiPresetsGroup = CommandSurfaceItem.GroupItem(
@@ -551,6 +552,22 @@ case class CommandRunner(
           .map(_.name)
       )
       .orElse(UiPreset.builtIns.headOption.map(_.name))
+
+  private def withPresetInputContext(
+    item: CommandSurfaceItem.InputItem,
+    presetName: Option[String]
+  ): CommandSurfaceItem.InputItem =
+    presetName match
+      case Some(name) =>
+        item.id match
+          case "ui-preset-save" | "ui-preset-apply" | "ui-preset-delete" | "ui-preset-reset" =>
+            item.copy(currentValue = name)
+          case "ui-preset-duplicate" | "ui-preset-rename" =>
+            item.copy(currentValue = s"$name -> ")
+          case _ =>
+            item
+      case None =>
+        item
 
   /** Store the focus that should be restored when runner closes */
 

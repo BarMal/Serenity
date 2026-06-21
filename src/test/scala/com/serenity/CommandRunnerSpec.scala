@@ -433,6 +433,12 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     )
     inputs.head.label shouldBe "Create Preset"
     inputs.head.hint shouldBe "New preset name"
+    inputs(1).currentValue shouldBe "Writing"
+    inputs(2).currentValue shouldBe "Writing"
+    inputs(3).currentValue shouldBe "Writing -> "
+    inputs(4).currentValue shouldBe "Writing -> "
+    inputs(5).currentValue shouldBe "Writing"
+    inputs(6).currentValue shouldBe "Writing"
     inputs.head.parse("Longform Writing") shouldBe Some(CommandIntent.SaveUiPreset("Longform Writing"))
     inputs(3).parse("Writing -> My Writing") shouldBe Some(CommandIntent.DuplicateUiPreset("Writing", "My Writing"))
     inputs(4).parse("Draft -> Final") shouldBe Some(CommandIntent.RenameUiPreset("Draft", "Final"))
@@ -479,6 +485,14 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     builtInPreset.selectedOption shouldBe "Code"
     customPreset.selectedOption shouldBe "Research Notes"
+
+    val inputs = presetGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
+    inputs(1).currentValue shouldBe "Research Notes"
+    inputs(2).currentValue shouldBe "Research Notes"
+    inputs(3).currentValue shouldBe "Research Notes -> "
+    inputs(4).currentValue shouldBe "Research Notes -> "
+    inputs(5).currentValue shouldBe "Research Notes"
+    inputs(6).currentValue shouldBe "Research Notes"
   }
 
   it should "surface font settings groups ahead of command matches when searching font-related terms" in {
