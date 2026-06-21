@@ -35,6 +35,22 @@ case class Selection(anchor: CursorPosition, focus: CursorPosition):
   def end: CursorPosition =
     if start == anchor then focus else anchor
 
+case class DocumentComment(anchor: CursorPosition, focus: CursorPosition, text: String):
+
+  def start: CursorPosition =
+    if anchor.line < focus.line || (anchor.line == focus.line && anchor.column <= focus.column) then anchor
+    else focus
+
+  def end: CursorPosition =
+    if start == anchor then focus else anchor
+
+  def contains(cursor: CursorPosition): Boolean =
+    val afterStart =
+      cursor.line > start.line || (cursor.line == start.line && cursor.column >= start.column)
+    val beforeEnd =
+      cursor.line < end.line || (cursor.line == end.line && cursor.column <= end.column)
+    afterStart && beforeEnd
+
 case class VerticalCursorState(cursor: CursorPosition, preferredColumn: Int, preferredXPx: Float)
 
 case class Buffer(
@@ -54,6 +70,7 @@ case class Buffer(
     findState: Option[FindState] = None,
     selections: List[Selection] = Nil,
     bookmarks: List[CursorPosition] = Nil,
+    documentComments: List[DocumentComment] = Nil,
     richTextDocument: Option[RichTextDocument] = None
 ):
 

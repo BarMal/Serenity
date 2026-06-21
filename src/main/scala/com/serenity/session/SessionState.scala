@@ -46,7 +46,8 @@ case class SessionBuffer(
     unsavedContent: Option[String] = None,
     richTextDocument: Option[RichTextDocument] = None,
     findState: Option[SessionFindState] = None,
-    bookmarks: List[SessionCursorPosition] = Nil
+    bookmarks: List[SessionCursorPosition] = Nil,
+    documentComments: List[SessionDocumentComment] = Nil
 )
 
 /** Persistent layout information
@@ -91,6 +92,12 @@ case class SessionFindState(
 case class SessionFindResult(
     line: Int,
     column: Int
+)
+
+case class SessionDocumentComment(
+    anchor: SessionCursorPosition,
+    focus: SessionCursorPosition,
+    text: String
 )
 
 object SessionState:
@@ -205,7 +212,8 @@ object SessionBuffer:
         else None,
       richTextDocument = buffer.richTextDocument.filter(_.matchesPlainText(text)),
       findState = buffer.findState.map(SessionFindState.fromFindState),
-      bookmarks = buffer.bookmarks.map(SessionCursorPosition.fromCursorPosition)
+      bookmarks = buffer.bookmarks.map(SessionCursorPosition.fromCursorPosition),
+      documentComments = buffer.documentComments.map(SessionDocumentComment.fromDocumentComment)
     )
 
   def toBuffer(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): Buffer =
@@ -223,6 +231,7 @@ object SessionBuffer:
       viewport = SessionViewport.toViewport(sessionBuffer.viewport),
       findState = sessionBuffer.findState.map(SessionFindState.toFindState),
       bookmarks = sessionBuffer.bookmarks.map(SessionCursorPosition.toCursorPosition),
+      documentComments = sessionBuffer.documentComments.map(SessionDocumentComment.toDocumentComment),
       richTextDocument = sessionBuffer.richTextDocument
     )
 
@@ -356,6 +365,22 @@ object SessionFindResult:
 
   def toFindResult(sessionFindResult: SessionFindResult): FindResult =
     FindResult(sessionFindResult.line, sessionFindResult.column)
+
+object SessionDocumentComment:
+
+  def fromDocumentComment(comment: DocumentComment): SessionDocumentComment =
+    SessionDocumentComment(
+      anchor = SessionCursorPosition.fromCursorPosition(comment.anchor),
+      focus = SessionCursorPosition.fromCursorPosition(comment.focus),
+      text = comment.text
+    )
+
+  def toDocumentComment(sessionComment: SessionDocumentComment): DocumentComment =
+    DocumentComment(
+      anchor = SessionCursorPosition.toCursorPosition(sessionComment.anchor),
+      focus = SessionCursorPosition.toCursorPosition(sessionComment.focus),
+      text = sessionComment.text
+    )
 
 // Circe codecs for all types
 // First encode the basic dependencies
@@ -737,6 +762,9 @@ given Decoder[SessionViewport] = Decoder.instance { cursor =>
 
 given Encoder[SessionFindResult] = deriveEncoder
 given Decoder[SessionFindResult] = deriveDecoder
+
+given Encoder[SessionDocumentComment] = deriveEncoder
+given Decoder[SessionDocumentComment] = deriveDecoder
 
 given Encoder[SessionFindState] = deriveEncoder
 

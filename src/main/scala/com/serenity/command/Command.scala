@@ -50,6 +50,10 @@ enum CommandIntent:
   case SetRichTextParagraphRole(role: ParagraphRole)
   case SetRichTextParagraphAlignment(alignment: ParagraphAlignment)
   case ToggleCommentLens
+  case AddDocumentComment(text: String)
+  case DeleteDocumentComment
+  case NextDocumentComment
+  case PreviousDocumentComment
   case OpenGotoLine
   case ToggleBookmark
   case NextBookmark
