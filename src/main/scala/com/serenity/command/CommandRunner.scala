@@ -209,10 +209,22 @@ case class CommandRunner(
       hint = Some("Inspect and edit bindings")
     )
     val editingPreset = presetEditContextName
+    val presetInputItems =
+      inputItems.filter(_.id.startsWith("ui-preset-")).map(withPresetInputContext(_, editingPreset))
+    val createPresetItems    = presetInputItems.filter(_.id == "ui-preset-create")
+    val remainingPresetItems = presetInputItems.filterNot(_.id == "ui-preset-create")
+    val presetIdentityGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-identity",
+      label = "Preset Identity",
+      children = remainingPresetItems,
+      category = CommandCategory.Settings,
+      hint = Some("Save, apply, duplicate, rename, delete, reset")
+    )
     val presetOptionsGroup = CommandSurfaceItem.GroupItem(
       id = "ui-preset-configure",
       label = editingPreset.fold("Preset Options")(name => s"Preset Options: $name"),
       children = List(
+        presetIdentityGroup,
         workspaceLayoutGroup,
         languageGroup,
         markdownGroup,
@@ -228,10 +240,6 @@ case class CommandRunner(
       category = CommandCategory.Settings,
       hint = Some(editingPreset.fold("Document, layout, typography, motion")(name => s"Editing $name"))
     )
-    val presetInputItems =
-      inputItems.filter(_.id.startsWith("ui-preset-")).map(withPresetInputContext(_, editingPreset))
-    val createPresetItems    = presetInputItems.filter(_.id == "ui-preset-create")
-    val remainingPresetItems = presetInputItems.filterNot(_.id == "ui-preset-create")
     val uiPresetsGroup = CommandSurfaceItem.GroupItem(
       id = "settings-ui-presets",
       label = "UI Presets",
