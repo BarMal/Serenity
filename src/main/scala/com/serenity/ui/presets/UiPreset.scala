@@ -54,6 +54,7 @@ object UiPreset:
       Some(s"${textRevealSummary(preset.config.editorInsertionTransitionKind)} text reveal"),
       Some(s"${preset.config.materialPreset.configKey} material"),
       Some(proseFontSummary(preset.config)),
+      paneCountSummary(preset.targetEditorPaneCount),
       panelSummary(preset.pinnedPanels)
     ).flatten.mkString("; ")
 
@@ -71,6 +72,12 @@ object UiPreset:
 
   private def proseFontSummary(config: AppConfig): String =
     s"${config.fontConfig.textFontFamily} ${formatPointSize(config.fontConfig.textFontSize)} prose"
+
+  private def paneCountSummary(targetEditorPaneCount: Option[Int]): Option[String] =
+    targetEditorPaneCount.collect {
+      case 1     => "1 editor pane"
+      case count => s"$count editor panes"
+    }
 
   private def textRevealSummary(kind: TransitionKind): String =
     kind match
