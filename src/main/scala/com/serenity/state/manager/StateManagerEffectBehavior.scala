@@ -594,6 +594,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           _ <- uiPresetStore
             .upsert(preset)
             .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to save UI preset $presetName"))
+          _ <- refreshCommandRunnerUiPresetPreviews
         yield ()
 
   protected def applyUiPresetEffect(name: String): IO[Unit] =
@@ -666,7 +667,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           .map(_.orElse(UiPreset.builtIn(source)))
           .flatMap {
             case Some(preset) =>
-              uiPresetStore.upsert(preset.copy(name = target))
+              uiPresetStore.upsert(preset.copy(name = target)) >> refreshCommandRunnerUiPresetPreviews
             case None =>
               logger.warn(s"[PRESET] UI preset not found: $source")
           }
@@ -679,6 +680,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case (Some(source), Some(target)) =>
         uiPresetStore
           .rename(source, target)
+          .flatTap(_ => refreshCommandRunnerUiPresetPreviews)
           .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to rename UI preset $source"))
       case _ =>
         logger.warn("[PRESET] Ignoring rename request with empty UI preset name")
@@ -688,6 +690,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case Some(presetName) =>
         uiPresetStore
           .delete(presetName)
+          .flatTap(_ => refreshCommandRunnerUiPresetPreviews)
           .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to delete UI preset $presetName"))
       case None =>
         logger.warn("[PRESET] Ignoring empty UI preset name")
@@ -699,6 +702,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           case Some(_) =>
             uiPresetStore
               .delete(presetName)
+              .flatTap(_ => refreshCommandRunnerUiPresetPreviews)
               .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to reset UI preset $presetName"))
           case None =>
             logger.warn(s"[PRESET] Built-in UI preset not found: $presetName")
@@ -707,6 +711,33 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
 
   private def normalizedPresetName(name: String): Option[String] =
     Option(name.trim).filter(_.nonEmpty)
+
+  private def refreshCommandRunnerUiPresetPreviews: IO[Unit] =
+    uiPresetStore
+      .list()
+      .map(_.map(UiPreset.Preview.fromPreset))
+      .handleErrorWith(error => logger.error(error)("[PRESET] Failed to list UI presets").as(Nil))
+      .flatMap(previews => stateRef.update(state => updateCommandRunnerUiPresetPreviews(state, previews)))
+
+  private def updateCommandRunnerUiPresetPreviews(state: AppState, previews: List[UiPreset.Preview]): AppState =
+    state.commandRunnerSurface match
+      case Some(surface) =>
+        surface.content match
+          case SurfaceContent.CommandPalette(runner) =>
+            val updatedRunner = runner.withUiPresetPreviews(previews)
+            val updatedSurfaces = state.uiSurfaces.map {
+              case current if current.id == surface.id =>
+                current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+              case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
+                current.copy(content = SurfaceContent.CommandPaletteSubmenu(updatedRunner, groupId, previewOnly))
+              case current =>
+                current
+            }
+            state.copy(uiSurfaces = updatedSurfaces)
+          case _ =>
+            state
+      case None =>
+        state
 
   private def runProjectTask(state: AppState, kind: ProjectTaskKind): IO[Unit] =
     projectTaskStartPath(state).flatMap { start =>

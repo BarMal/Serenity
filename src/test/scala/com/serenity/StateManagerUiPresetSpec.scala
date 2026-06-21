@@ -316,6 +316,42 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "refresh custom UI presets in an open command runner after saving" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-refresh").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "save-drafting-preset",
+        "Save drafting preset",
+        CommandIntent.SaveUiPreset("Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val runner = sm.getCurrentState
+      .map(
+        _.commandRunnerSurface.flatMap {
+          _.content match
+            case SurfaceContent.CommandPalette(runner) => Some(runner)
+            case _                                     => None
+        }
+      )
+      .unsafeRunSync()
+      .getOrElse(fail("command runner should stay open"))
+    val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
+    val customPreset = presetGroup.children
+      .collectFirst {
+        case item: com.serenity.command.CommandSurfaceItem.OptionItem if item.id == "ui-preset-custom" => item
+      }
+      .getOrElse(fail("missing custom preset picker"))
+
+    customPreset.options.map(_.label) shouldBe List("Drafting")
+    customPreset.options.headOption.map(_.intent) shouldBe Some(CommandIntent.ApplyUiPreset("Drafting"))
+  }
+
   it should "reset a custom built-in preset override to the built-in defaults" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-reset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
