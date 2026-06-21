@@ -352,6 +352,41 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     customPreset.options.headOption.map(_.intent) shouldBe Some(CommandIntent.ApplyUiPreset("Drafting"))
   }
 
+  it should "open preset options after creating a UI preset from the command runner" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-create-options").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "ui-preset-create",
+        "Create preset",
+        CommandIntent.SaveUiPreset("Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    val runner = state.commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(runner) => Some(runner)
+          case _                                     => None
+      }
+      .getOrElse(fail("command runner should stay open"))
+    val submenu = state.uiSurfaces.collectFirst {
+      case UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
+        groupId -> previewOnly
+    }
+
+    runner.activeSubmenu.map(_.groupId) shouldBe Some("ui-preset-configure")
+    runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-presets")
+    runner.statusMessage shouldBe Some("Preset saved. Configure workspace options.")
+    state.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    submenu shouldBe Some("ui-preset-configure" -> false)
+  }
+
   it should "reset a custom built-in preset override to the built-in defaults" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-reset").resolve("ui-presets.json")
     val store = UiPresetStore(path)

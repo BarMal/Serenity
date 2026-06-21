@@ -25,6 +25,8 @@ import com.serenity.ui.presets.UiPreset
 private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBehavior:
   this: StateManager =>
 
+  private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
+
   protected def interpretEffect(effect: AppEffect): IO[Unit] =
     effect match
       case AppEffect.Lifecycle(effect)      => interpretLifecycleEffect(effect)
@@ -385,6 +387,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateFontConfig(_.copy(textLigatures = enabled))
       case CommandIntent.SetUiLigatures(enabled) =>
         updateFontConfig(_.copy(uiLigatures = enabled))
+      case CommandIntent.SaveUiPreset(name) if command.name == "ui-preset-create" =>
+        saveUiPresetEffect(name) >> focusCreatedPresetOptions
       case CommandIntent.SaveUiPreset(name) =>
         saveUiPresetEffect(name)
       case CommandIntent.ApplyUiPreset(name) =>
@@ -738,6 +742,49 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             state
       case None =>
         state
+
+  private def focusCreatedPresetOptions: IO[Unit] =
+    stateRef.update { state =>
+      state.commandRunnerSurface match
+        case Some(surface) =>
+          surface.content match
+            case SurfaceContent.CommandPalette(runner) =>
+              val updatedRunner = runner.copy(
+                previewedGroupId = Some("settings-ui-presets"),
+                activeSubmenu = Some(
+                  CommandRunnerSubmenuState(
+                    groupId = "ui-preset-configure",
+                    parentGroupId = Some("settings-ui-presets")
+                  )
+                ),
+                submenuSelections = runner.submenuSelections + ("settings-ui-presets" -> 1),
+                editingItemId = None,
+                editingText = "",
+                statusMessage = Some("Preset saved. Configure workspace options.")
+              )
+              val submenuSurface = UiSurface(
+                id = CommandRunnerSubmenuSurfaceId,
+                content = SurfaceContent.CommandPaletteSubmenu(
+                  updatedRunner,
+                  "ui-preset-configure",
+                  previewOnly = false
+                ),
+                presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+              )
+              val updatedSurfaces = state.uiSurfaces
+                .filterNot(_.id == CommandRunnerSubmenuSurfaceId)
+                .map {
+                  case current if current.id == surface.id =>
+                    current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+                  case current =>
+                    current
+                } :+ submenuSurface
+              state.copy(uiSurfaces = updatedSurfaces, focus = Focus.Surface(CommandRunnerSubmenuSurfaceId))
+            case _ =>
+              state
+        case None =>
+          state
+    }
 
   private def runProjectTask(state: AppState, kind: ProjectTaskKind): IO[Unit] =
     projectTaskStartPath(state).flatMap { start =>
