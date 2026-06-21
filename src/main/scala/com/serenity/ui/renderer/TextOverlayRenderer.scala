@@ -41,9 +41,8 @@ object TextOverlayRenderer:
 
     applyGlassSheen(surface, rect, theme, config)
 
-    val animated = overlay.animationState.animations.nonEmpty
     drawBorder(surface, overlay, theme, config)
-    drawContent(surface, overlay, theme, cursorVisible, rowColors, animated, font, cellMetrics)
+    drawContent(surface, overlay, theme, cursorVisible, rowColors, font, cellMetrics)
 
     surface.setAlpha(1.0f)
     surface.setForegroundColor(theme.foreground)
@@ -65,7 +64,6 @@ object TextOverlayRenderer:
     theme: Theme,
     cursorVisible: Boolean,
     rowColors: Int => (Color, Color),
-    animated: Boolean,
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
@@ -89,7 +87,6 @@ object TextOverlayRenderer:
           cursorVisible,
           defaultForeground = Some(animFg),
           defaultBackground = Some(animBg),
-          isAnimating = animated,
           font = font,
           cellMetrics = cellMetrics
         )
@@ -103,9 +100,8 @@ object TextOverlayRenderer:
     row: OverlayRow,
     theme: Theme,
     cursorVisible: Boolean,
-    defaultForeground: Option[Color] = None,
-    defaultBackground: Option[Color] = None,
-    isAnimating: Boolean = false,
+    defaultForeground: Option[Color],
+    defaultBackground: Option[Color],
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
@@ -129,17 +125,17 @@ object TextOverlayRenderer:
       case OverlayRowLayout.Plain =>
         CharacterRenderer.renderStringPlain(surface, x, y, rowView.row.plainText.take(width))
       case OverlayRowLayout.Distributed =>
-        renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font, isAnimating)
+        renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
       case OverlayRowLayout.Split =>
-        renderSplitRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font, isAnimating)
+        renderSplitRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
       case OverlayRowLayout.Columns =>
-        renderColumnRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font, isAnimating)
+        renderColumnRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
 
     if cursorVisible then
       rowView.row.cursorColumn
-        .flatMap(cursorColumn => cursorPlacement(rowView.row, x, width, cursorColumn))
+        .flatMap(cursorColumn => cursorPlacement(rowView.row, x, width, cursorColumn, rowView.useMeasuredCursor))
         .foreach { placement =>
-          if shouldUseMeasuredCursor(font, surface) then
+          if placement.useMeasured && shouldUseMeasuredCursor(font, surface) then
             renderMeasuredCursor(surface, placement.x, y, placement.textBeforeCursor, theme, font, cellMetrics)
           else if placement.cellColumn >= 0 && placement.cellColumn < width then
             surface.setForegroundColor(theme.background)
@@ -147,16 +143,22 @@ object TextOverlayRenderer:
             CharacterRenderer.renderChar(surface, placement.x + placement.cellColumn, y, ' ')
         }
 
-  private case class OverlayRowView(row: OverlayRow)
+  private case class OverlayRowView(row: OverlayRow, useMeasuredCursor: Boolean)
 
-  private case class CursorPlacement(x: Int, textBeforeCursor: String):
+  private case class CursorPlacement(x: Int, textBeforeCursor: String, useMeasured: Boolean = false):
     def cellColumn: Int =
       textBeforeCursor.length
 
-  private def cursorPlacement(row: OverlayRow, x: Int, width: Int, cursorColumn: Int): Option[CursorPlacement] =
+  private def cursorPlacement(
+    row: OverlayRow,
+    x: Int,
+    width: Int,
+    cursorColumn: Int,
+    useMeasuredCursor: Boolean
+  ): Option[CursorPlacement] =
     row.layout match
       case OverlayRowLayout.Plain =>
-        Some(CursorPlacement(x, row.plainText.take(cursorColumn.max(0).min(row.plainText.length))))
+        Some(CursorPlacement(x, row.plainText.take(cursorColumn.max(0).min(row.plainText.length)), useMeasuredCursor))
       case OverlayRowLayout.Split =>
         splitCursorPlacement(row, x, width, cursorColumn)
       case OverlayRowLayout.Columns =>
@@ -178,10 +180,10 @@ object TextOverlayRenderer:
         val rightStartX     = x + math.max(0, width - rightGroupWidth)
         val rightStartCol   = left.text.length + 1
         if cursorColumn <= left.text.length then
-          Some(CursorPlacement(x, left.text.take(cursorColumn.max(0).min(left.text.length))))
+          Some(CursorPlacement(x, left.text.take(cursorColumn.max(0).min(left.text.length)), useMeasured = true))
         else
           val localColumn = (cursorColumn - rightStartCol).max(0).min(rightGroupText.length)
-          Some(CursorPlacement(rightStartX, rightGroupText.take(localColumn)))
+          Some(CursorPlacement(rightStartX, rightGroupText.take(localColumn), useMeasured = true))
       case _ =>
         Some(CursorPlacement(x, row.plainText.take(cursorColumn.max(0).min(row.plainText.length))))
 
@@ -198,6 +200,7 @@ object TextOverlayRenderer:
         )
 
   private def scrolledRowView(row: OverlayRow, width: Int): OverlayRowView =
+    val useMeasuredCursor = row.layout == OverlayRowLayout.Split
     val scrollOffset =
       row.cursorColumn match
         case Some(cursorColumn) if row.plainText.length > width =>
@@ -205,7 +208,7 @@ object TextOverlayRenderer:
         case _ =>
           0
 
-    if scrollOffset == 0 then OverlayRowView(row)
+    if scrollOffset == 0 then OverlayRowView(row, useMeasuredCursor)
     else
       val visibleText = row.plainText.slice(scrollOffset, scrollOffset + width)
       OverlayRowView(
@@ -214,7 +217,8 @@ object TextOverlayRenderer:
           cursorColumn = row.cursorColumn.map(_ - scrollOffset).filter(_ >= 0),
           segments = Nil,
           layout = OverlayRowLayout.Plain
-        )
+        ),
+        useMeasuredCursor
       )
 
   private def renderDistributedRow(
@@ -226,8 +230,7 @@ object TextOverlayRenderer:
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
-    font: Font,
-    isAnimating: Boolean = false
+    font: Font
   ): Unit =
     val segments = row.segments
     if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
@@ -235,7 +238,7 @@ object TextOverlayRenderer:
       val baseCellWidth = width / segments.length
       val remainder     = width % segments.length
 
-      segments.zipWithIndex.foldLeft(x) {
+      val _ = segments.zipWithIndex.foldLeft(x) {
         case (cursorX, (segment, index)) =>
           val cellWidth = baseCellWidth + (if index < remainder then 1 else 0)
           renderSegmentCell(
@@ -247,8 +250,7 @@ object TextOverlayRenderer:
             theme,
             defaultForeground,
             defaultBackground,
-            font,
-            isAnimating
+            font
           )
           cursorX + cellWidth
       }
@@ -263,8 +265,7 @@ object TextOverlayRenderer:
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
-    font: Font,
-    isAnimating: Boolean = false
+    font: Font
   ): Unit =
     row.segments match
       case left :: rightSegments if rightSegments.nonEmpty =>
@@ -284,12 +285,11 @@ object TextOverlayRenderer:
           theme,
           defaultForeground,
           defaultBackground,
-          font,
-          isAnimating
+          font
         )
 
         val rightStartX = x + math.max(0, width - rightGroupWidth)
-        rightSegments.foldLeft(rightStartX) { (cursorX, segment) =>
+        val _ = rightSegments.foldLeft(rightStartX) { (cursorX, segment) =>
           val text = segment.text.take(math.max(0, x + width - cursorX))
           renderSegmentText(
             surface,
@@ -301,8 +301,7 @@ object TextOverlayRenderer:
             theme,
             defaultForeground,
             defaultBackground,
-            font,
-            isAnimating
+            font
           )
           cursorX + text.length + 1
         }
@@ -318,8 +317,7 @@ object TextOverlayRenderer:
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
-    font: Font,
-    isAnimating: Boolean = false
+    font: Font
   ): Unit =
     row.segments match
       case label :: hint :: value :: Nil =>
@@ -429,8 +427,7 @@ object TextOverlayRenderer:
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
-    font: Font,
-    isAnimating: Boolean = false
+    font: Font
   ): Unit =
     val text    = segment.text.take(width)
     val leftPad = math.max(0, (width - text.length) / 2)
@@ -445,8 +442,7 @@ object TextOverlayRenderer:
       theme,
       defaultForeground,
       defaultBackground,
-      font,
-      isAnimating
+      font
     )
 
   private def renderSegmentText(
@@ -459,8 +455,7 @@ object TextOverlayRenderer:
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
-    font: Font,
-    isAnimating: Boolean = false
+    font: Font
   ): Unit =
     if width > 0 then
       val segmentBackground =
