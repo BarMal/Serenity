@@ -38,6 +38,7 @@ object UiPreset:
 
   enum Patch:
     case Appearance(config: AppConfig, themeName: Option[String] = None)
+    case DocumentDefaults(config: AppConfig)
     case Motion(config: AppConfig)
     case Typography(config: AppConfig)
 
@@ -48,6 +49,8 @@ object UiPreset:
             config = patchAppearanceConfig(preset.config, config),
             themeName = themeName.getOrElse(preset.themeName)
           )
+        case DocumentDefaults(config) =>
+          preset.copy(config = patchDocumentDefaultsConfig(preset.config, config))
         case Motion(config) =>
           preset.copy(config = patchMotionConfig(preset.config, config))
         case Typography(config) =>
@@ -65,6 +68,9 @@ object UiPreset:
       uiElementGap = source.uiElementGap,
       uiCornerRadiusPx = source.uiCornerRadiusPx
     )
+
+  private def patchDocumentDefaultsConfig(base: AppConfig, source: AppConfig): AppConfig =
+    base.copy(defaultDocumentMode = source.defaultDocumentMode)
 
   private def patchMotionConfig(base: AppConfig, source: AppConfig): AppConfig =
     base.copy(

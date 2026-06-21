@@ -124,6 +124,14 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.Appearance(config))
     )
 
+  private def updateDocumentDefaultsConfig(
+    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
+  ): IO[com.serenity.config.AppConfig] =
+    updateConfigWithEditedPresetPersistence(
+      update,
+      config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.DocumentDefaults(config))
+    )
+
   private def updateMotionConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
@@ -341,7 +349,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.SetMarkdownViewMode(mode) =>
         setMarkdownViewMode(mode)
       case CommandIntent.SetDefaultDocumentMode(mode) =>
-        updateConfig(_.withDefaultDocumentMode(mode)).void
+        updateDocumentDefaultsConfig(_.withDefaultDocumentMode(mode)).void
       case CommandIntent.SetSpellCheckEnabled(enabled) =>
         updateSpellCheckConfig(_.copy(enabled = enabled))
       case CommandIntent.SetSpellCheckLanguages(languages) =>
