@@ -46,12 +46,25 @@ object UiPreset:
 
   private def previewHint(preset: UiPreset): String =
     List(
+      Some(documentModeSummary(preset.config)),
       Option(preset.themeName).filter(_.nonEmpty),
       Some(s"${preset.config.motionPreset.configKey} motion"),
       Some(s"${preset.config.materialPreset.configKey} material"),
       Some(proseFontSummary(preset.config)),
       panelSummary(preset.pinnedPanels)
     ).flatten.mkString("; ")
+
+  private def documentModeSummary(config: AppConfig): String =
+    config.defaultDocumentMode match
+      case DefaultDocumentMode.RichText =>
+        "rich text default"
+      case DefaultDocumentMode.Markdown =>
+        config.markdownViewMode match
+          case MarkdownViewMode.Source       => "markdown source default"
+          case MarkdownViewMode.SplitPreview => "markdown split preview"
+          case MarkdownViewMode.InlineLens   => "markdown inline lens"
+      case DefaultDocumentMode.PlainText =>
+        "plain text default"
 
   private def proseFontSummary(config: AppConfig): String =
     s"${config.fontConfig.textFontFamily} ${formatPointSize(config.fontConfig.textFontSize)} prose"

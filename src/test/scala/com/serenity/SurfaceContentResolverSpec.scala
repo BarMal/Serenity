@@ -209,7 +209,9 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .headOption
       .getOrElse(fail("Expected preset option row"))
 
-    row.plainText should include("dark; subtle motion; frosted material; Serif 18pt prose; Left outline 28")
+    row.plainText should include(
+      "rich text default; dark; subtle motion; frosted material; Serif 18pt prose; Left outline 28"
+    )
   }
 
   it should "append a selected UI preset detail row in the preset submenu" in {
@@ -234,7 +236,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     resolved.rows.lastOption.map(_.plainText) shouldBe Some(
-      "Preset Preview Documentation - dark; subtle motion; frosted material; SansSerif 14pt prose; Left outline 30"
+      "Preset Preview Documentation - markdown split preview; dark; subtle motion; frosted material; SansSerif 14pt prose; Left outline 30"
     )
   }
 
