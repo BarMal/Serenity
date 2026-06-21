@@ -114,6 +114,20 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   protected def updateConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
+    updateConfigWithEditedPresetPersistence(update, _ => persistEditedUiPresetFromCommandRunner)
+
+  private def updateAppearanceConfig(
+    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
+  ): IO[com.serenity.config.AppConfig] =
+    updateConfigWithEditedPresetPersistence(
+      update,
+      config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.Appearance(config))
+    )
+
+  private def updateConfigWithEditedPresetPersistence(
+    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig,
+    persistEditedPreset: com.serenity.config.AppConfig => IO[Unit]
+  ): IO[com.serenity.config.AppConfig] =
     stateRef
       .modify { state =>
         val newConfig = update(state.config)
@@ -130,7 +144,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           case None =>
             IO.unit
       )
-      .flatTap(_ => persistEditedUiPresetFromCommandRunner)
+      .flatTap(persistEditedPreset)
       .flatTap(_ =>
         stateRef.get
           .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
@@ -145,6 +159,25 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             .upsert(UiPreset.capture(presetName, state, preferredWindowSize = None))
             .flatTap(_ => refreshCommandRunnerUiPresetPreviews)
             .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to persist edited UI preset $presetName"))
+        case None =>
+          IO.unit
+    }
+
+  private def patchEditedUiPresetFromCommandRunner(patch: UiPreset.Patch): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      editingUiPresetName(state) match
+        case Some(presetName) =>
+          uiPresetStore
+            .find(presetName)
+            .map(_.orElse(UiPreset.builtIn(presetName)))
+            .flatMap {
+              case Some(preset) =>
+                uiPresetStore.upsert(patch.applyTo(preset))
+              case None =>
+                logger.warn(s"[PRESET] UI preset not found for patch: $presetName")
+            }
+            .flatTap(_ => refreshCommandRunnerUiPresetPreviews)
+            .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to patch edited UI preset $presetName"))
         case None =>
           IO.unit
     }
@@ -305,7 +338,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.SetSpellCheckWords(words) =>
         updateSpellCheckConfig(_.copy(additionalWords = words))
       case CommandIntent.SetInterfaceDensity(density) =>
-        updateConfig(_.withInterfaceDensity(density)).void
+        updateAppearanceConfig(_.withInterfaceDensity(density)).void
       case CommandIntent.FocusPanel(position) =>
         switchToPinnedPanel(position)
       case CommandIntent.UnpinPanel(position) =>
@@ -325,7 +358,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             case AnimationMode.Subtle => config.withMotionPreset(com.serenity.config.MotionPreset.Subtle)
         }.void
       case CommandIntent.SetMaterialPreset(preset) =>
-        updateConfig(_.withMaterialPreset(preset)).void
+        updateAppearanceConfig(_.withMaterialPreset(preset)).void
       case CommandIntent.SetMotionPreset(preset) =>
         updateConfig(_.withMotionPreset(preset)).void
       case CommandIntent.SetElementTransitionSpeedScale(scale) =>
@@ -333,9 +366,9 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.SetEditorInsertionTransitionKind(kind) =>
         updateConfig(_.withEditorInsertionTransitionKind(kind)).void
       case CommandIntent.SetBackgroundStyle(style) =>
-        updateConfig(_.withBackgroundStyle(style)).void
+        updateAppearanceConfig(_.withBackgroundStyle(style)).void
       case CommandIntent.SetBlurRadius(r) =>
-        updateConfig(_.withBlurRadius(r)).void
+        updateAppearanceConfig(_.withBlurRadius(r)).void
       case CommandIntent.SetAnimationDuration(ms) =>
         updateConfig { config =>
           val newAnim =
@@ -369,15 +402,15 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           config.copy(characterAnimation = newAnim, motionPreset = com.serenity.config.MotionPreset.Custom)
         }.void
       case CommandIntent.SetCursorMode(mode) =>
-        updateConfig(_.withCursorMode(mode)).void
+        updateAppearanceConfig(_.withCursorMode(mode)).void
       case CommandIntent.SetCursorInfoBarMode(mode) =>
-        updateConfig(_.withCursorInfoBarMode(mode)).void
+        updateAppearanceConfig(_.withCursorInfoBarMode(mode)).void
       case CommandIntent.SetCursorInfoBarPlacement(placement) =>
-        updateConfig(_.withCursorInfoBarPlacement(placement)).void
+        updateAppearanceConfig(_.withCursorInfoBarPlacement(placement)).void
       case CommandIntent.SetUiElementGap(gap) =>
-        updateConfig(_.withUiElementGap(gap)).void
+        updateAppearanceConfig(_.withUiElementGap(gap)).void
       case CommandIntent.SetUiCornerRadiusPx(radius) =>
-        updateConfig(_.withUiCornerRadiusPx(radius)).void
+        updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
       case CommandIntent.IncreaseFontSize =>
         updateFontConfig(config =>
           config.copy(

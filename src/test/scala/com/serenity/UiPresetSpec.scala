@@ -168,6 +168,33 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       "plain text default; dark; smooth motion; fade text reveal; frosted material; frosted background; comfortable density; SansSerif 12pt prose; 2 editor panes"
   }
 
+  it should "patch appearance fields without replacing preset layout snapshots" in {
+    val panel = UiPreset.PinnedPanel
+      .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)
+      .getOrElse(fail("outline should be capturable"))
+    val preset = UiPreset(
+      name = "Drafting",
+      config =
+        AppConfig.default.withBackgroundStyle(BackgroundStyle.Solid).withInterfaceDensity(InterfaceDensity.Compact),
+      themeName = Theme.dark.name,
+      pinnedPanels = List(panel),
+      targetEditorPaneCount = Some(1)
+    )
+    val sourceConfig = AppConfig.default
+      .withBackgroundStyle(BackgroundStyle.GlassLike)
+      .withInterfaceDensity(InterfaceDensity.Spacious)
+      .withUiElementGap(4)
+
+    val patched = UiPreset.Patch.Appearance(sourceConfig, themeName = Some(Theme.light.name)).applyTo(preset)
+
+    patched.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    patched.config.interfaceDensity shouldBe InterfaceDensity.Spacious
+    patched.config.uiElementGap shouldBe 4
+    patched.themeName shouldBe Theme.light.name
+    patched.pinnedPanels shouldBe List(panel)
+    patched.targetEditorPaneCount shouldBe Some(1)
+  }
+
   it should "collapse editor panes when a preset targets one editor pane" in {
     val primaryBufferId   = BufferId(0)
     val secondaryBufferId = BufferId(1)

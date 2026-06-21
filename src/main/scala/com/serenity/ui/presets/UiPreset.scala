@@ -36,6 +36,30 @@ object UiPreset:
   def builtIn(name: String): Option[UiPreset] =
     builtIns.find(_.name.equalsIgnoreCase(name.trim))
 
+  enum Patch:
+    case Appearance(config: AppConfig, themeName: Option[String] = None)
+
+    def applyTo(preset: UiPreset): UiPreset =
+      this match
+        case Appearance(config, themeName) =>
+          preset.copy(
+            config = patchAppearanceConfig(preset.config, config),
+            themeName = themeName.getOrElse(preset.themeName)
+          )
+
+  private def patchAppearanceConfig(base: AppConfig, source: AppConfig): AppConfig =
+    base.copy(
+      blurRadius = source.blurRadius,
+      backgroundStyle = source.backgroundStyle,
+      materialPreset = source.materialPreset,
+      cursorMode = source.cursorMode,
+      cursorInfoBarMode = source.cursorInfoBarMode,
+      cursorInfoBarPlacement = source.cursorInfoBarPlacement,
+      interfaceDensity = source.interfaceDensity,
+      uiElementGap = source.uiElementGap,
+      uiCornerRadiusPx = source.uiCornerRadiusPx
+    )
+
   case class Preview(name: String, hint: String)
 
   object Preview:
