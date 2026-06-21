@@ -124,6 +124,14 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.Appearance(config))
     )
 
+  private def updateMotionConfig(
+    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
+  ): IO[com.serenity.config.AppConfig] =
+    updateConfigWithEditedPresetPersistence(
+      update,
+      config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.Motion(config))
+    )
+
   private def updateConfigWithEditedPresetPersistence(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig,
     persistEditedPreset: com.serenity.config.AppConfig => IO[Unit]
@@ -350,7 +358,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.FormatCurrentFile =>
         logger.debug("[CMD] Format command requested")
       case CommandIntent.SetAnimationMode(mode) =>
-        updateConfig { config =>
+        updateMotionConfig { config =>
           mode match
             case AnimationMode.None   => config.withoutCharacterAnimation
             case AnimationMode.Quick  => config.withMotionPreset(com.serenity.config.MotionPreset.Expressive)
@@ -360,17 +368,17 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.SetMaterialPreset(preset) =>
         updateAppearanceConfig(_.withMaterialPreset(preset)).void
       case CommandIntent.SetMotionPreset(preset) =>
-        updateConfig(_.withMotionPreset(preset)).void
+        updateMotionConfig(_.withMotionPreset(preset)).void
       case CommandIntent.SetElementTransitionSpeedScale(scale) =>
-        updateConfig(_.withElementTransitionSpeedScale(scale)).void
+        updateMotionConfig(_.withElementTransitionSpeedScale(scale)).void
       case CommandIntent.SetEditorInsertionTransitionKind(kind) =>
-        updateConfig(_.withEditorInsertionTransitionKind(kind)).void
+        updateMotionConfig(_.withEditorInsertionTransitionKind(kind)).void
       case CommandIntent.SetBackgroundStyle(style) =>
         updateAppearanceConfig(_.withBackgroundStyle(style)).void
       case CommandIntent.SetBlurRadius(r) =>
         updateAppearanceConfig(_.withBlurRadius(r)).void
       case CommandIntent.SetAnimationDuration(ms) =>
-        updateConfig { config =>
+        updateMotionConfig { config =>
           val newAnim =
             if ms <= 0 then None
             else
@@ -387,7 +395,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           config.copy(characterAnimation = newAnim, motionPreset = com.serenity.config.MotionPreset.Custom)
         }.void
       case CommandIntent.SetAnimationSteps(n) =>
-        updateConfig { config =>
+        updateMotionConfig { config =>
           val newAnim =
             if n <= 0 then None
             else

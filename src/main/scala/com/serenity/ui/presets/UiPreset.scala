@@ -38,6 +38,7 @@ object UiPreset:
 
   enum Patch:
     case Appearance(config: AppConfig, themeName: Option[String] = None)
+    case Motion(config: AppConfig)
 
     def applyTo(preset: UiPreset): UiPreset =
       this match
@@ -46,6 +47,8 @@ object UiPreset:
             config = patchAppearanceConfig(preset.config, config),
             themeName = themeName.getOrElse(preset.themeName)
           )
+        case Motion(config) =>
+          preset.copy(config = patchMotionConfig(preset.config, config))
 
   private def patchAppearanceConfig(base: AppConfig, source: AppConfig): AppConfig =
     base.copy(
@@ -58,6 +61,14 @@ object UiPreset:
       interfaceDensity = source.interfaceDensity,
       uiElementGap = source.uiElementGap,
       uiCornerRadiusPx = source.uiCornerRadiusPx
+    )
+
+  private def patchMotionConfig(base: AppConfig, source: AppConfig): AppConfig =
+    base.copy(
+      characterAnimation = source.characterAnimation,
+      motionPreset = source.motionPreset,
+      elementTransitionSpeedScale = source.elementTransitionSpeedScale,
+      editorInsertionTransitionKind = source.editorInsertionTransitionKind
     )
 
   case class Preview(name: String, hint: String)
