@@ -60,4 +60,21 @@ class TypographyRoleSpec extends AnyFlatSpec with Matchers:
     FontLoader.previewFontForRole(config, TypographyRole.MarkdownSource).getSize2D shouldBe 15.0f
     FontLoader.previewFontForRole(config, TypographyRole.Ui).getSize2D shouldBe 17.0f
   }
+
+  it should "apply the configured text scale multiplier to every preview font role" in {
+    val config = FontConfig(
+      codeFontFamily = Font.MONOSPACED,
+      textFontFamily = Font.SERIF,
+      uiFontFamily = Font.SANS_SERIF,
+      fontSize = 13.0f,
+      textFontSize = 15.0f,
+      uiFontSize = 17.0f,
+      textScaleMultiplier = 2.0
+    )
+
+    FontLoader.previewFontForRole(config, TypographyRole.Code).getSize2D shouldBe 26.0f
+    FontLoader.previewFontForRole(config, TypographyRole.Prose).getSize2D shouldBe 30.0f
+    FontLoader.previewFontForRole(config, TypographyRole.MarkdownSource).getSize2D shouldBe 30.0f
+    FontLoader.previewFontForRole(config, TypographyRole.Ui).getSize2D shouldBe 34.0f
+  }
 end TypographyRoleSpec

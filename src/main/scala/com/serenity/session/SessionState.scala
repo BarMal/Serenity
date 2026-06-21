@@ -12,7 +12,7 @@ import com.serenity.config.*
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
 import com.serenity.state.models.*
-import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.fonts.FontLoader.{FontConfig, TextScaleMode}
 import com.serenity.ui.layout.{Layout, PaneSplitDirection}
 import com.serenity.ui.theme.Theme
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
@@ -365,6 +365,16 @@ given Decoder[FiniteDuration] = Decoder.decodeLong.map(scala.concurrent.duration
 given Encoder[AnimationConfig] = deriveEncoder
 given Decoder[AnimationConfig] = deriveDecoder
 
+given Encoder[TextScaleMode] = Encoder.encodeString.contramap(_.configKey)
+
+given Decoder[TextScaleMode] = Decoder.decodeString.emap { value =>
+  value.toLowerCase match
+    case "auto"                      => Right(TextScaleMode.Auto)
+    case "manual" | "custom"         => Right(TextScaleMode.Manual)
+    case "off" | "none" | "disabled" => Right(TextScaleMode.Off)
+    case other                       => Left(s"Unknown text scale mode: $other")
+}
+
 given Encoder[FontConfig] = deriveEncoder
 
 given Decoder[FontConfig] = Decoder.instance { cursor =>
@@ -376,6 +386,8 @@ given Decoder[FontConfig] = Decoder.instance { cursor =>
     codeFontSize    <- cursor.getOrElse[Float]("codeFontSize")(legacyFontSize)
     textFontSize    <- cursor.getOrElse[Float]("textFontSize")(legacyFontSize)
     uiFontSize      <- cursor.getOrElse[Float]("uiFontSize")(FontConfig().uiFontSize)
+    textScaleMode   <- cursor.getOrElse[TextScaleMode]("textScaleMode")(FontConfig().textScaleMode)
+    textScale       <- cursor.getOrElse[Double]("textScaleMultiplier")(FontConfig().textScaleMultiplier)
     legacyLigatures <- cursor.getOrElse[Boolean]("enableLigatures")(FontConfig().enableLigatures)
     codeLigatures   <- cursor.getOrElse[Boolean]("codeLigatures")(legacyLigatures)
     textLigatures   <- cursor.getOrElse[Boolean]("textLigatures")(legacyLigatures)
@@ -387,6 +399,8 @@ given Decoder[FontConfig] = Decoder.instance { cursor =>
     fontSize = codeFontSize,
     textFontSize = textFontSize,
     uiFontSize = uiFontSize,
+    textScaleMode = textScaleMode,
+    textScaleMultiplier = FontConfig.clampTextScale(textScale),
     enableLigatures = codeLigatures,
     textLigatures = textLigatures,
     uiLigatures = uiLigatures

@@ -11,6 +11,11 @@ object FontLoader:
 
   val BundledCodeFontFamily = "Monaspace Neon (Bundled)"
 
+  enum TextScaleMode(val configKey: String):
+    case Auto   extends TextScaleMode("auto")
+    case Manual extends TextScaleMode("manual")
+    case Off    extends TextScaleMode("off")
+
   case class FontConfig(
       codeFontFamily: String = BundledCodeFontFamily,
       textFontFamily: String = Font.SANS_SERIF,
@@ -18,6 +23,8 @@ object FontLoader:
       fontSize: Float = 12.0f,
       textFontSize: Float = 12.0f,
       uiFontSize: Float = 12.0f,
+      textScaleMode: TextScaleMode = TextScaleMode.Auto,
+      textScaleMultiplier: Double = 1.0,
       enableLigatures: Boolean = true,
       textLigatures: Boolean = true,
       uiLigatures: Boolean = false
@@ -27,6 +34,34 @@ object FontLoader:
 
     def codeLigatures: Boolean =
       enableLigatures
+
+    def scaledCodeFontSize: Float =
+      scaledPointSize(fontSize)
+
+    def scaledTextFontSize: Float =
+      scaledPointSize(textFontSize)
+
+    def scaledUiFontSize: Float =
+      scaledPointSize(uiFontSize)
+
+    def resolveAutoTextScale(detectedDeviceScale: Double): FontConfig =
+      textScaleMode match
+        case TextScaleMode.Auto =>
+          copy(textScaleMultiplier = FontConfig.clampTextScale(detectedDeviceScale.max(1.0)))
+        case TextScaleMode.Manual =>
+          copy(textScaleMultiplier = FontConfig.clampTextScale(textScaleMultiplier))
+        case TextScaleMode.Off =>
+          copy(textScaleMultiplier = 1.0)
+
+    private def scaledPointSize(size: Float): Float =
+      (size.toDouble * FontConfig.clampTextScale(textScaleMultiplier)).toFloat
+
+  object FontConfig:
+    val MinTextScale: Double = 0.5
+    val MaxTextScale: Double = 4.0
+
+    def clampTextScale(scale: Double): Double =
+      scale.max(MinTextScale).min(MaxTextScale)
 
   lazy val availableMonospaceFamilies: List[String] =
     (BundledCodeFontFamily :: availableSystemFontFamilies.filter(f =>
@@ -44,7 +79,7 @@ object FontLoader:
     else isMonospaced(Font(family, Font.PLAIN, 12))
 
   def loadCodeFont(config: FontConfig)(using logger: Logger[IO]): IO[Font] =
-    val size = config.fontSize
+    val size = config.scaledCodeFontSize
     val baseFontIO =
       if config.codeFontFamily == BundledCodeFontFamily then
         loadBundledMonospace(size).handleErrorWith { error =>
@@ -62,21 +97,24 @@ object FontLoader:
     IO.pure(previewUiFont(config))
 
   def previewCodeFont(config: FontConfig): Font =
+    val size = config.scaledCodeFontSize
     val base =
       if config.codeFontFamily == BundledCodeFontFamily then
-        bundledMonospace(config.fontSize).getOrElse(defaultSystemMonospace(config.fontSize))
-      else Font(config.codeFontFamily, Font.PLAIN, config.fontSize.toInt).deriveFont(config.fontSize)
+        bundledMonospace(size).getOrElse(defaultSystemMonospace(size))
+      else Font(config.codeFontFamily, Font.PLAIN, size.toInt).deriveFont(size)
     applyFontFeatures(base, config.enableLigatures)
 
   def previewTextFont(config: FontConfig): Font =
+    val size = config.scaledTextFontSize
     applyFontFeatures(
-      Font(config.textFontFamily, Font.PLAIN, config.textFontSize.toInt).deriveFont(config.textFontSize),
+      Font(config.textFontFamily, Font.PLAIN, size.toInt).deriveFont(size),
       config.textLigatures
     )
 
   def previewUiFont(config: FontConfig): Font =
+    val size = config.scaledUiFontSize
     applyFontFeatures(
-      Font(config.uiFontFamily, Font.PLAIN, config.uiFontSize.toInt).deriveFont(config.uiFontSize),
+      Font(config.uiFontFamily, Font.PLAIN, size.toInt).deriveFont(size),
       config.uiLigatures
     )
 

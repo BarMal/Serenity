@@ -1,10 +1,11 @@
 import cats.effect.*
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.{AppRuntime, RuntimeDisplayState}
-import com.serenity.config.{ConfigManager, ConfigMigrationWarning}
+import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
+import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.terminal.SwingWindow
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -24,18 +25,31 @@ object Main extends IOApp:
       _ <- ConfigMigrationWarning
         .message(ConfigManager.defaultConfigPath, configLoad.report)
         .fold(IO.unit)(message => logger.warn(message))
-      appConfig = configLoad.config
+      appConfig = resolveAutoTextScale(configLoad.config, DisplayScale.defaultDeviceScale.textScale)
       displayState <- RuntimeDisplayState.create(appConfig.fontConfig)
       _ <- SwingWindow
-        .resource(displayState.primaryMetrics, appConfig.windowChromeMode, appConfig.preferredWindowSize)
+        .resource(
+          displayState.primaryMetrics,
+          displayState.uiMetrics,
+          appConfig.windowChromeMode,
+          appConfig.preferredWindowSize
+        )
         .use { swingWin =>
+          val actualAppConfig =
+            resolveAutoTextScale(appConfig, swingWin.detectedDeviceTextScale)
+          val initialScaleSync =
+            if actualAppConfig.fontConfig != appConfig.fontConfig then
+              displayState.update(actualAppConfig.fontConfig) >>
+                IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics, displayState.uiMetrics))
+            else IO.unit
+
           def syncDisplayMetrics(): IO[Unit] =
             IO.blocking {
               val metrics = displayState.primaryMetrics
-              if swingWin.metrics != metrics then swingWin.updateMetrics(metrics)
+              if swingWin.metrics != metrics then swingWin.updateMetrics(metrics, displayState.uiMetrics)
             }
 
-          AppRuntime.run(
+          initialScaleSync >> AppRuntime.run(
             initialViewportSize = swingWin.viewportSize,
             makeInputHandler = router =>
               new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
@@ -70,13 +84,13 @@ object Main extends IOApp:
                   cc
                 )
               ),
-            appConfig = appConfig,
+            appConfig = actualAppConfig,
             makeStateManager = Some(logger =>
               com.serenity.state.manager.StateManager.apply(
                 logger,
                 onFontConfigChanged = config =>
                   displayState.update(config) >>
-                    IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics)),
+                    IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics, displayState.uiMetrics)),
                 configPersistencePath = Some(ConfigManager.defaultConfigPath),
                 windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
                 onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
@@ -88,3 +102,6 @@ object Main extends IOApp:
           )
         }
     yield ExitCode.Success
+
+  private def resolveAutoTextScale(config: AppConfig, detectedTextScale: Double): AppConfig =
+    config.withFontConfig(config.fontConfig.resolveAutoTextScale(detectedTextScale))

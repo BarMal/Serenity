@@ -226,6 +226,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-prose-font",
       "settings-rich-text",
       "settings-ui-font",
+      "settings-text-scale",
       "settings-markdown",
       "settings-language",
       "settings-spellcheck",
@@ -253,25 +254,27 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     )
     groupItems(8).label shouldBe "UI Font"
     groupItems(8).children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
+    groupItems(9).label shouldBe "Text Scale"
+    groupItems(9).children.map(_.id) should contain allOf ("text-scale-mode", "text-scale")
     groupItems(5).children
       .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "code-font" => group }
       .map(_.children.map(_.id)) should not be empty
-    groupItems(11).label shouldBe "Spell Check"
-    groupItems(11).children.map(_.id) should contain allOf (
+    groupItems(12).label shouldBe "Spell Check"
+    groupItems(12).children.map(_.id) should contain allOf (
       "spellcheck-enabled",
       "spellcheck-languages",
       "spellcheck-words"
     )
-    groupItems(12).label shouldBe "Keymap"
-    groupItems(12).children.map(_.id) should contain allOf (
+    groupItems(13).label shouldBe "Keymap"
+    groupItems(13).children.map(_.id) should contain allOf (
       "keymap-global-command_palette",
       "keymap-command-runner-submit",
       "keymap-modal-dismiss"
     )
-    groupItems(9).label shouldBe "Markdown"
-    groupItems(9).children.map(_.id) should contain("markdown-view")
-    groupItems(10).label shouldBe "Language"
-    groupItems(10).children.map(_.id) should contain allOf ("default-document-mode", "lang-plain-text")
+    groupItems(10).label shouldBe "Markdown"
+    groupItems(10).children.map(_.id) should contain("markdown-view")
+    groupItems(11).label shouldBe "Language"
+    groupItems(11).children.map(_.id) should contain allOf ("default-document-mode", "lang-plain-text")
   }
 
   it should "surface default document mode as a typed language setting" in {

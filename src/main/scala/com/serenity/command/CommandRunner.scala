@@ -4,6 +4,7 @@ import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.presets.UiPreset
 
@@ -99,6 +100,7 @@ case class CommandRunner(
     val markdownViewItem     = CommandRunner.markdownViewOptionItem(optionSelections)
     val defaultDocumentItem  = CommandRunner.defaultDocumentModeOptionItem(optionSelections)
     val spellCheckItem       = CommandRunner.spellCheckOptionItem(optionSelections)
+    val textScaleModeItem    = CommandRunner.textScaleModeOptionItem(optionSelections)
     val keymapItems          = inputItems.filter(_.id.startsWith("keymap-"))
     val workspaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-workspace-layout",
@@ -185,6 +187,13 @@ case class CommandRunner(
       category = CommandCategory.Settings,
       hint = Some("Family, size, ligatures")
     )
+    val textScaleGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-text-scale",
+      label = "Text Scale",
+      children = List(textScaleModeItem) ++ inputItems.filter(_.id == "text-scale"),
+      category = CommandCategory.Settings,
+      hint = Some("Adapt all text to display scale")
+    )
     val markdownGroup = CommandSurfaceItem.GroupItem(
       id = "settings-markdown",
       label = "Markdown",
@@ -237,9 +246,11 @@ case class CommandRunner(
         languageGroup,
         markdownGroup,
         textAreaGroup,
+        textScaleGroup,
         proseFontGroup,
         codeFontGroup,
         uiFontGroup,
+        textScaleGroup,
         materialMotionGroup,
         appearanceGroup,
         spellCheckGroup,
@@ -268,6 +279,7 @@ case class CommandRunner(
       proseFontGroup,
       richTextGroup,
       uiFontGroup,
+      textScaleGroup,
       markdownGroup,
       languageGroup,
       spellCheckGroup,
@@ -622,6 +634,7 @@ object CommandRunner:
       "code-font"                 -> codeFontIndex(config.fontConfig.codeFontFamily),
       "text-font"                 -> textFontIndex(config.fontConfig.textFontFamily),
       "ui-font"                   -> uiFontIndex(config.fontConfig.uiFontFamily),
+      "text-scale-mode"           -> textScaleModeIndex(config.fontConfig.textScaleMode),
       "code-ligatures"            -> ligaturesIndex(config.fontConfig.codeLigatures),
       "text-ligatures"            -> ligaturesIndex(config.fontConfig.textLigatures),
       "ui-ligatures"              -> ligaturesIndex(config.fontConfig.uiLigatures)
@@ -1020,6 +1033,21 @@ object CommandRunner:
       hint = "Used in the app interface"
     )
 
+  private[command] def textScaleModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    val options = List(
+      CommandOption("Auto", CommandIntent.SetTextScaleMode(TextScaleMode.Auto), Some("Use display transform")),
+      CommandOption("Manual", CommandIntent.SetTextScaleMode(TextScaleMode.Manual), Some("Use configured multiplier")),
+      CommandOption("Off", CommandIntent.SetTextScaleMode(TextScaleMode.Off), Some("Use unscaled point sizes"))
+    )
+    CommandSurfaceItem.OptionItem(
+      id = "text-scale-mode",
+      label = "Text Scale Mode",
+      options = options,
+      selectedIndex = boundedOptionIndex(optionSelections.getOrElse("text-scale-mode", 0), options),
+      category = CommandCategory.Settings,
+      hint = Some("How font sizes adapt to the display")
+    )
+
   private def fontFamilyGroupItem(
     id: String,
     label: String,
@@ -1095,6 +1123,7 @@ object CommandRunner:
     val codeFontSizeValue  = config.fontConfig.codeFontSize.toString
     val textFontSizeValue  = config.fontConfig.textFontSize.toString
     val uiFontSizeValue    = config.fontConfig.uiFontSize.toString
+    val textScaleValue     = f"${config.fontConfig.textScaleMultiplier}%.2f"
     val textAreaLeftValue  = f"${config.textAreaInsets.leftPercent}%.1f"
     val textAreaRightValue = f"${config.textAreaInsets.rightPercent}%.1f"
     val speedScaleValue    = f"${config.elementTransitionSpeedScale}%.2f"
@@ -1371,6 +1400,21 @@ object CommandRunner:
             .filter(v => v >= 8.0f && v <= 48.0f)
             .map(CommandIntent.SetUiFontSize(_)),
         category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "text-scale",
+        label = "Text Scale",
+        hint = s"Multiplier (${FontLoader.FontConfig.MinTextScale}-${FontLoader.FontConfig.MaxTextScale})",
+        currentValue = textScaleValue,
+        isDecimal = true,
+        parse = text =>
+          text.toDoubleOption
+            .filter(value =>
+              value >= FontLoader.FontConfig.MinTextScale &&
+                value <= FontLoader.FontConfig.MaxTextScale
+            )
+            .map(CommandIntent.SetTextScaleMultiplier(_)),
+        category = CommandCategory.Settings
       )
     )
 
@@ -1580,6 +1624,12 @@ object CommandRunner:
     FontLoader.availableUiFamilies.indexOf(family) match
       case -1    => 0
       case index => index
+
+  private def textScaleModeIndex(mode: TextScaleMode): Int =
+    mode match
+      case TextScaleMode.Auto   => 0
+      case TextScaleMode.Manual => 1
+      case TextScaleMode.Off    => 2
 
   private def ligaturesIndex(enabled: Boolean): Int =
     if enabled then 0 else 1
