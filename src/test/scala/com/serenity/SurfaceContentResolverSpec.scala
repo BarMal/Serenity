@@ -191,7 +191,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
         activeCategory = CommandCategory.Settings,
-        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets")),
+        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 1)),
         inputItems = Nil
       )
 
@@ -206,7 +206,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
         SurfaceRenderMode.Floating
       )
       .rows
-      .headOption
+      .find(_.selected)
       .getOrElse(fail("Expected preset option row"))
 
     row.plainText should include(
@@ -222,7 +222,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .copy(
         activeCategory = CommandCategory.Settings,
         optionSelections = Map("ui-preset-built-in" -> 1),
-        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets"))
+        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 2))
       )
 
     val resolved = SurfaceContentResolver.resolve(
@@ -237,6 +237,56 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
     resolved.rows.lastOption.map(_.plainText) shouldBe Some(
       "Preset Preview Documentation - markdown split preview; dark; subtle motion; tandem text reveal; frosted material; SansSerif 14pt prose; Left outline 30"
+    )
+  }
+
+  it should "append a create preset detail row in the preset submenu" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(
+        activeCategory = CommandCategory.Settings,
+        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 0))
+      )
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPaletteSubmenu(
+        runner,
+        "settings-ui-presets",
+        previewOnly = false
+      ),
+      LayoutRect(0, 0, 90, 12),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.lastOption.map(_.plainText) shouldBe Some(
+      "Preset Preview Create Preset - name and save the current workspace setup"
+    )
+  }
+
+  it should "append a preset options detail row in the preset submenu" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(
+        activeCategory = CommandCategory.Settings,
+        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 1))
+      )
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPaletteSubmenu(
+        runner,
+        "settings-ui-presets",
+        previewOnly = false
+      ),
+      LayoutRect(0, 0, 90, 12),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.lastOption.map(_.plainText) shouldBe Some(
+      "Preset Preview Preset Options - document, layout, typography, motion, appearance"
     )
   }
 

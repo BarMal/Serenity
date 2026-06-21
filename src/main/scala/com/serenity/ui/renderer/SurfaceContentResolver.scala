@@ -473,20 +473,28 @@ object SurfaceContentResolver:
 
   private def presetPreviewRow(groupId: String, selectedItem: Option[CommandSurfaceItem]): List[OverlayRow] =
     selectedItem.collect {
+      case item: CommandSurfaceItem.InputItem if groupId == "settings-ui-presets" && item.id == "ui-preset-create" =>
+        presetPreviewDetail("Create Preset", "name and save the current workspace setup")
+      case group: CommandSurfaceItem.GroupItem
+          if groupId == "settings-ui-presets" && group.id == "ui-preset-configure" =>
+        presetPreviewDetail("Preset Options", "document, layout, typography, motion, appearance")
       case option: CommandSurfaceItem.OptionItem
           if groupId == "settings-ui-presets" &&
             (option.id == "ui-preset-built-in" || option.id == "ui-preset-custom") =>
         val hint = option.selectedHint.getOrElse("")
-        OverlayRow(
-          plainText = s"Preset Preview ${option.selectedOption} - $hint",
-          segments = List(
-            OverlaySegment("Preset Preview"),
-            OverlaySegment(option.selectedOption, selected = true),
-            OverlaySegment(hint, tone = OverlayTone.Normal)
-          ).filterNot(_.text.isEmpty),
-          layout = OverlayRowLayout.Columns
-        )
+        presetPreviewDetail(option.selectedOption, hint)
     }.toList
+
+  private def presetPreviewDetail(name: String, hint: String): OverlayRow =
+    OverlayRow(
+      plainText = s"Preset Preview $name - $hint",
+      segments = List(
+        OverlaySegment("Preset Preview"),
+        OverlaySegment(name, selected = true),
+        OverlaySegment(hint, tone = OverlayTone.Normal)
+      ).filterNot(_.text.isEmpty),
+      layout = OverlayRowLayout.Columns
+    )
 
   private def categoryTabs(activeCategory: CommandCategory): OverlayRow =
     val categories = List(
