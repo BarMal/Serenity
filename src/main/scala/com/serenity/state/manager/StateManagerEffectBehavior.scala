@@ -6,7 +6,7 @@ import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
-import com.serenity.config.MarkdownViewMode
+import com.serenity.config.{DefaultDocumentMode, MarkdownViewMode}
 import com.serenity.document.{CommentRendering, DocumentNavigation, DocumentOutline}
 import com.serenity.io.{FileEntry, FileUtils}
 import com.serenity.keystroke.events.ExplorerEvent
@@ -617,7 +617,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
                       IO.pure(currentState.theme)
                   )
                 preferredWindowSize <- stateRef.modify { state =>
-                  val restored = withUpdatedRunnerConfig(UiPreset.applyToState(preset, state, theme), preset.config)
+                  val restoredPresetState = UiPreset.applyToState(preset, state, theme)
+                  val restoredDocumentState =
+                    applyPresetDocumentModeToActiveEmptyBuffer(restoredPresetState, preset.config.defaultDocumentMode)
+                  val restored = withUpdatedRunnerConfig(restoredDocumentState, preset.config)
                   (restored, restored.config.preferredWindowSize)
                 }
                 _ <- persistConfigFile(preset.config)
@@ -635,6 +638,21 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
               yield ()
           }
           .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to apply UI preset $presetName"))
+
+  private def applyPresetDocumentModeToActiveEmptyBuffer(state: AppState, mode: DefaultDocumentMode): AppState =
+    state.focusedBufferId.flatMap(state.buffers.get) match
+      case Some(buffer) if buffer.isNewEmpty && buffer.content.weight == 0 && buffer.filePath.isEmpty =>
+        val updatedBuffer =
+          mode match
+            case DefaultDocumentMode.PlainText =>
+              buffer.copy(language = None, richTextDocument = None)
+            case DefaultDocumentMode.Markdown =>
+              buffer.copy(language = Some(LanguageId.Markdown), richTextDocument = None)
+            case DefaultDocumentMode.RichText =>
+              buffer.copy(language = None, richTextDocument = Some(RichTextDocument.fromPlainText("")))
+        state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
+      case _ =>
+        state
 
   private def openPresetMarkdownPreviewIfNeeded(preset: UiPreset): IO[Unit] =
     if preset.config.markdownViewMode == MarkdownViewMode.SplitPreview then stateRef.get.flatMap(openMarkdownPreview)
