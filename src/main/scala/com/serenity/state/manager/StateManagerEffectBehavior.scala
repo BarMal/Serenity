@@ -722,6 +722,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
 
   protected def renameUiPresetEffect(sourceName: String, targetName: String): IO[Unit] =
     (normalizedPresetName(sourceName), normalizedPresetName(targetName)) match
+      case (Some(source), _) if UiPreset.builtIn(source).nonEmpty =>
+        updateCommandRunnerPresetContext(Some(source), s"Built-in preset cannot be renamed. Duplicate $source first.")
       case (Some(source), Some(target)) =>
         uiPresetStore
           .rename(source, target)
@@ -735,6 +737,11 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
 
   protected def deleteUiPresetEffect(name: String): IO[Unit] =
     normalizedPresetName(name) match
+      case Some(presetName) if UiPreset.builtIn(presetName).nonEmpty =>
+        updateCommandRunnerPresetContext(
+          Some(presetName),
+          "Built-in preset cannot be deleted. Use Reset Preset to discard overrides."
+        )
       case Some(presetName) =>
         uiPresetStore
           .delete(presetName)

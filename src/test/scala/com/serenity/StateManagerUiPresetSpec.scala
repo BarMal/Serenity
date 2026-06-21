@@ -40,6 +40,18 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
+  private def commandRunnerState(sm: StateManager): com.serenity.command.CommandRunner =
+    sm.getCurrentState
+      .map(
+        _.commandRunnerSurface.flatMap {
+          _.content match
+            case SurfaceContent.CommandPalette(runner) => Some(runner)
+            case _                                     => None
+        }
+      )
+      .unsafeRunSync()
+      .getOrElse(fail("command runner should be open"))
+
   "StateManager UI presets" should "save the current UI preset to the preset store" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-save").resolve("ui-presets.json")
     val store = UiPresetStore(path)
@@ -353,6 +365,57 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     store.find("Drafting").unsafeRunSync() shouldBe None
     com.serenity.ui.presets.UiPreset.builtIn("Writing") should not be empty
+  }
+
+  it should "keep built-in presets immutable for rename commands" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-rename-built-in").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "rename-writing-preset",
+        "Rename writing preset",
+        CommandIntent.RenameUiPreset("Writing", "Personal Writing"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val runner = commandRunnerState(sm)
+
+    store.find("Personal Writing").unsafeRunSync() shouldBe None
+    runner.editingPresetName shouldBe Some("Writing")
+    runner.statusMessage shouldBe Some("Built-in preset cannot be renamed. Duplicate Writing first.")
+  }
+
+  it should "keep built-in presets immutable for delete commands" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-delete-built-in").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+    val customWriting = UiPreset(
+      name = "Writing",
+      config = AppConfig.default.copy(backgroundStyle = BackgroundStyle.Solid),
+      themeName = Theme.dark.name,
+      pinnedPanels = Nil
+    )
+    store.upsert(customWriting).unsafeRunSync()
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "delete-writing-preset",
+        "Delete writing preset",
+        CommandIntent.DeleteUiPreset("Writing"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val runner = commandRunnerState(sm)
+
+    store.find("Writing").unsafeRunSync() should not be empty
+    runner.editingPresetName shouldBe Some("Writing")
+    runner.statusMessage shouldBe Some("Built-in preset cannot be deleted. Use Reset Preset to discard overrides.")
   }
 
   it should "list custom UI presets in the command runner when opened" in {
