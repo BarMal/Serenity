@@ -43,6 +43,32 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 0, deviceScale = 2.0) shouldBe 2
   }
 
+  "Java2DRenderSurface.deviceRegionFor" should "map logical pixel regions to clamped device pixels" in {
+    Java2DRenderSurface.deviceRegionFor(
+      logicalX = 10,
+      logicalY = 5,
+      logicalWidth = 20,
+      logicalHeight = 10,
+      imageWidth = 200,
+      imageHeight = 100,
+      deviceScaleX = 2.0,
+      deviceScaleY = 1.5
+    ) shouldBe Some(Java2DRenderSurface.DeviceRegion(xPx = 20, yPx = 7, widthPx = 40, heightPx = 16))
+  }
+
+  it should "discard device regions outside the backing image" in {
+    Java2DRenderSurface.deviceRegionFor(
+      logicalX = 50,
+      logicalY = 50,
+      logicalWidth = 10,
+      logicalHeight = 10,
+      imageWidth = 30,
+      imageHeight = 30,
+      deviceScaleX = 2.0,
+      deviceScaleY = 2.0
+    ) shouldBe None
+  }
+
   it should "keep viewport dimensions in logical cells for a high-DPI backing image" in {
     val image   = new BufferedImage(200, 100, BufferedImage.TYPE_INT_ARGB)
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
