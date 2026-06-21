@@ -55,6 +55,29 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
     runtime.codeMetrics should not be originalCodeMetric
   }
 
+  it should "derive runtime fonts and metrics from the effective scaled font configuration" in {
+    val runtime = RuntimeDisplayState
+      .create(
+        FontConfig(
+          codeFontFamily = Font.MONOSPACED,
+          textFontFamily = Font.SERIF,
+          uiFontFamily = Font.SANS_SERIF,
+          fontSize = 12.0f,
+          textFontSize = 14.0f,
+          uiFontSize = 16.0f,
+          textScaleMultiplier = 1.5
+        )
+      )
+      .unsafeRunSync()
+
+    runtime.codeFont.getSize2D shouldBe 18.0f
+    runtime.textFont.getSize2D shouldBe 21.0f
+    runtime.uiFont.getSize2D shouldBe 24.0f
+    runtime.codeMetrics shouldBe CellMetrics.fromFont(runtime.codeFont)
+    runtime.textMetrics shouldBe CellMetrics.fromFont(runtime.textFont)
+    runtime.uiMetrics shouldBe CellMetrics.fromFont(runtime.uiFont)
+  }
+
   it should "provide primaryMetrics that contain all runtime font roles" in {
     val runtime = RuntimeDisplayState
       .create(

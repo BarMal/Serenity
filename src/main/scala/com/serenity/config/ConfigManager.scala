@@ -9,6 +9,8 @@ import scala.util.Using
 import cats.effect.IO
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.FontLoader.TextScaleMode
 
 /** Manages loading and saving application configuration */
 object ConfigManager:
@@ -106,6 +108,20 @@ object ConfigManager:
             case "font.ui.size" | "font_ui_size" =>
               value.trim.toFloatOption
                 .map(size => config.withFontConfig(config.fontConfig.copy(uiFontSize = clampFontSize(size))))
+                .getOrElse(config)
+            case "font.scale.mode" | "font_scale_mode" =>
+              parseTextScaleMode(value.trim)
+                .map(mode =>
+                  config.withFontConfig(config.fontConfig.copy(textScaleMode = mode).resolveAutoTextScale(1.0))
+                )
+                .getOrElse(config)
+            case "font.text_scale" | "font.text.scale" | "font_text_scale" =>
+              parseTextScaleMultiplier(value.trim)
+                .map(scale =>
+                  config.withFontConfig(
+                    config.fontConfig.copy(textScaleMultiplier = scale, textScaleMode = TextScaleMode.Manual)
+                  )
+                )
                 .getOrElse(config)
             case "font.code.ligatures" | "font_code_ligatures" =>
               value.trim.toLowerCase match
@@ -295,6 +311,8 @@ object ConfigManager:
         |font.code.size = ${config.fontConfig.codeFontSize}
         |font.text.size = ${config.fontConfig.textFontSize}
         |font.ui.size = ${config.fontConfig.uiFontSize}
+        |font.scale.mode = ${config.fontConfig.textScaleMode.configKey}
+        |font.text_scale = ${config.fontConfig.textScaleMultiplier}
         |font.code.ligatures = ${config.fontConfig.codeLigatures}
         |font.text.ligatures = ${config.fontConfig.textLigatures}
         |font.ui.ligatures = ${config.fontConfig.uiLigatures}
@@ -426,6 +444,10 @@ object ConfigManager:
         case "font.code.size" | "font_code_size" | "font.text.size" | "font.prose.size" | "font_text_size" |
             "font_prose_size" | "font.size" | "font_size" | "font.ui.size" | "font_ui_size" =>
           value.trim.toFloatOption.isEmpty
+        case "font.scale.mode" | "font_scale_mode" =>
+          parseTextScaleMode(value).isEmpty
+        case "font.text_scale" | "font.text.scale" | "font_text_scale" =>
+          parseTextScaleMultiplier(value).isEmpty
         case "cursor.active.color" | "cursor_active_color" | "cursor.inactive.color" | "cursor_inactive_color" =>
           value.nonEmpty && parseColor(value).isEmpty
         case "interface.density" | "interface_density" =>
@@ -469,6 +491,9 @@ object ConfigManager:
       "font.text.size",
       "font.prose.size",
       "font.ui.size",
+      "font.scale.mode",
+      "font.text_scale",
+      "font.text.scale",
       "font.code.ligatures",
       "font.text.ligatures",
       "font.prose.ligatures",
@@ -517,6 +542,8 @@ object ConfigManager:
       "font_prose_size"           -> "font.text.size",
       "font_size"                 -> "font.code.size and font.text.size",
       "font_ui_size"              -> "font.ui.size",
+      "font_scale_mode"           -> "font.scale.mode",
+      "font_text_scale"           -> "font.text_scale",
       "font_code_ligatures"       -> "font.code.ligatures",
       "font_text_ligatures"       -> "font.text.ligatures",
       "font_prose_ligatures"      -> "font.text.ligatures",
@@ -548,6 +575,17 @@ object ConfigManager:
 
   private def clampFontSize(size: Float): Float =
     size.max(8.0f).min(48.0f)
+
+  private def parseTextScaleMode(value: String): Option[TextScaleMode] =
+    value.toLowerCase match
+      case "auto"                      => Some(TextScaleMode.Auto)
+      case "manual" | "custom"         => Some(TextScaleMode.Manual)
+      case "off" | "none" | "disabled" => Some(TextScaleMode.Off)
+      case _                           => None
+
+  private def parseTextScaleMultiplier(value: String): Option[Double] =
+    value.toDoubleOption
+      .filter(scale => scale >= FontLoader.FontConfig.MinTextScale && scale <= FontLoader.FontConfig.MaxTextScale)
 
   private def parseMaterialPreset(value: String): Option[MaterialPreset] =
     value.toLowerCase match
@@ -716,6 +754,8 @@ object ConfigManager:
                            |font.code.size = 12.0
                            |font.text.size = 12.0
                            |font.ui.size = 12.0
+                           |font.scale.mode = auto
+                           |font.text_scale = 1.0
                            |font.code.ligatures = true
                            |font.text.ligatures = true
                            |font.ui.ligatures = false

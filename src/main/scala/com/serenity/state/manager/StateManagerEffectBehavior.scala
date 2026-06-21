@@ -452,6 +452,15 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateFontConfig(_.copy(textFontSize = clampFontSize(size)))
       case CommandIntent.SetUiFontSize(size) =>
         updateFontConfig(_.copy(uiFontSize = clampFontSize(size)))
+      case CommandIntent.SetTextScaleMode(mode) =>
+        updateFontConfig(config => config.copy(textScaleMode = mode).resolveAutoTextScale(config.textScaleMultiplier))
+      case CommandIntent.SetTextScaleMultiplier(scale) =>
+        updateFontConfig(config =>
+          config.copy(
+            textScaleMode = com.serenity.ui.fonts.FontLoader.TextScaleMode.Manual,
+            textScaleMultiplier = com.serenity.ui.fonts.FontLoader.FontConfig.clampTextScale(scale)
+          )
+        )
       case CommandIntent.SetCodeFontFamily(family) =>
         updateFontConfig(_.copy(codeFontFamily = family))
       case CommandIntent.SetTextFontFamily(family) =>

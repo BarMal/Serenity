@@ -5,6 +5,7 @@ import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
+import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.layout.PanelPosition
 
 enum AnimationMode:
@@ -102,6 +103,8 @@ enum CommandIntent:
   case SetCodeFontSize(size: Float)
   case SetTextFontSize(size: Float)
   case SetUiFontSize(size: Float)
+  case SetTextScaleMode(mode: TextScaleMode)
+  case SetTextScaleMultiplier(scale: Double)
   case SetCodeFontFamily(family: String)
   case SetTextFontFamily(family: String)
   case SetUiFontFamily(family: String)

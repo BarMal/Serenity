@@ -10,20 +10,16 @@ import javax.swing.*
 
 import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
+import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 
 class SwingWindow(
     initialPixelSize: Dimension,
     initialMetrics: CellMetrics,
-    chromeMode: WindowChromeMode = WindowChromeMode.Native
+    chromeMode: WindowChromeMode = WindowChromeMode.Native,
+    initialChromeMetrics: CellMetrics
 ):
 
-  private val TitleBarH     = 32
-  private val BtnW          = 46
-  private val Margin        = 6
-  private val CornerArc     = 12
-  private val MinW          = 400
-  private val MinH          = 300
   private val ColBar        = new Color(0x2b2b2b)
   private val ColBarFg      = new Color(0xcccccc)
   private val ColBtnHover   = new Color(0x3f3f3f)
@@ -31,12 +27,17 @@ class SwingWindow(
 
   private val pixelSize           = new AtomicReference(initialPixelSize)
   private val metricsRef          = new AtomicReference(initialMetrics)
+  private val chromeMetricsRef    = new AtomicReference(SwingWindow.ChromeMetrics.fromCellMetrics(initialChromeMetrics))
   private val pendingResize       = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch          = new CountDownLatch(1)
   private val renderedImageRef    = new AtomicReference[Option[BufferedImage]](None)
   private val savedBoundsRef      = new AtomicReference[Option[Rectangle]](None)
   private val maximizedRef        = new AtomicBoolean(false)
   private val maxBtnRef           = new AtomicReference[Option[JLabel]](None)
+  private val controlButtonsRef   = new AtomicReference[scala.List[JLabel]](Nil)
+  private val titleBarRef         = new AtomicReference[Option[JPanel]](None)
+  private val titleLabelRef       = new AtomicReference[Option[JLabel]](None)
+  private val titleSpacerRef      = new AtomicReference[Option[JPanel]](None)
   private val onResizeCallbackRef = new AtomicReference[Option[() => Unit]](None)
   private val usesCustomChrome    = chromeMode == WindowChromeMode.Custom
 
@@ -66,8 +67,9 @@ class SwingWindow(
 
   private def updateShape(): Unit =
     if usesCustomChrome && !maximizedRef.get() then
-      val d = frame.getSize
-      frame.setShape(new RoundRectangle2D.Double(0, 0, d.width, d.height, CornerArc, CornerArc))
+      val d      = frame.getSize
+      val chrome = chromeMetricsRef.get()
+      frame.setShape(new RoundRectangle2D.Double(0, 0, d.width, d.height, chrome.cornerArc, chrome.cornerArc))
     else if usesCustomChrome then frame.setShape(null)
 
   private def toggleMaximize(): Unit =
@@ -83,8 +85,8 @@ class SwingWindow(
       setOpaque(true)
       setBackground(ColBar)
       setForeground(ColBarFg)
-      setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13))
-      setPreferredSize(new Dimension(BtnW, TitleBarH))
+      setFont(chromeControlFont)
+      setPreferredSize(chromeButtonSize)
       addMouseListener(new MouseAdapter:
         override def mouseEntered(e: MouseEvent): Unit =
           setBackground(if isClose then ColCloseHover else ColBtnHover)
@@ -101,6 +103,7 @@ class SwingWindow(
     val maxBtn = makeCtrlBtn("□", isClose = false)
     maxBtnRef.set(Some(maxBtn))
     val closeBtn = makeCtrlBtn("✕", isClose = true)
+    controlButtonsRef.set(scala.List(minBtn, maxBtn, closeBtn))
 
     val btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0)):
       setBackground(ColBar)
@@ -110,11 +113,13 @@ class SwingWindow(
 
     val spacer = new JPanel:
       setBackground(ColBar)
-      setPreferredSize(new Dimension(3 * BtnW, TitleBarH))
+      setPreferredSize(chromeSpacerSize)
+    titleSpacerRef.set(Some(spacer))
 
     val titleLabel = new JLabel("Serenity", SwingConstants.CENTER):
       setForeground(ColBarFg)
-      setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13))
+      setFont(chromeControlFont)
+    titleLabelRef.set(Some(titleLabel))
 
     val dragAdapter = new MouseAdapter:
       private case class DragAnchor(x: Int, y: Int)
@@ -137,7 +142,8 @@ class SwingWindow(
 
     val bar = new JPanel(new BorderLayout):
       setBackground(ColBar)
-      setPreferredSize(new Dimension(0, TitleBarH))
+      setPreferredSize(chromeTitleBarSize)
+    titleBarRef.set(Some(bar))
     bar.add(spacer, BorderLayout.WEST)
     bar.add(titleLabel, BorderLayout.CENTER)
     bar.add(btnPanel, BorderLayout.EAST)
@@ -163,17 +169,19 @@ class SwingWindow(
     private val resizeStateRef = new AtomicReference(ResizeState())
 
     override def contains(x: Int, y: Int): Boolean =
-      x < Margin || x > getWidth - Margin || y < Margin || y > getHeight - Margin
+      val margin = chromeMetricsRef.get().margin
+      x < margin || x > getWidth - margin || y < margin || y > getHeight - margin
 
     private def edgeDir(e: MouseEvent): Int =
-      val x = e.getX; val y   = e.getY
-      val w = getWidth; val h = getHeight
+      val x      = e.getX; val y   = e.getY
+      val w      = getWidth; val h = getHeight
+      val margin = chromeMetricsRef.get().margin
       scala
         .List(
-          Option.when(y < Margin)(1),
-          Option.when(y > h - Margin)(2),
-          Option.when(x < Margin)(4),
-          Option.when(x > w - Margin)(8)
+          Option.when(y < margin)(1),
+          Option.when(y > h - margin)(2),
+          Option.when(x < margin)(4),
+          Option.when(x > w - margin)(8)
         )
         .flatten
         .foldLeft(0)(_ | _)
@@ -237,7 +245,8 @@ class SwingWindow(
           val finalBounds =
             if (state.resizeDir & 8) != 0 then afterWest.copy(width = state.pressBounds.width + dx)
             else afterWest
-          if finalBounds.width >= MinW && finalBounds.height >= MinH then
+          val chrome = chromeMetricsRef.get()
+          if finalBounds.width >= chrome.minWidth && finalBounds.height >= chrome.minHeight then
             frame.setBounds(finalBounds.x, finalBounds.y, finalBounds.width, finalBounds.height)
 
     addMouseListener(adapter)
@@ -275,7 +284,10 @@ class SwingWindow(
       f.setGlassPane(glassPane)
       glassPane.setVisible(true)
     f.pack()
-    f.setMinimumSize(new Dimension(MinW, MinH))
+    if usesCustomChrome then
+      val chrome = chromeMetricsRef.get()
+      f.setMinimumSize(new Dimension(chrome.minWidth, chrome.minHeight))
+    else f.setMinimumSize(new Dimension(SwingWindow.BaseMinWidth, SwingWindow.BaseMinHeight))
     f.setLocationRelativeTo(null)
     f
 
@@ -320,26 +332,104 @@ class SwingWindow(
     metricsRef.get()
 
   def updateMetrics(newMetrics: CellMetrics): Unit =
+    updateMetrics(newMetrics, newMetrics)
+
+  def updateMetrics(newMetrics: CellMetrics, newChromeMetrics: CellMetrics): Unit =
     metricsRef.set(newMetrics)
+    applyChromeMetrics(newChromeMetrics)
     val d = pixelSize.get()
     pendingResize.set(Some(newMetrics.viewportSize(d.width, d.height)))
     onResizeCallbackRef.get().foreach(_.apply())
+
+  def detectedDeviceTextScale: Double =
+    DisplayScale.forComponent(canvas).textScale
+
+  private def chromeControlFont: Font =
+    new Font(Font.SANS_SERIF, Font.PLAIN, chromeMetricsRef.get().titleFontSize)
+
+  private def chromeButtonSize: Dimension =
+    val chrome = chromeMetricsRef.get()
+    new Dimension(chrome.buttonWidth, chrome.titleBarHeight)
+
+  private def chromeSpacerSize: Dimension =
+    val chrome = chromeMetricsRef.get()
+    new Dimension(3 * chrome.buttonWidth, chrome.titleBarHeight)
+
+  private def chromeTitleBarSize: Dimension =
+    new Dimension(0, chromeMetricsRef.get().titleBarHeight)
+
+  private def applyChromeMetrics(metrics: CellMetrics): Unit =
+    if usesCustomChrome then
+      val chrome = SwingWindow.ChromeMetrics.fromCellMetrics(metrics)
+      chromeMetricsRef.set(chrome)
+      val controlFont = chromeControlFont
+      controlButtonsRef.get().foreach { button =>
+        button.setFont(controlFont)
+        button.setPreferredSize(chromeButtonSize)
+      }
+      titleLabelRef.get().foreach(_.setFont(controlFont))
+      titleSpacerRef.get().foreach(_.setPreferredSize(chromeSpacerSize))
+      titleBarRef.get().foreach(_.setPreferredSize(chromeTitleBarSize))
+      frame.setMinimumSize(new Dimension(chrome.minWidth, chrome.minHeight))
+      updateShape()
+      frame.revalidate()
+    else frame.setMinimumSize(new Dimension(SwingWindow.BaseMinWidth, SwingWindow.BaseMinHeight))
 
   def doResizeIfNecessary(): Option[ViewportSize] =
     pendingResize.getAndSet(None)
 
 object SwingWindow:
   val DefaultMetrics: CellMetrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13)
+  val BaseMinWidth: Int           = 400
+  val BaseMinHeight: Int          = 300
+
+  case class ChromeMetrics(
+      titleBarHeight: Int,
+      buttonWidth: Int,
+      margin: Int,
+      cornerArc: Int,
+      minWidth: Int,
+      minHeight: Int,
+      titleFontSize: Int
+  )
+
+  object ChromeMetrics:
+    private val BaseTitleBarHeight = 32
+    private val BaseButtonWidth    = 46
+    private val BaseMargin         = 6
+    private val BaseCornerArc      = 12
+    private val BaseTitleFontSize  = 13
+
+    def fromCellMetrics(metrics: CellMetrics): ChromeMetrics =
+      val scale = (metrics.lineHeight.toDouble / DefaultMetrics.lineHeight.toDouble).max(1.0)
+      ChromeMetrics(
+        titleBarHeight = scaledInt(BaseTitleBarHeight, scale),
+        buttonWidth = scaledInt(BaseButtonWidth, scale),
+        margin = scaledInt(BaseMargin, scale),
+        cornerArc = scaledInt(BaseCornerArc, scale),
+        minWidth = scaledInt(BaseMinWidth, scale),
+        minHeight = scaledInt(BaseMinHeight, scale),
+        titleFontSize = scaledInt(BaseTitleFontSize, scale)
+      )
+
+    private def scaledInt(value: Int, scale: Double): Int =
+      math.round(value.toDouble * scale).toInt.max(1)
 
   def resource(
     metrics: CellMetrics = DefaultMetrics,
+    chromeMetrics: CellMetrics = DefaultMetrics,
     chromeMode: WindowChromeMode = WindowChromeMode.Native,
     preferredWindowSize: Option[PreferredWindowSize] = None
   ): Resource[IO, SwingWindow] =
     Resource.make(
       IO.blocking {
         val initialSize = preferredWindowSize.map(_.normalized).getOrElse(PreferredWindowSize(1024, 768))
-        val win         = new SwingWindow(new Dimension(initialSize.width, initialSize.height), metrics, chromeMode)
+        val win = new SwingWindow(
+          new Dimension(initialSize.width, initialSize.height),
+          metrics,
+          chromeMode,
+          chromeMetrics
+        )
         win.start()
         win
       }

@@ -9,6 +9,7 @@ import com.serenity.animation.TransitionKind
 import com.serenity.config.*
 import com.serenity.keystroke.{InputKey, Modifier}
 import com.serenity.lsp.config.{LanguageId, LspServerOverride}
+import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -162,6 +163,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
         |font.code.size = 15.0
         |font.text.size = 16.0
         |font.ui.size = 13.0
+        |font.scale.mode = manual
+        |font.text_scale = 1.5
         |font.code.ligatures = false
         |font.text.ligatures = true
         |font.ui.ligatures = true
@@ -176,6 +179,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     config.fontConfig.codeFontSize shouldBe 15.0f
     config.fontConfig.textFontSize shouldBe 16.0f
     config.fontConfig.uiFontSize shouldBe 13.0f
+    config.fontConfig.textScaleMode shouldBe TextScaleMode.Manual
+    config.fontConfig.textScaleMultiplier shouldBe 1.5
     config.fontConfig.codeLigatures shouldBe false
     config.fontConfig.textLigatures shouldBe true
     config.fontConfig.uiLigatures shouldBe true
@@ -183,6 +188,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("font.ui.family = Dialog")
     ConfigManager.configToString(config) should include("font.code.size = 15.0")
     ConfigManager.configToString(config) should include("font.text.size = 16.0")
+    ConfigManager.configToString(config) should include("font.scale.mode = manual")
+    ConfigManager.configToString(config) should include("font.text_scale = 1.5")
     ConfigManager.configToString(config) should include("font.ui.ligatures = true")
     ConfigManager.configToString(config) should include("config.version = 1")
   }
