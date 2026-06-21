@@ -396,7 +396,9 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     configurePreset.label shouldBe "Preset Options: Writing"
     configurePreset.hint shouldBe Some("Editing Writing")
+    configurePreset.children.headOption.map(_.id) shouldBe Some("settings-preset-identity")
     configurePreset.children.map(_.id) should contain allOf (
+      "settings-preset-identity",
       "settings-workspace-layout",
       "settings-language",
       "settings-markdown",
@@ -404,6 +406,20 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-prose-font",
       "settings-material-motion",
       "settings-appearance"
+    )
+    val presetIdentity = configurePreset.children
+      .collectFirst {
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-identity" => group
+      }
+      .getOrElse(fail("missing preset identity group"))
+    presetIdentity.label shouldBe "Preset Identity"
+    presetIdentity.children.map(_.id) shouldBe List(
+      "ui-preset-save",
+      "ui-preset-apply",
+      "ui-preset-duplicate",
+      "ui-preset-rename",
+      "ui-preset-delete",
+      "ui-preset-reset"
     )
     val workspaceLayout = configurePreset.children
       .collectFirst {
