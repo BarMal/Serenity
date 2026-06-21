@@ -312,7 +312,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     customPreset.options.map(_.label) shouldBe List("Drafting")
     customPreset.options.headOption.map(_.intent) shouldBe Some(CommandIntent.ApplyUiPreset("Drafting"))
     customPreset.options.headOption.flatMap(_.hint) shouldBe Some(
-      "plain text default; dark; reduced motion; fade text reveal; solid material; SansSerif 12pt prose; Right outline 34"
+      "plain text default; dark; reduced motion; fade text reveal; solid material; solid background; comfortable density; SansSerif 12pt prose; Right outline 34"
     )
   }
 

@@ -151,7 +151,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     UiPreset.Preview.fromPreset(writing) shouldBe UiPreset.Preview(
       "Writing",
-      "rich text default; dark; subtle motion; typed text reveal; frosted material; Serif 18pt prose; 1 editor pane; Left outline 28"
+      "rich text default; dark; subtle motion; typed text reveal; frosted material; frosted background; spacious density; Serif 18pt prose; 1 editor pane; Left outline 28"
     )
   }
 
@@ -165,7 +165,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     )
 
     UiPreset.Preview.fromPreset(preset).hint shouldBe
-      "plain text default; dark; smooth motion; fade text reveal; frosted material; SansSerif 12pt prose; 2 editor panes"
+      "plain text default; dark; smooth motion; fade text reveal; frosted material; frosted background; comfortable density; SansSerif 12pt prose; 2 editor panes"
   }
 
   it should "collapse editor panes when a preset targets one editor pane" in {
