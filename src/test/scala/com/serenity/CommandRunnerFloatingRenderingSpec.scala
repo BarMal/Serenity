@@ -107,16 +107,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getBg(overlay.x + 1, overlay.y + 1) shouldBe state.theme.panel.background
     surface.getBg(overlay.x + 1, overlay.y + 2) shouldBe state.theme.highlighted.background
 
-    val uiFont    = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
-    val uiMetrics = CellMetrics.fromFont(uiFont)
-    val caretXs = TextLayoutSnapshot.caretXsForText(
-      "search: op",
-      uiFont,
-      surface.fontRenderContext.getOrElse(fail("missing frc"))
-    )
-    val expectedCursorXPx = uiMetrics.toPixelX(overlay.x + 1) + math.round(caretXs.last)
-    surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorXPx
-    surface.fillPixelRectCalls.filter(_.color == state.theme.cursor) should have size 2
+    val searchCursorX = overlay.x + 1 + "search: op".length
+    surface.getBg(searchCursorX, overlay.y + 1) shouldBe state.theme.cursor
   }
 
   it should "render category tabs in browse mode and show grouped settings rows" in {
@@ -275,12 +267,20 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     Renderer.render(state, cursorVisible = true, visibleSurface, ViewportSize(100, 30))
     Renderer.render(state, cursorVisible = false, hiddenSurface, ViewportSize(100, 30))
 
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val submenuRect = layout.belowCursorOverlayStack
+      .collectFirst { case (SurfaceId("command-runner-submenu"), rect) => rect }
+      .getOrElse(fail("Expected command-runner submenu overlay"))
+    val submenuCursorX = submenuRect.x + 1 + "Language search: java".length
+
     val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
     val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
 
-    visibleCursors should have size 4
+    visibleCursors should have size 3
     hiddenCursors should have size 3
-    hiddenCursors.map(_.xPx) shouldBe visibleCursors.take(3).map(_.xPx)
+    hiddenCursors.map(_.xPx) shouldBe visibleCursors.map(_.xPx)
+    visibleSurface.getBg(submenuCursorX, submenuRect.y + 1) shouldBe state.theme.cursor
+    hiddenSurface.getBg(submenuCursorX, submenuRect.y + 1) should not be state.theme.cursor
   }
 
   it should "keep the selected command highlighted while the overlay is animating" in {
