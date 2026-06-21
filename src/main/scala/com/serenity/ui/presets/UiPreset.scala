@@ -278,7 +278,8 @@ object UiPreset:
       name = normalizedName,
       config = state.config.copy(preferredWindowSize = preferredWindowSize.orElse(state.config.preferredWindowSize)),
       themeName = state.theme.name,
-      pinnedPanels = state.pinnedSurfaces.flatMap(PinnedPanel.fromSurface)
+      pinnedPanels = state.pinnedSurfaces.flatMap(PinnedPanel.fromSurface),
+      targetEditorPaneCount = Option(state.layout.editorPanes.size).filter(_ > 0)
     )
 
   def applyToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
@@ -316,36 +317,56 @@ object UiPreset:
 
   private def applyEditorPaneTarget(state: AppState, targetEditorPaneCount: Option[Int]): AppState =
     targetEditorPaneCount match
-      case Some(1) => collapseToSingleEditorPane(state)
-      case _       => state
+      case Some(count) if count > 0 => resizeEditorPanes(state, count)
+      case _                        => state
 
-  private def collapseToSingleEditorPane(state: AppState): AppState =
-    val keptPaneId = state.layout.activeEditorPaneId
+  private def resizeEditorPanes(state: AppState, targetCount: Int): AppState =
+    val activePaneId = state.layout.activeEditorPaneId
       .filter(state.layout.editorPanes.contains)
       .orElse(state.layout.orderedPaneIds.find(state.layout.editorPanes.contains))
       .getOrElse(PaneId(0))
-    val keptBufferId = state.layout.editorPanes
-      .get(keptPaneId)
-      .flatMap(_.bufferId)
-      .orElse(state.focusedBufferId)
-      .orElse(state.bufferOrder.find(state.buffers.contains))
-    val basePane = state.layout.editorPanes.getOrElse(keptPaneId, EditorPane.empty(keptPaneId))
-    val keptPane = basePane.copy(id = keptPaneId, bufferId = keptBufferId)
+    val existingPaneIds = activePaneId :: state.layout.orderedPaneIds.filter(paneId =>
+      paneId != activePaneId && state.layout.editorPanes.contains(paneId)
+    )
+    val existingTargetPaneIds = existingPaneIds.take(targetCount)
+    val missingPaneCount      = targetCount - existingTargetPaneIds.size
+    val newPaneIds =
+      LazyList
+        .iterate(state.nextPaneId.value)(_ + 1)
+        .map(PaneId.apply)
+        .filterNot(state.layout.editorPanes.contains)
+        .take(missingPaneCount)
+        .toList
+    val targetPaneIds = existingTargetPaneIds ++ newPaneIds
+    val priorityBufferIds = (state.focusedBufferId.toList ++
+      state.layout.editorPanes.get(activePaneId).flatMap(_.bufferId).toList).distinct
+    val visibleBufferIds = priorityBufferIds ++ state.bufferOrder.filter(bufferId =>
+      state.buffers.contains(bufferId) && !priorityBufferIds.contains(bufferId)
+    )
+    val resizedPanes = targetPaneIds.zipWithIndex.map { (paneId, index) =>
+      val basePane = state.layout.editorPanes.getOrElse(paneId, EditorPane.empty(paneId))
+      paneId -> basePane.copy(id = paneId, bufferId = visibleBufferIds.lift(index))
+    }.toMap
+    val nextActivePaneId = targetPaneIds.headOption
+    val nextPaneId = PaneId(
+      (state.nextPaneId.value :: targetPaneIds.map(_.value + 1)).max
+    )
     val nextFocus = state.focus match
-      case Focus.EditorPane(`keptPaneId`) =>
+      case Focus.EditorPane(paneId) if targetPaneIds.contains(paneId) =>
         state.focus
       case Focus.Surface(surfaceId) if state.surfaceById(surfaceId).nonEmpty =>
         state.focus
       case _ =>
-        Focus.EditorPane(keptPaneId)
+        nextActivePaneId.map(Focus.EditorPane.apply).getOrElse(state.focus)
 
     state.copy(
       layout = state.layout.copy(
-        editorPanes = Map(keptPaneId -> keptPane),
-        activeEditorPaneId = Some(keptPaneId),
-        paneOrder = List(keptPaneId)
+        editorPanes = resizedPanes,
+        activeEditorPaneId = nextActivePaneId,
+        paneOrder = targetPaneIds
       ),
-      focus = nextFocus
+      focus = nextFocus,
+      nextPaneId = nextPaneId
     )
 
   given Encoder[PanelPosition] = Encoder.encodeString.contramap(_.toString)

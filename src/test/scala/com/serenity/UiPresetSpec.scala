@@ -91,6 +91,26 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     restored.pinnedSurfaces.head.content shouldBe a[SurfaceContent.DirectoryTree]
   }
 
+  it should "capture the current editor pane count" in {
+    val pane0 = PaneId(0)
+    val pane1 = PaneId(1)
+    val state = AppState.initial.copy(
+      layout = Layout(
+        editorPanes = Map(
+          pane0 -> EditorPane.withBuffer(pane0, BufferId(0)),
+          pane1 -> EditorPane.empty(pane1)
+        ),
+        activeEditorPaneId = Some(pane0),
+        paneOrder = List(pane0, pane1)
+      ),
+      nextPaneId = PaneId(2)
+    )
+
+    val preset = UiPreset.capture("Two Pane Drafting", state, preferredWindowSize = None)
+
+    preset.targetEditorPaneCount shouldBe Some(2)
+  }
+
   it should "provide built-in task presets for writing, documentation, code, and review" in {
     UiPreset.builtInNames shouldBe List("Writing", "Documentation", "Code", "Review")
 
@@ -166,6 +186,39 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     restored.layout.editorPanes(pane1).bufferId shouldBe Some(secondaryBufferId)
     restored.buffers.keySet should contain allOf (primaryBufferId, secondaryBufferId)
     restored.bufferOrder shouldBe List(primaryBufferId, secondaryBufferId)
+  }
+
+  it should "restore editor pane count targets above one pane" in {
+    val primaryBufferId   = BufferId(0)
+    val secondaryBufferId = BufferId(1)
+    val pane0             = PaneId(0)
+    val state = AppState.initial.copy(
+      buffers = AppState.initial.buffers + (secondaryBufferId -> Buffer.newEmpty(secondaryBufferId)),
+      bufferOrder = List(primaryBufferId, secondaryBufferId),
+      layout = Layout(
+        editorPanes = Map(pane0 -> EditorPane.withBuffer(pane0, primaryBufferId)),
+        activeEditorPaneId = Some(pane0),
+        paneOrder = List(pane0)
+      ),
+      nextBufferId = BufferId(2),
+      nextPaneId = PaneId(1)
+    )
+    val preset = UiPreset(
+      name = "Two Pane Drafting",
+      config = AppConfig.default,
+      themeName = Theme.dark.name,
+      pinnedPanels = Nil,
+      targetEditorPaneCount = Some(2)
+    )
+
+    val restored = UiPreset.applyToState(preset, state, Theme.dark)
+
+    restored.layout.editorPanes should have size 2
+    restored.layout.paneOrder shouldBe List(PaneId(0), PaneId(1))
+    restored.layout.editorPanes(PaneId(0)).bufferId shouldBe Some(primaryBufferId)
+    restored.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(secondaryBufferId)
+    restored.nextPaneId shouldBe PaneId(2)
+    restored.buffers.keySet should contain allOf (primaryBufferId, secondaryBufferId)
   }
 
   it should "decode saved presets that do not include editor pane layout intent" in {
