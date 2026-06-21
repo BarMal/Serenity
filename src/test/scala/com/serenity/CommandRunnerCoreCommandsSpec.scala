@@ -92,6 +92,44 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers(com.serenity.state.models.BufferId(1)).isNewEmpty shouldBe true
   }
 
+  it should "execute clipboard and select-all editor commands" in {
+    val stateManager = createStateManager()
+    val bufferId     = stateManager.createBuffer("Hello World").unsafeRunSync()
+    stateManager.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val selected = state
+          .buffers(bufferId)
+          .copy(
+            selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> selected))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "copy", "copy")
+
+    stateManager.getCurrentState.unsafeRunSync().clipboard shouldBe Some("Hello")
+
+    executeCommandThroughRunner(stateManager, "select-all", "select-all")
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).selection shouldBe Some(
+      Selection(CursorPosition(0, 0), CursorPosition(0, "Hello World".length))
+    )
+
+    stateManager.updateState(_.copy(clipboard = Some("Draft"))).unsafeRunSync()
+    executeCommandThroughRunner(stateManager, "paste", "paste")
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).content.collect() shouldBe "Draft"
+
+    executeCommandThroughRunner(stateManager, "select-all", "select-all")
+    executeCommandThroughRunner(stateManager, "cut", "cut")
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.clipboard shouldBe Some("Draft")
+    finalState.buffers(bufferId).content.collect() shouldBe ""
+  }
+
   it should "open the goto-line modal for the goto-line command" in {
     val stateManager = createStateManager()
 

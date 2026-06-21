@@ -202,6 +202,14 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             )
             .state
         )
+      case CommandIntent.Copy =>
+        applyEvent(com.serenity.keystroke.events.Copy)
+      case CommandIntent.Cut =>
+        applyEvent(com.serenity.keystroke.events.Cut)
+      case CommandIntent.Paste =>
+        applyEvent(com.serenity.keystroke.events.Paste)
+      case CommandIntent.SelectAll =>
+        applyEvent(com.serenity.keystroke.events.SelectAll)
       case CommandIntent.ToggleRichTextMark(mark) =>
         updateState(current => toggleRichTextMark(current, mark))
       case CommandIntent.SetRichTextFontFamily(family) =>
