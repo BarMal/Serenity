@@ -8,6 +8,7 @@ on:
       - completed
 
 permissions:
+  actions: write
   checks: read
   contents: write
   pull-requests: write
@@ -94,3 +95,7 @@ jobs:
             --squash \
             --delete-branch \
             --match-head-commit "${pr_head_sha}"
+
+          gh workflow run desktop-publish.yml \
+            --repo "${REPO}" \
+            --ref master
