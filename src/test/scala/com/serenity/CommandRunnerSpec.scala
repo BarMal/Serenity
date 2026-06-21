@@ -383,7 +383,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     builtInPreset.options.map(_.label) shouldBe List("Writing", "Documentation", "Code", "Review")
     builtInPreset.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Writing"))
     builtInPreset.options.headOption.flatMap(_.hint) shouldBe Some(
-      "rich text default; dark; subtle motion; typed text reveal; frosted material; Serif 18pt prose; 1 editor pane; Left outline 28"
+      "rich text default; dark; subtle motion; typed text reveal; frosted material; frosted background; spacious density; Serif 18pt prose; 1 editor pane; Left outline 28"
     )
     customPreset.options.map(_.label) shouldBe List("Drafting", "Research Notes")
     customPreset.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Research Notes"))

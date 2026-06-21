@@ -53,6 +53,8 @@ object UiPreset:
       Some(s"${preset.config.motionPreset.configKey} motion"),
       Some(s"${textRevealSummary(preset.config.editorInsertionTransitionKind)} text reveal"),
       Some(s"${preset.config.materialPreset.configKey} material"),
+      Some(s"${backgroundStyleSummary(preset.config.backgroundStyle)} background"),
+      Some(s"${preset.config.interfaceDensity.configKey} density"),
       Some(proseFontSummary(preset.config)),
       paneCountSummary(preset.targetEditorPaneCount),
       panelSummary(preset.pinnedPanels)
@@ -87,6 +89,13 @@ object UiPreset:
       case TransitionKind.DirectionalSweep       => "directional"
       case TransitionKind.LineAndCharacterTandem => "tandem"
       case TransitionKind.OutlineThenContent     => "outline"
+
+  private def backgroundStyleSummary(style: BackgroundStyle): String =
+    style match
+      case BackgroundStyle.Solid       => "solid"
+      case BackgroundStyle.Transparent => "transparent"
+      case BackgroundStyle.Frosted     => "frosted"
+      case BackgroundStyle.GlassLike   => "glass"
 
   private def formatPointSize(size: Float): String =
     if size == size.round.toFloat then size.toInt.toString + "pt"
