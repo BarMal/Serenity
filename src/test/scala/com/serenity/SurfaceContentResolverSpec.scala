@@ -272,6 +272,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .copy(
         activeCategory = CommandCategory.Settings,
+        editingPresetName = Some("Research Notes"),
         activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 1))
       )
 
@@ -286,7 +287,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     resolved.rows.lastOption.map(_.plainText) shouldBe Some(
-      "Preset Preview Preset Options - document, layout, typography, motion, appearance"
+      "Preset Preview Research Notes - document, layout, typography, motion, appearance"
     )
   }
 
