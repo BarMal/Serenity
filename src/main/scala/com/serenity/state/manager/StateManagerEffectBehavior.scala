@@ -77,7 +77,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   private def interpretWorkflowEffect(effect: WorkflowEffect): IO[Unit] =
     effect match
       case WorkflowEffect.RequestOpenFile =>
-        stateRef.get.flatMap(requestOpenFileDialog)
+        requestOpenFileDialog
       case WorkflowEffect.RequestSaveAs =>
         stateRef.get.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
       case WorkflowEffect.RefreshFileWorkflow(surfaceId) =>
@@ -175,7 +175,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.ClearSession =>
         clearSession()
       case CommandIntent.OpenFile =>
-        requestOpenFileDialog(state)
+        requestOpenFileDialog
       case CommandIntent.QuitApp =>
         beginCloseAction(CloseScope.Quit, state)
       case CommandIntent.CloseAll =>
@@ -416,7 +416,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.StartupRestoreSession =>
         restoreStartupSession()
       case CommandIntent.StartupOpenFile =>
-        requestOpenFileDialog(state)
+        requestOpenFileDialog
       case CommandIntent.SetBufferLanguage(language) =>
         state.focusedBufferId match
           case Some(bufferId) =>
@@ -671,7 +671,9 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           .map(_.orElse(UiPreset.builtIn(source)))
           .flatMap {
             case Some(preset) =>
-              uiPresetStore.upsert(preset.copy(name = target)) >> refreshCommandRunnerUiPresetPreviews
+              uiPresetStore.upsert(preset.copy(name = target)) >>
+                refreshCommandRunnerUiPresetPreviews >>
+                updateCommandRunnerPresetContext(Some(target), s"Preset duplicated. Configure $target.")
             case None =>
               logger.warn(s"[PRESET] UI preset not found: $source")
           }
@@ -684,7 +686,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case (Some(source), Some(target)) =>
         uiPresetStore
           .rename(source, target)
-          .flatTap(_ => refreshCommandRunnerUiPresetPreviews)
+          .flatTap(_ =>
+            refreshCommandRunnerUiPresetPreviews >>
+              updateCommandRunnerPresetContext(Some(target), s"Preset renamed. Configure $target.")
+          )
           .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to rename UI preset $source"))
       case _ =>
         logger.warn("[PRESET] Ignoring rename request with empty UI preset name")
@@ -694,7 +699,9 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case Some(presetName) =>
         uiPresetStore
           .delete(presetName)
-          .flatTap(_ => refreshCommandRunnerUiPresetPreviews)
+          .flatTap(_ =>
+            refreshCommandRunnerUiPresetPreviews >> updateCommandRunnerPresetContext(None, "Preset deleted.")
+          )
           .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to delete UI preset $presetName"))
       case None =>
         logger.warn("[PRESET] Ignoring empty UI preset name")
@@ -706,7 +713,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           case Some(_) =>
             uiPresetStore
               .delete(presetName)
-              .flatTap(_ => refreshCommandRunnerUiPresetPreviews)
+              .flatTap(_ =>
+                refreshCommandRunnerUiPresetPreviews >>
+                  updateCommandRunnerPresetContext(Some(presetName), s"Preset reset. Configure $presetName.")
+              )
               .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to reset UI preset $presetName"))
           case None =>
             logger.warn(s"[PRESET] Built-in UI preset not found: $presetName")
@@ -742,6 +752,33 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             state
       case None =>
         state
+
+  private def updateCommandRunnerPresetContext(presetName: Option[String], statusMessage: String): IO[Unit] =
+    stateRef.update { state =>
+      state.commandRunnerSurface match
+        case Some(surface) =>
+          surface.content match
+            case SurfaceContent.CommandPalette(runner) =>
+              val updatedRunner = runner.copy(
+                editingPresetName = presetName,
+                editingItemId = None,
+                editingText = "",
+                statusMessage = Some(statusMessage)
+              )
+              val updatedSurfaces = state.uiSurfaces.map {
+                case current if current.id == surface.id =>
+                  current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+                case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
+                  current.copy(content = SurfaceContent.CommandPaletteSubmenu(updatedRunner, groupId, previewOnly))
+                case current =>
+                  current
+              }
+              state.copy(uiSurfaces = updatedSurfaces)
+            case _ =>
+              state
+        case None =>
+          state
+    }
 
   private def focusCreatedPresetOptions(name: String): IO[Unit] =
     stateRef.update { state =>
@@ -1258,7 +1295,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           logger.debug(s"[FILE] Buffer $bufferId not found for save")
     }
 
-  protected def requestOpenFileDialog(state: AppState): IO[Unit] =
+  protected def requestOpenFileDialog: IO[Unit] =
     FileUtils.getCurrentDirectory
       .flatMap(currentDirectory => fileDialog.chooseOpenFile(Some(currentDirectory)))
       .flatMap {

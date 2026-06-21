@@ -352,6 +352,68 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     customPreset.options.headOption.map(_.intent) shouldBe Some(CommandIntent.ApplyUiPreset("Drafting"))
   }
 
+  it should "keep command runner preset context current after preset management actions" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-action-status").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+    val preset = UiPreset(
+      name = "Drafting",
+      config = AppConfig.default,
+      themeName = Theme.dark.name,
+      pinnedPanels = Nil
+    )
+    store.upsert(preset).unsafeRunSync()
+
+    def runnerState =
+      sm.getCurrentState
+        .map(
+          _.commandRunnerSurface.flatMap {
+            _.content match
+              case SurfaceContent.CommandPalette(runner) => Some(runner)
+              case _                                     => None
+          }
+        )
+        .unsafeRunSync()
+        .getOrElse(fail("command runner should stay open"))
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "duplicate-drafting-preset",
+        "Duplicate drafting preset",
+        CommandIntent.DuplicateUiPreset("Drafting", "Drafting Copy"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    runnerState.editingPresetName shouldBe Some("Drafting Copy")
+    runnerState.statusMessage shouldBe Some("Preset duplicated. Configure Drafting Copy.")
+
+    sm.executeCommand(
+      Command.typed(
+        "rename-drafting-copy-preset",
+        "Rename drafting copy preset",
+        CommandIntent.RenameUiPreset("Drafting Copy", "Final Draft"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    runnerState.editingPresetName shouldBe Some("Final Draft")
+    runnerState.statusMessage shouldBe Some("Preset renamed. Configure Final Draft.")
+
+    sm.executeCommand(
+      Command.typed(
+        "delete-final-draft-preset",
+        "Delete final draft preset",
+        CommandIntent.DeleteUiPreset("Final Draft"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    runnerState.editingPresetName shouldBe None
+    runnerState.statusMessage shouldBe Some("Preset deleted.")
+  }
+
   it should "open preset options after creating a UI preset from the command runner" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-create-options").resolve("ui-presets.json")
     val store = UiPresetStore(path)
