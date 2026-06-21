@@ -2,7 +2,7 @@ package com.serenity.config
 
 import java.awt.Color
 
-import com.serenity.animation.{AnimationConfig, ElementTransitionSettings}
+import com.serenity.animation.*
 import com.serenity.lsp.config.LspUserConfig
 import com.serenity.ui.fonts.FontLoader.FontConfig
 
@@ -220,6 +220,7 @@ case class AppConfig(
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
     motionPreset: MotionPreset = MotionPreset.Reduced,
     elementTransitionSpeedScale: Double = 1.0,
+    editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
     cursorMode: CursorMode = CursorMode.Blink,
     cursorColors: CursorColorConfig = CursorColorConfig(),
     cursorInfoBarMode: CursorInfoBarMode = CursorInfoBarMode.Off,
@@ -336,10 +337,17 @@ case class AppConfig(
   def elementTransitionSettings: ElementTransitionSettings =
     val baseSettings = motionPreset.elementTransitionSettings
     if !baseSettings.enabled then baseSettings
-    else baseSettings.copy(speedScale = elementTransitionSpeedScale)
+    else
+      baseSettings.copy(
+        speedScale = elementTransitionSpeedScale,
+        overrides = baseSettings.overrides + (TransitionScope.EditorInsertion -> editorInsertionTransitionKind)
+      )
 
   def withElementTransitionSpeedScale(scale: Double): AppConfig =
     copy(elementTransitionSpeedScale = AppConfig.clampElementTransitionSpeedScale(scale))
+
+  def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
+    copy(editorInsertionTransitionKind = kind)
 
   def withCursorMode(mode: CursorMode): AppConfig =
     copy(cursorMode = mode)

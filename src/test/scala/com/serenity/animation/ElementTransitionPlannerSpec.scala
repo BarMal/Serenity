@@ -76,6 +76,19 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
     plan.timing shouldBe TransitionTiming(durationMs = 240, staggerMs = 18, delayMs = 0, speedScale = 1.5)
   }
 
+  it should "derive editor insertion transition overrides from app config" in {
+    val config = AppConfig.default
+      .withMotionPreset(MotionPreset.Subtle)
+      .withEditorInsertionTransitionKind(TransitionKind.TypedText)
+
+    val plan = ElementTransitionPlanner.plan(
+      ElementTransitionRequest(TransitionScope.EditorInsertion),
+      config.elementTransitionSettings
+    )
+
+    plan.kind shouldBe TransitionKind.TypedText
+  }
+
   it should "keep reduced motion disabled even when app config has a custom speed scale" in {
     val config = AppConfig.default
       .withMotionPreset(MotionPreset.Reduced)

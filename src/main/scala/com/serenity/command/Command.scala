@@ -1,5 +1,6 @@
 package com.serenity.command
 
+import com.serenity.animation.TransitionKind
 import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.project.ProjectTaskKind
@@ -65,6 +66,7 @@ enum CommandIntent:
   case SetMaterialPreset(preset: MaterialPreset)
   case SetMotionPreset(preset: MotionPreset)
   case SetElementTransitionSpeedScale(scale: Double)
+  case SetEditorInsertionTransitionKind(kind: TransitionKind)
   case SetBackgroundStyle(style: BackgroundStyle)
   case SetBlurRadius(r: Float)
   case SetAnimationDuration(ms: Int)

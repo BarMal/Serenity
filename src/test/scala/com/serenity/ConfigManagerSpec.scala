@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.animation.TransitionKind
 import com.serenity.config.*
 import com.serenity.keystroke.{InputKey, Modifier}
 import com.serenity.lsp.config.{LanguageId, LspServerOverride}
@@ -364,6 +365,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
       """ui.material = crystal
         |ui.motion = reduced
         |ui.motion.speed_scale = 1.75
+        |ui.motion.editor_text = typed
         |""".stripMargin
     )
 
@@ -374,10 +376,12 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     config.blurRadius shouldBe 0.65f
     config.motionPreset shouldBe MotionPreset.Reduced
     config.elementTransitionSpeedScale shouldBe 1.75
+    config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
     config.characterAnimation shouldBe None
     ConfigManager.configToString(config) should include("ui.material = crystal")
     ConfigManager.configToString(config) should include("ui.motion = reduced")
     ConfigManager.configToString(config) should include("ui.motion.speed_scale = 1.75")
+    ConfigManager.configToString(config) should include("ui.motion.editor_text = typed")
   }
 
   it should "load and write the default document mode" in {
