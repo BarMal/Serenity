@@ -130,11 +130,33 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           case None =>
             IO.unit
       )
+      .flatTap(_ => persistEditedUiPresetFromCommandRunner)
       .flatTap(_ =>
         stateRef.get
           .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
           .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after config change failed"))
       )
+
+  private def persistEditedUiPresetFromCommandRunner: IO[Unit] =
+    stateRef.get.flatMap { state =>
+      editingUiPresetName(state) match
+        case Some(presetName) =>
+          uiPresetStore
+            .upsert(UiPreset.capture(presetName, state, preferredWindowSize = None))
+            .flatTap(_ => refreshCommandRunnerUiPresetPreviews)
+            .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to persist edited UI preset $presetName"))
+        case None =>
+          IO.unit
+    }
+
+  private def editingUiPresetName(state: AppState): Option[String] =
+    state.commandRunnerSurface.flatMap {
+      _.content match
+        case SurfaceContent.CommandPalette(runner) =>
+          runner.editingPresetName.map(_.trim).filter(_.nonEmpty)
+        case _ =>
+          None
+    }
 
   protected def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig

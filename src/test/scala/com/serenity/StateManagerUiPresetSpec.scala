@@ -6,7 +6,7 @@ import java.nio.file.Files
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
-import com.serenity.config.{AppConfig, BackgroundStyle, PreferredWindowSize}
+import com.serenity.config.*
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
@@ -531,6 +531,44 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     runner.statusMessage shouldBe Some("Preset saved. Configure workspace options.")
     state.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
     submenu shouldBe Some("ui-preset-configure" -> false)
+  }
+
+  it should "persist config changes to the preset currently being edited" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-edit-config").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "ui-preset-create",
+        "Create preset",
+        CommandIntent.SaveUiPreset("Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "set-drafting-markdown-default",
+        "Set drafting document default",
+        CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "set-drafting-subtle-motion",
+        "Set drafting motion",
+        CommandIntent.SetMotionPreset(MotionPreset.Subtle),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
+
+    saved.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
+    saved.config.motionPreset shouldBe MotionPreset.Subtle
   }
 
   it should "reset a custom built-in preset override to the built-in defaults" in {
