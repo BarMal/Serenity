@@ -4,6 +4,7 @@ import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.presets.UiPreset
 
 case class CommandRunnerSubmenuState(
@@ -98,6 +99,13 @@ case class CommandRunner(
     val defaultDocumentItem  = CommandRunner.defaultDocumentModeOptionItem(optionSelections)
     val spellCheckItem       = CommandRunner.spellCheckOptionItem(optionSelections)
     val keymapItems          = inputItems.filter(_.id.startsWith("keymap-"))
+    val workspaceLayoutGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-workspace-layout",
+      label = "Workspace Layout",
+      children = CommandRunner.workspaceLayoutItems,
+      category = CommandCategory.Settings,
+      hint = Some("Panels, outline, preview, diagnostics")
+    )
     val animationGroup = CommandSurfaceItem.GroupItem(
       id = "settings-animation",
       label = "Animation",
@@ -203,6 +211,7 @@ case class CommandRunner(
       id = "ui-preset-configure",
       label = "Preset Options",
       children = List(
+        workspaceLayoutGroup,
         languageGroup,
         markdownGroup,
         textAreaGroup,
@@ -784,6 +793,66 @@ object CommandRunner:
             hint = Some("Saved workspace setups")
           )
         )
+
+  private[command] val workspaceLayoutItems: List[CommandSurfaceItem.CommandItem] =
+    List(
+      Command.typed(
+        "pin-outline",
+        "Pin the outline panel on the right.",
+        CommandIntent.PinOutlinePanel,
+        CommandCategory.View,
+        label = "Pin Outline Panel"
+      ),
+      Command.typed(
+        "markdown-preview",
+        "Render a Markdown preview for the current buffer.",
+        CommandIntent.OpenMarkdownPreview,
+        CommandCategory.View,
+        label = "Markdown Preview"
+      ),
+      Command.typed(
+        "pin-explorer",
+        "Pin the explorer panel on the left.",
+        CommandIntent.PinExplorerPanel,
+        CommandCategory.View,
+        label = "Pin Explorer Panel"
+      ),
+      Command.typed(
+        "pin-diagnostics",
+        "Pin the diagnostics panel at the bottom.",
+        CommandIntent.PinDiagnosticsPanel,
+        CommandCategory.View,
+        label = "Pin Diagnostics Panel"
+      ),
+      Command.typed(
+        "unpin-left-panel",
+        "Unpin the left panel.",
+        CommandIntent.UnpinPanel(PanelPosition.Left),
+        CommandCategory.View,
+        label = "Unpin Left Panel"
+      ),
+      Command.typed(
+        "unpin-right-panel",
+        "Unpin the right panel.",
+        CommandIntent.UnpinPanel(PanelPosition.Right),
+        CommandCategory.View,
+        label = "Unpin Right Panel"
+      ),
+      Command.typed(
+        "unpin-bottom-panel",
+        "Unpin the bottom panel.",
+        CommandIntent.UnpinPanel(PanelPosition.Bottom),
+        CommandCategory.View,
+        label = "Unpin Bottom Panel"
+      ),
+      Command.typed(
+        "collapse-expanded-panel",
+        "Collapse the expanded panel back to its pinned position.",
+        CommandIntent.CollapseExpandedPanel,
+        CommandCategory.View,
+        label = "Collapse Expanded Panel"
+      )
+    ).map(CommandSurfaceItem.CommandItem(_))
 
   private def boundedOptionIndex(index: Int, options: List[CommandOption]): Int =
     if options.isEmpty then 0
