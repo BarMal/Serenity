@@ -725,6 +725,51 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     saved.targetEditorPaneCount shouldBe Some(1)
   }
 
+  it should "patch typography edits without replacing preset panel snapshots" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-edit-typography-patch").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+    val existingPanel = UiPreset.PinnedPanel
+      .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)
+      .getOrElse(fail("outline should be capturable"))
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "ui-preset-create",
+        "Create preset",
+        CommandIntent.SaveUiPreset("Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    store
+      .upsert(
+        UiPreset(
+          name = "Drafting",
+          config = AppConfig.default.copy(fontConfig = AppConfig.default.fontConfig.copy(textFontSize = 12.0f)),
+          themeName = Theme.dark.name,
+          pinnedPanels = List(existingPanel),
+          targetEditorPaneCount = Some(1)
+        )
+      )
+      .unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "set-drafting-prose-size",
+        "Set drafting prose font size",
+        CommandIntent.SetTextFontSize(18.0f),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
+
+    saved.config.fontConfig.textFontSize shouldBe 18.0f
+    saved.pinnedPanels shouldBe List(existingPanel)
+    saved.targetEditorPaneCount shouldBe Some(1)
+  }
+
   it should "persist theme changes to the preset currently being edited" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-theme").resolve("ui-presets.json")
     val store = UiPresetStore(path)

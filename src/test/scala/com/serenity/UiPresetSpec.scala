@@ -221,6 +221,38 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     patched.targetEditorPaneCount shouldBe Some(1)
   }
 
+  it should "patch typography fields without replacing preset layout snapshots" in {
+    val panel = UiPreset.PinnedPanel
+      .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)
+      .getOrElse(fail("outline should be capturable"))
+    val preset = UiPreset(
+      name = "Drafting",
+      config = AppConfig.default.copy(fontConfig = FontConfig(textFontFamily = Font.SANS_SERIF, textFontSize = 12.0f)),
+      themeName = Theme.dark.name,
+      pinnedPanels = List(panel),
+      targetEditorPaneCount = Some(1)
+    )
+    val sourceConfig = AppConfig.default.copy(
+      fontConfig = FontConfig(
+        codeFontFamily = Font.MONOSPACED,
+        textFontFamily = Font.SERIF,
+        uiFontFamily = Font.DIALOG,
+        fontSize = 14.0f,
+        textFontSize = 18.0f,
+        uiFontSize = 13.0f,
+        enableLigatures = false,
+        textLigatures = true,
+        uiLigatures = false
+      )
+    )
+
+    val patched = UiPreset.Patch.Typography(sourceConfig).applyTo(preset)
+
+    patched.config.fontConfig shouldBe sourceConfig.fontConfig
+    patched.pinnedPanels shouldBe List(panel)
+    patched.targetEditorPaneCount shouldBe Some(1)
+  }
+
   it should "collapse editor panes when a preset targets one editor pane" in {
     val primaryBufferId   = BufferId(0)
     val secondaryBufferId = BufferId(1)
