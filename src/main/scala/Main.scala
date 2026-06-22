@@ -1,6 +1,6 @@
 import cats.effect.*
 import cats.effect.unsafe.implicits.global
-import com.serenity.app.{AppRuntime, RuntimeDisplayState}
+import com.serenity.app.{AppRuntime, CrashReporter, RuntimeDisplayState}
 import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
@@ -21,6 +21,7 @@ object Main extends IOApp:
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
 
     for
+      _          <- IO(CrashReporter.install())
       configLoad <- ConfigManager.loadConfigResultIO()
       _ <- ConfigMigrationWarning
         .message(ConfigManager.defaultConfigPath, configLoad.report)
