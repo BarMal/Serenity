@@ -257,16 +257,16 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       .shouldBe(Some("Full"))
   }
 
-  it should "adjust the selected background style inside the submenu with left and right" in {
+  it should "adjust the selected background style inside the surface appearance submenu with left and right" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
-      .withSelectedItem("settings-appearance")
+      .withSelectedItem("settings-surface-appearance")
       .enterSelectedGroup
       .copy(activeSubmenu =
-        Some(com.serenity.command.CommandRunnerSubmenuState("settings-appearance", selectedIndex = 2))
+        Some(com.serenity.command.CommandRunnerSubmenuState("settings-surface-appearance", selectedIndex = 0))
       )
     val surface = UiSurface(
       SurfaceId("command-runner"),
@@ -275,7 +275,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
     val submenuSurface = UiSurface(
       SurfaceId("command-runner-submenu"),
-      SurfaceContent.CommandPaletteSubmenu(runner, "settings-appearance", previewOnly = false),
+      SurfaceContent.CommandPaletteSubmenu(runner, "settings-surface-appearance", previewOnly = false),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = AppState(
@@ -295,7 +295,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected command runner surface"))
 
     runnerAfterLeft
-      .submenuItems("settings-appearance")
+      .submenuItems("settings-surface-appearance")
       .collectFirst {
         case option: CommandSurfaceItem.OptionItem if option.id == "background-style" => option.selectedOption
       }
@@ -310,16 +310,16 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     } shouldBe true
   }
 
-  it should "adjust the selected interface density inside the appearance submenu" in {
+  it should "adjust the selected interface density inside the interface layout submenu" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
-      .withSelectedItem("settings-appearance")
+      .withSelectedItem("settings-interface-layout")
       .enterSelectedGroup
       .copy(activeSubmenu =
-        Some(com.serenity.command.CommandRunnerSubmenuState("settings-appearance", selectedIndex = 3))
+        Some(com.serenity.command.CommandRunnerSubmenuState("settings-interface-layout", selectedIndex = 0))
       )
     val surface = UiSurface(
       SurfaceId("command-runner"),
@@ -328,7 +328,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
     val submenuSurface = UiSurface(
       SurfaceId("command-runner-submenu"),
-      SurfaceContent.CommandPaletteSubmenu(runner, "settings-appearance", previewOnly = false),
+      SurfaceContent.CommandPaletteSubmenu(runner, "settings-interface-layout", previewOnly = false),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = AppState(
@@ -619,7 +619,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "accept a decimal point on a decimal InputItem once dots are cleared" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-appearance", "blur-radius")
+    val state    = settingsStateOnItem("settings-surface-appearance", "blur-radius")
 
     val after0 = CommandRunnerReducer.reduce(RunnerInsertChar('0'), state, registry)
     val s0 = state.copy(uiSurfaces =
@@ -632,7 +632,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "reject a second decimal point" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-appearance", "blur-radius")
+    val state    = settingsStateOnItem("settings-surface-appearance", "blur-radius")
 
     val after0 = runnerFrom(CommandRunnerReducer.reduce(RunnerInsertChar('0'), state, registry).state)
     val s1 = state.copy(uiSurfaces = state.uiSurfaces.map(s => s.copy(content = SurfaceContent.CommandPalette(after0))))

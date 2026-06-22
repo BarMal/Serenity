@@ -54,6 +54,7 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     (1 to 5).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())
+    "animation".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
 

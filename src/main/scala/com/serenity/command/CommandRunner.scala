@@ -132,15 +132,28 @@ case class CommandRunner(
       category = CommandCategory.Settings,
       hint = Some("Style, duration, steps")
     )
-    val appearanceGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-appearance",
-      label = "Appearance",
-      children = List(cursorModeItem, cursorInfoBarItem, backgroundStyleItem, interfaceDensityItem) ++
-        inputItems.filter(item =>
-          item.id == "blur-radius" || item.id == "ui-element-gap" || item.id == "ui-corner-radius"
-        ) :+ cursorInfoPlacement,
+    val cursorGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-cursor",
+      label = "Cursor",
+      children = List(cursorModeItem, cursorInfoBarItem, cursorInfoPlacement),
       category = CommandCategory.Settings,
-      hint = Some("Cursor, info bar, background, density, blur")
+      hint = Some("Cursor style, info bar, placement")
+    )
+    val surfaceAppearanceGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-surface-appearance",
+      label = "Surface Appearance",
+      children = List(backgroundStyleItem) ++ inputItems.filter(_.id == "blur-radius"),
+      category = CommandCategory.Settings,
+      hint = Some("Background material and blur")
+    )
+    val interfaceLayoutGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-interface-layout",
+      label = "Interface Layout",
+      children = List(interfaceDensityItem) ++ inputItems.filter(item =>
+        item.id == "ui-element-gap" || item.id == "ui-corner-radius"
+      ),
+      category = CommandCategory.Settings,
+      hint = Some("Density, spacing, corners")
     )
     val materialMotionGroup = CommandSurfaceItem.GroupItem(
       id = "settings-material-motion",
@@ -258,9 +271,11 @@ case class CommandRunner(
         proseFontGroup,
         codeFontGroup,
         uiFontGroup,
-        textScaleGroup,
+        cursorGroup,
+        surfaceAppearanceGroup,
+        interfaceLayoutGroup,
         materialMotionGroup,
-        appearanceGroup,
+        animationGroup,
         spellCheckGroup,
         richTextGroup
       ),
@@ -278,19 +293,23 @@ case class CommandRunner(
       hint = Some("Save or apply named layouts")
     )
     List(
-      animationGroup,
-      appearanceGroup,
-      materialMotionGroup,
-      uiPresetsGroup,
+      workspaceLayoutGroup,
+      navigationGroup,
       textDisplayGroup,
       textAreaGroup,
+      markdownGroup,
+      languageGroup,
       codeFontGroup,
       proseFontGroup,
       richTextGroup,
       uiFontGroup,
       textScaleGroup,
-      markdownGroup,
-      languageGroup,
+      cursorGroup,
+      surfaceAppearanceGroup,
+      interfaceLayoutGroup,
+      animationGroup,
+      materialMotionGroup,
+      uiPresetsGroup,
       spellCheckGroup,
       keymapGroup
     )
