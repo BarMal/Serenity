@@ -116,6 +116,13 @@ case class CommandRunner(
       category = CommandCategory.Settings,
       hint = Some("Comments, bookmarks, headings, history")
     )
+    val textDisplayGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-text-display",
+      label = "Text Display",
+      children = CommandRunner.textDisplayItems,
+      category = CommandCategory.Settings,
+      hint = Some("Line numbers, gutter, wrap")
+    )
     val animationGroup = CommandSurfaceItem.GroupItem(
       id = "settings-animation",
       label = "Animation",
@@ -245,6 +252,7 @@ case class CommandRunner(
         navigationGroup,
         languageGroup,
         markdownGroup,
+        textDisplayGroup,
         textAreaGroup,
         textScaleGroup,
         proseFontGroup,
@@ -274,6 +282,7 @@ case class CommandRunner(
       appearanceGroup,
       materialMotionGroup,
       uiPresetsGroup,
+      textDisplayGroup,
       textAreaGroup,
       codeFontGroup,
       proseFontGroup,
@@ -922,6 +931,31 @@ object CommandRunner:
         CommandIntent.CollapseExpandedPanel,
         CommandCategory.View,
         label = "Collapse Expanded Panel"
+      )
+    ).map(CommandSurfaceItem.CommandItem(_))
+
+  private[command] val textDisplayItems: List[CommandSurfaceItem.CommandItem] =
+    List(
+      Command.typed(
+        "toggle-line-numbers",
+        "Show or hide line numbers.",
+        CommandIntent.ToggleLineNumbers,
+        CommandCategory.View,
+        label = "Toggle Line Numbers"
+      ),
+      Command.typed(
+        "toggle-gutter",
+        "Show or hide the status gutter.",
+        CommandIntent.ToggleGutter,
+        CommandCategory.View,
+        label = "Toggle Gutter"
+      ),
+      Command.typed(
+        "toggle-word-wrap",
+        "Wrap long logical lines to the editor width.",
+        CommandIntent.ToggleWordWrap,
+        CommandCategory.View,
+        label = "Toggle Word Wrap"
       )
     ).map(CommandSurfaceItem.CommandItem(_))
 

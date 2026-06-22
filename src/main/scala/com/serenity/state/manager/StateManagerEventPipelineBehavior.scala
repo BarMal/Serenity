@@ -1033,21 +1033,27 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
                   val font         = previewFontForBuffer(buffer, state.config.fontConfig)
                   val metrics      = CellMetrics.fromFont(font)
                   val panelWidthPx = paneRect.width * metrics.charWidth
-                  mouseTargetSnapshot(cache.layoutKey, buffer, state.config.fontConfig, panelWidthPx, font).map {
-                    snapshot =>
-                      val xPx = click.pixelX match
-                        case Some(pixelX) => (pixelX - (paneRect.x * metrics.charWidth)).toFloat
-                        case None         => ((click.col - paneRect.x).max(0) * metrics.charWidth).toFloat
-                      val clickedCursor = snapshot
-                        .cursorForVisualRowAndXPx(visualRow, xPx.max(0.0f))
-                        .orElse {
-                          val bufferLine  = (vp.topLine + visualRow).max(0)
-                          val bufferCol   = (vp.leftColumn + (click.col - paneRect.x)).max(0)
-                          val clampedLine = bufferLine.min(math.max(0, buffer.content.lineCount - 1))
-                          val lineLen     = buffer.content.getLine(clampedLine).getOrElse("").length
-                          Some(CursorPosition(clampedLine, bufferCol.min(lineLen)))
-                        }
-                      clickedCursor.map(cursor => (paneId, buffer, cursor))
+                  mouseTargetSnapshot(
+                    cache.layoutKey,
+                    buffer,
+                    state.config.fontConfig,
+                    panelWidthPx,
+                    font,
+                    state.config.wordWrapEnabled
+                  ).map { snapshot =>
+                    val xPx = click.pixelX match
+                      case Some(pixelX) => (pixelX - (paneRect.x * metrics.charWidth)).toFloat
+                      case None         => ((click.col - paneRect.x).max(0) * metrics.charWidth).toFloat
+                    val clickedCursor = snapshot
+                      .cursorForVisualRowAndXPx(visualRow, xPx.max(0.0f))
+                      .orElse {
+                        val bufferLine  = (vp.topLine + visualRow).max(0)
+                        val bufferCol   = (vp.leftColumn + (click.col - paneRect.x)).max(0)
+                        val clampedLine = bufferLine.min(math.max(0, buffer.content.lineCount - 1))
+                        val lineLen     = buffer.content.getLine(clampedLine).getOrElse("").length
+                        Some(CursorPosition(clampedLine, bufferCol.min(lineLen)))
+                      }
+                    clickedCursor.map(cursor => (paneId, buffer, cursor))
                   }
                 case None =>
                   cats.effect.IO.pure(None)
@@ -1069,19 +1075,20 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     buffer: Buffer,
     fontConfig: FontConfig,
     panelWidthPx: Int,
-    font: java.awt.Font
+    font: java.awt.Font,
+    wordWrapEnabled: Boolean
   ): cats.effect.IO[TextLayoutSnapshot] =
-    val key = MouseTargetSnapshotKey.from(buffer, fontConfig, panelWidthPx)
+    val key = MouseTargetSnapshotKey.from(buffer, fontConfig, panelWidthPx, wordWrapEnabled)
     mouseTargetCacheRef.modify {
       case Some(cache) if cache.layoutKey == layoutKey =>
         cache.snapshots.get(key) match
           case Some(snapshot) =>
             Some(cache) -> snapshot
           case None =>
-            val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font)
+            val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font, wordWrapEnabled = wordWrapEnabled)
             Some(cache.copy(snapshots = cache.snapshots.updated(key, snapshot))) -> snapshot
       case other =>
-        val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font)
+        val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font, wordWrapEnabled = wordWrapEnabled)
         other -> snapshot
     }
 

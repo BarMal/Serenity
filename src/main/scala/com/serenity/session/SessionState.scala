@@ -620,6 +620,7 @@ given Encoder[AppConfig] = Encoder.instance { config =>
     "minimumPaneWidth"              -> config.minimumPaneWidth.asJson,
     "showLineNumbers"               -> config.showLineNumbers.asJson,
     "showGutter"                    -> config.showGutter.asJson,
+    "wordWrapEnabled"               -> config.wordWrapEnabled.asJson,
     "blurRadius"                    -> config.blurRadius.asJson,
     "backgroundStyle"               -> config.backgroundStyle.asJson,
     "materialPreset"                -> config.materialPreset.asJson,
@@ -653,6 +654,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     minimumPaneWidth          <- cursor.get[Int]("minimumPaneWidth")
     showLineNumbers           <- cursor.get[Boolean]("showLineNumbers")
     showGutter                <- cursor.get[Boolean]("showGutter")
+    wordWrapEnabled           <- cursor.getOrElse[Boolean]("wordWrapEnabled")(true)
     blurRadius                <- cursor.getOrElse[Float]("blurRadius")(0.0f)
     backgroundStyle           <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
     materialPreset            <- cursor.getOrElse[MaterialPreset]("materialPreset")(MaterialPreset.Frosted)
@@ -688,6 +690,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     minimumPaneWidth = minimumPaneWidth,
     showLineNumbers = showLineNumbers,
     showGutter = showGutter,
+    wordWrapEnabled = wordWrapEnabled,
     blurRadius = blurRadius,
     backgroundStyle = backgroundStyle,
     materialPreset = materialPreset,

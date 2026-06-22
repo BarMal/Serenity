@@ -166,3 +166,27 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     gutterCommand.label shouldBe "Toggle Gutter"
     gutterCommand.description should include("gutter")
   }
+
+  behavior of "Toggle Word Wrap Command"
+
+  it should "be found in command registry by search terms" in {
+    val registry = CommandRegistry.withToggleUI
+
+    val wordResults = registry.searchCommands("word")
+    val wrapResults = registry.searchCommands("wrap")
+    val command     = registry.findCommand("toggle-word-wrap").get
+
+    wordResults.map(_.name) should contain("toggle-word-wrap")
+    wrapResults.map(_.name) should contain("toggle-word-wrap")
+    command.intent shouldBe CommandIntent.ToggleWordWrap
+  }
+
+  it should "toggle word wrap from enabled to disabled" in {
+    val stateManager = createStateManager()
+
+    stateManager.getCurrentState.unsafeRunSync().config.wordWrapEnabled shouldBe true
+
+    executeCommandThroughRunner(stateManager, "toggle-word-wrap", "toggle-word-wrap")
+
+    stateManager.getCurrentState.unsafeRunSync().config.wordWrapEnabled shouldBe false
+  }

@@ -215,6 +215,7 @@ case class AppConfig(
     minimumPaneWidth: Int = 50,
     showLineNumbers: Boolean = true,
     showGutter: Boolean = true,
+    wordWrapEnabled: Boolean = true,
     blurRadius: Float = 0.0f,
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
@@ -305,6 +306,10 @@ case class AppConfig(
   /** Create a new config with gutter toggled */
   def withGutter(enabled: Boolean): AppConfig =
     copy(showGutter = enabled)
+
+  /** Create a new config with word wrapping toggled */
+  def withWordWrap(enabled: Boolean): AppConfig =
+    copy(wordWrapEnabled = enabled)
 
   def withBlurRadius(r: Float): AppConfig =
     copy(blurRadius = r.max(0.0f).min(1.0f), materialPreset = MaterialPreset.Custom)

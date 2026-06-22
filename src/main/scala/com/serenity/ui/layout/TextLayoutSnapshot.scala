@@ -101,20 +101,24 @@ object TextLayoutSnapshot:
     cursorColumn: Int,
     panelWidthPx: Int,
     font: Font,
-    fontRenderContext: FontRenderContext = defaultFontRenderContext()
+    fontRenderContext: FontRenderContext = defaultFontRenderContext(),
+    wordWrapEnabled: Boolean = true
   ): Int =
-    val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
-    wrapLogicalLine(lineText, 0, math.max(1, panelWidthPx), font, fontRenderContext, measuredLayout).zipWithIndex
-      .collectFirst {
-        case (line, index) if cursorColumn >= line.startColumn && cursorColumn <= line.endColumn => index
-      }
-      .getOrElse(0)
+    if !wordWrapEnabled then 0
+    else
+      val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
+      wrapLogicalLine(lineText, 0, math.max(1, panelWidthPx), font, fontRenderContext, measuredLayout).zipWithIndex
+        .collectFirst {
+          case (line, index) if cursorColumn >= line.startColumn && cursorColumn <= line.endColumn => index
+        }
+        .getOrElse(0)
 
   def fromBuffer(
     buffer: Buffer,
     panelWidthPx: Int,
     font: Font,
-    fontRenderContext: FontRenderContext = defaultFontRenderContext()
+    fontRenderContext: FontRenderContext = defaultFontRenderContext(),
+    wordWrapEnabled: Boolean = true
   ): TextLayoutSnapshot =
     val measuredLayout =
       shouldUseMeasuredLayout(font, fontRenderContext)
@@ -124,7 +128,8 @@ object TextLayoutSnapshot:
       math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getAscent.toDouble).toInt)
     val richDocument =
       buffer.richTextDocument.filter(_.matchesPlainText(buffer.content.collect()))
-    val visualLineLimit = buffer.viewport.topVisualLine + buffer.viewport.visibleLines
+    val viewportTopVisualLine = if wordWrapEnabled then buffer.viewport.topVisualLine else 0
+    val visualLineLimit       = viewportTopVisualLine + buffer.viewport.visibleLines
     val visualLines =
       collectVisualLines(
         buffer,
@@ -133,8 +138,9 @@ object TextLayoutSnapshot:
         fontRenderContext,
         measuredLayout,
         visualLineLimit,
-        richDocument
-      ).drop(buffer.viewport.topVisualLine).take(buffer.viewport.visibleLines)
+        richDocument,
+        wordWrapEnabled
+      ).drop(viewportTopVisualLine).take(buffer.viewport.visibleLines)
 
     TextLayoutSnapshot(
       visualLines = visualLines,
@@ -152,7 +158,8 @@ object TextLayoutSnapshot:
     frc: FontRenderContext,
     measuredLayout: Boolean,
     visualLineLimit: Int,
-    richDocument: Option[RichTextDocument]
+    richDocument: Option[RichTextDocument],
+    wordWrapEnabled: Boolean
   ): Vector[TextVisualLine] =
     @annotation.tailrec
     def loop(lineIndex: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
@@ -164,15 +171,28 @@ object TextLayoutSnapshot:
           else math.min(buffer.viewport.leftColumn, rawLine.length)
         val visibleSlice = rawLine.drop(startColumn)
         val wrapped =
-          wrapLogicalLine(
-            visibleSlice,
-            lineIndex,
-            panelWidthPx,
-            font,
-            frc,
-            measuredLayout,
-            startColumn
-          )
+          if wordWrapEnabled then
+            wrapLogicalLine(
+              visibleSlice,
+              lineIndex,
+              panelWidthPx,
+              font,
+              frc,
+              measuredLayout,
+              startColumn
+            )
+          else
+            Vector(
+              shapeSegment(
+                visibleSlice,
+                lineIndex,
+                startColumn,
+                rawLine.length,
+                font,
+                frc,
+                measuredLayout
+              )
+            )
         val aligned = applyParagraphAlignment(wrapped, lineIndex, panelWidthPx, richDocument)
         loop(lineIndex + 1, acc ++ aligned)
 

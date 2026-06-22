@@ -23,6 +23,7 @@ private[manager] case class MouseTargetLayoutKey(
     viewportSize: ViewportSize,
     showGutter: Boolean,
     showLineNumbers: Boolean,
+    wordWrapEnabled: Boolean,
     minimumPaneWidth: Int,
     focusPaneId: Option[PaneId],
     orderedPaneIds: List[PaneId],
@@ -38,6 +39,7 @@ private[manager] object MouseTargetLayoutKey:
       viewportSize = viewportSize,
       showGutter = state.config.showGutter,
       showLineNumbers = state.config.showLineNumbers,
+      wordWrapEnabled = state.config.wordWrapEnabled,
       minimumPaneWidth = state.config.minimumPaneWidth,
       focusPaneId = state.focus match
         case Focus.EditorPane(paneId) if state.layout.editorPanes.contains(paneId) => Some(paneId)
@@ -60,19 +62,26 @@ private[manager] case class MouseTargetSnapshotKey(
     viewport: Viewport,
     language: Option[com.serenity.lsp.config.LanguageId],
     fontConfig: FontConfig,
-    panelWidthPx: Int
+    panelWidthPx: Int,
+    wordWrapEnabled: Boolean
 )
 
 private[manager] object MouseTargetSnapshotKey:
 
-  def from(buffer: Buffer, fontConfig: FontConfig, panelWidthPx: Int): MouseTargetSnapshotKey =
+  def from(
+    buffer: Buffer,
+    fontConfig: FontConfig,
+    panelWidthPx: Int,
+    wordWrapEnabled: Boolean = true
+  ): MouseTargetSnapshotKey =
     MouseTargetSnapshotKey(
       bufferId = buffer.id,
       content = RopeIdentity(buffer.content),
       viewport = buffer.viewport,
       language = buffer.language,
       fontConfig = fontConfig,
-      panelWidthPx = panelWidthPx
+      panelWidthPx = panelWidthPx,
+      wordWrapEnabled = wordWrapEnabled
     )
 
 private[manager] case class MouseTargetCache(

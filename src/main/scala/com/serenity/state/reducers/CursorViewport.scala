@@ -16,10 +16,18 @@ object CursorViewport:
     val font             = previewFontForBuffer(buffer, currentState.config.fontConfig)
     val visibleWidthPx   = viewport.visibleColumns * CellMetrics.fromFont(font).charWidth
     val lineText         = buffer.content.getLine(cursor.line).getOrElse("")
+    val wordWrapEnabled  = currentState.config.wordWrapEnabled
     val measuredCursorVisualLine =
-      TextLayoutSnapshot.visualLineIndexForCursor(lineText, cursor.column, visibleWidthPx, font)
+      TextLayoutSnapshot.visualLineIndexForCursor(
+        lineText,
+        cursor.column,
+        visibleWidthPx,
+        font,
+        wordWrapEnabled = wordWrapEnabled
+      )
     val cursorVisualLine =
-      if buffer.usesTextFont then measuredCursorVisualLine
+      if !wordWrapEnabled then 0
+      else if buffer.usesTextFont then measuredCursorVisualLine
       else
         val cellCursorVisualLine = cursor.column / math.max(1, viewport.visibleColumns)
         math.max(measuredCursorVisualLine, cellCursorVisualLine)
@@ -31,7 +39,7 @@ object CursorViewport:
       if clampedTopLine == cursor.line then math.max(0, cursorVisualLine - halfVisibleLines)
       else 0
     val clampedLeftColumn =
-      if buffer.usesTextFont then 0
+      if buffer.usesTextFont && wordWrapEnabled then 0
       else
         val measuredLeftColumn =
           TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)

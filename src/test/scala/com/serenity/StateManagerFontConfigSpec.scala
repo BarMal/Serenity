@@ -5,9 +5,11 @@ import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.command.CommandSurfaceItem
 import com.serenity.config.ConfigManager
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
+import com.serenity.state.models.SurfaceContent
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import org.scalatest.flatspec.AnyFlatSpec
@@ -15,24 +17,40 @@ import org.scalatest.matchers.should.Matchers
 
 class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
-  private val CodeFontSettingsMoves = 5
-  private val UiFontSettingsMoves   = 8
+  private val CodeFontSettingsGroupId = "settings-code-font"
+  private val UiFontSettingsGroupId   = "settings-ui-font"
 
   private def openRunner(stateManager: StateManager): Unit =
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
-  private def openSettingsSubmenu(stateManager: StateManager, movesDown: Int): Unit =
+  private def openSettingsSubmenu(stateManager: StateManager, groupId: String): Unit =
     openRunner(stateManager)
     for _ <- 1 to 5 do stateManager.applyEvent(TabKey).unsafeRunSync()
+    val movesDown = selectedSettingsGroupIndex(stateManager, groupId)
     for _ <- 1 to movesDown do stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
+
+  private def selectedSettingsGroupIndex(stateManager: StateManager, groupId: String): Int =
+    val runner = stateManager.getCurrentState
+      .unsafeRunSync()
+      .commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(runner) => Some(runner)
+          case _                                     => None
+      }
+      .getOrElse(fail("Expected active command runner"))
+
+    runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group.id }.indexOf(groupId) match
+      case -1    => fail(s"Expected settings group $groupId")
+      case index => index
 
   "StateManager" should "invoke the runtime font callback when changing code font size from font settings" in {
     val observed = AtomicReference[List[FontConfig]](Nil)
     val stateManager =
       createStateManager("StateManagerFontConfigSpec", config => IO(observed.updateAndGet(_ :+ config)))
 
-    openSettingsSubmenu(stateManager, movesDown = CodeFontSettingsMoves)
+    openSettingsSubmenu(stateManager, CodeFontSettingsGroupId)
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     List('1', '3').foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
@@ -47,7 +65,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     val stateManager =
       createStateManager("StateManagerFontConfigSpec", config => IO(observed.updateAndGet(_ :+ config)))
 
-    openSettingsSubmenu(stateManager, movesDown = UiFontSettingsMoves)
+    openSettingsSubmenu(stateManager, UiFontSettingsGroupId)
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     List('1', '5').foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
@@ -62,7 +80,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     val stateManager =
       createStateManager("StateManagerFontConfigSpec", config => IO(observed.updateAndGet(_ :+ config)))
 
-    openSettingsSubmenu(stateManager, movesDown = CodeFontSettingsMoves)
+    openSettingsSubmenu(stateManager, CodeFontSettingsGroupId)
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveRight).unsafeRunSync()
 
@@ -75,7 +93,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     val stateManager =
       createStateManager("StateManagerFontConfigSpec", config => IO(observed.updateAndGet(_ :+ config)))
 
-    openSettingsSubmenu(stateManager, movesDown = UiFontSettingsMoves)
+    openSettingsSubmenu(stateManager, UiFontSettingsGroupId)
     stateManager.applyEvent(Enter).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
 
@@ -94,7 +112,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
         )
         .unsafeRunSync()
 
-    openSettingsSubmenu(stateManager, movesDown = UiFontSettingsMoves)
+    openSettingsSubmenu(stateManager, UiFontSettingsGroupId)
     stateManager.applyEvent(Enter).unsafeRunSync()
     if FontLoader.availableUiFamilies.size > 1 then stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
@@ -114,7 +132,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
         )
         .unsafeRunSync()
 
-    openSettingsSubmenu(stateManager, movesDown = CodeFontSettingsMoves)
+    openSettingsSubmenu(stateManager, CodeFontSettingsGroupId)
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     List('1', '6').foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
@@ -135,7 +153,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
         )
         .unsafeRunSync()
 
-    openSettingsSubmenu(stateManager, movesDown = UiFontSettingsMoves)
+    openSettingsSubmenu(stateManager, UiFontSettingsGroupId)
     stateManager.applyEvent(Enter).unsafeRunSync()
     if FontLoader.availableUiFamilies.size > 1 then stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
