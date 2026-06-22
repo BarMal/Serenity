@@ -112,7 +112,7 @@ case class CommandRunner(
     val navigationGroup = CommandSurfaceItem.GroupItem(
       id = "settings-navigation",
       label = "Navigation",
-      children = CommandRunner.navigationItems,
+      children = inputItems.filter(_.id == "document-comment") ++ CommandRunner.navigationItems,
       category = CommandCategory.Settings,
       hint = Some("Comments, bookmarks, headings, history")
     )
@@ -1159,6 +1159,19 @@ object CommandRunner:
     val cornerRadiusValue  = config.uiCornerRadiusPx.toString
     val spellCheck         = config.spellCheck.normalized
 
+    val commentItems = List(
+      CommandSurfaceItem.InputItem(
+        id = "document-comment",
+        label = "Document Comment",
+        hint = "Comment text",
+        currentValue = "",
+        isDecimal = false,
+        parse = text => nonEmptyText(text).map(CommandIntent.AddDocumentComment(_)),
+        category = CommandCategory.Edit,
+        acceptsFreeText = true
+      )
+    )
+
     val richTextItems = List(
       CommandSurfaceItem.InputItem(
         id = "rich-text-font-family",
@@ -1446,7 +1459,8 @@ object CommandRunner:
       )
     )
 
-    presetItems ++ richTextItems ++ textAreaItems ++ spellCheckItems ++ numericItems ++ buildKeymapInputItems(config)
+    commentItems ++ presetItems ++ richTextItems ++ textAreaItems ++ spellCheckItems ++ numericItems ++
+      buildKeymapInputItems(config)
 
   private def nonEmptyText(text: String): Option[String] =
     Option(text.trim).filter(_.nonEmpty)
