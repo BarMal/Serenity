@@ -719,21 +719,17 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
                     logger.error(error)(s"[PRESET] Failed to load theme ${preset.themeName}; keeping current theme") >>
                       IO.pure(currentState.theme)
                   )
-                preferredWindowSize <- stateRef.modify { state =>
+                _ <- stateRef.modify { state =>
                   val restoredPresetState = UiPreset.applyToState(preset, state, theme)
                   val restoredDocumentState =
                     applyPresetDocumentModeToActiveEmptyBuffer(restoredPresetState, preset.config.defaultDocumentMode)
                   val restoredOutlineState = hydratePresetOutlinePanels(restoredDocumentState)
                   val restored             = withUpdatedRunnerConfig(restoredOutlineState, preset.config)
-                  (restored, restored.config.preferredWindowSize)
+                  (restored, ())
                 }
                 _ <- persistConfigFile(preset.config)
                 _ <- onFontConfigChanged(preset.config.fontConfig)
                   .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset font config"))
-                _ <- preferredWindowSize.traverse_(size =>
-                  onPreferredWindowSizeChanged(size)
-                    .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset window size"))
-                )
                 _ <- reloadPresetDirectories(preset)
                 _ <- openPresetMarkdownPreviewIfNeeded(preset)
                 _ <- stateRef.get

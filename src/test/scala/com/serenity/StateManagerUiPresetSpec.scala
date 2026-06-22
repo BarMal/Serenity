@@ -83,7 +83,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     saved.map(_.pinnedPanels.map(panel => panel.position -> panel.size)) shouldBe Some(List(PanelPosition.Bottom -> 12))
   }
 
-  it should "apply a named preset and notify runtime window size changes" in {
+  it should "apply a named preset without resizing the live runtime window" in {
     val path               = Files.createTempDirectory("state-manager-ui-preset-apply").resolve("ui-presets.json")
     val store              = UiPresetStore(path)
     val observedWindowSize = Ref.of[IO, Option[PreferredWindowSize]](None).unsafeRunSync()
@@ -109,6 +109,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     )
     store.upsert(preset).unsafeRunSync()
+    sm.handleViewportResize(ViewportSize(90, 28)).unsafeRunSync()
 
     sm.executeCommand(
       Command.typed(
@@ -123,9 +124,10 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     state.config.backgroundStyle shouldBe BackgroundStyle.Solid
     state.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1280, 720))
+    state.viewportSize shouldBe Some(ViewportSize(90, 28))
     state.theme.name shouldBe Theme.dark.name
     state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Right, 36))
-    observedWindowSize.get.unsafeRunSync() shouldBe Some(PreferredWindowSize(1280, 720))
+    observedWindowSize.get.unsafeRunSync() shouldBe None
   }
 
   it should "apply a built-in writing preset when no custom preset exists" in {
