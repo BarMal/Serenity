@@ -200,7 +200,7 @@ object TextOverlayRenderer:
         )
 
   private def scrolledRowView(row: OverlayRow, width: Int): OverlayRowView =
-    val useMeasuredCursor = row.layout == OverlayRowLayout.Split
+    val useMeasuredCursor = row.cursorColumn.nonEmpty
     val scrollOffset =
       row.cursorColumn match
         case Some(cursorColumn) if row.plainText.length > width =>
@@ -330,7 +330,6 @@ object TextOverlayRenderer:
           y,
           labelWidth,
           label,
-          row.selected,
           theme,
           defaultForeground,
           defaultBackground,
@@ -342,7 +341,6 @@ object TextOverlayRenderer:
           y,
           hintWidth,
           hint,
-          row.selected,
           theme,
           defaultForeground,
           defaultBackground,
@@ -354,7 +352,6 @@ object TextOverlayRenderer:
           y,
           valueWidth,
           value,
-          row.selected,
           theme,
           defaultForeground,
           defaultBackground,
@@ -369,7 +366,6 @@ object TextOverlayRenderer:
           y,
           labelWidth,
           label,
-          row.selected,
           theme,
           defaultForeground,
           defaultBackground,
@@ -381,7 +377,6 @@ object TextOverlayRenderer:
           y,
           hintWidth,
           hint,
-          row.selected,
           theme,
           defaultForeground,
           defaultBackground,
@@ -396,15 +391,12 @@ object TextOverlayRenderer:
     y: Int,
     width: Int,
     segment: OverlaySegment,
-    rowSelected: Boolean,
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
     font: Font
   ): Unit =
-    val text =
-      if rowSelected && segment.text.length > width then segment.text.takeRight(width)
-      else segment.text.take(width)
+    val text = fitCellText(segment.text, width)
     renderSegmentText(
       surface,
       x,
@@ -417,6 +409,12 @@ object TextOverlayRenderer:
       defaultBackground,
       font = font
     )
+
+  private def fitCellText(text: String, width: Int): String =
+    if width <= 0 then ""
+    else if text.length <= width then text
+    else if width <= 3 then text.take(width)
+    else text.take(width - 3) + "..."
 
   private def renderSegmentCell(
     surface: RenderSurface,
