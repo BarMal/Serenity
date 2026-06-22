@@ -19,7 +19,7 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
     StateManager
       .describeCommandRunnerEvent(TabKey, runner)
       .shouldBe(
-        "event=TabKey mode=browse category=Settings selected=group:settings-animation"
+        "event=TabKey mode=browse category=Settings selected=group:settings-workspace-layout"
       )
   }
 

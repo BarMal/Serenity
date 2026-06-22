@@ -74,7 +74,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     } shouldBe Some("ctrl+enter")
   }
 
-  it should "expose interface density in the appearance settings group" in {
+  it should "expose interface density in the interface layout settings group" in {
     val config = AppConfig.default
       .withInterfaceDensity(InterfaceDensity.Compact)
       .withUiElementGap(2)
@@ -82,20 +82,15 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty.activate(registry, config)
 
     runner.optionSelections.get("interface-density") shouldBe Some(0)
-    runner.settingsGroups.find(_.id == "settings-appearance").map(_.children.map(_.id)) should contain(
+    runner.settingsGroups.find(_.id == "settings-interface-layout").map(_.children.map(_.id)) should contain(
       List(
-        "cursor-mode",
-        "cursor-info-bar",
-        "background-style",
         "interface-density",
-        "blur-radius",
         "ui-element-gap",
-        "ui-corner-radius",
-        "cursor-info-bar-placement"
+        "ui-corner-radius"
       )
     )
     runner.settingsGroups
-      .find(_.id == "settings-appearance")
+      .find(_.id == "settings-interface-layout")
       .flatMap(
         _.children.collectFirst {
           case item: CommandSurfaceItem.InputItem if item.id == "ui-element-gap" =>
@@ -103,7 +98,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         }
       ) shouldBe Some(("2", "Cells (0-8)", Some(CommandIntent.SetUiElementGap(3)), None))
     runner.settingsGroups
-      .find(_.id == "settings-appearance")
+      .find(_.id == "settings-interface-layout")
       .flatMap(
         _.children.collectFirst {
           case item: CommandSurfaceItem.InputItem if item.id == "ui-corner-radius" =>
@@ -117,15 +112,10 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty.activate(registry, config)
 
     runner.optionSelections.get("cursor-info-bar") shouldBe Some(2)
-    runner.settingsGroups.find(_.id == "settings-appearance").map(_.children.map(_.id)) should contain(
+    runner.settingsGroups.find(_.id == "settings-cursor").map(_.children.map(_.id)) should contain(
       List(
         "cursor-mode",
         "cursor-info-bar",
-        "background-style",
-        "interface-density",
-        "blur-radius",
-        "ui-element-gap",
-        "ui-corner-radius",
         "cursor-info-bar-placement"
       )
     )
@@ -137,7 +127,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
 
     runner.optionSelections.get("cursor-info-bar-placement") shouldBe Some(1)
     runner.settingsGroups
-      .find(_.id == "settings-appearance")
+      .find(_.id == "settings-cursor")
       .map(_.children.collect {
         case item: CommandSurfaceItem.OptionItem if item.id == "cursor-info-bar-placement" =>
           item.selectedOption -> item.options.map(_.label)

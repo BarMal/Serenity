@@ -162,7 +162,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
-      .withSelectedItem("settings-animation")
+      .withSelectedItem("settings-workspace-layout")
 
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),
@@ -176,13 +176,13 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     header.segments.count(_.selected) shouldBe 1
     header.segments.find(_.selected).map(_.text) shouldBe Some("Settings")
 
-    val optionRow = floating.rows.headOption.getOrElse(fail("Expected animation group row"))
+    val optionRow = floating.rows.headOption.getOrElse(fail("Expected workspace layout group row"))
     optionRow.layout shouldBe OverlayRowLayout.Columns
-    optionRow.plainText shouldBe "Animation"
+    optionRow.plainText shouldBe "Workspace Layout"
     optionRow.plainText should not include "["
     optionRow.segments should have size 2
-    optionRow.segments.head.text shouldBe "Animation"
-    optionRow.segments(1).text shouldBe "Style, duration, steps"
+    optionRow.segments.head.text shouldBe "Workspace Layout"
+    optionRow.segments(1).text shouldBe "Panels, outline, preview, diagnostics"
     optionRow.segments(1).tone shouldBe OverlayTone.Normal
   }
 
