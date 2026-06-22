@@ -94,6 +94,13 @@ object CommandRegistry:
       CommandIntent.ToggleGutter,
       CommandCategory.View,
       label = "Toggle Gutter"
+    ),
+    Command.typed(
+      "toggle-word-wrap",
+      "Wrap long logical lines to the editor width.",
+      CommandIntent.ToggleWordWrap,
+      CommandCategory.View,
+      label = "Toggle Word Wrap"
     )
   )
 

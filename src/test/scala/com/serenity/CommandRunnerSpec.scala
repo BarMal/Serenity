@@ -221,6 +221,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-appearance",
       "settings-material-motion",
       "settings-ui-presets",
+      "settings-text-display",
       "settings-text-area",
       "settings-code-font",
       "settings-prose-font",
@@ -240,41 +241,47 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     groupItems(2).children.map(_.id) should contain allOf ("material-preset", "motion-preset")
     groupItems(3).label shouldBe "UI Presets"
     groupItems(3).children.map(_.id) should contain allOf ("ui-preset-save", "ui-preset-apply")
-    groupItems(4).label shouldBe "Text Area"
-    groupItems(4).children.map(_.id) should contain allOf ("text-area-left", "text-area-right")
-    groupItems(5).label shouldBe "Code Font"
-    groupItems(5).children.map(_.id) should contain allOf ("code-font", "code-ligatures", "code-font-size")
-    groupItems(6).label shouldBe "Prose Font"
-    groupItems(6).children.map(_.id) should contain allOf ("text-font", "text-ligatures", "text-font-size")
-    groupItems(7).label shouldBe "Rich Text"
-    groupItems(7).children.map(_.id) should contain allOf (
+    groupItems(4).label shouldBe "Text Display"
+    groupItems(4).children.map(_.id) should contain allOf (
+      "toggle-line-numbers",
+      "toggle-gutter",
+      "toggle-word-wrap"
+    )
+    groupItems(5).label shouldBe "Text Area"
+    groupItems(5).children.map(_.id) should contain allOf ("text-area-left", "text-area-right")
+    groupItems(6).label shouldBe "Code Font"
+    groupItems(6).children.map(_.id) should contain allOf ("code-font", "code-ligatures", "code-font-size")
+    groupItems(7).label shouldBe "Prose Font"
+    groupItems(7).children.map(_.id) should contain allOf ("text-font", "text-ligatures", "text-font-size")
+    groupItems(8).label shouldBe "Rich Text"
+    groupItems(8).children.map(_.id) should contain allOf (
       "rich-text-font-family",
       "rich-text-font-size",
       "rich-text-color"
     )
-    groupItems(8).label shouldBe "UI Font"
-    groupItems(8).children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
-    groupItems(9).label shouldBe "Text Scale"
-    groupItems(9).children.map(_.id) should contain allOf ("text-scale-mode", "text-scale")
-    groupItems(5).children
+    groupItems(9).label shouldBe "UI Font"
+    groupItems(9).children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
+    groupItems(10).label shouldBe "Text Scale"
+    groupItems(10).children.map(_.id) should contain allOf ("text-scale-mode", "text-scale")
+    groupItems(6).children
       .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "code-font" => group }
       .map(_.children.map(_.id)) should not be empty
-    groupItems(12).label shouldBe "Spell Check"
-    groupItems(12).children.map(_.id) should contain allOf (
+    groupItems(13).label shouldBe "Spell Check"
+    groupItems(13).children.map(_.id) should contain allOf (
       "spellcheck-enabled",
       "spellcheck-languages",
       "spellcheck-words"
     )
-    groupItems(13).label shouldBe "Keymap"
-    groupItems(13).children.map(_.id) should contain allOf (
+    groupItems(14).label shouldBe "Keymap"
+    groupItems(14).children.map(_.id) should contain allOf (
       "keymap-global-command_palette",
       "keymap-command-runner-submit",
       "keymap-modal-dismiss"
     )
-    groupItems(10).label shouldBe "Markdown"
-    groupItems(10).children.map(_.id) should contain("markdown-view")
-    groupItems(11).label shouldBe "Language"
-    groupItems(11).children.map(_.id) should contain allOf ("default-document-mode", "lang-plain-text")
+    groupItems(11).label shouldBe "Markdown"
+    groupItems(11).children.map(_.id) should contain("markdown-view")
+    groupItems(12).label shouldBe "Language"
+    groupItems(12).children.map(_.id) should contain allOf ("default-document-mode", "lang-plain-text")
   }
 
   it should "surface default document mode as a typed language setting" in {

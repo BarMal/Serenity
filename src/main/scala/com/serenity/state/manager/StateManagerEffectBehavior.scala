@@ -228,9 +228,11 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   protected def interpretCommand(command: Command, state: AppState): IO[Unit] =
     command.intent match
       case CommandIntent.ToggleLineNumbers =>
-        updateState(s => s.copy(config = s.config.copy(showLineNumbers = !s.config.showLineNumbers)))
+        updateConfig(config => config.withLineNumbers(!config.showLineNumbers)).void
       case CommandIntent.ToggleGutter =>
-        updateState(s => s.copy(config = s.config.copy(showGutter = !s.config.showGutter)))
+        updateConfig(config => config.withGutter(!config.showGutter)).void
+      case CommandIntent.ToggleWordWrap =>
+        updateConfig(config => config.withWordWrap(!config.wordWrapEnabled)).void
       case CommandIntent.SaveCurrentFile =>
         state.focusedBufferId match
           case Some(bufferId) => saveBufferEffect(bufferId)

@@ -48,6 +48,26 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     snapshot.visualLines.map(_.text) shouldBe Vector("hello ", "world ", "again")
   }
 
+  it should "keep logical lines unwrapped when word wrap is disabled" in {
+    val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val metrics = CellMetrics.fromFont(font)
+    val buffer = Buffer
+      .fromString(BufferId(12), "hello world again")
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 8, visibleLines = 4))
+
+    val snapshot =
+      TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 8, font, wordWrapEnabled = false)
+
+    snapshot.visualLines.map(_.text) shouldBe Vector("hello world again")
+    TextLayoutSnapshot.visualLineIndexForCursor(
+      "hello world again",
+      cursorColumn = 12,
+      panelWidthPx = metrics.charWidth * 8,
+      font,
+      wordWrapEnabled = false
+    ) shouldBe 0
+  }
+
   it should "skip wrapped visual rows from the top of a long logical line" in {
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val metrics = CellMetrics.fromFont(font)

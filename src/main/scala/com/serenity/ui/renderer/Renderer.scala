@@ -212,7 +212,8 @@ object Renderer:
         buf,
         panelWidthPx,
         bufferFont,
-        context.surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+        context.surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext()),
+        wordWrapEnabled = state.config.wordWrapEnabled
       )
     }
 
@@ -1148,7 +1149,8 @@ object Renderer:
               buffer,
               panelWidthPx,
               font,
-              surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+              surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext()),
+              wordWrapEnabled = state.config.wordWrapEnabled
             )
             val firstVisualRows =
               snapshot.visualLines.zipWithIndex

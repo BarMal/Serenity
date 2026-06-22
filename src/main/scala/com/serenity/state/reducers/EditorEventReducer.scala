@@ -1442,7 +1442,8 @@ object EditorEventReducer:
       TextLayoutSnapshot.fromBuffer(
         buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
         panelWidthPx,
-        font
+        font,
+        wordWrapEnabled = currentState.config.wordWrapEnabled
       )
     snapshot.xPxForCursor(cursor).getOrElse(cursor.column.toFloat * metrics.charWidth.toFloat)
 
@@ -1459,7 +1460,8 @@ object EditorEventReducer:
       TextLayoutSnapshot.fromBuffer(
         buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
         panelWidthPx,
-        font
+        font,
+        wordWrapEnabled = currentState.config.wordWrapEnabled
       )
     snapshot.moveVertical(cursor, direction, preferredXPx)
 
@@ -1487,7 +1489,8 @@ object EditorEventReducer:
       TextLayoutSnapshot.fromBuffer(
         buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
         widthPx,
-        font
+        font,
+        wordWrapEnabled = state.config.wordWrapEnabled
       )
     (snap, metrics)
 

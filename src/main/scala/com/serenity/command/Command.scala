@@ -78,6 +78,7 @@ enum CommandIntent:
   case SetAnimationSteps(n: Int)
   case ToggleLineNumbers
   case ToggleGutter
+  case ToggleWordWrap
   case SetCursorMode(mode: CursorMode)
   case SetCursorInfoBarMode(mode: CursorInfoBarMode)
   case SetCursorInfoBarPlacement(placement: CursorInfoBarPlacement)

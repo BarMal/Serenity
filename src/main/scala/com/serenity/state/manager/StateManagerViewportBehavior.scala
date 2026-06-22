@@ -16,17 +16,26 @@ private[manager] trait StateManagerViewportBehavior extends StateManagerSurfaceF
         case Some(pane) =>
           pane.bufferId.flatMap(state.buffers.get) match
             case Some(buffer) =>
-              val cursor         = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
-              val viewport       = buffer.viewport
-              val font           = previewFontForBuffer(buffer, state.config.fontConfig)
-              val visibleWidthPx = viewport.visibleColumns * CellMetrics.fromFont(font).charWidth
-              val lineText       = buffer.content.getLine(cursor.line).getOrElse("")
+              val cursor          = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+              val viewport        = buffer.viewport
+              val font            = previewFontForBuffer(buffer, state.config.fontConfig)
+              val visibleWidthPx  = viewport.visibleColumns * CellMetrics.fromFont(font).charWidth
+              val lineText        = buffer.content.getLine(cursor.line).getOrElse("")
+              val wordWrapEnabled = state.config.wordWrapEnabled
               val measuredCursorVisualLine =
-                TextLayoutSnapshot.visualLineIndexForCursor(lineText, cursor.column, visibleWidthPx, font)
+                TextLayoutSnapshot.visualLineIndexForCursor(
+                  lineText,
+                  cursor.column,
+                  visibleWidthPx,
+                  font,
+                  wordWrapEnabled = wordWrapEnabled
+                )
               val cellCursorVisualLine = cursor.column / math.max(1, viewport.visibleColumns)
-              val cursorVisualLine     = math.max(measuredCursorVisualLine, cellCursorVisualLine)
+              val cursorVisualLine =
+                if wordWrapEnabled then math.max(measuredCursorVisualLine, cellCursorVisualLine)
+                else 0
               val newLeftColumn =
-                if buffer.usesTextFont then 0
+                if buffer.usesTextFont && wordWrapEnabled then 0
                 else
                   val measuredLeftColumn =
                     TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)
