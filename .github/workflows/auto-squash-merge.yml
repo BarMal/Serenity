@@ -43,11 +43,12 @@ jobs:
             exit 0
           fi
 
-          pr_json="$(gh pr view "${PR_NUMBER}" --repo "${REPO}" --json headRefOid,isDraft,state,url)"
+          pr_json="$(gh pr view "${PR_NUMBER}" --repo "${REPO}" --json headRefOid,isDraft,state,url,baseRefName)"
           pr_state="$(jq -r '.state' <<<"${pr_json}")"
           pr_draft="$(jq -r '.isDraft' <<<"${pr_json}")"
           pr_head_sha="$(jq -r '.headRefOid' <<<"${pr_json}")"
           pr_url="$(jq -r '.url' <<<"${pr_json}")"
+          base_ref="$(jq -r '.baseRefName' <<<"${pr_json}")"
 
           if [ "${pr_state}" != "OPEN" ]; then
             echo "PR ${PR_NUMBER} is ${pr_state}; nothing to merge."
@@ -96,6 +97,38 @@ jobs:
             --delete-branch \
             --match-head-commit "${pr_head_sha}"
 
+          merge_commit=""
+          for attempt in {1..30}; do
+            merge_commit="$(gh pr view "${PR_NUMBER}" --repo "${REPO}" --json mergeCommit --jq '.mergeCommit.oid // ""')"
+            if [ -n "${merge_commit}" ]; then
+              break
+            fi
+
+            echo "Waiting for PR ${PR_NUMBER} merge commit to be available (attempt ${attempt}/30)."
+            sleep 2
+          done
+
+          if [ -z "${merge_commit}" ]; then
+            echo "::error::PR ${PR_NUMBER} merged but no merge commit was reported."
+            exit 1
+          fi
+
+          base_sha=""
+          for attempt in {1..30}; do
+            base_sha="$(gh api "repos/${REPO}/git/ref/heads/${base_ref}" --jq '.object.sha')"
+            if [ "${base_sha}" = "${merge_commit}" ]; then
+              break
+            fi
+
+            echo "Waiting for ${base_ref} to resolve to ${merge_commit}; current ${base_sha} (attempt ${attempt}/30)."
+            sleep 2
+          done
+
+          if [ "${base_sha}" != "${merge_commit}" ]; then
+            echo "::error::Timed out waiting for ${base_ref} to resolve to ${merge_commit}; current ${base_sha}."
+            exit 1
+          fi
+
           gh workflow run desktop-publish.yml \
             --repo "${REPO}" \
-            --ref master
+            --ref "${base_ref}"
