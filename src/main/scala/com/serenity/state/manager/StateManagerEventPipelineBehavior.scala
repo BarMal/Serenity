@@ -935,8 +935,14 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
 
   private def commandRunnerSelectionAt(event: MouseInputEvent, state: AppState): Option[CommandRunnerEvent] =
     state.viewportSize.flatMap { viewportSize =>
-      val layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      val surfaces = List(state.commandRunnerSubmenuSurface, state.commandRunnerSurface).flatten
+      val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      val surfaces =
+        event match
+          case _: MouseMove
+              if state.commandRunnerSubmenuSurface.exists(surface => state.focus == Focus.Surface(surface.id)) =>
+            state.commandRunnerSubmenuSurface.toList
+          case _ =>
+            List(state.commandRunnerSubmenuSurface, state.commandRunnerSurface).flatten
       surfaces.view.flatMap(surface => commandRunnerSelectionForSurface(event, layout, surface)).headOption
     }
 

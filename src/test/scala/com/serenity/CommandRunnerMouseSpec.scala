@@ -56,6 +56,23 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     runnerFrom(stateManager.getCurrentState.unsafeRunSync()).activeSubmenu.map(_.selectedIndex) shouldBe Some(2)
   }
 
+  it should "keep submenu focus when hovering over the parent command runner" in {
+    val stateManager = createStateManager("CommandRunnerMouseSpec")
+
+    openLanguageSubmenu(stateManager)
+
+    val before = stateManager.getCurrentState.unsafeRunSync()
+    before.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
+
+    val point = commandRunnerItemPoint(before, 0)
+
+    stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
+    runnerFrom(after).activeSubmenu.map(_.groupId) shouldBe Some("settings-language")
+  }
+
   it should "execute the focused submenu row clicked under the pointer" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 

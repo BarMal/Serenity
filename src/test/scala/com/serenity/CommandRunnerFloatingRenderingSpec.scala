@@ -107,8 +107,12 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getBg(overlay.x + 1, overlay.y + 1) shouldBe state.theme.panel.background
     surface.getBg(overlay.x + 1, overlay.y + 2) shouldBe state.theme.highlighted.background
 
-    val searchCursorX = overlay.x + 1 + "search: op".length
-    surface.getBg(searchCursorX, overlay.y + 1) shouldBe state.theme.cursor
+    val uiMetrics =
+      CellMetrics.fromFont(Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D))
+    val searchCursorY = uiMetrics.toPixelY(overlay.y + 1)
+    surface.fillPixelRectCalls.filter(call =>
+      call.color == state.theme.cursor && call.yPx == searchCursorY
+    ) should not be empty
   }
 
   it should "render category tabs in browse mode and show grouped settings rows" in {
@@ -271,16 +275,17 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val submenuRect = layout.belowCursorOverlayStack
       .collectFirst { case (SurfaceId("command-runner-submenu"), rect) => rect }
       .getOrElse(fail("Expected command-runner submenu overlay"))
-    val submenuCursorX = submenuRect.x + 1 + "Language search: java".length
+    val uiMetrics      = CellMetrics.fromFont(Font(Font.SANS_SERIF, Font.PLAIN, 12))
+    val submenuCursorY = uiMetrics.toPixelY(submenuRect.y + 1)
 
     val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
     val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
 
-    visibleCursors should have size 3
+    visibleCursors should have size 4
     hiddenCursors should have size 3
-    hiddenCursors.map(_.xPx) shouldBe visibleCursors.map(_.xPx)
-    visibleSurface.getBg(submenuCursorX, submenuRect.y + 1) shouldBe state.theme.cursor
-    hiddenSurface.getBg(submenuCursorX, submenuRect.y + 1) should not be state.theme.cursor
+    visibleCursors.map(_.yPx) should contain(submenuCursorY)
+    hiddenCursors.map(_.yPx) should not contain submenuCursorY
+    hiddenCursors.map(_.xPx) shouldBe visibleCursors.filterNot(_.yPx == submenuCursorY).map(_.xPx)
   }
 
   it should "keep the selected command highlighted while the overlay is animating" in {

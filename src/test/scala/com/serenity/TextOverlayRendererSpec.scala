@@ -73,6 +73,29 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorX
   }
 
+  it should "place a plain editable row caret using measured text advances" in {
+    val surface = new MockRenderSurface(80, 8)
+    val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val rowText = "search: iiiiWWWW"
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 40, 5),
+      rows = List(
+        OverlayRow(
+          plainText = rowText,
+          cursorColumn = Some(rowText.length)
+        )
+      )
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+
+    val caretXs         = TextLayoutSnapshot.caretXsForText(rowText, font, surface.fontRenderContext.get)
+    val expectedCursorX = metrics.toPixelX(1) + math.round(caretXs.last)
+
+    surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorX
+  }
+
   it should "render command runner settings rows with stable label, hint, and value columns" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -108,6 +131,33 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     val secondRow = surface.getRow(2)
     firstRow.indexOf("Used") shouldBe secondRow.indexOf("Used")
     firstRow.indexOf("Monaspace") shouldBe secondRow.indexOf("SansSerif")
+  }
+
+  it should "truncate long selected column text from the end instead of dropping the leading characters" in {
+    val surface = new MockRenderSurface(40, 6)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 24, 5),
+      rows = List(
+        OverlayRow(
+          plainText = "Extremely Long Setting Name: Helpful hint Value",
+          selected = true,
+          segments = List(
+            OverlaySegment("Extremely Long Setting Name"),
+            OverlaySegment("Helpful hint"),
+            OverlaySegment("Value", selected = true)
+          ),
+          layout = OverlayRowLayout.Columns
+        )
+      )
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+
+    val renderedRow = surface.getRow(1)
+    renderedRow should include("Extre")
+    renderedRow should not include "etting"
   }
 
   it should "render font preview segments with the segment font family" in {
