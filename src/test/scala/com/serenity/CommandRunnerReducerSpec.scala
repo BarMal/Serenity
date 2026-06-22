@@ -680,6 +680,22 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     } shouldBe true
   }
 
+  it should "emit authored document comment text from the navigation input item" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-navigation", "document-comment")
+
+    val typed =
+      "Tighten this opening".foldLeft(state)((s, char) =>
+        CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state
+      )
+
+    val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
+
+    result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
+      CommandIntent.AddDocumentComment("Tighten this opening")
+    )
+  }
+
   it should "be a no-op on Enter when the value is out of bounds" in {
     val registry = CommandRegistry.default
     val state    = settingsStateOnItem("settings-animation", "animation-steps")

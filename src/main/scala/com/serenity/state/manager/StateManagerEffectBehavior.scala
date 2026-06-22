@@ -1320,8 +1320,13 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateState: current =>
           current.buffers.get(buffer.id) match
             case Some(currentBuffer) =>
-              val comments = (comment :: currentBuffer.documentComments.filterNot(existing =>
-                existing.start == comment.start && existing.end == comment.end
+              val existingCommentAtCursor = currentBuffer.documentComments.find(_.contains(cursor))
+              val updatedComment = existingCommentAtCursor
+                .map(existing => existing.copy(text = commentText))
+                .getOrElse(comment)
+              val comments = (updatedComment :: currentBuffer.documentComments.filterNot(existing =>
+                existingCommentAtCursor.contains(existing) ||
+                  (existing.start == comment.start && existing.end == comment.end)
               )).sortBy(existing => (existing.start.line, existing.start.column, existing.text))
               current.copy(
                 buffers =
