@@ -79,6 +79,9 @@ enum CommandIntent:
   case ToggleLineNumbers
   case ToggleGutter
   case ToggleWordWrap
+  case SetLineNumbers(enabled: Boolean)
+  case SetGutter(enabled: Boolean)
+  case SetWordWrap(enabled: Boolean)
   case SetCursorMode(mode: CursorMode)
   case SetCursorInfoBarMode(mode: CursorInfoBarMode)
   case SetCursorInfoBarPlacement(placement: CursorInfoBarPlacement)

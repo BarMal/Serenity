@@ -101,6 +101,9 @@ case class CommandRunner(
     val defaultDocumentItem  = CommandRunner.defaultDocumentModeOptionItem(optionSelections)
     val spellCheckItem       = CommandRunner.spellCheckOptionItem(optionSelections)
     val textScaleModeItem    = CommandRunner.textScaleModeOptionItem(optionSelections)
+    val lineNumbersItem      = CommandRunner.lineNumbersOptionItem(optionSelections)
+    val gutterItem           = CommandRunner.gutterOptionItem(optionSelections)
+    val wordWrapItem         = CommandRunner.wordWrapOptionItem(optionSelections)
     val keymapItems          = inputItems.filter(_.id.startsWith("keymap-"))
     val workspaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-workspace-layout",
@@ -119,7 +122,7 @@ case class CommandRunner(
     val textDisplayGroup = CommandSurfaceItem.GroupItem(
       id = "settings-text-display",
       label = "Text Display",
-      children = CommandRunner.textDisplayItems,
+      children = List(lineNumbersItem, gutterItem, wordWrapItem),
       category = CommandCategory.Settings,
       hint = Some("Line numbers, gutter, wrap")
     )
@@ -659,6 +662,9 @@ object CommandRunner:
       "markdown-view"             -> markdownViewModeIndex(config.markdownViewMode),
       "default-document-mode"     -> defaultDocumentModeIndex(config.defaultDocumentMode),
       "spellcheck-enabled"        -> spellCheckEnabledIndex(config.spellCheck.enabled),
+      "line-numbers"              -> enabledIndex(config.showLineNumbers),
+      "gutter"                    -> enabledIndex(config.showGutter),
+      "word-wrap"                 -> enabledIndex(config.wordWrapEnabled),
       "code-font"                 -> codeFontIndex(config.fontConfig.codeFontFamily),
       "text-font"                 -> textFontIndex(config.fontConfig.textFontFamily),
       "ui-font"                   -> uiFontIndex(config.fontConfig.uiFontFamily),
@@ -995,30 +1001,35 @@ object CommandRunner:
       )
     ).map(CommandSurfaceItem.CommandItem(_))
 
-  private[command] val textDisplayItems: List[CommandSurfaceItem.CommandItem] =
-    List(
-      Command.typed(
-        "toggle-line-numbers",
-        "Show or hide line numbers.",
-        CommandIntent.ToggleLineNumbers,
-        CommandCategory.View,
-        label = "Toggle Line Numbers"
-      ),
-      Command.typed(
-        "toggle-gutter",
-        "Show or hide the status gutter.",
-        CommandIntent.ToggleGutter,
-        CommandCategory.View,
-        label = "Toggle Gutter"
-      ),
-      Command.typed(
-        "toggle-word-wrap",
-        "Wrap long logical lines to the editor width.",
-        CommandIntent.ToggleWordWrap,
-        CommandCategory.View,
-        label = "Toggle Word Wrap"
-      )
-    ).map(CommandSurfaceItem.CommandItem(_))
+  private[command] def lineNumbersOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    enabledOptionItem(
+      id = "line-numbers",
+      label = "Line Numbers",
+      selectedIndex = optionSelections.getOrElse("line-numbers", 0),
+      enabledIntent = CommandIntent.SetLineNumbers(true),
+      disabledIntent = CommandIntent.SetLineNumbers(false),
+      hint = "Show or hide line numbers"
+    )
+
+  private[command] def gutterOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    enabledOptionItem(
+      id = "gutter",
+      label = "Gutter",
+      selectedIndex = optionSelections.getOrElse("gutter", 0),
+      enabledIntent = CommandIntent.SetGutter(true),
+      disabledIntent = CommandIntent.SetGutter(false),
+      hint = "Show or hide the status gutter"
+    )
+
+  private[command] def wordWrapOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    enabledOptionItem(
+      id = "word-wrap",
+      label = "Word Wrap",
+      selectedIndex = optionSelections.getOrElse("word-wrap", 0),
+      enabledIntent = CommandIntent.SetWordWrap(true),
+      disabledIntent = CommandIntent.SetWordWrap(false),
+      hint = "Wrap long logical lines to the editor width"
+    )
 
   private[command] val navigationItems: List[CommandSurfaceItem.CommandItem] =
     List(
@@ -1111,6 +1122,26 @@ object CommandRunner:
   private def boundedOptionIndex(index: Int, options: List[CommandOption]): Int =
     if options.isEmpty then 0
     else index.max(0).min(options.length - 1)
+
+  private def enabledOptionItem(
+    id: String,
+    label: String,
+    selectedIndex: Int,
+    enabledIntent: CommandIntent,
+    disabledIntent: CommandIntent,
+    hint: String
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = id,
+      label = label,
+      options = List(
+        CommandOption("On", enabledIntent),
+        CommandOption("Off", disabledIntent)
+      ),
+      selectedIndex = selectedIndex,
+      category = CommandCategory.Settings,
+      hint = Some(hint)
+    )
 
   private[command] def normalizedUiPresetNames(names: List[String]): List[String] =
     names
@@ -1746,6 +1777,9 @@ object CommandRunner:
 
   private def spellCheckEnabledIndex(enabled: Boolean): Int =
     if enabled then 1 else 0
+
+  private def enabledIndex(enabled: Boolean): Int =
+    if enabled then 0 else 1
 
   private def codeFontIndex(family: String): Int =
     FontLoader.availableMonospaceFamilies.indexOf(family) match

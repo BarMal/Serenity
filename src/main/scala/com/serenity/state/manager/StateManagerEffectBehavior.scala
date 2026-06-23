@@ -233,6 +233,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateConfig(config => config.withGutter(!config.showGutter)).void
       case CommandIntent.ToggleWordWrap =>
         updateConfig(config => config.withWordWrap(!config.wordWrapEnabled)).void
+      case CommandIntent.SetLineNumbers(enabled) =>
+        updateConfig(config => config.withLineNumbers(enabled)).void
+      case CommandIntent.SetGutter(enabled) =>
+        updateConfig(config => config.withGutter(enabled)).void
+      case CommandIntent.SetWordWrap(enabled) =>
+        updateConfig(config => config.withWordWrap(enabled)).void
       case CommandIntent.SaveCurrentFile =>
         state.focusedBufferId match
           case Some(bufferId) => saveBufferEffect(bufferId)

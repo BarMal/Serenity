@@ -270,11 +270,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     group("settings-ui-presets").label shouldBe "UI Presets"
     group("settings-ui-presets").children.map(_.id) should contain allOf ("ui-preset-save", "ui-preset-apply")
     group("settings-text-display").label shouldBe "Text Display"
-    group("settings-text-display").children.map(_.id) should contain allOf (
-      "toggle-line-numbers",
-      "toggle-gutter",
-      "toggle-word-wrap"
-    )
+    group("settings-text-display").children.map(_.id) shouldBe List("line-numbers", "gutter", "word-wrap")
     group("settings-text-area").label shouldBe "Text Area"
     group("settings-text-area").children.map(_.id) should contain allOf ("text-area-left", "text-area-right")
     groupItems(6).label shouldBe "Code Font"
@@ -310,6 +306,32 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     group("settings-markdown").children.map(_.id) should contain("markdown-view")
     group("settings-language").label shouldBe "Language"
     group("settings-language").children.map(_.id) should contain allOf ("default-document-mode", "lang-plain-text")
+  }
+
+  it should "show current text display states as settings options" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val config = AppConfig.default
+      .copy(showLineNumbers = false, showGutter = false, wordWrapEnabled = false)
+    val runner = CommandRunner.empty
+      .activate(registry, config)
+      .withActiveCategory(CommandCategory.Settings)
+
+    val textDisplay = runner.visibleItems
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-text-display" => group }
+      .getOrElse(fail("Expected text display settings group"))
+    val options = textDisplay.children.collect { case option: CommandSurfaceItem.OptionItem => option }
+
+    options.map(option => option.id -> option.selectedOption) shouldBe List(
+      "line-numbers" -> "Off",
+      "gutter"       -> "Off",
+      "word-wrap"    -> "Off"
+    )
+    options.flatMap(_.selectedIntent) shouldBe List(
+      CommandIntent.SetLineNumbers(false),
+      CommandIntent.SetGutter(false),
+      CommandIntent.SetWordWrap(false)
+    )
   }
 
   it should "surface default document mode as a typed language setting" in {
