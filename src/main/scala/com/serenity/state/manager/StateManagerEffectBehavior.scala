@@ -1337,15 +1337,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   ): AppState =
     state.buffers.get(point.bufferId) match
       case Some(buffer) =>
-        val viewport = buffer.viewport
-        val cells = (viewport.topLine until (viewport.topLine + viewport.visibleLines)).flatMap { line =>
-          buffer.content.getLine(line).toList.flatMap { text =>
-            text.zipWithIndex.take(viewport.visibleColumns).map { (char, column) =>
-              com.serenity.animation.CharacterKey(column, line) ->
-                com.serenity.animation.CellAnimation(char, state.theme.background, state.theme.foreground)
-            }
-          }
-        }.toMap
+        val cells = VisibleBufferAnimationCells.fromBuffer(
+          buffer,
+          state.config.wordWrapEnabled,
+          state.theme.background,
+          state.theme.foreground
+        )
 
         if cells.isEmpty then state
         else
