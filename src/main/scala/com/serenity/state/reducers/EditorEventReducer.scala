@@ -73,7 +73,9 @@ object EditorEventReducer:
     currentState: AppState
   )(using balance: com.serenity.rope.Balance): ReducerResult =
     val result =
-      if buffer.allSelections.nonEmpty then reduceMultiSelectionTextEvent(event, buffer, paneId, currentState)
+      if isExtendSelectionEvent(event) then
+        reduceSingleCursorTextEvent(event, clearInFlightMultiCursorVerticalState(buffer), paneId, currentState)
+      else if buffer.allSelections.nonEmpty then reduceMultiSelectionTextEvent(event, buffer, paneId, currentState)
       else if preservesInFlightMultiCursorVerticalState(event, buffer) then
         reduceMultiCursorTextEvent(event, buffer, paneId, currentState)
       else if buffer.cursors.size > 1 then reduceMultiCursorTextEvent(event, buffer, paneId, currentState)
@@ -89,6 +91,11 @@ object EditorEventReducer:
         true
       case _ =>
         false
+
+  private def isExtendSelectionEvent(event: TextEntryEvent): Boolean =
+    event match
+      case ExtendSelectionLeft | ExtendSelectionRight | ExtendSelectionUp | ExtendSelectionDown => true
+      case _                                                                                    => false
 
   private def refreshFindState(state: AppState, bufferId: BufferId): AppState =
     state.buffers.get(bufferId) match
@@ -329,6 +336,52 @@ object EditorEventReducer:
               preferredColumn = Some(preferredColumn),
               preferredXPx = Some(preferredXPx),
               viewport = updatedViewport
+            )
+            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+
+          case ExtendSelectionLeft =>
+            val text      = buffer.content.collect()
+            val newCursor = moveCursorLeft(cursor, text)
+            val updatedBuffer =
+              extendSelection(buffer, currentState, cursor, newCursor, preferredColumn = Some(newCursor.column))
+            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+
+          case ExtendSelectionRight =>
+            val text      = buffer.content.collect()
+            val newCursor = moveCursorRight(cursor, text)
+            val updatedBuffer =
+              extendSelection(buffer, currentState, cursor, newCursor, preferredColumn = Some(newCursor.column))
+            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+
+          case ExtendSelectionUp =>
+            val preferredColumn       = buffer.preferredColumn.getOrElse(cursor.column)
+            val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
+            val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, cursor))
+            val newCursor = measuredVerticalMoveBySnapshot(buffer, cursor, navSnap, preferredXPx, direction = -1)
+              .getOrElse(moveUpVisualLine(cursor, buffer.content, effectivePanelWidth(currentState), preferredColumn))
+            val updatedBuffer = extendSelection(
+              buffer,
+              currentState,
+              cursor,
+              newCursor,
+              preferredColumn = Some(preferredColumn),
+              preferredXPx = Some(preferredXPx)
+            )
+            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+
+          case ExtendSelectionDown =>
+            val preferredColumn       = buffer.preferredColumn.getOrElse(cursor.column)
+            val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
+            val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, cursor))
+            val newCursor = measuredVerticalMoveBySnapshot(buffer, cursor, navSnap, preferredXPx, direction = 1)
+              .getOrElse(moveDownVisualLine(cursor, buffer.content, effectivePanelWidth(currentState), preferredColumn))
+            val updatedBuffer = extendSelection(
+              buffer,
+              currentState,
+              cursor,
+              newCursor,
+              preferredColumn = Some(preferredColumn),
+              preferredXPx = Some(preferredXPx)
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
@@ -1554,6 +1607,24 @@ object EditorEventReducer:
 
   private def selectionFocusOrCursor(buffer: Buffer, cursor: CursorPosition): CursorPosition =
     buffer.primarySelection.map(_.focus).getOrElse(cursor)
+
+  private def extendSelection(
+    buffer: Buffer,
+    currentState: AppState,
+    anchor: CursorPosition,
+    focus: CursorPosition,
+    preferredColumn: Option[Int],
+    preferredXPx: Option[Float] = None
+  ): Buffer =
+    val selectionAnchor = buffer.primarySelection.map(_.anchor).getOrElse(anchor)
+    val baseBuffer = buffer.copy(
+      cursors = focus :: buffer.cursors.tail,
+      selection = Some(Selection(selectionAnchor, focus)),
+      selections = Nil,
+      preferredColumn = preferredColumn,
+      preferredXPx = preferredXPx
+    )
+    baseBuffer.copy(viewport = adjustViewportForCursor(baseBuffer, currentState, focus))
 
   private def effectivePanelWidth(currentState: AppState): Int =
     val viewportSize = currentState.viewportSize.getOrElse(com.serenity.ui.layout.ViewportSize(80, 24))
