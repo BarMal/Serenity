@@ -312,6 +312,22 @@ object CommandRunnerReducer:
           replaceRunner(submenuFocusedState, _.withSelectedFocusedSubmenuIndex(index))
         )
 
+      case RunnerSelectPreviewSubmenuItem(groupId, index) =>
+        val submenuFocusedState = state.commandRunnerSubmenuSurface
+          .map(surface => state.copy(focus = Focus.Surface(surface.id)))
+          .getOrElse(state)
+        ReducerResult.noEffects(
+          replaceRunner(
+            submenuFocusedState,
+            runner =>
+              runner.copy(
+                previewedGroupId = Some(groupId),
+                activeSubmenu = Some(CommandRunnerSubmenuState(groupId, selectedIndex = index)),
+                submenuSelections = runner.submenuSelections + (groupId -> index)
+              )
+          )
+        )
+
       case RunnerNavigate(Direction.Left) =>
         if submenuHasFocus(state) then
           currentRunner(state) match

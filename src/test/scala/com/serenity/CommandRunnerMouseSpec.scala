@@ -73,6 +73,47 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     runnerFrom(after).activeSubmenu.map(_.groupId) shouldBe Some("settings-language")
   }
 
+  it should "focus a preview submenu row when the pointer moves into the preview" in {
+    val stateManager = createStateManager("CommandRunnerMouseSpec")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (1 to 5).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())
+
+    val before = stateManager.getCurrentState.unsafeRunSync()
+    before.commandRunnerSubmenuSurface.map(_.content) should matchPattern {
+      case Some(SurfaceContent.CommandPaletteSubmenu(_, "settings-workspace-layout", true)) =>
+    }
+
+    val point = commandRunnerSubmenuItemPoint(before, 0)
+
+    stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
+    runnerFrom(after).activeSubmenu.map(_.groupId) shouldBe Some("settings-workspace-layout")
+    runnerFrom(after).activeSubmenu.map(_.selectedIndex) shouldBe Some(0)
+  }
+
+  it should "enter the preview submenu row clicked under the pointer" in {
+    val stateManager = createStateManager("CommandRunnerMouseSpec")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    (1 to 5).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())
+
+    val before = stateManager.getCurrentState.unsafeRunSync()
+    val point  = commandRunnerSubmenuItemPoint(before, 0)
+
+    stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
+
+    val after   = stateManager.getCurrentState.unsafeRunSync()
+    val submenu = runnerFrom(after).activeSubmenu.getOrElse(fail("Expected focused submenu"))
+    after.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
+    submenu.groupId shouldBe "settings-panel-pins"
+    submenu.parentGroupId shouldBe Some("settings-workspace-layout")
+  }
+
   it should "execute the focused submenu row clicked under the pointer" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 
