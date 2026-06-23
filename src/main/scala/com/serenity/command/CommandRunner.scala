@@ -924,6 +924,48 @@ object CommandRunner:
         label = "Pin Diagnostics Panel"
       ),
       Command.typed(
+        "focus-left-panel",
+        "Focus the left pinned panel.",
+        CommandIntent.FocusPanel(PanelPosition.Left),
+        CommandCategory.View,
+        label = "Focus Left Panel"
+      ),
+      Command.typed(
+        "focus-right-panel",
+        "Focus the right pinned panel.",
+        CommandIntent.FocusPanel(PanelPosition.Right),
+        CommandCategory.View,
+        label = "Focus Right Panel"
+      ),
+      Command.typed(
+        "focus-bottom-panel",
+        "Focus the bottom pinned panel.",
+        CommandIntent.FocusPanel(PanelPosition.Bottom),
+        CommandCategory.View,
+        label = "Focus Bottom Panel"
+      ),
+      Command.typed(
+        "expand-left-panel",
+        "Expand the left pinned panel.",
+        CommandIntent.ExpandPanel(PanelPosition.Left),
+        CommandCategory.View,
+        label = "Expand Left Panel"
+      ),
+      Command.typed(
+        "expand-right-panel",
+        "Expand the right pinned panel.",
+        CommandIntent.ExpandPanel(PanelPosition.Right),
+        CommandCategory.View,
+        label = "Expand Right Panel"
+      ),
+      Command.typed(
+        "expand-bottom-panel",
+        "Expand the bottom pinned panel.",
+        CommandIntent.ExpandPanel(PanelPosition.Bottom),
+        CommandCategory.View,
+        label = "Expand Bottom Panel"
+      ),
+      Command.typed(
         "unpin-left-panel",
         "Unpin the left panel.",
         CommandIntent.UnpinPanel(PanelPosition.Left),
