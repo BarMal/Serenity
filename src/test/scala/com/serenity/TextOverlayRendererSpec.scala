@@ -117,6 +117,31 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorX
   }
 
+  it should "render editable plain row text and caret with the same measured baseline" in {
+    val surface = new MockRenderSurface(80, 8)
+    val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val rowText = "search: iiiiWWWW"
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 40, 5),
+      rows = List(
+        OverlayRow(
+          plainText = rowText,
+          cursorColumn = Some(rowText.length)
+        )
+      )
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+
+    val textRun = surface.drawRunPxCalls.find(_.s == rowText).getOrElse(fail("expected measured row text"))
+    textRun.yPx shouldBe metrics.toPixelY(1)
+    textRun.lineHeightPx shouldBe metrics.lineHeight
+    textRun.ascentPx shouldBe metrics.ascent
+    surface.fillPixelRectCalls.last.yPx shouldBe textRun.yPx
+    surface.fillPixelRectCalls.last.heightPx shouldBe textRun.lineHeightPx
+  }
+
   it should "render command runner settings rows with stable label, hint, and value columns" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
