@@ -119,6 +119,27 @@ object TextLayoutSnapshot:
         }
         .getOrElse(0)
 
+  private[serenity] def boundedVisualLinesForText(
+    text: String,
+    bufferLine: Int,
+    panelWidthPx: Int,
+    font: Font,
+    fontRenderContext: FontRenderContext = defaultFontRenderContext(),
+    baseColumn: Int = 0,
+    maxVisualLines: Int = Int.MaxValue
+  ): Vector[TextVisualLine] =
+    val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
+    wrapLogicalLine(
+      text,
+      bufferLine,
+      math.max(1, panelWidthPx),
+      font,
+      fontRenderContext,
+      measuredLayout,
+      baseColumn,
+      maxVisualLines
+    )
+
   def fromBuffer(
     buffer: Buffer,
     panelWidthPx: Int,
@@ -181,8 +202,10 @@ object TextLayoutSnapshot:
         val visibleSlice =
           if wordWrapEnabled then rawLine.drop(startColumn)
           else unwrappedVisibleSlice(rawLine, startColumn, buffer.viewport.visibleColumns)
+        val remainingVisualLines = math.max(0, visualLineLimit - acc.length)
         val wrapped =
-          if wordWrapEnabled then
+          if remainingVisualLines <= 0 then Vector.empty
+          else if wordWrapEnabled then
             wrapLogicalLine(
               visibleSlice,
               lineIndex,
@@ -190,7 +213,8 @@ object TextLayoutSnapshot:
               font,
               frc,
               measuredLayout,
-              startColumn
+              startColumn,
+              remainingVisualLines
             )
           else
             Vector(
@@ -220,12 +244,14 @@ object TextLayoutSnapshot:
     font: Font,
     frc: FontRenderContext,
     measuredLayout: Boolean,
-    baseColumn: Int = 0
+    baseColumn: Int = 0,
+    maxVisualLines: Int = Int.MaxValue
   ): Vector[TextVisualLine] =
-    if line.isEmpty then Vector(shapeSegment("", bufferLine, baseColumn, baseColumn, font, frc, measuredLayout))
+    if maxVisualLines <= 0 then Vector.empty
+    else if line.isEmpty then Vector(shapeSegment("", bufferLine, baseColumn, baseColumn, font, frc, measuredLayout))
     else
       def loop(startColumn: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
-        if startColumn >= line.length then acc
+        if startColumn >= line.length || acc.length >= maxVisualLines then acc
         else
           val remaining        = line.substring(startColumn)
           val fittingLength    = fittingSegmentLength(remaining, panelWidthPx, font, frc, measuredLayout)
@@ -249,11 +275,30 @@ object TextLayoutSnapshot:
     if !measuredLayout then
       val charWidth = math.max(1, CellMetrics.fromFont(font).charWidth)
       math.max(1, math.min(text.length, panelWidthPx / charWidth))
-    else
-      val carets = caretXs(text, font, frc, measuredLayout)
+    else fittingMeasuredSegmentLength(text, panelWidthPx, font, frc, measuredLayout)
+
+  private def fittingMeasuredSegmentLength(
+    text: String,
+    panelWidthPx: Int,
+    font: Font,
+    frc: FontRenderContext,
+    measuredLayout: Boolean
+  ): Int =
+    val cellWidth    = math.max(1, CellMetrics.fromFont(font).charWidth)
+    val initialLimit = math.min(text.length, math.max(16, panelWidthPx / cellWidth + 32))
+
+    @annotation.tailrec
+    def loop(limit: Int): Int =
+      val candidate = text.take(limit)
+      val carets    = caretXs(candidate, font, frc, measuredLayout)
       val maxFitting =
         carets.zipWithIndex.takeWhile { case (x, _) => x <= panelWidthPx.toFloat }.map(_._2).lastOption.getOrElse(0)
-      math.max(1, maxFitting)
+      val candidateExhausted = limit >= text.length
+      val panelFilled        = carets.lastOption.exists(_ > panelWidthPx.toFloat)
+      if candidateExhausted || panelFilled || maxFitting < candidate.length then math.max(1, maxFitting)
+      else loop(math.min(text.length, math.max(limit + 1, limit * 2)))
+
+    loop(initialLimit)
 
   private def wordBoundarySegmentLength(text: String, fittingLength: Int): Int =
     if fittingLength >= text.length then text.length
