@@ -673,8 +673,11 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     }
 
   protected def ensureCommandRunnerSurface(state: AppState): AppState =
-    val registry = CommandRegistry.default
-    val runner   = CommandRunner.empty.activate(registry, state.config)
+    val registry        = CommandRegistry.default
+    val activatedRunner = CommandRunner.empty.activate(registry, state.config)
+    val runner = activatedRunner.copy(
+      optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
+    )
     val (stateWithId, surfaceId) =
       state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
     val surface = UiSurface(

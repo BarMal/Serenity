@@ -1,11 +1,11 @@
 package com.serenity
 
-import com.serenity.command.CommandRegistry
+import com.serenity.command.{CommandRegistry, CommandSurfaceItem}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer, ModalStateReducer}
-import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.layout.{PanelPosition, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -72,6 +72,37 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val editorEntries = opened2.state.focusHistory.count(_ == Focus.EditorPane(PaneId(0)))
     editorEntries shouldBe 1
+  }
+
+  it should "hydrate workspace panel pin options from current pinned surfaces" in {
+    val base = AppState.initial.copy(
+      focus = Focus.EditorPane(PaneId(0)),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("outline-panel"),
+          SurfaceContent.Outline(Nil),
+          SurfacePresentation.Pinned(PanelPosition.Right, 30)
+        )
+      )
+    )
+
+    val opened = AppEventReducer.reduce(ToggleCommandRunner, base, registry).state
+    val runner = opened.commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(runner) => Some(runner)
+          case _                                     => None
+      }
+      .getOrElse(fail("Expected command runner"))
+
+    val workspace = runner.settingsGroups
+      .find(_.id == "settings-workspace-layout")
+      .getOrElse(fail("Expected workspace layout group"))
+    val outlineOption = workspace.children
+      .collectFirst { case option: CommandSurfaceItem.OptionItem if option.id == "panel-outline-pin" => option }
+      .getOrElse(fail("Expected outline pin option"))
+
+    outlineOption.selectedOption shouldBe "Right"
   }
 
   it should "create a new buffer and focus it on new tab" in {

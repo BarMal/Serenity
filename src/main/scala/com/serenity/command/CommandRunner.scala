@@ -108,7 +108,7 @@ case class CommandRunner(
     val workspaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-workspace-layout",
       label = "Workspace Layout",
-      children = CommandRunner.workspaceLayoutItems,
+      children = CommandRunner.workspaceLayoutItems(optionSelections),
       category = CommandCategory.Settings,
       hint = Some("Panels, outline, preview, diagnostics")
     )
@@ -899,36 +899,14 @@ object CommandRunner:
           )
         )
 
-  private[command] val workspaceLayoutItems: List[CommandSurfaceItem.CommandItem] =
-    List(
-      Command.typed(
-        "pin-outline",
-        "Pin the outline panel on the right.",
-        CommandIntent.PinOutlinePanel,
-        CommandCategory.View,
-        label = "Pin Outline Panel"
-      ),
-      Command.typed(
-        "markdown-preview",
-        "Render a Markdown preview for the current buffer.",
-        CommandIntent.OpenMarkdownPreview,
-        CommandCategory.View,
-        label = "Markdown Preview"
-      ),
-      Command.typed(
-        "pin-explorer",
-        "Pin the explorer panel on the left.",
-        CommandIntent.PinExplorerPanel,
-        CommandCategory.View,
-        label = "Pin Explorer Panel"
-      ),
-      Command.typed(
-        "pin-diagnostics",
-        "Pin the diagnostics panel at the bottom.",
-        CommandIntent.PinDiagnosticsPanel,
-        CommandCategory.View,
-        label = "Pin Diagnostics Panel"
-      ),
+  private[command] def workspaceLayoutItems(optionSelections: Map[String, Int]): List[CommandSurfaceItem] =
+    val panelPinItems = List(
+      panelPinOptionItem("panel-explorer-pin", "Explorer", PanelKind.Explorer, optionSelections),
+      panelPinOptionItem("panel-outline-pin", "Outline", PanelKind.Outline, optionSelections),
+      panelPinOptionItem("panel-diagnostics-pin", "Diagnostics", PanelKind.Diagnostics, optionSelections),
+      panelPinOptionItem("panel-markdown-preview-pin", "Markdown Preview", PanelKind.MarkdownPreview, optionSelections)
+    )
+    val commandItems = List(
       Command.typed(
         "focus-left-panel",
         "Focus the left pinned panel.",
@@ -1000,6 +978,29 @@ object CommandRunner:
         label = "Collapse Expanded Panel"
       )
     ).map(CommandSurfaceItem.CommandItem(_))
+    panelPinItems ++ commandItems
+
+  private[command] def panelPinOptionItem(
+    id: String,
+    label: String,
+    kind: PanelKind,
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    val options = List(
+      CommandOption("Off", CommandIntent.SetPanelPin(kind, None), hint = Some(s"Hide $label")),
+      CommandOption("Top", CommandIntent.SetPanelPin(kind, Some(PanelPosition.Top))),
+      CommandOption("Right", CommandIntent.SetPanelPin(kind, Some(PanelPosition.Right))),
+      CommandOption("Bottom", CommandIntent.SetPanelPin(kind, Some(PanelPosition.Bottom))),
+      CommandOption("Left", CommandIntent.SetPanelPin(kind, Some(PanelPosition.Left)))
+    )
+    CommandSurfaceItem.OptionItem(
+      id = id,
+      label = label,
+      options = options,
+      selectedIndex = boundedOptionIndex(optionSelections.getOrElse(id, 0), options),
+      category = CommandCategory.Settings,
+      hint = Some("Pin this panel to an edge")
+    )
 
   private[command] def lineNumbersOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     enabledOptionItem(

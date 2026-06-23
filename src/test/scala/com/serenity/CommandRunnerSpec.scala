@@ -242,9 +242,10 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     groupItems.head.label shouldBe "Workspace Layout"
     groupItems.head.children.map(_.id) should contain allOf (
-      "pin-outline",
-      "pin-explorer",
-      "pin-diagnostics",
+      "panel-explorer-pin",
+      "panel-outline-pin",
+      "panel-diagnostics-pin",
+      "panel-markdown-preview-pin",
       "focus-left-panel",
       "focus-right-panel",
       "focus-bottom-panel",
@@ -306,6 +307,34 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     group("settings-markdown").children.map(_.id) should contain("markdown-view")
     group("settings-language").label shouldBe "Language"
     group("settings-language").children.map(_.id) should contain allOf ("default-document-mode", "lang-plain-text")
+  }
+
+  it should "surface workspace panel pins as dynamic option rows" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(optionSelections = Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 4))
+      .withActiveCategory(CommandCategory.Settings)
+
+    val workspace = runner.visibleItems
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-workspace-layout" => group }
+      .getOrElse(fail("Expected workspace layout settings group"))
+
+    val pinOptions = workspace.children.collect { case option: CommandSurfaceItem.OptionItem => option }
+
+    pinOptions.map(_.id) shouldBe List(
+      "panel-explorer-pin",
+      "panel-outline-pin",
+      "panel-diagnostics-pin",
+      "panel-markdown-preview-pin"
+    )
+    pinOptions.foreach(_.options.map(_.label) shouldBe List("Off", "Top", "Right", "Bottom", "Left"))
+    pinOptions.find(_.id == "panel-outline-pin").map(_.selectedOption) shouldBe Some("Right")
+    pinOptions.find(_.id == "panel-outline-pin").flatMap(_.selectedIntent) shouldBe
+      Some(CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)))
+    pinOptions.find(_.id == "panel-diagnostics-pin").flatMap(_.selectedIntent) shouldBe
+      Some(CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Left)))
   }
 
   it should "show current text display states as settings options" in {
@@ -490,12 +519,16 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("missing workspace layout group"))
     workspaceLayout.label shouldBe "Workspace Layout"
     workspaceLayout.children.collect {
+      case option: CommandSurfaceItem.OptionItem => option.options.map(_.intent)
+    }.flatten should contain allOf (
+      CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)),
+      CommandIntent.SetPanelPin(PanelKind.MarkdownPreview, Some(PanelPosition.Right)),
+      CommandIntent.SetPanelPin(PanelKind.Explorer, Some(PanelPosition.Left)),
+      CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))
+    )
+    workspaceLayout.children.collect {
       case CommandSurfaceItem.CommandItem(command) => command.intent
     } should contain allOf (
-      CommandIntent.PinOutlinePanel,
-      CommandIntent.OpenMarkdownPreview,
-      CommandIntent.PinExplorerPanel,
-      CommandIntent.PinDiagnosticsPanel,
       CommandIntent.FocusPanel(PanelPosition.Left),
       CommandIntent.FocusPanel(PanelPosition.Right),
       CommandIntent.FocusPanel(PanelPosition.Bottom),

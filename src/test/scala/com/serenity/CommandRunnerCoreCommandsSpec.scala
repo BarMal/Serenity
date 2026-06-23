@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.command.*
 import com.serenity.config.SpellCheckConfig
 import com.serenity.io.{FileDialog, FileUtils}
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
@@ -852,6 +852,88 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.pinnedSurfaces shouldBe before.pinnedSurfaces
+  }
+
+  it should "set a typed panel pin without disturbing other pinned panels" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "panel-diagnostics-pin-bottom",
+          "Pin diagnostics at the bottom.",
+          CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom)),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "panel-outline-pin-right",
+          "Pin outline on the right.",
+          CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "panel-outline-pin-left",
+          "Move outline to the left.",
+          CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Left)),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.pinnedSurfaces.collect {
+      case UiSurface(_, SurfaceContent.Outline(_, _), SurfacePresentation.Pinned(position, _), _) => position
+    } shouldBe List(PanelPosition.Left)
+    updatedState.pinnedSurfaces.collect {
+      case UiSurface(_, SurfaceContent.Diagnostics(_), SurfacePresentation.Pinned(position, _), _) => position
+    } shouldBe List(PanelPosition.Bottom)
+  }
+
+  it should "turn off a typed panel pin without removing other pinned panels" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "panel-outline-pin-right",
+          "Pin outline on the right.",
+          CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "panel-diagnostics-pin-bottom",
+          "Pin diagnostics at the bottom.",
+          CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom)),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "panel-outline-pin-off",
+          "Hide outline panel.",
+          CommandIntent.SetPanelPin(PanelKind.Outline, None),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.pinnedSurfaces.exists(_.content.isInstanceOf[SurfaceContent.Outline]) shouldBe false
+    updatedState.pinnedSurfaces.exists(_.content.isInstanceOf[SurfaceContent.Diagnostics]) shouldBe true
   }
 
   it should "toggle a cursor-attached comment lens for the active comment" in {
