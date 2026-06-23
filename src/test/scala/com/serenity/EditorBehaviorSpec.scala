@@ -439,6 +439,25 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     val finalCursors = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors
     finalCursors shouldBe expectedCursors
 
+  it should "move between logical lines when word wrap is disabled and the cursor is past the viewport" in new EditorFixture:
+    val firstLine  = "a" * 180
+    val secondLine = "b" * 100
+    val bufferId   = stateManager.createBuffer(s"$firstLine\n$secondLine").unsafeRunSync()
+    val state      = stateManager.getCurrentState.unsafeRunSync()
+    val paneId     = state.layout.editorPanes.keys.head
+
+    stateManager
+      .updateState(current => current.copy(config = AppConfig.default.withWordWrap(false)))
+      .unsafeRunSync()
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+    stateManager.setCursorPosition(paneId, 0, 60).unsafeRunSync()
+
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+
+    val cursor = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.head
+    cursor shouldBe CursorPosition(1, 60)
+
   it should "clear in-flight multi-cursor vertical state when an explicit single cursor is set" in new EditorFixture:
     val bufferId = stateManager.createBuffer("abcdef\nxy\nabcdef").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()

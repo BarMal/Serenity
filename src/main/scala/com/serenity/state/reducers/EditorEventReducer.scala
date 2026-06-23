@@ -294,7 +294,7 @@ object EditorEventReducer:
             val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, movementStart))
             val newCursor = measuredVerticalMoveBySnapshot(buffer, movementStart, navSnap, preferredXPx, direction = -1)
               .getOrElse(
-                moveUpVisualLine(movementStart, buffer.content, effectivePanelWidth(currentState), preferredColumn)
+                fallbackVerticalMove(movementStart, buffer, currentState, preferredColumn, direction = -1)
               )
             val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
             val updatedBuffer = buffer.copy(
@@ -313,7 +313,7 @@ object EditorEventReducer:
             val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, movementStart))
             val newCursor = measuredVerticalMoveBySnapshot(buffer, movementStart, navSnap, preferredXPx, direction = 1)
               .getOrElse(
-                moveDownVisualLine(movementStart, buffer.content, effectivePanelWidth(currentState), preferredColumn)
+                fallbackVerticalMove(movementStart, buffer, currentState, preferredColumn, direction = 1)
               )
             val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
             val updatedBuffer = buffer.copy(
@@ -342,7 +342,7 @@ object EditorEventReducer:
             val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
             val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, cursor))
             val newCursor = measuredVerticalMoveBySnapshot(buffer, cursor, navSnap, preferredXPx, direction = -1)
-              .getOrElse(moveUpVisualLine(cursor, buffer.content, effectivePanelWidth(currentState), preferredColumn))
+              .getOrElse(fallbackVerticalMove(cursor, buffer, currentState, preferredColumn, direction = -1))
             val updatedBuffer = extendSelection(
               buffer,
               currentState,
@@ -358,7 +358,7 @@ object EditorEventReducer:
             val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
             val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, cursor))
             val newCursor = measuredVerticalMoveBySnapshot(buffer, cursor, navSnap, preferredXPx, direction = 1)
-              .getOrElse(moveDownVisualLine(cursor, buffer.content, effectivePanelWidth(currentState), preferredColumn))
+              .getOrElse(fallbackVerticalMove(cursor, buffer, currentState, preferredColumn, direction = 1))
             val updatedBuffer = extendSelection(
               buffer,
               currentState,
@@ -1490,8 +1490,7 @@ object EditorEventReducer:
     direction: Int
   ): CursorPosition =
     measuredVerticalMove(buffer, cursor, currentState, preferredXPx, direction).getOrElse {
-      if direction < 0 then moveUpVisualLine(cursor, buffer.content, effectivePanelWidth(currentState), preferredColumn)
-      else moveDownVisualLine(cursor, buffer.content, effectivePanelWidth(currentState), preferredColumn)
+      fallbackVerticalMove(cursor, buffer, currentState, preferredColumn, direction)
     }
 
   private def multiCursorVerticalStates(
@@ -1565,6 +1564,31 @@ object EditorEventReducer:
       val newColumn            = math.min(targetColumnInVisual, nextLineContent.length)
       cursor.copy(line = cursor.line + 1, column = newColumn)
     else cursor
+
+  private def fallbackVerticalMove(
+    cursor: CursorPosition,
+    buffer: Buffer,
+    currentState: AppState,
+    preferredColumn: Int,
+    direction: Int
+  ): CursorPosition =
+    if currentState.config.wordWrapEnabled then
+      if direction < 0 then moveUpVisualLine(cursor, buffer.content, effectivePanelWidth(currentState), preferredColumn)
+      else moveDownVisualLine(cursor, buffer.content, effectivePanelWidth(currentState), preferredColumn)
+    else if direction < 0 then moveUpLogicalLine(cursor, buffer.content, preferredColumn)
+    else moveDownLogicalLine(cursor, buffer.content, preferredColumn)
+
+  private def moveUpLogicalLine(cursor: CursorPosition, rope: Rope, preferredColumn: Int): CursorPosition =
+    if cursor.line <= 0 then cursor
+    else
+      val previousLineLength = rope.getLine(cursor.line - 1).map(_.length).getOrElse(0)
+      cursor.copy(line = cursor.line - 1, column = math.min(preferredColumn, previousLineLength))
+
+  private def moveDownLogicalLine(cursor: CursorPosition, rope: Rope, preferredColumn: Int): CursorPosition =
+    if cursor.line >= rope.lineCount - 1 then cursor
+    else
+      val nextLineLength = rope.getLine(cursor.line + 1).map(_.length).getOrElse(0)
+      cursor.copy(line = cursor.line + 1, column = math.min(preferredColumn, nextLineLength))
 
   private def addCharacterAnimationToBuffer(
     buffer: Buffer,
