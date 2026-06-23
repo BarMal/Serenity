@@ -241,6 +241,24 @@ object ConfigManager:
               value.trim.toDoubleOption
                 .map(percent => config.withTextAreaRightInset(percent / 100.0))
                 .getOrElse(config)
+            case "viewport.width.percent" | "viewport_width_percent" =>
+              parseViewportPercent(value.trim)
+                .map(percent => config.withViewportWidthSizing(config.viewportSizing.width.copy(percent = percent)))
+                .getOrElse(config)
+            case "viewport.width.max" | "viewport_width_max" =>
+              parseViewportMaxCells(value.trim)
+                .map(maxCells => config.withViewportWidthSizing(config.viewportSizing.width.copy(maxCells = maxCells)))
+                .getOrElse(config)
+            case "viewport.height.percent" | "viewport_height_percent" =>
+              parseViewportPercent(value.trim)
+                .map(percent => config.withViewportHeightSizing(config.viewportSizing.height.copy(percent = percent)))
+                .getOrElse(config)
+            case "viewport.height.max" | "viewport_height_max" =>
+              parseViewportMaxCells(value.trim)
+                .map(maxCells =>
+                  config.withViewportHeightSizing(config.viewportSizing.height.copy(maxCells = maxCells))
+                )
+                .getOrElse(config)
             case "spellcheck.enabled" | "spellcheck_enabled" =>
               parseBoolean(value.trim)
                 .map(enabled => config.withSpellCheck(config.spellCheck.copy(enabled = enabled)))
@@ -364,6 +382,10 @@ object ConfigManager:
        |# Text area horizontal insets as percentages of the central workspace.
        |text_area.left.percent = ${config.textAreaInsets.leftPercent}
        |text_area.right.percent = ${config.textAreaInsets.rightPercent}
+       |viewport.width.percent = ${config.viewportSizing.width.percentValue}
+       |viewport.width.max = ${config.viewportSizing.width.maxCells.fold("")(_.toString)}
+       |viewport.height.percent = ${config.viewportSizing.height.percentValue}
+       |viewport.height.max = ${config.viewportSizing.height.maxCells.fold("")(_.toString)}
        |
        |# LSP server overrides
        |$lspSettings
@@ -500,6 +522,11 @@ object ConfigManager:
         case "text_area.left.percent" | "text.area.left.percent" | "text_area_left_percent" |
             "text_area.right.percent" | "text.area.right.percent" | "text_area_right_percent" =>
           value.trim.toDoubleOption.isEmpty
+        case "viewport.width.percent" | "viewport_width_percent" | "viewport.height.percent" |
+            "viewport_height_percent" =>
+          parseViewportPercent(value).isEmpty
+        case "viewport.width.max" | "viewport_width_max" | "viewport.height.max" | "viewport_height_max" =>
+          parseViewportMaxCells(value).isEmpty
         case _ =>
           false
 
@@ -555,6 +582,10 @@ object ConfigManager:
       "text.area.left.percent",
       "text_area.right.percent",
       "text.area.right.percent",
+      "viewport.width.percent",
+      "viewport.width.max",
+      "viewport.height.percent",
+      "viewport.height.max",
       "spellcheck.enabled",
       "spellcheck.languages",
       "spellcheck.words"
@@ -600,6 +631,10 @@ object ConfigManager:
       "window_preferred_height"   -> "window.preferred.height",
       "text_area_left_percent"    -> "text_area.left.percent",
       "text_area_right_percent"   -> "text_area.right.percent",
+      "viewport_width_percent"    -> "viewport.width.percent",
+      "viewport_width_max"        -> "viewport.width.max",
+      "viewport_height_percent"   -> "viewport.height.percent",
+      "viewport_height_max"       -> "viewport.height.max",
       "spellcheck_enabled"        -> "spellcheck.enabled",
       "spellcheck_languages"      -> "spellcheck.languages",
       "spellcheck_words"          -> "spellcheck.words"
@@ -684,6 +719,18 @@ object ConfigManager:
     value.toIntOption.filter(radius =>
       radius >= AppConfig.MinUiCornerRadiusPx && radius <= AppConfig.MaxUiCornerRadiusPx
     )
+
+  private def parseViewportPercent(value: String): Option[Double] =
+    value.toDoubleOption
+      .map(_ / 100.0)
+      .filter(percent =>
+        percent >= ViewportAxisSizing.MinPercent &&
+          percent <= ViewportAxisSizing.MaxPercent
+      )
+
+  private def parseViewportMaxCells(value: String): Option[Option[Int]] =
+    if value.trim.isEmpty then Some(None)
+    else value.toIntOption.filter(_ >= 1).map(Some(_))
 
   private def parseColor(value: String): Option[java.awt.Color] =
     val hex = value.stripPrefix("#")

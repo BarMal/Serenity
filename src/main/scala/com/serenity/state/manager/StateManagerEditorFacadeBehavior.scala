@@ -7,7 +7,7 @@ import com.serenity.lsp.LspEffect
 import com.serenity.rope.Rope
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
-import com.serenity.ui.layout.PaneSplitDirection
+import com.serenity.ui.layout.{LayoutEngine, PaneSplitDirection, ViewportSize}
 
 private[manager] trait StateManagerEditorFacadeBehavior extends StateManagerEventPipelineBehavior:
   this: StateManager =>
@@ -148,10 +148,14 @@ private[manager] trait StateManagerEditorFacadeBehavior extends StateManagerEven
       state.layout.editorPanes.get(paneId) match
         case Some(pane) =>
           val updatedPane = pane.copy(bufferId = Some(bufferId))
-          state.copy(
+          val stateWithBuffer = state.copy(
             layout = state.layout.copy(
               editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
             )
+          )
+          LayoutEngine.syncViewportDimensions(
+            stateWithBuffer,
+            stateWithBuffer.viewportSize.getOrElse(ViewportSize(80, 24))
           )
         case None => state
     }
