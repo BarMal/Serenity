@@ -298,19 +298,31 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     hiddenCursors.exists(call => call.xPx == submenuCursorXPx && call.yPx == submenuCursorYPx) shouldBe false
   }
 
-  it should "keep the selected command highlighted while the overlay is animating" in {
+  it should "fade the selected command highlight with the overlay row animation" in {
     val commands = List(
       Command.typed("open", "Open file", CommandIntent.OpenFile),
       Command.typed("close", "Close current file", CommandIntent.CloseCurrentFile)
     )
     val baseState = stateWithRunner(Theme.light, "op", commands)
     val surfaceId = SurfaceId("command-runner")
+    val transparentPanelForeground = new java.awt.Color(
+      baseState.theme.panel.foreground.getRed,
+      baseState.theme.panel.foreground.getGreen,
+      baseState.theme.panel.foreground.getBlue,
+      0
+    )
+    val transparentPanelBackground = new java.awt.Color(
+      baseState.theme.panel.background.getRed,
+      baseState.theme.panel.background.getGreen,
+      baseState.theme.panel.background.getBlue,
+      0
+    )
     val animationState = AnimationState.empty.mergeAnimations(
       Map(
         CharacterKey(0, 2) -> AnimatedCell.fromThemeTransition(
+          transparentPanelForeground,
           baseState.theme.panel.foreground,
-          baseState.theme.panel.foreground,
-          baseState.theme.panel.background,
+          transparentPanelBackground,
           baseState.theme.panel.background,
           steps = 2
         )
@@ -326,8 +338,12 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
-    surface.getBg(overlay.x + 1, overlay.y + 2) shouldBe state.theme.highlighted.background
-    surface.getFg(overlay.x + 1, overlay.y + 2) shouldBe state.theme.highlighted.foreground
+    val selectedBackground = surface.getBg(overlay.x + 1, overlay.y + 2)
+    val selectedForeground = surface.getFg(overlay.x + 1, overlay.y + 2)
+    selectedBackground.getRGB & 0x00ffffff shouldBe state.theme.highlighted.background.getRGB & 0x00ffffff
+    selectedForeground.getRGB & 0x00ffffff shouldBe state.theme.highlighted.foreground.getRGB & 0x00ffffff
+    selectedBackground.getAlpha shouldBe 0
+    selectedForeground.getAlpha shouldBe 0
   }
 
   it should "draw the floating border with the rounded stroke even while animating" in {
