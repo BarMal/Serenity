@@ -153,7 +153,7 @@ object Renderer:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color] = None
+    cursorColor: Option[java.awt.Color]
   ): Unit =
     surface.hideCursor()
     surface.clearViewport(state.theme.background)
@@ -223,7 +223,7 @@ object Renderer:
       case Some(buf) if buf.content.weight == 0 =>
         renderEmptyPane(contentRect, state.theme, context)
       case Some(buf) =>
-        renderBufferContent(pane, buf, contentRect, state, context, bufferSnapshot.get)
+        renderBufferContent(buf, contentRect, state, context, bufferSnapshot.get)
       case None =>
         renderEmptyPane(contentRect, state.theme, context)
 
@@ -280,7 +280,6 @@ object Renderer:
     surface.setForegroundColor(state.theme.foreground)
 
   private def renderBufferContent(
-    pane: EditorPane,
     buffer: Buffer,
     rect: LayoutRect,
     state: AppState,
@@ -292,10 +291,9 @@ object Renderer:
       val previewWindow = markdownPreviewWindow(buffer, markdownLines)
       renderInlineMarkdownPreview(buffer, rect, state, context, previewWindow)
       renderMarkdownRawLenses(buffer, rect, state, context, snapshot, markdownLines, previewWindow)
-    else renderPlainBufferContent(pane, buffer, rect, state, context, snapshot)
+    else renderPlainBufferContent(buffer, rect, state, context, snapshot)
 
   private def renderPlainBufferContent(
-    pane: EditorPane,
     buffer: Buffer,
     rect: LayoutRect,
     state: AppState,
@@ -320,13 +318,7 @@ object Renderer:
               screenY < rect.bottom &&
               screenX < rect.right
           then
-            val lineTheme =
-              if isHoveredEditorLine(pane.id, buffer.id, visualLine, state) then
-                state.theme.copy(background = state.theme.panel.background)
-              else state.theme
-            if lineTheme.background == state.theme.panel.background then
-              context.surface.setBackgroundColor(state.theme.panel.background)
-              context.surface.fillRect(rect.x, screenY, rect.width, 1, ' ')
+            val lineTheme      = state.theme
             val styledSegments = richTextStyledSegments(buffer, visualLine, lineTheme)
             if snapshot.usesMeasuredLayout then
               CharacterRenderer.renderMeasuredLineWithAnimation(
@@ -395,18 +387,6 @@ object Renderer:
   private def visualLineCellOffset(visualLine: TextVisualLine, context: RenderContext): Int =
     if visualLine.xOffsetPx <= 0.0f then 0
     else math.round(visualLine.xOffsetPx / context.cellMetrics.charWidth.toFloat).max(0)
-
-  private def isHoveredEditorLine(
-    paneId: PaneId,
-    bufferId: BufferId,
-    visualLine: TextVisualLine,
-    state: AppState
-  ): Boolean =
-    state.hoveredEditorTarget.exists(target =>
-      target.paneId == paneId &&
-        target.bufferId == bufferId &&
-        target.cursor.line == visualLine.bufferLine
-    )
 
   private def richTextStyledSegments(
     buffer: Buffer,
