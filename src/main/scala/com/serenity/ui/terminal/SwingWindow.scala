@@ -51,10 +51,7 @@ class SwingWindow(
     addComponentListener(
       new ComponentAdapter:
         override def componentResized(e: ComponentEvent): Unit =
-          val d = getSize()
-          pixelSize.set(d)
-          pendingResize.set(Some(metrics.viewportSize(d.width, d.height)))
-          onResizeCallbackRef.get().foreach(_.apply())
+          publishCanvasResize(getSize())
     )
     override def paintComponent(g: java.awt.Graphics): Unit =
       g.setColor(Color.BLACK)
@@ -212,7 +209,7 @@ class SwingWindow(
           )
 
       override def mouseReleased(e: MouseEvent): Unit =
-        resizeStateRef.updateAndGet(_.copy(resizing = false, resizeDir = 0))
+        val _ = resizeStateRef.updateAndGet(_.copy(resizing = false, resizeDir = 0))
 
       override def mouseMoved(e: MouseEvent): Unit =
         setCursor(dirCursor(edgeDir(e)))
@@ -294,11 +291,13 @@ class SwingWindow(
   def awaitClose: IO[Unit] = IO.blocking(closeLatch.await())
 
   def start(): Unit =
-    SwingUtilities.invokeLater { () =>
+    val showWindow: Runnable = () =>
       frame.setVisible(true)
       if usesCustomChrome then updateShape()
-      canvas.requestFocusInWindow()
-    }
+      publishCanvasResize(canvas.getSize())
+      val _ = canvas.requestFocusInWindow()
+    if SwingUtilities.isEventDispatchThread then showWindow.run()
+    else SwingUtilities.invokeAndWait(showWindow)
 
   def stop(): Unit =
     val dispose: Runnable = () =>
@@ -321,11 +320,10 @@ class SwingWindow(
       val dimension = new Dimension(normalized.width, normalized.height)
       canvas.setPreferredSize(dimension)
       frame.setSize(dimension)
+      frame.validate()
       frame.setLocationRelativeTo(null)
-      pixelSize.set(dimension)
-      pendingResize.set(Some(metrics.viewportSize(dimension.width, dimension.height)))
-      onResizeCallbackRef.get().foreach(_.apply())
-      canvas.requestFocusInWindow()
+      publishCanvasResize(canvas.getSize(), dimension)
+      val _ = canvas.requestFocusInWindow()
     }
 
   def metrics: CellMetrics =
@@ -375,6 +373,15 @@ class SwingWindow(
       frame.revalidate()
     else frame.setMinimumSize(new Dimension(SwingWindow.BaseMinWidth, SwingWindow.BaseMinHeight))
 
+  private def publishCanvasResize(canvasSize: Dimension): Unit =
+    publishCanvasResize(canvasSize, pixelSize.get())
+
+  private def publishCanvasResize(canvasSize: Dimension, fallbackSize: Dimension): Unit =
+    val snapshot = SwingWindow.canvasResizeSnapshot(metrics, canvasSize, fallbackSize)
+    pixelSize.set(snapshot.pixelSize)
+    pendingResize.set(Some(snapshot.viewportSize))
+    onResizeCallbackRef.get().foreach(_.apply())
+
   def doResizeIfNecessary(): Option[ViewportSize] =
     pendingResize.getAndSet(None)
 
@@ -392,6 +399,8 @@ object SwingWindow:
       minHeight: Int,
       titleFontSize: Int
   )
+
+  case class CanvasResizeSnapshot(pixelSize: Dimension, viewportSize: ViewportSize)
 
   object ChromeMetrics:
     private val BaseTitleBarHeight = 32
@@ -414,6 +423,16 @@ object SwingWindow:
 
     private def scaledInt(value: Int, scale: Double): Int =
       math.round(value.toDouble * scale).toInt.max(1)
+
+  def canvasResizeSnapshot(
+    metrics: CellMetrics,
+    canvasSize: Dimension,
+    fallbackSize: Dimension
+  ): CanvasResizeSnapshot =
+    val size =
+      if canvasSize.width > 0 && canvasSize.height > 0 then new Dimension(canvasSize)
+      else new Dimension(fallbackSize)
+    CanvasResizeSnapshot(size, metrics.viewportSize(size.width, size.height))
 
   def resource(
     metrics: CellMetrics = DefaultMetrics,
