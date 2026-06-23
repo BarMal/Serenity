@@ -131,10 +131,9 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     val program = AppRuntime.run(
       initialViewportSize = ViewportSize(120, 40),
       makeInputHandler = _ => new SilentInputHandler,
-      checkResize = IO.pure(None),
+      checkResize = IO.raiseError(new RuntimeException("resize check failed")),
       renderFull = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
-      renderCursorOnly =
-        (_: AppState, _: Boolean, _: Option[Color]) => IO.raiseError(new RuntimeException("cursor render failed")),
+      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
       appConfig = AppConfig.default,
       makeStateManager = Some(logger =>
         StateManager.apply(
@@ -176,30 +175,37 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     described should include("cursor=2:4")
   }
 
-  it should "log idle render failures with phase and state diagnostics" in {
+  it should "recover idle cursor render failures with phase and state diagnostics" in {
     val program = for
       logs <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
       given Logger[IO] = new RecordingLogger(logs)
-      _ <- AppRuntime.run(
-        initialViewportSize = ViewportSize(120, 40),
-        makeInputHandler = _ => new SilentInputHandler,
-        checkResize = IO.pure(None),
-        renderFull = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
-        renderCursorOnly =
-          (_: AppState, _: Boolean, _: Option[Color]) => IO.raiseError(RuntimeException("idle render failed")),
-        appConfig = AppConfig.default,
-        makeStateManager = Some(logger =>
-          StateManager.apply(
-            logger,
-            policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+      result <- IO.race(
+        AppRuntime
+          .run(
+            initialViewportSize = ViewportSize(120, 40),
+            makeInputHandler = _ => new SilentInputHandler,
+            checkResize = IO.pure(None),
+            renderFull = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
+            renderCursorOnly =
+              (_: AppState, _: Boolean, _: Option[Color]) => IO.raiseError(RuntimeException("idle render failed")),
+            appConfig = AppConfig.default,
+            makeStateManager = Some(logger =>
+              StateManager.apply(
+                logger,
+                policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+              )
+            ),
+            awaitExternalQuit = IO.never,
+            registerResizeCallback = _ => ()
           )
-        ),
-        awaitExternalQuit = IO.never,
-        registerResizeCallback = _ => ()
+          .as("completed"),
+        IO.sleep(1500.millis).as("still-running")
       )
       entries <- logs.get
     yield
-      val failure = entries.find(_.message.contains("[RUNTIME] render loop failed"))
+      result shouldBe Right("still-running")
+      entries.exists(_.message.contains("[RUNTIME] render loop failed")) shouldBe false
+      val failure = entries.find(_.message.contains("[RUNTIME] idle cursor render failed"))
       failure.map(_.message) shouldBe defined
       failure.get.message should include("phase=idle.cursor-render")
       failure.get.message should include("viewport=120x40")
