@@ -100,6 +100,16 @@ object AppRuntime:
                 alpha = ((math.sin(i * math.Pi / 24) + 1.0) / 2.0 * 255).toInt
               yield (true, Some(new Color(c.getRed, c.getGreen, c.getBlue, alpha)))
 
+        def recoverIdleCursorRenderFailure(error: Throwable): IO[Unit] =
+          val (phase, diagnostics, cause) = error match
+            case RuntimeFailure(_, failedPhase, failureDiagnostics, failureCause) =>
+              (failedPhase, failureDiagnostics, failureCause)
+            case other =>
+              ("idle.cursor-render", "state=unavailable", other)
+          logger.warn(cause)(
+            s"[RUNTIME] idle cursor render failed phase=$phase; $diagnostics; requesting full render"
+          ) >> fastMode.set(true)
+
         def idlePhase: Stream[IO, Unit] =
           Stream
             .fixedRate[IO](500.millis)
@@ -117,7 +127,7 @@ object AppRuntime:
                   "render loop",
                   "idle.cursor-render",
                   IO.pure(Some(state))
-                )(renderCursorOnly(state, visible, cursor))
+                )(renderCursorOnly(state, visible, cursor)).handleErrorWith(recoverIdleCursorRenderFailure)
               yield ()
             }
 
