@@ -107,11 +107,11 @@ object SurfaceContentResolver:
         resolveFileSearch(state, rect, mode)
       case SurfaceContent.ContextMenu(menu) =>
         resolveContextMenu(menu, rect, mode)
-      case SurfaceContent.CommentLens(comment) =>
+      case SurfaceContent.CommentLens(lens) =>
         ResolvedSurfaceContent(
           title = titleFor(mode, "comment"),
           header = Some(OverlayRow("comment")),
-          rows = commentRows(comment.inlineMarkdown) ++ commentRows(comment.raw)
+          rows = commentLensRows(lens)
         )
       case SurfaceContent.MarkdownPreview(_, title) =>
         ResolvedSurfaceContent(title = titleFor(mode, s"Preview: $title"))
@@ -140,10 +140,26 @@ object SurfaceContentResolver:
       case SurfaceRenderMode.Floating => None
       case SurfaceRenderMode.Pinned   => Some(title)
 
-  private def commentRows(text: String): List[OverlayRow] =
-    text.linesIterator.toList match
-      case Nil   => List(OverlayRow(""))
-      case lines => lines.map(OverlayRow(_))
+  private def commentLensRows(lens: CommentLensState): List[OverlayRow] =
+    val (cursorLine, cursorColumn) = lineAndColumnAt(lens.draft, lens.clampedCursor)
+    splitLines(lens.draft).zipWithIndex.map { (line, index) =>
+      OverlayRow(
+        plainText = line,
+        selected = index == cursorLine,
+        cursorColumn = Option.when(index == cursorLine)(cursorColumn)
+      )
+    }
+
+  private def splitLines(text: String): List[String] =
+    text.split("\n", -1).toList match
+      case Nil => List("")
+      case xs  => xs
+
+  private def lineAndColumnAt(text: String, cursor: Int): (Int, Int) =
+    text.take(math.max(0, math.min(cursor, text.length))).foldLeft((0, 0)) {
+      case ((line, _), '\n') => (line + 1, 0)
+      case ((line, col), _)  => (line, col + 1)
+    }
 
   private def modalLines(modal: Modal): List[String] =
     modal match

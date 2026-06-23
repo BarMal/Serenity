@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.command.CommandRunner
 import com.serenity.config.*
+import com.serenity.document.RenderedComment
 import com.serenity.input.FocusedInputTranslator
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
@@ -123,6 +124,31 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
       Direction.Down
     )
     translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)) shouldBe PeekInputEvent.Accept
+  }
+
+  it should "treat comment lens focus as form editing input" in {
+    val commentState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("comment-lens")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("comment-lens"),
+          SurfaceContent.CommentLens(
+            CommentLensState(
+              RenderedComment(0, "Review this", "Review this"),
+              "Review this",
+              11,
+              Some(DocumentComment(CursorPosition(0, 0), CursorPosition(0, 6), "Review this"))
+            )
+          ),
+          SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
+        )
+      )
+    )
+    val translator = FocusedInputTranslator.forState(commentState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Character, Some('!'), Set.empty)) shouldBe ModalInsertChar('!')
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)) shouldBe ModalSubmit
+    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)) shouldBe ModalDismiss
   }
 
   it should "route Tab and Shift+Tab to command-runner category navigation" in {

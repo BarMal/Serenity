@@ -248,6 +248,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
                     new ThemePickerComponent()
                   case SurfaceContent.FileSearch(_) =>
                     new FileSearchComponent()
+                  case SurfaceContent.CommentLens(_) =>
+                    new CommentLensComponent()
                   case SurfaceContent.StartPage(_) =>
                     new StartupPageComponent()
                   case SurfaceContent.ModalWorkflow(modal) =>

@@ -877,13 +877,17 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val lens = shownState.commentLensSurface
       .flatMap {
         _.content match
-          case SurfaceContent.CommentLens(comment) => Some(comment)
-          case _                                   => None
+          case SurfaceContent.CommentLens(lens) => Some(lens)
+          case _                                => None
       }
       .getOrElse(fail("Expected comment lens"))
 
-    lens.raw shouldBe "// **Review** this value"
-    lens.inlineMarkdown shouldBe "Review this value"
+    lens.comment.raw shouldBe "// **Review** this value"
+    lens.comment.inlineMarkdown shouldBe "Review this value"
+    lens.draft shouldBe "// **Review** this value"
+    lens.target shouldBe None
+    shownState.focus shouldBe Focus.Surface(shownState.commentLensSurface.get.id)
+    shownState.commentLensSurface.get.dismissOnMove shouldBe false
 
     stateManager
       .executeCommand(
@@ -931,11 +935,12 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       .commentLensSurface
       .flatMap {
         _.content match
-          case SurfaceContent.CommentLens(comment) => Some(comment)
-          case _                                   => None
+          case SurfaceContent.CommentLens(lens) => Some(lens)
+          case _                                => None
       }
       .getOrElse(fail("Expected comment lens"))
-    lens.raw shouldBe "Comment"
+    lens.draft shouldBe "Comment"
+    lens.target shouldBe Some(DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Comment"))
 
     stateManager
       .updateState { state =>
