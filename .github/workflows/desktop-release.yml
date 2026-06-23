@@ -95,6 +95,7 @@ jobs:
           name: Serenity-jar
           path: dist/Serenity.jar
           if-no-files-found: error
+          retention-days: 1
 
       - name: Upload app image artifact
         uses: actions/upload-artifact@v4
@@ -102,3 +103,4 @@ jobs:
           name: Serenity-${{ matrix.artifact_suffix }}
           path: dist/Serenity-${{ matrix.artifact_suffix }}.zip
           if-no-files-found: error
+          retention-days: 1
