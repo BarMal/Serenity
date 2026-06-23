@@ -1,6 +1,6 @@
 package com.serenity.ui.renderer
 
-import java.awt.Font
+import java.awt.{Color, Font}
 
 import com.serenity.animation.ThemeInterpolator
 import com.serenity.config.{AppConfig, CursorInfoBarPlacement, MarkdownViewMode}
@@ -518,7 +518,7 @@ object Renderer:
             rect,
             screenY,
             foreground,
-            theme.warning.background,
+            commentHighlightBackground(theme),
             context,
             snapshot,
             commentStart,
@@ -526,6 +526,17 @@ object Renderer:
           )
       }
     }
+
+  private[serenity] def commentHighlightBackground(theme: Theme): Color =
+    blend(theme.warning.background, theme.background, warningWeight = 0.45)
+
+  private def blend(foreground: Color, background: Color, warningWeight: Double): Color =
+    val clampedWeight    = math.max(0.0, math.min(1.0, warningWeight))
+    val backgroundWeight = 1.0 - clampedWeight
+    def blendChannel(channel: Color => Int): Int =
+      math.round(channel(foreground) * clampedWeight + channel(background) * backgroundWeight).toInt
+
+    Color(blendChannel(_.getRed), blendChannel(_.getGreen), blendChannel(_.getBlue))
 
   private def renderTextRangeBackground(
     surface: RenderSurface,
