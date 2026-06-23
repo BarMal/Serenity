@@ -63,6 +63,40 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
       collectCount.incrementAndGet()
       delegate.collect()
 
+  final case class NonCollectingRope(delegate: Rope) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      this
+
+    override def index(i: Int): Option[Char] =
+      delegate.index(i)
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def lineCount: Int =
+      delegate.lineCount
+
+    override def getLine(lineIndex: Int): Option[String] =
+      delegate.getLine(lineIndex)
+
+    override def lineColumnToOffset(line: Int, column: Int): Int =
+      delegate.lineColumnToOffset(line, column)
+
+    override def collect(): String =
+      throw AssertionError("navigation should not materialise the whole buffer")
+
   "EditorEventReducer" should "insert characters into the focused pane buffer" in {
     val initialState = AppState.initial
     val paneId       = PaneId(0)
@@ -394,6 +428,69 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val buffer = updatedState.buffers(bufferId)
     buffer.content.collect() shouldBe "alpha  gamma"
     buffer.cursors shouldBe List(CursorPosition(0, 6))
+  }
+
+  it should "move horizontally without materialising a large single-line buffer" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val content  = NonCollectingRope(Rope("{" + (1 to 5000).map(i => s""""k$i":$i""").mkString(",") + "}"))
+    val initialBuffer = AppState.initial
+      .buffers(bufferId)
+      .copy(
+        content = content,
+        cursors = List(CursorPosition(0, 0)),
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 120, visibleLines = 40)
+      )
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(bufferId, initialBuffer),
+      config = AppState.initial.config.withWordWrap(false)
+    )
+
+    val updatedState = EditorEventReducer.reduce(MoveRight, paneId, initialState).state
+
+    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 1))
+  }
+
+  it should "move across line boundaries without materialising the whole buffer" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val content  = NonCollectingRope(Rope("alpha\n" + "x" * 5000))
+    val initialBuffer = AppState.initial
+      .buffers(bufferId)
+      .copy(
+        content = content,
+        cursors = List(CursorPosition(1, 0)),
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 120, visibleLines = 40)
+      )
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(bufferId, initialBuffer),
+      config = AppState.initial.config.withWordWrap(false)
+    )
+
+    val updatedState = EditorEventReducer.reduce(MoveLeft, paneId, initialState).state
+
+    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 5))
+  }
+
+  it should "move multiple cursors horizontally without materialising the whole buffer" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val content  = NonCollectingRope(Rope("alpha\n" + "x" * 5000))
+    val initialBuffer = AppState.initial
+      .buffers(bufferId)
+      .copy(
+        content = content,
+        cursors = List(CursorPosition(0, 5), CursorPosition(1, 0)),
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 120, visibleLines = 40)
+      )
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(bufferId, initialBuffer),
+      config = AppState.initial.config.withWordWrap(false)
+    )
+
+    val updatedState = EditorEventReducer.reduce(MoveRight, paneId, initialState).state
+
+    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 0), CursorPosition(1, 1))
   }
 
   it should "delete the next word once when multiple cursors overlap the same word" in {

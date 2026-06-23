@@ -1,9 +1,11 @@
 package com.serenity
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.richtext.{ParagraphAlignment, RichTextDocument, RichTextParagraph}
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -17,6 +19,38 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
 
   given Balance    = Balance.default
   given Logger[IO] = Slf4jLogger.getLogger[IO]
+
+  final case class CountingLineCountRope(delegate: Rope, lineCountCount: AtomicInteger) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      this
+
+    override def index(i: Int): Option[Char] =
+      delegate.index(i)
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def lineCount: Int =
+      lineCountCount.incrementAndGet()
+      delegate.lineCount
+
+    override def getLine(lineIndex: Int): Option[String] =
+      delegate.getLine(lineIndex)
+
+    override def collect(): String =
+      delegate.collect()
 
   private def proportionalDeltas(snapshot: TextLayoutSnapshot): Vector[Float] =
     snapshot.visualLines.headOption.toVector.flatMap { line =>
@@ -53,7 +87,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val metrics = CellMetrics.fromFont(font)
     val buffer = Buffer
       .fromString(BufferId(12), "hello world again")
-      .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 8, visibleLines = 4))
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 4))
 
     val snapshot =
       TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 8, font, wordWrapEnabled = false)
@@ -66,6 +100,34 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       font,
       wordWrapEnabled = false
     ) shouldBe 0
+  }
+
+  it should "read the buffer line count once while collecting visible lines" in {
+    val lineCountCount = AtomicInteger(0)
+    val content        = CountingLineCountRope(Rope((1 to 100).map(i => s"line-$i").mkString("\n")), lineCountCount)
+    val buffer = Buffer
+      .fromString(BufferId(13), "")
+      .copy(
+        content = content,
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 8)
+      )
+    val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+
+    TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font)
+
+    lineCountCount.get() shouldBe 1
+  }
+
+  it should "limit unwrapped visual lines to the visible viewport" in {
+    val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val buffer = Buffer
+      .fromString(BufferId(14), "abcdefghijklmnopqrstuvwxyz")
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 2, visibleColumns = 5, visibleLines = 4))
+
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font, wordWrapEnabled = false)
+
+    snapshot.visualLines.map(_.text) shouldBe Vector("cdefghi")
+    snapshot.visualLines.map(line => line.startColumn -> line.endColumn) shouldBe Vector(2 -> 9)
   }
 
   it should "skip wrapped visual rows from the top of a long logical line" in {
