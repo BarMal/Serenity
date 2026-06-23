@@ -413,18 +413,19 @@ object Renderer:
     visualLine: TextVisualLine,
     theme: Theme
   ): Option[List[StyledText]] =
-    val text = buffer.content.collect()
     buffer.richTextDocument
-      .filter(_.matchesPlainText(text))
-      .map(document =>
-        RichTextStyling.styledLine(
-          document,
-          visualLine.bufferLine,
-          visualLine.startColumn,
-          visualLine.endColumn,
-          theme
-        )
-      )
+      .map(document => document -> buffer.content.collect())
+      .filter { case (document, text) => document.matchesPlainText(text) }
+      .map {
+        case (document, _) =>
+          RichTextStyling.styledLine(
+            document,
+            visualLine.bufferLine,
+            visualLine.startColumn,
+            visualLine.endColumn,
+            theme
+          )
+      }
       .filter(segments => segments.map(_.content).mkString == visualLine.text)
 
   private def renderInlineMarkdownPreview(
