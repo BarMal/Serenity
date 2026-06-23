@@ -193,14 +193,14 @@ object TextOverlayRenderer:
         val labelWidth = math.min(22, math.max(8, width / 3))
         val valueWidth = math.min(18, math.max(8, width / 4))
         val hintWidth  = math.max(0, width - labelWidth - valueWidth - 2)
-        Some(CursorPlacement(x + labelWidth + hintWidth + 2, value.text.take(valueWidth)))
+        Some(CursorPlacement(x + labelWidth + hintWidth + 2, value.text.take(valueWidth), useMeasured = true))
       case _ =>
         row.cursorColumn.map(cursorColumn =>
           CursorPlacement(x, row.plainText.take(cursorColumn.max(0).min(row.plainText.length)))
         )
 
   private def scrolledRowView(row: OverlayRow, width: Int): OverlayRowView =
-    val useMeasuredCursor = row.cursorColumn.nonEmpty && row.layout != OverlayRowLayout.Plain
+    val useMeasuredCursor = row.cursorColumn.nonEmpty
     val scrollOffset =
       row.cursorColumn match
         case Some(cursorColumn) if row.plainText.length > width =>

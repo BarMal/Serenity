@@ -107,9 +107,17 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getBg(overlay.x + 1, overlay.y + 1) shouldBe state.theme.panel.background
     surface.getBg(overlay.x + 1, overlay.y + 2) shouldBe state.theme.highlighted.background
 
-    val searchCursorColumn = overlay.x + 1 + "search: op".length
-    surface.getBg(searchCursorColumn, overlay.y + 1) shouldBe state.theme.cursor
-    surface.getFg(searchCursorColumn, overlay.y + 1) shouldBe state.theme.background
+    val uiFont     = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
+    val uiMetrics  = CellMetrics.fromFont(uiFont)
+    val searchText = "search: op"
+    val searchCursorXPx = uiMetrics.toPixelX(overlay.x + 1) +
+      math.round(TextLayoutSnapshot.caretXsForText(searchText, uiFont, surface.fontRenderContext.get).last)
+    val searchCursorYPx = uiMetrics.toPixelY(overlay.y + 1)
+    surface.fillPixelRectCalls.exists(call =>
+      call.xPx == searchCursorXPx &&
+        call.yPx == searchCursorYPx &&
+        call.color == state.theme.cursor
+    ) shouldBe true
   }
 
   it should "render category tabs in browse mode and show grouped settings rows" in {
@@ -272,17 +280,22 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val submenuRect = layout.belowCursorOverlayStack
       .collectFirst { case (SurfaceId("command-runner-submenu"), rect) => rect }
       .getOrElse(fail("Expected command-runner submenu overlay"))
-    val submenuCursorColumn = submenuRect.x + 1 + "Language search: java".length
+    val codeFont   = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val uiFont     = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
+    val uiMetrics  = CellMetrics.fromFont(uiFont)
+    val searchText = "Language search: java"
+    val submenuCursorXPx = uiMetrics.toPixelX(submenuRect.x + 1) +
+      math.round(TextLayoutSnapshot.caretXsForText(searchText, uiFont, visibleSurface.fontRenderContext.get).last)
+    val submenuCursorYPx = uiMetrics.toPixelY(submenuRect.y + 1)
 
     val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
     val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
 
-    visibleCursors should have size 3
+    visibleCursors should have size 4
     hiddenCursors should have size 3
-    hiddenCursors.map(_.xPx) shouldBe visibleCursors.map(_.xPx)
-    visibleSurface.getBg(submenuCursorColumn, submenuRect.y + 1) shouldBe state.theme.cursor
-    visibleSurface.getFg(submenuCursorColumn, submenuRect.y + 1) shouldBe state.theme.background
-    hiddenSurface.getBg(submenuCursorColumn, submenuRect.y + 1) should not be state.theme.cursor
+    hiddenCursors.map(_.xPx) shouldBe visibleCursors.take(3).map(_.xPx)
+    visibleCursors.exists(call => call.xPx == submenuCursorXPx && call.yPx == submenuCursorYPx) shouldBe true
+    hiddenCursors.exists(call => call.xPx == submenuCursorXPx && call.yPx == submenuCursorYPx) shouldBe false
   }
 
   it should "keep the selected command highlighted while the overlay is animating" in {
