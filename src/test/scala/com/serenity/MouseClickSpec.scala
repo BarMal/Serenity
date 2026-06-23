@@ -236,12 +236,20 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+        )
+      )
+    }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
     sm.applyEvent(MouseMove(18, 2)).unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().hoveredEditorTarget shouldBe Some(
-      HoveredEditorTarget(PaneId(0), bufferId, CursorPosition(1, 5))
+      HoveredEditorTarget(PaneId(0), bufferId, CursorPosition(1, 3))
     )
   }
 

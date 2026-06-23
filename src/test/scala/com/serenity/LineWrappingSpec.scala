@@ -7,7 +7,8 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -399,7 +400,19 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     info(s"Before navigation: line=${beforeCursor.line}, column=${beforeCursor.column}")
     info(s"After move up: line=${afterUpCursor.line}, column=${afterUpCursor.column}")
 
-    afterUpCursor.column shouldBe 2
+    val font = FontLoader.previewFontForRole(beforeNavState.config.fontConfig, beforeBuffer.typographyRole)
+    val snapshot = TextLayoutSnapshot.fromBuffer(
+      beforeBuffer.copy(viewport = beforeBuffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
+      panelWidth * CellMetrics.fromFont(font).charWidth,
+      font,
+      wordWrapEnabled = beforeNavState.config.wordWrapEnabled
+    )
+    val preferredXPx    = snapshot.xPxForCursor(beforeCursor).getOrElse(fail("missing caret x"))
+    val fallbackAfterUp = beforeCursor.copy(column = beforeCursor.column % panelWidth)
+    val expectedAfterUp =
+      snapshot.moveVertical(beforeCursor, direction = -1, preferredXPx).getOrElse(fallbackAfterUp)
+
+    afterUpCursor shouldBe expectedAfterUp
 
     // Move down should return to second visual line
     stateManager.applyEvent(MoveDown).unsafeRunSync()
