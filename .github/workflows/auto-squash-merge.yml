@@ -128,7 +128,3 @@ jobs:
             echo "::error::Timed out waiting for ${base_ref} to resolve to ${merge_commit}; current ${base_sha}."
             exit 1
           fi
-
-          gh workflow run desktop-publish.yml \
-            --repo "${REPO}" \
-            --ref "${base_ref}"
