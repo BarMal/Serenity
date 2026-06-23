@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.nio.file.Path
+
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Layout, ViewportSize}
@@ -44,6 +46,33 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     yield x
 
     selectedCells should have size 5
+  }
+
+  it should "span and center the active buffer header across the workspace row" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val buffer   = Buffer.fromFile(bufferId, Path.of("notes.md"), "alpha")
+    val pane     = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light
+    )
+    val viewport = ViewportSize(80, 24)
+    val surface  = new MockRenderSurface(viewport.width, viewport.height)
+
+    Renderer.render(state, cursorVisible = false, surface, viewport)
+
+    val title         = "notes.md"
+    val expectedStart = (viewport.width - title.length) / 2
+
+    surface.getBg(0, 0) shouldBe state.theme.highlighted.background
+    surface.getBg(viewport.width - 1, 0) shouldBe state.theme.highlighted.background
+    surface.getRow(0).substring(expectedStart, expectedStart + title.length) shouldBe title
   }
 
   it should "highlight every active selection in the editor pane" in {

@@ -183,9 +183,14 @@ object Renderer:
   private def renderSpacerColumns(context: RenderContext): Unit = ()
 
   private def renderEditorPanes(state: AppState, context: RenderContext): Unit =
-    val paneLayouts = LayoutEngine.calculatePaneLayouts(state, context.layout)
+    val paneLayouts  = LayoutEngine.calculatePaneLayouts(state, context.layout)
+    val activePaneId = state.layout.activeEditorPaneId
+    val orderedPanes =
+      state.layout.orderedPaneIds
+        .flatMap(paneId => state.layout.editorPanes.get(paneId).map(paneId -> _))
+        .sortBy((paneId, _) => if activePaneId.contains(paneId) then 1 else 0)
 
-    state.layout.editorPanes.foreach { (paneId, pane) =>
+    orderedPanes.foreach { (paneId, pane) =>
       paneLayouts.get(paneId) match
         case Some(paneRect) => renderEditorPane(pane, paneRect, state, context)
         case None           => ()
@@ -246,6 +251,9 @@ object Renderer:
     context.surface.setFont(context.uiFont)
     val surface  = context.surface
     val isActive = state.layout.activeEditorPaneId.contains(pane.id)
+    val headerRect =
+      if isActive then activeBufferHeaderRect(rect.y, context.layout)
+      else rect
 
     if isActive then
       surface.setBackgroundColor(state.theme.highlighted.background)
@@ -265,19 +273,32 @@ object Renderer:
       case None =>
         "No Buffer"
 
-    val maxTitleWidth = math.max(1, rect.width - 2)
+    val maxTitleWidth = math.max(1, headerRect.width - 2)
     val displayTitle =
       if bufferTitle.length > maxTitleWidth then bufferTitle.take(maxTitleWidth - 3) + "..."
       else bufferTitle
 
-    surface.putString(rect.x, rect.y, " " * rect.width)
+    surface.putString(headerRect.x, headerRect.y, " " * headerRect.width)
 
-    val paddingLeft = (rect.width - displayTitle.length) / 2
-    val centeredX   = rect.x + paddingLeft
-    surface.putString(centeredX, rect.y, displayTitle)
+    val paddingLeft = (headerRect.width - displayTitle.length) / 2
+    val centeredX   = headerRect.x + paddingLeft
+    surface.putString(centeredX, headerRect.y, displayTitle)
 
     surface.setBackgroundColor(state.theme.background)
     surface.setForegroundColor(state.theme.foreground)
+
+  private def activeBufferHeaderRect(y: Int, layout: CalculatedLayout): LayoutRect =
+    val workspaceRects =
+      List(
+        Some(layout.leftSpacerRect),
+        layout.lineNumberRect,
+        Some(layout.editorPanelRect),
+        Some(layout.rightSpacerRect)
+      ).flatten
+    val left  = workspaceRects.map(_.x).minOption.getOrElse(layout.editorPanelRect.x)
+    val right = workspaceRects.map(_.right).maxOption.getOrElse(layout.editorPanelRect.right)
+
+    LayoutRect(left, y, math.max(1, right - left), 1)
 
   private def renderBufferContent(
     buffer: Buffer,
