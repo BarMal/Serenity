@@ -11,12 +11,21 @@ object CursorViewport:
     currentState: AppState,
     cursor: CursorPosition
   ): Viewport =
+    val wordWrapEnabled = currentState.config.wordWrapEnabled
+    if buffer.usesTextFont then adjustTextViewport(buffer, currentState, cursor, wordWrapEnabled)
+    else adjustCodeViewport(buffer.viewport, cursor, wordWrapEnabled)
+
+  private def adjustTextViewport(
+    buffer: Buffer,
+    currentState: AppState,
+    cursor: CursorPosition,
+    wordWrapEnabled: Boolean
+  ): Viewport =
     val viewport         = buffer.viewport
     val halfVisibleLines = viewport.visibleLines / 2
     val font             = previewFontForBuffer(buffer, currentState.config.fontConfig)
     val visibleWidthPx   = viewport.visibleColumns * CellMetrics.fromFont(font).charWidth
     val lineText         = buffer.content.getLine(cursor.line).getOrElse("")
-    val wordWrapEnabled  = currentState.config.wordWrapEnabled
     val measuredCursorVisualLine =
       TextLayoutSnapshot.visualLineIndexForCursor(
         lineText,
@@ -27,10 +36,7 @@ object CursorViewport:
       )
     val cursorVisualLine =
       if !wordWrapEnabled then 0
-      else if buffer.usesTextFont then measuredCursorVisualLine
-      else
-        val cellCursorVisualLine = cursor.column / math.max(1, viewport.visibleColumns)
-        math.max(measuredCursorVisualLine, cellCursorVisualLine)
+      else measuredCursorVisualLine
     val targetTopLine =
       if cursorVisualLine > halfVisibleLines then cursor.line
       else cursor.line - halfVisibleLines
@@ -39,12 +45,36 @@ object CursorViewport:
       if clampedTopLine == cursor.line then math.max(0, cursorVisualLine - halfVisibleLines)
       else 0
     val clampedLeftColumn =
-      if buffer.usesTextFont && wordWrapEnabled then 0
+      if wordWrapEnabled then 0
       else
         val measuredLeftColumn =
           TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)
         val minimumVisibleColumn = math.max(0, cursor.column - viewport.visibleColumns + 1)
         math.max(minimumVisibleColumn, measuredLeftColumn)
+
+    viewport.copy(
+      topLine = clampedTopLine,
+      leftColumn = clampedLeftColumn,
+      topVisualLine = topVisualLine
+    )
+
+  private def adjustCodeViewport(
+    viewport: Viewport,
+    cursor: CursorPosition,
+    wordWrapEnabled: Boolean
+  ): Viewport =
+    val visibleColumns   = math.max(1, viewport.visibleColumns)
+    val halfVisibleLines = viewport.visibleLines / 2
+    val cursorVisualLine =
+      if wordWrapEnabled then cursor.column / visibleColumns else 0
+    val targetTopLine =
+      if cursorVisualLine > halfVisibleLines then cursor.line
+      else cursor.line - halfVisibleLines
+    val clampedTopLine = math.max(0, targetTopLine)
+    val topVisualLine =
+      if clampedTopLine == cursor.line then math.max(0, cursorVisualLine - halfVisibleLines)
+      else 0
+    val clampedLeftColumn = math.max(0, cursor.column - visibleColumns + 1)
 
     viewport.copy(
       topLine = clampedTopLine,
