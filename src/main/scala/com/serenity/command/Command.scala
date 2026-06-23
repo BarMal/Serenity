@@ -22,6 +22,12 @@ enum CommandCategory:
   case Project
   case Settings
 
+enum PanelKind:
+  case Explorer
+  case Outline
+  case Diagnostics
+  case MarkdownPreview
+
 enum CommandIntent:
   case SaveCurrentFile
   case SaveCurrentFileAs
@@ -93,6 +99,7 @@ enum CommandIntent:
   case PinOutlinePanel
   case PinDiagnosticsPanel
   case OpenMarkdownPreview
+  case SetPanelPin(kind: PanelKind, position: Option[PanelPosition])
   case SetMarkdownViewMode(mode: MarkdownViewMode)
   case SetDefaultDocumentMode(mode: DefaultDocumentMode)
   case SetSpellCheckEnabled(enabled: Boolean)

@@ -68,19 +68,21 @@ private[manager] trait StateManagerSurfaceFacadeBehavior extends StateManagerEdi
         surface.content match
           case SurfaceContent.DirectoryTree(_, _) =>
             surface.presentation match
-              case SurfacePresentation.Pinned(PanelPosition.Left, _) => true
-              case _                                                 => false
+              case SurfacePresentation.Pinned(_, _) => true
+              case _                                => false
           case _ =>
             false
       }
       val updated =
         maybeExistingExplorer match
-          case Some(surface) =>
+          case Some(surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, size), _)) =>
             val nextSurface = surface.copy(
               content = SurfaceContent.DirectoryTree(tree, selectedPath = None),
-              presentation = SurfacePresentation.Pinned(PanelPosition.Left, 30)
+              presentation = SurfacePresentation.Pinned(position, size)
             )
             state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ nextSurface)
+          case Some(_) =>
+            state
           case None =>
             PanelStateReducer.pin(content, PanelPosition.Left, 30, state).state
       validateAndUpdateState(updated, state).flatMap(_ => applyAnimationHooks(state))
@@ -91,9 +93,13 @@ private[manager] trait StateManagerSurfaceFacadeBehavior extends StateManagerEdi
     stateRef.get.flatMap { state =>
       val updated = state.pinnedSurfaces.reverse
         .find { surface =>
-          surface.presentation match
-            case SurfacePresentation.Pinned(PanelPosition.Left, _) => true
-            case _                                                 => false
+          surface.content match
+            case SurfaceContent.DirectoryTree(_, _) =>
+              surface.presentation match
+                case SurfacePresentation.Pinned(_, _) => true
+                case _                                => false
+            case _ =>
+              false
         }
         .flatMap { surface =>
           surface.content match

@@ -99,7 +99,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case Some(surface) =>
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
-            val updatedRunner = runner.updateInputItems(config)
+            val configRunner = runner.updateInputItems(config)
+            val updatedRunner = configRunner.copy(
+              optionSelections = configRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
+            )
             val updatedSurfaces = state.uiSurfaces.map {
               case current if current.id == surface.id =>
                 current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
@@ -347,21 +350,15 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           .flatMap(themeNamesRef.set)
           .handleErrorWith(ex => logger.error(ex)("[THEMES] Failed to reload theme list"))
       case CommandIntent.PinExplorerPanel =>
-        FileUtils.getCurrentDirectory.flatMap(path =>
-          interpretEffect(AppEffect.Explorer(ExplorerEffect.OpenRoot(PanelPosition.Left, path, 30)))
-        ) >> persistEditedUiPresetFromCommandRunner
+        setPanelPin(PanelKind.Explorer, Some(PanelPosition.Left))
       case CommandIntent.PinOutlinePanel =>
-        val symbols = outlineSymbols(state)
-        pinPanel(
-          PanelContent.Outline(symbols, currentOutlineActiveLocation(symbols, state)),
-          PanelPosition.Right,
-          30
-        ) >>
-          persistEditedUiPresetFromCommandRunner
+        setPanelPin(PanelKind.Outline, Some(PanelPosition.Right))
       case CommandIntent.PinDiagnosticsPanel =>
-        pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 10) >> persistEditedUiPresetFromCommandRunner
+        setPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))
       case CommandIntent.OpenMarkdownPreview =>
-        openMarkdownPreview(state) >> persistEditedUiPresetFromCommandRunner
+        setPanelPin(PanelKind.MarkdownPreview, Some(PanelPosition.Right))
+      case CommandIntent.SetPanelPin(kind, position) =>
+        setPanelPin(kind, position)
       case CommandIntent.SetMarkdownViewMode(mode) =>
         setMarkdownViewMode(mode)
       case CommandIntent.SetDefaultDocumentMode(mode) =>
@@ -772,7 +769,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     state.copy(uiSurfaces = hydratedSurfaces)
 
   private def openPresetMarkdownPreviewIfNeeded(preset: UiPreset): IO[Unit] =
-    if preset.config.markdownViewMode == MarkdownViewMode.SplitPreview then stateRef.get.flatMap(openMarkdownPreview)
+    if preset.config.markdownViewMode == MarkdownViewMode.SplitPreview then openMarkdownPreview
     else IO.unit
 
   protected def duplicateUiPresetEffect(sourceName: String, targetName: String): IO[Unit] =
@@ -1093,7 +1090,57 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case SurfaceContent.CommentLens(_) => true
       case _                             => false
 
-  private def openMarkdownPreview(state: AppState): IO[Unit] =
+  private def openMarkdownPreview: IO[Unit] =
+    pinPanelKind(PanelKind.MarkdownPreview, PanelPosition.Right)
+
+  private def setPanelPin(kind: PanelKind, position: Option[PanelPosition]): IO[Unit] =
+    val updateEffect = position match
+      case None =>
+        updatePanelState(removePanelKind(kind))
+      case Some(targetPosition) =>
+        pinPanelKind(kind, targetPosition)
+    updateEffect >> refreshCommandRunnerPanelSelections >> persistEditedUiPresetFromCommandRunner
+
+  private def pinPanelKind(kind: PanelKind, position: PanelPosition): IO[Unit] =
+    kind match
+      case PanelKind.Explorer =>
+        stateRef.get.flatMap { state =>
+          newestPanelKindSurface(kind, state) match
+            case Some(surface) =>
+              updatePanelState(upsertPanelKind(kind, surface.content, position, defaultPanelSize(kind, position)))
+            case None =>
+              FileUtils.getCurrentDirectory.flatMap(path =>
+                interpretEffect(
+                  AppEffect.Explorer(ExplorerEffect.OpenRoot(position, path, defaultPanelSize(kind, position)))
+                )
+              )
+        }
+      case PanelKind.Outline =>
+        stateRef.get.flatMap { state =>
+          val symbols = outlineSymbols(state)
+          updatePanelState(
+            upsertPanelKind(
+              kind,
+              SurfaceContent.Outline(symbols, currentOutlineActiveLocation(symbols, state)),
+              position,
+              defaultPanelSize(kind, position)
+            )
+          )
+        }
+      case PanelKind.Diagnostics =>
+        updatePanelState(
+          upsertPanelKind(kind, SurfaceContent.Diagnostics(Nil), position, defaultPanelSize(kind, position))
+        )
+      case PanelKind.MarkdownPreview =>
+        stateRef.get.flatMap { state =>
+          markdownPreviewContent(state) match
+            case Some(content) =>
+              updatePanelState(upsertPanelKind(kind, content, position, defaultPanelSize(kind, position)))
+            case None =>
+              logger.debug("[CMD] Markdown preview requested without an active Markdown buffer")
+        }
+
+  private def markdownPreviewContent(state: AppState): Option[SurfaceContent] =
     state.focusedBufferId
       .flatMap(state.buffers.get)
       .filter(_.language.contains(LanguageId.Markdown))
@@ -1101,13 +1148,103 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         val title = buffer.filePath
           .flatMap(path => Option(path.getFileName).map(_.toString))
           .getOrElse("Untitled")
-        pinPanel(
-          PanelContent.MarkdownPreview(buffer.id, title),
-          PanelPosition.Right,
-          40
-        )
+        SurfaceContent.MarkdownPreview(buffer.id, title)
       }
-      .getOrElse(logger.debug("[CMD] Markdown preview requested without an active Markdown buffer"))
+
+  private def updatePanelState(update: AppState => AppState): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      val updated = update(state)
+      validateAndUpdateState(updated, state)
+    }
+
+  private def removePanelKind(kind: PanelKind)(state: AppState): AppState =
+    val removedIds = state.uiSurfaces.collect {
+      case surface if panelKindOf(surface.content).contains(kind) => surface.id
+    }.toSet
+    val nextFocus = state.focus match
+      case Focus.Surface(surfaceId) if removedIds.contains(surfaceId) =>
+        state.layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(state.focus)
+      case _ =>
+        state.focus
+    state.copy(
+      uiSurfaces = state.uiSurfaces.filterNot(surface => removedIds.contains(surface.id)),
+      focus = nextFocus
+    )
+
+  private def upsertPanelKind(
+    kind: PanelKind,
+    content: SurfaceContent,
+    position: PanelPosition,
+    size: Int
+  )(state: AppState): AppState =
+    val matchingSurfaces = state.uiSurfaces.filter(surface => panelKindOf(surface.content).contains(kind))
+    val retainedSurface  = matchingSurfaces.reverse.headOption
+    val stateWithoutKind = state.copy(
+      uiSurfaces = state.uiSurfaces.filterNot(surface => panelKindOf(surface.content).contains(kind))
+    )
+    val (stateWithId, surface) = retainedSurface match
+      case Some(existing) =>
+        stateWithoutKind -> existing.copy(
+          content = content,
+          presentation = SurfacePresentation.Pinned(position, size),
+          dismissOnMove = false
+        )
+      case None =>
+        val (allocatedState, surfaceId) = stateWithoutKind.allocateSurfaceId
+        allocatedState -> UiSurface(
+          surfaceId,
+          content,
+          SurfacePresentation.Pinned(position, size),
+          dismissOnMove = false
+        )
+    val nextFocus = state.focus match
+      case Focus.Surface(surfaceId) if matchingSurfaces.exists(_.id == surfaceId) => Focus.Surface(surface.id)
+      case _                                                                      => state.focus
+    stateWithId.copy(uiSurfaces = stateWithId.uiSurfaces :+ surface, focus = nextFocus)
+
+  private def newestPanelKindSurface(kind: PanelKind, state: AppState): Option[UiSurface] =
+    state.uiSurfaces.reverse.find(surface => panelKindOf(surface.content).contains(kind))
+
+  private def panelKindOf(content: SurfaceContent): Option[PanelKind] =
+    content match
+      case SurfaceContent.DirectoryTree(_, _)   => Some(PanelKind.Explorer)
+      case SurfaceContent.Outline(_, _)         => Some(PanelKind.Outline)
+      case SurfaceContent.Diagnostics(_)        => Some(PanelKind.Diagnostics)
+      case SurfaceContent.MarkdownPreview(_, _) => Some(PanelKind.MarkdownPreview)
+      case _                                    => None
+
+  private def defaultPanelSize(kind: PanelKind, position: PanelPosition): Int =
+    kind match
+      case PanelKind.MarkdownPreview => 40
+      case PanelKind.Diagnostics =>
+        position match
+          case PanelPosition.Top | PanelPosition.Bottom => 10
+          case PanelPosition.Left | PanelPosition.Right => 30
+      case PanelKind.Explorer | PanelKind.Outline =>
+        position match
+          case PanelPosition.Top | PanelPosition.Bottom => 10
+          case PanelPosition.Left | PanelPosition.Right => 30
+
+  private def refreshCommandRunnerPanelSelections: IO[Unit] =
+    stateRef.update { state =>
+      val selections = CommandRunnerPanelSelections.fromState(state)
+      val updatedSurfaces = state.uiSurfaces.map {
+        case surface @ UiSurface(_, SurfaceContent.CommandPalette(runner), _, _) =>
+          surface.copy(content =
+            SurfaceContent.CommandPalette(runner.copy(optionSelections = runner.optionSelections ++ selections))
+          )
+        case surface @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly), _, _) =>
+          surface.copy(content =
+            SurfaceContent.CommandPaletteSubmenu(
+              runner.copy(optionSelections = runner.optionSelections ++ selections),
+              groupId,
+              previewOnly
+            )
+          )
+        case other => other
+      }
+      state.copy(uiSurfaces = updatedSurfaces)
+    }
 
   private def outlineSymbols(state: AppState): List[Symbol] =
     state.focusedBufferId
@@ -1381,7 +1518,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     val updateConfigEffect = updateConfig(_.withMarkdownViewMode(mode)).void
     val updateModeEffect = mode match
       case MarkdownViewMode.SplitPreview =>
-        updateConfigEffect >> stateRef.get.flatMap(openMarkdownPreview)
+        updateConfigEffect >> openMarkdownPreview
       case MarkdownViewMode.Source | MarkdownViewMode.InlineLens =>
         updateConfigEffect >> unpinMarkdownPreviewPanel()
     updateModeEffect >> persistEditedUiPresetFromCommandRunner

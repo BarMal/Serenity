@@ -51,11 +51,14 @@ object AppEventReducer:
       case _ =>
         val activatedRunner = CommandRunner.empty
           .activate(registry, state.config)
+        val runnerWithPanelSelections = activatedRunner.copy(
+          optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
+        )
         val (stateWithId, surfaceId) =
           state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
         val surface = UiSurface(
           id = surfaceId,
-          content = SurfaceContent.CommandPalette(activatedRunner),
+          content = SurfaceContent.CommandPalette(runnerWithPanelSelections),
           presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
         )
         val clearedSurfaces =
