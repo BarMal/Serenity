@@ -297,7 +297,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     group("settings-ui-presets").label shouldBe "UI Presets"
     group("settings-ui-presets").children.map(_.id) should contain allOf ("ui-preset-save", "ui-preset-apply")
     group("settings-text-display").label shouldBe "Text Display"
-    group("settings-text-display").children.map(_.id) shouldBe List("line-numbers", "gutter", "word-wrap")
+    group("settings-text-display").children.map(_.id) shouldBe List("line-numbers", "gutter", "line-wrap")
     group("settings-text-area").label shouldBe "Text Area"
     group("settings-text-area").children.map(_.id) should contain allOf ("text-area-left", "text-area-right")
     groupItems(6).label shouldBe "Code Font"
@@ -381,7 +381,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     options.map(option => option.id -> option.selectedOption) shouldBe List(
       "line-numbers" -> "Off",
       "gutter"       -> "Off",
-      "word-wrap"    -> "Off"
+      "line-wrap"    -> "Off"
     )
     options.flatMap(_.selectedIntent) shouldBe List(
       CommandIntent.SetLineNumbers(false),
