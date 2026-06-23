@@ -1007,13 +1007,16 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         case SurfaceContent.CommandPalette(runner) =>
           overlayItemIndex(event, rect, runner.visibleItems.length, runner.selectedIndex)
             .map(RunnerSelectVisibleItem(_))
-        case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) if !previewOnly =>
+        case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
           val submenuState = runner.activeSubmenu.filter(_.groupId == groupId)
           val items = submenuState
             .map(_.filteredItems(runner.submenuItems(groupId)))
             .getOrElse(runner.submenuItems(groupId))
           val selectedIndex = submenuState.map(_.selectedIndex).getOrElse(0)
-          overlayItemIndex(event, rect, items.length, selectedIndex).map(RunnerSelectSubmenuItem(_))
+          overlayItemIndex(event, rect, items.length, selectedIndex).map { index =>
+            if previewOnly then RunnerSelectPreviewSubmenuItem(groupId, index)
+            else RunnerSelectSubmenuItem(index)
+          }
         case _ =>
           None
     }
