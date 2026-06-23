@@ -1013,7 +1013,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().commentLensSurface shouldBe None
+    val hiddenState = stateManager.getCurrentState.unsafeRunSync()
+    hiddenState.commentLensSurface shouldBe None
+    hiddenState.focus shouldBe Focus.EditorPane(PaneId(0))
+    hiddenState.focusHistory shouldBe Nil
   }
 
   it should "add, navigate, render, and delete authored document comments" in {

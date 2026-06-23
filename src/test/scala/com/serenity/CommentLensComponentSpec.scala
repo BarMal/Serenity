@@ -73,11 +73,13 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "dismiss without saving on Escape" in {
-    val edited    = stateAfter(component.processEvent(ModalInsertChar('!'), baseState), baseState)
+    val state     = baseState.copy(focusHistory = List(Focus.EditorPane(paneId)))
+    val edited    = stateAfter(component.processEvent(ModalInsertChar('!'), state), state)
     val dismissed = stateAfter(component.processEvent(ModalDismiss, edited), edited)
 
     dismissed.commentLensSurface shouldBe None
     dismissed.focus shouldBe Focus.EditorPane(paneId)
+    dismissed.focusHistory shouldBe Nil
     dismissed.buffers(bufferId).documentComments shouldBe List(comment)
   }
 

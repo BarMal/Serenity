@@ -177,7 +177,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     commentCells.foreach(x => surface.getBg(x, 1) should not be state.theme.warning.background)
   }
 
-  it should "use the warning foreground for the active authored document comment range" in {
+  it should "keep active authored document comments readable with the document foreground" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val buffer = Buffer
@@ -210,7 +210,8 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     yield surface.getFg(x, 1)
 
     activeCommentLetters should have size 4
-    activeCommentLetters.distinct shouldBe IndexedSeq(state.theme.warning.foreground)
+    activeCommentLetters.distinct shouldBe IndexedSeq(state.theme.foreground)
+    activeCommentLetters.distinct should not be IndexedSeq(state.theme.warning.foreground)
   }
 
   it should "highlight authored document comments across multiple lines" in {

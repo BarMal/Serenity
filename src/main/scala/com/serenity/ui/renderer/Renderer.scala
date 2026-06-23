@@ -509,13 +509,10 @@ object Renderer:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): Unit =
-    val activeCursor = buffer.cursors.headOption
     buffer.documentComments.foreach { comment =>
       columnsForRange(comment.start, comment.end, visualLine, markPoint = true).foreach {
         case (commentStart, commentEnd) =>
-          val foreground =
-            if activeCursor.exists(comment.contains) then theme.warning.foreground
-            else theme.foreground
+          val foreground = theme.foreground
           renderTextRangeBackground(
             surface,
             visualLine,
