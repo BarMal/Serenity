@@ -353,5 +353,95 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     surface.strokeRoundRectCalls.head.y shouldBe (paneRect.y + 1) * metrics.lineHeight
   }
 
+  it should "align heading paragraph list and table lenses to the active preview block" in {
+    val cases = List(
+      (
+        "heading",
+        "# Heading\n\nParagraph",
+        CursorPosition(0, 0),
+        1
+      ),
+      (
+        "paragraph",
+        "# Heading\n\nParagraph line\ncontinued",
+        CursorPosition(2, 0),
+        2
+      ),
+      (
+        "list",
+        "# Heading\n\n- one\n  detail\n- two",
+        CursorPosition(3, 0),
+        3
+      ),
+      (
+        "table",
+        "# Heading\n\n| Task | Owner |\n| ---- | ----- |\n| Ship | Codex |",
+        CursorPosition(3, 0),
+        5
+      )
+    )
+
+    cases.foreach {
+      case (name, source, cursor, expectedHeightRows) =>
+        val (state, surface, metrics) = renderMarkdownLens(source, cursor)
+        val paneRect =
+          LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
+            PaneId(1)
+          )
+
+        withClue(s"$name lens: ") {
+          surface.strokeRoundRectCalls should not be empty
+          val border = surface.strokeRoundRectCalls.head
+          border.y shouldBe (paneRect.y + 1) * metrics.lineHeight
+          border.h shouldBe expectedHeightRows * metrics.lineHeight
+        }
+    }
+  }
+
+  private def renderMarkdownLens(
+    source: String,
+    cursor: CursorPosition
+  ): (AppState, MockRenderSurface, CellMetrics) =
+    val bufferId = BufferId(1)
+    val paneId   = PaneId(1)
+    val buffer = Buffer
+      .fromString(bufferId, source)
+      .copy(
+        language = Some(LanguageId.Markdown),
+        cursors = List(cursor),
+        viewport = Viewport.default.copy(topLine = cursor.line.max(0), visibleLines = 10)
+      )
+    val state = AppState.empty.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId),
+        paneOrder = List(paneId)
+      ),
+      focus = Focus.EditorPane(paneId),
+      config = AppState.empty.config
+        .withSyntaxHighlighting(true)
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    )
+    val surface = new MockRenderSurface(80, 24)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(80, 24),
+      codeFont = font,
+      textFont = font,
+      cellMetrics = metrics,
+      cursorColor = None
+    )
+
+    (state, surface, metrics)
+
   private def rows(surface: MockRenderSurface): List[String] =
     (0 until surface.height).map(surface.getRow).map(_.trim).filter(_.nonEmpty).toList

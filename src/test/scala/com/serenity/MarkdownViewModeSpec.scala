@@ -233,6 +233,26 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     surfaceRows(surface).exists(_.contains("Task  Owner")) shouldBe false
   }
 
+  it should "update the split preview image when the source cursor moves to a later block" in {
+    val source =
+      """# Intro
+        |
+        |Opening text
+        |
+        |# Later
+        |
+        |Final notes""".stripMargin
+
+    val firstImage = renderSplitPreviewImage(
+      markdownPreviewPanelState(source, CursorPosition(0, 0))
+    )
+    val laterImage = renderSplitPreviewImage(
+      markdownPreviewPanelState(source, CursorPosition(4, 0))
+    )
+
+    laterImage should not be theSameInstanceAs(firstImage)
+  }
+
   "Markdown inline lens mode" should "leave markdown source untouched in source mode" in {
     val surface = new MockRenderSurface(100, 20)
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
@@ -328,5 +348,55 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
 
   private def surfaceRows(surface: MockRenderSurface): List[String] =
     (0 until surface.height).map(surface.getRow).map(_.trim).filter(_.nonEmpty).toList
+
+  private def markdownPreviewPanelState(source: String, cursor: CursorPosition): AppState =
+    val bufferId = BufferId(1)
+    val paneId   = PaneId(1)
+    AppState.empty.copy(
+      buffers = Map(
+        bufferId -> Buffer
+          .fromString(bufferId, source)
+          .copy(
+            language = Some(LanguageId.Markdown),
+            cursors = List(cursor),
+            viewport = Viewport.default.copy(visibleLines = 10)
+          )
+      ),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId),
+        paneOrder = List(paneId)
+      ),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("markdown-preview"),
+          SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
+          SurfacePresentation.Pinned(PanelPosition.Right, 40)
+        )
+      ),
+      focus = Focus.EditorPane(paneId),
+      config = AppConfig.default
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
+    )
+
+  private def renderSplitPreviewImage(state: AppState): java.awt.image.BufferedImage =
+    val surface = new MockRenderSurface(120, 32)
+    val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(120, 32),
+      codeFont = font,
+      textFont = font,
+      cellMetrics = CellMetrics.fromFont(font),
+      cursorColor = None
+    )
+
+    surface.drawImageCalls.headOption.map(_.image).getOrElse(fail("Expected rendered markdown preview image"))
 
 end MarkdownViewModeSpec
