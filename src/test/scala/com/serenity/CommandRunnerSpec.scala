@@ -241,7 +241,21 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       groupItems.find(_.id == id).getOrElse(fail(s"missing group $id"))
 
     groupItems.head.label shouldBe "Workspace Layout"
-    groupItems.head.children.map(_.id) should contain allOf ("pin-outline", "pin-explorer", "pin-diagnostics")
+    groupItems.head.children.map(_.id) should contain allOf (
+      "pin-outline",
+      "pin-explorer",
+      "pin-diagnostics",
+      "focus-left-panel",
+      "focus-right-panel",
+      "focus-bottom-panel",
+      "expand-left-panel",
+      "expand-right-panel",
+      "expand-bottom-panel",
+      "unpin-left-panel",
+      "unpin-right-panel",
+      "unpin-bottom-panel",
+      "collapse-expanded-panel"
+    )
     group("settings-cursor").label shouldBe "Cursor"
     group("settings-cursor").children.map(_.id) should contain allOf ("cursor-mode", "cursor-info-bar")
     group("settings-surface-appearance").label shouldBe "Surface Appearance"
@@ -460,7 +474,15 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.OpenMarkdownPreview,
       CommandIntent.PinExplorerPanel,
       CommandIntent.PinDiagnosticsPanel,
+      CommandIntent.FocusPanel(PanelPosition.Left),
+      CommandIntent.FocusPanel(PanelPosition.Right),
+      CommandIntent.FocusPanel(PanelPosition.Bottom),
+      CommandIntent.ExpandPanel(PanelPosition.Left),
+      CommandIntent.ExpandPanel(PanelPosition.Right),
+      CommandIntent.ExpandPanel(PanelPosition.Bottom),
       CommandIntent.UnpinPanel(PanelPosition.Left),
+      CommandIntent.UnpinPanel(PanelPosition.Right),
+      CommandIntent.UnpinPanel(PanelPosition.Bottom),
       CommandIntent.CollapseExpandedPanel
     )
     val navigation = configurePreset.children
