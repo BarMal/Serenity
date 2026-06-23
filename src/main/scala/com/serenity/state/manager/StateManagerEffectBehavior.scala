@@ -143,6 +143,14 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.Motion(config))
     )
 
+  private def updateTextDisplayConfig(
+    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
+  ): IO[com.serenity.config.AppConfig] =
+    updateConfigWithEditedPresetPersistence(
+      update,
+      config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.TextDisplay(config))
+    )
+
   private def updateConfigWithEditedPresetPersistence(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig,
     persistEditedPreset: com.serenity.config.AppConfig => IO[Unit]
@@ -231,17 +239,17 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   protected def interpretCommand(command: Command, state: AppState): IO[Unit] =
     command.intent match
       case CommandIntent.ToggleLineNumbers =>
-        updateConfig(config => config.withLineNumbers(!config.showLineNumbers)).void
+        updateTextDisplayConfig(config => config.withLineNumbers(!config.showLineNumbers)).void
       case CommandIntent.ToggleGutter =>
-        updateConfig(config => config.withGutter(!config.showGutter)).void
+        updateTextDisplayConfig(config => config.withGutter(!config.showGutter)).void
       case CommandIntent.ToggleWordWrap =>
-        updateConfig(config => config.withWordWrap(!config.wordWrapEnabled)).void
+        updateTextDisplayConfig(config => config.withWordWrap(!config.wordWrapEnabled)).void
       case CommandIntent.SetLineNumbers(enabled) =>
-        updateConfig(config => config.withLineNumbers(enabled)).void
+        updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
       case CommandIntent.SetGutter(enabled) =>
-        updateConfig(config => config.withGutter(enabled)).void
+        updateTextDisplayConfig(config => config.withGutter(enabled)).void
       case CommandIntent.SetWordWrap(enabled) =>
-        updateConfig(config => config.withWordWrap(enabled)).void
+        updateTextDisplayConfig(config => config.withWordWrap(enabled)).void
       case CommandIntent.SaveCurrentFile =>
         state.focusedBufferId match
           case Some(bufferId) => saveBufferEffect(bufferId)
@@ -505,9 +513,9 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.ResetUiPreset(name) =>
         resetUiPresetEffect(name)
       case CommandIntent.SetTextAreaLeftInset(value) =>
-        updateConfig(_.withTextAreaLeftInset(value)).void
+        updateTextDisplayConfig(_.withTextAreaLeftInset(value)).void
       case CommandIntent.SetTextAreaRightInset(value) =>
-        updateConfig(_.withTextAreaRightInset(value)).void
+        updateTextDisplayConfig(_.withTextAreaRightInset(value)).void
       case CommandIntent.RunProjectTask(kind) =>
         runProjectTask(state, kind)
       case CommandIntent.ToggleLigatures =>
