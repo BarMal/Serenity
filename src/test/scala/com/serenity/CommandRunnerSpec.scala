@@ -111,6 +111,14 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     settingsCommands.exists(_.name == "toggle-theme") shouldBe true
   }
 
+  it should "reuse categorized command lists from the registry" in {
+    val registry = CommandRegistry.default
+
+    registry.commandsForCategory(CommandCategory.File) shouldBe theSameInstanceAs(
+      registry.commandsForCategory(CommandCategory.File)
+    )
+  }
+
   it should "omit redundant top-level typography toggle commands" in {
     val registry     = CommandRegistry.default
     val commandNames = registry.getAllCommands.map(_.name)
@@ -361,6 +369,26 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.SetGutter(false),
       CommandIntent.SetWordWrap(false)
     )
+  }
+
+  it should "reuse derived settings groups within a command runner state" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+
+    runner.settingsGroups shouldBe theSameInstanceAs(runner.settingsGroups)
+  }
+
+  it should "reuse derived visible items within a command runner state" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+
+    runner.visibleItems shouldBe theSameInstanceAs(runner.visibleItems)
   }
 
   it should "surface default document mode as a typed language setting" in {

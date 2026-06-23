@@ -196,7 +196,7 @@ object CommandSurfaceItem:
   case class CommandItem(command: Command) extends CommandSurfaceItem:
     override def id: String                = command.name
     override def category: CommandCategory = command.category
-    override def searchText: String        = s"${command.name} ${command.label} ${command.description}"
+    override lazy val searchText: String   = s"${command.name} ${command.label} ${command.description}"
 
   case class OptionItem(
       id: String,
@@ -206,7 +206,7 @@ object CommandSurfaceItem:
       category: CommandCategory,
       hint: Option[String] = None
   ) extends CommandSurfaceItem:
-    override def searchText: String =
+    override lazy val searchText: String =
       s"$label ${options.map(option => s"${option.label} ${option.hint.getOrElse("")}").mkString(" ")}"
 
     def selectedOption: String =
@@ -236,7 +236,7 @@ object CommandSurfaceItem:
       acceptsBindingText: Boolean = false,
       acceptsFreeText: Boolean = false
   ) extends CommandSurfaceItem:
-    override def searchText: String = s"$label $hint"
+    override lazy val searchText: String = s"$label $hint"
 
     def accepts(currentText: String, char: Char): Boolean =
       if acceptsFreeText then !char.isControl
@@ -255,7 +255,7 @@ object CommandSurfaceItem:
       category: CommandCategory,
       hint: Option[String] = None
   ) extends CommandSurfaceItem:
-    override def searchText: String =
+    override lazy val searchText: String =
       s"$label ${children.map(_.searchText).mkString(" ")}"
 
 /** Search result for a command with relevance scoring */

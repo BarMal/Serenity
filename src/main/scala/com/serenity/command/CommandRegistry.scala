@@ -12,6 +12,15 @@ class CommandRegistry(private val commands: List[Command]):
 
   private val searcher = new CommandSearcher(commands)
 
+  private lazy val commandsByCategory: Map[CommandCategory, List[Command]] =
+    CommandCategory.values.map { category =>
+      val categoryCommands =
+        category match
+          case CommandCategory.All => commands
+          case _                   => commands.filter(_.category == category)
+      category -> categoryCommands
+    }.toMap
+
   /** Get all registered commands */
   def getAllCommands: List[Command] = commands
 
@@ -20,9 +29,7 @@ class CommandRegistry(private val commands: List[Command]):
     searcher.search(term, maxResults)
 
   def commandsForCategory(category: CommandCategory): List[Command] =
-    category match
-      case CommandCategory.All => commands
-      case _                   => commands.filter(_.category == category)
+    commandsByCategory(category)
 
   def surfaceItemsForCategory(
     category: CommandCategory,
