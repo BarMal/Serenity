@@ -73,7 +73,7 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorX
   }
 
-  it should "place a plain editable row caret using measured text advances" in {
+  it should "place a plain editable row caret on the rendered cell boundary" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)
@@ -90,10 +90,10 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
 
     TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
-    val caretXs         = TextLayoutSnapshot.caretXsForText(rowText, font, surface.fontRenderContext.get)
-    val expectedCursorX = metrics.toPixelX(1) + math.round(caretXs.last)
+    val expectedCursorColumn = 1 + rowText.length
 
-    surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorX
+    surface.getBg(expectedCursorColumn, 1) shouldBe Theme.light.cursor
+    surface.getFg(expectedCursorColumn, 1) shouldBe Theme.light.background
   }
 
   it should "render command runner settings rows with stable label, hint, and value columns" in {

@@ -200,7 +200,7 @@ object TextOverlayRenderer:
         )
 
   private def scrolledRowView(row: OverlayRow, width: Int): OverlayRowView =
-    val useMeasuredCursor = row.cursorColumn.nonEmpty
+    val useMeasuredCursor = row.cursorColumn.nonEmpty && row.layout != OverlayRowLayout.Plain
     val scrollOffset =
       row.cursorColumn match
         case Some(cursorColumn) if row.plainText.length > width =>
