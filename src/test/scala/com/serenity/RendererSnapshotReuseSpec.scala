@@ -3,7 +3,7 @@ package com.serenity
 import java.awt.Font
 
 import com.serenity.config.AppConfig
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.Renderer
@@ -17,6 +17,40 @@ import org.scalatest.matchers.should.Matchers
 class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
+
+  final case class NonCollectingRope(delegate: Rope) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      this
+
+    override def index(i: Int): Option[Char] =
+      delegate.index(i)
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def lineCount: Int =
+      delegate.lineCount
+
+    override def getLine(lineIndex: Int): Option[String] =
+      delegate.getLine(lineIndex)
+
+    override def lineColumnToOffset(line: Int, column: Int): Int =
+      delegate.lineColumnToOffset(line, column)
+
+    override def collect(): String =
+      throw AssertionError("plain rendering should not materialise the whole buffer")
 
   private val monoFont     = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val cellMetrics  = CellMetrics.fromFont(monoFont)
@@ -67,4 +101,37 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
     surface.drawRunPxCalls.exists(_.s.contains("hello")) shouldBe true
+  }
+
+  it should "render a plain large buffer without materialising the whole rope" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val content  = NonCollectingRope(Rope("{" + (1 to 5000).map(i => s""""k$i":$i""").mkString(",") + "}"))
+    val buffer = Buffer(bufferId, content)
+      .copy(
+        language = Some(com.serenity.lsp.config.LanguageId.JsonLang),
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 20)
+      )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+    )
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    noException should be thrownBy Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      monoFont,
+      monoFont,
+      cellMetrics,
+      None
+    )
   }
