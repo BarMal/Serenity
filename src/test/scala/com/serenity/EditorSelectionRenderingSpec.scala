@@ -129,18 +129,20 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
     )
 
-    val surface = new MockRenderSurface(100, 30)
+    val surface           = new MockRenderSurface(100, 30)
+    val commentBackground = Renderer.commentHighlightBackground(state.theme)
 
     Renderer.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
 
     val commentCells = for
       x <- 0 until surface.width
       if "beta".contains(surface.getChar(x, 1))
-      if surface.getBg(x, 1) == state.theme.warning.background
+      if surface.getBg(x, 1) == commentBackground
     yield x
 
     commentCells should have size 4
     commentCells.foreach(x => surface.getBg(x, 1) should not be state.theme.highlighted.background)
+    commentCells.foreach(x => surface.getBg(x, 1) should not be state.theme.warning.background)
   }
 
   it should "use the warning foreground for the active authored document comment range" in {
@@ -164,14 +166,15 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
     )
 
-    val surface = new MockRenderSurface(100, 30)
+    val surface           = new MockRenderSurface(100, 30)
+    val commentBackground = Renderer.commentHighlightBackground(state.theme)
 
     Renderer.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
 
     val activeCommentLetters = for
       x <- 0 until surface.width
       if "beta".contains(surface.getChar(x, 1))
-      if surface.getBg(x, 1) == state.theme.warning.background
+      if surface.getBg(x, 1) == commentBackground
     yield surface.getFg(x, 1)
 
     activeCommentLetters should have size 4
@@ -199,13 +202,14 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
     )
 
-    val surface = new MockRenderSurface(100, 30)
+    val surface           = new MockRenderSurface(100, 30)
+    val commentBackground = Renderer.commentHighlightBackground(state.theme)
 
     Renderer.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
 
-    val firstLineHighlights  = (0 until surface.width).count(x => surface.getBg(x, 1) == state.theme.warning.background)
-    val secondLineHighlights = (0 until surface.width).count(x => surface.getBg(x, 2) == state.theme.warning.background)
-    val thirdLineHighlights  = (0 until surface.width).count(x => surface.getBg(x, 3) == state.theme.warning.background)
+    val firstLineHighlights  = (0 until surface.width).count(x => surface.getBg(x, 1) == commentBackground)
+    val secondLineHighlights = (0 until surface.width).count(x => surface.getBg(x, 2) == commentBackground)
+    val thirdLineHighlights  = (0 until surface.width).count(x => surface.getBg(x, 3) == commentBackground)
 
     firstLineHighlights shouldBe 4
     secondLineHighlights shouldBe 11
@@ -233,7 +237,8 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
     )
 
-    val surface = new MockRenderSurface(100, 30)
+    val surface           = new MockRenderSurface(100, 30)
+    val commentBackground = Renderer.commentHighlightBackground(state.theme)
 
     Renderer.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
 
@@ -243,5 +248,6 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
         fail("Expected rendered buffer text")
       )
 
-    surface.getBg(alphaStart + 5, 1) shouldBe state.theme.warning.background
+    surface.getBg(alphaStart + 5, 1) shouldBe commentBackground
+    surface.getBg(alphaStart + 5, 1) should not be state.theme.warning.background
   }
