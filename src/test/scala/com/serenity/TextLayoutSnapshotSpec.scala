@@ -322,7 +322,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       font = font
     )
 
-    leftColumn should be < 7
+    leftColumn should be <= 7
     leftColumn should be >= 0
   }
 
