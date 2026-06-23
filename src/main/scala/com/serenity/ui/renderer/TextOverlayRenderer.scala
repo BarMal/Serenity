@@ -109,13 +109,13 @@ object TextOverlayRenderer:
     val baseFg  = defaultForeground.getOrElse(theme.panel.foreground)
     val baseBg  = defaultBackground.getOrElse(theme.panel.background)
     val rowBackground =
-      rowView.row.backgroundColor.getOrElse(
-        if rowView.row.selected then theme.highlighted.background else baseBg
-      )
+      rowView.row.backgroundColor
+        .map(color => withAlpha(color, baseBg.getAlpha))
+        .getOrElse(if rowView.row.selected then withAlpha(theme.highlighted.background, baseBg.getAlpha) else baseBg)
     val rowForeground =
-      rowView.row.foregroundColor.getOrElse(
-        if rowView.row.selected then theme.highlighted.foreground else baseFg
-      )
+      rowView.row.foregroundColor
+        .map(color => withAlpha(color, baseFg.getAlpha))
+        .getOrElse(if rowView.row.selected then withAlpha(theme.highlighted.foreground, baseFg.getAlpha) else baseFg)
 
     surface.setForegroundColor(rowForeground)
     surface.setBackgroundColor(rowBackground)
@@ -457,18 +457,22 @@ object TextOverlayRenderer:
   ): Unit =
     if width > 0 then
       val segmentBackground =
-        segment.backgroundColor.getOrElse(
-          if segment.selected then theme.highlighted.background
-          else if segment.tone == OverlayTone.Error then theme.error.background
-          else defaultBackground
-        )
+        segment.backgroundColor
+          .map(color => withAlpha(color, defaultBackground.getAlpha))
+          .getOrElse(
+            if segment.selected then withAlpha(theme.highlighted.background, defaultBackground.getAlpha)
+            else if segment.tone == OverlayTone.Error then withAlpha(theme.error.background, defaultBackground.getAlpha)
+            else defaultBackground
+          )
       val segmentForeground =
-        segment.foregroundColor.getOrElse(
-          if segment.selected then theme.highlighted.foreground
-          else if segment.tone == OverlayTone.Muted then theme.muted
-          else if segment.tone == OverlayTone.Error then theme.error.foreground
-          else defaultForeground
-        )
+        segment.foregroundColor
+          .map(color => withAlpha(color, defaultForeground.getAlpha))
+          .getOrElse(
+            if segment.selected then withAlpha(theme.highlighted.foreground, defaultForeground.getAlpha)
+            else if segment.tone == OverlayTone.Muted then withAlpha(theme.muted, defaultForeground.getAlpha)
+            else if segment.tone == OverlayTone.Error then withAlpha(theme.error.foreground, defaultForeground.getAlpha)
+            else defaultForeground
+          )
       surface.setForegroundColor(segmentForeground)
       surface.setBackgroundColor(segmentBackground)
       segment.fontFamily.foreach(family =>
@@ -476,6 +480,10 @@ object TextOverlayRenderer:
       )
       CharacterRenderer.renderStringPlain(surface, x, y, segmentText.take(width))
       if segment.fontFamily.nonEmpty then surface.setFont(font)
+
+  private def withAlpha(color: Color, alpha: Int): Color =
+    if color.getAlpha == alpha then color
+    else new Color(color.getRed, color.getGreen, color.getBlue, alpha)
 
   private def shouldUseMeasuredCursor(font: java.awt.Font, surface: RenderSurface): Boolean =
     FontLoader.ligaturesEnabled(font) || !FontLoader.isMonospacedFont(font) || surface.fontRenderContext.nonEmpty
