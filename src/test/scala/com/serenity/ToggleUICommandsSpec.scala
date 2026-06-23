@@ -169,6 +169,28 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
   behavior of "Toggle Word Wrap Command"
 
+  it should "expose a line wrap command alias for soft wrapping" in {
+    val registry = CommandRegistry.withToggleUI
+
+    val lineResults = registry.searchCommands("line wrap")
+    val wrapResults = registry.searchCommands("wrap")
+    val command     = registry.findCommand("toggle-line-wrap").get
+
+    lineResults.map(_.name) should contain("toggle-line-wrap")
+    wrapResults.map(_.name) should contain("toggle-line-wrap")
+    command.intent shouldBe CommandIntent.ToggleWordWrap
+  }
+
+  it should "toggle soft line wrapping through the line wrap command" in {
+    val stateManager = createStateManager()
+
+    stateManager.getCurrentState.unsafeRunSync().config.wordWrapEnabled shouldBe true
+
+    executeCommandThroughRunner(stateManager, "toggle-line-wrap", "toggle-line-wrap")
+
+    stateManager.getCurrentState.unsafeRunSync().config.wordWrapEnabled shouldBe false
+  }
+
   it should "be found in command registry by search terms" in {
     val registry = CommandRegistry.withToggleUI
 

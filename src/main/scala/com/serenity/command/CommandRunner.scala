@@ -104,7 +104,7 @@ case class CommandRunner(
     val textScaleModeItem    = CommandRunner.textScaleModeOptionItem(optionSelections)
     val lineNumbersItem      = CommandRunner.lineNumbersOptionItem(optionSelections)
     val gutterItem           = CommandRunner.gutterOptionItem(optionSelections)
-    val wordWrapItem         = CommandRunner.wordWrapOptionItem(optionSelections)
+    val lineWrapItem         = CommandRunner.lineWrapOptionItem(optionSelections)
     val keymapItems          = inputItems.filter(_.id.startsWith("keymap-"))
     val workspaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-workspace-layout",
@@ -123,7 +123,7 @@ case class CommandRunner(
     val textDisplayGroup = CommandSurfaceItem.GroupItem(
       id = "settings-text-display",
       label = "Text Display",
-      children = List(lineNumbersItem, gutterItem, wordWrapItem),
+      children = List(lineNumbersItem, gutterItem, lineWrapItem),
       category = CommandCategory.Settings,
       hint = Some("Line numbers, gutter, wrap")
     )
@@ -666,6 +666,7 @@ object CommandRunner:
       "spellcheck-enabled"        -> spellCheckEnabledIndex(config.spellCheck.enabled),
       "line-numbers"              -> enabledIndex(config.showLineNumbers),
       "gutter"                    -> enabledIndex(config.showGutter),
+      "line-wrap"                 -> enabledIndex(config.wordWrapEnabled),
       "word-wrap"                 -> enabledIndex(config.wordWrapEnabled),
       "code-font"                 -> codeFontIndex(config.fontConfig.codeFontFamily),
       "text-font"                 -> textFontIndex(config.fontConfig.textFontFamily),
@@ -1056,11 +1057,11 @@ object CommandRunner:
       hint = "Show or hide the status gutter"
     )
 
-  private[command] def wordWrapOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+  private[command] def lineWrapOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     enabledOptionItem(
-      id = "word-wrap",
-      label = "Word Wrap",
-      selectedIndex = optionSelections.getOrElse("word-wrap", 0),
+      id = "line-wrap",
+      label = "Line Wrap",
+      selectedIndex = optionSelections.getOrElse("line-wrap", optionSelections.getOrElse("word-wrap", 0)),
       enabledIntent = CommandIntent.SetWordWrap(true),
       disabledIntent = CommandIntent.SetWordWrap(false),
       hint = "Wrap long logical lines to the editor width"
