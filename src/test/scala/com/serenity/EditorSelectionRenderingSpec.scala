@@ -82,7 +82,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     highlightedLetters.mkString shouldBe "alphagamma"
   }
 
-  it should "paint a subtle background on the hovered editor line" in {
+  it should "not repaint document rows for passive editor hover" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val buffer   = Buffer.fromString(bufferId, "alpha\nbeta")
@@ -96,7 +96,10 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       ),
       hoveredEditorTarget = Some(HoveredEditorTarget(paneId, bufferId, CursorPosition(1, 0))),
       theme = Theme.light,
-      config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
+      config = com.serenity.config.AppConfig.default
+        .withSyntaxHighlighting(false)
+        .withLineNumbers(false)
+        .withGutter(false)
     )
 
     val surface = new MockRenderSurface(100, 30)
@@ -105,7 +108,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
 
     val hoveredLineBackgrounds = (0 until surface.width).count(x => surface.getBg(x, 2) == state.theme.panel.background)
 
-    hoveredLineBackgrounds should be > 0
+    hoveredLineBackgrounds shouldBe 0
   }
 
   it should "highlight authored document comment ranges without using the selection colour" in {
