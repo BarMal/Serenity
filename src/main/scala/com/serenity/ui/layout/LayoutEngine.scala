@@ -475,11 +475,47 @@ object LayoutEngine:
       topVisualLine = viewport.topVisualLine.min(math.max(0, panelRect.height - 1))
     )
 
+  def updateViewportDimensions(
+    viewport: Viewport,
+    panelRect: LayoutRect,
+    viewportSizing: com.serenity.config.ViewportSizing
+  ): Viewport =
+    val normalizedSizing = viewportSizing.normalized
+    val visibleLines     = normalizedSizing.height.resolve(panelRect.height)
+    viewport.copy(
+      visibleLines = visibleLines,
+      visibleColumns = normalizedSizing.width.resolve(panelRect.width),
+      topVisualLine = viewport.topVisualLine.min(math.max(0, visibleLines - 1))
+    )
+
   def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect, metrics: CellMetrics): Viewport =
     viewport.copy(
       visibleLines = panelRect.height / metrics.lineHeight,
       visibleColumns = panelRect.width / metrics.charWidth,
       topVisualLine = viewport.topVisualLine.min(math.max(0, panelRect.height / metrics.lineHeight - 1))
+    )
+
+  def syncViewportDimensions(state: AppState, viewportSize: ViewportSize): AppState =
+    val calculatedLayout = calculateLayout(state, viewportSize)
+    val paneLayouts      = calculatePaneLayouts(state, calculatedLayout)
+    val (updatedBuffers, updatedPanes) =
+      state.layout.editorPanes.foldLeft((state.buffers, state.layout.editorPanes)) {
+        case ((buffers, panes), (paneId, pane)) =>
+          val paneRect     = paneLayouts.getOrElse(paneId, calculatedLayout.editorPanelRect)
+          val paneViewport = updateViewportDimensions(pane.viewport, paneRect, state.config.viewportSizing)
+          val nextPanes    = panes + (paneId -> pane.copy(viewport = paneViewport))
+          val updatedBuffer = pane.bufferId.flatMap(buffers.get).map { buffer =>
+            buffer.id -> buffer
+              .copy(viewport = updateViewportDimensions(buffer.viewport, paneRect, state.config.viewportSizing))
+          }
+          val nextBuffers = updatedBuffer.fold(buffers)(buffers + _)
+
+          (nextBuffers, nextPanes)
+      }
+
+    state.copy(
+      buffers = updatedBuffers,
+      layout = state.layout.copy(editorPanes = updatedPanes)
     )
 
   /** Calculate individual pane layouts within the editor area */

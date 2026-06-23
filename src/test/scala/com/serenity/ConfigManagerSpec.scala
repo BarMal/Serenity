@@ -404,6 +404,29 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("display.word_wrap = false")
   }
 
+  it should "load and write viewport sizing policy" in {
+    val configFile = Files.createTempFile("serenity-viewport-config", ".conf")
+    Files.writeString(
+      configFile,
+      """viewport.width.percent = 80
+        |viewport.width.max =
+        |viewport.height.percent = 100
+        |viewport.height.max = 50
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.viewportSizing.width.percent shouldBe 0.8
+    config.viewportSizing.width.maxCells shouldBe None
+    config.viewportSizing.height.percent shouldBe 1.0
+    config.viewportSizing.height.maxCells shouldBe Some(50)
+    ConfigManager.configToString(config) should include("viewport.width.percent = 80.0")
+    ConfigManager.configToString(config) should include("viewport.width.max = ")
+    ConfigManager.configToString(config) should include("viewport.height.percent = 100.0")
+    ConfigManager.configToString(config) should include("viewport.height.max = 50")
+  }
+
   it should "load and write material and motion presets" in {
     val configFile = Files.createTempFile("serenity-material-motion-config", ".conf")
     Files.writeString(

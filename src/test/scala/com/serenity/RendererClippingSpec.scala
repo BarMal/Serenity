@@ -21,7 +21,7 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
 
   behavior of "Renderer Panel Boundary Clipping"
 
-  it should "document the viewport/panel width mismatch that is now handled by clipping" in {
+  it should "sync assigned pane viewports to the rendered panel width" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
@@ -46,19 +46,11 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
     val pane     = finalState.layout.editorPanes(paneId)
     val viewport = pane.viewport
 
-    // This is still true - viewport.visibleColumns (80) is larger than panelRect.width
     info(s"Viewport visible columns: ${viewport.visibleColumns}")
     info(s"Panel actual width: ${panelRect.width}")
     info(s"Panel rect: x=${panelRect.x}, width=${panelRect.width}, right=${panelRect.right}")
 
-    // But now the Renderer clips to panel width, so it's handled correctly
-    if viewport.visibleColumns > panelRect.width then
-      info(
-        s"Viewport visibleColumns (${viewport.visibleColumns}) exceeds panel width (${panelRect.width}), but Renderer now clips correctly"
-      )
-
-    // Test passes because the issue is documented and mitigated
-    panelRect.width should be > 0
+    viewport.visibleColumns shouldBe panelRect.width
   }
 
   it should "demonstrate the clipping solution for putString panel overflow" in {

@@ -2,10 +2,12 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.{AppConfig, ViewportAxisSizing, ViewportSizing}
 import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
+import com.serenity.state.models.*
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -59,6 +61,95 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
         buffer.viewport.visibleLines.shouldBe(newLayout.editorPanelRect.height)
         buffer.viewport.visibleColumns.shouldBe(newLayout.editorPanelRect.width)
       case None => fail("No buffer found in state")
+  }
+
+  it should "sync split-pane buffer viewports to each pane layout on resize" in {
+    val firstPaneId  = PaneId(0)
+    val secondPaneId = PaneId(1)
+    val firstBuffer  = Buffer.fromString(BufferId(0), "first")
+    val secondBuffer = Buffer.fromString(BufferId(1), "second")
+    val initialState = com.serenity.state.models.AppState.initial.copy(
+      buffers = Map(firstBuffer.id -> firstBuffer, secondBuffer.id -> secondBuffer),
+      bufferOrder = List(firstBuffer.id, secondBuffer.id),
+      layout = Layout(
+        editorPanes = Map(
+          firstPaneId  -> EditorPane.withBuffer(firstPaneId, firstBuffer.id),
+          secondPaneId -> EditorPane.withBuffer(secondPaneId, secondBuffer.id)
+        ),
+        activeEditorPaneId = Some(firstPaneId),
+        paneOrder = List(firstPaneId, secondPaneId),
+        splitDirection = PaneSplitDirection.Horizontal
+      ),
+      focus = Focus.EditorPane(firstPaneId),
+      nextBufferId = BufferId(2),
+      nextPaneId = PaneId(2)
+    )
+    val newSize = ViewportSize(120, 40)
+
+    val resizedState = com.serenity.state.reducers.SystemEventReducer
+      .reduce(ResizeEvent(newSize), initialState)
+      .state
+    val calculatedLayout = LayoutEngine.calculateLayout(resizedState, newSize)
+    val paneLayouts      = LayoutEngine.calculatePaneLayouts(resizedState, calculatedLayout)
+
+    resizedState.buffers(firstBuffer.id).viewport.visibleColumns shouldBe paneLayouts(firstPaneId).width
+    resizedState.buffers(firstBuffer.id).viewport.visibleLines shouldBe paneLayouts(firstPaneId).height
+    resizedState.layout.editorPanes(firstPaneId).viewport.visibleColumns shouldBe paneLayouts(firstPaneId).width
+    resizedState.layout.editorPanes(firstPaneId).viewport.visibleLines shouldBe paneLayouts(firstPaneId).height
+    resizedState.buffers(secondBuffer.id).viewport.visibleColumns shouldBe paneLayouts(secondPaneId).width
+    resizedState.buffers(secondBuffer.id).viewport.visibleLines shouldBe paneLayouts(secondPaneId).height
+    resizedState.layout.editorPanes(secondPaneId).viewport.visibleColumns shouldBe paneLayouts(secondPaneId).width
+    resizedState.layout.editorPanes(secondPaneId).viewport.visibleLines shouldBe paneLayouts(secondPaneId).height
+  }
+
+  it should "apply configured relative and bounded viewport sizing to pane layouts" in {
+    val viewportSizing = ViewportSizing(
+      width = ViewportAxisSizing(percent = 0.8, maxCells = None),
+      height = ViewportAxisSizing(percent = 1.0, maxCells = Some(20))
+    )
+    val initialState = com.serenity.state.models.AppState.initial.copy(
+      config = AppConfig.default.copy(viewportSizing = viewportSizing)
+    )
+    val newSize = ViewportSize(120, 40)
+
+    val resizedState = com.serenity.state.reducers.SystemEventReducer
+      .reduce(ResizeEvent(newSize), initialState)
+      .state
+    val calculatedLayout = LayoutEngine.calculateLayout(resizedState, newSize)
+    val paneId           = resizedState.layout.activeEditorPaneId.getOrElse(fail("Expected active pane"))
+    val paneRect         = LayoutEngine.calculatePaneLayouts(resizedState, calculatedLayout)(paneId)
+    val bufferId         = resizedState.layout.editorPanes(paneId).bufferId.getOrElse(fail("Expected active buffer"))
+
+    resizedState.buffers(bufferId).viewport.visibleColumns shouldBe math.max(1, (paneRect.width * 0.8).toInt)
+    resizedState.buffers(bufferId).viewport.visibleLines shouldBe 20
+    resizedState.layout.editorPanes(paneId).viewport.visibleColumns shouldBe math.max(1, (paneRect.width * 0.8).toInt)
+    resizedState.layout.editorPanes(paneId).viewport.visibleLines shouldBe 20
+  }
+
+  it should "sync a newly assigned buffer to the current pane viewport" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
+    val viewportSize = ViewportSize(120, 40)
+    stateManager.applyEvent(ResizeEvent(viewportSize)).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("assigned after resize").unsafeRunSync()
+    val paneId = stateManager.getCurrentState
+      .unsafeRunSync()
+      .layout
+      .activeEditorPaneId
+      .getOrElse(fail("Expected active pane"))
+
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+
+    val updatedState     = stateManager.getCurrentState.unsafeRunSync()
+    val calculatedLayout = LayoutEngine.calculateLayout(updatedState, viewportSize)
+    val paneRect         = LayoutEngine.calculatePaneLayouts(updatedState, calculatedLayout)(paneId)
+    updatedState.buffers(bufferId).viewport.visibleColumns shouldBe paneRect.width
+    updatedState.buffers(bufferId).viewport.visibleLines shouldBe paneRect.height
+    updatedState.layout.editorPanes(paneId).viewport.visibleColumns shouldBe paneRect.width
+    updatedState.layout.editorPanes(paneId).viewport.visibleLines shouldBe paneRect.height
   }
 
   it should "handle text wrapping recalculation on resize" in {
