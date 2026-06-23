@@ -221,6 +221,7 @@ case class AppConfig(
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
     motionPreset: MotionPreset = MotionPreset.Reduced,
     elementTransitionSpeedScale: Double = 1.0,
+    commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
     cursorMode: CursorMode = CursorMode.Blink,
     cursorColors: CursorColorConfig = CursorColorConfig(),
@@ -335,7 +336,8 @@ case class AppConfig(
       case _ =>
         copy(
           motionPreset = preset,
-          characterAnimation = preset.animationConfig
+          characterAnimation = preset.animationConfig,
+          commandRunnerAnimation = preset.animationConfig
         )
 
   /** Transition policy derived from the selected motion preset and global speed scale. */
@@ -350,6 +352,9 @@ case class AppConfig(
 
   def withElementTransitionSpeedScale(scale: Double): AppConfig =
     copy(elementTransitionSpeedScale = AppConfig.clampElementTransitionSpeedScale(scale))
+
+  def withCommandRunnerAnimation(animation: Option[AnimationConfig]): AppConfig =
+    copy(commandRunnerAnimation = animation)
 
   def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
     copy(editorInsertionTransitionKind = kind)

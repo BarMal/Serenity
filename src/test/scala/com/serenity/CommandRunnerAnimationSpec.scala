@@ -49,6 +49,18 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     state.surfaceAnimations(surfaceId).animationState.hasActiveAnimations shouldBe true
   }
 
+  it should "skip command runner fade when the command runner animation is disabled" in {
+    val sm = createStateManager()
+    sm.updateState(_.copy(config = com.serenity.config.AppConfig.default.withCommandRunnerAnimation(None)))
+      .unsafeRunSync()
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val state     = sm.getCurrentState.unsafeRunSync()
+    val surfaceId = state.commandRunnerSurface.get.id
+    state.surfaceAnimations.get(surfaceId) shouldBe None
+  }
+
   it should "transition to Visible after bufferFadeLength ticks" in {
     val sm = createStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
@@ -132,6 +144,31 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     animatedRows.foreach { row =>
       ghostAnim.getCell(0, row).map(_.backgroundSteps.length).getOrElse(0) shouldBe firstRowSteps
     }
+  }
+
+  it should "reverse a partial fade from the command runner's current opacity" in {
+    val sm = createStateManager()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val openedState = sm.getCurrentState.unsafeRunSync()
+    val surfaceId   = openedState.commandRunnerSurface.get.id
+
+    (1 to 3).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
+
+    val partialState       = sm.getCurrentState.unsafeRunSync()
+    val partialFadeCell    = partialState.surfaceAnimations(surfaceId).animationState.getCell(0, 0).get
+    val partialBackground  = partialFadeCell.currentBackground.get
+    val totalFadeSteps     = com.serenity.animation.AnimationConfig.smooth.get.steps
+    val remainingFadeSteps = partialFadeCell.backgroundSteps.length
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val closedState = sm.getCurrentState.unsafeRunSync()
+    val ghost       = closedState.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay]).get
+    val ghostCell   = closedState.surfaceAnimations(ghost.id).animationState.getCell(0, 0).get
+
+    ghostCell.currentBackground shouldBe Some(partialBackground)
+    ghostCell.backgroundSteps.length shouldBe (totalFadeSteps - remainingFadeSteps + 1)
   }
 
   it should "remove the ghost surface when Exiting animation completes" in {

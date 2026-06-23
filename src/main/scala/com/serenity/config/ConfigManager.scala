@@ -205,6 +205,10 @@ object ConfigManager:
               parseElementTransitionSpeedScale(value.trim)
                 .map(config.withElementTransitionSpeedScale)
                 .getOrElse(config)
+            case "ui.motion.command_runner" | "ui.motion.command.runner" | "ui_motion_command_runner" =>
+              parseAnimationPreset(value.trim)
+                .map(config.withCommandRunnerAnimation)
+                .getOrElse(config)
             case "ui.motion.editor_text" | "ui.motion.editor.text" | "ui_motion_editor_text" =>
               parseEditorInsertionTransitionKind(value.trim)
                 .map(config.withEditorInsertionTransitionKind)
@@ -295,6 +299,12 @@ object ConfigManager:
       case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
       case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
       case Some(_)                                          => "custom" // For custom configurations
+    val commandRunnerAnimationSetting = config.commandRunnerAnimation match
+      case None                                             => "none"
+      case Some(anim) if anim == AnimationConfig.quick.get  => "quick"
+      case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
+      case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
+      case Some(_)                                          => "custom"
     val lspSettings = lspConfigToString(config.lspUserConfig)
     def editorBinding(action: EditorKeyAction): String =
       config.focusedKeymapConfig.editor
@@ -341,6 +351,7 @@ object ConfigManager:
        |ui.material = ${config.materialPreset.configKey}
        |ui.motion = ${config.motionPreset.configKey}
        |ui.motion.speed_scale = ${config.elementTransitionSpeedScale}
+       |ui.motion.command_runner = $commandRunnerAnimationSetting
        |ui.motion.editor_text = ${editorInsertionTransitionConfigKey(config.editorInsertionTransitionKind)}
        |
        |# Default mode for new buffers: plain-text, markdown, rich-text
@@ -475,6 +486,8 @@ object ConfigManager:
           parseMotionPreset(value).isEmpty
         case "ui.motion.speed_scale" | "motion.speed_scale" | "ui_motion_speed_scale" | "motion_speed_scale" =>
           parseElementTransitionSpeedScale(value).isEmpty
+        case "ui.motion.command_runner" | "ui.motion.command.runner" | "ui_motion_command_runner" =>
+          parseAnimationPreset(value).isEmpty
         case "ui.motion.editor_text" | "ui.motion.editor.text" | "ui_motion_editor_text" =>
           parseEditorInsertionTransitionKind(value).isEmpty
         case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
@@ -524,6 +537,8 @@ object ConfigManager:
       "motion.preset",
       "ui.motion.speed_scale",
       "motion.speed_scale",
+      "ui.motion.command_runner",
+      "ui.motion.command.runner",
       "ui.motion.editor_text",
       "ui.motion.editor.text",
       "ui.element_gap",
@@ -574,6 +589,7 @@ object ConfigManager:
       "ui_motion"                 -> "ui.motion",
       "motion_preset"             -> "motion.preset",
       "ui_motion_speed_scale"     -> "ui.motion.speed_scale",
+      "ui_motion_command_runner"  -> "ui.motion.command_runner",
       "ui_motion_editor_text"     -> "ui.motion.editor_text",
       "motion_speed_scale"        -> "motion.speed_scale",
       "ui_element_gap"            -> "ui.element_gap",
@@ -620,6 +636,14 @@ object ConfigManager:
       case "expressive" | "full" | "quick"         => Some(MotionPreset.Expressive)
       case "custom"                                => Some(MotionPreset.Custom)
       case _                                       => None
+
+  private def parseAnimationPreset(value: String): Option[Option[AnimationConfig]] =
+    value.toLowerCase match
+      case "none" | "false" | "off" | "disabled" => Some(None)
+      case "quick" | "expressive"                => Some(AnimationConfig.quick)
+      case "smooth"                              => Some(AnimationConfig.smooth)
+      case "subtle"                              => Some(AnimationConfig.subtle)
+      case _                                     => None
 
   private def parseEditorInsertionTransitionKind(value: String): Option[TransitionKind] =
     value.toLowerCase match
