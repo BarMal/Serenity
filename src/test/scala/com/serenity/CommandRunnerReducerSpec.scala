@@ -486,10 +486,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runner.activeSubmenu.map(_.groupId) shouldBe Some("ui-preset-configure")
     runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-presets")
     runner.focusedSubmenuItems.map(_.id) should contain allOf (
-      "settings-language",
-      "settings-markdown",
-      "settings-prose-font",
-      "settings-material-motion"
+      "settings-document-writing",
+      "settings-editor-view",
+      "settings-typography",
+      "settings-appearance-motion"
     )
   }
 
@@ -532,14 +532,20 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   ): AppState =
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val baseRunner = CommandRunner.empty
+    val searchedRunner = CommandRunner.empty
       .activate(registry, config)
       .withActiveCategory(CommandCategory.Settings)
+      .updateSearchTerm(settingsGroupSearchTerm(groupId))
+    val selectedIndex = searchedRunner.visibleItems.indexWhere(_.id == groupId) match
+      case -1    => 0
+      case index => index
+    val baseRunner = searchedRunner.copy(selectedIndex = selectedIndex)
+    val group      = baseRunner.submenuGroup(groupId).getOrElse(fail(s"missing settings group $groupId"))
     val groupIndex =
-      baseRunner.settingsGroups.find(_.id == groupId).map(_.children.indexWhere(_.id == itemId)).getOrElse(0)
-    val runner = baseRunner
-      .withSelectedItem(groupId)
-      .enterSelectedGroup
+      group.children.indexWhere(_.id == itemId) match
+        case -1    => 0
+        case index => index
+    val runner = baseRunner.enterSelectedGroup
       .copy(activeSubmenu = Some(com.serenity.command.CommandRunnerSubmenuState(groupId, selectedIndex = groupIndex)))
     val surface = UiSurface(
       SurfaceId("command-runner"),
@@ -557,6 +563,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       focus = Focus.Surface(submenuSurface.id),
       uiSurfaces = List(surface, submenuSurface)
     )
+
+  private def settingsGroupSearchTerm(groupId: String): String =
+    groupId.stripPrefix("settings-").replace("-", " ")
 
   private def runnerFrom(state: AppState): CommandRunner =
     state.commandRunnerSurface

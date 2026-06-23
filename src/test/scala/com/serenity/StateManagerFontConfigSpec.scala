@@ -5,11 +5,9 @@ import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.CommandSurfaceItem
 import com.serenity.config.ConfigManager
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.SurfaceContent
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import org.scalatest.flatspec.AnyFlatSpec
@@ -25,25 +23,14 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
 
   private def openSettingsSubmenu(stateManager: StateManager, groupId: String): Unit =
     openRunner(stateManager)
-    for _ <- 1 to 5 do stateManager.applyEvent(TabKey).unsafeRunSync()
-    val movesDown = selectedSettingsGroupIndex(stateManager, groupId)
-    for _ <- 1 to movesDown do stateManager.applyEvent(MoveDown).unsafeRunSync()
+    settingsGroupSearchTerm(groupId).foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-  private def selectedSettingsGroupIndex(stateManager: StateManager, groupId: String): Int =
-    val runner = stateManager.getCurrentState
-      .unsafeRunSync()
-      .commandRunnerSurface
-      .flatMap {
-        _.content match
-          case SurfaceContent.CommandPalette(runner) => Some(runner)
-          case _                                     => None
-      }
-      .getOrElse(fail("Expected active command runner"))
-
-    runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group.id }.indexOf(groupId) match
-      case -1    => fail(s"Expected settings group $groupId")
-      case index => index
+  private def settingsGroupSearchTerm(groupId: String): String =
+    groupId match
+      case CodeFontSettingsGroupId => "code font"
+      case UiFontSettingsGroupId   => "ui font"
+      case other                   => other.stripPrefix("settings-").replace("-", " ")
 
   "StateManager" should "invoke the runtime font callback when changing code font size from font settings" in {
     val observed = AtomicReference[List[FontConfig]](Nil)

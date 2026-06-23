@@ -37,6 +37,16 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       case child                               => List(child)
     }
 
+  private def groupByIdRecursive(
+    groups: List[CommandSurfaceItem.GroupItem],
+    id: String
+  ): CommandSurfaceItem.GroupItem =
+    (groups ++ groups.flatMap(group =>
+      descendants(group).collect { case child: CommandSurfaceItem.GroupItem => child }
+    ))
+      .find(_.id == id)
+      .getOrElse(fail(s"missing group $id"))
+
   "CommandRegistry" should "register and find commands" in {
     val registry = CommandRegistry.default
     val commands = registry.getAllCommands
@@ -198,11 +208,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
-    val animationGroup = runner.visibleItems
-      .collectFirst {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-animation" => group
-      }
-      .getOrElse(fail("Expected animation mode option item"))
+    val animationGroup = groupByIdRecursive(runner.settingsGroups, "settings-animation")
 
     animationGroup.label shouldBe "Animation"
     animationGroup.children.map(_.id) should contain allOf ("animation-mode", "animation-duration", "animation-steps")
@@ -215,11 +221,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
-    val appearanceGroup = runner.visibleItems
-      .collectFirst {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-surface-appearance" => group
-      }
-      .getOrElse(fail("Expected background style option item"))
+    val appearanceGroup = groupByIdRecursive(runner.settingsGroups, "settings-surface-appearance")
 
     appearanceGroup.label shouldBe "Surface Appearance"
     appearanceGroup.children.map(_.id) shouldBe List("background-style", "blur-radius")
@@ -234,32 +236,24 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     val groupItems = runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group }
 
-    groupItems
-      .map(_.id) shouldBe List(
+    groupItems.map(_.id) shouldBe List(
       "settings-workspace-layout",
-      "settings-navigation",
-      "settings-text-display",
-      "settings-text-area",
-      "settings-markdown",
-      "settings-language",
-      "settings-code-font",
-      "settings-prose-font",
-      "settings-rich-text",
-      "settings-ui-font",
-      "settings-text-scale",
-      "settings-cursor",
-      "settings-surface-appearance",
-      "settings-interface-layout",
-      "settings-animation",
-      "settings-material-motion",
+      "settings-document-writing",
+      "settings-editor-view",
+      "settings-typography",
+      "settings-appearance-motion",
       "settings-ui-presets",
-      "settings-spellcheck",
       "settings-keymap"
     )
     def group(id: String): CommandSurfaceItem.GroupItem =
       groupItems.find(_.id == id).getOrElse(fail(s"missing group $id"))
+    def nestedGroup(id: String): CommandSurfaceItem.GroupItem =
+      groupItems
+        .flatMap(item => descendants(item).collect { case group: CommandSurfaceItem.GroupItem => group })
+        .find(_.id == id)
+        .getOrElse(fail(s"missing nested group $id"))
 
-    groupItems.head.label shouldBe "Workspace Layout"
+    groupItems.head.label shouldBe "Panels & Workspace"
     groupItems.head.children.map(_.id) shouldBe List("settings-panel-pins", "settings-panel-actions")
     val panelPins    = groupById(groupItems.head.children, "settings-panel-pins")
     val panelActions = groupById(groupItems.head.children, "settings-panel-actions")
@@ -283,42 +277,74 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "unpin-bottom-panel",
       "collapse-expanded-panel"
     )
-    group("settings-cursor").label shouldBe "Cursor"
-    group("settings-cursor").children.map(_.id) should contain allOf ("cursor-mode", "cursor-info-bar")
-    group("settings-surface-appearance").label shouldBe "Surface Appearance"
-    group("settings-surface-appearance").children.map(_.id) shouldBe List("background-style", "blur-radius")
-    group("settings-interface-layout").label shouldBe "Interface Layout"
-    group("settings-interface-layout").children.map(_.id) shouldBe List(
+    group("settings-document-writing").children.map(_.id) shouldBe List(
+      "settings-navigation",
+      "settings-language",
+      "settings-markdown",
+      "settings-rich-text",
+      "settings-spellcheck"
+    )
+    group("settings-editor-view").children.map(_.id) shouldBe List(
+      "settings-text-display",
+      "settings-text-area",
+      "settings-text-scale"
+    )
+    group("settings-typography").children.map(_.id) shouldBe List(
+      "settings-prose-font",
+      "settings-code-font",
+      "settings-ui-font"
+    )
+    group("settings-appearance-motion").children.map(_.id) shouldBe List(
+      "settings-cursor",
+      "settings-surface-appearance",
+      "settings-interface-layout",
+      "settings-material-motion",
+      "settings-animation"
+    )
+    nestedGroup("settings-cursor").label shouldBe "Cursor"
+    nestedGroup("settings-cursor").children.map(_.id) should contain allOf ("cursor-mode", "cursor-info-bar")
+    nestedGroup("settings-surface-appearance").label shouldBe "Surface Appearance"
+    nestedGroup("settings-surface-appearance").children.map(_.id) shouldBe List("background-style", "blur-radius")
+    nestedGroup("settings-interface-layout").label shouldBe "Interface Layout"
+    nestedGroup("settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
       "ui-element-gap",
       "ui-corner-radius"
     )
-    group("settings-material-motion").children.map(_.id) should contain allOf ("material-preset", "motion-preset")
+    nestedGroup("settings-material-motion").children.map(_.id) should contain allOf ("material-preset", "motion-preset")
     group("settings-ui-presets").label shouldBe "UI Presets"
     group("settings-ui-presets").children.map(_.id) should contain allOf ("ui-preset-save", "ui-preset-apply")
-    group("settings-text-display").label shouldBe "Text Display"
-    group("settings-text-display").children.map(_.id) shouldBe List("line-numbers", "gutter", "line-wrap")
-    group("settings-text-area").label shouldBe "Text Area"
-    group("settings-text-area").children.map(_.id) should contain allOf ("text-area-left", "text-area-right")
-    groupItems(6).label shouldBe "Code Font"
-    groupItems(6).children.map(_.id) should contain allOf ("code-font", "code-ligatures", "code-font-size")
-    groupItems(7).label shouldBe "Prose Font"
-    groupItems(7).children.map(_.id) should contain allOf ("text-font", "text-ligatures", "text-font-size")
-    groupItems(8).label shouldBe "Rich Text"
-    groupItems(8).children.map(_.id) should contain allOf (
+    nestedGroup("settings-text-display").label shouldBe "Text Display"
+    nestedGroup("settings-text-display").children.map(_.id) shouldBe List("line-numbers", "gutter", "line-wrap")
+    nestedGroup("settings-text-area").label shouldBe "Text Area"
+    nestedGroup("settings-text-area").children.map(_.id) should contain allOf ("text-area-left", "text-area-right")
+    nestedGroup("settings-code-font").label shouldBe "Code Font"
+    nestedGroup("settings-code-font").children.map(_.id) should contain allOf (
+      "code-font",
+      "code-ligatures",
+      "code-font-size"
+    )
+    nestedGroup("settings-prose-font").label shouldBe "Prose Font"
+    nestedGroup("settings-prose-font").children.map(_.id) should contain allOf (
+      "text-font",
+      "text-ligatures",
+      "text-font-size"
+    )
+    nestedGroup("settings-rich-text").label shouldBe "Rich Text"
+    nestedGroup("settings-rich-text").children.map(_.id) should contain allOf (
       "rich-text-font-family",
       "rich-text-font-size",
       "rich-text-color"
     )
-    group("settings-ui-font").label shouldBe "UI Font"
-    group("settings-ui-font").children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
-    group("settings-text-scale").label shouldBe "Text Scale"
-    group("settings-text-scale").children.map(_.id) should contain allOf ("text-scale-mode", "text-scale")
-    group("settings-code-font").children
+    nestedGroup("settings-ui-font").label shouldBe "UI Font"
+    nestedGroup("settings-ui-font").children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
+    nestedGroup("settings-text-scale").label shouldBe "Text Scale"
+    nestedGroup("settings-text-scale").children.map(_.id) should contain allOf ("text-scale-mode", "text-scale")
+    nestedGroup("settings-code-font").children
       .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "code-font" => group }
       .map(_.children.map(_.id)) should not be empty
-    group("settings-spellcheck").label shouldBe "Spell Check"
-    group("settings-spellcheck").children.map(_.id) should contain allOf (
+    nestedGroup("settings-spellcheck").label shouldBe "Spell Check"
+    nestedGroup("settings-spellcheck").children.map(_.id) should contain allOf (
       "spellcheck-enabled",
       "spellcheck-languages",
       "spellcheck-words"
@@ -329,10 +355,13 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "keymap-command-runner-submit",
       "keymap-modal-dismiss"
     )
-    group("settings-markdown").label shouldBe "Markdown"
-    group("settings-markdown").children.map(_.id) should contain("markdown-view")
-    group("settings-language").label shouldBe "Language"
-    group("settings-language").children.map(_.id) should contain allOf ("default-document-mode", "lang-plain-text")
+    nestedGroup("settings-markdown").label shouldBe "Markdown"
+    nestedGroup("settings-markdown").children.map(_.id) should contain("markdown-view")
+    nestedGroup("settings-language").label shouldBe "Language"
+    nestedGroup("settings-language").children.map(_.id) should contain allOf (
+      "default-document-mode",
+      "lang-plain-text"
+    )
   }
 
   it should "surface workspace panel pins as dynamic option rows" in {
@@ -373,10 +402,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, config)
       .withActiveCategory(CommandCategory.Settings)
 
-    val textDisplay = runner.visibleItems
-      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-text-display" => group }
-      .getOrElse(fail("Expected text display settings group"))
-    val options = textDisplay.children.collect { case option: CommandSurfaceItem.OptionItem => option }
+    val textDisplay = groupByIdRecursive(runner.settingsGroups, "settings-text-display")
+    val options     = textDisplay.children.collect { case option: CommandSurfaceItem.OptionItem => option }
 
     options.map(option => option.id -> option.selectedOption) shouldBe List(
       "line-numbers" -> "Off",
@@ -417,8 +444,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default.withDefaultDocumentMode(DefaultDocumentMode.RichText))
       .withActiveCategory(CommandCategory.Settings)
 
-    val languageGroup =
-      runner.settingsGroups.find(_.id == "settings-language").getOrElse(fail("missing language group"))
+    val languageGroup = groupByIdRecursive(runner.settingsGroups, "settings-language")
 
     val documentMode =
       languageGroup.children
@@ -444,9 +470,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
 
-    val richTextGroup =
-      runner.settingsGroups.find(_.id == "settings-rich-text").getOrElse(fail("missing rich text group"))
-    val inputs = richTextGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
+    val richTextGroup = groupByIdRecursive(runner.settingsGroups, "settings-rich-text")
+    val inputs        = richTextGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
 
     inputs.map(_.id) shouldBe List("rich-text-font-family", "rich-text-font-size", "rich-text-color")
     inputs.head.parse("Serif") shouldBe Some(CommandIntent.SetRichTextFontFamily("Serif"))
@@ -467,8 +492,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       )
       .withActiveCategory(CommandCategory.Settings)
 
-    val spellGroup =
-      runner.settingsGroups.find(_.id == "settings-spellcheck").getOrElse(fail("missing spell-check group"))
+    val spellGroup = groupByIdRecursive(runner.settingsGroups, "settings-spellcheck")
 
     val enabledOption =
       spellGroup.children
@@ -536,13 +560,10 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     configurePreset.children.map(_.id) should contain allOf (
       "settings-preset-identity",
       "settings-workspace-layout",
-      "settings-navigation",
-      "settings-language",
-      "settings-markdown",
-      "settings-text-area",
-      "settings-prose-font",
-      "settings-material-motion",
-      "settings-surface-appearance"
+      "settings-document-writing",
+      "settings-editor-view",
+      "settings-typography",
+      "settings-appearance-motion"
     )
     configurePreset.children.map(_.id).distinct shouldBe configurePreset.children.map(_.id)
     val presetIdentity = configurePreset.children
@@ -564,7 +585,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
         case group: CommandSurfaceItem.GroupItem if group.id == "settings-workspace-layout" => group
       }
       .getOrElse(fail("missing workspace layout group"))
-    workspaceLayout.label shouldBe "Workspace Layout"
+    workspaceLayout.label shouldBe "Panels & Workspace"
     val workspaceItems = descendants(workspaceLayout)
     workspaceItems.collect {
       case option: CommandSurfaceItem.OptionItem => option.options.map(_.intent)
@@ -586,11 +607,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.UnpinPanel(PanelPosition.Bottom),
       CommandIntent.CollapseExpandedPanel
     )
-    val navigation = configurePreset.children
-      .collectFirst {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-navigation" => group
-      }
-      .getOrElse(fail("missing navigation group"))
+    val navigation = groupByIdRecursive(List(configurePreset), "settings-navigation")
     navigation.label shouldBe "Navigation"
     navigation.children.collect {
       case CommandSurfaceItem.CommandItem(command) => command.intent
@@ -685,9 +702,9 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .updateSearchTerm("font")
 
-    runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-code-font")
+    runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-prose-font")
     runner.visibleItems.exists {
-      case group: CommandSurfaceItem.GroupItem => group.id == "settings-ui-font"
+      case group: CommandSurfaceItem.GroupItem => group.id == "settings-code-font"
       case _                                   => false
     } shouldBe true
   }
