@@ -107,6 +107,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     Files.writeString(
       configFile,
       """keymap.editor.page_down = ctrl+pagedown
+        |keymap.editor.extend_selection_right = shift+right
         |keymap.command_runner.submit = ctrl+enter
         |keymap.modal.dismiss = ctrl+escape
         |keymap.panel.activate = ctrl+enter
@@ -122,6 +123,13 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
       keyType = InputKey.PageDown,
       character = None,
       modifiers = Set(Modifier.Ctrl)
+    )
+    config.focusedKeymapConfig.editor
+      .bindingsFor(EditorKeyAction.ExtendSelectionRight)
+      .head shouldBe com.serenity.config.HotkeyTrigger(
+      keyType = InputKey.ArrowRight,
+      character = None,
+      modifiers = Set(Modifier.Shift)
     )
     config.focusedKeymapConfig.commandRunner
       .bindingsFor(CommandRunnerKeyAction.Submit)
@@ -192,6 +200,23 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("font.text_scale = 1.5")
     ConfigManager.configToString(config) should include("font.ui.ligatures = true")
     ConfigManager.configToString(config) should include("config.version = 1")
+  }
+
+  it should "write default editor selection-extension keymap bindings" in {
+    val written = ConfigManager.configToString(AppConfig.default)
+
+    written should include("keymap.editor.extend_selection_left = shift+left")
+    written should include("keymap.editor.extend_selection_right = shift+right")
+    written should include("keymap.editor.extend_selection_up = shift+up")
+    written should include("keymap.editor.extend_selection_down = shift+down")
+  }
+
+  it should "fall back to default editor key bindings when writing sparse keymap config" in {
+    val config  = AppConfig.default.withFocusedKeymapConfig(FocusedKeymapConfig(editor = EditorKeymapConfig(Map.empty)))
+    val written = ConfigManager.configToString(config)
+
+    written should include("keymap.editor.page_down = pagedown")
+    written should include("keymap.editor.extend_selection_right = shift+right")
   }
 
   it should "load legacy shared font size and ligature keys for code and prose fonts" in {

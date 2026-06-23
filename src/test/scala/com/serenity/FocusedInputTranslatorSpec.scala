@@ -66,6 +66,16 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     translator.translate(KeyStrokeInfo(InputKey.End, None, Set(Modifier.Ctrl))) shouldBe MoveToEndOfFile
   }
 
+  it should "treat Shift-arrow keys as selection extension in editor focus" in {
+    val translator = FocusedInputTranslator.forState(editorState)
+    val shift      = Set(Modifier.Shift)
+
+    translator.translate(KeyStrokeInfo(InputKey.ArrowLeft, None, shift)) shouldBe ExtendSelectionLeft
+    translator.translate(KeyStrokeInfo(InputKey.ArrowRight, None, shift)) shouldBe ExtendSelectionRight
+    translator.translate(KeyStrokeInfo(InputKey.ArrowUp, None, shift)) shouldBe ExtendSelectionUp
+    translator.translate(KeyStrokeInfo(InputKey.ArrowDown, None, shift)) shouldBe ExtendSelectionDown
+  }
+
   it should "treat Enter and Tab as modal form actions in modal focus" in {
     val modalState = editorState.copy(
       focus = Focus.Surface(SurfaceId("file-modal")),

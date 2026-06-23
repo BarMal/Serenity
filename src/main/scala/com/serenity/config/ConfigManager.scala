@@ -296,6 +296,12 @@ object ConfigManager:
       case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
       case Some(_)                                          => "custom" // For custom configurations
     val lspSettings = lspConfigToString(config.lspUserConfig)
+    def editorBinding(action: EditorKeyAction): String =
+      config.focusedKeymapConfig.editor
+        .bindingsFor(action)
+        .headOption
+        .orElse(EditorKeymapConfig.defaultBindings.get(action).flatMap(_.headOption))
+        .fold("")(_.render)
 
     s"""# Serenity Editor Configuration
        |config.version = ${ConfigVersion.Current.value}
@@ -361,7 +367,11 @@ object ConfigManager:
        |hotkey.file_search = ${config.hotkeyConfig.bindingsFor(HotkeyAction.FileSearch).head.render}
        |
        |# Focused keymap overrides
-       |keymap.editor.page_down = ${config.focusedKeymapConfig.editor.bindingsFor(EditorKeyAction.PageDown).head.render}
+       |keymap.editor.page_down = ${editorBinding(EditorKeyAction.PageDown)}
+       |keymap.editor.extend_selection_left = ${editorBinding(EditorKeyAction.ExtendSelectionLeft)}
+       |keymap.editor.extend_selection_right = ${editorBinding(EditorKeyAction.ExtendSelectionRight)}
+       |keymap.editor.extend_selection_up = ${editorBinding(EditorKeyAction.ExtendSelectionUp)}
+       |keymap.editor.extend_selection_down = ${editorBinding(EditorKeyAction.ExtendSelectionDown)}
        |keymap.command_runner.submit = ${config.focusedKeymapConfig.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit).head.render}
        |keymap.modal.dismiss = ${config.focusedKeymapConfig.modal.bindingsFor(ModalKeyAction.Dismiss).head.render}
        |""".stripMargin
@@ -795,6 +805,10 @@ object ConfigManager:
                           |
                           |# Focused keymap overrides
                           |keymap.editor.page_down = pagedown
+                          |keymap.editor.extend_selection_left = shift+left
+                          |keymap.editor.extend_selection_right = shift+right
+                          |keymap.editor.extend_selection_up = shift+up
+                          |keymap.editor.extend_selection_down = shift+down
                           |keymap.command_runner.submit = enter
                           |keymap.modal.dismiss = escape
                           |""".stripMargin
