@@ -39,6 +39,7 @@ object UiPreset:
   enum Patch:
     case Appearance(config: AppConfig, themeName: Option[String] = None)
     case DocumentDefaults(config: AppConfig)
+    case LanguageTools(config: AppConfig)
     case Motion(config: AppConfig)
     case TextDisplay(config: AppConfig)
     case Typography(config: AppConfig)
@@ -52,6 +53,8 @@ object UiPreset:
           )
         case DocumentDefaults(config) =>
           preset.copy(config = patchDocumentDefaultsConfig(preset.config, config))
+        case LanguageTools(config) =>
+          preset.copy(config = patchLanguageToolsConfig(preset.config, config))
         case Motion(config) =>
           preset.copy(config = patchMotionConfig(preset.config, config))
         case TextDisplay(config) =>
@@ -74,6 +77,9 @@ object UiPreset:
 
   private def patchDocumentDefaultsConfig(base: AppConfig, source: AppConfig): AppConfig =
     base.copy(defaultDocumentMode = source.defaultDocumentMode)
+
+  private def patchLanguageToolsConfig(base: AppConfig, source: AppConfig): AppConfig =
+    base.copy(spellCheck = source.spellCheck)
 
   private def patchMotionConfig(base: AppConfig, source: AppConfig): AppConfig =
     base.copy(
