@@ -16,6 +16,20 @@ case class AnimationConfig(
   /** Check if animation is disabled (zero duration or steps) */
   def isDisabled: Boolean = steps <= 0 || totalDuration.toMillis <= 0
 
+  /** Derive a runtime animation duration from a global speed multiplier. */
+  def scaledBy(speedScale: Double): Option[AnimationConfig] =
+    val normalizedScale = speedScale.max(0.0)
+    if isDisabled || normalizedScale <= 0.0 then None
+    else
+      Some(
+        copy(
+          steps = math.max(1, math.round(steps.toDouble * normalizedScale).toInt),
+          totalDuration = scala.concurrent.duration.Duration.fromNanos(
+            math.round(totalDuration.toNanos.toDouble * normalizedScale)
+          )
+        )
+      )
+
 object AnimationConfig:
   /** No animation - characters appear immediately with final color */
   val none: Option[AnimationConfig] = None

@@ -4,8 +4,11 @@ import java.awt.Color
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.{AppConfig, MotionPreset}
+import com.serenity.keystroke.events.NextTab
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -120,4 +123,37 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.advanceAnimationsOnTick().unsafeRunSync()
     val bufferAnimsAfter = sm.getCurrentState.unsafeRunSync().buffers.view.mapValues(_.animations.animations).toMap
     bufferAnimsAfter shouldBe bufferAnimsBefore
+  }
+
+  it should "scale pane flow animations with the global animation speed" in {
+    val sm = makeStateManager()
+    sm.updateState { state =>
+      state.copy(
+        config = AppConfig.default
+          .withMotionPreset(MotionPreset.Smooth)
+          .withElementTransitionSpeedScale(2.0),
+        viewportSize = Some(ViewportSize(80, 24))
+      )
+    }.unsafeRunSync()
+
+    val firstBufferId = sm.getCurrentState.unsafeRunSync().bufferOrder.head
+    sm.updateBuffer(firstBufferId, "First").unsafeRunSync()
+    val secondBufferId = sm.createBuffer("Second").unsafeRunSync()
+
+    sm.applyEvent(NextTab).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    state.focusedBufferId shouldBe Some(secondBufferId)
+    val shortestFadeLength = state
+      .buffers(secondBufferId)
+      .animations
+      .animations
+      .values
+      .map(_.foregroundSteps.length)
+      .min
+    shortestFadeLength shouldBe AppConfig.default
+      .withMotionPreset(MotionPreset.Smooth)
+      .characterAnimation
+      .get
+      .steps * 2
   }

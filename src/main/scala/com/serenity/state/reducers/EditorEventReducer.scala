@@ -1573,7 +1573,7 @@ object EditorEventReducer:
     cursorLine: Int,
     cursorColumn: Int
   ): Buffer =
-    state.config.characterAnimation match
+    state.config.scaledCharacterAnimation match
       case Some(animConfig) =>
         val updatedAnimations = buffer.animations.addCharacterAnimation(
           char,

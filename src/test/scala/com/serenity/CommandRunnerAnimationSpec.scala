@@ -2,6 +2,8 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.animation.AnimationConfig
+import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -51,7 +53,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
   it should "skip command runner fade when the command runner animation is disabled" in {
     val sm = createStateManager()
-    sm.updateState(_.copy(config = com.serenity.config.AppConfig.default.withCommandRunnerAnimation(None)))
+    sm.updateState(_.copy(config = AppConfig.default.withCommandRunnerAnimation(None)))
       .unsafeRunSync()
 
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
@@ -59,6 +61,41 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val state     = sm.getCurrentState.unsafeRunSync()
     val surfaceId = state.commandRunnerSurface.get.id
     state.surfaceAnimations.get(surfaceId) shouldBe None
+  }
+
+  it should "skip command runner fade when the global animation speed is zero" in {
+    val sm = createStateManager()
+    sm.updateState { state =>
+      state.copy(config =
+        AppConfig.default
+          .withMotionPreset(MotionPreset.Smooth)
+          .withElementTransitionSpeedScale(0.0)
+      )
+    }.unsafeRunSync()
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val state     = sm.getCurrentState.unsafeRunSync()
+    val surfaceId = state.commandRunnerSurface.get.id
+    state.surfaceAnimations.get(surfaceId) shouldBe None
+  }
+
+  it should "scale command runner fade length with the global animation speed" in {
+    val sm = createStateManager()
+    sm.updateState { state =>
+      state.copy(config =
+        AppConfig.default
+          .withMotionPreset(MotionPreset.Smooth)
+          .withElementTransitionSpeedScale(2.0)
+      )
+    }.unsafeRunSync()
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val state     = sm.getCurrentState.unsafeRunSync()
+    val surfaceId = state.commandRunnerSurface.get.id
+    val firstCell = state.surfaceAnimations(surfaceId).animationState.getCell(0, 0).get
+    firstCell.backgroundSteps.length shouldBe AnimationConfig.smooth.get.steps * 2
   }
 
   it should "transition to Visible after bufferFadeLength ticks" in {

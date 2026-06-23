@@ -244,7 +244,7 @@ case class AppConfig(
 
   /** Create a new config with character animation disabled */
   def withoutCharacterAnimation: AppConfig =
-    copy(characterAnimation = None, motionPreset = MotionPreset.Reduced)
+    copy(characterAnimation = None, motionPreset = MotionPreset.Reduced, commandRunnerAnimation = None)
 
   /** Create a new config with syntax highlighting toggled */
   def withSyntaxHighlighting(enabled: Boolean): AppConfig =
@@ -356,6 +356,18 @@ case class AppConfig(
   def withCommandRunnerAnimation(animation: Option[AnimationConfig]): AppConfig =
     copy(commandRunnerAnimation = animation)
 
+  /** Character insertion animation after applying the global motion speed. */
+  def scaledCharacterAnimation: Option[AnimationConfig] =
+    AppConfig.scaledAnimation(characterAnimation, elementTransitionSpeedScale)
+
+  /** Command runner animation after applying the global motion speed. */
+  def scaledCommandRunnerAnimation: Option[AnimationConfig] =
+    AppConfig.scaledAnimation(commandRunnerAnimation, elementTransitionSpeedScale)
+
+  /** General UI animation after applying the global motion speed. */
+  def scaledUiAnimation: Option[AnimationConfig] =
+    AppConfig.scaledAnimation(characterAnimation, elementTransitionSpeedScale)
+
   def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
     copy(editorInsertionTransitionKind = kind)
 
@@ -425,6 +437,9 @@ object AppConfig:
 
   def clampUiCornerRadiusPx(radius: Int): Int =
     radius.max(MinUiCornerRadiusPx).min(MaxUiCornerRadiusPx)
+
+  def scaledAnimation(animation: Option[AnimationConfig], speedScale: Double): Option[AnimationConfig] =
+    animation.flatMap(_.scaledBy(clampElementTransitionSpeedScale(speedScale)))
 
   /** Default configuration with smooth animations and syntax highlighting disabled */
   val default: AppConfig = AppConfig(

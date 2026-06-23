@@ -1346,14 +1346,16 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
 
         if cells.isEmpty then state
         else
-          val animated = com.serenity.animation.FlowAnimationBuilder.build(
-            cells,
-            com.serenity.animation.FlowDirection.ByRow,
-            sweep,
-            AnimationConfig.smooth.get.steps
-          )
-          val updatedBuffer = buffer.copy(animations = buffer.animations.clearAll().mergeAnimations(animated))
-          state.copy(buffers = state.buffers + (point.bufferId -> updatedBuffer))
+          state.config.scaledUiAnimation.fold(state) { config =>
+            val animated = com.serenity.animation.FlowAnimationBuilder.build(
+              cells,
+              com.serenity.animation.FlowDirection.ByRow,
+              sweep,
+              config.steps
+            )
+            val updatedBuffer = buffer.copy(animations = buffer.animations.clearAll().mergeAnimations(animated))
+            state.copy(buffers = state.buffers + (point.bufferId -> updatedBuffer))
+          }
       case None =>
         state
 
@@ -1702,7 +1704,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateState { state =>
           val transition =
             if state.theme == newTheme then None
-            else Some(ThemeTransition(state.theme, 0, AnimationConfig.smooth.get.steps))
+            else state.config.scaledUiAnimation.map(config => ThemeTransition(state.theme, 0, config.steps))
           state.copy(theme = newTheme, themeTransition = transition)
         } >> persistEditedUiPresetFromCommandRunner
       }

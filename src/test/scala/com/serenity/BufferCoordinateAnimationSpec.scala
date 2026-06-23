@@ -5,7 +5,7 @@ import java.awt.Color
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationState, CharacterKey}
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.keystroke.events.{InsertChar, ScrollDown}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -82,6 +82,35 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
       val buffer = newState.buffers(bufferId)
       buffer.animations.animations should contain key CharacterKey(3, 1)
       buffer.animations.animations should have size 1
+
+    program.unsafeRunSync()
+  }
+
+  it should "scale typed character animation length with the global animation speed" in {
+    val program = for
+      sm <- IO.pure(makeStateManager())
+      _ <- sm.updateState(state =>
+        state.copy(config =
+          AppConfig.default
+            .withMotionPreset(MotionPreset.Smooth)
+            .withElementTransitionSpeedScale(2.0)
+        )
+      )
+      bufferId <- sm.createBuffer("Hello")
+      state    <- sm.getCurrentState
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      _        <- sm.setBufferForPane(paneId, bufferId)
+      _        <- sm.setCursorPosition(paneId, 0, 5)
+      _        <- sm.applyEvent(InsertChar('a'))
+      newState <- sm.getCurrentState
+    yield
+      val buffer = newState.buffers(bufferId)
+      val cell   = buffer.animations.getCell(5, 0).get
+      cell.foregroundSteps.length shouldBe AppConfig.default
+        .withMotionPreset(MotionPreset.Smooth)
+        .characterAnimation
+        .get
+        .steps * 2
 
     program.unsafeRunSync()
   }

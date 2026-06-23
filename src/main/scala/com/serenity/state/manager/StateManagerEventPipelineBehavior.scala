@@ -301,8 +301,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
 
   private def applyPaneFlowAnimation(sweep: SweepDirection): cats.effect.IO[Unit] =
     stateRef.get.flatMap { state =>
-      val steps = AnimationConfig.smooth.get.steps
       val animOpt = for
+        config <- state.config.scaledUiAnimation
         paneId <- state.layout.activeEditorPaneId
         pane   <- state.layout.editorPanes.get(paneId)
         buffId <- pane.bufferId
@@ -315,7 +315,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         )
         if cells.nonEmpty
       yield
-        val animated = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, sweep, steps)
+        val animated = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, sweep, config.steps)
         val newAnims = buffer.animations.clearAll().mergeAnimations(animated)
         state.copy(buffers = state.buffers.updated(buffId, buffer.copy(animations = newAnims)))
       animOpt match
@@ -345,7 +345,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     }
 
   private def applyCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): cats.effect.IO[Unit] =
-    state.config.commandRunnerAnimation match
+    state.config.scaledCommandRunnerAnimation match
       case Some(config) if !config.isDisabled =>
         stateRef.update { s =>
           val steps         = config.steps
@@ -384,7 +384,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     closedSurface: UiSurface,
     prevState: AppState
   ): cats.effect.IO[Unit] =
-    prevState.config.commandRunnerAnimation match
+    prevState.config.scaledCommandRunnerAnimation match
       case Some(config) if !config.isDisabled =>
         stateRef.update { s =>
           val steps          = config.steps
@@ -604,22 +604,24 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           case SurfacePhase.BufferFadingOut =>
             val newTick = surfAnim.phaseTick + 1
             if newTick >= surfAnim.bufferFadeLength then
-              val overlayFadeIn = (0 until surfAnim.overlayHeight).map { rowOffset =>
-                val delay    = rowOffset
-                val panelBg  = s.theme.panel.background
-                val panelFg  = s.theme.panel.foreground
-                val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
-                val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
-                val bgSteps = List.fill(delay)(transpBg) ++
-                  RgbInterpolator.interpolateRgba(transpBg, panelBg, AnimationConfig.smooth.get.steps)
-                val fgSteps = List.fill(delay)(transpFg) ++
-                  RgbInterpolator.interpolateRgba(transpFg, panelFg, AnimationConfig.smooth.get.steps)
-                CharacterKey(0, rowOffset) -> AnimatedCell(
-                  content = None,
-                  foregroundSteps = fgSteps,
-                  backgroundSteps = bgSteps
-                )
-              }.toMap
+              val overlayFadeIn = s.config.scaledUiAnimation.fold(Map.empty[CharacterKey, AnimatedCell]) { config =>
+                (0 until surfAnim.overlayHeight).map { rowOffset =>
+                  val delay    = rowOffset
+                  val panelBg  = s.theme.panel.background
+                  val panelFg  = s.theme.panel.foreground
+                  val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
+                  val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
+                  val bgSteps = List.fill(delay)(transpBg) ++
+                    RgbInterpolator.interpolateRgba(transpBg, panelBg, config.steps)
+                  val fgSteps = List.fill(delay)(transpFg) ++
+                    RgbInterpolator.interpolateRgba(transpFg, panelFg, config.steps)
+                  CharacterKey(0, rowOffset) -> AnimatedCell(
+                    content = None,
+                    foregroundSteps = fgSteps,
+                    backgroundSteps = bgSteps
+                  )
+                }.toMap
+              }
               val newSurfAnim = surfAnim.copy(
                 phase = SurfacePhase.Visible,
                 animationState = AnimationState(overlayFadeIn),
