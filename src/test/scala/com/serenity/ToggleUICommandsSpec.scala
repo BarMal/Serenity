@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{CommandIntent, CommandRegistry}
+import com.serenity.command.*
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.SurfaceContent
@@ -189,4 +189,56 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "toggle-word-wrap", "toggle-word-wrap")
 
     stateManager.getCurrentState.unsafeRunSync().config.wordWrapEnabled shouldBe false
+  }
+
+  it should "set text display settings explicitly from stateful options" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "line-numbers-off",
+          "Set line numbers off",
+          CommandIntent.SetLineNumbers(false),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed("gutter-off", "Set gutter off", CommandIntent.SetGutter(false), CommandCategory.Settings)
+      )
+      .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed("word-wrap-off", "Set word wrap off", CommandIntent.SetWordWrap(false), CommandCategory.Settings)
+      )
+      .unsafeRunSync()
+
+    val disabledState = stateManager.getCurrentState.unsafeRunSync()
+    disabledState.config.showLineNumbers shouldBe false
+    disabledState.config.showGutter shouldBe false
+    disabledState.config.wordWrapEnabled shouldBe false
+
+    stateManager
+      .executeCommand(
+        Command
+          .typed("line-numbers-on", "Set line numbers on", CommandIntent.SetLineNumbers(true), CommandCategory.Settings)
+      )
+      .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed("gutter-on", "Set gutter on", CommandIntent.SetGutter(true), CommandCategory.Settings)
+      )
+      .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed("word-wrap-on", "Set word wrap on", CommandIntent.SetWordWrap(true), CommandCategory.Settings)
+      )
+      .unsafeRunSync()
+
+    val enabledState = stateManager.getCurrentState.unsafeRunSync()
+    enabledState.config.showLineNumbers shouldBe true
+    enabledState.config.showGutter shouldBe true
+    enabledState.config.wordWrapEnabled shouldBe true
   }
