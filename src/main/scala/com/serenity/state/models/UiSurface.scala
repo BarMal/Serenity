@@ -60,6 +60,16 @@ enum SurfacePresentation:
   case Pinned(position: PanelPosition, size: Int)
   case Expanded(originalPosition: PanelPosition, originalSize: Int)
 
+/** Focused draft state for editing an authored document comment from the above-cursor lens. */
+case class CommentLensState(
+    comment: RenderedComment,
+    draft: String,
+    cursor: Int,
+    target: Option[DocumentComment]
+):
+  def clampedCursor: Int =
+    math.max(0, math.min(cursor, draft.length))
+
 enum SurfaceContent:
   case StartPage(page: StartupPage)
   case QuickInfo(text: String)
@@ -73,7 +83,7 @@ enum SurfaceContent:
   case ThemePicker(state: ThemePickerState)
   case FileSearch(state: FileSearchState)
   case ContextMenu(menu: com.serenity.state.models.ContextMenu)
-  case CommentLens(comment: RenderedComment)
+  case CommentLens(state: CommentLensState)
   case MarkdownPreview(bufferId: BufferId, title: String)
   case ModalWorkflow(modal: Modal)
   case Terminal(buffer: String, cursor: Int)

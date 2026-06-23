@@ -1043,13 +1043,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateState(dismissCommentLens)
       case None =>
         activeEditorComment(state) match
-          case Some((cursor, comment)) =>
+          case Some((cursor, lens)) =>
             updateState { current =>
               val surface = UiSurface(
                 id = SurfaceId("comment-lens"),
-                content = SurfaceContent.CommentLens(comment),
-                presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor),
-                dismissOnMove = true
+                content = SurfaceContent.CommentLens(lens),
+                presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
               )
               current
                 .copy(uiSurfaces = current.uiSurfaces.filterNot(isCommentLensSurface) :+ surface)
@@ -1058,7 +1057,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           case None =>
             logger.debug("[CMD] Comment lens requested without an active comment")
 
-  private def activeEditorComment(state: AppState): Option[(CursorPosition, com.serenity.document.RenderedComment)] =
+  private def activeEditorComment(state: AppState): Option[(CursorPosition, CommentLensState)] =
     for
       paneId   <- state.layout.activeEditorPaneId
       pane     <- state.layout.editorPanes.get(paneId)
@@ -1066,7 +1065,18 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       buffer   <- state.buffers.get(bufferId)
       cursor   <- buffer.cursors.headOption
       comment  <- CommentRendering.atCursor(buffer)
-    yield (cursor, comment)
+    yield
+      val target = buffer.documentComments.find(_.contains(cursor))
+      val draft  = target.map(_.text).getOrElse(comment.raw)
+      (
+        cursor,
+        CommentLensState(
+          comment = comment,
+          draft = draft,
+          cursor = draft.length,
+          target = target
+        )
+      )
 
   private def dismissCommentLens(state: AppState): AppState =
     val nextFocus = state.layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(state.focus)

@@ -132,13 +132,18 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.footer.map(_.plainText) shouldBe Some("2/2")
   }
 
-  it should "resolve multiline comment lenses into separate inline and raw rows" in {
+  it should "resolve multiline comment lenses into editable draft rows" in {
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.CommentLens(
-        RenderedComment(
-          sourceLine = 4,
-          raw = "/*\n* **Review** this value\n*/",
-          inlineMarkdown = "Review this value\nbefore release"
+        CommentLensState(
+          RenderedComment(
+            sourceLine = 4,
+            raw = "/*\n* **Review** this value\n*/",
+            inlineMarkdown = "Review this value\nbefore release"
+          ),
+          draft = "Review this value\nbefore release",
+          cursor = "Review this value".length,
+          target = None
         )
       ),
       LayoutRect(0, 0, 28, 8),
@@ -149,11 +154,10 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.header.map(_.plainText) shouldBe Some("comment")
     floating.rows.map(_.plainText) shouldBe List(
       "Review this value",
-      "before release",
-      "/*",
-      "* **Review** this value",
-      "*/"
+      "before release"
     )
+    floating.rows.map(_.selected) shouldBe List(true, false)
+    floating.rows.head.cursorColumn shouldBe Some("Review this value".length)
   }
 
   it should "resolve browse mode into distributed category tabs and grouped settings rows without bracket markers" in {
