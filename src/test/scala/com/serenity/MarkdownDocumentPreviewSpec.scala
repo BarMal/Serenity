@@ -108,6 +108,54 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     MarkdownDocumentPreview.previewRowsForSourceRange(lines, 1 to 3) shouldBe Some(1 to 5)
   }
 
+  it should "choose a synced preview window from the active markdown block" in {
+    val lines = Vector(
+      "# Intro",
+      "",
+      "First paragraph",
+      "continued",
+      "",
+      "- one",
+      "  detail",
+      "- two",
+      "",
+      "# Later"
+    )
+
+    val paragraph = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(3), fallbackTopLine = 0)
+    paragraph.firstSourceLine shouldBe 2
+    paragraph.firstPreviewRow shouldBe 2
+    paragraph.source shouldBe "First paragraph\ncontinued\n\n- one\n  detail\n- two\n\n# Later"
+
+    val list = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(6), fallbackTopLine = 0)
+    list.firstSourceLine shouldBe 5
+    list.firstPreviewRow shouldBe 5
+    list.source shouldBe "- one\n  detail\n- two\n\n# Later"
+
+    val heading = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(9), fallbackTopLine = 0)
+    heading.firstSourceLine shouldBe 9
+    heading.firstPreviewRow shouldBe 9
+    heading.source shouldBe "# Later"
+  }
+
+  it should "include rendered table chrome in the synced preview row offset" in {
+    val lines = Vector(
+      "Before",
+      "",
+      "| Task | Owner |",
+      "| ---- | ----- |",
+      "| Ship | Codex |",
+      "",
+      "After"
+    )
+
+    val table = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(4), fallbackTopLine = 0)
+
+    table.firstSourceLine shouldBe 2
+    table.firstPreviewRow shouldBe 2
+    table.source shouldBe "| Task | Owner |\n| ---- | ----- |\n| Ship | Codex |\n\nAfter"
+  }
+
   it should "preserve rendered image elements in the document preview HTML" in {
     val html = MarkdownDocumentPreview.renderHtmlFragment(
       """![Architecture](docs/arch.png)

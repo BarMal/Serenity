@@ -25,6 +25,7 @@ import org.xml.sax.InputSource
 object MarkdownDocumentPreview:
 
   case class InlinePreviewLine(sourceLine: Option[Int], text: String)
+  case class PreviewWindow(firstSourceLine: Int, firstPreviewRow: Int, source: String)
 
   private val MaxCachedImages = 24
 
@@ -196,6 +197,28 @@ object MarkdownDocumentPreview:
         Some(first to last)
       case _ =>
         None
+
+  def previewWindow(
+    sourceLines: Vector[String],
+    activeLine: Option[Int],
+    fallbackTopLine: Int
+  ): PreviewWindow =
+    if sourceLines.isEmpty then PreviewWindow(0, 0, "")
+    else
+      val anchorLine = activeLine
+        .filter(line => line >= 0 && line < sourceLines.length)
+        .getOrElse(fallbackTopLine.max(0).min(sourceLines.length - 1))
+      val blockRange      = MarkdownBlockLens.currentBlock(sourceLines, anchorLine)
+      val firstSourceLine = blockRange.start.max(0).min(sourceLines.length - 1)
+      val firstPreviewRow = previewRowsForSourceRange(sourceLines, blockRange)
+        .map(_.start)
+        .orElse(previewRowForSourceLine(sourceLines, firstSourceLine))
+        .getOrElse(firstSourceLine)
+      PreviewWindow(
+        firstSourceLine = firstSourceLine,
+        firstPreviewRow = firstPreviewRow,
+        source = sourceLines.drop(firstSourceLine).mkString("\n")
+      )
 
   private def htmlRenderer(baseUri: Option[URI]): HtmlRenderer =
     baseUri match

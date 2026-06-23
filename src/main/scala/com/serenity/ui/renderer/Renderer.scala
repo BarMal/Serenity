@@ -289,8 +289,9 @@ object Renderer:
   ): Unit =
     if isInlineMarkdownLens(buffer, state) then
       val markdownLines = markdownSourceLines(buffer)
-      renderInlineMarkdownPreview(buffer, rect, state, context)
-      renderMarkdownRawLenses(buffer, rect, state, context, snapshot, markdownLines)
+      val previewWindow = markdownPreviewWindow(buffer, markdownLines)
+      renderInlineMarkdownPreview(buffer, rect, state, context, previewWindow)
+      renderMarkdownRawLenses(buffer, rect, state, context, snapshot, markdownLines, previewWindow)
     else renderPlainBufferContent(pane, buffer, rect, state, context, snapshot)
 
   private def renderPlainBufferContent(
@@ -430,14 +431,15 @@ object Renderer:
     buffer: Buffer,
     rect: LayoutRect,
     state: AppState,
-    context: RenderContext
+    context: RenderContext,
+    previewWindow: MarkdownDocumentPreview.PreviewWindow
   ): Unit =
     val widthPx  = math.max(1, rect.width * context.cellMetrics.charWidth)
     val heightPx = math.max(1, rect.height * context.cellMetrics.lineHeight)
     val baseUri  = buffer.filePath.flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
     val title    = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
     val image = MarkdownDocumentPreview.renderImage(
-      source = buffer.content.collect(),
+      source = previewWindow.source,
       title = title,
       widthPx = widthPx,
       heightPx = heightPx,
@@ -614,6 +616,16 @@ object Renderer:
   private def markdownSourceLines(buffer: Buffer): Vector[String] =
     (0 until buffer.content.lineCount).toVector.map(line => buffer.content.getLine(line).getOrElse(""))
 
+  private def markdownPreviewWindow(
+    buffer: Buffer,
+    lines: Vector[String]
+  ): MarkdownDocumentPreview.PreviewWindow =
+    MarkdownDocumentPreview.previewWindow(
+      lines,
+      activeLine = buffer.cursors.headOption.map(_.line),
+      fallbackTopLine = buffer.viewport.topLine
+    )
+
   private def activeMarkdownBlockRanges(lines: Vector[String], cursors: List[CursorPosition]): List[Range.Inclusive] =
     cursors
       .map(_.line)
@@ -629,7 +641,8 @@ object Renderer:
     state: AppState,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
-    lines: Vector[String]
+    lines: Vector[String],
+    previewWindow: MarkdownDocumentPreview.PreviewWindow
   ): Unit =
     activeMarkdownBlockRanges(lines, buffer.cursors).foreach { blockRange =>
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
@@ -641,7 +654,8 @@ object Renderer:
             cursorForBlock(buffer.cursors, blockRange),
             rect.height,
             snapshot,
-            lines
+            lines,
+            previewWindow
           )
         val lensY = rect.y + placement.top
         context.surface.setBackgroundColor(state.theme.panel.background)
@@ -698,7 +712,8 @@ object Renderer:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): Unit =
-    val lines = markdownSourceLines(buffer)
+    val lines         = markdownSourceLines(buffer)
+    val previewWindow = markdownPreviewWindow(buffer, lines)
     activeMarkdownBlockRanges(lines, buffer.cursors).foreach { blockRange =>
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
@@ -709,7 +724,8 @@ object Renderer:
             cursorForBlock(buffer.cursors, blockRange),
             rect.height,
             snapshot,
-            lines
+            lines,
+            previewWindow
           )
         buffer.cursors.zipWithIndex.foreach { (cursor, cursorIndex) =>
           val isPrimaryCursor = cursorIndex == 0
@@ -747,7 +763,8 @@ object Renderer:
     primaryCursor: Option[CursorPosition],
     visibleHeight: Int,
     snapshot: TextLayoutSnapshot,
-    markdownLines: Vector[String]
+    markdownLines: Vector[String],
+    previewWindow: MarkdownDocumentPreview.PreviewWindow
   ): MarkdownLensPlacement =
     val previewRange = MarkdownDocumentPreview.previewRowsForSourceRange(markdownLines, blockRange)
     val lensHeight = math.max(
@@ -757,11 +774,12 @@ object Renderer:
     val cursorVisualRow = primaryCursor.flatMap { cursor =>
       MarkdownDocumentPreview
         .previewRowForSourceLine(markdownLines, cursor.line)
+        .map(_ - previewWindow.firstPreviewRow)
         .orElse(calculateCursorVisualPosition(cursor, snapshot).map(_._1))
     }
     val desiredTop =
       previewRange
-        .map(_.start)
+        .map(_.start - previewWindow.firstPreviewRow)
         .orElse(cursorVisualRow.map(row => row - lensHeight / 2))
         .getOrElse(blockVisualLines.headOption.fold(0)(_.bufferLine))
     val visibleLensHeight = lensHeight.max(1).min(visibleHeight.max(1))
@@ -1117,7 +1135,9 @@ object Renderer:
     val widthPx            = contentWidthCells * context.cellMetrics.charWidth
     val heightPx           = contentHeightCells * context.cellMetrics.lineHeight
     val buffer             = state.buffers.get(bufferId)
-    val content            = buffer.map(_.content.collect()).getOrElse("")
+    val content = buffer
+      .map(buffer => markdownPreviewWindow(buffer, markdownSourceLines(buffer)).source)
+      .getOrElse("")
     val baseUri =
       buffer.flatMap(_.filePath).flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
     val image = MarkdownDocumentPreview.renderImage(
