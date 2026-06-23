@@ -26,6 +26,17 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
+  private def groupById(items: List[CommandSurfaceItem], id: String): CommandSurfaceItem.GroupItem =
+    items
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == id => group }
+      .getOrElse(fail(s"missing group $id"))
+
+  private def descendants(group: CommandSurfaceItem.GroupItem): List[CommandSurfaceItem] =
+    group.children.flatMap {
+      case child: CommandSurfaceItem.GroupItem => child :: descendants(child)
+      case child                               => List(child)
+    }
+
   "CommandRegistry" should "register and find commands" in {
     val registry = CommandRegistry.default
     val commands = registry.getAllCommands
@@ -249,11 +260,18 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       groupItems.find(_.id == id).getOrElse(fail(s"missing group $id"))
 
     groupItems.head.label shouldBe "Workspace Layout"
-    groupItems.head.children.map(_.id) should contain allOf (
+    groupItems.head.children.map(_.id) shouldBe List("settings-panel-pins", "settings-panel-actions")
+    val panelPins    = groupById(groupItems.head.children, "settings-panel-pins")
+    val panelActions = groupById(groupItems.head.children, "settings-panel-actions")
+    panelPins.label shouldBe "Panel Pins"
+    panelPins.children.map(_.id) shouldBe List(
       "panel-explorer-pin",
       "panel-outline-pin",
       "panel-diagnostics-pin",
-      "panel-markdown-preview-pin",
+      "panel-markdown-preview-pin"
+    )
+    panelActions.label shouldBe "Panel Actions"
+    panelActions.children.map(_.id) should contain allOf (
       "focus-left-panel",
       "focus-right-panel",
       "focus-bottom-panel",
@@ -329,7 +347,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-workspace-layout" => group }
       .getOrElse(fail("Expected workspace layout settings group"))
 
-    val pinOptions = workspace.children.collect { case option: CommandSurfaceItem.OptionItem => option }
+    val panelPins  = groupById(workspace.children, "settings-panel-pins")
+    val pinOptions = panelPins.children.collect { case option: CommandSurfaceItem.OptionItem => option }
 
     pinOptions.map(_.id) shouldBe List(
       "panel-explorer-pin",
@@ -546,7 +565,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       }
       .getOrElse(fail("missing workspace layout group"))
     workspaceLayout.label shouldBe "Workspace Layout"
-    workspaceLayout.children.collect {
+    val workspaceItems = descendants(workspaceLayout)
+    workspaceItems.collect {
       case option: CommandSurfaceItem.OptionItem => option.options.map(_.intent)
     }.flatten should contain allOf (
       CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)),
@@ -554,9 +574,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.SetPanelPin(PanelKind.Explorer, Some(PanelPosition.Left)),
       CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))
     )
-    workspaceLayout.children.collect {
-      case CommandSurfaceItem.CommandItem(command) => command.intent
-    } should contain allOf (
+    workspaceItems.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } should contain allOf (
       CommandIntent.FocusPanel(PanelPosition.Left),
       CommandIntent.FocusPanel(PanelPosition.Right),
       CommandIntent.FocusPanel(PanelPosition.Bottom),

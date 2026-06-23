@@ -15,6 +15,12 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
   private val registry = CommandRegistry.withToggleUI
 
+  private def descendants(group: CommandSurfaceItem.GroupItem): List[CommandSurfaceItem] =
+    group.children.flatMap {
+      case child: CommandSurfaceItem.GroupItem => child :: descendants(child)
+      case child                               => List(child)
+    }
+
   "AppEventReducer" should "emit a quit effect without mutating state" in {
     val initialState = AppState.initial
 
@@ -98,7 +104,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     val workspace = runner.settingsGroups
       .find(_.id == "settings-workspace-layout")
       .getOrElse(fail("Expected workspace layout group"))
-    val outlineOption = workspace.children
+    val outlineOption = descendants(workspace)
       .collectFirst { case option: CommandSurfaceItem.OptionItem if option.id == "panel-outline-pin" => option }
       .getOrElse(fail("Expected outline pin option"))
 

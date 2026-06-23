@@ -997,7 +997,22 @@ object CommandRunner:
         label = "Collapse Expanded Panel"
       )
     ).map(CommandSurfaceItem.CommandItem(_))
-    panelPinItems ++ commandItems
+    List(
+      CommandSurfaceItem.GroupItem(
+        id = "settings-panel-pins",
+        label = "Panel Pins",
+        children = panelPinItems,
+        category = CommandCategory.Settings,
+        hint = Some("Choose panel edge placement")
+      ),
+      CommandSurfaceItem.GroupItem(
+        id = "settings-panel-actions",
+        label = "Panel Actions",
+        children = commandItems,
+        category = CommandCategory.Settings,
+        hint = Some("Focus, expand, unpin, collapse")
+      )
+    )
 
   private[command] def panelPinOptionItem(
     id: String,
