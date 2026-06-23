@@ -15,6 +15,28 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  private def stateWithCommentedText(
+    text: String,
+    cursor: CursorPosition,
+    comment: DocumentComment
+  ): (PaneId, BufferId, AppState) =
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val state = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope(text),
+            cursors = List(cursor),
+            documentComments = List(comment)
+          )
+      )
+    )
+
+    (paneId, bufferId, state)
+
   final case class CountingRope(delegate: Rope, collectCount: AtomicInteger) extends Rope:
     override def weight: Int =
       delegate.weight
@@ -74,6 +96,103 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
 
     buffer.content.collect() shouldBe "aXbcXd"
     buffer.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 5))
+  }
+
+  it should "move document comments after inserted text before them" in {
+    val comment = DocumentComment(CursorPosition(0, 4), CursorPosition(0, 7), "note")
+    val (paneId, bufferId, initialState) =
+      stateWithCommentedText("abc def", CursorPosition(0, 0), comment)
+
+    val updatedState = EditorEventReducer.reduce(InsertChar('X'), paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.collect() shouldBe "Xabc def"
+    buffer.documentComments shouldBe List(
+      DocumentComment(CursorPosition(0, 5), CursorPosition(0, 8), "note")
+    )
+  }
+
+  it should "move document comments down after newlines inserted before them" in {
+    val comment = DocumentComment(CursorPosition(0, 4), CursorPosition(0, 7), "note")
+    val (paneId, bufferId, initialState) =
+      stateWithCommentedText("abc def", CursorPosition(0, 0), comment)
+
+    val updatedState = EditorEventReducer.reduce(NewLine, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.collect() shouldBe "\nabc def"
+    buffer.documentComments shouldBe List(
+      DocumentComment(CursorPosition(1, 4), CursorPosition(1, 7), "note")
+    )
+  }
+
+  it should "move document comments left after deleted text before them" in {
+    val comment = DocumentComment(CursorPosition(0, 4), CursorPosition(0, 7), "note")
+    val (paneId, bufferId, initialState) =
+      stateWithCommentedText("abc def", CursorPosition(0, 0), comment)
+
+    val updatedState = EditorEventReducer.reduce(DeleteForward, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.collect() shouldBe "bc def"
+    buffer.documentComments shouldBe List(
+      DocumentComment(CursorPosition(0, 3), CursorPosition(0, 6), "note")
+    )
+  }
+
+  it should "expand document comments when text is inserted inside them" in {
+    val comment = DocumentComment(CursorPosition(0, 4), CursorPosition(0, 7), "note")
+    val (paneId, bufferId, initialState) =
+      stateWithCommentedText("abc def", CursorPosition(0, 5), comment)
+
+    val updatedState = EditorEventReducer.reduce(InsertChar('X'), paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.collect() shouldBe "abc dXef"
+    buffer.documentComments shouldBe List(
+      DocumentComment(CursorPosition(0, 4), CursorPosition(0, 8), "note")
+    )
+  }
+
+  it should "move document comments when a selected line is indented" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val comment  = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 4), "note")
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("beta"),
+            cursors = List(CursorPosition(0, 4)),
+            selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 4))),
+            documentComments = List(comment)
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(TabKey, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.collect() shouldBe "    beta"
+    buffer.documentComments shouldBe List(
+      DocumentComment(CursorPosition(0, 4), CursorPosition(0, 8), "note")
+    )
+  }
+
+  it should "move document comments when a line before them is cut" in {
+    val comment = DocumentComment(CursorPosition(1, 0), CursorPosition(1, 4), "note")
+    val (paneId, bufferId, initialState) =
+      stateWithCommentedText("alpha\nbeta", CursorPosition(0, 0), comment)
+
+    val updatedState = EditorEventReducer.reduce(Cut, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.collect() shouldBe "beta"
+    buffer.documentComments shouldBe List(
+      DocumentComment(CursorPosition(0, 0), CursorPosition(0, 4), "note")
+    )
   }
 
   it should "insert newlines at every cursor position when multiple cursors are active" in {
