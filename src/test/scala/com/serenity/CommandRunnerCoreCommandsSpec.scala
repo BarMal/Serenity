@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.animation.CharacterKey
 import com.serenity.command.*
 import com.serenity.config.SpellCheckConfig
 import com.serenity.io.{FileDialog, FileUtils}
@@ -700,6 +701,36 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
     updatedBuffer.cursors shouldBe List(CursorPosition(4, 1))
     updatedBuffer.animations.activeAnimationCount should be > 0
+  }
+
+  it should "animate the visible unwrapped slice after bookmark navigation" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("0123456789abcdefghijklmnopqrstuvwxyz"),
+            cursors = List(CursorPosition(0, 0)),
+            bookmarks = List(CursorPosition(0, 12)),
+            viewport = Viewport.default.copy(visibleLines = 1, visibleColumns = 5)
+          )
+        state.copy(
+          config = state.config.withWordWrap(false),
+          buffers = state.buffers + (bufferId -> buffer)
+        )
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "next-bookmark", "next-bookmark")
+
+    val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    updatedBuffer.cursors.shouldBe(List(CursorPosition(0, 12)))
+    updatedBuffer.viewport.leftColumn.should(be > 0)
+    updatedBuffer.animations.animations.should(contain.key(CharacterKey(updatedBuffer.viewport.leftColumn, 0)))
+    updatedBuffer.animations.animations.shouldNot(contain.key(CharacterKey(0, 0)))
   }
 
   it should "record document jumps in navigation history and move backward and forward" in {

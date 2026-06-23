@@ -307,13 +307,12 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         pane   <- state.layout.editorPanes.get(paneId)
         buffId <- pane.bufferId
         buffer <- state.buffers.get(buffId)
-        vp = buffer.viewport
-        cells = (vp.topLine until (vp.topLine + vp.visibleLines)).flatMap { lineIdx =>
-          val line = buffer.content.getLine(lineIdx).getOrElse("")
-          line.zipWithIndex.take(vp.visibleColumns).map { (ch, col) =>
-            CharacterKey(col, lineIdx) -> CellAnimation(ch, state.theme.background, state.theme.foreground)
-          }
-        }.toMap
+        cells = VisibleBufferAnimationCells.fromBuffer(
+          buffer,
+          state.config.wordWrapEnabled,
+          state.theme.background,
+          state.theme.foreground
+        )
         if cells.nonEmpty
       yield
         val animated = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, sweep, steps)
