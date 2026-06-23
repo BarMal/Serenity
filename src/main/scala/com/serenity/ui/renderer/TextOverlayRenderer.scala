@@ -123,7 +123,9 @@ object TextOverlayRenderer:
 
     rowView.row.layout match
       case OverlayRowLayout.Plain =>
-        CharacterRenderer.renderStringPlain(surface, x, y, rowView.row.plainText.take(width))
+        if rowView.useMeasuredCursor && shouldUseMeasuredCursor(font, surface) then
+          renderMeasuredPlainRow(surface, x, y, width, rowView.row.plainText, font, cellMetrics)
+        else CharacterRenderer.renderStringPlain(surface, x, y, rowView.row.plainText.take(width))
       case OverlayRowLayout.Distributed =>
         renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
       case OverlayRowLayout.Split =>
@@ -491,6 +493,24 @@ object TextOverlayRenderer:
 
   private def shouldUseMeasuredCursor(font: java.awt.Font, surface: RenderSurface): Boolean =
     FontLoader.ligaturesEnabled(font) || !FontLoader.isMonospacedFont(font) || surface.fontRenderContext.nonEmpty
+
+  private def renderMeasuredPlainRow(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    width: Int,
+    text: String,
+    font: java.awt.Font,
+    cellMetrics: CellMetrics
+  ): Unit =
+    val visibleText = text.take(width)
+    if visibleText.nonEmpty then
+      val frc     = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+      val caretXs = TextLayoutSnapshot.caretXsForText(visibleText, font, frc)
+      val textXPx = cellMetrics.toPixelX(x).toFloat
+      val textYPx = cellMetrics.toPixelY(y)
+      val widthPx = caretXs.lastOption.getOrElse(0.0f).max(1.0f)
+      surface.drawRunPx(textXPx, textYPx, widthPx, cellMetrics.lineHeight, cellMetrics.ascent, visibleText)
 
   private def renderMeasuredCursor(
     surface: RenderSurface,
