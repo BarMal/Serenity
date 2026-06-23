@@ -46,7 +46,7 @@ case class CommandRunner(
     editingPresetName: Option[String] = None
 ):
 
-  def visibleItems: List[CommandSurfaceItem] =
+  lazy val visibleItems: List[CommandSurfaceItem] =
     val commandItems = filteredCommands.map(CommandSurfaceItem.CommandItem(_))
     if searchTerm.isEmpty then
       activeCategory match
@@ -87,7 +87,7 @@ case class CommandRunner(
   def selectedCommand: Option[Command] =
     selectedItem.collect { case CommandSurfaceItem.CommandItem(command) => command }
 
-  def settingsGroups: List[CommandSurfaceItem.GroupItem] =
+  lazy val settingsGroups: List[CommandSurfaceItem.GroupItem] =
     val animationItem        = CommandRunner.animationOptionItem(optionSelections)
     val cursorModeItem       = CommandRunner.cursorModeOptionItem(optionSelections)
     val cursorInfoBarItem    = CommandRunner.cursorInfoBarOptionItem(optionSelections)
