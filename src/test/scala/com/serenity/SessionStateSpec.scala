@@ -421,6 +421,21 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.elementTransitionSpeedScale shouldBe 1.0
   }
 
+  it should "default command runner animation when loading older JSON without the field" in {
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val jsonWithoutCommandRunnerAnimation =
+      originalJson.mapObject(
+        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("commandRunnerAnimation")))
+      )
+
+    val decoded = jsonWithoutCommandRunnerAnimation.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.commandRunnerAnimation shouldBe com.serenity.animation.AnimationConfig.smooth
+  }
+
   it should "default windowChromeMode to Native when loading older JSON without the field" in {
     val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
     val configObject =

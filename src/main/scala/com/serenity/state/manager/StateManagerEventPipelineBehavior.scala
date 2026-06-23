@@ -340,92 +340,109 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         prevPanels.filter(surface => !currentPanels.exists(_.id == surface.id))
 
       openedSurfaces.traverse_(surface => applyCommandRunnerOpenAnimation(surface, currentState)) >>
-        closedSurfaces.traverse_(surface => applyCommandRunnerCloseAnimation(surface, prevState, currentState)) >>
+        closedSurfaces.traverse_(surface => applyCommandRunnerCloseAnimation(surface, prevState)) >>
         openedPanels.traverse_(surface => applyPinnedPanelOpenAnimation(surface)) >>
         closedPanels.traverse_(surface => applyPinnedPanelCloseAnimation(surface, prevState))
     }
 
   private def applyCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): cats.effect.IO[Unit] =
-    val steps = AnimationConfig.smooth.get.steps
-    stateRef.update { s =>
-      val tSize         = s.viewportSize.getOrElse(ViewportSize(80, 24))
-      val layout        = LayoutEngine.calculateLayoutWithUI(s, tSize)
-      val overlayHeight = overlayRectForSurface(layout, surface.id).map(_.height).getOrElse(4)
-      val overlayFadeIn = (0 until overlayHeight).map { rowOffset =>
-        val delay    = rowOffset
-        val panelBg  = s.theme.panel.background
-        val panelFg  = s.theme.panel.foreground
-        val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
-        val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
-        val bgSteps = List.fill(delay)(transpBg) ++
-          RgbInterpolator.interpolateRgba(transpBg, panelBg, steps)
-        val fgSteps = List.fill(delay)(transpFg) ++
-          RgbInterpolator.interpolateRgba(transpFg, panelFg, steps)
-        CharacterKey(0, rowOffset) -> AnimatedCell(
-          content = None,
-          foregroundSteps = fgSteps,
-          backgroundSteps = bgSteps
-        )
-      }.toMap
-      val surfAnim = SurfaceAnimationState(
-        phase = SurfacePhase.Visible,
-        animationState = AnimationState(overlayFadeIn),
-        overlayHeight = overlayHeight,
-        bufferFadeLength = 0,
-        phaseTick = 0
-      )
-      s.copy(surfaceAnimations = s.surfaceAnimations + (surface.id -> surfAnim))
-    }
+    state.config.commandRunnerAnimation match
+      case Some(config) if !config.isDisabled =>
+        stateRef.update { s =>
+          val steps         = config.steps
+          val tSize         = s.viewportSize.getOrElse(ViewportSize(80, 24))
+          val layout        = LayoutEngine.calculateLayoutWithUI(s, tSize)
+          val overlayHeight = overlayRectForSurface(layout, surface.id).map(_.height).getOrElse(4)
+          val overlayFadeIn = (0 until overlayHeight).map { rowOffset =>
+            val delay    = rowOffset
+            val panelBg  = s.theme.panel.background
+            val panelFg  = s.theme.panel.foreground
+            val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
+            val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
+            val bgSteps = List.fill(delay)(transpBg) ++
+              RgbInterpolator.interpolateRgba(transpBg, panelBg, steps)
+            val fgSteps = List.fill(delay)(transpFg) ++
+              RgbInterpolator.interpolateRgba(transpFg, panelFg, steps)
+            CharacterKey(0, rowOffset) -> AnimatedCell(
+              content = None,
+              foregroundSteps = fgSteps,
+              backgroundSteps = bgSteps
+            )
+          }.toMap
+          val surfAnim = SurfaceAnimationState(
+            phase = SurfacePhase.Visible,
+            animationState = AnimationState(overlayFadeIn),
+            overlayHeight = overlayHeight,
+            bufferFadeLength = 0,
+            phaseTick = 0
+          )
+          s.copy(surfaceAnimations = s.surfaceAnimations + (surface.id -> surfAnim))
+        }
+      case _ =>
+        stateRef.update(s => s.copy(surfaceAnimations = s.surfaceAnimations - surface.id))
 
   private def applyCommandRunnerCloseAnimation(
     closedSurface: UiSurface,
-    prevState: AppState,
-    currentState: AppState
+    prevState: AppState
   ): cats.effect.IO[Unit] =
-    val steps = AnimationConfig.smooth.get.steps
-    stateRef.update { s =>
-      val tSize          = prevState.viewportSize.orElse(s.viewportSize).getOrElse(ViewportSize(80, 24))
-      val previousLayout = LayoutEngine.calculateLayoutWithUI(prevState, tSize)
-      val overlayHeight = prevState.surfaceAnimations
-        .get(closedSurface.id)
-        .map(_.overlayHeight)
-        .orElse(overlayRectForSurface(previousLayout, closedSurface.id).map(_.height))
-        .getOrElse(4)
-      val cachedRect = overlayRectForSurface(previousLayout, closedSurface.id)
-        .getOrElse(LayoutRect(12, 2, 56, overlayHeight))
-      val overlayFadeOutAnims = (0 until overlayHeight).map { rowOffset =>
-        val panelBg  = s.theme.panel.background
-        val panelFg  = s.theme.panel.foreground
-        val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
-        val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
-        val bgSteps  = RgbInterpolator.interpolateRgba(panelBg, transpBg, steps)
-        val fgSteps  = RgbInterpolator.interpolateRgba(panelFg, transpFg, steps)
-        CharacterKey(0, rowOffset) -> AnimatedCell(
-          content = None,
-          foregroundSteps = fgSteps,
-          backgroundSteps = bgSteps
-        )
-      }.toMap
-      val (stateWithId, ghostId) = s.allocateSurfaceId
-      val ghostSurface = UiSurface(
-        id = ghostId,
-        content = SurfaceContent.GhostOverlay(closedSurface.content, cachedRect),
-        presentation = closedSurface.presentation
-      )
-      val ghostAnimState = SurfaceAnimationState(
-        phase = SurfacePhase.Exiting,
-        animationState = AnimationState(overlayFadeOutAnims),
-        overlayHeight = overlayHeight,
-        bufferFadeLength = 0,
-        phaseTick = 0
-      )
-      stateWithId.copy(
-        uiSurfaces = stateWithId.uiSurfaces :+ ghostSurface,
-        surfaceAnimations = stateWithId.surfaceAnimations
-          - closedSurface.id
-          + (ghostId -> ghostAnimState)
-      )
-    }
+    prevState.config.commandRunnerAnimation match
+      case Some(config) if !config.isDisabled =>
+        stateRef.update { s =>
+          val steps          = config.steps
+          val tSize          = prevState.viewportSize.orElse(s.viewportSize).getOrElse(ViewportSize(80, 24))
+          val previousLayout = LayoutEngine.calculateLayoutWithUI(prevState, tSize)
+          val overlayHeight = prevState.surfaceAnimations
+            .get(closedSurface.id)
+            .map(_.overlayHeight)
+            .orElse(overlayRectForSurface(previousLayout, closedSurface.id).map(_.height))
+            .getOrElse(4)
+          val cachedRect = overlayRectForSurface(previousLayout, closedSurface.id)
+            .getOrElse(LayoutRect(12, 2, 56, overlayHeight))
+          val overlayFadeOutAnims = (0 until overlayHeight).map { rowOffset =>
+            val panelBg  = s.theme.panel.background
+            val panelFg  = s.theme.panel.foreground
+            val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
+            val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
+            val previousCell = prevState.surfaceAnimations
+              .get(closedSurface.id)
+              .flatMap(_.animationState.getCell(0, rowOffset))
+            val currentBg = previousCell.flatMap(_.currentBackground).getOrElse(panelBg)
+            val currentFg = previousCell.flatMap(_.currentForeground).getOrElse(panelFg)
+            val reversedSteps = previousCell
+              .map(cell =>
+                completedFadeSteps(totalFadeFrames = rowOffset + steps, remainingFrames = cell.backgroundSteps.length)
+              )
+              .getOrElse(steps)
+            val bgSteps = RgbInterpolator.interpolateRgba(currentBg, transpBg, reversedSteps)
+            val fgSteps = RgbInterpolator.interpolateRgba(currentFg, transpFg, reversedSteps)
+            CharacterKey(0, rowOffset) -> AnimatedCell(
+              content = None,
+              foregroundSteps = fgSteps,
+              backgroundSteps = bgSteps
+            )
+          }.toMap
+          val (stateWithId, ghostId) = s.allocateSurfaceId
+          val ghostSurface = UiSurface(
+            id = ghostId,
+            content = SurfaceContent.GhostOverlay(closedSurface.content, cachedRect),
+            presentation = closedSurface.presentation
+          )
+          val ghostAnimState = SurfaceAnimationState(
+            phase = SurfacePhase.Exiting,
+            animationState = AnimationState(overlayFadeOutAnims),
+            overlayHeight = overlayHeight,
+            bufferFadeLength = 0,
+            phaseTick = 0
+          )
+          stateWithId.copy(
+            uiSurfaces = stateWithId.uiSurfaces :+ ghostSurface,
+            surfaceAnimations = stateWithId.surfaceAnimations
+              - closedSurface.id
+              + (ghostId -> ghostAnimState)
+          )
+        }
+      case _ =>
+        stateRef.update(s => s.copy(surfaceAnimations = s.surfaceAnimations - closedSurface.id))
 
   private def animatedCommandSurfaces(state: AppState): List[UiSurface] =
     state.uiSurfaces.filter {
@@ -556,6 +573,9 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
 
   private def transparent(color: Color): Color =
     new Color(color.getRed, color.getGreen, color.getBlue, 0)
+
+  private def completedFadeSteps(totalFadeFrames: Int, remainingFrames: Int): Int =
+    (totalFadeFrames - remainingFrames + 1).max(1)
 
   private def panelPosition(surface: UiSurface): Option[PanelPosition] =
     surface.presentation match

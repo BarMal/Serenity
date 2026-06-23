@@ -96,6 +96,7 @@ case class CommandRunner(
     val interfaceDensityItem = CommandRunner.interfaceDensityOptionItem(optionSelections)
     val materialPresetItem   = CommandRunner.materialPresetOptionItem(optionSelections)
     val motionPresetItem     = CommandRunner.motionPresetOptionItem(optionSelections)
+    val commandRunnerFade    = CommandRunner.commandRunnerFadeOptionItem(optionSelections)
     val editorTextItem       = CommandRunner.editorTextTransitionOptionItem(optionSelections)
     val markdownViewItem     = CommandRunner.markdownViewOptionItem(optionSelections)
     val defaultDocumentItem  = CommandRunner.defaultDocumentModeOptionItem(optionSelections)
@@ -161,7 +162,7 @@ case class CommandRunner(
     val materialMotionGroup = CommandSurfaceItem.GroupItem(
       id = "settings-material-motion",
       label = "Material & Motion",
-      children = List(materialPresetItem, motionPresetItem, editorTextItem) ++
+      children = List(materialPresetItem, motionPresetItem, commandRunnerFade, editorTextItem) ++
         inputItems.filter(_.id == "element-transition-speed-scale"),
       category = CommandCategory.Settings,
       hint = Some("Named UI material and animation timing")
@@ -653,6 +654,7 @@ object CommandRunner:
       "animation-mode"            -> animationModeIndex(config),
       "material-preset"           -> materialPresetIndex(config.materialPreset),
       "motion-preset"             -> motionPresetIndex(config.motionPreset),
+      "command-runner-fade"       -> commandRunnerFadeIndex(config.commandRunnerAnimation),
       "editor-text-transition"    -> editorTextTransitionIndex(config.editorInsertionTransitionKind),
       "cursor-mode"               -> cursorModeIndex(config.cursorMode),
       "cursor-info-bar"           -> cursorInfoBarModeIndex(config.cursorInfoBarMode),
@@ -706,6 +708,23 @@ object CommandRunner:
       selectedIndex = optionSelections.getOrElse("editor-text-transition", 0),
       category = CommandCategory.Settings,
       hint = Some("Editor insertion reveal style")
+    )
+
+  private[command] def commandRunnerFadeOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "command-runner-fade",
+      label = "Command Runner Fade",
+      options = List(
+        CommandOption("Off", CommandIntent.SetCommandRunnerAnimation(None)),
+        CommandOption("Subtle", CommandIntent.SetCommandRunnerAnimation(AnimationConfig.subtle)),
+        CommandOption("Smooth", CommandIntent.SetCommandRunnerAnimation(AnimationConfig.smooth)),
+        CommandOption("Expressive", CommandIntent.SetCommandRunnerAnimation(AnimationConfig.quick))
+      ),
+      selectedIndex = optionSelections.getOrElse("command-runner-fade", 2),
+      category = CommandCategory.Settings,
+      hint = Some("Palette fade in and out")
     )
 
   private[command] def cursorInfoBarOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -1754,6 +1773,14 @@ object CommandRunner:
       case MotionPreset.Smooth     => 2
       case MotionPreset.Expressive => 3
       case MotionPreset.Custom     => 4
+
+  private def commandRunnerFadeIndex(animation: Option[AnimationConfig]): Int =
+    animation match
+      case None                                                  => 0
+      case Some(value) if AnimationConfig.subtle.contains(value) => 1
+      case Some(value) if AnimationConfig.smooth.contains(value) => 2
+      case Some(value) if AnimationConfig.quick.contains(value)  => 3
+      case Some(_)                                               => 2
 
   private def editorTextTransitionIndex(kind: TransitionKind): Int =
     kind match

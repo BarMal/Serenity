@@ -626,6 +626,7 @@ given Encoder[AppConfig] = Encoder.instance { config =>
     "materialPreset"                -> config.materialPreset.asJson,
     "motionPreset"                  -> config.motionPreset.asJson,
     "elementTransitionSpeedScale"   -> config.elementTransitionSpeedScale.asJson,
+    "commandRunnerAnimation"        -> config.commandRunnerAnimation.asJson,
     "editorInsertionTransitionKind" -> config.editorInsertionTransitionKind.asJson,
     "cursorMode"                    -> config.cursorMode.asJson,
     "cursorColors"                  -> config.cursorColors.asJson,
@@ -662,6 +663,9 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     elementTransitionSpeedScale <- cursor
       .getOrElse[Double]("elementTransitionSpeedScale")(1.0)
       .map(AppConfig.clampElementTransitionSpeedScale)
+    commandRunnerAnimation <- cursor.getOrElse[Option[AnimationConfig]]("commandRunnerAnimation")(
+      AnimationConfig.smooth
+    )
     editorInsertionTransitionKind <- cursor.getOrElse[TransitionKind]("editorInsertionTransitionKind")(
       TransitionKind.Fade
     )
@@ -696,6 +700,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     materialPreset = materialPreset,
     motionPreset = motionPreset,
     elementTransitionSpeedScale = elementTransitionSpeedScale,
+    commandRunnerAnimation = commandRunnerAnimation,
     editorInsertionTransitionKind = editorInsertionTransitionKind,
     cursorMode = cursorMode,
     cursorColors = cursorColors,

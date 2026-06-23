@@ -161,6 +161,10 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       case item: CommandSurfaceItem.OptionItem if item.id == "editor-text-transition" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Typed" -> List("Fade", "Typed", "Directional", "Tandem", "Off"))
+    materialGroup.children.collectFirst {
+      case item: CommandSurfaceItem.OptionItem if item.id == "command-runner-fade" =>
+        (item.selectedOption, item.options.map(_.label))
+    } shouldBe Some("Off" -> List("Off", "Subtle", "Smooth", "Expressive"))
   }
 
   "ensureCommandRunnerSurface (via closePane)" should "use the current config, not defaults" in {

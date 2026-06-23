@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.TransitionKind
+import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -52,6 +52,23 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
+  }
+
+  it should "update the command runner fade animation config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "command-runner-fade",
+          "Set command runner fade",
+          CommandIntent.SetCommandRunnerAnimation(AnimationConfig.subtle),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.commandRunnerAnimation shouldBe AnimationConfig.subtle
   }
 
   it should "update the UI element gap config" in {
