@@ -31,6 +31,15 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     val logger = LoggerFactory[IO].getLogger(using LoggerName("CursorModeSpec"))
     StateManager.apply(logger).unsafeRunSync()
 
+  private def settingsItems(runner: CommandRunner): List[CommandSurfaceItem] =
+    def descendants(group: CommandSurfaceItem.GroupItem): List[CommandSurfaceItem] =
+      group.children.flatMap {
+        case child: CommandSurfaceItem.GroupItem => child :: descendants(child)
+        case child                               => List(child)
+      }
+
+    runner.settingsGroups.flatMap(group => group :: descendants(group))
+
   // ── AppConfig ────────────────────────────────────────────────────────────
 
   "AppConfig" should "default cursorMode to Blink" in {
@@ -59,7 +68,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
       isActive = true,
       activeCategory = CommandCategory.Settings
     )
-    runner.settingsGroups.flatMap(_.children).collect {
+    settingsItems(runner).collect {
       case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
     } should not be empty
   }
@@ -69,28 +78,25 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
       isActive = true,
       activeCategory = CommandCategory.Settings
     )
-    val item = runner.settingsGroups
-      .flatMap(_.children)
-      .collectFirst { case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o }
-      .get
+    val item = settingsItems(runner).collectFirst {
+      case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
+    }.get
     item.options.map(_.label) should contain allOf ("Blink", "Breathe")
   }
 
   it should "map Blink option to SetCursorMode(Blink) intent" in {
     val runner = CommandRunner.empty.copy(isActive = true, activeCategory = CommandCategory.Settings)
-    val item = runner.settingsGroups
-      .flatMap(_.children)
-      .collectFirst { case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o }
-      .get
+    val item = settingsItems(runner).collectFirst {
+      case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
+    }.get
     item.options.find(_.label == "Blink").get.intent shouldBe CommandIntent.SetCursorMode(CursorMode.Blink)
   }
 
   it should "map Breathe option to SetCursorMode(Breathe) intent" in {
     val runner = CommandRunner.empty.copy(isActive = true, activeCategory = CommandCategory.Settings)
-    val item = runner.settingsGroups
-      .flatMap(_.children)
-      .collectFirst { case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o }
-      .get
+    val item = settingsItems(runner).collectFirst {
+      case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
+    }.get
     item.options.find(_.label == "Breathe").get.intent shouldBe CommandIntent.SetCursorMode(CursorMode.Breathe)
   }
 

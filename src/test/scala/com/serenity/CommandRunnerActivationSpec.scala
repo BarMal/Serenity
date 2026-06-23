@@ -19,6 +19,17 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
 
   private val registry = CommandRegistry.default
 
+  private def descendants(group: CommandSurfaceItem.GroupItem): List[CommandSurfaceItem] =
+    group.children.flatMap {
+      case child: CommandSurfaceItem.GroupItem => child :: descendants(child)
+      case child                               => List(child)
+    }
+
+  private def settingsGroup(runner: CommandRunner, id: String): Option[CommandSurfaceItem.GroupItem] =
+    (runner.settingsGroups ++ runner.settingsGroups.flatMap(group =>
+      descendants(group).collect { case child: CommandSurfaceItem.GroupItem => child }
+    )).find(_.id == id)
+
   "CommandRunner.activate" should "reflect non-default ligature settings in option selections per font role" in {
     val config = AppConfig.default.withFontConfig(
       FontConfig(enableLigatures = false, textLigatures = false, uiLigatures = true)
@@ -31,19 +42,21 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "split font settings into code, prose, and UI groups" in {
-    val runner   = CommandRunner.empty.activate(registry, AppConfig.default)
-    val groupIds = runner.settingsGroups.map(_.id)
+    val runner = CommandRunner.empty.activate(registry, AppConfig.default)
+    val groupIds = runner.settingsGroups.flatMap(group =>
+      group.id :: descendants(group).collect { case child: CommandSurfaceItem.GroupItem => child.id }
+    )
 
     groupIds should contain allOf ("settings-code-font", "settings-prose-font", "settings-ui-font")
-    groupIds should not contain "settings-typography"
+    runner.settingsGroups.map(_.id) should contain("settings-typography")
 
-    runner.settingsGroups.find(_.id == "settings-code-font").map(_.children.map(_.id)) should contain(
+    settingsGroup(runner, "settings-code-font").map(_.children.map(_.id)) should contain(
       List("code-font", "code-ligatures", "code-font-size")
     )
-    runner.settingsGroups.find(_.id == "settings-prose-font").map(_.children.map(_.id)) should contain(
+    settingsGroup(runner, "settings-prose-font").map(_.children.map(_.id)) should contain(
       List("text-font", "text-ligatures", "text-font-size")
     )
-    runner.settingsGroups.find(_.id == "settings-ui-font").map(_.children.map(_.id)) should contain(
+    settingsGroup(runner, "settings-ui-font").map(_.children.map(_.id)) should contain(
       List("ui-font", "ui-ligatures", "ui-font-size")
     )
   }
@@ -82,23 +95,21 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty.activate(registry, config)
 
     runner.optionSelections.get("interface-density") shouldBe Some(0)
-    runner.settingsGroups.find(_.id == "settings-interface-layout").map(_.children.map(_.id)) should contain(
+    settingsGroup(runner, "settings-interface-layout").map(_.children.map(_.id)) should contain(
       List(
         "interface-density",
         "ui-element-gap",
         "ui-corner-radius"
       )
     )
-    runner.settingsGroups
-      .find(_.id == "settings-interface-layout")
+    settingsGroup(runner, "settings-interface-layout")
       .flatMap(
         _.children.collectFirst {
           case item: CommandSurfaceItem.InputItem if item.id == "ui-element-gap" =>
             (item.currentValue, item.hint, item.parse("3"), item.parse("9"))
         }
       ) shouldBe Some(("2", "Cells (0-8)", Some(CommandIntent.SetUiElementGap(3)), None))
-    runner.settingsGroups
-      .find(_.id == "settings-interface-layout")
+    settingsGroup(runner, "settings-interface-layout")
       .flatMap(
         _.children.collectFirst {
           case item: CommandSurfaceItem.InputItem if item.id == "ui-corner-radius" =>
@@ -112,7 +123,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty.activate(registry, config)
 
     runner.optionSelections.get("cursor-info-bar") shouldBe Some(2)
-    runner.settingsGroups.find(_.id == "settings-cursor").map(_.children.map(_.id)) should contain(
+    settingsGroup(runner, "settings-cursor").map(_.children.map(_.id)) should contain(
       List(
         "cursor-mode",
         "cursor-info-bar",
@@ -126,8 +137,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty.activate(registry, config)
 
     runner.optionSelections.get("cursor-info-bar-placement") shouldBe Some(1)
-    runner.settingsGroups
-      .find(_.id == "settings-cursor")
+    settingsGroup(runner, "settings-cursor")
       .map(_.children.collect {
         case item: CommandSurfaceItem.OptionItem if item.id == "cursor-info-bar-placement" =>
           item.selectedOption -> item.options.map(_.label)
@@ -142,7 +152,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       .withElementTransitionSpeedScale(1.5)
     val runner = CommandRunner.empty.activate(registry, config)
 
-    val materialGroup = runner.settingsGroups.find(_.id == "settings-material-motion").getOrElse {
+    val materialGroup = settingsGroup(runner, "settings-material-motion").getOrElse {
       fail("Expected material and motion settings group")
     }
     materialGroup.children.collectFirst {

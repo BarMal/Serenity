@@ -175,7 +175,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     tabLine should include("Settings")
     tabLine should not include "["
     tabLine.indexOf("Settings") should be > tabLine.length / 2
-    optionLine should include("Workspace Layout")
+    optionLine should include("Panels & Workspace")
     optionLine should not include "["
 
     val settingsBackgrounds =

@@ -83,8 +83,14 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       AppConfig.default.withMarkdownViewMode(MarkdownViewMode.InlineLens)
     )
 
+    def descendants(group: CommandSurfaceItem.GroupItem): List[CommandSurfaceItem] =
+      group.children.flatMap {
+        case child: CommandSurfaceItem.GroupItem => child :: descendants(child)
+        case child                               => List(child)
+      }
+
     val markdownItem = runner.settingsGroups
-      .flatMap(_.children)
+      .flatMap(group => group :: descendants(group))
       .collectFirst { case item: CommandSurfaceItem.OptionItem if item.id == "markdown-view" => item }
 
     markdownItem.map(_.selectedOption) shouldBe Some("Inline Lens")

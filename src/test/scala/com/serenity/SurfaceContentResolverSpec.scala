@@ -180,13 +180,13 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     header.segments.count(_.selected) shouldBe 1
     header.segments.find(_.selected).map(_.text) shouldBe Some("Settings")
 
-    val optionRow = floating.rows.headOption.getOrElse(fail("Expected workspace layout group row"))
+    val optionRow = floating.rows.headOption.getOrElse(fail("Expected panels and workspace group row"))
     optionRow.layout shouldBe OverlayRowLayout.Columns
-    optionRow.plainText shouldBe "Workspace Layout"
+    optionRow.plainText shouldBe "Panels & Workspace"
     optionRow.plainText should not include "["
     optionRow.segments should have size 2
-    optionRow.segments.head.text shouldBe "Workspace Layout"
-    optionRow.segments(1).text shouldBe "Panels, outline, preview, diagnostics"
+    optionRow.segments.head.text shouldBe "Panels & Workspace"
+    optionRow.segments(1).text shouldBe "Pin, focus, expand, and unpin panels"
     optionRow.segments(1).tone shouldBe OverlayTone.Normal
   }
 

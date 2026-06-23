@@ -108,10 +108,10 @@ case class CommandRunner(
     val keymapItems          = inputItems.filter(_.id.startsWith("keymap-"))
     val workspaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-workspace-layout",
-      label = "Workspace Layout",
+      label = "Panels & Workspace",
       children = CommandRunner.workspaceLayoutItems(optionSelections),
       category = CommandCategory.Settings,
-      hint = Some("Panels, outline, preview, diagnostics")
+      hint = Some("Pin, focus, expand, and unpin panels")
     )
     val navigationGroup = CommandSurfaceItem.GroupItem(
       id = "settings-navigation",
@@ -199,7 +199,7 @@ case class CommandRunner(
       label = "Rich Text",
       children = inputItems.filter(_.id.startsWith("rich-text-")),
       category = CommandCategory.Settings,
-      hint = Some("Selection font, size, colour")
+      hint = Some("Selection family, size, colour")
     )
     val uiFontGroup = CommandSurfaceItem.GroupItem(
       id = "settings-ui-font",
@@ -248,6 +248,34 @@ case class CommandRunner(
       category = CommandCategory.Settings,
       hint = Some("Inspect and edit bindings")
     )
+    val documentWritingGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-document-writing",
+      label = "Document Writing",
+      children = List(navigationGroup, languageGroup, markdownGroup, richTextGroup, spellCheckGroup),
+      category = CommandCategory.Settings,
+      hint = Some("Comments, previews, styling, and spelling")
+    )
+    val editorViewGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-editor-view",
+      label = "Editor View",
+      children = List(textDisplayGroup, textAreaGroup, textScaleGroup),
+      category = CommandCategory.Settings,
+      hint = Some("Wrap, gutters, margins, display scale")
+    )
+    val typographyGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-typography",
+      label = "Typography",
+      children = List(proseFontGroup, codeFontGroup, uiFontGroup),
+      category = CommandCategory.Settings,
+      hint = Some("Typefaces for prose, code, and interface")
+    )
+    val appearanceMotionGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-appearance-motion",
+      label = "Appearance & Motion",
+      children = List(cursorGroup, surfaceAppearanceGroup, interfaceLayoutGroup, materialMotionGroup, animationGroup),
+      category = CommandCategory.Settings,
+      hint = Some("Visual styling, spacing, and movement")
+    )
     val editingPreset = presetEditContextName
     val presetInputItems =
       inputItems.filter(_.id.startsWith("ui-preset-")).map(withPresetInputContext(_, editingPreset))
@@ -266,22 +294,10 @@ case class CommandRunner(
       children = List(
         presetIdentityGroup,
         workspaceLayoutGroup,
-        navigationGroup,
-        languageGroup,
-        markdownGroup,
-        textDisplayGroup,
-        textAreaGroup,
-        textScaleGroup,
-        proseFontGroup,
-        codeFontGroup,
-        uiFontGroup,
-        cursorGroup,
-        surfaceAppearanceGroup,
-        interfaceLayoutGroup,
-        materialMotionGroup,
-        animationGroup,
-        spellCheckGroup,
-        richTextGroup
+        documentWritingGroup,
+        editorViewGroup,
+        typographyGroup,
+        appearanceMotionGroup
       ),
       category = CommandCategory.Settings,
       hint = Some(editingPreset.fold("Document, layout, typography, motion")(name => s"Editing $name"))
@@ -298,23 +314,11 @@ case class CommandRunner(
     )
     List(
       workspaceLayoutGroup,
-      navigationGroup,
-      textDisplayGroup,
-      textAreaGroup,
-      markdownGroup,
-      languageGroup,
-      codeFontGroup,
-      proseFontGroup,
-      richTextGroup,
-      uiFontGroup,
-      textScaleGroup,
-      cursorGroup,
-      surfaceAppearanceGroup,
-      interfaceLayoutGroup,
-      animationGroup,
-      materialMotionGroup,
+      documentWritingGroup,
+      editorViewGroup,
+      typographyGroup,
+      appearanceMotionGroup,
       uiPresetsGroup,
-      spellCheckGroup,
       keymapGroup
     )
 
@@ -586,7 +590,7 @@ case class CommandRunner(
     val lowerTerm = term.toLowerCase
     if lowerTerm.length < 3 then Nil
     else
-      val matches = settingsGroups.filter(_.searchText.toLowerCase.contains(lowerTerm))
+      val matches = allSettingsGroups.filter(_.searchText.toLowerCase.contains(lowerTerm))
       val (directMatches, remainingMatches) =
         matches.partition(group => CommandRunner.directGroupSearchText(group).contains(lowerTerm))
       val (directChildMatches, nestedMatches) =
@@ -594,6 +598,14 @@ case class CommandRunner(
           group.children.exists(child => CommandRunner.directItemSearchText(child).contains(lowerTerm))
         )
       directMatches ++ directChildMatches ++ nestedMatches
+
+  private def allSettingsGroups: List[CommandSurfaceItem.GroupItem] =
+    def loop(groups: List[CommandSurfaceItem.GroupItem]): List[CommandSurfaceItem.GroupItem] =
+      groups ++ groups.flatMap { group =>
+        loop(group.children.collect { case child: CommandSurfaceItem.GroupItem => child })
+      }
+
+    loop(settingsGroups).distinctBy(_.id)
 
   private def presetEditContextName: Option[String] =
     editingPresetName
