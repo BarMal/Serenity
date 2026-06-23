@@ -61,6 +61,7 @@ case class TextLayoutSnapshot(
       .flatMap(targetRow => cursorForVisualRowAndXPx(targetRow, preferredXPx))
 
 object TextLayoutSnapshot:
+  private val UnwrappedOverscanColumns = 2
 
   def caretXsForText(
     text: String,
@@ -90,11 +91,16 @@ object TextLayoutSnapshot:
     if lineText.isEmpty || visibleWidthPx <= 0 then 0
     else
       val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
-      val xs             = caretXs(lineText, font, fontRenderContext, measuredLayout)
       val safeColumn     = cursorColumn.max(0).min(lineText.length)
-      val cursorXPx      = xs.lift(safeColumn).getOrElse(xs.lastOption.getOrElse(0.0f))
-      val targetLeftXPx  = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
-      xs.zipWithIndex.takeWhile { case (x, _) => x <= targetLeftXPx }.map(_._2).lastOption.getOrElse(0)
+      if !measuredLayout then
+        val charWidth      = math.max(1, CellMetrics.fromFont(font).charWidth)
+        val visibleColumns = math.max(1, visibleWidthPx / charWidth)
+        math.max(0, safeColumn - visibleColumns + 1)
+      else
+        val xs            = caretXs(lineText, font, fontRenderContext, measuredLayout)
+        val cursorXPx     = xs.lift(safeColumn).getOrElse(xs.lastOption.getOrElse(0.0f))
+        val targetLeftXPx = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
+        xs.zipWithIndex.takeWhile { case (x, _) => x <= targetLeftXPx }.map(_._2).lastOption.getOrElse(0)
 
   def visualLineIndexForCursor(
     lineText: String,
@@ -130,9 +136,11 @@ object TextLayoutSnapshot:
       buffer.richTextDocument.filter(_.matchesPlainText(buffer.content.collect()))
     val viewportTopVisualLine = if wordWrapEnabled then buffer.viewport.topVisualLine else 0
     val visualLineLimit       = viewportTopVisualLine + buffer.viewport.visibleLines
+    val totalLines            = buffer.content.lineCount
     val visualLines =
       collectVisualLines(
         buffer,
+        totalLines,
         math.max(1, panelWidthPx),
         font,
         fontRenderContext,
@@ -153,6 +161,7 @@ object TextLayoutSnapshot:
 
   private def collectVisualLines(
     buffer: Buffer,
+    totalLines: Int,
     panelWidthPx: Int,
     font: Font,
     frc: FontRenderContext,
@@ -163,13 +172,15 @@ object TextLayoutSnapshot:
   ): Vector[TextVisualLine] =
     @annotation.tailrec
     def loop(lineIndex: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
-      if lineIndex >= buffer.content.lineCount || acc.length >= visualLineLimit then acc
+      if lineIndex >= totalLines || acc.length >= visualLineLimit then acc
       else
         val rawLine = buffer.content.getLine(lineIndex).getOrElse("")
         val startColumn =
           if buffer.viewport.topVisualLine > 0 then 0
           else math.min(buffer.viewport.leftColumn, rawLine.length)
-        val visibleSlice = rawLine.drop(startColumn)
+        val visibleSlice =
+          if wordWrapEnabled then rawLine.drop(startColumn)
+          else unwrappedVisibleSlice(rawLine, startColumn, buffer.viewport.visibleColumns)
         val wrapped =
           if wordWrapEnabled then
             wrapLogicalLine(
@@ -187,7 +198,7 @@ object TextLayoutSnapshot:
                 visibleSlice,
                 lineIndex,
                 startColumn,
-                rawLine.length,
+                startColumn + visibleSlice.length,
                 font,
                 frc,
                 measuredLayout
@@ -197,6 +208,10 @@ object TextLayoutSnapshot:
         loop(lineIndex + 1, acc ++ aligned)
 
     loop(buffer.viewport.topLine, Vector.empty)
+
+  private def unwrappedVisibleSlice(rawLine: String, startColumn: Int, visibleColumns: Int): String =
+    val visibleEndColumn = startColumn + math.max(1, visibleColumns) + UnwrappedOverscanColumns
+    rawLine.slice(startColumn, math.min(rawLine.length, visibleEndColumn))
 
   private def wrapLogicalLine(
     line: String,
@@ -231,10 +246,14 @@ object TextLayoutSnapshot:
     frc: FontRenderContext,
     measuredLayout: Boolean
   ): Int =
-    val carets = caretXs(text, font, frc, measuredLayout)
-    val maxFitting =
-      carets.zipWithIndex.takeWhile { case (x, _) => x <= panelWidthPx.toFloat }.map(_._2).lastOption.getOrElse(0)
-    math.max(1, maxFitting)
+    if !measuredLayout then
+      val charWidth = math.max(1, CellMetrics.fromFont(font).charWidth)
+      math.max(1, math.min(text.length, panelWidthPx / charWidth))
+    else
+      val carets = caretXs(text, font, frc, measuredLayout)
+      val maxFitting =
+        carets.zipWithIndex.takeWhile { case (x, _) => x <= panelWidthPx.toFloat }.map(_._2).lastOption.getOrElse(0)
+      math.max(1, maxFitting)
 
   private def wordBoundarySegmentLength(text: String, fittingLength: Int): Int =
     if fittingLength >= text.length then text.length

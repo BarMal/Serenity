@@ -262,14 +262,8 @@ object EditorEventReducer:
                 else ReducerResult.noEffects(currentState)
 
           case MoveLeft =>
-            val movementStart = selectionFocusOrCursor(buffer, cursor)
-            val text          = buffer.content.collect()
-            val newCursor =
-              if movementStart.column > 0 then movementStart.moveLeft
-              else if movementStart.line > 0 then
-                val prevLineEnd = findLineEnd(text, movementStart.line - 1)
-                movementStart.copy(line = movementStart.line - 1, column = prevLineEnd)
-              else movementStart
+            val movementStart   = selectionFocusOrCursor(buffer, cursor)
+            val newCursor       = moveCursorLeft(movementStart, buffer.content)
             val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
@@ -281,16 +275,8 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveRight =>
-            val movementStart  = selectionFocusOrCursor(buffer, cursor)
-            val text           = buffer.content.collect()
-            val currentLineEnd = findLineEnd(text, movementStart.line)
-            val newCursor =
-              if movementStart.column < currentLineEnd then movementStart.moveRight
-              else
-                val totalLines = countLines(text)
-                if movementStart.line < totalLines - 1 then
-                  movementStart.copy(line = movementStart.line + 1, column = 0)
-                else movementStart
+            val movementStart   = selectionFocusOrCursor(buffer, cursor)
+            val newCursor       = moveCursorRight(movementStart, buffer.content)
             val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
@@ -340,15 +326,13 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case ExtendSelectionLeft =>
-            val text      = buffer.content.collect()
-            val newCursor = moveCursorLeft(cursor, text)
+            val newCursor = moveCursorLeft(cursor, buffer.content)
             val updatedBuffer =
               extendSelection(buffer, currentState, cursor, newCursor, preferredColumn = Some(newCursor.column))
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case ExtendSelectionRight =>
-            val text      = buffer.content.collect()
-            val newCursor = moveCursorRight(cursor, text)
+            val newCursor = moveCursorRight(cursor, buffer.content)
             val updatedBuffer =
               extendSelection(buffer, currentState, cursor, newCursor, preferredColumn = Some(newCursor.column))
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
@@ -407,7 +391,7 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveToEnd =>
-            val lineEnd         = findLineEnd(buffer.content.collect(), cursor.line)
+            val lineEnd         = findLineEnd(buffer.content, cursor.line)
             val newCursor       = cursor.copy(column = lineEnd)
             val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
             val updatedBuffer = buffer.copy(
@@ -464,10 +448,9 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveToEndOfFile =>
-            val text        = buffer.content.collect()
-            val totalLines  = countLines(text)
+            val totalLines  = countLines(buffer.content)
             val lastLine    = totalLines - 1
-            val lastLineEnd = findLineEnd(text, lastLine)
+            val lastLineEnd = findLineEnd(buffer.content, lastLine)
             val newCursor   = CursorPosition(lastLine, lastLineEnd)
             val newTopLine  = math.max(0, lastLine - buffer.viewport.visibleLines + 1)
             val newViewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
@@ -722,19 +705,17 @@ object EditorEventReducer:
           updateBufferInState(currentState, applyLineUnindent(buffer, currentState, distinctCursorLines(buffer)))
         )
       case MoveLeft =>
-        val text = buffer.content.collect()
         ReducerResult.noEffects(
           updateBufferInState(
             currentState,
-            applyMultiCursorNavigation(buffer, currentState)(cursor => moveCursorLeft(cursor, text))
+            applyMultiCursorNavigation(buffer, currentState)(cursor => moveCursorLeft(cursor, buffer.content))
           )
         )
       case MoveRight =>
-        val text = buffer.content.collect()
         ReducerResult.noEffects(
           updateBufferInState(
             currentState,
-            applyMultiCursorNavigation(buffer, currentState)(cursor => moveCursorRight(cursor, text))
+            applyMultiCursorNavigation(buffer, currentState)(cursor => moveCursorRight(cursor, buffer.content))
           )
         )
       case MoveToStart =>
@@ -745,12 +726,11 @@ object EditorEventReducer:
           )
         )
       case MoveToEnd =>
-        val text = buffer.content.collect()
         ReducerResult.noEffects(
           updateBufferInState(
             currentState,
             applyMultiCursorNavigation(buffer, currentState)(cursor =>
-              cursor.copy(column = findLineEnd(text, cursor.line))
+              cursor.copy(column = findLineEnd(buffer.content, cursor.line))
             )
           )
         )
@@ -775,10 +755,9 @@ object EditorEventReducer:
           updateBufferInState(currentState, applyMultiCursorNavigation(buffer, currentState)(_ => CursorPosition(0, 0)))
         )
       case MoveToEndOfFile =>
-        val text        = buffer.content.collect()
-        val totalLines  = countLines(text)
+        val totalLines  = countLines(buffer.content)
         val lastLine    = totalLines - 1
-        val lastLineEnd = findLineEnd(text, lastLine)
+        val lastLineEnd = findLineEnd(buffer.content, lastLine)
         val target      = CursorPosition(lastLine, lastLineEnd)
         ReducerResult.noEffects(
           updateBufferInState(currentState, applyMultiCursorNavigation(buffer, currentState)(_ => target))
@@ -878,6 +857,9 @@ object EditorEventReducer:
 
   private def findLineEnd(content: String, line: Int): Int =
     getLine(content, line).fold(0)(_.length)
+
+  private def findLineEnd(content: Rope, line: Int): Int =
+    content.getLine(line).fold(0)(_.length)
 
   private def countLines(rope: Rope): Int =
     rope.lineCount
@@ -1484,14 +1466,14 @@ object EditorEventReducer:
   private def toFindResult(cursor: CursorPosition): FindResult =
     FindResult(cursor.line, cursor.column)
 
-  private def moveCursorLeft(cursor: CursorPosition, content: String): CursorPosition =
+  private def moveCursorLeft(cursor: CursorPosition, content: Rope): CursorPosition =
     if cursor.column > 0 then cursor.moveLeft
     else if cursor.line > 0 then
       val prevLineEnd = findLineEnd(content, cursor.line - 1)
       cursor.copy(line = cursor.line - 1, column = prevLineEnd)
     else cursor
 
-  private def moveCursorRight(cursor: CursorPosition, content: String): CursorPosition =
+  private def moveCursorRight(cursor: CursorPosition, content: Rope): CursorPosition =
     val currentLineEnd = findLineEnd(content, cursor.line)
     if cursor.column < currentLineEnd then cursor.moveRight
     else
