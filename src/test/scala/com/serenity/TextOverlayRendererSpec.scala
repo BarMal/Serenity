@@ -181,6 +181,35 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     renderedRow should not include "etting"
   }
 
+  it should "keep editable command setting columns anchored when the value overflows" in {
+    val surface = new MockRenderSurface(40, 6)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val rowText = "Motion Speed Scale: Scale (0.0-4.0) 12345678901234567890"
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 24, 5),
+      rows = List(
+        OverlayRow(
+          plainText = rowText,
+          selected = true,
+          cursorColumn = Some(rowText.length),
+          segments = List(
+            OverlaySegment("Motion Speed Scale"),
+            OverlaySegment("Scale (0.0-4.0)"),
+            OverlaySegment("12345678901234567890", selected = true)
+          ),
+          layout = OverlayRowLayout.Columns
+        )
+      )
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+
+    val renderedRow = surface.getRow(1)
+    renderedRow should include("Motio")
+    renderedRow should not include "78901234567890"
+  }
+
   it should "render font preview segments with the segment font family" in {
     val surface = new MockRenderSurface(60, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)

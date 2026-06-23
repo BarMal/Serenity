@@ -202,10 +202,14 @@ object TextOverlayRenderer:
   private def scrolledRowView(row: OverlayRow, width: Int): OverlayRowView =
     val useMeasuredCursor = row.cursorColumn.nonEmpty
     val scrollOffset =
-      row.cursorColumn match
-        case Some(cursorColumn) if row.plainText.length > width =>
-          math.max(0, math.min(cursorColumn - width + 1, row.plainText.length - width))
-        case _ =>
+      row.layout match
+        case OverlayRowLayout.Plain | OverlayRowLayout.Split =>
+          row.cursorColumn match
+            case Some(cursorColumn) if row.plainText.length > width =>
+              math.max(0, math.min(cursorColumn - width + 1, row.plainText.length - width))
+            case _ =>
+              0
+        case OverlayRowLayout.Columns | OverlayRowLayout.Distributed =>
           0
 
     if scrollOffset == 0 then OverlayRowView(row, useMeasuredCursor)
