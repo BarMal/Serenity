@@ -21,6 +21,13 @@ import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 object AppRuntime:
 
+  final private[serenity] case class RuntimeFailure(
+      loopName: String,
+      phase: String,
+      diagnostics: String,
+      cause: Throwable
+  ) extends RuntimeException(s"$loopName failed in phase=$phase; $diagnostics", cause)
+
   def run(
     initialViewportSize: ViewportSize,
     makeInputHandler: InputRouter[IO, Event] => InputHandler[IO],
@@ -62,6 +69,26 @@ object AppRuntime:
             fastMode.set(true)
         ).drain
       _ <-
+        def withRuntimeDiagnostics[A](
+          loopName: String,
+          phase: String,
+          stateForDiagnostics: IO[Option[AppState]] = stateManager.getCurrentState.map(Some(_))
+        )(effect: IO[A]): IO[A] =
+          effect.handleErrorWith {
+            case failure: RuntimeFailure =>
+              IO.raiseError(failure)
+            case error =>
+              stateForDiagnostics.attempt.flatMap {
+                case Right(Some(state)) =>
+                  IO.raiseError(RuntimeFailure(loopName, phase, describeStateForDiagnostics(state), error))
+                case Right(None) =>
+                  IO.raiseError(RuntimeFailure(loopName, phase, "state=unavailable", error))
+                case Left(stateError) =>
+                  val reason = Option(stateError.getMessage).getOrElse(stateError.getClass.getSimpleName)
+                  IO.raiseError(RuntimeFailure(loopName, phase, s"state=unavailable reason=$reason", error))
+              }
+          }
+
         def computeCursorForIdle(state: AppState): IO[(Boolean, Option[Color])] =
           state.config.cursorMode match
             case CursorMode.Blink =>
@@ -79,10 +106,18 @@ object AppRuntime:
             .interruptWhen(fastMode.discrete)
             .evalMap { _ =>
               for
-                _                 <- checkResizeAndHandle
-                state             <- stateManager.getCurrentState
-                (visible, cursor) <- computeCursorForIdle(state)
-                _                 <- renderCursorOnly(state, visible, cursor)
+                _     <- withRuntimeDiagnostics("render loop", "idle.resize")(checkResizeAndHandle)
+                state <- withRuntimeDiagnostics("render loop", "idle.state")(stateManager.getCurrentState)
+                (visible, cursor) <- withRuntimeDiagnostics(
+                  "render loop",
+                  "idle.cursor",
+                  IO.pure(Some(state))
+                )(computeCursorForIdle(state))
+                _ <- withRuntimeDiagnostics(
+                  "render loop",
+                  "idle.cursor-render",
+                  IO.pure(Some(state))
+                )(renderCursorOnly(state, visible, cursor))
               yield ()
             }
 
@@ -91,10 +126,17 @@ object AppRuntime:
             .fixedRate[IO](16.millis)
             .evalMap { _ =>
               for
-                _      <- checkResizeAndHandle
-                active <- stateManager.advanceAnimationsOnTick()
-                state  <- stateManager.getCurrentState
-                _      <- renderFull(state, true, None)
+                _ <- withRuntimeDiagnostics("render loop", "fast.resize")(checkResizeAndHandle)
+                active <- withRuntimeDiagnostics(
+                  "render loop",
+                  "fast.animation-tick"
+                )(stateManager.advanceAnimationsOnTick())
+                state <- withRuntimeDiagnostics("render loop", "fast.state")(stateManager.getCurrentState)
+                _ <- withRuntimeDiagnostics(
+                  "render loop",
+                  "fast.full-render",
+                  IO.pure(Some(state))
+                )(renderFull(state, true, None))
               yield active
             }
             .takeWhile(identity)
@@ -117,7 +159,12 @@ object AppRuntime:
           stateManager.awaitQuit >> inputHandler.shutdown
         def supervised(name: String)(effect: IO[Unit]): IO[Unit] =
           effect.handleErrorWith { error =>
-            logger.error(error)(s"[RUNTIME] $name failed; forcing safe shutdown") >>
+            val (phase, diagnostics, loggedError) = error match
+              case RuntimeFailure(_, failedPhase, failureDiagnostics, cause) =>
+                (s" phase=$failedPhase", s"; $failureDiagnostics", cause)
+              case other =>
+                ("", "", other)
+            logger.error(loggedError)(s"[RUNTIME] $name failed$phase$diagnostics; forcing safe shutdown") >>
               stateManager.forceQuit().attempt.void
           }
 
@@ -184,3 +231,35 @@ object AppRuntime:
           char.toInt == 26
         }
       case _ => false
+
+  private[serenity] def describeStateForDiagnostics(state: AppState): String =
+    val viewport   = state.viewportSize.map(size => s"${size.width}x${size.height}").getOrElse("unknown")
+    val activePane = state.layout.activeEditorPaneId
+    val activeBuffer =
+      activePane.flatMap(paneId => state.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.buffers.get))
+    val activeBufferSummary = activeBuffer match
+      case Some(buffer) =>
+        val language = buffer.language.map(_.id).getOrElse("plaintext")
+        val cursor   = buffer.cursors.headOption.map(c => s"${c.line}:${c.column}").getOrElse("none")
+        List(
+          s"activeBuffer=${buffer.id}",
+          s"chars=${buffer.content.weight}",
+          s"lines=${buffer.content.lineCount}",
+          s"dirty=${buffer.isDirty}",
+          s"language=$language",
+          s"cursor=$cursor",
+          s"bufferAnimations=${buffer.animations.hasActiveAnimations}"
+        ).mkString(" ")
+      case None =>
+        "activeBuffer=none"
+    List(
+      s"focus=${state.focus}",
+      s"viewport=$viewport",
+      s"buffers=${state.buffers.size}",
+      s"panes=${state.layout.editorPanes.size}",
+      s"surfaces=${state.uiSurfaces.size}",
+      s"activePane=${activePane.map(_.toString).getOrElse("none")}",
+      activeBufferSummary,
+      s"themeTransition=${state.themeTransition.isDefined}",
+      s"surfaceAnimations=${state.surfaceAnimations.size}"
+    ).mkString(" ")
