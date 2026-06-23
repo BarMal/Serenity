@@ -40,6 +40,7 @@ object UiPreset:
     case Appearance(config: AppConfig, themeName: Option[String] = None)
     case DocumentDefaults(config: AppConfig)
     case Motion(config: AppConfig)
+    case TextDisplay(config: AppConfig)
     case Typography(config: AppConfig)
 
     def applyTo(preset: UiPreset): UiPreset =
@@ -53,6 +54,8 @@ object UiPreset:
           preset.copy(config = patchDocumentDefaultsConfig(preset.config, config))
         case Motion(config) =>
           preset.copy(config = patchMotionConfig(preset.config, config))
+        case TextDisplay(config) =>
+          preset.copy(config = patchTextDisplayConfig(preset.config, config))
         case Typography(config) =>
           preset.copy(config = patchTypographyConfig(preset.config, config))
 
@@ -78,6 +81,15 @@ object UiPreset:
       motionPreset = source.motionPreset,
       elementTransitionSpeedScale = source.elementTransitionSpeedScale,
       editorInsertionTransitionKind = source.editorInsertionTransitionKind
+    )
+
+  private def patchTextDisplayConfig(base: AppConfig, source: AppConfig): AppConfig =
+    base.copy(
+      showLineNumbers = source.showLineNumbers,
+      showGutter = source.showGutter,
+      wordWrapEnabled = source.wordWrapEnabled,
+      textAreaInsets = source.textAreaInsets,
+      viewportSizing = source.viewportSizing
     )
 
   private def patchTypographyConfig(base: AppConfig, source: AppConfig): AppConfig =

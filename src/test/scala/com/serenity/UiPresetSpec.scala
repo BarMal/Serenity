@@ -273,6 +273,43 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     patched.targetEditorPaneCount shouldBe Some(1)
   }
 
+  it should "patch text display fields without replacing preset layout snapshots" in {
+    val panel = UiPreset.PinnedPanel
+      .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)
+      .getOrElse(fail("outline should be capturable"))
+    val preset = UiPreset(
+      name = "Drafting",
+      config = AppConfig.default
+        .withLineNumbers(true)
+        .withGutter(true)
+        .withWordWrap(true),
+      themeName = Theme.dark.name,
+      pinnedPanels = List(panel),
+      targetEditorPaneCount = Some(1)
+    )
+    val sourceConfig = AppConfig.default
+      .withLineNumbers(false)
+      .withGutter(false)
+      .withWordWrap(false)
+      .withTextAreaInsets(TextAreaInsets.fromPercent(20.0, 10.0))
+      .withViewportSizing(
+        ViewportSizing(
+          width = ViewportAxisSizing.fromPercent(80.0, Some(120)),
+          height = ViewportAxisSizing.fromPercent(90.0, Some(40))
+        )
+      )
+
+    val patched = UiPreset.Patch.TextDisplay(sourceConfig).applyTo(preset)
+
+    patched.config.showLineNumbers shouldBe false
+    patched.config.showGutter shouldBe false
+    patched.config.wordWrapEnabled shouldBe false
+    patched.config.textAreaInsets shouldBe TextAreaInsets.fromPercent(20.0, 10.0)
+    patched.config.viewportSizing shouldBe sourceConfig.viewportSizing
+    patched.pinnedPanels shouldBe List(panel)
+    patched.targetEditorPaneCount shouldBe Some(1)
+  }
+
   it should "collapse editor panes when a preset targets one editor pane" in {
     val primaryBufferId   = BufferId(0)
     val secondaryBufferId = BufferId(1)
