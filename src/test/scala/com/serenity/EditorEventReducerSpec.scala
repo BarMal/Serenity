@@ -956,6 +956,54 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     buffer.allSelections shouldBe List(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
   }
 
+  it should "extend a selection horizontally with shift navigation" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("abcd"),
+            cursors = List(CursorPosition(0, 1))
+          )
+      )
+    )
+
+    val firstState  = EditorEventReducer.reduce(ExtendSelectionRight, paneId, initialState).state
+    val secondState = EditorEventReducer.reduce(ExtendSelectionRight, paneId, firstState).state
+    val buffer      = secondState.buffers(bufferId)
+
+    buffer.cursors shouldBe List(CursorPosition(0, 3))
+    buffer.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(0, 3)))
+    buffer.allSelections shouldBe List(Selection(CursorPosition(0, 1), CursorPosition(0, 3)))
+  }
+
+  it should "extend a selection vertically with shift navigation" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("abc\ndef"),
+            cursors = List(CursorPosition(1, 1))
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(ExtendSelectionUp, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.cursors shouldBe List(CursorPosition(0, 1))
+    buffer.selection shouldBe Some(Selection(CursorPosition(1, 1), CursorPosition(0, 1)))
+    buffer.selection.map(_.start) shouldBe Some(CursorPosition(0, 1))
+    buffer.selection.map(_.end) shouldBe Some(CursorPosition(1, 1))
+  }
+
   it should "open the goto-line modal from editor events even when multiple cursors are active" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)
