@@ -103,7 +103,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     overlay.width shouldBe contentRect.width
     overlay.x shouldBe contentRect.x
 
-    surface.getBg(0, 0) shouldBe state.theme.background
+    surface.getBg(0, 0) shouldBe state.theme.highlighted.background
     surface.getBg(overlay.x + 1, overlay.y + 1) shouldBe state.theme.panel.background
     surface.getBg(overlay.x + 1, overlay.y + 2) shouldBe state.theme.highlighted.background
 
