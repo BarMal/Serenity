@@ -15,6 +15,10 @@ enum EditorKeyAction extends KeymapEventAction[TextEntryEvent]:
   case MoveRight
   case MoveUp
   case MoveDown
+  case ExtendSelectionLeft
+  case ExtendSelectionRight
+  case ExtendSelectionUp
+  case ExtendSelectionDown
   case MoveToStart
   case MoveToEnd
   case MoveToStartOfFile
@@ -32,45 +36,55 @@ enum EditorKeyAction extends KeymapEventAction[TextEntryEvent]:
 
   def configKey: String =
     this match
-      case MoveLeft           => "move_left"
-      case MoveRight          => "move_right"
-      case MoveUp             => "move_up"
-      case MoveDown           => "move_down"
-      case MoveToStart        => "move_to_start"
-      case MoveToEnd          => "move_to_end"
-      case MoveToStartOfFile  => "move_to_start_of_file"
-      case MoveToEndOfFile    => "move_to_end_of_file"
-      case PageUp             => "page_up"
-      case PageDown           => "page_down"
-      case DeleteBackward     => "delete_backward"
-      case DeleteForward      => "delete_forward"
-      case DeleteWordBackward => "delete_word_backward"
-      case DeleteWordForward  => "delete_word_forward"
-      case Escape             => "escape"
-      case NewLine            => "new_line"
-      case Tab                => "tab"
-      case ReverseTab         => "reverse_tab"
+      case MoveLeft            => "move_left"
+      case MoveRight           => "move_right"
+      case MoveUp              => "move_up"
+      case MoveDown            => "move_down"
+      case ExtendSelectionLeft => "extend_selection_left"
+      case ExtendSelectionRight =>
+        "extend_selection_right"
+      case ExtendSelectionUp   => "extend_selection_up"
+      case ExtendSelectionDown => "extend_selection_down"
+      case MoveToStart         => "move_to_start"
+      case MoveToEnd           => "move_to_end"
+      case MoveToStartOfFile   => "move_to_start_of_file"
+      case MoveToEndOfFile     => "move_to_end_of_file"
+      case PageUp              => "page_up"
+      case PageDown            => "page_down"
+      case DeleteBackward      => "delete_backward"
+      case DeleteForward       => "delete_forward"
+      case DeleteWordBackward  => "delete_word_backward"
+      case DeleteWordForward   => "delete_word_forward"
+      case Escape              => "escape"
+      case NewLine             => "new_line"
+      case Tab                 => "tab"
+      case ReverseTab          => "reverse_tab"
 
   def event: TextEntryEvent =
     this match
-      case MoveLeft           => com.serenity.keystroke.events.MoveLeft
-      case MoveRight          => com.serenity.keystroke.events.MoveRight
-      case MoveUp             => com.serenity.keystroke.events.MoveUp
-      case MoveDown           => com.serenity.keystroke.events.MoveDown
-      case MoveToStart        => com.serenity.keystroke.events.MoveToStart
-      case MoveToEnd          => com.serenity.keystroke.events.MoveToEnd
-      case MoveToStartOfFile  => com.serenity.keystroke.events.MoveToStartOfFile
-      case MoveToEndOfFile    => com.serenity.keystroke.events.MoveToEndOfFile
-      case PageUp             => com.serenity.keystroke.events.PageUp
-      case PageDown           => com.serenity.keystroke.events.PageDown
-      case DeleteBackward     => com.serenity.keystroke.events.DeleteBackward
-      case DeleteForward      => com.serenity.keystroke.events.DeleteForward
-      case DeleteWordBackward => com.serenity.keystroke.events.DeleteWordBackward
-      case DeleteWordForward  => com.serenity.keystroke.events.DeleteWordForward
-      case Escape             => com.serenity.keystroke.events.Escape
-      case NewLine            => com.serenity.keystroke.events.NewLine
-      case Tab                => com.serenity.keystroke.events.TabKey
-      case ReverseTab         => com.serenity.keystroke.events.ReverseTabKey
+      case MoveLeft            => com.serenity.keystroke.events.MoveLeft
+      case MoveRight           => com.serenity.keystroke.events.MoveRight
+      case MoveUp              => com.serenity.keystroke.events.MoveUp
+      case MoveDown            => com.serenity.keystroke.events.MoveDown
+      case ExtendSelectionLeft => com.serenity.keystroke.events.ExtendSelectionLeft
+      case ExtendSelectionRight =>
+        com.serenity.keystroke.events.ExtendSelectionRight
+      case ExtendSelectionUp   => com.serenity.keystroke.events.ExtendSelectionUp
+      case ExtendSelectionDown => com.serenity.keystroke.events.ExtendSelectionDown
+      case MoveToStart         => com.serenity.keystroke.events.MoveToStart
+      case MoveToEnd           => com.serenity.keystroke.events.MoveToEnd
+      case MoveToStartOfFile   => com.serenity.keystroke.events.MoveToStartOfFile
+      case MoveToEndOfFile     => com.serenity.keystroke.events.MoveToEndOfFile
+      case PageUp              => com.serenity.keystroke.events.PageUp
+      case PageDown            => com.serenity.keystroke.events.PageDown
+      case DeleteBackward      => com.serenity.keystroke.events.DeleteBackward
+      case DeleteForward       => com.serenity.keystroke.events.DeleteForward
+      case DeleteWordBackward  => com.serenity.keystroke.events.DeleteWordBackward
+      case DeleteWordForward   => com.serenity.keystroke.events.DeleteWordForward
+      case Escape              => com.serenity.keystroke.events.Escape
+      case NewLine             => com.serenity.keystroke.events.NewLine
+      case Tab                 => com.serenity.keystroke.events.TabKey
+      case ReverseTab          => com.serenity.keystroke.events.ReverseTabKey
 
 enum CommandRunnerKeyAction extends KeymapEventAction[CommandRunnerEvent]:
   case NavigateUp
@@ -233,10 +247,38 @@ case class EditorKeymapConfig(
 object EditorKeymapConfig:
 
   val defaultBindings: Map[EditorKeyAction, List[HotkeyTrigger]] = Map(
-    EditorKeyAction.MoveLeft    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
-    EditorKeyAction.MoveRight   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set.empty)),
-    EditorKeyAction.MoveUp      -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
-    EditorKeyAction.MoveDown    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),
+    EditorKeyAction.MoveLeft  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
+    EditorKeyAction.MoveRight -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set.empty)),
+    EditorKeyAction.MoveUp    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
+    EditorKeyAction.MoveDown  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),
+    EditorKeyAction.ExtendSelectionLeft -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.ArrowLeft,
+        None,
+        Set(com.serenity.keystroke.Modifier.Shift)
+      )
+    ),
+    EditorKeyAction.ExtendSelectionRight -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.ArrowRight,
+        None,
+        Set(com.serenity.keystroke.Modifier.Shift)
+      )
+    ),
+    EditorKeyAction.ExtendSelectionUp -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.ArrowUp,
+        None,
+        Set(com.serenity.keystroke.Modifier.Shift)
+      )
+    ),
+    EditorKeyAction.ExtendSelectionDown -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.ArrowDown,
+        None,
+        Set(com.serenity.keystroke.Modifier.Shift)
+      )
+    ),
     EditorKeyAction.MoveToStart -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Home, None, Set.empty)),
     EditorKeyAction.MoveToEnd   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.End, None, Set.empty)),
     EditorKeyAction.MoveToStartOfFile -> List(
