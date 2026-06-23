@@ -150,6 +150,33 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     snapshot.visualLines.map(_.text) shouldBe Vector("beta ", "gamma")
   }
 
+  it should "bound wrapped line shaping to the requested visible rows" in {
+    val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val metrics = CellMetrics.fromFont(font)
+
+    val lines = TextLayoutSnapshot.boundedVisualLinesForText(
+      text = "abcdefghijkl",
+      bufferLine = 0,
+      panelWidthPx = metrics.charWidth * 3,
+      font = font,
+      maxVisualLines = 2
+    )
+
+    lines.map(_.text) shouldBe Vector("abc", "def")
+  }
+
+  it should "shape only visible wrapped rows from a large logical line" in {
+    val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val metrics = CellMetrics.fromFont(font)
+    val buffer = Buffer
+      .fromString(BufferId(15), "abcdefghijklmnopqrstuvwxyz" * 100)
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 3, visibleLines = 2))
+
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 3, font)
+
+    snapshot.visualLines.map(_.text) shouldBe Vector("abc", "def")
+  }
+
   it should "track caret stops for every logical column in a visual segment" in {
     val buffer = Buffer
       .fromString(BufferId(2), "office")
