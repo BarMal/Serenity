@@ -118,8 +118,6 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
 
   private def dismiss(state: AppState, surface: UiSurface): AppState =
     val withoutLens = state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id))
-    withoutLens.layout.activeEditorPaneId match
-      case Some(paneId) => withoutLens.copy(focus = Focus.EditorPane(paneId))
-      case None         => withoutLens.popFocus
+    withoutLens.popFocus
 
 end CommentLensComponent

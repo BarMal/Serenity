@@ -1084,8 +1084,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       )
 
   private def dismissCommentLens(state: AppState): AppState =
-    val nextFocus = state.layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(state.focus)
-    state.copy(uiSurfaces = state.uiSurfaces.filterNot(isCommentLensSurface), focus = nextFocus)
+    state.copy(uiSurfaces = state.uiSurfaces.filterNot(isCommentLensSurface)).popFocus
 
   private def isCommentLensSurface(surface: UiSurface): Boolean =
     surface.content match

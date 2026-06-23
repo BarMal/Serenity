@@ -188,6 +188,33 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "collapse document comments to a point marker when their full range is deleted" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val comment  = DocumentComment(CursorPosition(0, 4), CursorPosition(0, 7), "note")
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("abc def ghi"),
+            cursors = List(CursorPosition(0, 7)),
+            selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 7))),
+            documentComments = List(comment)
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(DeleteBackward, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.collect() shouldBe "abc  ghi"
+    buffer.documentComments shouldBe List(
+      DocumentComment(CursorPosition(0, 4), CursorPosition(0, 4), "note")
+    )
+  }
+
   it should "move document comments when a selected line is indented" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)
