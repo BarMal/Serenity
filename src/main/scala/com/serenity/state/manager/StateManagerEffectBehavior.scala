@@ -230,7 +230,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   protected def updateSpellCheckConfig(
     update: com.serenity.config.SpellCheckConfig => com.serenity.config.SpellCheckConfig
   ): IO[Unit] =
-    updateConfig(config => config.withSpellCheck(update(config.spellCheck))).void >>
+    updateConfigWithEditedPresetPersistence(
+      config => config.withSpellCheck(update(config.spellCheck)),
+      config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.LanguageTools(config))
+    ).void >>
       stateRef.update(SpellChecker.refreshDiagnostics)
 
   protected def clampFontSize(size: Float): Float =
