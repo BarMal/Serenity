@@ -194,10 +194,10 @@ object TextLayoutSnapshot:
     wordWrapEnabled: Boolean
   ): Vector[TextVisualLine] =
     @annotation.tailrec
-    def loop(lineIndex: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
-      if lineIndex >= totalLines || acc.length >= visualLineLimit then acc
+    def loop(lines: Vector[(Int, String)], acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
+      if lines.isEmpty || acc.length >= visualLineLimit then acc
       else
-        val rawLine = buffer.content.getLine(lineIndex).getOrElse("")
+        val (lineIndex, rawLine) = lines.head
         val startColumn =
           if buffer.viewport.topVisualLine > 0 then 0
           else math.min(buffer.viewport.leftColumn, rawLine.length)
@@ -231,9 +231,10 @@ object TextLayoutSnapshot:
               )
             )
         val aligned = applyParagraphAlignment(wrapped, lineIndex, panelWidthPx, richDocument)
-        loop(lineIndex + 1, acc ++ aligned)
+        loop(lines.tail, acc ++ aligned)
 
-    loop(buffer.viewport.topLine, Vector.empty)
+    val maxLogicalLines = math.min(math.max(0, totalLines - buffer.viewport.topLine), math.max(1, visualLineLimit))
+    loop(buffer.content.linesIteratorFrom(buffer.viewport.topLine).take(maxLogicalLines).toVector, Vector.empty)
 
   private def unwrappedVisibleSlice(rawLine: String, startColumn: Int, visibleColumns: Int): String =
     val visibleEndColumn = startColumn + math.max(1, visibleColumns) + UnwrappedOverscanColumns

@@ -106,6 +106,12 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       lineReads.incrementAndGet()
       delegate.getLine(lineIndex)
 
+    override def linesIteratorFrom(lineIndex: Int): Iterator[(Int, String)] =
+      delegate.linesIteratorFrom(lineIndex).map { line =>
+        lineReads.incrementAndGet()
+        line
+      }
+
     override def lineColumnToOffset(line: Int, column: Int): Int =
       delegate.lineColumnToOffset(line, column)
 

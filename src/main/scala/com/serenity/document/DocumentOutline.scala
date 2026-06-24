@@ -39,9 +39,7 @@ object DocumentOutline:
 
   private def richTextMatchesBuffer(document: RichTextDocument, buffer: Buffer): Boolean =
     document.paragraphs.length == buffer.content.lineCount &&
-      document.paragraphs.zipWithIndex.forall { (paragraph, line) =>
-        buffer.content.getLine(line).contains(paragraph.plainText)
-      }
+      document.paragraphs.map(_.plainText).toVector == buffer.content.linesFrom(0, document.paragraphs.length)
 
   private def markdownHeadings(buffer: Buffer): List[Symbol] =
     bufferLines(buffer).collect {
@@ -81,4 +79,4 @@ object DocumentOutline:
     else title.take(MaxPlainTextSectionNameLength - 3) + "..."
 
   private def bufferLines(buffer: Buffer): Iterator[(String, Int)] =
-    (0 until buffer.content.lineCount).iterator.flatMap(line => buffer.content.getLine(line).map(_ -> line))
+    buffer.content.linesIteratorFrom(0).map { case (line, text) => text -> line }
