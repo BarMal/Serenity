@@ -16,6 +16,10 @@ object TextNavigationConverters:
       ExtendSelectionUp
     case KeyStrokeInfo(InputKey.ArrowDown, _, modifiers) if modifiers.contains(Modifier.Shift) =>
       ExtendSelectionDown
+    case KeyStrokeInfo(InputKey.ArrowLeft, _, modifiers) if modifiers.contains(Modifier.Ctrl) =>
+      MoveWordLeft
+    case KeyStrokeInfo(InputKey.ArrowRight, _, modifiers) if modifiers.contains(Modifier.Ctrl) =>
+      MoveWordRight
     case KeyStrokeInfo(InputKey.ArrowLeft, _, _)  => MoveLeft
     case KeyStrokeInfo(InputKey.ArrowRight, _, _) => MoveRight
     case KeyStrokeInfo(InputKey.ArrowUp, _, _)    => MoveUp
