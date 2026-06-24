@@ -227,6 +227,25 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     snapshot.cursorForVisualRowAndXPx(0, expectedOffset) shouldBe Some(CursorPosition(0, 0))
   }
 
+  it should "skip rich text alignment when the metadata shape no longer matches the buffer" in {
+    val document = RichTextDocument(
+      List(RichTextParagraph.plain("abcd", alignment = ParagraphAlignment.Center))
+    )
+    val buffer = Buffer
+      .fromString(BufferId(16), "abcd\nefgh")
+      .copy(
+        richTextDocument = Some(document),
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2)
+      )
+    val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val metrics = CellMetrics.fromFont(font)
+
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 10, font)
+
+    snapshot.richTextDocument shouldBe None
+    snapshot.visualLines.head.xOffsetPx shouldBe 0.0f
+  }
+
   it should "offset right-aligned rich text caret stops within the panel width" in {
     val document = RichTextDocument(
       List(RichTextParagraph.plain("abcd", alignment = ParagraphAlignment.Right))

@@ -149,3 +149,15 @@ class AnimatedCellSpec extends AnyFlatSpec with Matchers:
     val cell = AnimatedCell.createFadeAnimation('a', black, white, durationMs = 0)
     cell.isComplete should be(true)
   }
+
+  "AnimatedCell.parametricForeground" should "advance delayed colour interpolation without storing step lists" in {
+    val cell = AnimatedCell.parametricForeground('a', black, white, steps = 3, delayFrames = 2)
+
+    cell.foregroundSteps shouldBe empty
+    cell.currentForeground shouldBe Some(black)
+    cell.advance().currentForeground shouldBe Some(black)
+    cell.advance().advance().currentForeground shouldBe Some(black)
+    cell.advance().advance().advance().currentForeground shouldBe Some(new Color(128, 128, 128))
+    cell.advance().advance().advance().advance().currentForeground shouldBe Some(white)
+    cell.advance().advance().advance().advance().advance().isComplete shouldBe true
+  }

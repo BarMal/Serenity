@@ -34,7 +34,11 @@ object FlowAnimationBuilder:
           case (FlowDirection.ByRow, SweepDirection.Forward)     => key.line - minRow
           case (FlowDirection.ByRow, SweepDirection.Backward)    => maxRow - key.line
 
-        val fade    = RgbInterpolator.interpolateRgba(cell.startColor, cell.endColor, steps)
-        val padding = List.fill(delayFrames.max(0) + offset * staggerFrames.max(0))(cell.startColor)
-        key -> AnimatedCell(content = Some(cell.char), foregroundSteps = padding ++ fade, backgroundSteps = List.empty)
+        key -> AnimatedCell.parametricForeground(
+          char = cell.char,
+          startColor = cell.startColor,
+          endColor = cell.endColor,
+          steps = steps,
+          delayFrames = delayFrames.max(0) + offset * staggerFrames.max(0)
+        )
       }

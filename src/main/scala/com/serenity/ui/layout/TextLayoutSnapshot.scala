@@ -154,11 +154,11 @@ object TextLayoutSnapshot:
       math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getHeight.toDouble).toInt)
     val ascentPx =
       math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getAscent.toDouble).toInt)
+    val totalLines = buffer.content.lineCount
     val richDocument =
-      buffer.richTextDocument.filter(_.matchesPlainText(buffer.content.collect()))
+      buffer.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.content.weight))
     val viewportTopVisualLine = if wordWrapEnabled then buffer.viewport.topVisualLine else 0
     val visualLineLimit       = viewportTopVisualLine + buffer.viewport.visibleLines
-    val totalLines            = buffer.content.lineCount
     val visualLines =
       collectVisualLines(
         buffer,

@@ -2,18 +2,46 @@ package com.serenity.animation
 
 import java.awt.Color
 
+case class ColorTimeline(
+    startColor: Color,
+    endColor: Color,
+    steps: Int,
+    delayFrames: Int = 0,
+    currentFrame: Int = 0
+):
+
+  def currentColor: Option[Color] =
+    if steps <= 0 then None
+    else if currentFrame < delayFrames.max(0) then Some(startColor)
+    else RgbInterpolator.interpolateRgbaAt(startColor, endColor, steps, currentFrame - delayFrames.max(0))
+
+  def advance: ColorTimeline =
+    copy(currentFrame = currentFrame + 1)
+
+  def isComplete: Boolean =
+    steps <= 0 || currentFrame >= delayFrames.max(0) + steps
+
 case class AnimatedCell(
     content: Option[Char],
     foregroundSteps: List[Color],
     backgroundSteps: List[Color],
-    cycling: Boolean = false
+    cycling: Boolean = false,
+    foregroundAnimation: Option[ColorTimeline] = None,
+    backgroundAnimation: Option[ColorTimeline] = None
 ):
 
-  def currentForeground: Option[Color] = foregroundSteps.headOption
-  def currentBackground: Option[Color] = backgroundSteps.headOption
+  def currentForeground: Option[Color] =
+    foregroundAnimation.flatMap(_.currentColor).orElse(foregroundSteps.headOption)
+
+  def currentBackground: Option[Color] =
+    backgroundAnimation.flatMap(_.currentColor).orElse(backgroundSteps.headOption)
 
   def isComplete: Boolean =
-    !cycling && foregroundSteps.isEmpty && backgroundSteps.isEmpty
+    !cycling &&
+      foregroundSteps.isEmpty &&
+      backgroundSteps.isEmpty &&
+      foregroundAnimation.forall(_.isComplete) &&
+      backgroundAnimation.forall(_.isComplete)
 
   def advance(): AnimatedCell =
     if cycling then
@@ -24,11 +52,18 @@ case class AnimatedCell(
     else
       copy(
         foregroundSteps = if foregroundSteps.isEmpty then List.empty else foregroundSteps.tail,
-        backgroundSteps = if backgroundSteps.isEmpty then List.empty else backgroundSteps.tail
+        backgroundSteps = if backgroundSteps.isEmpty then List.empty else backgroundSteps.tail,
+        foregroundAnimation = foregroundAnimation.map(_.advance),
+        backgroundAnimation = backgroundAnimation.map(_.advance)
       )
 
   def complete(): AnimatedCell =
-    copy(foregroundSteps = List.empty, backgroundSteps = List.empty)
+    copy(
+      foregroundSteps = List.empty,
+      backgroundSteps = List.empty,
+      foregroundAnimation = None,
+      backgroundAnimation = None
+    )
 
 object AnimatedCell:
 
@@ -62,6 +97,22 @@ object AnimatedCell:
       content = Some(char),
       foregroundSteps = List(color),
       backgroundSteps = List.empty
+    )
+
+  def parametricForeground(
+    char: Char,
+    startColor: Color,
+    endColor: Color,
+    steps: Int,
+    delayFrames: Int = 0
+  ): AnimatedCell =
+    AnimatedCell(
+      content = Some(char),
+      foregroundSteps = List.empty,
+      backgroundSteps = List.empty,
+      foregroundAnimation = Option.when(steps > 0)(
+        ColorTimeline(startColor, endColor, steps, delayFrames.max(0))
+      )
     )
 
   def createFadeAnimation(

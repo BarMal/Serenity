@@ -228,7 +228,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     lineReads.get() shouldBe buffer.viewport.visibleLines
   }
 
-  it should "validate rich text content once while rendering visible styled lines" in {
+  it should "render rich text visible lines without materialising the whole rope" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val collects = AtomicInteger(0)
@@ -252,7 +252,35 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
 
-    collects.get() shouldBe 1
+    collects.get() shouldBe 0
+  }
+
+  it should "reject structurally stale rich text metadata without materialising the whole rope" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val collects = AtomicInteger(0)
+    val document = RichTextDocument(List(RichTextParagraph.plain("paragraph-1")))
+    val content  = CountingAccessRope(Rope("paragraph-1\nparagraph-2"), collects = collects)
+    val buffer = Buffer(bufferId, content).copy(
+      richTextDocument = Some(document),
+      viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+    )
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
+
+    collects.get() shouldBe 0
+    surface.drawRunPxCalls.map(_.s) should contain("paragraph-1")
   }
 
   it should "share markdown lens source lines between content and cursor rendering" in {
