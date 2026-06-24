@@ -125,6 +125,39 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     bufferAnimsAfter shouldBe bufferAnimsBefore
   }
 
+  it should "not copy inactive buffers while advancing another buffer animation" in {
+    val sm               = makeStateManager()
+    val inactiveBufferId = sm.createBuffer("inactive").unsafeRunSync()
+    val activeBufferId   = sm.createBuffer("active").unsafeRunSync()
+
+    sm.updateState { state =>
+      val activeBuffer = state
+        .buffers(activeBufferId)
+        .copy(
+          animations = com.serenity.animation.AnimationState.empty.addCharacterAnimation(
+            'a',
+            0,
+            0,
+            Color.BLACK,
+            Color.WHITE,
+            5
+          )
+        )
+
+      state.copy(buffers = state.buffers + (activeBufferId -> activeBuffer))
+    }.unsafeRunSync()
+
+    val before         = sm.getCurrentState.unsafeRunSync()
+    val inactiveBefore = before.buffers(inactiveBufferId)
+
+    sm.advanceAnimationsOnTick().unsafeRunSync()
+
+    val after         = sm.getCurrentState.unsafeRunSync()
+    val inactiveAfter = after.buffers(inactiveBufferId)
+
+    inactiveAfter should be theSameInstanceAs inactiveBefore
+  }
+
   it should "scale pane flow animations with the global animation speed" in {
     val sm = makeStateManager()
     sm.updateState { state =>

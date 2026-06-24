@@ -26,7 +26,9 @@ private[manager] trait StateManagerEditorFacadeBehavior extends StateManagerEven
     for
       state <- stateRef.get
       updatedBuffers = state.buffers.view.mapValues { buffer =>
-        buffer.copy(animations = buffer.animations.advanceAnimations())
+        val updatedAnimations = buffer.animations.advanceAnimations()
+        if updatedAnimations eq buffer.animations then buffer
+        else buffer.copy(animations = updatedAnimations)
       }.toMap
       _ <- stateRef.set(state.copy(buffers = updatedBuffers))
     yield ()
@@ -39,7 +41,9 @@ private[manager] trait StateManagerEditorFacadeBehavior extends StateManagerEven
       if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations then IO.pure(false)
       else
         val updatedBuffers = state.buffers.view.mapValues { buffer =>
-          buffer.copy(animations = buffer.animations.advanceAllAnimations())
+          val updatedAnimations = buffer.animations.advanceAllAnimations()
+          if updatedAnimations eq buffer.animations then buffer
+          else buffer.copy(animations = updatedAnimations)
         }.toMap
         val updatedTransition        = state.themeTransition.map(_.advance).filterNot(_.isComplete)
         val stateWithAdvancedBuffers = state.copy(buffers = updatedBuffers, themeTransition = updatedTransition)

@@ -29,27 +29,36 @@ case class AnimationState(
 
   /** Merge a pre-built map of cells into this state, overwriting any existing entries */
   def mergeAnimations(incoming: Map[CharacterKey, AnimatedCell]): AnimationState =
-    copy(animations = animations ++ incoming)
+    if incoming.isEmpty then this
+    else copy(animations = animations ++ incoming)
 
   /** Advance all animations by one step */
   def advanceAnimations(): AnimationState =
-    copy(animations = animations.view.mapValues(_.advance()).toMap)
+    if !hasActiveAnimations then this
+    else copy(animations = animations.view.mapValues(cell => if cell.isComplete then cell else cell.advance()).toMap)
 
   /** Advance all animations and automatically clean up completed ones */
   def advanceAllAnimations(): AnimationState =
-    advanceAnimations().cleanupCompleted()
+    if !hasActiveAnimations then cleanupCompleted()
+    else advanceAnimations().cleanupCompleted()
 
   /** Mark all animations as completed (snap to end state) */
   def onThemeChange(): AnimationState =
-    copy(animations = animations.view.mapValues(_.complete()).toMap)
+    if animations.isEmpty then this
+    else copy(animations = animations.view.mapValues(_.complete()).toMap)
 
   /** Remove all completed animations from state */
   def cleanupCompleted(): AnimationState =
-    copy(animations = animations.filter((_, cell) => !cell.isComplete))
+    if animations.isEmpty then this
+    else
+      val activeAnimations = animations.filter((_, cell) => !cell.isComplete)
+      if activeAnimations.size == animations.size then this
+      else if activeAnimations.isEmpty then AnimationState.empty
+      else copy(animations = activeAnimations)
 
   /** Clear all animations */
   def clearAll(): AnimationState =
-    copy(animations = Map.empty)
+    if animations.isEmpty then this else AnimationState.empty
 
   /** Get the animated cell at the given buffer position, if any */
   def getCell(x: Int, y: Int): Option[AnimatedCell] =

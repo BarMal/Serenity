@@ -859,7 +859,9 @@ object EditorEventReducer:
     getLine(content, line).fold(0)(_.length)
 
   private def findLineEnd(content: Rope, line: Int): Int =
-    content.getLine(line).fold(0)(_.length)
+    val lineStart = content.lineColumnToOffset(line, 0)
+    val lineEnd   = content.lineColumnToOffset(line, Int.MaxValue)
+    lineEnd - lineStart
 
   private def countLines(rope: Rope): Int =
     rope.lineCount
@@ -1474,12 +1476,11 @@ object EditorEventReducer:
     else cursor
 
   private def moveCursorRight(cursor: CursorPosition, content: Rope): CursorPosition =
-    val currentLineEnd = findLineEnd(content, cursor.line)
-    if cursor.column < currentLineEnd then cursor.moveRight
-    else
-      val totalLines = countLines(content)
-      if cursor.line < totalLines - 1 then cursor.copy(line = cursor.line + 1, column = 0)
-      else cursor
+    val offset = content.lineColumnToOffset(cursor.line, cursor.column)
+    content.index(offset) match
+      case Some('\n') => cursor.copy(line = cursor.line + 1, column = 0)
+      case Some(_)    => cursor.moveRight
+      case None       => cursor
 
   private def moveMultiCursorVertical(
     cursor: CursorPosition,
