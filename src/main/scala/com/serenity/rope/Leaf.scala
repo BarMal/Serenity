@@ -6,6 +6,8 @@ case class Leaf(value: String)(using balance: Balance) extends Rope:
   override def weight: Int               = value.length
   override def height: Int               = 1
   override val newlineCount: Int         = value.count(_ == '\n')
+  override val lastLineLength: Int       = value.length - value.lastIndexOf('\n') - 1
+  override val endsWithNewline: Boolean  = value.endsWith("\n")
   override def isWeightBalanced: Boolean = true
   override def isHeightBalanced: Boolean = true
   override def rebalance: Rope =

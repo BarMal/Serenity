@@ -30,6 +30,12 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     override def newlineCount: Int =
       delegate.newlineCount
 
+    override def lastLineLength: Int =
+      delegate.lastLineLength
+
+    override def endsWithNewline: Boolean =
+      delegate.endsWithNewline
+
     override def isWeightBalanced: Boolean =
       delegate.isWeightBalanced
 

@@ -6,6 +6,14 @@ case class Node(left: Rope, right: Rope)(using balance: Balance) extends Rope:
   override val height: Int       = Math.max(left.height, right.height) + 1
   override val newlineCount: Int = left.newlineCount + right.newlineCount
 
+  override val lastLineLength: Int =
+    if right.weight == 0 then left.lastLineLength
+    else if right.newlineCount == 0 && !left.endsWithNewline then left.lastLineLength + right.lastLineLength
+    else right.lastLineLength
+
+  override val endsWithNewline: Boolean =
+    if right.weight == 0 then left.endsWithNewline else right.endsWithNewline
+
   override def isWeightBalanced: Boolean =
     Math.abs(left.weight - right.weight) <= balance.weightBalance
 
