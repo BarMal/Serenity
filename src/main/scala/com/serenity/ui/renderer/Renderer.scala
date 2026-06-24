@@ -37,6 +37,16 @@ case class RenderContext(
 
 object Renderer:
 
+  private case class EditorPaneRenderPlan(
+      paneLayouts: Map[PaneId, LayoutRect],
+      snapshots: Map[PaneId, TextLayoutSnapshot]
+  )
+
+  private case class MarkdownLensFrame(
+      lines: Vector[String],
+      previewWindow: MarkdownDocumentPreview.PreviewWindow
+  )
+
   private def withEffectiveTheme(state: AppState): AppState =
     state.themeTransition match
       case None => state
@@ -171,19 +181,53 @@ object Renderer:
       case None =>
         val context =
           RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
+        val editorRenderPlan = prepareEditorPaneRenderPlan(state, context)
         renderSpacerColumns(context)
-        renderLineNumbers(state, context)
+        renderLineNumbers(state, context, editorRenderPlan)
         renderGutter(state, context)
         renderPinnedPanels(state, context)
-        renderEditorPanes(state, context)
+        renderEditorPanes(state, context, editorRenderPlan)
         renderFloatingPanels(state, context)
 
     surface.flush()
 
   private def renderSpacerColumns(context: RenderContext): Unit = ()
 
-  private def renderEditorPanes(state: AppState, context: RenderContext): Unit =
-    val paneLayouts  = LayoutEngine.calculatePaneLayouts(state, context.layout)
+  private def prepareEditorPaneRenderPlan(state: AppState, context: RenderContext): EditorPaneRenderPlan =
+    val paneLayouts = LayoutEngine.calculatePaneLayouts(state, context.layout)
+    val snapshots =
+      state.layout.editorPanes.flatMap {
+        case (paneId, pane) =>
+          for
+            paneRect <- paneLayouts.get(paneId)
+            bufferId <- pane.bufferId
+            buffer   <- state.buffers.get(bufferId)
+          yield paneId -> snapshotForBuffer(buffer, editorContentRect(paneRect), state, context)
+      }
+
+    EditorPaneRenderPlan(paneLayouts, snapshots)
+
+  private def snapshotForBuffer(
+    buffer: Buffer,
+    contentRect: LayoutRect,
+    state: AppState,
+    context: RenderContext
+  ): TextLayoutSnapshot =
+    val bufferFont   = context.fontForBuffer(buffer)
+    val panelWidthPx = contentRect.width * context.cellMetrics.charWidth
+    context.surface.setFont(bufferFont)
+    TextLayoutSnapshot.fromBuffer(
+      buffer,
+      panelWidthPx,
+      bufferFont,
+      context.surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext()),
+      wordWrapEnabled = state.config.wordWrapEnabled
+    )
+
+  private def editorContentRect(rect: LayoutRect): LayoutRect =
+    LayoutRect(rect.x, rect.y + 1, rect.width, math.max(1, rect.height - 1))
+
+  private def renderEditorPanes(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
     val activePaneId = state.layout.activeEditorPaneId
     val orderedPanes =
       state.layout.orderedPaneIds
@@ -191,8 +235,8 @@ object Renderer:
         .sortBy((paneId, _) => if activePaneId.contains(paneId) then 1 else 0)
 
     orderedPanes.foreach { (paneId, pane) =>
-      paneLayouts.get(paneId) match
-        case Some(paneRect) => renderEditorPane(pane, paneRect, state, context)
+      renderPlan.paneLayouts.get(paneId) match
+        case Some(paneRect) => renderEditorPane(pane, paneRect, state, context, renderPlan.snapshots.get(paneId))
         case None           => ()
     }
 
@@ -200,27 +244,20 @@ object Renderer:
     pane: EditorPane,
     rect: LayoutRect,
     state: AppState,
-    context: RenderContext
+    context: RenderContext,
+    preparedSnapshot: Option[TextLayoutSnapshot]
   ): Unit =
     val buffer = pane.bufferId.flatMap(state.buffers.get)
 
     renderBufferHeader(pane, buffer, rect, state, context)
 
-    val contentRect = LayoutRect(rect.x, rect.y + 1, rect.width, math.max(1, rect.height - 1))
+    val contentRect = editorContentRect(rect)
 
-    // Compute snapshot once so renderBufferContent and renderCursors share the same layout.
-    val bufferSnapshot = buffer.map { buf =>
-      val bufferFont   = context.fontForBuffer(buf)
-      val panelWidthPx = contentRect.width * context.cellMetrics.charWidth
-      context.surface.setFont(bufferFont)
-      TextLayoutSnapshot.fromBuffer(
-        buf,
-        panelWidthPx,
-        bufferFont,
-        context.surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext()),
-        wordWrapEnabled = state.config.wordWrapEnabled
-      )
-    }
+    val bufferSnapshot = preparedSnapshot.orElse(buffer.map(snapshotForBuffer(_, contentRect, state, context)))
+    val markdownLensFrame =
+      buffer.collect {
+        case buf if isInlineMarkdownLens(buf, state) => markdownLensFrameFor(buf)
+      }
 
     buffer match
       case Some(buf) if buf.content.weight == 0 && buf.isNewEmpty =>
@@ -228,7 +265,7 @@ object Renderer:
       case Some(buf) if buf.content.weight == 0 =>
         renderEmptyPane(contentRect, state.theme, context)
       case Some(buf) =>
-        renderBufferContent(buf, contentRect, state, context, bufferSnapshot.get)
+        renderBufferContent(buf, contentRect, state, context, bufferSnapshot.get, markdownLensFrame)
       case None =>
         renderEmptyPane(contentRect, state.theme, context)
 
@@ -237,7 +274,15 @@ object Renderer:
       else context
     buffer.foreach { buf =>
       if isInlineMarkdownLens(buf, state) then
-        renderMarkdownLensCursors(buf, contentRect, state.theme, state.config, cursorContext, bufferSnapshot.get)
+        renderMarkdownLensCursors(
+          buf,
+          contentRect,
+          state.theme,
+          state.config,
+          cursorContext,
+          bufferSnapshot.get,
+          markdownLensFrame.getOrElse(markdownLensFrameFor(buf))
+        )
       else renderCursors(buf, contentRect, state.theme, state.config, cursorContext, bufferSnapshot.get)
     }
 
@@ -305,13 +350,14 @@ object Renderer:
     rect: LayoutRect,
     state: AppState,
     context: RenderContext,
-    snapshot: TextLayoutSnapshot
+    snapshot: TextLayoutSnapshot,
+    markdownLensFrame: Option[MarkdownLensFrame]
   ): Unit =
+    context.surface.setFont(context.fontForBuffer(buffer))
     if isInlineMarkdownLens(buffer, state) then
-      val markdownLines = markdownSourceLines(buffer)
-      val previewWindow = markdownPreviewWindow(buffer, markdownLines)
-      renderInlineMarkdownPreview(buffer, rect, state, context, previewWindow)
-      renderMarkdownRawLenses(buffer, rect, state, context, snapshot, markdownLines, previewWindow)
+      val frame = markdownLensFrame.getOrElse(markdownLensFrameFor(buffer))
+      renderInlineMarkdownPreview(buffer, rect, state, context, frame.previewWindow)
+      renderMarkdownRawLenses(buffer, rect, state, context, snapshot, frame)
     else renderPlainBufferContent(buffer, rect, state, context, snapshot)
 
   private def renderPlainBufferContent(
@@ -340,7 +386,7 @@ object Renderer:
               screenX < rect.right
           then
             val lineTheme      = state.theme
-            val styledSegments = richTextStyledSegments(buffer, visualLine, lineTheme)
+            val styledSegments = richTextStyledSegments(visualLine, lineTheme, snapshot)
             if snapshot.usesMeasuredLayout then
               CharacterRenderer.renderMeasuredLineWithAnimation(
                 context.surface,
@@ -410,22 +456,19 @@ object Renderer:
     else math.round(visualLine.xOffsetPx / context.cellMetrics.charWidth.toFloat).max(0)
 
   private def richTextStyledSegments(
-    buffer: Buffer,
     visualLine: TextVisualLine,
-    theme: Theme
+    theme: Theme,
+    snapshot: TextLayoutSnapshot
   ): Option[List[StyledText]] =
-    buffer.richTextDocument
-      .map(document => document -> buffer.content.collect())
-      .filter { case (document, text) => document.matchesPlainText(text) }
-      .map {
-        case (document, _) =>
-          RichTextStyling.styledLine(
-            document,
-            visualLine.bufferLine,
-            visualLine.startColumn,
-            visualLine.endColumn,
-            theme
-          )
+    snapshot.richTextDocument
+      .map { document =>
+        RichTextStyling.styledLine(
+          document,
+          visualLine.bufferLine,
+          visualLine.startColumn,
+          visualLine.endColumn,
+          theme
+        )
       }
       .filter(segments => segments.map(_.content).mkString == visualLine.text)
 
@@ -615,6 +658,10 @@ object Renderer:
   private def markdownSourceLines(buffer: Buffer): Vector[String] =
     (0 until buffer.content.lineCount).toVector.map(line => buffer.content.getLine(line).getOrElse(""))
 
+  private def markdownLensFrameFor(buffer: Buffer): MarkdownLensFrame =
+    val lines = markdownSourceLines(buffer)
+    MarkdownLensFrame(lines, markdownPreviewWindow(buffer, lines))
+
   private def markdownPreviewWindow(
     buffer: Buffer,
     lines: Vector[String]
@@ -640,9 +687,10 @@ object Renderer:
     state: AppState,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
-    lines: Vector[String],
-    previewWindow: MarkdownDocumentPreview.PreviewWindow
+    frame: MarkdownLensFrame
   ): Unit =
+    val lines         = frame.lines
+    val previewWindow = frame.previewWindow
     activeMarkdownBlockRanges(lines, buffer.cursors).foreach { blockRange =>
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
@@ -709,10 +757,11 @@ object Renderer:
     theme: Theme,
     config: AppConfig,
     context: RenderContext,
-    snapshot: TextLayoutSnapshot
+    snapshot: TextLayoutSnapshot,
+    frame: MarkdownLensFrame
   ): Unit =
-    val lines         = markdownSourceLines(buffer)
-    val previewWindow = markdownPreviewWindow(buffer, lines)
+    val lines         = frame.lines
+    val previewWindow = frame.previewWindow
     activeMarkdownBlockRanges(lines, buffer.cursors).foreach { blockRange =>
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
@@ -1158,7 +1207,7 @@ object Renderer:
       if y < context.surface.viewportHeight && x < context.surface.viewportWidth then
         CharacterRenderer.renderChar(context.surface, x, y, '.')
 
-  private def renderLineNumbers(state: AppState, context: RenderContext): Unit =
+  private def renderLineNumbers(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
     if state.config.showLineNumbers then
       context.surface.setFont(context.uiFont)
       context.layout.lineNumberRect foreach { lineRect =>
@@ -1170,30 +1219,33 @@ object Renderer:
         surface.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height, ' ')
         state.layout.activeEditorPaneId
           .flatMap(state.layout.editorPanes.get)
-          .flatMap(_.bufferId)
-          .flatMap(state.buffers.get)
-          .foreach { buffer =>
-            val font         = context.fontForBuffer(buffer)
-            val panelWidthPx = context.layout.editorPanelRect.width * context.cellMetrics.charWidth
-            val snapshot = TextLayoutSnapshot.fromBuffer(
-              buffer,
-              panelWidthPx,
-              font,
-              surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext()),
-              wordWrapEnabled = state.config.wordWrapEnabled
-            )
-            val firstVisualRows =
-              snapshot.visualLines.zipWithIndex
-                .groupMapReduce(_._1.bufferLine)(_._2)(math.min)
+          .foreach { pane =>
+            val buffer = pane.bufferId.flatMap(state.buffers.get)
+            val snapshot =
+              state.layout.activeEditorPaneId
+                .flatMap(renderPlan.snapshots.get)
+                .orElse {
+                  for
+                    paneRect <- state.layout.activeEditorPaneId.flatMap(renderPlan.paneLayouts.get)
+                    buf      <- buffer
+                  yield snapshotForBuffer(buf, editorContentRect(paneRect), state, context)
+                }
+            snapshot.foreach { snapshot =>
+              val firstVisualRows =
+                snapshot.visualLines.zipWithIndex
+                  .groupMapReduce(_._1.bufferLine)(_._2)(math.min)
 
-            snapshot.visualLines.zipWithIndex.foreach {
-              case (visualLine, index) if index < lineRect.height =>
-                val screenY = lineRect.y + index
-                if firstVisualRows.get(visualLine.bufferLine).contains(index) then
-                  val lineNumberText = (visualLine.bufferLine + 1).toString.padTo(lineRect.width - 1, ' ') + " "
-                  surface.putString(lineRect.x, screenY, lineNumberText)
-                  renderDiagnosticIndicator(surface, lineRect, screenY, visualLine.bufferLine, buffer, state)
-              case _ => ()
+              snapshot.visualLines.zipWithIndex.foreach {
+                case (visualLine, index) if index < lineRect.height =>
+                  val screenY = lineRect.y + index
+                  if firstVisualRows.get(visualLine.bufferLine).contains(index) then
+                    val lineNumberText = (visualLine.bufferLine + 1).toString.padTo(lineRect.width - 1, ' ') + " "
+                    surface.putString(lineRect.x, screenY, lineNumberText)
+                    buffer.foreach(
+                      renderDiagnosticIndicator(surface, lineRect, screenY, visualLine.bufferLine, _, state)
+                    )
+                case _ => ()
+              }
             }
           }
       }

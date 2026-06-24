@@ -1,8 +1,11 @@
 package com.serenity
 
 import java.awt.Font
+import java.util.concurrent.atomic.AtomicInteger
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, MarkdownViewMode}
+import com.serenity.lsp.config.LanguageId
+import com.serenity.richtext.{RichTextDocument, RichTextParagraph}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -60,6 +63,55 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
     override def collect(): String =
       throw AssertionError("plain rendering should not materialise the whole buffer")
+
+  final case class CountingAccessRope(
+      delegate: Rope,
+      lineReads: AtomicInteger = AtomicInteger(0),
+      collects: AtomicInteger = AtomicInteger(0)
+  ) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def newlineCount: Int =
+      delegate.newlineCount
+
+    override def lastLineLength: Int =
+      delegate.lastLineLength
+
+    override def endsWithNewline: Boolean =
+      delegate.endsWithNewline
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      this
+
+    override def index(i: Int): Option[Char] =
+      delegate.index(i)
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def lineCount: Int =
+      delegate.lineCount
+
+    override def getLine(lineIndex: Int): Option[String] =
+      lineReads.incrementAndGet()
+      delegate.getLine(lineIndex)
+
+    override def lineColumnToOffset(line: Int, column: Int): Int =
+      delegate.lineColumnToOffset(line, column)
+
+    override def collect(): String =
+      collects.incrementAndGet()
+      delegate.collect()
 
   private val monoFont     = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val cellMetrics  = CellMetrics.fromFont(monoFont)
@@ -143,4 +195,88 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       cellMetrics,
       None
     )
+  }
+
+  it should "reuse the active pane snapshot when rendering line numbers" in {
+    val paneId    = PaneId(0)
+    val bufferId  = BufferId(1)
+    val lineReads = AtomicInteger(0)
+    val content   = CountingAccessRope(Rope((1 to 20).map(i => s"line-$i").mkString("\n")), lineReads = lineReads)
+    val buffer = Buffer(bufferId, content).copy(
+      viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 5)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default.withLineNumbers(true).withGutter(false).withWordWrap(false)
+    )
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
+
+    lineReads.get() shouldBe buffer.viewport.visibleLines
+  }
+
+  it should "validate rich text content once while rendering visible styled lines" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val collects = AtomicInteger(0)
+    val document = RichTextDocument((1 to 8).map(i => RichTextParagraph.plain(s"paragraph-$i")).toList)
+    val content  = CountingAccessRope(Rope(document.plainText), collects = collects)
+    val buffer = Buffer(bufferId, content).copy(
+      richTextDocument = Some(document),
+      viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+    )
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
+
+    collects.get() shouldBe 1
+  }
+
+  it should "share markdown lens source lines between content and cursor rendering" in {
+    val paneId    = PaneId(0)
+    val bufferId  = BufferId(1)
+    val lineReads = AtomicInteger(0)
+    val markdown  = (1 to 12).map(i => s"# Heading $i").mkString("\n")
+    val content   = CountingAccessRope(Rope(markdown), lineReads = lineReads)
+    val buffer = Buffer(bufferId, content).copy(
+      language = Some(LanguageId.Markdown),
+      cursors = List(CursorPosition(0, 0)),
+      viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withWordWrap(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    )
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
+
+    lineReads.get() shouldBe buffer.viewport.visibleLines + buffer.content.lineCount
   }
