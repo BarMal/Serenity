@@ -78,6 +78,29 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     Rope("Hello, world!").deleteRight(13, -13).collect() shouldBe ""
     Rope("Hello, world!").deleteLeft(0, -13).collect() shouldBe ""
 
+  it should "apply the Rope deletion contract to direct leaves" in new RopeSpecScope:
+    val leaf: Rope = Leaf("hello")
+    val node: Rope = Node(Leaf("he"), Leaf("llo"))
+
+    val operations: List[(String, Rope => Rope, String)] = List(
+      ("delete left with a negative count", _.deleteLeft(0, -2), "llo"),
+      ("delete right with a negative count", _.deleteRight(5, -2), "hel"),
+      ("delete left before zero", _.deleteLeft(-1, 2), "hello"),
+      ("delete right before zero", _.deleteRight(-1, 2), "hello"),
+      ("delete left after weight", _.deleteLeft(6, 2), "hello"),
+      ("delete right after weight", _.deleteRight(6, 2), "hello"),
+      ("delete left with an oversized count", _.deleteLeft(2, 5), "llo"),
+      ("delete right with an oversized count", _.deleteRight(3, 20), "hel")
+    )
+
+    operations.foreach {
+      case (description, operation, expected) =>
+        withClue(description) {
+          operation(leaf).collect() shouldBe expected
+          operation(node).collect() shouldBe expected
+        }
+    }
+
   it should "replace" in new RopeSpecScope:
     Rope("Hello, world!")
       .replace(5, '!')

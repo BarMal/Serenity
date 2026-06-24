@@ -25,12 +25,4 @@ case class Leaf(value: String)(using balance: Balance) extends Rope:
       val (pre, post) = value.splitAt(index)
       Rope((pre + str) + post)
 
-  override def deleteLeft(start: Int, count: Int): Rope =
-    val (pre, post) = value.splitAt(start)
-    Leaf(pre.dropRight(count) + post)
-
-  override def deleteRight(start: Int, count: Int): Rope =
-    val (pre, post) = value.splitAt(start)
-    Leaf(pre + post.drop(count))
-
   override def collect(): String = value
