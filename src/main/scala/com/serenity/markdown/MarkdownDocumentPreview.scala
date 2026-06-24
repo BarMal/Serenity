@@ -10,6 +10,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 import scala.jdk.CollectionConverters.*
 import scala.util.Try
 import scala.util.control.NonFatal
+import scala.util.hashing.MurmurHash3
 
 import com.serenity.ui.theme.Theme
 import org.commonmark.Extension
@@ -28,10 +29,17 @@ object MarkdownDocumentPreview:
   case class PreviewWindow(firstSourceLine: Int, firstPreviewRow: Int, source: String)
 
   private val MaxCachedImages          = 24
+  private val MaxCachedHtmlFragments   = 48
   private val MaxCachedInlineDocuments = 32
 
+  private case class SourceFingerprint(length: Int, hash: Int)
+
+  private object SourceFingerprint:
+    def from(source: String): SourceFingerprint =
+      SourceFingerprint(source.length, MurmurHash3.stringHash(source))
+
   private case class ImageCacheKey(
-      source: String,
+      source: SourceFingerprint,
       title: String,
       widthPx: Int,
       heightPx: Int,
@@ -40,6 +48,8 @@ object MarkdownDocumentPreview:
       baseUri: Option[String],
       panelChrome: Boolean
   )
+
+  private case class HtmlFragmentCacheKey(source: SourceFingerprint, title: String, baseUri: Option[String])
 
   private case class InlineDocumentCacheKey(sourceLines: Vector[String])
 
@@ -53,6 +63,11 @@ object MarkdownDocumentPreview:
     new LinkedHashMap[ImageCacheKey, BufferedImage](MaxCachedImages, 0.75f, true):
       override def removeEldestEntry(eldest: java.util.Map.Entry[ImageCacheKey, BufferedImage]): Boolean =
         size() > MaxCachedImages
+
+  private val htmlFragmentCache =
+    new LinkedHashMap[HtmlFragmentCacheKey, String](MaxCachedHtmlFragments, 0.75f, true):
+      override def removeEldestEntry(eldest: java.util.Map.Entry[HtmlFragmentCacheKey, String]): Boolean =
+        size() > MaxCachedHtmlFragments
 
   private val inlineDocumentCache =
     new LinkedHashMap[InlineDocumentCacheKey, InlinePreviewIndex](MaxCachedInlineDocuments, 0.75f, true):
@@ -78,7 +93,18 @@ object MarkdownDocumentPreview:
       .build()
 
   def renderHtmlFragment(source: String, title: String, baseUri: Option[URI] = None): String =
-    htmlRenderer(baseUri).render(parser.parse(source))
+    val key = HtmlFragmentCacheKey(SourceFingerprint.from(source), title, baseUri.map(_.toString))
+    htmlFragmentCache
+      .synchronized {
+        Option(htmlFragmentCache.get(key))
+      }
+      .getOrElse {
+        val rendered = htmlRenderer(baseUri).render(parser.parse(source))
+        htmlFragmentCache.synchronized {
+          val _ = htmlFragmentCache.put(key, rendered)
+        }
+        rendered
+      }
 
   def renderImage(
     source: String,
@@ -93,7 +119,7 @@ object MarkdownDocumentPreview:
     val safeWidth  = widthPx.max(1)
     val safeHeight = heightPx.max(1)
     val key = ImageCacheKey(
-      source = source,
+      source = SourceFingerprint.from(source),
       title = title,
       widthPx = safeWidth,
       heightPx = safeHeight,

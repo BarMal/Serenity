@@ -38,6 +38,34 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     html should include("<td>Grace</td>")
   }
 
+  it should "reuse rendered HTML fragments for identical source and base URI" in {
+    val source = "# Cached\n\nBody"
+    val first = MarkdownDocumentPreview.renderHtmlFragment(
+      source,
+      title = "cached.md"
+    )
+    val second = MarkdownDocumentPreview.renderHtmlFragment(
+      source,
+      title = "cached.md"
+    )
+
+    second should be theSameInstanceAs first
+  }
+
+  it should "not reuse cached HTML fragments when source content changes" in {
+    val first = MarkdownDocumentPreview.renderHtmlFragment(
+      "# Cached",
+      title = "cached.md"
+    )
+    val second = MarkdownDocumentPreview.renderHtmlFragment(
+      "# Changed",
+      title = "cached.md"
+    )
+
+    second should not be theSameInstanceAs(first)
+    second should include("<h1>Changed</h1>")
+  }
+
   it should "format markdown tables for inline lens rendering as closed box tables" in {
     val rows = MarkdownDocumentPreview.renderInlineLines(
       Vector(
