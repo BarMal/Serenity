@@ -27,7 +27,8 @@ object MarkdownDocumentPreview:
   case class InlinePreviewLine(sourceLine: Option[Int], text: String)
   case class PreviewWindow(firstSourceLine: Int, firstPreviewRow: Int, source: String)
 
-  private val MaxCachedImages = 24
+  private val MaxCachedImages          = 24
+  private val MaxCachedInlineDocuments = 32
 
   private case class ImageCacheKey(
       source: String,
@@ -40,10 +41,25 @@ object MarkdownDocumentPreview:
       panelChrome: Boolean
   )
 
+  private case class InlineDocumentCacheKey(sourceLines: Vector[String])
+
+  private case class InlinePreviewIndex(
+      previewLines: Vector[InlinePreviewLine],
+      rowsBySourceLine: Map[Int, Vector[Int]],
+      tableLineIndexes: Set[Int]
+  )
+
   private val imageCache =
     new LinkedHashMap[ImageCacheKey, BufferedImage](MaxCachedImages, 0.75f, true):
       override def removeEldestEntry(eldest: java.util.Map.Entry[ImageCacheKey, BufferedImage]): Boolean =
         size() > MaxCachedImages
+
+  private val inlineDocumentCache =
+    new LinkedHashMap[InlineDocumentCacheKey, InlinePreviewIndex](MaxCachedInlineDocuments, 0.75f, true):
+      override def removeEldestEntry(
+        eldest: java.util.Map.Entry[InlineDocumentCacheKey, InlinePreviewIndex]
+      ): Boolean =
+        size() > MaxCachedInlineDocuments
 
   private val extensions: java.util.List[Extension] =
     List[Extension](TablesExtension.create(), TaskListItemsExtension.create()).asJava
@@ -134,48 +150,28 @@ object MarkdownDocumentPreview:
     renderInlineDocument(sourceLines).map(_.text)
 
   def renderInlineDocument(sourceLines: Vector[String]): Vector[InlinePreviewLine] =
-    @annotation.tailrec
-    def loop(index: Int, acc: Vector[InlinePreviewLine]): Vector[InlinePreviewLine] =
-      if index >= sourceLines.length then acc
-      else
-        tableBlockAt(sourceLines, index) match
-          case Some(tableBlock) =>
-            loop(tableBlock.endIndex + 1, acc ++ tableBlock.previewLines)
-          case None =>
-            loop(index + 1, acc :+ InlinePreviewLine(Some(index), renderInlineLine(sourceLines(index))))
-
-    loop(0, Vector.empty)
+    inlinePreviewIndex(sourceLines).previewLines
 
   def inlineTableLineIndexes(sourceLines: Vector[String]): Set[Int] =
-    @annotation.tailrec
-    def loop(index: Int, acc: Set[Int]): Set[Int] =
-      if index >= sourceLines.length then acc
-      else
-        tableBlockAt(sourceLines, index) match
-          case Some(tableBlock) =>
-            loop(tableBlock.endIndex + 1, acc ++ (index to tableBlock.endIndex))
-          case None =>
-            loop(index + 1, acc)
-
-    loop(0, Set.empty)
+    inlinePreviewIndex(sourceLines).tableLineIndexes
 
   def renderInlineLineAt(sourceLines: Vector[String], index: Int): String =
-    tableBlockContaining(sourceLines, index) match
-      case Some(tableBlock) =>
-        tableBlock.previewLines.find(_.sourceLine.contains(index)).map(_.text).getOrElse("")
-      case None =>
-        sourceLines.lift(index).map(renderInlineLine).getOrElse("")
+    inlinePreviewIndex(sourceLines).rowsBySourceLine
+      .get(index)
+      .flatMap(_.headOption)
+      .flatMap(renderInlineDocument(sourceLines).lift)
+      .map(_.text)
+      .orElse(sourceLines.lift(index).map(renderInlineLine))
+      .getOrElse("")
 
   def previewRowForSourceLine(sourceLines: Vector[String], sourceLine: Int): Option[Int] =
-    renderInlineDocumentThrough(sourceLines, sourceLine).zipWithIndex.collectFirst {
-      case (line, row) if line.sourceLine.contains(sourceLine) => row
-    }
+    inlinePreviewIndex(sourceLines).rowsBySourceLine.get(sourceLine).flatMap(_.headOption)
 
   def previewRowsForSourceRange(sourceLines: Vector[String], sourceRange: Range.Inclusive): Option[Range.Inclusive] =
-    val preview = renderInlineDocumentThrough(sourceLines, sourceRange.end)
-    val mappedRows = preview.zipWithIndex.collect {
-      case (line, row) if line.sourceLine.exists(sourceRange.contains) => row
-    }
+    val preview = renderInlineDocument(sourceLines)
+    val mappedRows = sourceRange
+      .flatMap(line => inlinePreviewIndex(sourceLines).rowsBySourceLine.getOrElse(line, Vector.empty))
+      .distinct
     mappedRows match
       case rows if rows.nonEmpty =>
         val firstMapped = rows.min
@@ -197,6 +193,56 @@ object MarkdownDocumentPreview:
         Some(first to last)
       case _ =>
         None
+
+  private def inlinePreviewIndex(sourceLines: Vector[String]): InlinePreviewIndex =
+    val key = InlineDocumentCacheKey(sourceLines)
+    inlineDocumentCache
+      .synchronized {
+        Option(inlineDocumentCache.get(key))
+      }
+      .getOrElse {
+        val index = buildInlinePreviewIndex(sourceLines)
+        inlineDocumentCache.synchronized {
+          val _ = inlineDocumentCache.put(key, index)
+        }
+        index
+      }
+
+  private def buildInlinePreviewIndex(sourceLines: Vector[String]): InlinePreviewIndex =
+    val previewLines = renderInlineDocumentUncached(sourceLines)
+    InlinePreviewIndex(
+      previewLines = previewLines,
+      rowsBySourceLine = previewLines.zipWithIndex
+        .flatMap { case (line, row) => line.sourceLine.map(_ -> row) }
+        .groupMap(_._1)(_._2),
+      tableLineIndexes = tableLineIndexesUncached(sourceLines)
+    )
+
+  private def renderInlineDocumentUncached(sourceLines: Vector[String]): Vector[InlinePreviewLine] =
+    @annotation.tailrec
+    def loop(index: Int, acc: Vector[InlinePreviewLine]): Vector[InlinePreviewLine] =
+      if index >= sourceLines.length then acc
+      else
+        tableBlockAt(sourceLines, index) match
+          case Some(tableBlock) =>
+            loop(tableBlock.endIndex + 1, acc ++ tableBlock.previewLines)
+          case None =>
+            loop(index + 1, acc :+ InlinePreviewLine(Some(index), renderInlineLine(sourceLines(index))))
+
+    loop(0, Vector.empty)
+
+  private def tableLineIndexesUncached(sourceLines: Vector[String]): Set[Int] =
+    @annotation.tailrec
+    def loop(index: Int, acc: Set[Int]): Set[Int] =
+      if index >= sourceLines.length then acc
+      else
+        tableBlockAt(sourceLines, index) match
+          case Some(tableBlock) =>
+            loop(tableBlock.endIndex + 1, acc ++ (index to tableBlock.endIndex))
+          case None =>
+            loop(index + 1, acc)
+
+    loop(0, Set.empty)
 
   def previewWindow(
     sourceLines: Vector[String],
@@ -383,26 +429,6 @@ object MarkdownDocumentPreview:
     val endLine = firstSourceLine + math.min(safeMax, sourceLines.length - firstSourceLine)
     sourceLines.slice(firstSourceLine, endLine).mkString("\n")
 
-  private def renderInlineDocumentThrough(sourceLines: Vector[String], sourceLine: Int): Vector[InlinePreviewLine] =
-    if sourceLine < 0 then Vector.empty
-    else
-      val builder = Vector.newBuilder[InlinePreviewLine]
-
-      @annotation.tailrec
-      def loop(index: Int): Unit =
-        if index >= sourceLines.length || index > sourceLine then ()
-        else
-          tableBlockAt(sourceLines, index) match
-            case Some(tableBlock) =>
-              builder ++= tableBlock.previewLines
-              loop(tableBlock.endIndex + 1)
-            case None =>
-              builder += InlinePreviewLine(Some(index), renderInlineLine(sourceLines(index)))
-              loop(index + 1)
-
-      loop(0)
-      builder.result()
-
   private def tableBlockAt(lines: Vector[String], index: Int): Option[InlineTableBlock] =
     Option
       .when(index + 1 < lines.length && isTableRow(lines(index)) && isTableSeparator(lines(index + 1))) {
@@ -415,21 +441,6 @@ object MarkdownDocumentPreview:
         InlineTableBlock(endIndex, sourceMappedTableRows(rows, renderedRows))
       }
       .filter(_.previewLines.nonEmpty)
-
-  private def tableBlockContaining(lines: Vector[String], index: Int): Option[InlineTableBlock] =
-    @annotation.tailrec
-    def loop(lineIndex: Int): Option[InlineTableBlock] =
-      if lineIndex > index then None
-      else
-        tableBlockAt(lines, lineIndex) match
-          case Some(tableBlock) if index <= tableBlock.endIndex =>
-            Some(tableBlock)
-          case Some(tableBlock) =>
-            loop(tableBlock.endIndex + 1)
-          case None =>
-            loop(lineIndex + 1)
-
-    loop(0)
 
   private def sourceMappedTableRows(sourceRows: Vector[Int], renderedRows: Vector[String]): Vector[InlinePreviewLine] =
     renderedRows.zipWithIndex.map {
