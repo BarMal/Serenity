@@ -71,7 +71,7 @@ object EditorEventReducer:
     buffer: Buffer,
     paneId: PaneId,
     currentState: AppState
-  )(using balance: com.serenity.rope.Balance): ReducerResult =
+  ): ReducerResult =
     val result =
       if isExtendSelectionEvent(event) then
         reduceSingleCursorTextEvent(event, clearInFlightMultiCursorVerticalState(buffer), paneId, currentState)
@@ -123,7 +123,7 @@ object EditorEventReducer:
     buffer: Buffer,
     paneId: PaneId,
     currentState: AppState
-  )(using balance: com.serenity.rope.Balance): ReducerResult =
+  ): ReducerResult =
     buffer.cursors.headOption match
       case Some(cursor) =>
         event match
@@ -237,9 +237,8 @@ object EditorEventReducer:
                   currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
                 )
               case None =>
-                val text   = buffer.content.collect()
-                val offset = lineColumnToOffset(text, cursor.line, cursor.column)
-                val start  = TextEditing.previousWordBoundary(text, offset)
+                val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+                val start  = previousWordBoundary(buffer.content, offset)
                 if start < offset then
                   val updatedBuffer = deleteOffsetRange(buffer, currentState, start, offset, start)
                   ReducerResult.noEffects(
@@ -255,9 +254,8 @@ object EditorEventReducer:
                   currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
                 )
               case None =>
-                val text   = buffer.content.collect()
-                val offset = lineColumnToOffset(text, cursor.line, cursor.column)
-                val end    = TextEditing.nextWordBoundary(text, offset)
+                val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+                val end    = nextWordBoundary(buffer.content, offset)
                 if offset < end then
                   val updatedBuffer = deleteOffsetRange(buffer, currentState, offset, end, offset)
                   ReducerResult.noEffects(
@@ -615,7 +613,7 @@ object EditorEventReducer:
     buffer: Buffer,
     paneId: PaneId,
     currentState: AppState
-  )(using balance: com.serenity.rope.Balance): ReducerResult =
+  ): ReducerResult =
     event match
       case InsertChar(char) =>
         ReducerResult.noEffects(
@@ -667,7 +665,7 @@ object EditorEventReducer:
     buffer: Buffer,
     paneId: PaneId,
     currentState: AppState
-  )(using balance: com.serenity.rope.Balance): ReducerResult =
+  ): ReducerResult =
     event match
       case InsertChar(char) =>
         ReducerResult.noEffects(
@@ -829,7 +827,7 @@ object EditorEventReducer:
     buffer: Buffer,
     paneId: PaneId,
     currentState: AppState
-  )(using balance: com.serenity.rope.Balance): ReducerResult =
+  ): ReducerResult =
     reduceSingleCursorTextEvent(
       event,
       clearInFlightMultiCursorVerticalState(buffer.copy(selection = buffer.primarySelection, selections = Nil)),
@@ -925,15 +923,14 @@ object EditorEventReducer:
     currentState: AppState,
     backward: Boolean
   ): Buffer =
-    val text    = buffer.content.collect()
-    val entries = multiCursorEntries(buffer, text)
+    val entries = multiCursorEntries(buffer)
     val edits = entries.zipWithIndex.flatMap {
       case (entry, index) =>
         if backward then
-          val start = TextEditing.previousWordBoundary(text, entry.offset)
+          val start = previousWordBoundary(buffer.content, entry.offset)
           Option.when(start < entry.offset)(MultiCursorEdit(index, start, entry.offset, ""))
         else
-          val end = TextEditing.nextWordBoundary(text, entry.offset)
+          val end = nextWordBoundary(buffer.content, entry.offset)
           Option.when(entry.offset < end)(MultiCursorEdit(index, entry.offset, end, ""))
     }
     applyMergedDeletionEdits(buffer, currentState, entries.map(_.offset), edits)
@@ -942,25 +939,21 @@ object EditorEventReducer:
     buffer: Buffer,
     currentState: AppState,
     targetLines: List[Int]
-  )(using balance: com.serenity.rope.Balance): Buffer =
-    val text      = buffer.content.collect()
-    val lines     = text.split("\n", -1).toList
-    val targetSet = targetLines.filter(line => line >= 0 && line < lines.length).toSet
+  ): Buffer =
+    val targetSet = targetLines.filter(line => line >= 0 && line < countLines(buffer.content)).toSet
 
     if targetSet.isEmpty then buffer
     else
+      val initialText = Option.when(buffer.documentComments.nonEmpty)(buffer.content.collect())
       val edits = targetSet.toList.sorted.zipWithIndex.map {
         case (line, index) =>
-          val offset = lineColumnToOffset(text, line, 0)
+          val offset = lineColumnToOffset(buffer.content, line, 0)
           MultiCursorEdit(index, offset, offset, TabInsertion)
       }
-      val updatedText = lines.zipWithIndex
-        .map {
-          case (lineText, lineIndex) =>
-            if targetSet.contains(lineIndex) then TabInsertion + lineText else lineText
-        }
-        .mkString("\n")
-      val updatedContent = Rope(updatedText)
+      val updatedContent = edits
+        .sortBy(edit => (-edit.start, -edit.end))
+        .foldLeft(buffer.content)((content, edit) => content.insert(edit.start, edit.insertedText))
+      val updatedText = Option.when(buffer.documentComments.nonEmpty)(updatedContent.collect())
       val finalCursors = buffer.cursors.map { cursor =>
         if targetSet.contains(cursor.line) then cursor.copy(column = cursor.column + TabInsertion.length)
         else cursor
@@ -976,7 +969,10 @@ object EditorEventReducer:
         preferredColumn = Some(primaryCursor.column),
         preferredXPx = None,
         multiCursorVerticalStates = Nil,
-        documentComments = adjustDocumentComments(buffer.documentComments, text, updatedText, edits)
+        documentComments = initialText.zip(updatedText).fold(buffer.documentComments) {
+          case (beforeText, afterText) =>
+            adjustDocumentComments(buffer.documentComments, beforeText, afterText, edits)
+        }
       )
       baseBuffer.copy(viewport = adjustViewportForCursor(baseBuffer, currentState, primaryCursor))
 
@@ -984,28 +980,25 @@ object EditorEventReducer:
     buffer: Buffer,
     currentState: AppState,
     targetLines: List[Int]
-  )(using balance: com.serenity.rope.Balance): Buffer =
-    val text      = buffer.content.collect()
-    val lines     = text.split("\n", -1).toList
-    val targetSet = targetLines.filter(line => line >= 0 && line < lines.length).toSet
-    val updatedLines = lines.zipWithIndex.map {
-      case (lineText, lineIndex) =>
-        if targetSet.contains(lineIndex) then
-          val (updatedLine, removed) = unindentLine(lineText)
-          (updatedLine, lineIndex -> removed)
-        else (lineText, lineIndex -> 0)
-    }
-    val updatedText = updatedLines.map(_._1).mkString("\n")
-    val removals    = updatedLines.map(_._2).toMap
+  ): Buffer =
+    val targetSet = targetLines.filter(line => line >= 0 && line < countLines(buffer.content)).toSet
+    val removals = targetSet.toList.sorted.map { line =>
+      val (_, removed) = unindentLine(buffer.content.getLine(line).getOrElse(""))
+      line -> removed
+    }.toMap
 
     if removals.values.forall(_ == 0) then buffer
     else
+      val initialText = Option.when(buffer.documentComments.nonEmpty)(buffer.content.collect())
       val edits = removals.toList.sortBy(_._1).zipWithIndex.collect {
         case ((line, removed), index) if removed > 0 =>
-          val start = lineColumnToOffset(text, line, 0)
+          val start = lineColumnToOffset(buffer.content, line, 0)
           MultiCursorEdit(index, start, start + removed, "")
       }
-      val updatedContent = Rope(updatedText)
+      val updatedContent = edits
+        .sortBy(edit => (-edit.start, -edit.end))
+        .foldLeft(buffer.content)((content, edit) => content.delete(edit.start, edit.end))
+      val updatedText = Option.when(buffer.documentComments.nonEmpty)(updatedContent.collect())
       val finalCursors = buffer.cursors
         .map(cursor => cursor.copy(column = math.max(0, cursor.column - removals.getOrElse(cursor.line, 0))))
         .distinct
@@ -1020,7 +1013,10 @@ object EditorEventReducer:
         preferredColumn = Some(primaryCursor.column),
         preferredXPx = None,
         multiCursorVerticalStates = Nil,
-        documentComments = adjustDocumentComments(buffer.documentComments, text, updatedText, edits)
+        documentComments = initialText.zip(updatedText).fold(buffer.documentComments) {
+          case (beforeText, afterText) =>
+            adjustDocumentComments(buffer.documentComments, beforeText, afterText, edits)
+        }
       )
       baseBuffer.copy(viewport = adjustViewportForCursor(baseBuffer, currentState, primaryCursor))
 
@@ -1378,11 +1374,8 @@ object EditorEventReducer:
     )
 
   private def multiCursorEntries(buffer: Buffer): List[CursorEntry] =
-    multiCursorEntries(buffer, buffer.content.collect())
-
-  private def multiCursorEntries(buffer: Buffer, text: String): List[CursorEntry] =
     buffer.cursors.distinct
-      .map(cursor => CursorEntry(cursor, lineColumnToOffset(text, cursor.line, cursor.column)))
+      .map(cursor => CursorEntry(cursor, lineColumnToOffset(buffer.content, cursor.line, cursor.column)))
       .sortBy(_.offset)
 
   private def distinctCursorLines(buffer: Buffer): List[Int] =
@@ -1446,6 +1439,19 @@ object EditorEventReducer:
       else cursor.copy(column = cursor.column + 1)
     }
     scanned
+
+  private def previousWordBoundary(content: Rope, offset: Int): Int =
+    TextEditing.previousWordBoundary(RopeCharacterSource(content), offset)
+
+  private def nextWordBoundary(content: Rope, offset: Int): Int =
+    TextEditing.nextWordBoundary(RopeCharacterSource(content), offset)
+
+  final private case class RopeCharacterSource(content: Rope) extends TextEditing.CharacterSource:
+    override def length: Int =
+      content.weight
+
+    override def charAt(index: Int): Char =
+      content.index(index).getOrElse('\u0000')
 
   private def findModalForBuffer(buffer: Buffer): Modal =
     buffer.findState match

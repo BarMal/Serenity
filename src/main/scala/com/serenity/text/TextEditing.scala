@@ -2,6 +2,11 @@ package com.serenity.text
 
 object TextEditing:
 
+  /** Minimal indexed character access for word-boundary scanning without requiring a String. */
+  trait CharacterSource:
+    def length: Int
+    def charAt(index: Int): Char
+
   private enum CharacterClass:
     case Whitespace, Word, Punctuation
 
@@ -14,28 +19,34 @@ object TextEditing:
     text.substring(0, text.length) + text.substring(boundary)
 
   def previousWordBoundary(text: String, cursor: Int): Int =
-    val idx = clamp(cursor, text.length)
+    previousWordBoundary(StringCharacterSource(text), cursor)
+
+  def previousWordBoundary(source: CharacterSource, cursor: Int): Int =
+    val idx = clamp(cursor, source.length)
     val segmentEnd =
-      if idx > 0 && characterClass(text.charAt(idx - 1)) == CharacterClass.Whitespace then
-        scanBackwardClassStart(text, idx, CharacterClass.Whitespace)
+      if idx > 0 && characterClass(source.charAt(idx - 1)) == CharacterClass.Whitespace then
+        scanBackwardClassStart(source, idx, CharacterClass.Whitespace)
       else idx
 
     if segmentEnd <= 0 then 0
-    else scanBackwardClassStart(text, segmentEnd, characterClass(text.charAt(segmentEnd - 1)))
+    else scanBackwardClassStart(source, segmentEnd, characterClass(source.charAt(segmentEnd - 1)))
 
   def nextWordBoundary(text: String, cursor: Int): Int =
-    val length = text.length
+    nextWordBoundary(StringCharacterSource(text), cursor)
+
+  def nextWordBoundary(source: CharacterSource, cursor: Int): Int =
+    val length = source.length
     val idx    = clamp(cursor, length)
     val segmentStart =
-      if idx < length && characterClass(text.charAt(idx)) == CharacterClass.Whitespace then
-        scanForwardClassEnd(text, idx, CharacterClass.Whitespace)
+      if idx < length && characterClass(source.charAt(idx)) == CharacterClass.Whitespace then
+        scanForwardClassEnd(source, idx, CharacterClass.Whitespace)
       else idx
 
     if segmentStart >= length then length
     else
-      val segmentEnd = scanForwardClassEnd(text, segmentStart, characterClass(text.charAt(segmentStart)))
-      if segmentEnd < length && characterClass(text.charAt(segmentEnd)) == CharacterClass.Whitespace then
-        scanForwardClassEnd(text, segmentEnd, CharacterClass.Whitespace)
+      val segmentEnd = scanForwardClassEnd(source, segmentStart, characterClass(source.charAt(segmentStart)))
+      if segmentEnd < length && characterClass(source.charAt(segmentEnd)) == CharacterClass.Whitespace then
+        scanForwardClassEnd(source, segmentEnd, CharacterClass.Whitespace)
       else segmentEnd
 
   private def clamp(cursor: Int, length: Int): Int =
@@ -54,13 +65,20 @@ object TextEditing:
           CharacterClass.Punctuation
 
   @annotation.tailrec
-  private def scanBackwardClassStart(text: String, idx: Int, targetClass: CharacterClass): Int =
-    if idx > 0 && characterClass(text.charAt(idx - 1)) == targetClass then
-      scanBackwardClassStart(text, idx - 1, targetClass)
+  private def scanBackwardClassStart(source: CharacterSource, idx: Int, targetClass: CharacterClass): Int =
+    if idx > 0 && characterClass(source.charAt(idx - 1)) == targetClass then
+      scanBackwardClassStart(source, idx - 1, targetClass)
     else idx
 
   @annotation.tailrec
-  private def scanForwardClassEnd(text: String, idx: Int, targetClass: CharacterClass): Int =
-    if idx < text.length && characterClass(text.charAt(idx)) == targetClass then
-      scanForwardClassEnd(text, idx + 1, targetClass)
+  private def scanForwardClassEnd(source: CharacterSource, idx: Int, targetClass: CharacterClass): Int =
+    if idx < source.length && characterClass(source.charAt(idx)) == targetClass then
+      scanForwardClassEnd(source, idx + 1, targetClass)
     else idx
+
+  final private case class StringCharacterSource(text: String) extends CharacterSource:
+    override def length: Int =
+      text.length
+
+    override def charAt(index: Int): Char =
+      text.charAt(index)

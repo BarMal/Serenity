@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.util.concurrent.atomic.AtomicInteger
-
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
@@ -36,41 +34,6 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     (paneId, bufferId, state)
-
-  final case class CountingRope(delegate: Rope, collectCount: AtomicInteger) extends Rope:
-    override def weight: Int =
-      delegate.weight
-
-    override def height: Int =
-      delegate.height
-
-    override def newlineCount: Int =
-      delegate.newlineCount
-
-    override def lastLineLength: Int =
-      delegate.lastLineLength
-
-    override def endsWithNewline: Boolean =
-      delegate.endsWithNewline
-
-    override def isWeightBalanced: Boolean =
-      delegate.isWeightBalanced
-
-    override def isHeightBalanced: Boolean =
-      delegate.isHeightBalanced
-
-    override def rebalance: Rope =
-      delegate.rebalance
-
-    override def index(i: Int): Option[Char] =
-      delegate.index(i)
-
-    override def splitAt(index: Int): Option[(Rope, Rope)] =
-      delegate.splitAt(index)
-
-    override def collect(): String =
-      collectCount.incrementAndGet()
-      delegate.collect()
 
   final case class NonCollectingRope(delegate: Rope) extends Rope:
     override def weight: Int =
@@ -450,11 +413,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     buffer.cursors shouldBe List(CursorPosition(0, 6))
   }
 
-  it should "materialise buffer text once while calculating multi-cursor word deletions" in {
-    val paneId       = PaneId(0)
-    val bufferId     = BufferId(0)
-    val collectCount = AtomicInteger(0)
-    val content      = CountingRope(Rope("alpha beta gamma"), collectCount)
+  it should "delete words for multiple cursors without materialising the whole buffer" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val content  = NonCollectingRope(Rope("alpha beta gamma"))
     val initialState = AppState.initial.copy(
       buffers = AppState.initial.buffers.updated(
         bufferId,
@@ -468,9 +430,31 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = EditorEventReducer.reduce(DeleteWordBackward, paneId, initialState).state
-    collectCount.get() shouldBe 1
 
     val buffer = updatedState.buffers(bufferId)
+    buffer.content.collect() shouldBe "alpha  gamma"
+    buffer.cursors shouldBe List(CursorPosition(0, 6))
+  }
+
+  it should "delete the previous word for a single cursor without materialising the whole buffer" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val content  = NonCollectingRope(Rope("alpha beta gamma"))
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = content,
+            cursors = List(CursorPosition(0, 10))
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(DeleteWordBackward, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
     buffer.content.collect() shouldBe "alpha  gamma"
     buffer.cursors shouldBe List(CursorPosition(0, 6))
   }
@@ -632,6 +616,60 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(Copy, paneId, initialState).state
 
     updatedState.clipboard shouldBe Some("alpha\nbet")
+  }
+
+  it should "indent selected lines without materialising the whole buffer" in {
+    val paneId    = PaneId(0)
+    val bufferId  = BufferId(0)
+    val selection = Selection(CursorPosition(0, 0), CursorPosition(1, 2))
+    val content   = NonCollectingRope(Rope("alpha\nbeta\n" + "x" * 5000))
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = content,
+            cursors = List(selection.focus),
+            selection = Some(selection)
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(TabKey, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.getLine(0) shouldBe Some("    alpha")
+    buffer.content.getLine(1) shouldBe Some("    beta")
+    buffer.content.getLine(2) shouldBe Some("x" * 5000)
+    buffer.cursors shouldBe List(CursorPosition(1, 6))
+  }
+
+  it should "unindent selected lines without materialising the whole buffer" in {
+    val paneId    = PaneId(0)
+    val bufferId  = BufferId(0)
+    val selection = Selection(CursorPosition(0, 4), CursorPosition(1, 2))
+    val content   = NonCollectingRope(Rope("    alpha\n  beta\n" + "x" * 5000))
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = content,
+            cursors = List(selection.focus),
+            selection = Some(selection)
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(ReverseTabKey, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.getLine(0) shouldBe Some("alpha")
+    buffer.content.getLine(1) shouldBe Some("beta")
+    buffer.content.getLine(2) shouldBe Some("x" * 5000)
+    buffer.cursors shouldBe List(CursorPosition(1, 0))
   }
 
   it should "delete the next word once when multiple cursors overlap the same word" in {
