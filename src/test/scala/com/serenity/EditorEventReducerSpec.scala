@@ -538,6 +538,102 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 0), CursorPosition(1, 1))
   }
 
+  it should "copy the current line without materialising the whole buffer" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val content  = NonCollectingRope(Rope("alpha\n" + "x" * 5000))
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = content,
+            cursors = List(CursorPosition(0, 2))
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(Copy, paneId, initialState).state
+
+    updatedState.clipboard shouldBe Some("alpha")
+  }
+
+  it should "cut the current line without materialising the whole buffer" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val content  = NonCollectingRope(Rope("alpha\n" + "x" * 5000))
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = content,
+            cursors = List(CursorPosition(0, 2))
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(Cut, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    updatedState.clipboard shouldBe Some("alpha")
+    buffer.content.collect() shouldBe "x" * 5000
+    buffer.cursors shouldBe List(CursorPosition(0, 0))
+  }
+
+  it should "replace a selection without materialising the whole buffer" in {
+    val paneId    = PaneId(0)
+    val bufferId  = BufferId(0)
+    val selection = Selection(CursorPosition(0, 0), CursorPosition(0, 5))
+    val content   = NonCollectingRope(Rope("alpha\n" + "x" * 5000))
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = content,
+            cursors = List(selection.focus),
+            selection = Some(selection)
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(InsertChar('Z'), paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.collect() shouldBe "Z\n" + ("x" * 5000)
+    buffer.cursors shouldBe List(CursorPosition(0, 1))
+    buffer.allSelections shouldBe Nil
+  }
+
+  it should "copy multiple selections without materialising the whole buffer" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val first    = Selection(CursorPosition(0, 0), CursorPosition(0, 5))
+    val second   = Selection(CursorPosition(1, 0), CursorPosition(1, 3))
+    val content  = NonCollectingRope(Rope("alpha\nbeta\n" + "x" * 5000))
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = content,
+            cursors = List(first.focus, second.focus),
+            selection = Some(first),
+            selections = List(first, second)
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(Copy, paneId, initialState).state
+
+    updatedState.clipboard shouldBe Some("alpha\nbet")
+  }
+
   it should "delete the next word once when multiple cursors overlap the same word" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)

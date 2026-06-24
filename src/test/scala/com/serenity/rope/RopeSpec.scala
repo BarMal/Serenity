@@ -544,6 +544,23 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     multiline.lineColumnToOffset(20, 0) shouldBe multiline.weight
     multiline.lineColumnToOffset(-1, -4) shouldBe 0
 
+  it should "extract string slices without materialising the whole rope" in new ChunkedRopeSpecScope:
+    val rope = Rope("alpha\nbeta\ngamma")
+
+    rope.sliceString(0, 5) shouldBe "alpha"
+    rope.sliceString(6, 10) shouldBe "beta"
+    rope.sliceString(3, 14) shouldBe "ha\nbeta\ngam"
+    rope.sliceString(-4, 99) shouldBe "alpha\nbeta\ngamma"
+    rope.sliceString(8, 8) shouldBe ""
+
+  it should "resolve offsets to line and column positions without collecting skipped branches" in new ChunkedRopeSpecScope:
+    val skippedContent = (1 to 200).map(index => s"skip-$index").mkString("", "\n", "\n")
+    val skippedBranch  = ExplodingIndexRope(Rope(skippedContent))
+    val targetBranch   = Rope("target-line\n")
+    val rope           = Node(skippedBranch, targetBranch)
+
+    rope.offsetToLineColumn(skippedBranch.weight + 6) shouldBe (skippedBranch.newlineCount, 6)
+
   it should "read line helpers across many leaves" in new ChunkedRopeSpecScope:
     val content = (1 to 200).map(index => s"line-$index").mkString("\n")
     val rope    = Rope(content)

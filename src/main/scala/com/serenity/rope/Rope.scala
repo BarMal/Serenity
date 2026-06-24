@@ -85,6 +85,15 @@ trait Rope(using balance: Balance):
   def slice(startIndex: Int, endIndex: Int): Rope =
     dropRight(weight - endIndex).dropLeft(startIndex)
 
+  def sliceString(startIndex: Int, endIndex: Int): String =
+    val start = math.max(0, math.min(startIndex, weight))
+    val end   = math.max(start, math.min(endIndex, weight))
+    if start == end then ""
+    else
+      val value = new StringBuilder(end - start)
+      appendRange(this, start, end, 0, value)
+      value.toString
+
   def searchAll(term: String): List[Int] =
     if term.isEmpty then List.empty
     else
@@ -113,12 +122,52 @@ trait Rope(using balance: Balance):
     if targetLine > newlineCount then weight
     else lineColumnToOffsetIn(this, targetLine, targetCol, 0)
 
+  def offsetToLineColumn(offset: Int): (Int, Int) =
+    val clamped = math.max(0, math.min(offset, weight))
+    offsetToLineColumnIn(this, clamped, 0, 0)
+
   def search(term: String): Option[Int] =
     if term.isEmpty then None
     else
       val content = this.collect()
       val index   = content.indexOf(term)
       if index == -1 then None else Some(index)
+
+  private def appendRange(
+    rope: Rope,
+    startIndex: Int,
+    endIndex: Int,
+    baseOffset: Int,
+    value: StringBuilder
+  ): Unit =
+    rope match
+      case Leaf(leafValue) =>
+        val leafStart = math.max(0, startIndex - baseOffset)
+        val leafEnd   = math.min(leafValue.length, endIndex - baseOffset)
+        if leafStart < leafEnd then value.append(leafValue.substring(leafStart, leafEnd))
+      case node: Node =>
+        val leftEnd = baseOffset + node.left.weight
+        if startIndex < leftEnd then appendRange(node.left, startIndex, endIndex, baseOffset, value)
+        if endIndex > leftEnd then appendRange(node.right, startIndex, endIndex, leftEnd, value)
+      case other =>
+        appendIndexedRange(other, startIndex - baseOffset, endIndex - baseOffset, value)
+
+  private def appendIndexedRange(
+    rope: Rope,
+    startIndex: Int,
+    endIndex: Int,
+    value: StringBuilder
+  ): Unit =
+    @tailrec
+    def loop(offset: Int): Unit =
+      if offset < endIndex then
+        rope.index(offset) match
+          case Some(char) =>
+            value.append(char)
+            loop(offset + 1)
+          case None => ()
+
+    loop(math.max(0, startIndex))
 
   private def appendLine(rope: Rope, lineIndex: Int, value: StringBuilder): Unit =
     rope match
@@ -207,6 +256,61 @@ trait Rope(using balance: Balance):
             else loop(offset + 1, currentLine, currentColumn)
 
     loop(0, 0, 0)
+
+  private def offsetToLineColumnIn(
+    rope: Rope,
+    offset: Int,
+    baseLine: Int,
+    baseColumn: Int
+  ): (Int, Int) =
+    if offset >= rope.weight then advancePosition(rope, baseLine, baseColumn)
+    else
+      rope match
+        case Leaf(value) =>
+          leafOffsetToLineColumn(value, offset, baseLine, baseColumn)
+        case node: Node =>
+          if offset <= node.left.weight then offsetToLineColumnIn(node.left, offset, baseLine, baseColumn)
+          else
+            val (rightBaseLine, rightBaseColumn) = advancePosition(node.left, baseLine, baseColumn)
+            offsetToLineColumnIn(node.right, offset - node.left.weight, rightBaseLine, rightBaseColumn)
+        case other =>
+          indexedOffsetToLineColumn(other, offset, baseLine, baseColumn)
+
+  private def advancePosition(rope: Rope, baseLine: Int, baseColumn: Int): (Int, Int) =
+    if rope.weight == 0 then (baseLine, baseColumn)
+    else if rope.newlineCount == 0 then (baseLine, baseColumn + rope.weight)
+    else (baseLine + rope.newlineCount, rope.lastLineLength)
+
+  private def leafOffsetToLineColumn(
+    value: String,
+    offset: Int,
+    baseLine: Int,
+    baseColumn: Int
+  ): (Int, Int) =
+    @tailrec
+    def loop(index: Int, line: Int, column: Int): (Int, Int) =
+      if index >= offset || index >= value.length then (line, column)
+      else if value.charAt(index) == '\n' then loop(index + 1, line + 1, 0)
+      else loop(index + 1, line, column + 1)
+
+    loop(0, baseLine, baseColumn)
+
+  private def indexedOffsetToLineColumn(
+    rope: Rope,
+    offset: Int,
+    baseLine: Int,
+    baseColumn: Int
+  ): (Int, Int) =
+    @tailrec
+    def loop(index: Int, line: Int, column: Int): (Int, Int) =
+      if index >= offset || index >= rope.weight then (line, column)
+      else
+        rope.index(index) match
+          case Some('\n') => loop(index + 1, line + 1, 0)
+          case Some(_)    => loop(index + 1, line, column + 1)
+          case None       => (line, column)
+
+    loop(0, baseLine, baseColumn)
 
 object Rope:
 
