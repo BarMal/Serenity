@@ -138,6 +138,20 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     heading.source shouldBe "# Later"
   }
 
+  it should "bound synced preview window source when a maximum line count is supplied" in {
+    val lines = (1 to 20).map(i => s"# Heading $i").toVector
+
+    val window = MarkdownDocumentPreview.previewWindow(
+      lines,
+      activeLine = Some(4),
+      fallbackTopLine = 0,
+      maxSourceLines = 5
+    )
+
+    window.firstSourceLine shouldBe 4
+    window.source shouldBe (5 to 9).map(i => s"# Heading $i").mkString("\n")
+  }
+
   it should "include rendered table chrome in the synced preview row offset" in {
     val lines = Vector(
       "Before",

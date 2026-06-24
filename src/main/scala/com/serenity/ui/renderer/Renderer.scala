@@ -47,6 +47,9 @@ object Renderer:
       previewWindow: MarkdownDocumentPreview.PreviewWindow
   )
 
+  private val MinMarkdownPreviewSourceLines = 32
+  private val MarkdownPreviewOverscanFactor = 4
+
   private def withEffectiveTheme(state: AppState): AppState =
     state.themeTransition match
       case None => state
@@ -660,17 +663,22 @@ object Renderer:
 
   private def markdownLensFrameFor(buffer: Buffer): MarkdownLensFrame =
     val lines = markdownSourceLines(buffer)
-    MarkdownLensFrame(lines, markdownPreviewWindow(buffer, lines))
+    MarkdownLensFrame(lines, markdownPreviewWindow(buffer, lines, buffer.viewport.visibleLines))
 
   private def markdownPreviewWindow(
     buffer: Buffer,
-    lines: Vector[String]
+    lines: Vector[String],
+    visibleRows: Int
   ): MarkdownDocumentPreview.PreviewWindow =
     MarkdownDocumentPreview.previewWindow(
       lines,
       activeLine = buffer.cursors.headOption.map(_.line),
-      fallbackTopLine = buffer.viewport.topLine
+      fallbackTopLine = buffer.viewport.topLine,
+      maxSourceLines = markdownPreviewSourceLineLimit(visibleRows)
     )
+
+  private def markdownPreviewSourceLineLimit(visibleRows: Int): Int =
+    math.max(MinMarkdownPreviewSourceLines, visibleRows.max(1) * MarkdownPreviewOverscanFactor)
 
   private def activeMarkdownBlockRanges(lines: Vector[String], cursors: List[CursorPosition]): List[Range.Inclusive] =
     cursors
@@ -1184,7 +1192,7 @@ object Renderer:
     val heightPx           = contentHeightCells * context.cellMetrics.lineHeight
     val buffer             = state.buffers.get(bufferId)
     val content = buffer
-      .map(buffer => markdownPreviewWindow(buffer, markdownSourceLines(buffer)).source)
+      .map(buffer => markdownPreviewWindow(buffer, markdownSourceLines(buffer), contentHeightCells).source)
       .getOrElse("")
     val baseUri =
       buffer.flatMap(_.filePath).flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))

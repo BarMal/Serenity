@@ -93,7 +93,7 @@ object MarkdownDocumentPreview:
       .getOrElse {
         val rendered = renderImageUncached(source, title, safeWidth, safeHeight, theme, font, baseUri, panelChrome)
         imageCache.synchronized {
-          imageCache.put(key, rendered)
+          val _ = imageCache.put(key, rendered)
         }
         rendered
       }
@@ -167,12 +167,12 @@ object MarkdownDocumentPreview:
         sourceLines.lift(index).map(renderInlineLine).getOrElse("")
 
   def previewRowForSourceLine(sourceLines: Vector[String], sourceLine: Int): Option[Int] =
-    renderInlineDocument(sourceLines).zipWithIndex.collectFirst {
+    renderInlineDocumentThrough(sourceLines, sourceLine).zipWithIndex.collectFirst {
       case (line, row) if line.sourceLine.contains(sourceLine) => row
     }
 
   def previewRowsForSourceRange(sourceLines: Vector[String], sourceRange: Range.Inclusive): Option[Range.Inclusive] =
-    val preview = renderInlineDocument(sourceLines)
+    val preview = renderInlineDocumentThrough(sourceLines, sourceRange.end)
     val mappedRows = preview.zipWithIndex.collect {
       case (line, row) if line.sourceLine.exists(sourceRange.contains) => row
     }
@@ -201,7 +201,8 @@ object MarkdownDocumentPreview:
   def previewWindow(
     sourceLines: Vector[String],
     activeLine: Option[Int],
-    fallbackTopLine: Int
+    fallbackTopLine: Int,
+    maxSourceLines: Int = Int.MaxValue
   ): PreviewWindow =
     if sourceLines.isEmpty then PreviewWindow(0, 0, "")
     else
@@ -217,7 +218,7 @@ object MarkdownDocumentPreview:
       PreviewWindow(
         firstSourceLine = firstSourceLine,
         firstPreviewRow = firstPreviewRow,
-        source = sourceLines.drop(firstSourceLine).mkString("\n")
+        source = previewSource(sourceLines, firstSourceLine, maxSourceLines)
       )
 
   private def htmlRenderer(baseUri: Option[URI]): HtmlRenderer =
@@ -376,6 +377,31 @@ object MarkdownDocumentPreview:
     "`([^`]+)`".r.replaceAllIn(withoutLinks, matched => matched.group(1))
 
   private case class InlineTableBlock(endIndex: Int, previewLines: Vector[InlinePreviewLine])
+
+  private def previewSource(sourceLines: Vector[String], firstSourceLine: Int, maxSourceLines: Int): String =
+    val safeMax = maxSourceLines.max(1)
+    val endLine = firstSourceLine + math.min(safeMax, sourceLines.length - firstSourceLine)
+    sourceLines.slice(firstSourceLine, endLine).mkString("\n")
+
+  private def renderInlineDocumentThrough(sourceLines: Vector[String], sourceLine: Int): Vector[InlinePreviewLine] =
+    if sourceLine < 0 then Vector.empty
+    else
+      val builder = Vector.newBuilder[InlinePreviewLine]
+
+      @annotation.tailrec
+      def loop(index: Int): Unit =
+        if index >= sourceLines.length || index > sourceLine then ()
+        else
+          tableBlockAt(sourceLines, index) match
+            case Some(tableBlock) =>
+              builder ++= tableBlock.previewLines
+              loop(tableBlock.endIndex + 1)
+            case None =>
+              builder += InlinePreviewLine(Some(index), renderInlineLine(sourceLines(index)))
+              loop(index + 1)
+
+      loop(0)
+      builder.result()
 
   private def tableBlockAt(lines: Vector[String], index: Int): Option[InlineTableBlock] =
     Option
