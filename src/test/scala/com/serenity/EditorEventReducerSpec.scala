@@ -127,6 +127,32 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "move document comments after inserted text without materialising the buffer" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val comment  = DocumentComment(CursorPosition(0, 4), CursorPosition(0, 7), "note")
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = NonCollectingRope(Rope("abc def")),
+            cursors = List(CursorPosition(0, 0)),
+            documentComments = List(comment)
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(InsertChar('X'), paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.getLine(0) shouldBe Some("Xabc def")
+    buffer.documentComments shouldBe List(
+      DocumentComment(CursorPosition(0, 5), CursorPosition(0, 8), "note")
+    )
+  }
+
   it should "move document comments down after newlines inserted before them" in {
     val comment = DocumentComment(CursorPosition(0, 4), CursorPosition(0, 7), "note")
     val (paneId, bufferId, initialState) =
@@ -150,6 +176,32 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.buffers(bufferId)
 
     buffer.content.collect() shouldBe "bc def"
+    buffer.documentComments shouldBe List(
+      DocumentComment(CursorPosition(0, 3), CursorPosition(0, 6), "note")
+    )
+  }
+
+  it should "move document comments after deletion without materialising the buffer" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val comment  = DocumentComment(CursorPosition(0, 4), CursorPosition(0, 7), "note")
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = NonCollectingRope(Rope("abc def")),
+            cursors = List(CursorPosition(0, 0)),
+            documentComments = List(comment)
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(DeleteForward, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.content.getLine(0) shouldBe Some("bc def")
     buffer.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 3), CursorPosition(0, 6), "note")
     )
@@ -235,6 +287,28 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     buffer.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 0), CursorPosition(0, 4), "note")
     )
+  }
+
+  it should "select all without materialising the buffer" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = NonCollectingRope(Rope("alpha\nbeta")),
+            cursors = List(CursorPosition(0, 0))
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(SelectAll, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.selection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
+    buffer.cursors shouldBe List(CursorPosition(1, 4))
   }
 
   it should "insert newlines at every cursor position when multiple cursors are active" in {
