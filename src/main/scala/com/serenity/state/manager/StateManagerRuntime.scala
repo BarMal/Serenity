@@ -2,8 +2,8 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
+import cats.effect.*
 import cats.effect.std.Queue
-import cats.effect.{Deferred, IO, Ref}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.lsp.LspEffect
@@ -26,6 +26,7 @@ private[manager] case class StateManagerRuntime(
     themeManager: AppThemeManager,
     lspQueue: Queue[IO, LspEffect],
     mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
+    documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     onFontConfigChanged: FontConfig => IO[Unit],
     configPersistencePath: Option[Path],
     uiPresetStore: UiPresetStore,
@@ -50,6 +51,7 @@ private[manager] object StateManagerRuntime:
     themeManager: AppThemeManager,
     lspQueue: Queue[IO, LspEffect],
     mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
+    documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     onFontConfigChanged: FontConfig => IO[Unit],
     configPersistencePath: Option[Path],
     uiPresetStore: UiPresetStore,
@@ -70,6 +72,7 @@ private[manager] object StateManagerRuntime:
       themeManager = themeManager,
       lspQueue = lspQueue,
       mouseTargetCacheRef = mouseTargetCacheRef,
+      documentAnalysisFiberRef = documentAnalysisFiberRef,
       onFontConfigChanged = onFontConfigChanged,
       configPersistencePath = configPersistencePath,
       uiPresetStore = uiPresetStore,

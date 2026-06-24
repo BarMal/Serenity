@@ -3,6 +3,8 @@ package com.serenity
 import java.awt.Font
 import java.nio.file.{Files, Path}
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.CharacterKey
@@ -278,7 +280,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.theme.name shouldBe "light"
   }
 
-  it should "enable spell-checking from the command runner and refresh diagnostics immediately" in {
+  it should "enable spell-checking from the command runner and refresh diagnostics asynchronously" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
 
@@ -297,9 +299,17 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "spellcheck-on", "spellcheck-on")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    val diagnostics  = updatedState.diagnostics.getOrElse(SpellChecker.bufferDiagnosticsUri(bufferId), Nil)
 
     updatedState.config.spellCheck.enabled shouldBe true
+    updatedState.diagnostics.getOrElse(SpellChecker.bufferDiagnosticsUri(bufferId), Nil) shouldBe Nil
+
+    IO.sleep(300.millis).unsafeRunSync()
+
+    val diagnostics =
+      stateManager.getCurrentState
+        .unsafeRunSync()
+        .diagnostics
+        .getOrElse(SpellChecker.bufferDiagnosticsUri(bufferId), Nil)
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: wurld")
   }
 

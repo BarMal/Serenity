@@ -2,9 +2,9 @@ package com.serenity.state.manager
 
 import java.nio.file.Files
 
+import cats.effect.*
 import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
-import cats.effect.{Deferred, IO, Ref}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileDialog
 import com.serenity.lsp.LspEffect
@@ -27,12 +27,13 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
 
   "StateManagerRuntime" should "collect manager dependencies behind one runtime boundary" in {
     val program = for
-      stateRef            <- Ref.of[IO, AppState](AppState.initial)
-      undoRef             <- Ref.of[IO, UndoState](UndoState())
-      themeNamesRef       <- Ref.of[IO, List[String]](List("dark"))
-      quitSignal          <- Deferred[IO, Unit]
-      lspQueue            <- Queue.bounded[IO, LspEffect](8)
-      mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
+      stateRef                 <- Ref.of[IO, AppState](AppState.initial)
+      undoRef                  <- Ref.of[IO, UndoState](UndoState())
+      themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
+      quitSignal               <- Deferred[IO, Unit]
+      lspQueue                 <- Queue.bounded[IO, LspEffect](8)
+      mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
+      documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
       sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
       runtime = StateManagerRuntime.create(
@@ -46,6 +47,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         themeManager = AppThemeManager.create,
         lspQueue = lspQueue,
         mouseTargetCacheRef = mouseTargetCacheRef,
+        documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         configPersistencePath = None,
         uiPresetStore = UiPresetStore.default,
@@ -60,6 +62,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.quitSignal shouldBe quitSignal
       runtime.lspQueue shouldBe lspQueue
       runtime.mouseTargetCacheRef shouldBe mouseTargetCacheRef
+      runtime.documentAnalysisFiberRef shouldBe documentAnalysisFiberRef
       runtime.sessionManager.sessionExists.unsafeRunSync() shouldBe false
       runtime.fileManager should not be null
       runtime.fileDialog shouldBe FileDialog.unavailable
