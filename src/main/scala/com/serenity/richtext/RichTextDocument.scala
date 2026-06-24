@@ -175,6 +175,10 @@ case class RichTextDocument(paragraphs: List[RichTextParagraph]):
   def plainText: String =
     paragraphs.map(_.plainText).mkString("\n")
 
+  def plainTextLength: Int =
+    if paragraphs.isEmpty then 0
+    else paragraphs.map(_.plainText.length).sum + paragraphs.length - 1
+
   def normalized: RichTextDocument =
     copy(paragraphs = paragraphs.map(_.normalized))
 
@@ -244,6 +248,10 @@ case class RichTextDocument(paragraphs: List[RichTextParagraph]):
   /** True when the rich document still represents the provided plain text exactly. */
   def matchesPlainText(text: String): Boolean =
     plainText == text
+
+  /** Fast shape check for hot render paths. Exact content validation stays at load/save/edit boundaries. */
+  def matchesPlainTextShape(lineCount: Int, textLength: Int): Boolean =
+    paragraphs.length == lineCount && plainTextLength == textLength
 
   private def updateParagraphs(range: RichTextRange)(update: RichTextParagraph => RichTextParagraph): RichTextDocument =
     if paragraphs.isEmpty then this

@@ -51,7 +51,18 @@ object MarkdownDocumentPreview:
 
   private case class HtmlFragmentCacheKey(source: SourceFingerprint, title: String, baseUri: Option[String])
 
-  private case class InlineDocumentCacheKey(sourceLines: Vector[String])
+  private case class SourceLinesFingerprint(lineCount: Int, totalLength: Int, hash: Int)
+
+  private object SourceLinesFingerprint:
+
+    def from(sourceLines: Vector[String]): SourceLinesFingerprint =
+      SourceLinesFingerprint(
+        lineCount = sourceLines.length,
+        totalLength = sourceLines.map(_.length).sum,
+        hash = MurmurHash3.orderedHash(sourceLines)
+      )
+
+  private case class InlineDocumentCacheKey(source: SourceLinesFingerprint)
 
   private case class InlinePreviewIndex(
       previewLines: Vector[InlinePreviewLine],
@@ -221,7 +232,7 @@ object MarkdownDocumentPreview:
         None
 
   private def inlinePreviewIndex(sourceLines: Vector[String]): InlinePreviewIndex =
-    val key = InlineDocumentCacheKey(sourceLines)
+    val key = InlineDocumentCacheKey(SourceLinesFingerprint.from(sourceLines))
     inlineDocumentCache
       .synchronized {
         Option(inlineDocumentCache.get(key))

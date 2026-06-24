@@ -48,9 +48,21 @@ class ElementTransitionLowererSpec extends AnyFlatSpec with Matchers:
       tickRateMs = 16
     )
 
-    state.animations(CharacterKey(0, 0)).foregroundSteps.length.shouldBe(10)
-    state.animations(CharacterKey(1, 0)).foregroundSteps.length.shouldBe(11)
-    state.animations(CharacterKey(2, 0)).foregroundSteps.length.shouldBe(12)
+    state
+      .animations(CharacterKey(0, 0))
+      .foregroundAnimation
+      .map(animation => animation.steps -> animation.delayFrames)
+      .shouldBe(Some(10 -> 0))
+    state
+      .animations(CharacterKey(1, 0))
+      .foregroundAnimation
+      .map(animation => animation.steps -> animation.delayFrames)
+      .shouldBe(Some(10 -> 1))
+    state
+      .animations(CharacterKey(2, 0))
+      .foregroundAnimation
+      .map(animation => animation.steps -> animation.delayFrames)
+      .shouldBe(Some(10 -> 2))
   }
 
   it should "lower right-to-left sweeps into column-backward staggered cells" in {
@@ -71,9 +83,21 @@ class ElementTransitionLowererSpec extends AnyFlatSpec with Matchers:
       tickRateMs = 16
     )
 
-    state.animations(CharacterKey(0, 0)).foregroundSteps.length.shouldBe(12)
-    state.animations(CharacterKey(1, 0)).foregroundSteps.length.shouldBe(11)
-    state.animations(CharacterKey(2, 0)).foregroundSteps.length.shouldBe(10)
+    state
+      .animations(CharacterKey(0, 0))
+      .foregroundAnimation
+      .map(animation => animation.steps -> animation.delayFrames)
+      .shouldBe(Some(10 -> 2))
+    state
+      .animations(CharacterKey(1, 0))
+      .foregroundAnimation
+      .map(animation => animation.steps -> animation.delayFrames)
+      .shouldBe(Some(10 -> 1))
+    state
+      .animations(CharacterKey(2, 0))
+      .foregroundAnimation
+      .map(animation => animation.steps -> animation.delayFrames)
+      .shouldBe(Some(10 -> 0))
   }
 
   it should "delay outline-then-content cells until after frame cells begin" in {
@@ -91,6 +115,6 @@ class ElementTransitionLowererSpec extends AnyFlatSpec with Matchers:
       tickRateMs = 16
     )
 
-    state.animations(CharacterKey(0, 0)).foregroundSteps.length.shouldBe(10)
-    state.animations(CharacterKey(1, 0)).foregroundSteps.length.should(be > 10)
+    state.animations(CharacterKey(0, 0)).foregroundAnimation.map(_.steps).shouldBe(Some(10))
+    state.animations(CharacterKey(1, 0)).foregroundAnimation.map(_.delayFrames).exists(_ > 0).shouldBe(true)
   }

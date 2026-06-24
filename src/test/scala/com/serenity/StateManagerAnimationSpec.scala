@@ -182,7 +182,7 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
       .animations
       .animations
       .values
-      .map(_.foregroundSteps.length)
+      .flatMap(_.foregroundAnimation.map(_.steps))
       .min
     shortestFadeLength shouldBe AppConfig.default
       .withMotionPreset(MotionPreset.Smooth)

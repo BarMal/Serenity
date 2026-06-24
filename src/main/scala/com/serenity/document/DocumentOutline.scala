@@ -11,7 +11,10 @@ object DocumentOutline:
   private val MaxPlainTextSectionNameLength = 54
 
   def forBuffer(buffer: Buffer): List[Symbol] =
-    richTextHeadings(buffer.richTextDocument.filter(richTextMatchesBuffer(_, buffer))).filter(_.nonEmpty) match
+    richTextHeadings(
+      buffer.richTextDocument.filter(_.matchesPlainTextShape(buffer.content.lineCount, buffer.content.weight))
+    )
+      .filter(_.nonEmpty) match
       case Some(symbols) => symbols
       case None =>
         buffer.language match
@@ -36,10 +39,6 @@ object DocumentOutline:
     role match
       case ParagraphRole.Heading(_) => true
       case ParagraphRole.Body       => false
-
-  private def richTextMatchesBuffer(document: RichTextDocument, buffer: Buffer): Boolean =
-    document.paragraphs.length == buffer.content.lineCount &&
-      document.paragraphs.map(_.plainText).toVector == buffer.content.linesFrom(0, document.paragraphs.length)
 
   private def markdownHeadings(buffer: Buffer): List[Symbol] =
     bufferLines(buffer).collect {
