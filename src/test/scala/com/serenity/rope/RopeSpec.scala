@@ -495,26 +495,42 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     val initial = Rope("alpha\nbeta\ngamma")
 
     initial.newlineCount.shouldBe(2)
+    initial.lastLineLength.shouldBe("gamma".length)
+    initial.endsWithNewline.shouldBe(false)
     initial.lineCount.shouldBe(3)
 
     val concatenated = Rope("alpha\n").concat(Rope("beta\ngamma"))
     concatenated.newlineCount.shouldBe(2)
+    concatenated.lastLineLength.shouldBe("gamma".length)
+    concatenated.endsWithNewline.shouldBe(false)
     concatenated.lineCount.shouldBe(3)
 
     val inserted = Rope("alphagamma").insert("alpha".length, "\nbeta\n")
     inserted.collect() shouldBe "alpha\nbeta\ngamma"
     inserted.newlineCount.shouldBe(2)
+    inserted.lastLineLength.shouldBe("gamma".length)
+    inserted.endsWithNewline.shouldBe(false)
     inserted.lineCount.shouldBe(3)
 
     val deleted = inserted.deleteRight("alpha".length, "\nbeta\n".length)
     deleted.collect() shouldBe "alphagamma"
     deleted.newlineCount.shouldBe(0)
+    deleted.lastLineLength.shouldBe("alphagamma".length)
+    deleted.endsWithNewline.shouldBe(false)
     deleted.lineCount.shouldBe(1)
 
     val rebuilt = concatenated.rebuild
     rebuilt.collect() shouldBe "alpha\nbeta\ngamma"
     rebuilt.newlineCount.shouldBe(2)
+    rebuilt.lastLineLength.shouldBe("gamma".length)
+    rebuilt.endsWithNewline.shouldBe(false)
     rebuilt.lineCount.shouldBe(3)
+
+    val trailingNewline = Rope("alpha\n").concat(Rope("beta\n"))
+    trailingNewline.newlineCount.shouldBe(2)
+    trailingNewline.lastLineLength.shouldBe(0)
+    trailingNewline.endsWithNewline.shouldBe(true)
+    trailingNewline.lineCount.shouldBe(3)
 
   it should "resolve line and column offsets through rope line traversal" in new ChunkedRopeSpecScope:
     val multiline = Rope("alpha\nbeta\ngamma")
@@ -538,6 +554,50 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     rope.getLine(199) shouldBe Some("line-200")
     rope.lineColumnToOffset(149, 4) shouldBe content.indexOf("line-150") + 4
 
+  it should "skip preceding rope branches when resolving later lines" in new ChunkedRopeSpecScope:
+    val skippedContent = (1 to 200).map(index => s"skip-$index").mkString("", "\n", "\n")
+    val skippedBranch  = ExplodingIndexRope(Rope(skippedContent))
+    val targetBranch   = Rope("target-line\n")
+    val rope           = Node(skippedBranch, targetBranch)
+    val targetLine     = skippedBranch.newlineCount
+
+    rope.getLine(targetLine) shouldBe Some("target-line")
+    rope.lineColumnToOffset(targetLine, 6) shouldBe skippedBranch.weight + 6
+
   trait ChunkedRopeSpecScope:
     given balance: Balance =
       Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
+
+  final case class ExplodingIndexRope(delegate: Rope)(using Balance) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def newlineCount: Int =
+      delegate.newlineCount
+
+    override def lastLineLength: Int =
+      delegate.lastLineLength
+
+    override def endsWithNewline: Boolean =
+      delegate.endsWithNewline
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      this
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def index(i: Int): Option[Char] =
+      throw AssertionError("line traversal should skip this branch")
+
+    override def collect(): String =
+      throw AssertionError("line traversal should not materialise this branch")
