@@ -115,6 +115,20 @@ trait Rope(using balance: Balance):
       appendLine(this, lineIndex, value)
       Some(value.toString)
 
+  def linesFrom(lineIndex: Int, maxLines: Int): Vector[String] =
+    linesIteratorFrom(lineIndex).take(maxLines).map(_._2).toVector
+
+  def linesIteratorFrom(lineIndex: Int): Iterator[(Int, String)] =
+    if lineIndex < 0 || lineIndex > newlineCount then Iterator.empty
+    else
+      Iterator.unfold((lineColumnToOffset(lineIndex, 0), lineIndex, false)) {
+        case (_, _, true)                            => None
+        case (_, line, false) if line > newlineCount => None
+        case (offset, line, false) =>
+          val next = lineAt(offset)
+          Some((line -> next.value) -> (next.nextOffset, line + 1, next.isFinalLine))
+      }
+
   def lineColumnToOffset(line: Int, column: Int): Int =
     val targetLine = math.max(0, line)
     val targetCol  = math.max(0, column)
@@ -226,6 +240,24 @@ trait Rope(using balance: Balance):
           case None    => ()
 
     loop(0, 0)
+
+  private case class LineRead(value: String, nextOffset: Int, isFinalLine: Boolean)
+
+  private def lineAt(offset: Int): LineRead =
+    val value = new StringBuilder
+
+    @tailrec
+    def loop(index: Int): LineRead =
+      if index >= weight then LineRead(value.toString, index, isFinalLine = true)
+      else
+        this.index(index) match
+          case Some('\n') => LineRead(value.toString, index + 1, isFinalLine = false)
+          case Some(char) =>
+            value.append(char)
+            loop(index + 1)
+          case None => LineRead(value.toString, index, isFinalLine = true)
+
+    loop(math.max(0, offset))
 
   private def lineColumnToOffsetIn(rope: Rope, line: Int, column: Int, baseOffset: Int): Int =
     rope match
