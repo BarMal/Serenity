@@ -1463,20 +1463,7 @@ object EditorEventReducer:
 
   private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
     if query.isEmpty then Nil
-    else
-      val text = buffer.content.collect()
-      findMatches(text, query).map(offset => offsetToCursorPosition(text, text.length, offset))
-
-  private def findMatches(text: String, query: String): List[Int] =
-    if query.isEmpty then Nil
-    else
-      @annotation.tailrec
-      def loop(start: Int, acc: List[Int]): List[Int] =
-        val index = text.indexOf(query, start)
-        if index == -1 then acc.reverse
-        else loop(index + query.length, index :: acc)
-
-      loop(0, Nil)
+    else buffer.content.searchAll(query).map(offset => offsetToCursorPosition(buffer.content, offset))
 
   private def toFindResult(cursor: CursorPosition): FindResult =
     FindResult(cursor.line, cursor.column)

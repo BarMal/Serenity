@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.keystroke.events.*
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalEventReducer}
 import com.serenity.ui.fonts.FontLoader
@@ -15,6 +15,52 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
   private def matchAt(line: Int, column: Int): FindResult =
     FindResult(line, column)
+
+  final case class NonCollectingRope(delegate: Rope) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def newlineCount: Int =
+      delegate.newlineCount
+
+    override def lastLineLength: Int =
+      delegate.lastLineLength
+
+    override def endsWithNewline: Boolean =
+      delegate.endsWithNewline
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      this
+
+    override def index(i: Int): Option[Char] =
+      delegate.index(i)
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def lineCount: Int =
+      delegate.lineCount
+
+    override def getLine(lineIndex: Int): Option[String] =
+      delegate.getLine(lineIndex)
+
+    override def lineColumnToOffset(line: Int, column: Int): Int =
+      delegate.lineColumnToOffset(line, column)
+
+    override def offsetToLineColumn(offset: Int): (Int, Int) =
+      delegate.offsetToLineColumn(offset)
+
+    override def collect(): String =
+      throw AssertionError("find should not materialise the whole buffer")
 
   private def stateWithFindModal(
     query: String,
@@ -128,6 +174,26 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     withNeedle.buffers(bufferId).findState shouldBe Some(FindState("needle", List(matchAt(0, 6), matchAt(1, 0)), 0))
     withNeedle.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 6)
     withNeedle.modalSurface shouldBe defined
+  }
+
+  it should "update find results without materialising the whole buffer" in {
+    val bufferId = BufferId(0)
+    val initialState = stateWithFindModal("", "alpha needle beta\nneedle again").copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(content = NonCollectingRope(Rope("alpha needle beta\nneedle again")))
+      )
+    )
+
+    val withNeedle = "needle".foldLeft(initialState) { (state, char) =>
+      ModalEventReducer.reduce(ModalType.Find, InsertChar(char), state).state
+    }
+
+    activeFindModal(withNeedle) shouldBe Some(Modal.Find("needle", List(matchAt(0, 6), matchAt(1, 0)), 0))
+    withNeedle.buffers(bufferId).findState shouldBe Some(FindState("needle", List(matchAt(0, 6), matchAt(1, 0)), 0))
+    withNeedle.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 6)
   }
 
   it should "navigate find results forward and backward while the overlay remains open" in {

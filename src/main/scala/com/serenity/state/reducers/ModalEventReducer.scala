@@ -1,6 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
+import com.serenity.rope.Rope
 import com.serenity.state.models.*
 import com.serenity.text.TextEditing
 
@@ -370,9 +371,8 @@ object ModalEventReducer:
       case ReplaceWorkflowScope.Selection =>
         buffer.primarySelection match
           case Some(selection) =>
-            val text        = buffer.content.collect()
-            val startOffset = offsetForCursor(text, selection.start)
-            val endOffset   = offsetForCursor(text, selection.end)
+            val startOffset = offsetForCursor(buffer.content, selection.start)
+            val endOffset   = offsetForCursor(buffer.content, selection.end)
             Right(Some((math.min(startOffset, endOffset), math.max(startOffset, endOffset))))
           case None =>
             Left("Select text to preview selection matches")
@@ -413,10 +413,7 @@ object ModalEventReducer:
     if query.isEmpty then Nil
     else
       activeBuffer(state)
-        .map { buffer =>
-          val text = buffer.content.collect()
-          buffer.content.searchAll(query).map(offset => cursorPositionForOffset(text, offset))
-        }
+        .map(buffer => buffer.content.searchAll(query).map(offset => cursorPositionForOffset(buffer.content, offset)))
         .getOrElse(Nil)
 
   private def applyFindMatch(
@@ -466,18 +463,12 @@ object ModalEventReducer:
   private def activeBufferId(state: AppState): Option[BufferId] =
     state.layout.activeEditorPaneId.flatMap(paneId => state.layout.editorPanes.get(paneId).flatMap(_.bufferId))
 
-  private def offsetForCursor(text: String, cursor: CursorPosition): Int =
-    val lines            = text.split("\n", -1)
-    val clampedLine      = math.max(0, math.min(cursor.line, lines.length - 1))
-    val precedingLengths = lines.take(clampedLine).map(_.length + 1).sum
-    precedingLengths + math.max(0, math.min(cursor.column, lines(clampedLine).length))
+  private def offsetForCursor(content: Rope, cursor: CursorPosition): Int =
+    content.lineColumnToOffset(cursor.line, cursor.column)
 
-  private def cursorPositionForOffset(text: String, offset: Int): CursorPosition =
-    val clamped = math.max(0, math.min(offset, text.length))
-    text.take(clamped).foldLeft(CursorPosition(0, 0)) { (cursor, char) =>
-      if char == '\n' then CursorPosition(cursor.line + 1, 0)
-      else cursor.copy(column = cursor.column + 1)
-    }
+  private def cursorPositionForOffset(content: Rope, offset: Int): CursorPosition =
+    val (line, column) = content.offsetToLineColumn(offset)
+    CursorPosition(line, column)
 
   private def dismissToPane(state: AppState): AppState =
     state.layout.activeEditorPaneId match

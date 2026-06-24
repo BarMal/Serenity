@@ -53,6 +53,27 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
       newState.focus shouldEqual Focus.Surface(SurfaceId("command-runner"))
       newState.focusHistory should contain(Focus.EditorPane(PaneId(1)))
 
+    it("should replace an open find modal when toggled"):
+      val registry = CommandRegistry.default
+      val initialState = AppState.initial.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("find"),
+            SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        ),
+        focus = Focus.Surface(SurfaceId("find")),
+        focusHistory = List(Focus.EditorPane(PaneId(0)))
+      )
+
+      val result   = AppEventReducer.reduce(ToggleCommandRunner, initialState, registry)
+      val newState = result.state
+
+      newState.modalSurface shouldBe None
+      newState.commandRunnerSurface shouldBe defined
+      newState.commandRunnerSurface.map(surface => Focus.Surface(surface.id)) shouldBe Some(newState.focus)
+
     it("should deactivate and restore previous focus when escaped"):
       val registry  = CommandRegistry.default
       val component = CommandRunnerComponent(registry)
