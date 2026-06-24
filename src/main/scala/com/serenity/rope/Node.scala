@@ -2,8 +2,9 @@ package com.serenity.rope
 
 case class Node(left: Rope, right: Rope)(using balance: Balance) extends Rope:
 
-  override val weight: Int = left.weight + right.weight
-  override val height: Int = Math.max(left.height, right.height) + 1
+  override val weight: Int       = left.weight + right.weight
+  override val height: Int       = Math.max(left.height, right.height) + 1
+  override val newlineCount: Int = left.newlineCount + right.newlineCount
 
   override def isWeightBalanced: Boolean =
     Math.abs(left.weight - right.weight) <= balance.weightBalance

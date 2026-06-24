@@ -25,6 +25,9 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     override def height: Int =
       delegate.height
 
+    override def newlineCount: Int =
+      delegate.newlineCount
+
     override def isWeightBalanced: Boolean =
       delegate.isWeightBalanced
 

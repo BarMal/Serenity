@@ -5,6 +5,7 @@ import scala.annotation.tailrec
 trait Rope(using balance: Balance):
   def weight: Int
   def height: Int
+  def newlineCount: Int
 
   def isWeightBalanced: Boolean
   def isHeightBalanced: Boolean
@@ -94,7 +95,7 @@ trait Rope(using balance: Balance):
       findAll(0, List.empty)
 
   def lineCount: Int =
-    foldCharsUntil(1)((count, char) => Left(if char == '\n' then count + 1 else count))
+    newlineCount + 1
 
   def getLine(lineIndex: Int): Option[String] =
     if lineIndex < 0 then None
