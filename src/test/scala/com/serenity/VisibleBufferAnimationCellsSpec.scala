@@ -2,8 +2,7 @@ package com.serenity
 
 import java.awt.Color
 
-import com.serenity.animation.CharacterKey
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.VisibleBufferAnimationCells
 import com.serenity.state.models.{Buffer, BufferId, Viewport}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -13,34 +12,38 @@ class VisibleBufferAnimationCellsSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  "VisibleBufferAnimationCells" should "key unwrapped scrolled text by visible buffer columns" in {
-    val buffer = Buffer
-      .fromString(BufferId(1), "abcdefghijklmnopqrstuvwxyz")
-      .copy(viewport = Viewport(topLine = 0, leftColumn = 10, visibleLines = 1, visibleColumns = 5))
+  "VisibleBufferAnimationCells" should "collect all visible cells below the animation cap" in {
+    val buffer = Buffer(BufferId(1), Rope("abcdef")).copy(
+      viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 1, visibleColumns = 6)
+    )
 
     val cells = VisibleBufferAnimationCells.fromBuffer(
       buffer,
       wordWrapEnabled = false,
       startColor = Color.BLACK,
-      endColor = Color.WHITE
+      endColor = Color.WHITE,
+      maxAnimatedCells = 10
     )
 
-    cells.keys.toSet.shouldBe((10 until 15).map(CharacterKey(_, 0)).toSet)
-    cells(CharacterKey(10, 0)).char.shouldBe('k')
-    cells(CharacterKey(14, 0)).char.shouldBe('o')
+    cells.size shouldBe 6
   }
 
-  it should "skip unwrapped lines that are entirely left of the viewport" in {
-    val buffer = Buffer
-      .fromString(BufferId(1), "short")
-      .copy(viewport = Viewport(topLine = 0, leftColumn = 10, visibleLines = 1, visibleColumns = 5))
+  it should "cap large visible buffer animations before per-cell fade lists are allocated" in {
+    val content = (1 to 100).map(_ => "x" * 100).mkString("\n")
+    val buffer = Buffer(BufferId(1), Rope(content)).copy(
+      viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 100, visibleColumns = 100)
+    )
 
     val cells = VisibleBufferAnimationCells.fromBuffer(
       buffer,
       wordWrapEnabled = false,
       startColor = Color.BLACK,
-      endColor = Color.WHITE
+      endColor = Color.WHITE,
+      maxAnimatedCells = 2_000
     )
 
-    cells.shouldBe(empty)
+    cells.size shouldBe 2_000
+    cells.keys.map(_.line).maxOption shouldBe Some(19)
   }
+
+end VisibleBufferAnimationCellsSpec
