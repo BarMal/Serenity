@@ -5,6 +5,7 @@ import java.nio.file.Files
 
 import scala.concurrent.duration.*
 
+import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntime
@@ -213,6 +214,27 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       failure.get.message should include("surfaces=1")
       failure.get.message should include("activeBuffer=none")
       failure.flatMap(_.error).map(_.getMessage) should contain("idle render failed")
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "log resize callback failures from the runtime bridge" in {
+    val program = Dispatcher.parallel[IO].use { dispatcher =>
+      for
+        logs <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
+        given Logger[IO] = new RecordingLogger(logs)
+        callback = AppRuntime.resizeCallbackBridge(
+          IO.raiseError(new RuntimeException("resize signal failed")),
+          dispatcher
+        )
+        _       <- IO(callback())
+        _       <- IO.sleep(50.millis)
+        entries <- logs.get
+      yield
+        val failure = entries.find(_.message.contains("[RUNTIME] resize callback failed"))
+        failure.map(_.message) shouldBe defined
+        failure.flatMap(_.error).map(_.getMessage) should contain("resize signal failed")
+    }
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
