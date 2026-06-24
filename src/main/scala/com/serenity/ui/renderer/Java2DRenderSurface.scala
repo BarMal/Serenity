@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import scala.jdk.CollectionConverters.*
 
+import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.TextStyle
 
@@ -198,7 +199,6 @@ class Java2DRenderSurface(
 
 object Java2DRenderSurface:
 
-  private[serenity] case class DeviceScale(x: Double, y: Double)
   private[serenity] case class DeviceRegion(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)
 
   def forFrame(
@@ -209,7 +209,7 @@ object Java2DRenderSurface:
   ): Java2DRenderSurface =
     val logicalWidth  = canvas.getWidth.max(1)
     val logicalHeight = canvas.getHeight.max(1)
-    val scale         = deviceScaleFor(canvas)
+    val scale         = DisplayScale.forComponent(canvas)
     val image = new BufferedImage(
       deviceImageDimension(logicalWidth, scale.x),
       deviceImageDimension(logicalHeight, scale.y),
@@ -250,9 +250,3 @@ object Java2DRenderSurface:
 
   private def scaledCeil(logicalPx: Int, deviceScale: Double): Int =
     math.ceil(logicalPx.toDouble * deviceScale.max(1.0)).toInt
-
-  private def deviceScaleFor(canvas: javax.swing.JPanel): DeviceScale =
-    Option(canvas.getGraphicsConfiguration)
-      .map(_.getDefaultTransform)
-      .map(transform => DeviceScale(transform.getScaleX.max(1.0), transform.getScaleY.max(1.0)))
-      .getOrElse(DeviceScale(1.0, 1.0))
