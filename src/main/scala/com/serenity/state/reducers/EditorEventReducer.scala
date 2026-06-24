@@ -283,6 +283,32 @@ object EditorEventReducer:
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
+          case MoveWordLeft =>
+            val movementStart   = selectionFocusOrCursor(buffer, cursor)
+            val newCursor       = moveCursorToPreviousWordBoundary(movementStart, buffer.content)
+            val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
+            val updatedBuffer = buffer.copy(
+              cursors = newCursor :: buffer.cursors.tail,
+              selection = None,
+              preferredColumn = Some(newCursor.column),
+              preferredXPx = None,
+              viewport = updatedViewport
+            )
+            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+
+          case MoveWordRight =>
+            val movementStart   = selectionFocusOrCursor(buffer, cursor)
+            val newCursor       = moveCursorToNextWordBoundary(movementStart, buffer.content)
+            val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
+            val updatedBuffer = buffer.copy(
+              cursors = newCursor :: buffer.cursors.tail,
+              selection = None,
+              preferredColumn = Some(newCursor.column),
+              preferredXPx = None,
+              viewport = updatedViewport
+            )
+            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+
           case MoveUp =>
             val movementStart         = selectionFocusOrCursor(buffer, cursor)
             val preferredColumn       = buffer.preferredColumn.getOrElse(movementStart.column)
@@ -642,8 +668,8 @@ object EditorEventReducer:
             clipboard = Some(selectedTexts(buffer).mkString("\n"))
           )
         )
-      case MoveLeft | MoveRight | MoveUp | MoveDown | MoveToStart | MoveToEnd | PageUp | PageDown | MoveToStartOfFile |
-          MoveToEndOfFile =>
+      case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveUp | MoveDown | MoveToStart | MoveToEnd | PageUp |
+          PageDown | MoveToStartOfFile | MoveToEndOfFile =>
         reduceMultiCursorTextEvent(event, collapseSelectionsToFocus(buffer, currentState), paneId, currentState)
       case SelectAll | OpenGotoLine | OpenFind | FindNext | Escape =>
         reduceGlobalTextEvent(event, buffer, paneId, currentState)
@@ -709,6 +735,24 @@ object EditorEventReducer:
           updateBufferInState(
             currentState,
             applyMultiCursorNavigation(buffer, currentState)(cursor => moveCursorRight(cursor, buffer.content))
+          )
+        )
+      case MoveWordLeft =>
+        ReducerResult.noEffects(
+          updateBufferInState(
+            currentState,
+            applyMultiCursorNavigation(buffer, currentState)(cursor =>
+              moveCursorToPreviousWordBoundary(cursor, buffer.content)
+            )
+          )
+        )
+      case MoveWordRight =>
+        ReducerResult.noEffects(
+          updateBufferInState(
+            currentState,
+            applyMultiCursorNavigation(buffer, currentState)(cursor =>
+              moveCursorToNextWordBoundary(cursor, buffer.content)
+            )
           )
         )
       case MoveToStart =>
@@ -1382,6 +1426,14 @@ object EditorEventReducer:
       case Some('\n') => cursor.copy(line = cursor.line + 1, column = 0)
       case Some(_)    => cursor.moveRight
       case None       => cursor
+
+  private def moveCursorToPreviousWordBoundary(cursor: CursorPosition, content: Rope): CursorPosition =
+    val offset = lineColumnToOffset(content, cursor.line, cursor.column)
+    offsetToCursorPosition(content, previousWordBoundary(content, offset))
+
+  private def moveCursorToNextWordBoundary(cursor: CursorPosition, content: Rope): CursorPosition =
+    val offset = lineColumnToOffset(content, cursor.line, cursor.column)
+    offsetToCursorPosition(content, nextWordBoundary(content, offset))
 
   private def moveMultiCursorVertical(
     cursor: CursorPosition,

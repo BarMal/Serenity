@@ -1120,6 +1120,66 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
   }
 
+  it should "move a single cursor to the previous word boundary" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha beta,gamma"),
+            cursors = List(CursorPosition(0, 14))
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(MoveWordLeft, paneId, initialState).state
+    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 11))
+  }
+
+  it should "move a single cursor to the next word boundary" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha,beta gamma"),
+            cursors = List(CursorPosition(0, 0))
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(MoveWordRight, paneId, initialState).state
+    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 5))
+  }
+
+  it should "move every cursor by word boundaries when multiple cursors are active" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha beta,gamma delta"),
+            cursors = List(CursorPosition(0, 8), CursorPosition(0, 20))
+          )
+      )
+    )
+
+    val movedLeft = EditorEventReducer.reduce(MoveWordLeft, paneId, initialState).state
+    movedLeft.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 6), CursorPosition(0, 17))
+
+    val movedRight = EditorEventReducer.reduce(MoveWordRight, paneId, initialState).state
+    movedRight.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 10), CursorPosition(0, 22))
+  }
+
   it should "move every cursor to line start when multiple cursors are active" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)

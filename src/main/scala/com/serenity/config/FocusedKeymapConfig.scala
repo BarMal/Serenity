@@ -13,6 +13,8 @@ trait KeymapEventAction[+E <: Event]:
 enum EditorKeyAction extends KeymapEventAction[TextEntryEvent]:
   case MoveLeft
   case MoveRight
+  case MoveWordLeft
+  case MoveWordRight
   case MoveUp
   case MoveDown
   case ExtendSelectionLeft
@@ -38,6 +40,8 @@ enum EditorKeyAction extends KeymapEventAction[TextEntryEvent]:
     this match
       case MoveLeft            => "move_left"
       case MoveRight           => "move_right"
+      case MoveWordLeft        => "move_word_left"
+      case MoveWordRight       => "move_word_right"
       case MoveUp              => "move_up"
       case MoveDown            => "move_down"
       case ExtendSelectionLeft => "extend_selection_left"
@@ -64,6 +68,8 @@ enum EditorKeyAction extends KeymapEventAction[TextEntryEvent]:
     this match
       case MoveLeft            => com.serenity.keystroke.events.MoveLeft
       case MoveRight           => com.serenity.keystroke.events.MoveRight
+      case MoveWordLeft        => com.serenity.keystroke.events.MoveWordLeft
+      case MoveWordRight       => com.serenity.keystroke.events.MoveWordRight
       case MoveUp              => com.serenity.keystroke.events.MoveUp
       case MoveDown            => com.serenity.keystroke.events.MoveDown
       case ExtendSelectionLeft => com.serenity.keystroke.events.ExtendSelectionLeft
@@ -249,8 +255,14 @@ object EditorKeymapConfig:
   val defaultBindings: Map[EditorKeyAction, List[HotkeyTrigger]] = Map(
     EditorKeyAction.MoveLeft  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
     EditorKeyAction.MoveRight -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set.empty)),
-    EditorKeyAction.MoveUp    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
-    EditorKeyAction.MoveDown  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),
+    EditorKeyAction.MoveWordLeft -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set(com.serenity.keystroke.Modifier.Ctrl))
+    ),
+    EditorKeyAction.MoveWordRight -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set(com.serenity.keystroke.Modifier.Ctrl))
+    ),
+    EditorKeyAction.MoveUp   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
+    EditorKeyAction.MoveDown -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),
     EditorKeyAction.ExtendSelectionLeft -> List(
       HotkeyTrigger(
         com.serenity.keystroke.InputKey.ArrowLeft,
