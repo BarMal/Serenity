@@ -245,7 +245,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
                       workflow.findText.length,
                       workflow.replacementText.length
                     )
-                  val newCursor = cursorPositionForOffset(updatedContent.collect(), cursorOffset)
+                  val newCursor = cursorPositionForOffset(updatedContent, cursorOffset)
                   val updatedFindState =
                     refreshedFindState(updatedContent, workflow.findText, requestedIndex = 0)
                   val updatedBuffer = buffer.copy(
@@ -303,13 +303,13 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
                     workflow.copy(statusMessage = Some("No matches found"))
                   )
                 else
-                  val startOffset = nextReplaceMatchOffset(buffer, workflow.findText, matches)
+                  val startOffset = nextReplaceMatchOffset(buffer, matches)
                   val endOffset   = startOffset + workflow.findText.length
                   val updatedContent = buffer.content
                     .delete(startOffset, endOffset)
                     .insert(startOffset, workflow.replacementText)
                   val cursorOffset = startOffset + workflow.replacementText.length
-                  val newCursor    = cursorPositionForOffset(updatedContent.collect(), cursorOffset)
+                  val newCursor    = cursorPositionForOffset(updatedContent, cursorOffset)
                   val updatedFindState =
                     refreshedFindStateAfterOffset(updatedContent, workflow.findText, cursorOffset)
                   val replacementSelection =
@@ -574,9 +574,9 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
         case _                                                          => None
     }
 
-  private def nextReplaceMatchOffset(buffer: Buffer, findText: String, matches: List[Int]): Int =
+  private def nextReplaceMatchOffset(buffer: Buffer, matches: List[Int]): Int =
     val cursorOffset = buffer.cursors.headOption
-      .map(cursor => offsetForCursor(buffer.content.collect(), cursor))
+      .map(cursor => offsetForCursor(buffer.content, cursor))
       .getOrElse(0)
     matches.find(_ >= cursorOffset).getOrElse(matches.head)
 
@@ -590,9 +590,8 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
       case ReplaceWorkflowScope.Selection =>
         buffer.primarySelection match
           case Some(selection) =>
-            val text        = buffer.content.collect()
-            val startOffset = offsetForCursor(text, selection.start)
-            val endOffset   = offsetForCursor(text, selection.end)
+            val startOffset = offsetForCursor(buffer.content, selection.start)
+            val endOffset   = offsetForCursor(buffer.content, selection.end)
             Right(Some((startOffset, endOffset)))
           case None =>
             Left("Select text to limit replacement")
@@ -615,10 +614,9 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
     findText: String,
     requestedIndex: Int
   ): Option[FindState] =
-    val text = content.collect()
     val results = content
       .searchAll(findText)
-      .map(offset => cursorPositionForOffset(text, offset))
+      .map(offset => cursorPositionForOffset(content, offset))
       .map(cursor => FindResult(cursor.line, cursor.column))
     val resultSet = FindResultSet.normalized(findText, results, requestedIndex)
     Option.when(resultSet.results.nonEmpty)(FindState.fromResultSet(resultSet))
@@ -697,12 +695,19 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
       else linesBefore.map(_.length).sum + linesBefore.length
     linePrefixLength + cursor.column
 
+  private def offsetForCursor(content: com.serenity.rope.Rope, cursor: CursorPosition): Int =
+    content.lineColumnToOffset(cursor.line, cursor.column)
+
   private def cursorPositionForOffset(text: String, offset: Int): CursorPosition =
     val clamped = math.max(0, math.min(offset, text.length))
     text.take(clamped).foldLeft(CursorPosition(0, 0)) { (cursor, char) =>
       if char == '\n' then CursorPosition(cursor.line + 1, 0)
       else cursor.copy(column = cursor.column + 1)
     }
+
+  private def cursorPositionForOffset(content: com.serenity.rope.Rope, offset: Int): CursorPosition =
+    val (line, column) = content.offsetToLineColumn(offset)
+    CursorPosition(line, column)
 
   protected def replaceWorkflowSurface(
     state: AppState,

@@ -581,6 +581,14 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     rope.getLine(targetLine) shouldBe Some("target-line")
     rope.lineColumnToOffset(targetLine, 6) shouldBe skippedBranch.weight + 6
 
+  it should "search without materialising the whole rope" in new ChunkedRopeSpecScope:
+    val content = "alpha needle\nbeta\nneedle gamma"
+    val rope    = NonCollectingIndexedRope(Rope(content))
+
+    rope.search("needle") shouldBe Some(content.indexOf("needle"))
+    rope.searchAll("needle") shouldBe List(content.indexOf("needle"), content.lastIndexOf("needle"))
+    rope.searchAll("missing") shouldBe Nil
+
   trait ChunkedRopeSpecScope:
     given balance: Balance =
       Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
@@ -618,3 +626,37 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
     override def collect(): String =
       throw AssertionError("line traversal should not materialise this branch")
+
+  final case class NonCollectingIndexedRope(delegate: Rope)(using Balance) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def newlineCount: Int =
+      delegate.newlineCount
+
+    override def lastLineLength: Int =
+      delegate.lastLineLength
+
+    override def endsWithNewline: Boolean =
+      delegate.endsWithNewline
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      this
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def index(i: Int): Option[Char] =
+      delegate.index(i)
+
+    override def collect(): String =
+      throw AssertionError("search should not materialise the whole rope")

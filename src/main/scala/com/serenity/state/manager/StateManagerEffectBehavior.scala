@@ -1678,19 +1678,14 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
 
   private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
     if query.isEmpty then Nil
-    else
-      val text = buffer.content.collect()
-      buffer.content.searchAll(query).map(offset => cursorPositionForOffset(text, offset))
+    else buffer.content.searchAll(query).map(offset => cursorPositionForOffset(buffer.content, offset))
 
   private def toFindResult(cursor: CursorPosition): FindResult =
     FindResult(cursor.line, cursor.column)
 
-  private def cursorPositionForOffset(text: String, offset: Int): CursorPosition =
-    val clamped = math.max(0, math.min(offset, text.length))
-    text.take(clamped).foldLeft(CursorPosition(0, 0)) { (cursor, char) =>
-      if char == '\n' then CursorPosition(cursor.line + 1, 0)
-      else cursor.copy(column = cursor.column + 1)
-    }
+  private def cursorPositionForOffset(content: com.serenity.rope.Rope, offset: Int): CursorPosition =
+    val (line, column) = content.offsetToLineColumn(offset)
+    CursorPosition(line, column)
 
   protected def toggleThemeEffect(state: AppState): IO[Unit] =
     val targetThemeName =

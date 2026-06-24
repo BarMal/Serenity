@@ -95,14 +95,14 @@ trait Rope(using balance: Balance):
       value.toString
 
   def searchAll(term: String): List[Int] =
-    if term.isEmpty then List.empty
+    if term.isEmpty || term.length > weight then List.empty
     else
-      val content = this.collect()
       @tailrec
       def findAll(start: Int, acc: List[Int]): List[Int] =
-        val index = content.indexOf(term, start)
-        if index == -1 then acc.reverse
-        else findAll(index + term.length, index :: acc)
+        if start > weight - term.length then acc.reverse
+        else if matchesAt(start, term) then findAll(start + term.length, start :: acc)
+        else findAll(start + 1, acc)
+
       findAll(0, List.empty)
 
   def lineCount: Int =
@@ -127,11 +127,26 @@ trait Rope(using balance: Balance):
     offsetToLineColumnIn(this, clamped, 0, 0)
 
   def search(term: String): Option[Int] =
-    if term.isEmpty then None
+    if term.isEmpty || term.length > weight then None
     else
-      val content = this.collect()
-      val index   = content.indexOf(term)
-      if index == -1 then None else Some(index)
+      @tailrec
+      def loop(offset: Int): Option[Int] =
+        if offset > weight - term.length then None
+        else if matchesAt(offset, term) then Some(offset)
+        else loop(offset + 1)
+
+      loop(0)
+
+  private def matchesAt(offset: Int, term: String): Boolean =
+    @tailrec
+    def loop(index: Int): Boolean =
+      if index >= term.length then true
+      else
+        this.index(offset + index) match
+          case Some(char) if char == term.charAt(index) => loop(index + 1)
+          case _                                        => false
+
+    loop(0)
 
   private def appendRange(
     rope: Rope,
