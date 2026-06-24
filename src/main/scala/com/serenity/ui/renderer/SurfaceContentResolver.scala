@@ -758,7 +758,8 @@ object SurfaceContentResolver:
     ResolvedSurfaceContent(
       title = titleFor(mode, "Search"),
       header = Some(headerRow),
-      rows = resultRows
+      rows = resultRows,
+      footer = Option.when(state.hasMoreResults)(OverlayRow(s"${state.results.length} loaded, more available"))
     )
 
   private def resolveContextMenu(
