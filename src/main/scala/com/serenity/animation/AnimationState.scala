@@ -10,6 +10,16 @@ case class AnimationState(
     animations: Map[CharacterKey, AnimatedCell] = Map.empty
 ):
 
+  private lazy val activeCount: Int =
+    animations.values.count(!_.isComplete)
+
+  private lazy val animationsByLine: Map[Int, Map[Int, AnimatedCell]] =
+    animations
+      .groupMap { case (key, _) => key.line } { case (key, cell) => key.column -> cell }
+      .view
+      .mapValues(_.toMap)
+      .toMap
+
   def addCharacterAnimation(
     char: Char,
     x: Int,
@@ -35,7 +45,7 @@ case class AnimationState(
   /** Advance all animations by one step */
   def advanceAnimations(): AnimationState =
     if !hasActiveAnimations then this
-    else copy(animations = animations.view.mapValues(cell => if cell.isComplete then cell else cell.advance()).toMap)
+    else copy(animations = animations.map((key, cell) => key -> (if cell.isComplete then cell else cell.advance())))
 
   /** Advance all animations and automatically clean up completed ones */
   def advanceAllAnimations(): AnimationState =
@@ -50,11 +60,9 @@ case class AnimationState(
   /** Remove all completed animations from state */
   def cleanupCompleted(): AnimationState =
     if animations.isEmpty then this
-    else
-      val activeAnimations = animations.filter((_, cell) => !cell.isComplete)
-      if activeAnimations.size == animations.size then this
-      else if activeAnimations.isEmpty then AnimationState.empty
-      else copy(animations = activeAnimations)
+    else if activeAnimationCount == animations.size then this
+    else if activeAnimationCount == 0 then AnimationState.empty
+    else copy(animations = animations.filter((_, cell) => !cell.isComplete))
 
   /** Clear all animations */
   def clearAll(): AnimationState =
@@ -70,17 +78,15 @@ case class AnimationState(
 
   /** Get all animated cells for a given buffer line, keyed by column */
   def getLineAnimations(line: Int): Map[Int, AnimatedCell] =
-    animations
-      .filter((key, _) => key.line == line)
-      .map((key, cell) => key.column -> cell)
+    animationsByLine.getOrElse(line, Map.empty)
 
   /** Check if there are any active (non-complete) animations */
   def hasActiveAnimations: Boolean =
-    animations.values.exists(!_.isComplete)
+    activeCount > 0
 
   /** Count of active (non-completed) animations */
   def activeAnimationCount: Int =
-    animations.values.count(!_.isComplete)
+    activeCount
 
   /** All animation positions as buffer coordinates */
   def allPositions: Set[CharacterKey] =
