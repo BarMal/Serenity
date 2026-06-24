@@ -1,10 +1,11 @@
 package com.serenity.project
 
 import java.nio.file.{Files, Path}
+import java.util.concurrent.TimeUnit
 
 import scala.io.{Codec, Source}
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 
 /** Project-level workflow supported by Serenity's command runner. */
 enum ProjectTaskKind(val label: String, val lowerLabel: String):
@@ -158,23 +159,61 @@ object ProjectTaskDetector:
 /** Runs a detected project task and captures its combined output. */
 object ProjectTaskRunner:
 
-  private val MaxOutputLength = 20_000
+  private val MaxOutputLength    = 20_000
+  private val DestroyGraceMillis = 250
 
-  def run(command: ProjectTaskCommand): IO[ProjectTaskResult] =
-    IO.blocking {
-      val builder = ProcessBuilder(command.commandLine*)
-      builder.directory(command.workingDirectory.toFile)
-      builder.redirectErrorStream(true)
+  private[project] trait ProcessHandle:
+    def output: IO[String]
+    def waitFor: IO[Int]
+    def destroy: IO[Unit]
 
-      val process = builder.start()
-      val source  = Source.fromInputStream(process.getInputStream)(using Codec.UTF8)
-      val output =
+  private[project] trait ProcessStarter:
+    def start(command: ProjectTaskCommand): IO[ProcessHandle]
+
+  private object SystemProcessStarter extends ProcessStarter:
+
+    override def start(command: ProjectTaskCommand): IO[ProcessHandle] =
+      IO.blocking {
+        val builder = ProcessBuilder(command.commandLine*)
+        builder.directory(command.workingDirectory.toFile)
+        builder.redirectErrorStream(true)
+
+        JdkProcessHandle(builder.start())
+      }
+
+  final private case class JdkProcessHandle(process: Process) extends ProcessHandle:
+
+    override def output: IO[String] =
+      IO.interruptible {
+        val source = Source.fromInputStream(process.getInputStream)(using Codec.UTF8)
         try source.mkString
         finally source.close()
-      val exitCode = process.waitFor()
+      }
 
-      ProjectTaskResult(command, exitCode, trimOutput(output))
+    override def waitFor: IO[Int] =
+      IO.interruptible(process.waitFor())
+
+    override def destroy: IO[Unit] =
+      IO.blocking {
+        if process.isAlive then
+          process.destroy()
+          process.waitFor(DestroyGraceMillis.toLong, TimeUnit.MILLISECONDS)
+          if process.isAlive then process.destroyForcibly(): Unit
+      }.void
+
+  def run(command: ProjectTaskCommand): IO[ProjectTaskResult] =
+    run(command, SystemProcessStarter)
+
+  private[project] def run(command: ProjectTaskCommand, starter: ProcessStarter): IO[ProjectTaskResult] =
+    processResource(command, starter).use { process =>
+      for
+        output   <- process.output
+        exitCode <- process.waitFor
+      yield ProjectTaskResult(command, exitCode, trimOutput(output))
     }
+
+  private def processResource(command: ProjectTaskCommand, starter: ProcessStarter): Resource[IO, ProcessHandle] =
+    Resource.make(starter.start(command))(_.destroy.attempt.void)
 
   private def trimOutput(output: String): String =
     if output.length <= MaxOutputLength then output
