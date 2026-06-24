@@ -94,11 +94,10 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
     if query.isEmpty then Nil
     else
       val lowerQuery = query.toLowerCase
-      val results = for
-        buffer <- state.buffers.values.toList.sortBy(_.id.value)
+      (for
+        buffer <- state.buffers.values.toList.sortBy(_.id.value).iterator
         name = buffer.filePath.map(_.getFileName.toString).getOrElse(s"buffer-${buffer.id.value}")
-        lineIdx <- 0 until buffer.content.lineCount
+        lineIdx <- (0 until buffer.content.lineCount).iterator
         line = buffer.content.getLine(lineIdx).getOrElse("")
         if line.toLowerCase.contains(lowerQuery)
-      yield FileSearchResult(buffer.id, name, lineIdx, line.trim)
-      results.take(100)
+      yield FileSearchResult(buffer.id, name, lineIdx, line.trim)).take(100).toList
