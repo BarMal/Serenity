@@ -20,6 +20,13 @@ class AnimationStateSpec extends AnyFlatSpec with Matchers:
     state.hasActiveAnimations should be(false)
   }
 
+  it should "reuse empty state when advancing animations" in {
+    val state = AnimationState.empty
+
+    state.advanceAnimations() should be theSameInstanceAs state
+    state.advanceAllAnimations() should be theSameInstanceAs state
+  }
+
   it should "add character animation" in {
     val state = AnimationState.empty
     val newState = state.addCharacterAnimation(
@@ -114,6 +121,15 @@ class AnimationStateSpec extends AnyFlatSpec with Matchers:
     cleared.getCell(1, 1) should be(empty)
     cleared.getCell(2, 1) should be(empty)
     cleared.hasActiveAnimations should be(false)
+  }
+
+  it should "reuse inactive state when advancing and cleanup is unnecessary" in {
+    val state = AnimationState.empty
+      .addCharacterAnimation('a', 1, 1, black, white, 1)
+      .advanceAllAnimations()
+
+    state.hasActiveAnimations should be(false)
+    state.advanceAllAnimations() should be theSameInstanceAs state
   }
 
   it should "handle position-based queries correctly" in {
