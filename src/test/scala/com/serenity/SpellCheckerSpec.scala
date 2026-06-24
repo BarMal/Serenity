@@ -4,10 +4,10 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.keystroke.events.InsertChar
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.BufferId
+import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -17,6 +17,52 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
 
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+  final case class NonCollectingRope(delegate: Rope) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def newlineCount: Int =
+      delegate.newlineCount
+
+    override def lastLineLength: Int =
+      delegate.lastLineLength
+
+    override def endsWithNewline: Boolean =
+      delegate.endsWithNewline
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      this
+
+    override def index(i: Int): Option[Char] =
+      delegate.index(i)
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def lineCount: Int =
+      delegate.lineCount
+
+    override def getLine(lineIndex: Int): Option[String] =
+      delegate.getLine(lineIndex)
+
+    override def lineColumnToOffset(line: Int, column: Int): Int =
+      delegate.lineColumnToOffset(line, column)
+
+    override def offsetToLineColumn(offset: Int): (Int, Int) =
+      delegate.offsetToLineColumn(offset)
+
+    override def collect(): String =
+      throw AssertionError("unchanged cached spell-check diagnostics should not materialise content")
 
   "SpellChecker" should "report unknown words with unicode-aware ranges" in {
     val config = SpellCheckConfig(
@@ -62,6 +108,54 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     val config = SpellCheckConfig(enabled = true)
 
     SpellChecker.check("id parse_json v2 ok", config) shouldBe Nil
+  }
+
+  it should "reuse cached diagnostics for unchanged buffers without materialising content" in {
+    val config      = SpellCheckConfig(enabled = true)
+    val bufferId    = BufferId(0)
+    val diagnostics = SpellChecker.check("wurld", config)
+    val content     = NonCollectingRope(Rope("wurld"))
+    val buffer      = AppState.initial.buffers(bufferId).copy(content = content)
+    val uri         = SpellChecker.diagnosticsUri(buffer)
+    val fingerprint = SpellCheckFingerprint.from(buffer, config)
+    val state = AppState.initial.copy(
+      config = AppConfig.default.withSpellCheck(config),
+      buffers = Map(bufferId -> buffer),
+      diagnostics = Map(uri -> diagnostics),
+      spellCheckCache = Map(uri -> SpellCheckCacheEntry(fingerprint, diagnostics))
+    )
+
+    val refreshed = SpellChecker.refreshDiagnostics(state)
+
+    refreshed.diagnostics.getOrElse(uri, Nil) shouldBe diagnostics
+    refreshed.spellCheckCache.get(uri).map(_.fingerprint) shouldBe Some(fingerprint)
+  }
+
+  it should "invalidate cached spell-check diagnostics when buffer content changes" in {
+    val config           = SpellCheckConfig(enabled = true)
+    val bufferId         = BufferId(0)
+    val staleContent     = Rope("wurld")
+    val updatedContent   = Rope("hello")
+    val staleBuffer      = AppState.initial.buffers(bufferId).copy(content = staleContent)
+    val updatedBuffer    = staleBuffer.copy(content = updatedContent)
+    val uri              = SpellChecker.diagnosticsUri(updatedBuffer)
+    val staleDiagnostics = SpellChecker.check("wurld", config)
+    val state = AppState.initial.copy(
+      config = AppConfig.default.withSpellCheck(config),
+      buffers = Map(bufferId -> updatedBuffer),
+      diagnostics = Map(uri -> staleDiagnostics),
+      spellCheckCache = Map(
+        uri -> SpellCheckCacheEntry(SpellCheckFingerprint.from(staleBuffer, config), staleDiagnostics)
+      )
+    )
+
+    val refreshed = SpellChecker.refreshDiagnostics(state)
+
+    refreshed.diagnostics.get(uri) shouldBe None
+    refreshed.spellCheckCache.get(uri).map(_.diagnostics) shouldBe Some(Nil)
+    refreshed.spellCheckCache.get(uri).map(_.fingerprint) shouldBe Some(
+      SpellCheckFingerprint.from(updatedBuffer, config)
+    )
   }
 
   "StateManager" should "refresh spell-check diagnostics after prose edits" in {

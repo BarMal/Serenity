@@ -4,7 +4,7 @@ import java.util.Locale
 
 import com.serenity.config.SpellCheckConfig
 import com.serenity.lsp.model.*
-import com.serenity.state.models.{AppState, Buffer, BufferId}
+import com.serenity.state.models.*
 
 object SpellChecker:
 
@@ -93,15 +93,26 @@ object SpellChecker:
       .filter(_._2.nonEmpty)
       .toMap
 
-    val refreshed = state.buffers.values.foldLeft(preserved) { (diagnostics, buffer) =>
-      val spellDiagnostics =
-        if shouldCheck(buffer, state.config.spellCheck) then check(buffer.content.collect(), state.config.spellCheck)
-        else Nil
-      if spellDiagnostics.isEmpty then diagnostics
-      else diagnostics + (diagnosticsUri(buffer) -> spellDiagnostics)
+    val (refreshed, cache) = state.buffers.values.foldLeft((preserved, Map.empty[String, SpellCheckCacheEntry])) {
+      case ((diagnostics, cache), buffer) =>
+        val uri = diagnosticsUri(buffer)
+        if shouldCheck(buffer, state.config.spellCheck) then
+          val fingerprint = SpellCheckFingerprint.from(buffer, state.config.spellCheck)
+          val entry = state.spellCheckCache
+            .get(uri)
+            .filter(_.fingerprint == fingerprint)
+            .getOrElse {
+              val spellDiagnostics = check(buffer.content.collect(), state.config.spellCheck)
+              SpellCheckCacheEntry(fingerprint, spellDiagnostics)
+            }
+          val nextDiagnostics =
+            if entry.diagnostics.isEmpty then diagnostics
+            else diagnostics + (uri -> entry.diagnostics)
+          nextDiagnostics -> (cache + (uri -> entry))
+        else diagnostics -> cache
     }
 
-    state.copy(diagnostics = refreshed)
+    state.copy(diagnostics = refreshed, spellCheckCache = cache)
 
   def diagnosticsUri(buffer: Buffer): String =
     buffer.filePath.map(_.toUri.toString).getOrElse(bufferDiagnosticsUri(buffer.id))

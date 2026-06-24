@@ -93,7 +93,7 @@ object CommentRendering:
       .headOption
       .map {
         case (syntax, range) =>
-          val rawLines = range.toVector.flatMap(line => buffer.content.getLine(line).map(_.trim))
+          val rawLines = buffer.content.linesFrom(range.start, range.size).map(_.trim)
           RenderedComment(
             sourceLine = range.start,
             raw = rawLines.mkString("\n"),

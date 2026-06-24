@@ -589,6 +589,15 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     rope.searchAll("needle") shouldBe List(content.indexOf("needle"), content.lastIndexOf("needle"))
     rope.searchAll("missing") shouldBe Nil
 
+  it should "read sequential lines without materialising the whole rope" in new ChunkedRopeSpecScope:
+    val content = "alpha\nbeta\ngamma\n"
+    val rope    = NonCollectingIndexedRope(Rope(content))
+
+    rope.linesFrom(0, 10) shouldBe Vector("alpha", "beta", "gamma", "")
+    rope.linesFrom(1, 2) shouldBe Vector("beta", "gamma")
+    rope.linesIteratorFrom(2).take(2).toVector shouldBe Vector(2 -> "gamma", 3 -> "")
+    rope.linesFrom(4, 1) shouldBe Vector.empty
+
   trait ChunkedRopeSpecScope:
     given balance: Balance =
       Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)

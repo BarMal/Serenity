@@ -1,7 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.animation.AnimationState
-import com.serenity.config.{AppConfig, CursorInfoBarMode, CursorInfoBarPlacement}
+import com.serenity.config.*
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
@@ -95,6 +95,32 @@ case class HoveredEditorTarget(
     cursor: CursorPosition
 )
 
+case class SpellCheckFingerprint(
+    contentIdentity: Int,
+    contentWeight: Int,
+    contentNewlineCount: Int,
+    contentLastLineLength: Int,
+    usesTextFont: Boolean,
+    config: SpellCheckConfig
+)
+
+object SpellCheckFingerprint:
+
+  def from(buffer: Buffer, config: SpellCheckConfig): SpellCheckFingerprint =
+    SpellCheckFingerprint(
+      contentIdentity = System.identityHashCode(buffer.content),
+      contentWeight = buffer.content.weight,
+      contentNewlineCount = buffer.content.newlineCount,
+      contentLastLineLength = buffer.content.lastLineLength,
+      usesTextFont = buffer.usesTextFont,
+      config = config.normalized
+    )
+
+case class SpellCheckCacheEntry(
+    fingerprint: SpellCheckFingerprint,
+    diagnostics: List[Diagnostic]
+)
+
 case class AppState(
     layout: Layout,
     buffers: Map[BufferId, Buffer],
@@ -113,6 +139,7 @@ case class AppState(
     clipboard: Option[String] = None, // not persisted between sessions
     recentFiles: List[java.nio.file.Path] = Nil,
     diagnostics: Map[String, List[Diagnostic]] = Map.empty,
+    spellCheckCache: Map[String, SpellCheckCacheEntry] = Map.empty,
     focusHistory: List[Focus] = List.empty,
     navigationBackStack: List[NavigationPoint] = Nil,
     navigationForwardStack: List[NavigationPoint] = Nil,

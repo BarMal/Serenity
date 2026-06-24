@@ -136,8 +136,7 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
       val matches = for
         buffer <- matchedBuffers.iterator
         name = buffer.filePath.map(_.getFileName.toString).getOrElse(s"buffer-${buffer.id.value}")
-        lineIdx <- (startLine(buffer.id) until buffer.content.lineCount).iterator
-        line = buffer.content.getLine(lineIdx).getOrElse("")
+        (lineIdx, line) <- buffer.content.linesIteratorFrom(startLine(buffer.id))
         if line.toLowerCase.contains(lowerQuery)
       yield FileSearchResult(buffer.id, name, lineIdx, line.trim)
 

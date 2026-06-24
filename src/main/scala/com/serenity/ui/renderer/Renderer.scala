@@ -659,7 +659,7 @@ object Renderer:
     buffer.language.contains(LanguageId.Markdown) && state.config.markdownViewMode == MarkdownViewMode.InlineLens
 
   private def markdownSourceLines(buffer: Buffer): Vector[String] =
-    (0 until buffer.content.lineCount).toVector.map(line => buffer.content.getLine(line).getOrElse(""))
+    buffer.content.linesFrom(0, buffer.content.lineCount)
 
   private def markdownLensFrameFor(buffer: Buffer): MarkdownLensFrame =
     val lines = markdownSourceLines(buffer)
