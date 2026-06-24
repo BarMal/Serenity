@@ -108,12 +108,40 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
     finally Files.deleteIfExists(path)
   }
 
+  it should "fail safely when the DOCX document entry is missing" in {
+    val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(emptyZipBytes())
+
+    error.getMessage should include("missing word/document.xml")
+  }
+
+  it should "fail safely when the DOCX document entry is oversized" in {
+    val bytes = docxRawBytes("word/document.xml", Array.fill(RichTextArchive.MaxXmlEntryBytes + 1)(0.toByte))
+
+    val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(bytes)
+
+    error.getMessage should include("word/document.xml is too large")
+  }
+
+  it should "wrap malformed DOCX XML in a codec exception" in {
+    val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(docxBytes("<w:document>"))
+
+    error.getMessage should include("DOCX document could not be decoded")
+  }
+
   private def docxBytes(documentXml: String): Array[Byte] =
+    docxRawBytes("word/document.xml", documentXml.getBytes(StandardCharsets.UTF_8))
+
+  private def emptyZipBytes(): Array[Byte] =
+    val output = java.io.ByteArrayOutputStream()
+    ZipOutputStream(output).close()
+    output.toByteArray
+
+  private def docxRawBytes(entryName: String, content: Array[Byte]): Array[Byte] =
     val output = java.io.ByteArrayOutputStream()
     val zip    = ZipOutputStream(output)
     try
-      zip.putNextEntry(ZipEntry("word/document.xml"))
-      zip.write(documentXml.getBytes(StandardCharsets.UTF_8))
+      zip.putNextEntry(ZipEntry(entryName))
+      zip.write(content)
       zip.closeEntry()
     finally zip.close()
     output.toByteArray

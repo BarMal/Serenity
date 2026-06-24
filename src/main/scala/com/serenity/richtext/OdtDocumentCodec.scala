@@ -3,8 +3,10 @@ package com.serenity.richtext
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
+import java.util.zip.{ZipEntry, ZipOutputStream}
 import javax.xml.parsers.DocumentBuilderFactory
+
+import scala.util.control.NonFatal
 
 import cats.effect.IO
 import org.w3c.dom.{Document as XmlDocument, Element, Node}
@@ -23,7 +25,7 @@ object OdtDocumentCodec:
 
   /** Read an ODT file into Serenity's native rich text model. */
   def read(path: Path): IO[RichTextDocument] =
-    IO.blocking(readBytes(Files.readAllBytes(path)))
+    IO.blocking(readBytes(RichTextArchive.readFile(path, "ODT")))
 
   /** Write Serenity's native rich text model to an ODT file. */
   def write(document: RichTextDocument, path: Path): IO[Unit] =
@@ -31,23 +33,27 @@ object OdtDocumentCodec:
 
   /** Decode ODT bytes into Serenity's native rich text model. */
   def readBytes(bytes: Array[Byte]): RichTextDocument =
-    val content = zipEntry(bytes, "content.xml").getOrElse {
-      throw new IllegalArgumentException("ODT archive is missing content.xml")
-    }
-    val xml    = parseXml(content)
-    val styles = stylesFromDocument(xml)
-    val paragraphs = firstElement(xml.getElementsByTagNameNS(OfficeNs, "text"))
-      .map(textElement =>
-        childElements(textElement)
-          .filter(element => element.getNamespaceURI == TextNs && Set("p", "h").contains(element.getLocalName))
-          .map(paragraphFromElement(_, styles))
-      )
-      .getOrElse(Nil)
+    try
+      val content = RichTextArchive.zipEntry(bytes, "content.xml", "ODT").getOrElse {
+        throw RichTextCodecException("ODT archive is missing content.xml")
+      }
+      val xml    = parseXml(content)
+      val styles = stylesFromDocument(xml)
+      val paragraphs = firstElement(xml.getElementsByTagNameNS(OfficeNs, "text"))
+        .map(textElement =>
+          childElements(textElement)
+            .filter(element => element.getNamespaceURI == TextNs && Set("p", "h").contains(element.getLocalName))
+            .map(paragraphFromElement(_, styles))
+        )
+        .getOrElse(Nil)
 
-    RichTextDocument(
-      if paragraphs.nonEmpty then paragraphs
-      else List(RichTextParagraph.plain(""))
-    ).normalized
+      RichTextDocument(
+        if paragraphs.nonEmpty then paragraphs
+        else List(RichTextParagraph.plain(""))
+      ).normalized
+    catch
+      case error: RichTextCodecException => throw error
+      case NonFatal(error)               => throw RichTextCodecException("ODT document could not be decoded", error)
 
   /** Encode Serenity's native rich text model as ODT bytes. */
   def writeBytes(document: RichTextDocument): Array[Byte] =
@@ -60,26 +66,15 @@ object OdtDocumentCodec:
     finally zip.close()
     output.toByteArray
 
-  private def zipEntry(bytes: Array[Byte], name: String): Option[Array[Byte]] =
-    val input = ZipInputStream(ByteArrayInputStream(bytes), StandardCharsets.UTF_8)
-    try
-      Iterator
-        .continually(input.getNextEntry)
-        .takeWhile(_ != null)
-        .find(_.getName == name)
-        .map { _ =>
-          val output = ByteArrayOutputStream()
-          input.transferTo(output)
-          output.toByteArray
-        }
-    finally input.close()
-
   private def parseXml(bytes: Array[Byte]): XmlDocument =
     val factory = DocumentBuilderFactory.newInstance()
     factory.setNamespaceAware(true)
     disableExternalEntities(factory)
     val input = ByteArrayInputStream(bytes)
-    try factory.newDocumentBuilder().parse(input)
+    try
+      val builder = factory.newDocumentBuilder()
+      builder.setErrorHandler(RichTextArchive.SilentXmlErrorHandler)
+      builder.parse(input)
     finally input.close()
 
   private def disableExternalEntities(factory: DocumentBuilderFactory): Unit =
