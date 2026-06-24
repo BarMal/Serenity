@@ -241,12 +241,12 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       case other => fail(s"Expected StateChange, got $other")
   }
 
-  it should "stop scanning once the result limit is reached" in {
+  it should "load the first result batch and record when more matches are available" in {
     val bufferId = BufferId(0)
     val content  = (0 until 200).map(line => s"needle result $line").mkString("\n")
     val guardedContent = GuardedGetLineRope(
       delegate = Rope(content),
-      allowedLines = (0 until 100).toSet
+      allowedLines = (0 to 100).toSet
     )
     val base = AppState.initial
     val buffer = base
@@ -269,6 +269,54 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
           case Some(SurfaceContent.FileSearch(fs)) =>
             fs.results.length shouldBe 100
             fs.results.lastOption.map(_.line) shouldBe Some(99)
+            fs.hasMoreResults shouldBe true
+          case other => fail(s"Expected FileSearch surface, got $other")
+      case other => fail(s"Expected StateChange, got $other")
+  }
+
+  it should "append the next search batch when navigating beyond loaded results" in {
+    val bufferId = BufferId(0)
+    val content  = (0 until 250).map(line => s"needle result $line").mkString("\n")
+    val guardedContent = GuardedGetLineRope(
+      delegate = Rope(content),
+      allowedLines = (0 to 200).toSet
+    )
+    val base = AppState.initial
+    val buffer = base
+      .buffers(bufferId)
+      .copy(content = guardedContent, filePath = Some(java.nio.file.Path.of("many.txt")))
+    val withBuffer       = base.copy(buffers = base.buffers.updated(bufferId, buffer))
+    val (withId, search) = withBuffer.allocateSurfaceId
+    val surface = UiSurface(
+      search,
+      SurfaceContent.FileSearch(FileSearchState("needl", Nil, 0)),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val state = withId.copy(uiSurfaces = List(surface), focus = Focus.Surface(search))
+    val typed = component.processEvent(InsertChar('e'), state) match
+      case ComponentResult.StateChange(f) => f(state)
+      case other                          => fail(s"Expected StateChange, got $other")
+    val selectedAtEnd = typed.copy(
+      uiSurfaces = typed.uiSurfaces.map {
+        case searchSurface if searchSurface.id == search =>
+          searchSurface.content match
+            case SurfaceContent.FileSearch(fs) =>
+              searchSurface.copy(content = SurfaceContent.FileSearch(fs.copy(selectedIndex = 99)))
+            case _ => searchSurface
+        case other => other
+      }
+    )
+
+    val result = component.processEvent(MoveDown, selectedAtEnd)
+
+    result match
+      case ComponentResult.StateChange(f) =>
+        f(selectedAtEnd).fileSearchSurface.map(_.content) match
+          case Some(SurfaceContent.FileSearch(fs)) =>
+            fs.results.length shouldBe 200
+            fs.selectedIndex shouldBe 100
+            fs.results(100).line shouldBe 100
+            fs.hasMoreResults shouldBe true
           case other => fail(s"Expected FileSearch surface, got $other")
       case other => fail(s"Expected StateChange, got $other")
   }

@@ -7,10 +7,17 @@ case class FileSearchResult(
     lineContent: String
 )
 
+case class FileSearchCursor(
+    bufferId: BufferId,
+    line: Int
+)
+
 case class FileSearchState(
     query: String,
     results: List[FileSearchResult],
-    selectedIndex: Int
+    selectedIndex: Int,
+    hasMoreResults: Boolean = false,
+    nextCursor: Option[FileSearchCursor] = None
 ):
   def selectedResult: Option[FileSearchResult] =
     if results.isEmpty then None else results.lift(selectedIndex)

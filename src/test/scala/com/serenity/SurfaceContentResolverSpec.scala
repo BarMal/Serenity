@@ -635,6 +635,19 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.rows shouldBe Nil
   }
 
+  it should "show when FileSearch has more batches available" in {
+    val results = List(FileSearchResult(BufferId(0), "main.scala", 5, "def foo(x: Int)"))
+    val search  = FileSearchState("def", results, selectedIndex = 0, hasMoreResults = true)
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.FileSearch(search),
+      LayoutRect(0, 0, 60, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.footer.map(_.plainText) shouldBe Some("1 loaded, more available")
+  }
+
   it should "resolve Markdown previews as rendered pinned preview shells" in {
     val resolved = SurfaceContentResolver.resolveMarkdownPreview(
       title = "notes.md",

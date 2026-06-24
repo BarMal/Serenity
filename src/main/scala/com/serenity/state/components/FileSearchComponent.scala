@@ -6,6 +6,8 @@ import com.serenity.text.TextEditing
 
 class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
 
+  private val resultBatchSize: Int = 100
+
   protected def decodeEvent(event: Event): Option[ModalInputEvent] =
     ModalInputEvent.fromEvent(event)
 
@@ -43,8 +45,14 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
           case _ => ComponentResult.noChange
 
   private def updateQuery(state: AppState, surface: UiSurface, newQuery: String): AppState =
-    val results   = searchBuffers(newQuery, state)
-    val newSearch = FileSearchState(newQuery, results, 0)
+    val batch = searchBuffers(newQuery, state, startCursor = None, resultBatchSize)
+    val newSearch = FileSearchState(
+      query = newQuery,
+      results = batch.results,
+      selectedIndex = 0,
+      hasMoreResults = batch.nextCursor.isDefined,
+      nextCursor = batch.nextCursor
+    )
     replaceSurface(state, surface, SurfaceContent.FileSearch(newSearch))
 
   private def updateSelection(
@@ -53,7 +61,10 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
     searchState: FileSearchState,
     delta: Int
   ): AppState =
-    val newSearch = searchState.moveSelection(delta)
+    val newSearch =
+      if delta > 0 && searchState.selectedIndex == searchState.results.length - 1 && searchState.hasMoreResults then
+        appendNextBatch(state, searchState)
+      else searchState.moveSelection(delta)
     replaceSurface(state, surface, SurfaceContent.FileSearch(newSearch))
 
   private def submitOrDismiss(state: AppState, surface: UiSurface, searchState: FileSearchState): AppState =
@@ -90,14 +101,47 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
     val newSurface = surface.copy(content = newContent)
     state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface)
 
-  private def searchBuffers(query: String, state: AppState): List[FileSearchResult] =
-    if query.isEmpty then Nil
+  private case class FileSearchBatch(results: List[FileSearchResult], nextCursor: Option[FileSearchCursor])
+
+  private def appendNextBatch(state: AppState, searchState: FileSearchState): FileSearchState =
+    searchState.nextCursor match
+      case None => searchState.moveSelection(1)
+      case Some(cursor) =>
+        val batch       = searchBuffers(searchState.query, state, startCursor = Some(cursor), resultBatchSize)
+        val nextResults = searchState.results ++ batch.results
+        searchState.copy(
+          results = nextResults,
+          selectedIndex = searchState.results.length.min(math.max(0, nextResults.length - 1)),
+          hasMoreResults = batch.nextCursor.isDefined,
+          nextCursor = batch.nextCursor
+        )
+
+  private def searchBuffers(
+    query: String,
+    state: AppState,
+    startCursor: Option[FileSearchCursor],
+    maxResults: Int
+  ): FileSearchBatch =
+    if query.isEmpty || maxResults <= 0 then FileSearchBatch(Nil, None)
     else
       val lowerQuery = query.toLowerCase
-      (for
-        buffer <- state.buffers.values.toList.sortBy(_.id.value).iterator
+      val buffers    = state.buffers.values.toList.sortBy(_.id.value)
+      val matchedBuffers = startCursor match
+        case None         => buffers
+        case Some(cursor) => buffers.dropWhile(_.id.value < cursor.bufferId.value)
+
+      def startLine(bufferId: BufferId): Int =
+        startCursor.filter(_.bufferId == bufferId).map(_.line).getOrElse(0)
+
+      val matches = for
+        buffer <- matchedBuffers.iterator
         name = buffer.filePath.map(_.getFileName.toString).getOrElse(s"buffer-${buffer.id.value}")
-        lineIdx <- (0 until buffer.content.lineCount).iterator
+        lineIdx <- (startLine(buffer.id) until buffer.content.lineCount).iterator
         line = buffer.content.getLine(lineIdx).getOrElse("")
         if line.toLowerCase.contains(lowerQuery)
-      yield FileSearchResult(buffer.id, name, lineIdx, line.trim)).take(100).toList
+      yield FileSearchResult(buffer.id, name, lineIdx, line.trim)
+
+      val loaded = matches.take(maxResults + 1).toList
+      loaded.drop(maxResults).headOption match
+        case Some(next) => FileSearchBatch(loaded.take(maxResults), Some(FileSearchCursor(next.bufferId, next.line)))
+        case None       => FileSearchBatch(loaded, None)
