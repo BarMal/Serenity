@@ -1122,23 +1122,23 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     }
 
   private def wordSelectionAtCursor(buffer: Buffer, cursor: CursorPosition): Option[Selection] =
-    val text          = buffer.content.collect()
-    val clickedOffset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-    if text.isEmpty then None
+    val source        = RopeCharacterSource(buffer.content)
+    val clickedOffset = buffer.content.lineColumnToOffset(cursor.line, cursor.column)
+    if source.length == 0 then None
     else
       val probeOffset =
-        if clickedOffset >= text.length then text.length - 1
-        else if text.charAt(clickedOffset).isWhitespace && clickedOffset > 0 && !text
+        if clickedOffset >= source.length then source.length - 1
+        else if source.charAt(clickedOffset).isWhitespace && clickedOffset > 0 && !source
               .charAt(clickedOffset - 1)
               .isWhitespace
         then clickedOffset - 1
         else clickedOffset
-      if probeOffset < 0 || text.charAt(probeOffset).isWhitespace then None
+      if probeOffset < 0 || source.charAt(probeOffset).isWhitespace then None
       else
-        val start = TextEditing.previousWordBoundary(text, probeOffset)
+        val start = TextEditing.previousWordBoundary(source, probeOffset)
         @annotation.tailrec
         def wordEndFrom(offset: Int): Int =
-          if offset < text.length && !text.charAt(offset).isWhitespace then wordEndFrom(offset + 1)
+          if offset < source.length && !source.charAt(offset).isWhitespace then wordEndFrom(offset + 1)
           else offset
         val end = wordEndFrom(probeOffset)
         Some(
@@ -1161,18 +1161,16 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     val anchor = buffer.primarySelection.map(_.anchor).orElse(buffer.cursors.headOption).getOrElse(focus)
     Option.when(anchor != focus)(Selection(anchor, focus))
 
-  private def lineColumnToOffset(content: com.serenity.rope.Rope, line: Int, column: Int): Int =
-    val textLines        = content.collect().split("\n", -1)
-    val clampedLine      = math.max(0, math.min(line, textLines.length - 1))
-    val precedingLengths = textLines.take(clampedLine).map(_.length + 1).sum
-    precedingLengths + math.max(0, math.min(column, textLines(clampedLine).length))
-
   private def offsetToCursorPosition(content: com.serenity.rope.Rope, offset: Int): CursorPosition =
-    val clamped = math.max(0, math.min(offset, content.weight))
-    content.collect().take(clamped).foldLeft(CursorPosition(0, 0)) { (cursor, char) =>
-      if char == '\n' then CursorPosition(cursor.line + 1, 0)
-      else cursor.copy(column = cursor.column + 1)
-    }
+    val (line, column) = content.offsetToLineColumn(offset)
+    CursorPosition(line, column)
+
+  final private case class RopeCharacterSource(content: com.serenity.rope.Rope) extends TextEditing.CharacterSource:
+    override def length: Int =
+      content.weight
+
+    override def charAt(index: Int): Char =
+      content.index(index).getOrElse('\u0000')
 
   private def modalType(modal: Modal): ModalType =
     modal match
