@@ -58,7 +58,7 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((_, Modal.GotoLine(input))) =>
             input.toIntOption match
-              case Some(lineNumber) if lineNumber > 0 =>
+              case Some(lineNumber) =>
                 ReducerResult.noEffects(jumpToLine(currentState, lineNumber - 1))
               case _ =>
                 ReducerResult.noEffects(dismissToPane(currentState))
@@ -493,10 +493,12 @@ object ModalEventReducer:
           case Some(pane) =>
             pane.bufferId.flatMap(state.buffers.get) match
               case Some(buffer) =>
+                val target      = clampedCursor(buffer, targetLine, 0)
                 val halfVisible = buffer.viewport.visibleLines / 2
-                val newTopLine  = math.max(0, targetLine - halfVisible)
+                val maxTopLine  = math.max(0, buffer.content.lineCount - buffer.viewport.visibleLines)
+                val newTopLine  = math.min(maxTopLine, math.max(0, target.line - halfVisible))
                 val updatedBuffer = buffer.copy(
-                  cursors = List(CursorPosition(targetLine, 0)),
+                  cursors = List(target),
                   viewport = buffer.viewport.copy(topLine = newTopLine)
                 )
                 state.copy(
@@ -510,6 +512,13 @@ object ModalEventReducer:
             state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface), focus = Focus.EditorPane(PaneId(0)))
       case None =>
         state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface), focus = Focus.EditorPane(PaneId(0)))
+
+  private def clampedCursor(buffer: Buffer, targetLine: Int, targetColumn: Int): CursorPosition =
+    val lastLine      = math.max(0, buffer.content.lineCount - 1)
+    val line          = math.max(0, math.min(targetLine, lastLine))
+    val lineLength    = buffer.content.getLine(line).map(_.length).getOrElse(0)
+    val clampedColumn = math.max(0, math.min(targetColumn, lineLength))
+    CursorPosition(line, clampedColumn)
 
   private def currentModal(state: AppState): Option[(UiSurface, Modal)] =
     state.modalSurface.flatMap { surface =>

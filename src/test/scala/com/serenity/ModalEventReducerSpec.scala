@@ -90,6 +90,34 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
+  private def stateWithGotoLineModal(
+    input: String,
+    content: String,
+    cursor: CursorPosition = CursorPosition(0, 0),
+    viewport: Viewport = Viewport(0, 0, 24, 80)
+  ): AppState =
+    val bufferId = BufferId(0)
+    AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("goto-line"),
+          SurfaceContent.ModalWorkflow(Modal.GotoLine(input)),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("goto-line")),
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope(content),
+            cursors = List(cursor),
+            viewport = viewport
+          )
+      )
+    )
+
   private def activeFindModal(state: AppState): Option[Modal] =
     state.modalSurface.flatMap {
       _.content match
@@ -138,6 +166,47 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.focus shouldBe Focus.EditorPane(paneId)
     updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(2, 0)
   }
+
+  it should "clamp oversized goto line input to the final buffer line" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithGotoLineModal("99", "a\nbb\nccc", viewport = Viewport(0, 0, 4, 80))
+
+    val updatedState = ModalEventReducer.reduce(ModalType.GotoLine, Enter, initialState).state
+
+    updatedState.modalSurface shouldBe None
+    updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(2, 0)
+  }
+
+  it should "clamp zero goto line input to the first buffer line" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithGotoLineModal("0", "a\nbb", CursorPosition(1, 1))
+
+    val updatedState = ModalEventReducer.reduce(ModalType.GotoLine, Enter, initialState).state
+
+    updatedState.modalSurface shouldBe None
+    updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 0)
+  }
+
+  it should "clamp negative goto line input to the first buffer line" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithGotoLineModal("-2", "a\nbb", CursorPosition(1, 1))
+
+    val updatedState = ModalEventReducer.reduce(ModalType.GotoLine, Enter, initialState).state
+
+    updatedState.modalSurface shouldBe None
+    updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 0)
+  }
+
+  it should "dismiss empty and non-numeric goto line input without moving the cursor" in
+    List("", "abc").foreach { input =>
+      val bufferId     = BufferId(0)
+      val initialState = stateWithGotoLineModal(input, "a\nbb", CursorPosition(1, 1))
+
+      val updatedState = ModalEventReducer.reduce(ModalType.GotoLine, Enter, initialState).state
+
+      updatedState.modalSurface shouldBe None
+      updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(1, 1)
+    }
 
   it should "keep find open and move the cursor to the first hit when submitted" in {
     val bufferId     = BufferId(0)
