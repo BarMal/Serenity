@@ -1,6 +1,7 @@
 package com.serenity.ui.display
 
-import java.awt.{Component, GraphicsEnvironment}
+import java.awt.geom.AffineTransform
+import java.awt.{Component, GraphicsConfiguration, GraphicsEnvironment}
 
 object DisplayScale:
 
@@ -10,15 +11,19 @@ object DisplayScale:
 
   val One: DeviceScale = DeviceScale(1.0, 1.0)
 
+  def fromTransform(transform: AffineTransform): DeviceScale =
+    DeviceScale(transform.getScaleX.max(1.0), transform.getScaleY.max(1.0))
+
+  def fromGraphicsConfiguration(configuration: GraphicsConfiguration): DeviceScale =
+    fromTransform(configuration.getDefaultTransform)
+
   def forComponent(component: Component): DeviceScale =
     Option(component.getGraphicsConfiguration)
-      .map(_.getDefaultTransform)
-      .map(transform => DeviceScale(transform.getScaleX.max(1.0), transform.getScaleY.max(1.0)))
+      .map(fromGraphicsConfiguration)
       .getOrElse(One)
 
   def defaultDeviceScale: DeviceScale =
     try
-      val config    = GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice.getDefaultConfiguration
-      val transform = config.getDefaultTransform
-      DeviceScale(transform.getScaleX.max(1.0), transform.getScaleY.max(1.0))
+      val config = GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice.getDefaultConfiguration
+      fromGraphicsConfiguration(config)
     catch case _: Exception => One
