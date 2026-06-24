@@ -32,7 +32,8 @@ case class TextLayoutSnapshot(
     lineHeightPx: Int,
     ascentPx: Int,
     isProportional: Boolean = false,
-    usesMeasuredLayout: Boolean = false
+    usesMeasuredLayout: Boolean = false,
+    richTextDocument: Option[RichTextDocument] = None
 ):
 
   def xPxForCursor(cursor: com.serenity.state.models.CursorPosition): Option[Float] =
@@ -177,7 +178,8 @@ object TextLayoutSnapshot:
       lineHeightPx = lineHeightPx,
       ascentPx = ascentPx,
       isProportional = !FontLoader.isMonospacedFont(font),
-      usesMeasuredLayout = measuredLayout
+      usesMeasuredLayout = measuredLayout,
+      richTextDocument = richDocument
     )
 
   private def collectVisualLines(
