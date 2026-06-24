@@ -34,18 +34,34 @@ object CommentRendering:
       }
 
   private def commentAtLine(buffer: Buffer, lineIndex: Int): Option[RenderedComment] =
-    val lines = bufferLines(buffer)
-    blockCommentAt(lines, lineIndex, buffer.language).orElse {
-      for
-        line <- lines.lift(lineIndex)
-        body <- lineCommentBody(line, buffer.language)
-      yield RenderedComment(lineIndex, line.trim, renderInlineComment(body))
+    buffer.content.getLine(lineIndex).flatMap { line =>
+      if startsBlockComment(line, buffer.language) then
+        blockCommentAt(buffer, lineIndex, buffer.language)
+          .orElse(lineCommentAt(line, lineIndex, buffer.language, includeStarFallback = true))
+      else
+        lineCommentAt(line, lineIndex, buffer.language, includeStarFallback = false)
+          .orElse(blockCommentAt(buffer, lineIndex, buffer.language))
+          .orElse(lineCommentAt(line, lineIndex, buffer.language, includeStarFallback = true))
     }
 
-  private def bufferLines(buffer: Buffer): Vector[String] =
-    (0 until buffer.content.lineCount).toVector.map(line => buffer.content.getLine(line).getOrElse(""))
+  private def lineCommentAt(
+    line: String,
+    lineIndex: Int,
+    language: Option[LanguageId],
+    includeStarFallback: Boolean
+  ): Option[RenderedComment] =
+    lineCommentBody(line, language, includeStarFallback)
+      .map(body => RenderedComment(lineIndex, line.trim, renderInlineComment(body)))
 
-  private def lineCommentBody(line: String, language: Option[LanguageId]): Option[String] =
+  private def startsBlockComment(line: String, language: Option[LanguageId]): Boolean =
+    val trimmed = line.trim
+    blockCommentSyntaxes(language).exists(syntax => trimmed.startsWith(syntax.start))
+
+  private def lineCommentBody(
+    line: String,
+    language: Option[LanguageId],
+    includeStarFallback: Boolean
+  ): Option[String] =
     val trimmed = line.trim
     language match
       case Some(LanguageId.Markdown | LanguageId.Html | LanguageId.Xml) =>
@@ -61,23 +77,23 @@ object CommentRendering:
       case Some(_) =>
         prefixedCommentBody(trimmed, "//")
           .orElse(blockCommentBody(trimmed, BlockCommentSyntax("/*", "*/", stripLeadingStars = true)))
-          .orElse(prefixedCommentBody(trimmed, "*"))
+          .orElse(if includeStarFallback then prefixedCommentBody(trimmed, "*") else None)
       case None =>
         None
 
   private case class BlockCommentSyntax(start: String, end: String, stripLeadingStars: Boolean = false)
 
   private def blockCommentAt(
-    lines: Vector[String],
+    buffer: Buffer,
     lineIndex: Int,
     language: Option[LanguageId]
   ): Option[RenderedComment] =
     blockCommentSyntaxes(language).view
-      .flatMap(syntax => blockCommentRange(lines, lineIndex, syntax).map((syntax, _)))
+      .flatMap(syntax => blockCommentRange(buffer, lineIndex, syntax).map((syntax, _)))
       .headOption
       .map {
         case (syntax, range) =>
-          val rawLines = lines.slice(range.start, range.end + 1).map(_.trim)
+          val rawLines = range.toVector.flatMap(line => buffer.content.getLine(line).map(_.trim))
           RenderedComment(
             sourceLine = range.start,
             raw = rawLines.mkString("\n"),
@@ -104,15 +120,18 @@ object CommentRendering:
         Nil
 
   private def blockCommentRange(
-    lines: Vector[String],
+    buffer: Buffer,
     lineIndex: Int,
     syntax: BlockCommentSyntax
   ): Option[Range.Inclusive] =
-    if lineIndex < 0 || lineIndex >= lines.length then None
+    val lineCount = buffer.content.lineCount
+    if lineIndex < 0 || lineIndex >= lineCount then None
     else
       for
-        start <- (lineIndex to 0 by -1).find(index => lines(index).trim.startsWith(syntax.start))
-        end   <- (start until lines.length).find(index => lines(index).trim.endsWith(syntax.end))
+        start <- (lineIndex to 0 by -1).find(index =>
+          buffer.content.getLine(index).exists(_.trim.startsWith(syntax.start))
+        )
+        end <- (start until lineCount).find(index => buffer.content.getLine(index).exists(_.trim.endsWith(syntax.end)))
         if lineIndex <= end
       yield start to end
 

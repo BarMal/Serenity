@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.document.CommentRendering
 import com.serenity.lsp.config.LanguageId
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -112,5 +112,67 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
 
     CommentRendering.atCursor(buffer) shouldBe None
   }
+
+  it should "read only the cursor line when rendering a line comment" in {
+    val targetLine = 9000
+    val source = (0 to 10000)
+      .map { line =>
+        if line == targetLine then "// **Important** note"
+        else s"val value$line = $line"
+      }
+      .mkString("\n")
+    val guardedContent = GuardedGetLineRope(Rope(source), allowedLines = Set(targetLine))
+    val buffer = Buffer
+      .fromString(BufferId(1), "")
+      .copy(
+        content = guardedContent,
+        language = Some(LanguageId.Scala),
+        cursors = List(CursorPosition(targetLine, 4))
+      )
+
+    val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
+
+    comment.sourceLine shouldBe targetLine
+    comment.raw shouldBe "// **Important** note"
+    comment.inlineMarkdown shouldBe "Important note"
+  }
+
+  final case class GuardedGetLineRope(delegate: Rope, allowedLines: Set[Int]) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def newlineCount: Int =
+      delegate.newlineCount
+
+    override def lastLineLength: Int =
+      delegate.lastLineLength
+
+    override def endsWithNewline: Boolean =
+      delegate.endsWithNewline
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      this
+
+    override def index(i: Int): Option[Char] =
+      delegate.index(i)
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def getLine(lineIndex: Int): Option[String] =
+      if allowedLines.contains(lineIndex) then delegate.getLine(lineIndex)
+      else throw AssertionError(s"comment rendering should not read line $lineIndex")
+
+    override def collect(): String =
+      throw AssertionError("comment rendering should not materialise the whole buffer")
 
 end CommentRenderingSpec
