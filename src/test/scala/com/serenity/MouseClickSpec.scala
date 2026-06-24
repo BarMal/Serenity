@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
@@ -25,6 +25,52 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
+
+  final case class NonCollectingRope(delegate: Rope) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def newlineCount: Int =
+      delegate.newlineCount
+
+    override def lastLineLength: Int =
+      delegate.lastLineLength
+
+    override def endsWithNewline: Boolean =
+      delegate.endsWithNewline
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      this
+
+    override def index(i: Int): Option[Char] =
+      delegate.index(i)
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def lineCount: Int =
+      delegate.lineCount
+
+    override def getLine(lineIndex: Int): Option[String] =
+      delegate.getLine(lineIndex)
+
+    override def lineColumnToOffset(line: Int, column: Int): Int =
+      delegate.lineColumnToOffset(line, column)
+
+    override def offsetToLineColumn(offset: Int): (Int, Int) =
+      delegate.offsetToLineColumn(offset)
+
+    override def collect(): String =
+      throw AssertionError("mouse word selection should not materialise the whole buffer")
 
   // Layout at 80x24, showLineNumbers=true, showGutter=true:
   //   gutterHeight=1  → contentHeight=23
@@ -416,6 +462,37 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
         buffers = state.buffers.updated(
           bufferId,
           state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+        )
+      )
+    }.unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+
+    val state    = sm.getCurrentState.unsafeRunSync()
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+
+    sm.applyEvent(MouseClick(paneRect.x + 7, paneRect.y + 1, clickCount = 2)).unsafeRunSync()
+
+    val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.cursors.headOption shouldBe Some(CursorPosition(0, 10))
+    buffer.selection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
+    buffer.selections shouldBe Nil
+  }
+
+  it should "select the clicked word on double click without materialising the whole buffer" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("alpha beta gamma").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers.updated(
+          bufferId,
+          state
+            .buffers(bufferId)
+            .copy(
+              content = NonCollectingRope(Rope("alpha beta gamma")),
+              language = Some(LanguageId.Scala)
+            )
         )
       )
     }.unsafeRunSync()
