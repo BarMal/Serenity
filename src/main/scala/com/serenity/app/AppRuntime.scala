@@ -9,7 +9,7 @@ import cats.effect.std.Dispatcher
 import cats.syntax.parallel.*
 import com.serenity.config.{AppConfig, CursorMode}
 import com.serenity.input.*
-import com.serenity.keystroke.events.{Event, UnhandledEvent}
+import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
 import com.serenity.state.manager.StateManager
@@ -63,6 +63,7 @@ object AppRuntime:
         inputFunnel = (s: Stream[IO, Event]) =>
           s.evalMap(event =>
             checkResizeAndHandle >>
+              signalGestureRenderBeforeHandling(event, fastMode.set(true)) >>
               ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
               stateManager.applyEvent(event) >>
               ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
@@ -215,6 +216,11 @@ object AppRuntime:
       dispatcher.unsafeRunAndForget(
         signalResize.handleErrorWith(error => logger.error(error)("[RUNTIME] resize callback failed"))
       )
+
+  private[serenity] def signalGestureRenderBeforeHandling(event: Event, signalFastRender: IO[Unit]): IO[Unit] =
+    event match
+      case _: MouseDrag | _: MouseMove | _: MousePress => signalFastRender
+      case _                                           => IO.unit
 
   private def logSelectiveEvents(
     event: Event,
