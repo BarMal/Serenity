@@ -491,6 +491,31 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     multiline.getLine(4) shouldBe None
     multiline.getLine(-1) shouldBe None
 
+  it should "maintain newline metadata across rope operations" in new ChunkedRopeSpecScope:
+    val initial = Rope("alpha\nbeta\ngamma")
+
+    initial.newlineCount.shouldBe(2)
+    initial.lineCount.shouldBe(3)
+
+    val concatenated = Rope("alpha\n").concat(Rope("beta\ngamma"))
+    concatenated.newlineCount.shouldBe(2)
+    concatenated.lineCount.shouldBe(3)
+
+    val inserted = Rope("alphagamma").insert("alpha".length, "\nbeta\n")
+    inserted.collect() shouldBe "alpha\nbeta\ngamma"
+    inserted.newlineCount.shouldBe(2)
+    inserted.lineCount.shouldBe(3)
+
+    val deleted = inserted.deleteRight("alpha".length, "\nbeta\n".length)
+    deleted.collect() shouldBe "alphagamma"
+    deleted.newlineCount.shouldBe(0)
+    deleted.lineCount.shouldBe(1)
+
+    val rebuilt = concatenated.rebuild
+    rebuilt.collect() shouldBe "alpha\nbeta\ngamma"
+    rebuilt.newlineCount.shouldBe(2)
+    rebuilt.lineCount.shouldBe(3)
+
   it should "resolve line and column offsets through rope line traversal" in new ChunkedRopeSpecScope:
     val multiline = Rope("alpha\nbeta\ngamma")
 
