@@ -1,5 +1,4 @@
 import cats.effect.*
-import cats.effect.unsafe.implicits.global
 import com.serenity.app.{AppRuntime, CrashReporter, RuntimeDisplayState}
 import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning}
 import com.serenity.input.SwingInputHandler
@@ -99,7 +98,7 @@ object Main extends IOApp:
               )
             ),
             awaitExternalQuit = swingWin.awaitClose,
-            registerResizeCallback = cb => swingWin.setOnResize(() => cb.unsafeRunAndForget())
+            registerResizeCallback = cb => swingWin.setOnResize(cb)
           )
         }
     yield ExitCode.Success

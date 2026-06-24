@@ -5,6 +5,7 @@ import java.awt.Color
 import scala.concurrent.duration.*
 
 import cats.effect.*
+import cats.effect.std.Dispatcher
 import cats.syntax.parallel.*
 import com.serenity.config.{AppConfig, CursorMode}
 import com.serenity.input.*
@@ -37,172 +38,183 @@ object AppRuntime:
     appConfig: AppConfig,
     makeStateManager: Option[Logger[IO] => IO[StateManager]] = None,
     awaitExternalQuit: IO[Unit] = IO.never,
-    registerResizeCallback: IO[Unit] => Unit = _ => ()
+    registerResizeCallback: (() => Unit) => Unit = _ => ()
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
-    for
-      _ <- logger.info("Starting Serenity text editor")
-      themeManager = com.serenity.ui.theme.config.AppThemeManager.create
-      defaultTheme <- themeManager.initializeWithTheme()
-      stateManager <- makeStateManager.getOrElse(logger => StateManager.apply(logger, initialConfig = appConfig))(
-        logger
-      )
-      initialState <- AppStartup.initializeState(stateManager, defaultTheme, initialViewportSize, appConfig)
-      inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
-      systemClipboard = SystemClipboard.awt[IO]
-      inputHandler    = makeInputHandler(inputRouter)
-      _             <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
-      _             <- renderFull(initialState, true, None)
-      _             <- logger.info("Initial render completed, starting main loop")
-      fastMode      <- SignallingRef.of[IO, Boolean](false)
-      _             <- IO(registerResizeCallback(fastMode.set(true)))
-      cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
-      checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, fastMode.set(true)))
-      inputFunnel = (s: Stream[IO, Event]) =>
-        s.evalMap(event =>
-          checkResizeAndHandle >>
-            ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
-            stateManager.applyEvent(event) >>
-            ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
-            stateManager.getCurrentState
-              .flatMap(state => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))) >>
-            fastMode.set(true)
-        ).drain
-      _ <-
-        def withRuntimeDiagnostics[A](
-          loopName: String,
-          phase: String,
-          stateForDiagnostics: IO[Option[AppState]] = stateManager.getCurrentState.map(Some(_))
-        )(effect: IO[A]): IO[A] =
-          effect.handleErrorWith {
-            case failure: RuntimeFailure =>
-              IO.raiseError(failure)
-            case error =>
-              stateForDiagnostics.attempt.flatMap {
-                case Right(Some(state)) =>
-                  IO.raiseError(RuntimeFailure(loopName, phase, describeStateForDiagnostics(state), error))
-                case Right(None) =>
-                  IO.raiseError(RuntimeFailure(loopName, phase, "state=unavailable", error))
-                case Left(stateError) =>
-                  val reason = Option(stateError.getMessage).getOrElse(stateError.getClass.getSimpleName)
-                  IO.raiseError(RuntimeFailure(loopName, phase, s"state=unavailable reason=$reason", error))
-              }
-          }
-
-        def computeCursorForIdle(state: AppState): IO[(Boolean, Option[Color])] =
-          state.config.cursorMode match
-            case CursorMode.Blink =>
-              cursorVisible.updateAndGet(!_).map(vis => (vis, None))
-            case CursorMode.Breathe =>
-              for
-                i <- breathIndex.updateAndGet(i => (i + 1) % 48)
-                c     = state.config.cursorColors.activeOr(state.theme.cursor)
-                alpha = ((math.sin(i * math.Pi / 24) + 1.0) / 2.0 * 255).toInt
-              yield (true, Some(new Color(c.getRed, c.getGreen, c.getBlue, alpha)))
-
-        def recoverIdleCursorRenderFailure(error: Throwable): IO[Unit] =
-          val (phase, diagnostics, cause) = error match
-            case RuntimeFailure(_, failedPhase, failureDiagnostics, failureCause) =>
-              (failedPhase, failureDiagnostics, failureCause)
-            case other =>
-              ("idle.cursor-render", "state=unavailable", other)
-          logger.warn(cause)(
-            s"[RUNTIME] idle cursor render failed phase=$phase; $diagnostics; requesting full render"
-          ) >> fastMode.set(true)
-
-        def idlePhase: Stream[IO, Unit] =
-          Stream
-            .fixedRate[IO](500.millis)
-            .interruptWhen(fastMode.discrete)
-            .evalMap { _ =>
-              for
-                _     <- withRuntimeDiagnostics("render loop", "idle.resize")(checkResizeAndHandle)
-                state <- withRuntimeDiagnostics("render loop", "idle.state")(stateManager.getCurrentState)
-                (visible, cursor) <- withRuntimeDiagnostics(
-                  "render loop",
-                  "idle.cursor",
-                  IO.pure(Some(state))
-                )(computeCursorForIdle(state))
-                _ <- withRuntimeDiagnostics(
-                  "render loop",
-                  "idle.cursor-render",
-                  IO.pure(Some(state))
-                )(renderCursorOnly(state, visible, cursor)).handleErrorWith(recoverIdleCursorRenderFailure)
-              yield ()
+    Dispatcher.parallel[IO].use { resizeCallbackDispatcher =>
+      for
+        _ <- logger.info("Starting Serenity text editor")
+        themeManager = com.serenity.ui.theme.config.AppThemeManager.create
+        defaultTheme <- themeManager.initializeWithTheme()
+        stateManager <- makeStateManager.getOrElse(logger => StateManager.apply(logger, initialConfig = appConfig))(
+          logger
+        )
+        initialState <- AppStartup.initializeState(stateManager, defaultTheme, initialViewportSize, appConfig)
+        inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
+        systemClipboard = SystemClipboard.awt[IO]
+        inputHandler    = makeInputHandler(inputRouter)
+        _             <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
+        _             <- renderFull(initialState, true, None)
+        _             <- logger.info("Initial render completed, starting main loop")
+        fastMode      <- SignallingRef.of[IO, Boolean](false)
+        _             <- IO(registerResizeCallback(resizeCallbackBridge(fastMode.set(true), resizeCallbackDispatcher)))
+        cursorVisible <- Ref.of[IO, Boolean](true)
+        breathIndex   <- Ref.of[IO, Int](0)
+        checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, fastMode.set(true)))
+        inputFunnel = (s: Stream[IO, Event]) =>
+          s.evalMap(event =>
+            checkResizeAndHandle >>
+              ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
+              stateManager.applyEvent(event) >>
+              ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
+              stateManager.getCurrentState
+                .flatMap(state => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))) >>
+              fastMode.set(true)
+          ).drain
+        _ <-
+          def withRuntimeDiagnostics[A](
+            loopName: String,
+            phase: String,
+            stateForDiagnostics: IO[Option[AppState]] = stateManager.getCurrentState.map(Some(_))
+          )(effect: IO[A]): IO[A] =
+            effect.handleErrorWith {
+              case failure: RuntimeFailure =>
+                IO.raiseError(failure)
+              case error =>
+                stateForDiagnostics.attempt.flatMap {
+                  case Right(Some(state)) =>
+                    IO.raiseError(RuntimeFailure(loopName, phase, describeStateForDiagnostics(state), error))
+                  case Right(None) =>
+                    IO.raiseError(RuntimeFailure(loopName, phase, "state=unavailable", error))
+                  case Left(stateError) =>
+                    val reason = Option(stateError.getMessage).getOrElse(stateError.getClass.getSimpleName)
+                    IO.raiseError(RuntimeFailure(loopName, phase, s"state=unavailable reason=$reason", error))
+                }
             }
 
-        def fastPhase: Stream[IO, Unit] =
-          Stream
-            .fixedRate[IO](16.millis)
-            .evalMap { _ =>
-              for
-                _ <- withRuntimeDiagnostics("render loop", "fast.resize")(checkResizeAndHandle)
-                active <- withRuntimeDiagnostics(
-                  "render loop",
-                  "fast.animation-tick"
-                )(stateManager.advanceAnimationsOnTick())
-                state <- withRuntimeDiagnostics("render loop", "fast.state")(stateManager.getCurrentState)
-                _ <- withRuntimeDiagnostics(
-                  "render loop",
-                  "fast.full-render",
-                  IO.pure(Some(state))
-                )(renderFull(state, true, None))
-              yield active
-            }
-            .takeWhile(identity)
-            .map(_ => ())
-            .onFinalize {
-              stateManager.getCurrentState.flatMap { state =>
-                val stillActive =
-                  state.buffers.values.exists(_.animations.hasActiveAnimations) ||
-                    state.themeTransition.isDefined ||
-                    state.surfaceAnimations.nonEmpty
-                if stillActive then IO.unit else fastMode.set(false)
-              }
-            }
+          def computeCursorForIdle(state: AppState): IO[(Boolean, Option[Color])] =
+            state.config.cursorMode match
+              case CursorMode.Blink =>
+                cursorVisible.updateAndGet(!_).map(vis => (vis, None))
+              case CursorMode.Breathe =>
+                for
+                  i <- breathIndex.updateAndGet(i => (i + 1) % 48)
+                  c     = state.config.cursorColors.activeOr(state.theme.cursor)
+                  alpha = ((math.sin(i * math.Pi / 24) + 1.0) / 2.0 * 255).toInt
+                yield (true, Some(new Color(c.getRed, c.getGreen, c.getBlue, alpha)))
 
-        val renderLoop: Stream[IO, Unit] =
-          Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
-
-        val quitSignal = stateManager.awaitQuit.attempt
-        val shutdownInputHandler =
-          stateManager.awaitQuit >> inputHandler.shutdown
-        def supervised(name: String)(effect: IO[Unit]): IO[Unit] =
-          effect.handleErrorWith { error =>
-            val (phase, diagnostics, loggedError) = error match
-              case RuntimeFailure(_, failedPhase, failureDiagnostics, cause) =>
-                (s" phase=$failedPhase", s"; $failureDiagnostics", cause)
+          def recoverIdleCursorRenderFailure(error: Throwable): IO[Unit] =
+            val (phase, diagnostics, cause) = error match
+              case RuntimeFailure(_, failedPhase, failureDiagnostics, failureCause) =>
+                (failedPhase, failureDiagnostics, failureCause)
               case other =>
-                ("", "", other)
-            logger.error(loggedError)(s"[RUNTIME] $name failed$phase$diagnostics; forcing safe shutdown") >>
-              stateManager.forceQuit().attempt.void
-          }
+                ("idle.cursor-render", "state=unavailable", other)
+            logger.warn(cause)(
+              s"[RUNTIME] idle cursor render failed phase=$phase; $diagnostics; requesting full render"
+            ) >> fastMode.set(true)
 
-        (
-          supervised("input loop")(
-            inputHandler.eventStream
-              .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
-              .through(inputFunnel)
-              .interruptWhen(quitSignal)
-              .compile
-              .drain
-          ),
-          supervised("render loop")(renderLoop.interruptWhen(quitSignal).compile.drain),
-          stateManager.awaitQuit,
-          supervised("interval save loop")(stateManager.intervalSaveStream.compile.drain),
-          supervised("external quit coordinator")(
-            IO.race(
-              awaitExternalQuit >> stateManager.forceQuit(),
-              stateManager.awaitQuit
-            ).void
-          ),
-          supervised("input shutdown")(shutdownInputHandler),
-          supervised("LSP loop")(
-            LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger, appConfig.lspUserConfig)
-          )
-        ).parMapN((_, _, _, _, _, _, _) => ())
-      _ <- logger.info("Serenity editor shutdown complete")
-    yield ()
+          def idlePhase: Stream[IO, Unit] =
+            Stream
+              .fixedRate[IO](500.millis)
+              .interruptWhen(fastMode.discrete)
+              .evalMap { _ =>
+                for
+                  _     <- withRuntimeDiagnostics("render loop", "idle.resize")(checkResizeAndHandle)
+                  state <- withRuntimeDiagnostics("render loop", "idle.state")(stateManager.getCurrentState)
+                  (visible, cursor) <- withRuntimeDiagnostics(
+                    "render loop",
+                    "idle.cursor",
+                    IO.pure(Some(state))
+                  )(computeCursorForIdle(state))
+                  _ <- withRuntimeDiagnostics(
+                    "render loop",
+                    "idle.cursor-render",
+                    IO.pure(Some(state))
+                  )(renderCursorOnly(state, visible, cursor)).handleErrorWith(recoverIdleCursorRenderFailure)
+                yield ()
+              }
+
+          def fastPhase: Stream[IO, Unit] =
+            Stream
+              .fixedRate[IO](16.millis)
+              .evalMap { _ =>
+                for
+                  _ <- withRuntimeDiagnostics("render loop", "fast.resize")(checkResizeAndHandle)
+                  active <- withRuntimeDiagnostics(
+                    "render loop",
+                    "fast.animation-tick"
+                  )(stateManager.advanceAnimationsOnTick())
+                  state <- withRuntimeDiagnostics("render loop", "fast.state")(stateManager.getCurrentState)
+                  _ <- withRuntimeDiagnostics(
+                    "render loop",
+                    "fast.full-render",
+                    IO.pure(Some(state))
+                  )(renderFull(state, true, None))
+                yield active
+              }
+              .takeWhile(identity)
+              .map(_ => ())
+              .onFinalize {
+                stateManager.getCurrentState.flatMap { state =>
+                  val stillActive =
+                    state.buffers.values.exists(_.animations.hasActiveAnimations) ||
+                      state.themeTransition.isDefined ||
+                      state.surfaceAnimations.nonEmpty
+                  if stillActive then IO.unit else fastMode.set(false)
+                }
+              }
+
+          val renderLoop: Stream[IO, Unit] =
+            Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
+
+          val quitSignal = stateManager.awaitQuit.attempt
+          val shutdownInputHandler =
+            stateManager.awaitQuit >> inputHandler.shutdown
+          def supervised(name: String)(effect: IO[Unit]): IO[Unit] =
+            effect.handleErrorWith { error =>
+              val (phase, diagnostics, loggedError) = error match
+                case RuntimeFailure(_, failedPhase, failureDiagnostics, cause) =>
+                  (s" phase=$failedPhase", s"; $failureDiagnostics", cause)
+                case other =>
+                  ("", "", other)
+              logger.error(loggedError)(s"[RUNTIME] $name failed$phase$diagnostics; forcing safe shutdown") >>
+                stateManager.forceQuit().attempt.void
+            }
+
+          (
+            supervised("input loop")(
+              inputHandler.eventStream
+                .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
+                .through(inputFunnel)
+                .interruptWhen(quitSignal)
+                .compile
+                .drain
+            ),
+            supervised("render loop")(renderLoop.interruptWhen(quitSignal).compile.drain),
+            stateManager.awaitQuit,
+            supervised("interval save loop")(stateManager.intervalSaveStream.compile.drain),
+            supervised("external quit coordinator")(
+              IO.race(
+                awaitExternalQuit >> stateManager.forceQuit(),
+                stateManager.awaitQuit
+              ).void
+            ),
+            supervised("input shutdown")(shutdownInputHandler),
+            supervised("LSP loop")(
+              LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger, appConfig.lspUserConfig)
+            )
+          ).parMapN((_, _, _, _, _, _, _) => ())
+        _ <- logger.info("Serenity editor shutdown complete")
+      yield ()
+    }
+
+  private[serenity] def resizeCallbackBridge(
+    signalResize: IO[Unit],
+    dispatcher: Dispatcher[IO]
+  )(using logger: Logger[IO]): () => Unit =
+    () =>
+      dispatcher.unsafeRunAndForget(
+        signalResize.handleErrorWith(error => logger.error(error)("[RUNTIME] resize callback failed"))
+      )
 
   private def logSelectiveEvents(
     event: Event,
