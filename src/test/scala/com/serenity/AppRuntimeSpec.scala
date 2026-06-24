@@ -12,7 +12,7 @@ import com.serenity.app.AppRuntime
 import com.serenity.config.AppConfig
 import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
-import com.serenity.keystroke.events.Event
+import com.serenity.keystroke.events.{Event, MouseDrag}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
@@ -235,6 +235,32 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
         failure.map(_.message) shouldBe defined
         failure.flatMap(_.error).map(_.getMessage) should contain("resize signal failed")
     }
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "wake fast rendering before handling drag gestures" in {
+    val program =
+      for
+        order  <- Ref.of[IO, Vector[String]](Vector.empty)
+        _      <- AppRuntime.signalGestureRenderBeforeHandling(MouseDrag(12, 5), order.update(_ :+ "fast"))
+        _      <- order.update(_ :+ "handled")
+        events <- order.get
+      yield events shouldBe Vector("fast", "handled")
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "leave non-gesture input on the normal render wake path" in {
+    val program =
+      for
+        signalled <- Ref.of[IO, Boolean](false)
+        _ <- AppRuntime.signalGestureRenderBeforeHandling(
+          com.serenity.keystroke.events.InsertChar('x'),
+          signalled.set(true)
+        )
+        result <- signalled.get
+      yield result shouldBe false
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
