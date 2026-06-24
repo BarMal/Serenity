@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.keystroke.events.*
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.components.{ComponentResult, FileSearchComponent}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer}
@@ -240,3 +240,73 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
           case other => fail(s"Expected FileSearch, got $other")
       case other => fail(s"Expected StateChange, got $other")
   }
+
+  it should "stop scanning once the result limit is reached" in {
+    val bufferId = BufferId(0)
+    val content  = (0 until 200).map(line => s"needle result $line").mkString("\n")
+    val guardedContent = GuardedGetLineRope(
+      delegate = Rope(content),
+      allowedLines = (0 until 100).toSet
+    )
+    val base = AppState.initial
+    val buffer = base
+      .buffers(bufferId)
+      .copy(content = guardedContent, filePath = Some(java.nio.file.Path.of("many.txt")))
+    val withBuffer       = base.copy(buffers = base.buffers.updated(bufferId, buffer))
+    val (withId, search) = withBuffer.allocateSurfaceId
+    val surface = UiSurface(
+      search,
+      SurfaceContent.FileSearch(FileSearchState("needl", Nil, 0)),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val state = withId.copy(uiSurfaces = List(surface), focus = Focus.Surface(search))
+
+    val result = component.processEvent(InsertChar('e'), state)
+
+    result match
+      case ComponentResult.StateChange(f) =>
+        f(state).fileSearchSurface.map(_.content) match
+          case Some(SurfaceContent.FileSearch(fs)) =>
+            fs.results.length shouldBe 100
+            fs.results.lastOption.map(_.line) shouldBe Some(99)
+          case other => fail(s"Expected FileSearch surface, got $other")
+      case other => fail(s"Expected StateChange, got $other")
+  }
+
+  final case class GuardedGetLineRope(delegate: Rope, allowedLines: Set[Int]) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def newlineCount: Int =
+      delegate.newlineCount
+
+    override def lastLineLength: Int =
+      delegate.lastLineLength
+
+    override def endsWithNewline: Boolean =
+      delegate.endsWithNewline
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      this
+
+    override def index(i: Int): Option[Char] =
+      delegate.index(i)
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def getLine(lineIndex: Int): Option[String] =
+      if allowedLines.contains(lineIndex) then delegate.getLine(lineIndex)
+      else throw AssertionError(s"file search should stop before reading line $lineIndex")
+
+    override def collect(): String =
+      throw AssertionError("file search should not materialise the whole buffer")
