@@ -2,8 +2,8 @@ package com.serenity.state.manager
 
 import java.nio.file.{Files, Path}
 
+import cats.effect.*
 import cats.effect.std.Queue
-import cats.effect.{Deferred, IO, Ref}
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileDialog
@@ -132,6 +132,7 @@ object StateManager:
       stateRef                    <- Ref.of[IO, AppState](AppState.initial.copy(config = initialConfig))
       undoRef                     <- Ref.of[IO, UndoState](UndoState(maxUndoDepth = policy.maxUndoDepth))
       mouseTargetCacheRef         <- Ref.of[IO, Option[MouseTargetCache]](None)
+      documentAnalysisFiberRef    <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       themeNamesRef <- themeManager.listAvailableThemes
         .handleErrorWith(_ => IO.pure(Nil))
         .flatMap(Ref.of[IO, List[String]])
@@ -148,6 +149,7 @@ object StateManager:
         themeManager = themeManager,
         lspQueue = lspQueue,
         mouseTargetCacheRef = mouseTargetCacheRef,
+        documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = onFontConfigChanged,
         configPersistencePath = configPersistencePath,
         uiPresetStore = uiPresetStore,

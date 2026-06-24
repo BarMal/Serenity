@@ -15,7 +15,6 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.project.*
 import com.serenity.richtext.*
 import com.serenity.session.SessionSaveTrigger
-import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
@@ -234,7 +233,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       config => config.withSpellCheck(update(config.spellCheck)),
       config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.LanguageTools(config))
     ).void >>
-      stateRef.update(SpellChecker.refreshDiagnostics)
+      scheduleDocumentAnalysis()
 
   protected def clampFontSize(size: Float): Float =
     size.max(8.0f).min(48.0f)

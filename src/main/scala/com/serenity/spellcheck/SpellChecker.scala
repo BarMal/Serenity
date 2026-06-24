@@ -114,6 +114,20 @@ object SpellChecker:
 
     state.copy(diagnostics = refreshed, spellCheckCache = cache)
 
+  def analysisFingerprints(state: AppState): Map[String, SpellCheckFingerprint] =
+    state.buffers.values
+      .filter(buffer => shouldCheck(buffer, state.config.spellCheck))
+      .map(buffer => diagnosticsUri(buffer) -> SpellCheckFingerprint.from(buffer, state.config.spellCheck))
+      .toMap
+
+  def applyIfCurrent(current: AppState, analyzed: AppState, expected: Map[String, SpellCheckFingerprint]): AppState =
+    if analysisFingerprints(current) == expected then
+      current.copy(
+        diagnostics = analyzed.diagnostics,
+        spellCheckCache = analyzed.spellCheckCache
+      )
+    else current
+
   def diagnosticsUri(buffer: Buffer): String =
     buffer.filePath.map(_.toUri.toString).getOrElse(bufferDiagnosticsUri(buffer.id))
 

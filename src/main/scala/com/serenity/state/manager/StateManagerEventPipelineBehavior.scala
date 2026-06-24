@@ -2,6 +2,8 @@ package com.serenity.state.manager
 
 import java.awt.Color
 
+import scala.concurrent.duration.*
+
 import cats.syntax.foldable.*
 import com.serenity.animation.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
@@ -19,6 +21,8 @@ import com.serenity.ui.presets.UiPreset
 
 private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEffectBehavior:
   this: StateManager =>
+
+  private val DocumentAnalysisDebounce = 150.millis
 
   private val ContextMenuSurfaceId = SurfaceId("context-menu")
 
@@ -213,20 +217,36 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
   protected def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
     normalizeCommandRunnerFocus(newState).validated match
       case Right(validState) =>
-        val diagnosticState = SpellChecker.refreshDiagnostics(validState)
         val modalTransitionLog =
-          (fallbackState.modalSurface, diagnosticState.modalSurface) match
+          (fallbackState.modalSurface, validState.modalSurface) match
             case (before, after) if before != after =>
               logger.info(
                 s"[STATE MODAL] before=${before.map(_.id).getOrElse("none")} " +
-                  s"after=${after.map(_.id).getOrElse("none")} focus=${diagnosticState.focus}"
+                  s"after=${after.map(_.id).getOrElse("none")} focus=${validState.focus}"
               )
             case _ =>
               cats.effect.IO.unit
-        modalTransitionLog >> stateRef.set(diagnosticState)
+        modalTransitionLog >> stateRef.set(validState) >> scheduleDocumentAnalysis()
       case Left(errors) =>
         logger.error(s"State validation failed: ${errors.mkString(", ")}") >>
           stateRef.set(fallbackState)
+
+  protected def scheduleDocumentAnalysis(): cats.effect.IO[Unit] =
+    for
+      previous <- documentAnalysisFiberRef.getAndSet(None)
+      _        <- previous.traverse_(_.cancel)
+      fiber    <- documentAnalysisJob.start
+      _        <- documentAnalysisFiberRef.set(Some(fiber))
+    yield ()
+
+  private def documentAnalysisJob: cats.effect.IO[Unit] =
+    (cats.effect.IO.sleep(DocumentAnalysisDebounce) >>
+      stateRef.get.flatMap { snapshot =>
+        val expected = SpellChecker.analysisFingerprints(snapshot)
+        cats.effect.IO
+          .blocking(SpellChecker.refreshDiagnostics(snapshot))
+          .flatMap(analyzed => stateRef.update(current => SpellChecker.applyIfCurrent(current, analyzed, expected)))
+      }).handleErrorWith(error => logger.error(error)("[ANALYSIS] Document analysis refresh failed"))
 
   private def getLocalHandlerForFocus(focus: Focus, state: AppState): LocalEventHandler =
     focus match

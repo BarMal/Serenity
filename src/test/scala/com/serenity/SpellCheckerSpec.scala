@@ -1,5 +1,7 @@
 package com.serenity
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, SpellCheckConfig}
@@ -158,6 +160,24 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "drop stale spell-check analysis results when the buffer changes before publication" in {
+    val config        = SpellCheckConfig(enabled = true)
+    val bufferId      = BufferId(0)
+    val staleBuffer   = AppState.initial.buffers(bufferId).copy(content = Rope("wurld"))
+    val currentBuffer = staleBuffer.copy(content = Rope("hello"))
+    val staleState = AppState.initial.copy(
+      config = AppConfig.default.withSpellCheck(config),
+      buffers = Map(bufferId -> staleBuffer)
+    )
+    val currentState = staleState.copy(buffers = Map(bufferId -> currentBuffer))
+    val expected     = SpellChecker.analysisFingerprints(staleState)
+    val analyzed     = SpellChecker.refreshDiagnostics(staleState)
+
+    val published = SpellChecker.applyIfCurrent(currentState, analyzed, expected)
+
+    published shouldBe currentState
+  }
+
   "StateManager" should "refresh spell-check diagnostics after prose edits" in {
     val logger = LoggerFactory[IO].getLogger(using LoggerName("SpellCheckerSpec"))
     val stateManager = StateManager
@@ -165,6 +185,11 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     "wurld".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+
+    val immediateState = stateManager.getCurrentState.unsafeRunSync()
+    immediateState.diagnostics.getOrElse(SpellChecker.bufferDiagnosticsUri(BufferId(0)), Nil) shouldBe Nil
+
+    IO.sleep(300.millis).unsafeRunSync()
 
     val state       = stateManager.getCurrentState.unsafeRunSync()
     val diagnostics = state.diagnostics.getOrElse(SpellChecker.bufferDiagnosticsUri(BufferId(0)), Nil)

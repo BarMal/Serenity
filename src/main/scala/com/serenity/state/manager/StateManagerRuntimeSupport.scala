@@ -2,8 +2,8 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
+import cats.effect.*
 import cats.effect.std.Queue
-import cats.effect.{Deferred, IO, Ref}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.lsp.LspEffect
@@ -22,14 +22,16 @@ private[manager] trait StateManagerRuntimeSupport:
   protected def runtime: StateManagerRuntime
   protected def balance: Balance
 
-  protected def stateRef: Ref[IO, AppState]                                   = runtime.stateRef
-  protected def undoRef: Ref[IO, UndoState]                                   = runtime.undoRef
-  protected def themeNamesRef: Ref[IO, List[String]]                          = runtime.themeNamesRef
-  protected def quitSignal: Deferred[IO, Unit]                                = runtime.quitSignal
-  protected def logger: Logger[IO]                                            = runtime.logger
-  protected def policy: SessionManager.SessionPolicy                          = runtime.policy
-  protected def themeManager: AppThemeManager                                 = runtime.themeManager
-  protected def lspQueue: Queue[IO, LspEffect]                                = runtime.lspQueue
+  protected def stateRef: Ref[IO, AppState]          = runtime.stateRef
+  protected def undoRef: Ref[IO, UndoState]          = runtime.undoRef
+  protected def themeNamesRef: Ref[IO, List[String]] = runtime.themeNamesRef
+  protected def quitSignal: Deferred[IO, Unit]       = runtime.quitSignal
+  protected def logger: Logger[IO]                   = runtime.logger
+  protected def policy: SessionManager.SessionPolicy = runtime.policy
+  protected def themeManager: AppThemeManager        = runtime.themeManager
+  protected def lspQueue: Queue[IO, LspEffect]       = runtime.lspQueue
+  protected def documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]] =
+    runtime.documentAnalysisFiberRef
   protected def onFontConfigChanged: FontConfig => IO[Unit]                   = runtime.onFontConfigChanged
   protected def configPersistencePath: Option[Path]                           = runtime.configPersistencePath
   protected def uiPresetStore: UiPresetStore                                  = runtime.uiPresetStore
@@ -44,6 +46,7 @@ private[manager] trait StateManagerRuntimeSupport:
   protected def sessionPersistence: SessionPersistence = runtime.sessionPersistence
 
   protected def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
+  protected def scheduleDocumentAnalysis(): IO[Unit]
   protected def ensureCommandRunnerSurface(state: AppState): AppState
   protected def saveBufferEffect(bufferId: BufferId): IO[Unit]
   protected def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit]
