@@ -32,7 +32,7 @@ trait Rope(using balance: Balance):
     deleteRight(startIndex, endIndex - startIndex)
 
   def deleteLeft(start: Int, count: Int): Rope =
-    if count == 0 then this
+    if count == 0 || start < 0 || start > weight then this
     else if count < 0 then deleteRight(start, Math.abs(count))
     else if start <= 0 then this
     else
@@ -40,12 +40,12 @@ trait Rope(using balance: Balance):
       deleteRight(start - actualCount, actualCount)
 
   def deleteRight(start: Int, count: Int): Rope =
-    if count == 0 then this
+    if count == 0 || start < 0 || start > weight then this
     else if count < 0 then deleteLeft(start, Math.abs(count))
     else if start + count > weight then deleteRight(start, weight - start)
     else
       (for
-        startAndRest <- splitAt(Math.max(0, start))
+        startAndRest <- splitAt(start)
         (start, rest) = startAndRest
         restAndEnd <- rest.splitAt(count)
         (_, end) = restAndEnd
