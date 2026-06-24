@@ -155,12 +155,40 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
     finally Files.deleteIfExists(path)
   }
 
+  it should "fail safely when the ODT content entry is missing" in {
+    val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(emptyZipBytes())
+
+    error.getMessage should include("missing content.xml")
+  }
+
+  it should "fail safely when the ODT content entry is oversized" in {
+    val bytes = odtRawBytes("content.xml", Array.fill(RichTextArchive.MaxXmlEntryBytes + 1)(0.toByte))
+
+    val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(bytes)
+
+    error.getMessage should include("content.xml is too large")
+  }
+
+  it should "wrap malformed ODT XML in a codec exception" in {
+    val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(odtBytes("<office:document-content>"))
+
+    error.getMessage should include("ODT document could not be decoded")
+  }
+
   private def odtBytes(contentXml: String): Array[Byte] =
+    odtRawBytes("content.xml", contentXml.getBytes(StandardCharsets.UTF_8))
+
+  private def emptyZipBytes(): Array[Byte] =
+    val output = java.io.ByteArrayOutputStream()
+    ZipOutputStream(output).close()
+    output.toByteArray
+
+  private def odtRawBytes(entryName: String, content: Array[Byte]): Array[Byte] =
     val output = java.io.ByteArrayOutputStream()
     val zip    = ZipOutputStream(output)
     try
-      zip.putNextEntry(ZipEntry("content.xml"))
-      zip.write(contentXml.getBytes(StandardCharsets.UTF_8))
+      zip.putNextEntry(ZipEntry(entryName))
+      zip.write(content)
       zip.closeEntry()
     finally zip.close()
     output.toByteArray

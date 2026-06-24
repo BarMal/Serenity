@@ -3,8 +3,10 @@ package com.serenity.richtext
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
+import java.util.zip.{ZipEntry, ZipOutputStream}
 import javax.xml.parsers.DocumentBuilderFactory
+
+import scala.util.control.NonFatal
 
 import cats.effect.IO
 import org.w3c.dom.{Document as XmlDocument, Element, Node}
@@ -15,7 +17,7 @@ object DocxDocumentCodec:
 
   /** Read a DOCX file into Serenity's native rich text model. */
   def read(path: Path): IO[RichTextDocument] =
-    IO.blocking(readBytes(Files.readAllBytes(path)))
+    IO.blocking(readBytes(RichTextArchive.readFile(path, "DOCX")))
 
   /** Write Serenity's native rich text model to a DOCX file. */
   def write(document: RichTextDocument, path: Path): IO[Unit] =
@@ -23,22 +25,26 @@ object DocxDocumentCodec:
 
   /** Decode DOCX bytes into Serenity's native rich text model. */
   def readBytes(bytes: Array[Byte]): RichTextDocument =
-    val content = zipEntry(bytes, "word/document.xml").getOrElse {
-      throw new IllegalArgumentException("DOCX archive is missing word/document.xml")
-    }
-    val xml = parseXml(content)
-    val paragraphs = firstElement(xml.getElementsByTagNameNS(WNs, "body"))
-      .map(body =>
-        childElements(body)
-          .filter(element => element.getNamespaceURI == WNs && element.getLocalName == "p")
-          .map(paragraphFromElement)
-      )
-      .getOrElse(Nil)
+    try
+      val content = RichTextArchive.zipEntry(bytes, "word/document.xml", "DOCX").getOrElse {
+        throw RichTextCodecException("DOCX archive is missing word/document.xml")
+      }
+      val xml = parseXml(content)
+      val paragraphs = firstElement(xml.getElementsByTagNameNS(WNs, "body"))
+        .map(body =>
+          childElements(body)
+            .filter(element => element.getNamespaceURI == WNs && element.getLocalName == "p")
+            .map(paragraphFromElement)
+        )
+        .getOrElse(Nil)
 
-    RichTextDocument(
-      if paragraphs.nonEmpty then paragraphs
-      else List(RichTextParagraph.plain(""))
-    ).normalized
+      RichTextDocument(
+        if paragraphs.nonEmpty then paragraphs
+        else List(RichTextParagraph.plain(""))
+      ).normalized
+    catch
+      case error: RichTextCodecException => throw error
+      case NonFatal(error)               => throw RichTextCodecException("DOCX document could not be decoded", error)
 
   /** Encode Serenity's native rich text model as DOCX bytes. */
   def writeBytes(document: RichTextDocument): Array[Byte] =
@@ -52,26 +58,15 @@ object DocxDocumentCodec:
     finally zip.close()
     output.toByteArray
 
-  private def zipEntry(bytes: Array[Byte], name: String): Option[Array[Byte]] =
-    val input = ZipInputStream(ByteArrayInputStream(bytes), StandardCharsets.UTF_8)
-    try
-      Iterator
-        .continually(input.getNextEntry)
-        .takeWhile(_ != null)
-        .find(_.getName == name)
-        .map { _ =>
-          val output = ByteArrayOutputStream()
-          input.transferTo(output)
-          output.toByteArray
-        }
-    finally input.close()
-
   private def parseXml(bytes: Array[Byte]): XmlDocument =
     val factory = DocumentBuilderFactory.newInstance()
     factory.setNamespaceAware(true)
     disableExternalEntities(factory)
     val input = ByteArrayInputStream(bytes)
-    try factory.newDocumentBuilder().parse(input)
+    try
+      val builder = factory.newDocumentBuilder()
+      builder.setErrorHandler(RichTextArchive.SilentXmlErrorHandler)
+      builder.parse(input)
     finally input.close()
 
   private def disableExternalEntities(factory: DocumentBuilderFactory): Unit =
