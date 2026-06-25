@@ -791,8 +791,6 @@ object SurfaceContentResolver:
 
   def resolveMarkdownPreview(
     title: String,
-    content: String,
-    rect: LayoutRect,
     mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
     ResolvedSurfaceContent(

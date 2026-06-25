@@ -651,14 +651,6 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
   it should "resolve Markdown previews as rendered pinned preview shells" in {
     val resolved = SurfaceContentResolver.resolveMarkdownPreview(
       title = "notes.md",
-      content = """# Notes
-            |
-            || Task | Owner |
-            || ---- | ----- |
-            || Ship | Codex |
-            |
-            |![Diagram](diagram.png)""".stripMargin,
-      rect = LayoutRect(0, 0, 40, 12),
       mode = SurfaceRenderMode.Pinned
     )
 
