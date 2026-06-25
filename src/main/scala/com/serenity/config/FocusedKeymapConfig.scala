@@ -256,10 +256,12 @@ object EditorKeymapConfig:
     EditorKeyAction.MoveLeft  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
     EditorKeyAction.MoveRight -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set.empty)),
     EditorKeyAction.MoveWordLeft -> List(
-      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set(com.serenity.keystroke.Modifier.Ctrl))
+      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set(com.serenity.keystroke.Modifier.Ctrl)),
+      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set(com.serenity.keystroke.Modifier.Alt))
     ),
     EditorKeyAction.MoveWordRight -> List(
-      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set(com.serenity.keystroke.Modifier.Ctrl))
+      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set(com.serenity.keystroke.Modifier.Ctrl)),
+      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowRight, None, Set(com.serenity.keystroke.Modifier.Alt))
     ),
     EditorKeyAction.MoveUp   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
     EditorKeyAction.MoveDown -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set.empty)),

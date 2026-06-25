@@ -25,3 +25,11 @@ class TextNavigationConvertersSpec extends AnyFlatSpec with Matchers:
     converter(KeyStrokeInfo(InputKey.ArrowLeft, None, ctrl)) shouldBe MoveWordLeft
     converter(KeyStrokeInfo(InputKey.ArrowRight, None, ctrl)) shouldBe MoveWordRight
   }
+
+  it should "map alt-arrow keys to word-navigation events" in {
+    val converter = TextNavigationConverters.navigationConverter
+    val alt       = Set(Modifier.Alt)
+
+    converter(KeyStrokeInfo(InputKey.ArrowLeft, None, alt)) shouldBe MoveWordLeft
+    converter(KeyStrokeInfo(InputKey.ArrowRight, None, alt)) shouldBe MoveWordRight
+  }
