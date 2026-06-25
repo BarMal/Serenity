@@ -324,12 +324,26 @@ object ConfigManager:
       case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
       case Some(_)                                          => "custom"
     val lspSettings = lspConfigToString(config.lspUserConfig)
-    def editorBinding(action: EditorKeyAction): String =
-      config.focusedKeymapConfig.editor
-        .bindingsFor(action)
-        .headOption
-        .orElse(EditorKeymapConfig.defaultBindings.get(action).flatMap(_.headOption))
+    def binding[A](
+      action: A,
+      configured: A => List[HotkeyTrigger],
+      defaults: Map[A, List[HotkeyTrigger]]
+    ): String =
+      configured(action).headOption
+        .orElse(defaults.get(action).flatMap(_.headOption))
         .fold("")(_.render)
+    def hotkeyBinding(action: HotkeyAction): String =
+      binding(action, config.hotkeyConfig.bindingsFor, HotkeyConfig.defaultBindings)
+    def editorBinding(action: EditorKeyAction): String =
+      binding(action, config.focusedKeymapConfig.editor.bindingsFor, EditorKeymapConfig.defaultBindings)
+    def commandRunnerBinding(action: CommandRunnerKeyAction): String =
+      binding(
+        action,
+        config.focusedKeymapConfig.commandRunner.bindingsFor,
+        CommandRunnerKeymapConfig.defaultBindings
+      )
+    def modalBinding(action: ModalKeyAction): String =
+      binding(action, config.focusedKeymapConfig.modal.bindingsFor, ModalKeymapConfig.defaultBindings)
 
     s"""# Serenity Editor Configuration
        |config.version = ${ConfigVersion.Current.value}
@@ -396,8 +410,8 @@ object ConfigManager:
        |spellcheck.words = ${config.spellCheck.normalized.additionalWords.mkString(",")}
        |
        |# Hotkey overrides
-       |hotkey.command_palette = ${config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render}
-       |hotkey.file_search = ${config.hotkeyConfig.bindingsFor(HotkeyAction.FileSearch).head.render}
+       |hotkey.command_palette = ${hotkeyBinding(HotkeyAction.ToggleCommandRunner)}
+       |hotkey.file_search = ${hotkeyBinding(HotkeyAction.FileSearch)}
        |
        |# Focused keymap overrides
        |keymap.editor.page_down = ${editorBinding(EditorKeyAction.PageDown)}
@@ -405,8 +419,8 @@ object ConfigManager:
        |keymap.editor.extend_selection_right = ${editorBinding(EditorKeyAction.ExtendSelectionRight)}
        |keymap.editor.extend_selection_up = ${editorBinding(EditorKeyAction.ExtendSelectionUp)}
        |keymap.editor.extend_selection_down = ${editorBinding(EditorKeyAction.ExtendSelectionDown)}
-       |keymap.command_runner.submit = ${config.focusedKeymapConfig.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit).head.render}
-       |keymap.modal.dismiss = ${config.focusedKeymapConfig.modal.bindingsFor(ModalKeyAction.Dismiss).head.render}
+       |keymap.command_runner.submit = ${commandRunnerBinding(CommandRunnerKeyAction.Submit)}
+       |keymap.modal.dismiss = ${modalBinding(ModalKeyAction.Dismiss)}
        |""".stripMargin
 
   /** Save configuration to file */
