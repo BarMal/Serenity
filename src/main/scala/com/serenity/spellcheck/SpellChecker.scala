@@ -4,6 +4,7 @@ import java.util.Locale
 
 import com.serenity.config.SpellCheckConfig
 import com.serenity.lsp.model.*
+import com.serenity.rope.Rope
 import com.serenity.state.models.*
 
 object SpellChecker:
@@ -59,33 +60,42 @@ object SpellChecker:
   )
 
   def check(text: String, config: SpellCheckConfig): List[Diagnostic] =
+    checkLines(
+      text
+        .split("\n", -1)
+        .iterator
+        .zipWithIndex
+        .map { case (line, lineIndex) => lineIndex -> line },
+      config
+    )
+
+  def check(content: Rope, config: SpellCheckConfig): List[Diagnostic] =
+    checkLines(content.linesIteratorFrom(0), config)
+
+  private def checkLines(lines: Iterator[(Int, String)], config: SpellCheckConfig): List[Diagnostic] =
     val normalized = config.normalized
     if !normalized.enabled then Nil
     else
       val dictionary = dictionaryFor(normalized)
-      text
-        .split("\n", -1)
-        .zipWithIndex
-        .flatMap { (line, lineIndex) =>
-          WordPattern
-            .findAllMatchIn(line)
-            .filterNot(match_ => isAccepted(match_.matched, dictionary))
-            .map { match_ =>
-              val word = match_.matched
-              Diagnostic(
-                range = LspRange(
-                  LspPosition(lineIndex, match_.start),
-                  LspPosition(lineIndex, match_.end)
-                ),
-                severity = Some(DiagnosticSeverity.Hint),
-                message = s"Possible spelling issue: $word",
-                source = Some(Source),
-                code = Some("unknown-word")
-              )
-            }
-            .toList
-        }
-        .toList
+      lines.flatMap { (lineIndex, line) =>
+        WordPattern
+          .findAllMatchIn(line)
+          .filterNot(match_ => isAccepted(match_.matched, dictionary))
+          .map { match_ =>
+            val word = match_.matched
+            Diagnostic(
+              range = LspRange(
+                LspPosition(lineIndex, match_.start),
+                LspPosition(lineIndex, match_.end)
+              ),
+              severity = Some(DiagnosticSeverity.Hint),
+              message = s"Possible spelling issue: $word",
+              source = Some(Source),
+              code = Some("unknown-word")
+            )
+          }
+          .toList
+      }.toList
 
   def refreshDiagnostics(state: AppState): AppState =
     val preserved = state.diagnostics.view
@@ -102,7 +112,7 @@ object SpellChecker:
             .get(uri)
             .filter(_.fingerprint == fingerprint)
             .getOrElse {
-              val spellDiagnostics = check(buffer.content.collect(), state.config.spellCheck)
+              val spellDiagnostics = check(buffer.content, state.config.spellCheck)
               SpellCheckCacheEntry(fingerprint, spellDiagnostics)
             }
           val nextDiagnostics =
