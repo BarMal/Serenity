@@ -318,7 +318,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
                         buffer.primarySelection.map(selection =>
                           adjustSelectionAfterReplacement(
                             buffer = buffer,
-                            updatedText = updatedContent.collect(),
+                            updatedContent = updatedContent,
                             selection = selection,
                             startOffset = startOffset,
                             endOffset = endOffset,
@@ -658,22 +658,21 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
 
   private def adjustSelectionAfterReplacement(
     buffer: Buffer,
-    updatedText: String,
+    updatedContent: com.serenity.rope.Rope,
     selection: Selection,
     startOffset: Int,
     endOffset: Int,
     replacementLength: Int
   ): Selection =
-    val oldText = buffer.content.collect()
-    val delta   = replacementLength - (endOffset - startOffset)
+    val delta = replacementLength - (endOffset - startOffset)
 
     def adjust(cursor: CursorPosition): CursorPosition =
-      val oldOffset = offsetForCursor(oldText, cursor)
+      val oldOffset = offsetForCursor(buffer.content, cursor)
       val newOffset =
         if oldOffset <= startOffset then oldOffset
         else if oldOffset >= endOffset then oldOffset + delta
         else startOffset + replacementLength
-      cursorPositionForOffset(updatedText, newOffset)
+      cursorPositionForOffset(updatedContent, newOffset)
 
     Selection(adjust(selection.anchor), adjust(selection.focus))
 
@@ -688,22 +687,8 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
       case None =>
         IO.unit
 
-  private def offsetForCursor(text: String, cursor: CursorPosition): Int =
-    val linesBefore = text.split("\n", -1).take(cursor.line)
-    val linePrefixLength =
-      if linesBefore.isEmpty then 0
-      else linesBefore.map(_.length).sum + linesBefore.length
-    linePrefixLength + cursor.column
-
   private def offsetForCursor(content: com.serenity.rope.Rope, cursor: CursorPosition): Int =
     content.lineColumnToOffset(cursor.line, cursor.column)
-
-  private def cursorPositionForOffset(text: String, offset: Int): CursorPosition =
-    val clamped = math.max(0, math.min(offset, text.length))
-    text.take(clamped).foldLeft(CursorPosition(0, 0)) { (cursor, char) =>
-      if char == '\n' then CursorPosition(cursor.line + 1, 0)
-      else cursor.copy(column = cursor.column + 1)
-    }
 
   private def cursorPositionForOffset(content: com.serenity.rope.Rope, offset: Int): CursorPosition =
     val (line, column) = content.offsetToLineColumn(offset)
