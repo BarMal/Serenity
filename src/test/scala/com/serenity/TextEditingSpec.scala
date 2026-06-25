@@ -24,3 +24,17 @@ class TextEditingSpec extends AnyFlatSpec with Matchers:
     TextEditing.nextWordBoundary("hello, world", 5) shouldBe 7
     TextEditing.nextWordBoundary("hello, world", 7) shouldBe 12
   }
+
+  it should "step over surrogate-pair emoji as one grapheme" in {
+    val text = "a🙂b"
+
+    TextEditing.nextGraphemeBoundary(text, 1) shouldBe 3
+    TextEditing.previousGraphemeBoundary(text, 3) shouldBe 1
+  }
+
+  it should "step over combining-mark accents with their base character" in {
+    val text = "cafe\u0301!"
+
+    TextEditing.nextGraphemeBoundary(text, 3) shouldBe 5
+    TextEditing.previousGraphemeBoundary(text, 5) shouldBe 3
+  }

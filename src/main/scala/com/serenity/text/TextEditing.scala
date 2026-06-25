@@ -49,6 +49,22 @@ object TextEditing:
         scanForwardClassEnd(source, segmentEnd, CharacterClass.Whitespace)
       else segmentEnd
 
+  def previousGraphemeBoundary(text: String, cursor: Int): Int =
+    previousGraphemeBoundary(StringCharacterSource(text), cursor)
+
+  def previousGraphemeBoundary(source: CharacterSource, cursor: Int): Int =
+    val idx = clamp(cursor, source.length)
+    if idx <= 0 then 0
+    else rewindGraphemeStart(source, previousCodePointStart(source, idx))
+
+  def nextGraphemeBoundary(text: String, cursor: Int): Int =
+    nextGraphemeBoundary(StringCharacterSource(text), cursor)
+
+  def nextGraphemeBoundary(source: CharacterSource, cursor: Int): Int =
+    val idx = clamp(cursor, source.length)
+    if idx >= source.length then source.length
+    else consumeGraphemeEnd(source, nextCodePointEnd(source, idx))
+
   private def clamp(cursor: Int, length: Int): Int =
     math.max(0, math.min(cursor, length))
 
@@ -63,6 +79,61 @@ object TextEditing:
           CharacterClass.Word
         case _ =>
           CharacterClass.Punctuation
+
+  private def codePointAt(source: CharacterSource, index: Int): Int =
+    val first = source.charAt(index)
+    if Character.isHighSurrogate(first) && index + 1 < source.length then
+      val second = source.charAt(index + 1)
+      if Character.isLowSurrogate(second) then Character.toCodePoint(first, second)
+      else first.toInt
+    else first.toInt
+
+  private def previousCodePointStart(source: CharacterSource, idx: Int): Int =
+    if idx >= 2 && Character.isLowSurrogate(source.charAt(idx - 1)) &&
+        Character.isHighSurrogate(source.charAt(idx - 2))
+    then idx - 2
+    else math.max(0, idx - 1)
+
+  private def nextCodePointEnd(source: CharacterSource, idx: Int): Int =
+    if idx + 1 < source.length && Character.isHighSurrogate(source.charAt(idx)) &&
+        Character.isLowSurrogate(source.charAt(idx + 1))
+    then idx + 2
+    else math.min(source.length, idx + 1)
+
+  @annotation.tailrec
+  private def rewindGraphemeStart(source: CharacterSource, idx: Int): Int =
+    val previous =
+      if idx > 0 then
+        val previousStart = previousCodePointStart(source, idx)
+        Option.when(codePointAt(source, previousStart) == ZeroWidthJoiner && previousStart > 0) {
+          previousCodePointStart(source, previousStart)
+        }
+      else None
+
+    val currentCodePoint = codePointAt(source, idx)
+    if idx > 0 && isGraphemeExtender(currentCodePoint) then
+      rewindGraphemeStart(source, previousCodePointStart(source, idx))
+    else
+      previous match
+        case Some(joinedStart) => rewindGraphemeStart(source, joinedStart)
+        case None              => idx
+
+  @annotation.tailrec
+  private def consumeGraphemeEnd(source: CharacterSource, idx: Int): Int =
+    if idx >= source.length then source.length
+    else
+      val codePoint = codePointAt(source, idx)
+      if isGraphemeExtender(codePoint) then consumeGraphemeEnd(source, nextCodePointEnd(source, idx))
+      else if codePoint == ZeroWidthJoiner && nextCodePointEnd(source, idx) < source.length then
+        consumeGraphemeEnd(source, nextCodePointEnd(source, nextCodePointEnd(source, idx)))
+      else idx
+
+  private val ZeroWidthJoiner = 0x200d
+
+  private def isGraphemeExtender(codePoint: Int): Boolean =
+    Character.getType(codePoint) match
+      case Character.NON_SPACING_MARK | Character.COMBINING_SPACING_MARK | Character.ENCLOSING_MARK => true
+      case _                                                                                        => false
 
   @annotation.tailrec
   private def scanBackwardClassStart(source: CharacterSource, idx: Int, targetClass: CharacterClass): Int =
