@@ -3,7 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -14,6 +14,40 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
+
+  final private case class NonCollectingRope(delegate: Rope) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def newlineCount: Int =
+      delegate.newlineCount
+
+    override def lastLineLength: Int =
+      delegate.lastLineLength
+
+    override def endsWithNewline: Boolean =
+      delegate.endsWithNewline
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      this
+
+    override def index(i: Int): Option[Char] =
+      delegate.index(i)
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def collect(): String =
+      throw AssertionError("replace selection adjustment should not materialise content")
 
   private def createStateManager(): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
@@ -407,6 +441,44 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
           )
         )
       )
+    )
+  }
+
+  it should "shrink the active selection scope without materialising buffer content" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = NonCollectingRope(Rope("needle one\nneedle two\noutside needle")),
+            selection = Some(
+              Selection(
+                CursorPosition(0, 0),
+                CursorPosition(1, "needle two".length)
+              )
+            )
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "replace", "replace")
+
+    "needle".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('n')).unsafeRunSync()
+    stateManager.applyEvent(MoveLeft).unsafeRunSync()
+    stateManager.applyEvent(ModalNavigate(Direction.Down)).unsafeRunSync()
+
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val afterFirst = stateManager.getCurrentState.unsafeRunSync()
+    afterFirst.buffers(bufferId).content.collect() shouldBe "n one\nneedle two\noutside needle"
+    afterFirst.buffers(bufferId).selection shouldBe Some(
+      Selection(CursorPosition(0, 0), CursorPosition(1, "needle two".length))
     )
   }
 
