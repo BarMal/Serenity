@@ -219,6 +219,29 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     written should include("keymap.editor.extend_selection_right = shift+right")
   }
 
+  it should "fall back to default global hotkeys when writing sparse or empty hotkey config" in {
+    val config = AppConfig.default.withHotkeyConfig(
+      HotkeyConfig(Map(HotkeyAction.ToggleCommandRunner -> Nil))
+    )
+    val written = ConfigManager.configToString(config)
+
+    written should include("hotkey.command_palette = ctrl+p")
+    written should include("hotkey.file_search = ctrl+shift+f")
+  }
+
+  it should "fall back to default focused bindings when writing sparse command runner and modal keymaps" in {
+    val config = AppConfig.default.withFocusedKeymapConfig(
+      FocusedKeymapConfig(
+        commandRunner = CommandRunnerKeymapConfig(Map(CommandRunnerKeyAction.Submit -> Nil)),
+        modal = ModalKeymapConfig(Map.empty)
+      )
+    )
+    val written = ConfigManager.configToString(config)
+
+    written should include("keymap.command_runner.submit = enter")
+    written should include("keymap.modal.dismiss = escape")
+  }
+
   it should "load legacy shared font size and ligature keys for code and prose fonts" in {
     val configFile = Files.createTempFile("serenity-legacy-font-config", ".conf")
     Files.writeString(
