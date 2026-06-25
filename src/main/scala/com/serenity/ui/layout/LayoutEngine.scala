@@ -320,28 +320,29 @@ object LayoutEngine:
   )
 
   private def orderedBelowCursorSurfaces(state: AppState): List[UiSurface] =
-    val maybeRunner  = state.commandRunnerSurface.toList
-    val maybeSubmenu = state.commandRunnerSubmenuSurface.toList
-    if maybeRunner.nonEmpty && maybeSubmenu.nonEmpty then maybeRunner ++ maybeSubmenu
-    else
-      val belowSurfaces = state.floatingSurfaces.filter {
-        _.presentation match
-          case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
-          case _                                                             => false
-      }
-      state.focus match
-        case Focus.Surface(surfaceId) =>
-          belowSurfaces.find(_.id == surfaceId) match
-            case Some(focused) => List(focused)
-            case None          => belowSurfaces.headOption.toList
-        case _ =>
-          if belowSurfaces.nonEmpty then belowSurfaces.headOption.toList
-          else
-            state.cursorInfoBarSurface.filter {
-              _.presentation match
-                case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
-                case _                                                             => false
-            }.toList
+    val belowSurfaces = state.floatingSurfaces.filter {
+      _.presentation match
+        case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
+        case _                                                             => false
+    }
+    state.focus match
+      case Focus.Surface(surfaceId) if state.commandRunnerDomainSurfaceIds.contains(surfaceId) =>
+        val maybeRunner  = state.commandRunnerSurface.toList
+        val maybeSubmenu = state.commandRunnerSubmenuSurface.toList
+        if maybeRunner.nonEmpty && maybeSubmenu.nonEmpty then maybeRunner ++ maybeSubmenu
+        else belowSurfaces.find(_.id == surfaceId).toList
+      case Focus.Surface(surfaceId) =>
+        belowSurfaces.find(_.id == surfaceId) match
+          case Some(focused) => List(focused)
+          case None          => belowSurfaces.headOption.toList
+      case _ =>
+        if belowSurfaces.nonEmpty then belowSurfaces.headOption.toList
+        else
+          state.cursorInfoBarSurface.filter {
+            _.presentation match
+              case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
+              case _                                                             => false
+          }.toList
 
   private def calculateBelowCursorOverlayStack(
     surfaces: List[UiSurface],
