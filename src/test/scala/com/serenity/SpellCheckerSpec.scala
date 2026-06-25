@@ -64,7 +64,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
       delegate.offsetToLineColumn(offset)
 
     override def collect(): String =
-      throw AssertionError("unchanged cached spell-check diagnostics should not materialise content")
+      throw AssertionError("spell-check diagnostics should not materialise content")
 
   "SpellChecker" should "report unknown words with unicode-aware ranges" in {
     val config = SpellCheckConfig(
@@ -131,6 +131,24 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
 
     refreshed.diagnostics.getOrElse(uri, Nil) shouldBe diagnostics
     refreshed.spellCheckCache.get(uri).map(_.fingerprint) shouldBe Some(fingerprint)
+  }
+
+  it should "analyze uncached buffers without materialising content" in {
+    val config   = SpellCheckConfig(enabled = true)
+    val bufferId = BufferId(0)
+    val content  = NonCollectingRope(Rope("hello wurld\nok"))
+    val buffer   = AppState.initial.buffers(bufferId).copy(content = content)
+    val uri      = SpellChecker.diagnosticsUri(buffer)
+    val state = AppState.initial.copy(
+      config = AppConfig.default.withSpellCheck(config),
+      buffers = Map(bufferId -> buffer)
+    )
+
+    val refreshed   = SpellChecker.refreshDiagnostics(state)
+    val diagnostics = refreshed.diagnostics.getOrElse(uri, Nil)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: wurld")
+    refreshed.spellCheckCache.get(uri).map(_.diagnostics) shouldBe Some(diagnostics)
   }
 
   it should "invalidate cached spell-check diagnostics when buffer content changes" in {
