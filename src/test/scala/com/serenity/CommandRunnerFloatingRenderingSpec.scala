@@ -97,7 +97,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val commandLine =
       (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 2)).mkString.trim
 
-    searchLine should include("search: op")
+    searchLine should include("op")
+    searchLine should not include "search:"
     commandLine should include("Open")
     commandLine should include("Open file")
     overlay.width shouldBe contentRect.width
@@ -109,7 +110,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
     val uiFont     = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
     val uiMetrics  = CellMetrics.fromFont(uiFont)
-    val searchText = "search: op"
+    val searchText = "op"
     val searchCursorXPx = uiMetrics.toPixelX(overlay.x + 1) +
       math.round(TextLayoutSnapshot.caretXsForText(searchText, uiFont, surface.fontRenderContext.get).last)
     val searchCursorYPx = uiMetrics.toPixelY(overlay.y + 1)

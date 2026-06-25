@@ -374,8 +374,8 @@ object SurfaceContentResolver:
         else
           Some(
             OverlayRow(
-              plainText = s"search: ${runner.searchTerm}",
-              cursorColumn = Some(s"search: ${runner.searchTerm}".length)
+              plainText = runner.searchTerm,
+              cursorColumn = Some(runner.searchTerm.length)
             )
           )
 
