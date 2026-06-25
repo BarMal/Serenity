@@ -73,6 +73,13 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     translator.translate(KeyStrokeInfo(InputKey.ArrowRight, None, Set(Modifier.Ctrl))) shouldBe MoveWordRight
   }
 
+  it should "treat Alt+Left and Alt+Right as word navigation in editor focus" in {
+    val translator = FocusedInputTranslator.forState(editorState)
+
+    translator.translate(KeyStrokeInfo(InputKey.ArrowLeft, None, Set(Modifier.Alt))) shouldBe MoveWordLeft
+    translator.translate(KeyStrokeInfo(InputKey.ArrowRight, None, Set(Modifier.Alt))) shouldBe MoveWordRight
+  }
+
   it should "treat Shift-arrow keys as selection extension in editor focus" in {
     val translator = FocusedInputTranslator.forState(editorState)
     val shift      = Set(Modifier.Shift)
