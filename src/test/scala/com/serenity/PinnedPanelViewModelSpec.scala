@@ -2,6 +2,7 @@ package com.serenity
 
 import java.nio.file.Paths
 
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.PinnedPanelViewModel
@@ -10,7 +11,41 @@ import org.scalatest.matchers.should.Matchers
 
 class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
 
-  given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+  given Balance = Balance.default
+
+  final private case class NonCollectingRope(delegate: Rope) extends Rope:
+    override def weight: Int =
+      delegate.weight
+
+    override def height: Int =
+      delegate.height
+
+    override def newlineCount: Int =
+      delegate.newlineCount
+
+    override def lastLineLength: Int =
+      delegate.lastLineLength
+
+    override def endsWithNewline: Boolean =
+      delegate.endsWithNewline
+
+    override def isWeightBalanced: Boolean =
+      delegate.isWeightBalanced
+
+    override def isHeightBalanced: Boolean =
+      delegate.isHeightBalanced
+
+    override def rebalance: Rope =
+      this
+
+    override def index(i: Int): Option[Char] =
+      delegate.index(i)
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] =
+      delegate.splitAt(index)
+
+    override def collect(): String =
+      throw AssertionError("markdown preview shell should not materialise content")
 
   private val root = Paths.get("/repo")
 
@@ -185,6 +220,27 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
       "Variable state",
       "Heading Chapter 1"
     )
+  }
+
+  it should "resolve Markdown preview shells without materialising buffer content" in {
+    val initialState = AppState.initial
+    val bufferId     = BufferId(0)
+    val state = initialState.copy(
+      buffers = initialState.buffers.updated(
+        bufferId,
+        initialState.buffers(bufferId).copy(content = NonCollectingRope(Rope("# Notes\n\nBody")))
+      )
+    )
+    val markdownPanel = UiSurface(
+      id = SurfaceId("markdown-preview"),
+      content = SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
+      presentation = SurfacePresentation.Pinned(PanelPosition.Right, 40)
+    )
+
+    val view = PinnedPanelViewModel.resolve(markdownPanel, LayoutRect(0, 0, 40, 12), state)
+
+    view.title shouldBe "Preview: notes.md"
+    view.rows shouldBe Nil
   }
 
   it should "shape diagnostics content differently for wide and compact geometry" in {

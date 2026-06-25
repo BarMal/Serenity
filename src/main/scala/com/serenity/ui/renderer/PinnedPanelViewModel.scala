@@ -51,12 +51,8 @@ object PinnedPanelViewModel:
   private def resolve(surface: UiSurface, rect: LayoutRect, state: Option[AppState]): TextPanelView =
     val resolved =
       surface.content match
-        case SurfaceContent.MarkdownPreview(bufferId, title) =>
-          val content = state
-            .flatMap(_.buffers.get(bufferId))
-            .map(_.content.collect())
-            .getOrElse("")
-          SurfaceContentResolver.resolveMarkdownPreview(title, content, rect, SurfaceRenderMode.Pinned)
+        case SurfaceContent.MarkdownPreview(_, title) =>
+          SurfaceContentResolver.resolveMarkdownPreview(title, SurfaceRenderMode.Pinned)
         case SurfaceContent.Outline(symbols, activeLocation) =>
           SurfaceContentResolver.resolve(
             SurfaceContent.Outline(symbols, activeOutlineLocation(symbols, activeLocation, state)),
