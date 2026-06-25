@@ -162,8 +162,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val overlays = OverlayViewModel.fromState(state, layout)
     val overlay  = overlays.belowCursor.getOrElse(fail("Expected command runner overlay"))
 
-    overlay.header.map(_.plainText) shouldBe Some("search: op")
-    overlay.header.flatMap(_.cursorColumn) shouldBe Some("search: op".length)
+    overlay.header.map(_.plainText) shouldBe Some("op")
+    overlay.header.flatMap(_.cursorColumn) shouldBe Some("op".length)
     overlay.rows.exists(_.selected) shouldBe true
     overlay.rows.map(_.plainText).head should include("Open")
     overlay.rows.map(_.plainText).head should include("Open file")

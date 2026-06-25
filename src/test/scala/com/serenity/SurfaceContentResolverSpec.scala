@@ -96,8 +96,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     floating.title shouldBe None
-    floating.header.map(_.plainText) shouldBe Some("search: open")
-    floating.header.flatMap(_.cursorColumn) shouldBe Some("search: open".length)
+    floating.header.map(_.plainText) shouldBe Some("open")
+    floating.header.flatMap(_.cursorColumn) shouldBe Some("open".length)
     floating.rows.exists(_.selected) shouldBe true
     floating.rows.map(_.plainText).head should include("[Edit]")
     floating.rows should have size 1
