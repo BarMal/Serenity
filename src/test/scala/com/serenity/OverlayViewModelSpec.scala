@@ -252,6 +252,54 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlay.header.map(_.plainText) should not contain "search: op"
   }
 
+  it should "prefer a focused find modal over an existing command runner submenu stack" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(com.serenity.command.CommandCategory.Settings)
+    val buffer = Buffer
+      .fromString(bufferId, "one\ntwo\nthree")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.Surface(SurfaceId("find")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner-submenu"),
+          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = true),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("find"),
+          SurfaceContent.ModalWorkflow(Modal.Find("two", List(FindResult(1, 0)), 0)),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
+
+    val overlays = OverlayViewModel.fromState(state, layout)
+    val overlay  = overlays.belowCursor.getOrElse(fail("Expected find overlay"))
+
+    overlay.header.map(_.plainText) shouldBe Some("find")
+    overlay.rows.map(_.plainText) should contain("Find two")
+    overlays.belowCursorStack should have size 1
+  }
+
   it should "stack the command runner and submenu preview beneath the cursor" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
