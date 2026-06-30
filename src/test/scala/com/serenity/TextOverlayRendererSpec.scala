@@ -177,6 +177,15 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     val secondRow = surface.getRow(2)
     firstRow.indexOf("Used") shouldBe secondRow.indexOf("Used")
     firstRow.indexOf("Monaspace") shouldBe secondRow.indexOf("SansSerif")
+
+    val contentWidth = overlay.rect.width - 2
+    val labelWidth   = math.min(22, math.max(8, contentWidth / 3))
+    val valueWidth   = math.min(18, math.max(8, contentWidth / 4))
+    val hintWidth    = math.max(0, contentWidth - labelWidth - valueWidth - 2)
+    val valueX       = overlay.rect.x + 1 + labelWidth + hintWidth + 2
+
+    (valueX until valueX + valueWidth).foreach(x => surface.getBg(x, 2) shouldBe Theme.light.highlighted.background)
+    surface.getBg(valueX - 1, 2) shouldBe Theme.light.panel.background
   }
 
   it should "truncate long selected column text from the end instead of dropping the leading characters" in {
