@@ -55,11 +55,12 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     newLayout.editorPanelRect.width shouldBe 81
     newLayout.editorPanelRect.height shouldBe 39
+    val newContentRect = CursorLayout.contentRectForPane(newLayout.editorPanelRect)
 
     updatedState.buffers.get(bufferId) match
       case Some(buffer) =>
-        buffer.viewport.visibleLines.shouldBe(newLayout.editorPanelRect.height)
-        buffer.viewport.visibleColumns.shouldBe(newLayout.editorPanelRect.width)
+        buffer.viewport.visibleLines.shouldBe(newContentRect.height)
+        buffer.viewport.visibleColumns.shouldBe(newContentRect.width)
       case None => fail("No buffer found in state")
   }
 
@@ -92,14 +93,17 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val calculatedLayout = LayoutEngine.calculateLayout(resizedState, newSize)
     val paneLayouts      = LayoutEngine.calculatePaneLayouts(resizedState, calculatedLayout)
 
-    resizedState.buffers(firstBuffer.id).viewport.visibleColumns shouldBe paneLayouts(firstPaneId).width
-    resizedState.buffers(firstBuffer.id).viewport.visibleLines shouldBe paneLayouts(firstPaneId).height
-    resizedState.layout.editorPanes(firstPaneId).viewport.visibleColumns shouldBe paneLayouts(firstPaneId).width
-    resizedState.layout.editorPanes(firstPaneId).viewport.visibleLines shouldBe paneLayouts(firstPaneId).height
-    resizedState.buffers(secondBuffer.id).viewport.visibleColumns shouldBe paneLayouts(secondPaneId).width
-    resizedState.buffers(secondBuffer.id).viewport.visibleLines shouldBe paneLayouts(secondPaneId).height
-    resizedState.layout.editorPanes(secondPaneId).viewport.visibleColumns shouldBe paneLayouts(secondPaneId).width
-    resizedState.layout.editorPanes(secondPaneId).viewport.visibleLines shouldBe paneLayouts(secondPaneId).height
+    val firstContentRect  = CursorLayout.contentRectForPane(paneLayouts(firstPaneId))
+    val secondContentRect = CursorLayout.contentRectForPane(paneLayouts(secondPaneId))
+
+    resizedState.buffers(firstBuffer.id).viewport.visibleColumns shouldBe firstContentRect.width
+    resizedState.buffers(firstBuffer.id).viewport.visibleLines shouldBe firstContentRect.height
+    resizedState.layout.editorPanes(firstPaneId).viewport.visibleColumns shouldBe firstContentRect.width
+    resizedState.layout.editorPanes(firstPaneId).viewport.visibleLines shouldBe firstContentRect.height
+    resizedState.buffers(secondBuffer.id).viewport.visibleColumns shouldBe secondContentRect.width
+    resizedState.buffers(secondBuffer.id).viewport.visibleLines shouldBe secondContentRect.height
+    resizedState.layout.editorPanes(secondPaneId).viewport.visibleColumns shouldBe secondContentRect.width
+    resizedState.layout.editorPanes(secondPaneId).viewport.visibleLines shouldBe secondContentRect.height
   }
 
   it should "apply configured relative and bounded viewport sizing to pane layouts" in {
@@ -120,9 +124,14 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val paneRect         = LayoutEngine.calculatePaneLayouts(resizedState, calculatedLayout)(paneId)
     val bufferId         = resizedState.layout.editorPanes(paneId).bufferId.getOrElse(fail("Expected active buffer"))
 
-    resizedState.buffers(bufferId).viewport.visibleColumns shouldBe math.max(1, (paneRect.width * 0.8).toInt)
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
+
+    resizedState.buffers(bufferId).viewport.visibleColumns shouldBe math.max(1, (contentRect.width * 0.8).toInt)
     resizedState.buffers(bufferId).viewport.visibleLines shouldBe 20
-    resizedState.layout.editorPanes(paneId).viewport.visibleColumns shouldBe math.max(1, (paneRect.width * 0.8).toInt)
+    resizedState.layout.editorPanes(paneId).viewport.visibleColumns shouldBe math.max(
+      1,
+      (contentRect.width * 0.8).toInt
+    )
     resizedState.layout.editorPanes(paneId).viewport.visibleLines shouldBe 20
   }
 
@@ -146,10 +155,11 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val updatedState     = stateManager.getCurrentState.unsafeRunSync()
     val calculatedLayout = LayoutEngine.calculateLayout(updatedState, viewportSize)
     val paneRect         = LayoutEngine.calculatePaneLayouts(updatedState, calculatedLayout)(paneId)
-    updatedState.buffers(bufferId).viewport.visibleColumns shouldBe paneRect.width
-    updatedState.buffers(bufferId).viewport.visibleLines shouldBe paneRect.height
-    updatedState.layout.editorPanes(paneId).viewport.visibleColumns shouldBe paneRect.width
-    updatedState.layout.editorPanes(paneId).viewport.visibleLines shouldBe paneRect.height
+    val contentRect      = CursorLayout.contentRectForPane(paneRect)
+    updatedState.buffers(bufferId).viewport.visibleColumns shouldBe contentRect.width
+    updatedState.buffers(bufferId).viewport.visibleLines shouldBe contentRect.height
+    updatedState.layout.editorPanes(paneId).viewport.visibleColumns shouldBe contentRect.width
+    updatedState.layout.editorPanes(paneId).viewport.visibleLines shouldBe contentRect.height
   }
 
   it should "handle text wrapping recalculation on resize" in {
@@ -186,7 +196,8 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     state2.buffers.get(bufferId) match
       case Some(buffer) =>
-        buffer.viewport.visibleColumns.shouldBe(layout2.editorPanelRect.width)
+        val contentRect = CursorLayout.contentRectForPane(layout2.editorPanelRect)
+        buffer.viewport.visibleColumns.shouldBe(contentRect.width)
       case None => fail("No buffer found in state")
   }
 
@@ -213,11 +224,12 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(resizeEvent).unsafeRunSync()
 
     // State should now reflect the resize
-    val resizedState  = stateManager.getCurrentState.unsafeRunSync()
-    val resizedBuffer = resizedState.buffers(resizedState.bufferOrder.head)
-    val resizedLayout = LayoutEngine.calculateLayout(resizedState, newViewportSize)
-    resizedBuffer.viewport.visibleLines.shouldBe(resizedLayout.editorPanelRect.height)
-    resizedBuffer.viewport.visibleColumns.shouldBe(resizedLayout.editorPanelRect.width)
+    val resizedState       = stateManager.getCurrentState.unsafeRunSync()
+    val resizedBuffer      = resizedState.buffers(resizedState.bufferOrder.head)
+    val resizedLayout      = LayoutEngine.calculateLayout(resizedState, newViewportSize)
+    val resizedContentRect = CursorLayout.contentRectForPane(resizedLayout.editorPanelRect)
+    resizedBuffer.viewport.visibleLines.shouldBe(resizedContentRect.height)
+    resizedBuffer.viewport.visibleColumns.shouldBe(resizedContentRect.width)
   }
 
   it should "recalculate text wrapping when terminal width changes" in {
@@ -256,7 +268,8 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     stateAfterWide.buffers.get(bufferId) match
       case Some(buffer) =>
-        buffer.viewport.visibleColumns.shouldBe(layoutAfterWide.editorPanelRect.width)
-        buffer.viewport.visibleLines.shouldBe(layoutAfterWide.editorPanelRect.height)
+        val contentRect = CursorLayout.contentRectForPane(layoutAfterWide.editorPanelRect)
+        buffer.viewport.visibleColumns.shouldBe(contentRect.width)
+        buffer.viewport.visibleLines.shouldBe(contentRect.height)
       case None => fail("No buffer found after wide resize")
   }

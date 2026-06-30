@@ -470,10 +470,11 @@ object LayoutEngine:
     viewport.copy(topLine = clampedScrollLine, topVisualLine = 0)
 
   def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect): Viewport =
+    val contentRect = CursorLayout.contentRectForPane(panelRect)
     viewport.copy(
-      visibleLines = panelRect.height,
-      visibleColumns = panelRect.width,
-      topVisualLine = viewport.topVisualLine.min(math.max(0, panelRect.height - 1))
+      visibleLines = contentRect.height,
+      visibleColumns = contentRect.width,
+      topVisualLine = viewport.topVisualLine.min(math.max(0, contentRect.height - 1))
     )
 
   def updateViewportDimensions(
@@ -482,18 +483,20 @@ object LayoutEngine:
     viewportSizing: com.serenity.config.ViewportSizing
   ): Viewport =
     val normalizedSizing = viewportSizing.normalized
-    val visibleLines     = normalizedSizing.height.resolve(panelRect.height)
+    val contentRect      = CursorLayout.contentRectForPane(panelRect)
+    val visibleLines     = normalizedSizing.height.resolve(contentRect.height)
     viewport.copy(
       visibleLines = visibleLines,
-      visibleColumns = normalizedSizing.width.resolve(panelRect.width),
+      visibleColumns = normalizedSizing.width.resolve(contentRect.width),
       topVisualLine = viewport.topVisualLine.min(math.max(0, visibleLines - 1))
     )
 
   def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect, metrics: CellMetrics): Viewport =
+    val contentRect = CursorLayout.contentRectForPane(panelRect)
     viewport.copy(
-      visibleLines = panelRect.height / metrics.lineHeight,
-      visibleColumns = panelRect.width / metrics.charWidth,
-      topVisualLine = viewport.topVisualLine.min(math.max(0, panelRect.height / metrics.lineHeight - 1))
+      visibleLines = contentRect.height / metrics.lineHeight,
+      visibleColumns = contentRect.width / metrics.charWidth,
+      topVisualLine = viewport.topVisualLine.min(math.max(0, contentRect.height / metrics.lineHeight - 1))
     )
 
   def syncViewportDimensions(state: AppState, viewportSize: ViewportSize): AppState =
