@@ -14,6 +14,8 @@ character. Cursor-left, cursor-right, forward delete, and backward delete theref
 insertions snap to the grapheme boundary after the supplied cursor position, and selection replacement
 or deletion expands non-empty ranges outward to grapheme boundaries. Invalid or externally restored
 cursor and selection positions therefore cannot edit only part of a visible character.
+Measured text layout exposes caret stops only at grapheme boundaries, so rendering and pixel hit
+testing also avoid placing cursors inside a visible character.
 
 ## Consequences
 

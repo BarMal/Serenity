@@ -7,6 +7,7 @@ import java.text.AttributedString
 
 import com.serenity.richtext.{ParagraphAlignment, RichTextDocument}
 import com.serenity.state.models.Buffer
+import com.serenity.text.TextEditing
 import com.serenity.ui.fonts.FontLoader
 
 case class TextCaretStop(column: Int, xPx: Float)
@@ -20,8 +21,12 @@ case class TextVisualLine(
     caretStops: Vector[TextCaretStop],
     xOffsetPx: Float = 0.0f
 ):
+
   def xForColumn(column: Int): Option[Float] =
-    caretStops.find(_.column == column).map(_.xPx)
+    caretStops
+      .find(_.column >= column)
+      .orElse(caretStops.lastOption)
+      .map(_.xPx)
 
   def nearestColumnForXPx(xPx: Float): Int =
     caretStops.minBy(stop => math.abs(stop.xPx - xPx)).column
@@ -318,16 +323,16 @@ object TextLayoutSnapshot:
     frc: FontRenderContext,
     measuredLayout: Boolean
   ): TextVisualLine =
-    val xs = caretXs(text, font, frc, measuredLayout)
+    val xs              = caretXs(text, font, frc, measuredLayout)
+    val boundaryOffsets = graphemeBoundaryOffsets(text)
     TextVisualLine(
       bufferLine = bufferLine,
       startColumn = startColumn,
       endColumn = endColumn,
       text = text,
       widthPx = xs.lastOption.getOrElse(0.0f),
-      caretStops = xs.zipWithIndex.map {
-        case (x, index) =>
-          TextCaretStop(startColumn + index, x)
+      caretStops = boundaryOffsets.map { offset =>
+        TextCaretStop(startColumn + offset, xs.lift(offset).getOrElse(xs.lastOption.getOrElse(0.0f)))
       }.toVector
     )
 
@@ -375,6 +380,16 @@ object TextLayoutSnapshot:
       val leadingCarets =
         (0 until text.length).toVector.map(index => layout.getCaretInfo(TextHitInfo.leading(index))(0))
       normalizeCollapsedCarets(leadingCarets :+ layout.getAdvance)
+
+  private def graphemeBoundaryOffsets(text: String): Vector[Int] =
+    @annotation.tailrec
+    def loop(offset: Int, acc: Vector[Int]): Vector[Int] =
+      if offset >= text.length then if acc.lastOption.contains(text.length) then acc else acc :+ text.length
+      else
+        val next = TextEditing.nextGraphemeBoundary(text, offset)
+        loop(next, acc :+ next)
+
+    loop(0, Vector(0))
 
   private def shouldUseMeasuredLayout(font: Font, frc: FontRenderContext): Boolean =
     !FontLoader.isMonospacedFont(font) ||
