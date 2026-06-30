@@ -30,8 +30,9 @@ class SystemEventReducerSpec extends AnyFlatSpec with Matchers:
     val bufferId       = updatedState.bufferOrder.head
     val buffer         = updatedState.buffers(bufferId)
 
-    buffer.viewport.visibleColumns shouldBe expectedLayout.editorPanelRect.width
-    buffer.viewport.visibleLines shouldBe expectedLayout.editorPanelRect.height
+    val contentRect = CursorLayout.contentRectForPane(expectedLayout.editorPanelRect)
+    buffer.viewport.visibleColumns shouldBe contentRect.width
+    buffer.viewport.visibleLines shouldBe contentRect.height
   }
 
   it should "leave unrelated system events as no-ops" in {

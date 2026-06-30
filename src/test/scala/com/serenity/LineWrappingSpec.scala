@@ -288,10 +288,12 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val largeViewport = LayoutEngine.updateViewportDimensions(initialPane.viewport, largePanelRect)
 
     // Verify viewport dimensions match panel dimensions
-    smallViewport.visibleColumns shouldBe smallPanelRect.width
-    smallViewport.visibleLines shouldBe smallPanelRect.height
-    largeViewport.visibleColumns shouldBe largePanelRect.width
-    largeViewport.visibleLines shouldBe largePanelRect.height
+    val smallContentRect = CursorLayout.contentRectForPane(smallPanelRect)
+    val largeContentRect = CursorLayout.contentRectForPane(largePanelRect)
+    smallViewport.visibleColumns shouldBe smallContentRect.width
+    smallViewport.visibleLines shouldBe smallContentRect.height
+    largeViewport.visibleColumns shouldBe largeContentRect.width
+    largeViewport.visibleLines shouldBe largeContentRect.height
 
     // Verify dynamic sizing works
     largeViewport.visibleColumns should be > smallViewport.visibleColumns
