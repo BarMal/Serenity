@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.{InterfaceDensityMetrics, TextAreaInsets}
+import com.serenity.config.{AppConfig, InterfaceDensityMetrics, TextAreaInsets}
 import com.serenity.state.models.*
 
 case class ViewportSize(width: Int, height: Int)
@@ -40,6 +40,7 @@ object LayoutEngine:
   // Default spacer width as percentage of terminal width (15% each side = 30% total)
   private val DefaultSpacerPercentage   = 0.15
   private val MinimumVerticalPaneHeight = 5
+  private val CommandSurfaceChromeRows  = 4
 
   def calculateLayout(
     state: AppState,
@@ -392,6 +393,10 @@ object LayoutEngine:
 
   private def calculateFloatingSurfaceHeight(content: SurfaceContent, maxHeight: Int, state: AppState): Int =
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
+    val commandMaxHeight =
+      state.config.commandRunnerVisibleRows
+        .map(rows => AppConfig.clampCommandRunnerVisibleRows(rows) + CommandSurfaceChromeRows)
+        .getOrElse(densityMetrics.commandSurfaceMaxHeight)
     val preferredHeight = content match
       case SurfaceContent.StartPage(_)            => maxHeight
       case SurfaceContent.QuickInfo(text)         => math.max(3, text.linesIterator.size + 2)
@@ -401,7 +406,12 @@ object LayoutEngine:
       case SurfaceContent.DirectoryListing(_, entries, _) => math.max(4, math.min(6, entries.take(4).size + 2))
       case SurfaceContent.DirectoryTree(tree, _) =>
         math.max(4, math.min(8, DirectoryTreeData.visibleRows(tree).size + 2))
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.ThemePicker(_) | SurfaceContent.FileSearch(_) =>
+      case SurfaceContent.CommandPalette(_) =>
+        math.min(
+          commandMaxHeight,
+          math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1)
+        )
+      case SurfaceContent.ThemePicker(_) | SurfaceContent.FileSearch(_) =>
         math.min(
           densityMetrics.commandSurfaceMaxHeight,
           math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1)
@@ -420,7 +430,7 @@ object LayoutEngine:
           .map(_.filteredItems(allItems).size)
           .getOrElse(allItems.size)
         math.min(
-          densityMetrics.commandSurfaceMaxHeight,
+          commandMaxHeight,
           math.max(densityMetrics.commandSurfaceMinHeight, itemCount + densityMetrics.commandSurfaceVerticalPadding)
         )
       case SurfaceContent.ModalWorkflow(modal) =>

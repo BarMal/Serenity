@@ -260,6 +260,7 @@ case class AppConfig(
     motionPreset: MotionPreset = MotionPreset.Reduced,
     elementTransitionSpeedScale: Double = 1.0,
     commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
+    commandRunnerVisibleRows: Option[Int] = None,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
     cursorMode: CursorMode = CursorMode.Blink,
     cursorColors: CursorColorConfig = CursorColorConfig(),
@@ -395,6 +396,9 @@ case class AppConfig(
   def withCommandRunnerAnimation(animation: Option[AnimationConfig]): AppConfig =
     copy(commandRunnerAnimation = animation)
 
+  def withCommandRunnerVisibleRows(rows: Option[Int]): AppConfig =
+    copy(commandRunnerVisibleRows = rows.map(AppConfig.clampCommandRunnerVisibleRows))
+
   /** Character insertion animation after applying the global motion speed. */
   def scaledCharacterAnimation: Option[AnimationConfig] =
     AppConfig.scaledAnimation(characterAnimation, elementTransitionSpeedScale)
@@ -476,6 +480,8 @@ object AppConfig:
   val MaxUiElementGap: Int                   = 8
   val MinUiCornerRadiusPx: Int               = 0
   val MaxUiCornerRadiusPx: Int               = 32
+  val MinCommandRunnerVisibleRows: Int       = 1
+  val MaxCommandRunnerVisibleRows: Int       = 20
 
   def clampElementTransitionSpeedScale(scale: Double): Double =
     scale.max(MinElementTransitionSpeedScale).min(MaxElementTransitionSpeedScale)
@@ -485,6 +491,9 @@ object AppConfig:
 
   def clampUiCornerRadiusPx(radius: Int): Int =
     radius.max(MinUiCornerRadiusPx).min(MaxUiCornerRadiusPx)
+
+  def clampCommandRunnerVisibleRows(rows: Int): Int =
+    rows.max(MinCommandRunnerVisibleRows).min(MaxCommandRunnerVisibleRows)
 
   def scaledAnimation(animation: Option[AnimationConfig], speedScale: Double): Option[AnimationConfig] =
     animation.flatMap(_.scaledBy(clampElementTransitionSpeedScale(speedScale)))

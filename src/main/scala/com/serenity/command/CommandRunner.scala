@@ -154,10 +154,10 @@ case class CommandRunner(
       id = "settings-interface-layout",
       label = "Interface Layout",
       children = List(interfaceDensityItem) ++ inputItems.filter(item =>
-        item.id == "ui-element-gap" || item.id == "ui-corner-radius"
+        item.id == "ui-element-gap" || item.id == "ui-corner-radius" || item.id == "command-runner-visible-rows"
       ),
       category = CommandCategory.Settings,
-      hint = Some("Density, spacing, corners")
+      hint = Some("Density, spacing, command rows")
     )
     val materialMotionGroup = CommandSurfaceItem.GroupItem(
       id = "settings-material-motion",
@@ -1331,6 +1331,7 @@ object CommandRunner:
     val speedScaleValue    = f"${config.elementTransitionSpeedScale}%.2f"
     val elementGapValue    = config.uiElementGap.toString
     val cornerRadiusValue  = config.uiCornerRadiusPx.toString
+    val commandRowsValue   = config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
     val spellCheck         = config.spellCheck.normalized
 
     val commentItems = List(
@@ -1579,6 +1580,26 @@ object CommandRunner:
             .filter(value => value >= AppConfig.MinUiCornerRadiusPx && value <= AppConfig.MaxUiCornerRadiusPx)
             .map(CommandIntent.SetUiCornerRadiusPx(_)),
         category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "command-runner-visible-rows",
+        label = "Command Rows",
+        hint = s"Rows (${AppConfig.MinCommandRunnerVisibleRows}-${AppConfig.MaxCommandRunnerVisibleRows}) or auto",
+        currentValue = commandRowsValue,
+        isDecimal = false,
+        parse = text =>
+          val normalized = text.trim.toLowerCase
+          if normalized == "auto" then Some(CommandIntent.SetCommandRunnerVisibleRows(None))
+          else
+            normalized.toIntOption
+              .filter(value =>
+                value >= AppConfig.MinCommandRunnerVisibleRows &&
+                  value <= AppConfig.MaxCommandRunnerVisibleRows
+              )
+              .map(value => CommandIntent.SetCommandRunnerVisibleRows(Some(value)))
+        ,
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
       ),
       CommandSurfaceItem.InputItem(
         id = "code-font-size",

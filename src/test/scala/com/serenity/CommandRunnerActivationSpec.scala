@@ -99,7 +99,8 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       List(
         "interface-density",
         "ui-element-gap",
-        "ui-corner-radius"
+        "ui-corner-radius",
+        "command-runner-visible-rows"
       )
     )
     settingsGroup(runner, "settings-interface-layout")
