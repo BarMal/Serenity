@@ -173,15 +173,23 @@ object DocumentFormat:
         )
       case DocumentFormat.RichTextDocument =>
         DocumentFormatCapabilities(
+          canOpen = true,
+          canSave = true,
+          canRender = true,
+          canEdit = true,
+          preservesRichFormatting = true
+        )
+
+  def capabilities(fileType: FileType): DocumentFormatCapabilities =
+    fileType match
+      case FileType.WordDocument =>
+        DocumentFormatCapabilities(
           canOpen = false,
           canSave = false,
           canRender = false,
           canEdit = false,
           preservesRichFormatting = false
         )
-
-  def capabilities(fileType: FileType): DocumentFormatCapabilities =
-    fileType match
       case FileType.RichText | FileType.OpenDocumentText | FileType.WordOpenXmlDocument =>
         DocumentFormatCapabilities(
           canOpen = true,
