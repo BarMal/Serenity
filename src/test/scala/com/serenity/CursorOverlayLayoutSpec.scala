@@ -126,6 +126,47 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     rect.bottom should be <= paneRect.bottom
   }
 
+  it should "anchor below-cursor overlays to the visible wrapped cursor row" in {
+    val buffer = Buffer
+      .fromString(
+        bufferId,
+        List(
+          "abcdefghijklmnopqrstuvwxyz",
+          "second"
+        ).mkString("\n")
+      )
+      .copy(
+        cursors = List(CursorPosition(1, 0)),
+        viewport = Viewport.default.copy(topLine = 0, topVisualLine = 1, visibleLines = 20, visibleColumns = 10)
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.Surface(SurfaceId("cursor-info-bar")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("cursor-info-bar"),
+          SurfaceContent.CursorInfoBar("Line 2, Col 1"),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 0)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(13, 30), spacerPercentage = 0.0)
+
+    layout.belowCursorOverlayRect shouldBe defined
+    val rect        = layout.belowCursorOverlayRect.get
+    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
+
+    rect.y shouldBe contentRect.y + 3
+  }
+
   it should "size a find overlay to fit its header, query row, and result footer" in {
     val state = baseState().copy(
       uiSurfaces = List(
