@@ -473,15 +473,16 @@ object SurfaceContentResolver:
 
     ResolvedSurfaceContent(
       title = titleFor(mode, group.map(_.label).getOrElse("submenu")),
-      header = group.map { g =>
+      header = group.map { _ =>
         submenuState.filter(_.searchTerm.nonEmpty) match
           case Some(submenu) =>
+            val label = runner.submenuBreadcrumbLabels(groupId).mkString(" > ")
             OverlayRow(
-              plainText = s"${g.label} search: ${submenu.searchTerm}",
-              cursorColumn = Some(s"${g.label} search: ${submenu.searchTerm}".length)
+              plainText = s"$label search: ${submenu.searchTerm}",
+              cursorColumn = Some(s"$label search: ${submenu.searchTerm}".length)
             )
           case None =>
-            OverlayRow(g.label)
+            OverlayRow(runner.submenuBreadcrumbLabels(groupId).mkString(" > "))
       },
       rows = rows ++ detailRows,
       footer = footer
@@ -567,15 +568,18 @@ object SurfaceContentResolver:
       case _                                                            => None
 
   private def optionRow(option: CommandSurfaceItem.OptionItem, selected: Boolean): OverlayRow =
-    val hint = option.selectedHint
-    val rightSegments =
-      hint.toList.map(hint => OverlaySegment(hint, tone = OverlayTone.Normal)) :+
-        OverlaySegment(option.selectedOption, selected = true)
+    val optionSegments = option.options.zipWithIndex.map { (choice, index) =>
+      OverlaySegment(choice.label, selected = index == option.selectedIndex)
+    }
+    val selectedOptionHint = option.options.lift(option.selectedIndex).flatMap(_.hint)
+    val hintSegments       = selectedOptionHint.toList.map(hint => OverlaySegment(hint, tone = OverlayTone.Normal))
+    val choicesText        = option.options.map(_.label).mkString(" ")
+    val previewText        = selectedOptionHint.map(hint => s" - $hint").getOrElse("")
 
     OverlayRow(
-      plainText = s"${option.label}: ${hint.map(_ + " ").getOrElse("")}${option.selectedOption}",
+      plainText = s"${option.label}: $choicesText$previewText",
       selected = selected,
-      segments = OverlaySegment(option.label) :: rightSegments,
+      segments = OverlaySegment(option.label) :: optionSegments ++ hintSegments,
       layout = OverlayRowLayout.Columns
     )
 
