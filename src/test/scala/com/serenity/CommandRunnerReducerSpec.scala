@@ -493,6 +493,27 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "preserve nested submenu ancestry for settings breadcrumbs" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-ui-presets", "ui-preset-configure")
+
+    val presetOptions = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
+    val typographySelected = CommandRunnerReducer
+      .reduce(RunnerSelectSubmenuItem(4), presetOptions, registry)
+      .state
+    val typography = CommandRunnerReducer.reduce(RunnerSubmit, typographySelected, registry)
+    val runner     = runnerFrom(typography.state)
+
+    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-typography")
+    runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("ui-preset-configure")
+    runner.activeSubmenu.map(_.ancestorGroupIds) shouldBe Some(List("settings-ui-presets", "ui-preset-configure"))
+    runner.submenuBreadcrumbLabels("settings-typography") shouldBe List(
+      "UI Presets",
+      "Preset Options: Writing",
+      "Typography"
+    )
+  }
+
   it should "clear submenu search with escape before leaving the submenu" in {
     val registry = CommandRegistry.default
     val searched = List('j', 'a').foldLeft(settingsStateOnItem("settings-language", "lang-plain-text")) { (s, char) =>

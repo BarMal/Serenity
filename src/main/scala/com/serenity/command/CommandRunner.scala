@@ -14,7 +14,8 @@ case class CommandRunnerSubmenuState(
     editingItemId: Option[String] = None,
     editingText: String = "",
     searchTerm: String = "",
-    parentGroupId: Option[String] = None
+    parentGroupId: Option[String] = None,
+    ancestorGroupIds: List[String] = Nil
 ):
   def selectedItem(items: List[CommandSurfaceItem]): Option[CommandSurfaceItem] =
     items.lift(selectedIndex)
@@ -154,10 +155,10 @@ case class CommandRunner(
       id = "settings-interface-layout",
       label = "Interface Layout",
       children = List(interfaceDensityItem) ++ inputItems.filter(item =>
-        item.id == "ui-element-gap" || item.id == "ui-corner-radius"
+        item.id == "ui-element-gap" || item.id == "ui-corner-radius" || item.id == "command-runner-visible-rows"
       ),
       category = CommandCategory.Settings,
-      hint = Some("Density, spacing, corners")
+      hint = Some("Density, spacing, command rows")
     )
     val materialMotionGroup = CommandSurfaceItem.GroupItem(
       id = "settings-material-motion",
@@ -354,7 +355,14 @@ case class CommandRunner(
         copy(
           submenuSelections =
             submenuSelections + (submenu.groupId -> submenu.selectedIndex) + (parentId -> parentIndex),
-          activeSubmenu = Some(CommandRunnerSubmenuState(parentId, selectedIndex = parentIndex))
+          activeSubmenu = Some(
+            CommandRunnerSubmenuState(
+              parentId,
+              selectedIndex = parentIndex,
+              parentGroupId = submenu.ancestorGroupIds.lastOption,
+              ancestorGroupIds = submenu.ancestorGroupIds.dropRight(1)
+            )
+          )
         )
       case Some(submenu) =>
         copy(
@@ -389,6 +397,13 @@ case class CommandRunner(
 
   def focusedSubmenuItems: List[CommandSurfaceItem] =
     activeSubmenu.toList.flatMap(submenu => submenu.filteredItems(submenuItems(submenu.groupId)))
+
+  def submenuBreadcrumbLabels(groupId: String): List[String] =
+    activeSubmenu match
+      case Some(submenu) if submenu.groupId == groupId && submenu.ancestorGroupIds.nonEmpty =>
+        (submenu.ancestorGroupIds :+ groupId).flatMap(id => submenuGroup(id).map(_.label))
+      case _ =>
+        submenuGroup(groupId).map(_.label).toList
 
   def moveSubmenuSelection(delta: Int): CommandRunner =
     activeSubmenu match
@@ -428,7 +443,8 @@ case class CommandRunner(
                 CommandRunnerSubmenuState(
                   group.id,
                   selectedIndex = rememberedIndex,
-                  parentGroupId = Some(submenu.groupId)
+                  parentGroupId = Some(submenu.groupId),
+                  ancestorGroupIds = submenu.ancestorGroupIds :+ submenu.groupId
                 )
               )
             )
@@ -1331,6 +1347,7 @@ object CommandRunner:
     val speedScaleValue    = f"${config.elementTransitionSpeedScale}%.2f"
     val elementGapValue    = config.uiElementGap.toString
     val cornerRadiusValue  = config.uiCornerRadiusPx.toString
+    val commandRowsValue   = config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
     val spellCheck         = config.spellCheck.normalized
 
     val commentItems = List(
@@ -1579,6 +1596,26 @@ object CommandRunner:
             .filter(value => value >= AppConfig.MinUiCornerRadiusPx && value <= AppConfig.MaxUiCornerRadiusPx)
             .map(CommandIntent.SetUiCornerRadiusPx(_)),
         category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "command-runner-visible-rows",
+        label = "Command Rows",
+        hint = s"Rows (${AppConfig.MinCommandRunnerVisibleRows}-${AppConfig.MaxCommandRunnerVisibleRows}) or auto",
+        currentValue = commandRowsValue,
+        isDecimal = false,
+        parse = text =>
+          val normalized = text.trim.toLowerCase
+          if normalized == "auto" then Some(CommandIntent.SetCommandRunnerVisibleRows(None))
+          else
+            normalized.toIntOption
+              .filter(value =>
+                value >= AppConfig.MinCommandRunnerVisibleRows &&
+                  value <= AppConfig.MaxCommandRunnerVisibleRows
+              )
+              .map(value => CommandIntent.SetCommandRunnerVisibleRows(Some(value)))
+        ,
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
       ),
       CommandSurfaceItem.InputItem(
         id = "code-font-size",

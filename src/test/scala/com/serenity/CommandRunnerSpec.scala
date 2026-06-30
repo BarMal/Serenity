@@ -309,7 +309,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
       "ui-element-gap",
-      "ui-corner-radius"
+      "ui-corner-radius",
+      "command-runner-visible-rows"
     )
     nestedGroup("settings-material-motion").children.map(_.id) should contain allOf ("material-preset", "motion-preset")
     group("settings-ui-presets").label shouldBe "UI Presets"
@@ -415,6 +416,24 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.SetGutter(false),
       CommandIntent.SetWordWrap(false)
     )
+  }
+
+  it should "surface command runner visible rows as a typed interface setting" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default.withCommandRunnerVisibleRows(Some(9)))
+      .withActiveCategory(CommandCategory.Settings)
+
+    val interfaceGroup = groupByIdRecursive(runner.settingsGroups, "settings-interface-layout")
+    val input = interfaceGroup.children
+      .collectFirst { case item: CommandSurfaceItem.InputItem if item.id == "command-runner-visible-rows" => item }
+      .getOrElse(fail("missing command runner visible rows input"))
+
+    input.currentValue shouldBe "9"
+    input.parse("12") shouldBe Some(CommandIntent.SetCommandRunnerVisibleRows(Some(12)))
+    input.parse("auto") shouldBe Some(CommandIntent.SetCommandRunnerVisibleRows(None))
+    input.parse("0") shouldBe None
   }
 
   it should "reuse derived settings groups within a command runner state" in {

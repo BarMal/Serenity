@@ -71,11 +71,11 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       preservesRichFormatting = false
     )
     DocumentFormat.capabilities(DocumentFormat.RichTextDocument) shouldBe DocumentFormatCapabilities(
-      canOpen = false,
-      canSave = false,
-      canRender = false,
-      canEdit = false,
-      preservesRichFormatting = false
+      canOpen = true,
+      canSave = true,
+      canRender = true,
+      canEdit = true,
+      preservesRichFormatting = true
     )
     DocumentFormat.capabilities(FileType.RichText) shouldBe DocumentFormatCapabilities(
       canOpen = true,

@@ -316,6 +316,20 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("interface.density = spacious")
   }
 
+  it should "load and write command runner visible rows" in {
+    val configFile = Files.createTempFile("serenity-command-rows-config", ".conf")
+    Files.writeString(
+      configFile,
+      """command_runner.visible_rows = 9
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.commandRunnerVisibleRows shouldBe Some(9)
+    ConfigManager.configToString(config) should include("command_runner.visible_rows = 9")
+  }
+
   it should "load and write LSP language server overrides" in {
     val configFile = Files.createTempFile("serenity-lsp-config", ".conf")
     Files.writeString(

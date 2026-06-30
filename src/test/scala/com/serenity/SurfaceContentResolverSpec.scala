@@ -218,6 +218,62 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "render option rows as adjacent choices with the active choice marked" in {
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(
+        activeCategory = CommandCategory.Settings,
+        optionSelections = Map("interface-density" -> 1),
+        activeSubmenu = Some(CommandRunnerSubmenuState("settings-interface-layout"))
+      )
+
+    val row = SurfaceContentResolver
+      .resolve(
+        SurfaceContent.CommandPaletteSubmenu(
+          runner,
+          "settings-interface-layout",
+          previewOnly = false
+        ),
+        LayoutRect(0, 0, 80, 10),
+        SurfaceRenderMode.Floating
+      )
+      .rows
+      .headOption
+      .getOrElse(fail("Expected interface density option row"))
+
+    row.layout shouldBe OverlayRowLayout.Columns
+    row.plainText shouldBe "Interface Density: Compact Comfortable Spacious"
+    row.segments.map(_.text) should contain allOf ("Compact", "Comfortable", "Spacious")
+    row.segments.filter(_.selected).map(_.text) shouldBe List("Comfortable")
+  }
+
+  it should "render nested submenu headers as breadcrumbs" in {
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(
+        activeCategory = CommandCategory.Settings,
+        activeSubmenu = Some(
+          CommandRunnerSubmenuState(
+            "settings-typography",
+            parentGroupId = Some("ui-preset-configure"),
+            ancestorGroupIds = List("settings-ui-presets", "ui-preset-configure")
+          )
+        )
+      )
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPaletteSubmenu(
+        runner,
+        "settings-typography",
+        previewOnly = false
+      ),
+      LayoutRect(0, 0, 80, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.header.map(_.plainText) shouldBe Some("UI Presets > Preset Options: Writing > Typography")
+  }
+
   it should "append a selected UI preset detail row in the preset submenu" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
