@@ -1139,6 +1139,68 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "snap authored document comment ranges to grapheme boundaries" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("cafe\u0301!"),
+            cursors = List(CursorPosition(0, 5)),
+            selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 5)))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "document-comment",
+          "Add document comment.",
+          CommandIntent.AddDocumentComment("Accent"),
+          CommandCategory.Edit
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).documentComments shouldBe List(
+      DocumentComment(CursorPosition(0, 3), CursorPosition(0, 5), "Accent")
+    )
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("a\uD83D\uDE42b"),
+            cursors = List(CursorPosition(0, 2)),
+            selection = None,
+            documentComments = Nil
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "document-comment",
+          "Add document comment.",
+          CommandIntent.AddDocumentComment("Point"),
+          CommandCategory.Edit
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).documentComments should contain(
+      DocumentComment(CursorPosition(0, 3), CursorPosition(0, 3), "Point")
+    )
+  }
+
   it should "save, restore, and clear the current session from command runner commands" in {
     val sessionRoot  = Files.createTempDirectory("serenity-command-session")
     val stateManager = createStateManager(Some(sessionRoot))

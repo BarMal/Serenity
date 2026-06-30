@@ -204,6 +204,23 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     line.xForColumn(6) shouldBe Some(line.widthPx)
   }
 
+  it should "expose caret stops only at grapheme boundaries" in {
+    val buffer = Buffer
+      .fromString(BufferId(17), "a\uD83D\uDE42b cafe\u0301!")
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2))
+    val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font)
+    val line     = snapshot.visualLines.head
+
+    line.caretStops.map(_.column) shouldBe Vector(0, 1, 3, 4, 5, 6, 7, 8, 10, 11)
+    line.xForColumn(2) shouldBe line.xForColumn(3)
+    line.xForColumn(9) shouldBe line.xForColumn(10)
+    snapshot.cursorForVisualRowAndXPx(0, line.xForColumn(2).getOrElse(fail("missing caret x"))) shouldBe Some(
+      CursorPosition(0, 3)
+    )
+  }
+
   it should "offset center-aligned rich text caret stops within the panel width" in {
     val document = RichTextDocument(
       List(RichTextParagraph.plain("abcd", alignment = ParagraphAlignment.Center))

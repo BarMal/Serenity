@@ -18,6 +18,7 @@ import com.serenity.session.SessionSaveTrigger
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
+import com.serenity.text.TextEditing
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 
@@ -1472,16 +1473,17 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   private def addDocumentComment(state: AppState, text: String): IO[Unit] =
     activeEditorBuffer(state) match
       case Some((_, buffer)) =>
-        val cursor = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+        val cursor           = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+        val normalizedCursor = snapCursorAfterGrapheme(buffer, cursor)
         val range = buffer.primarySelection
-          .map(selection => selection.start -> selection.end)
-          .getOrElse(cursor -> cursor)
+          .map(selection => normalizedCommentSelectionRange(buffer, selection))
+          .getOrElse(normalizedCursor -> normalizedCursor)
         val commentText = Option(text.trim).filter(_.nonEmpty).getOrElse("Comment")
         val comment     = DocumentComment(range._1, range._2, commentText)
         updateState: current =>
           current.buffers.get(buffer.id) match
             case Some(currentBuffer) =>
-              val existingCommentAtCursor = currentBuffer.documentComments.find(_.contains(cursor))
+              val existingCommentAtCursor = currentBuffer.documentComments.find(_.contains(normalizedCursor))
               val updatedComment = existingCommentAtCursor
                 .map(existing => existing.copy(text = commentText))
                 .getOrElse(comment)
@@ -1496,6 +1498,40 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             case None => current
       case None =>
         logger.debug("[CMD] Add document comment requested without an active editor buffer")
+
+  private def normalizedCommentSelectionRange(
+    buffer: Buffer,
+    selection: Selection
+  ): (CursorPosition, CursorPosition) =
+    val startOffset = buffer.content.lineColumnToOffset(selection.start.line, selection.start.column)
+    val endOffset   = buffer.content.lineColumnToOffset(selection.end.line, selection.end.column)
+    if startOffset >= endOffset then
+      val cursor = offsetToCursorPosition(buffer, graphemeBoundaryAfterOrAt(buffer, startOffset))
+      cursor -> cursor
+    else
+      offsetToCursorPosition(buffer, graphemeBoundaryBeforeOrAt(buffer, startOffset)) ->
+        offsetToCursorPosition(buffer, graphemeBoundaryAfterOrAt(buffer, endOffset))
+
+  private def snapCursorAfterGrapheme(buffer: Buffer, cursor: CursorPosition): CursorPosition =
+    val offset = buffer.content.lineColumnToOffset(cursor.line, cursor.column)
+    offsetToCursorPosition(buffer, graphemeBoundaryAfterOrAt(buffer, offset))
+
+  private def offsetToCursorPosition(buffer: Buffer, offset: Int): CursorPosition =
+    val (line, column) = buffer.content.offsetToLineColumn(offset)
+    CursorPosition(line, column)
+
+  private def graphemeBoundaryBeforeOrAt(buffer: Buffer, offset: Int): Int =
+    TextEditing.graphemeBoundaryBeforeOrAt(RopeCharacterSource(buffer.content), offset)
+
+  private def graphemeBoundaryAfterOrAt(buffer: Buffer, offset: Int): Int =
+    TextEditing.graphemeBoundaryAfterOrAt(RopeCharacterSource(buffer.content), offset)
+
+  final private case class RopeCharacterSource(content: com.serenity.rope.Rope) extends TextEditing.CharacterSource:
+    override def length: Int =
+      content.weight
+
+    override def charAt(index: Int): Char =
+      content.index(index).getOrElse('\u0000')
 
   private def deleteDocumentComment(state: AppState): IO[Unit] =
     activeEditorBuffer(state) match
