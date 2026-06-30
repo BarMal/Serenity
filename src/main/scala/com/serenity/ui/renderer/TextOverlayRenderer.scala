@@ -484,7 +484,7 @@ object TextOverlayRenderer:
       segment.fontFamily.foreach(family =>
         surface.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
       )
-      CharacterRenderer.renderStringPlain(surface, x, y, segmentText.take(width))
+      CharacterRenderer.renderStringPlain(surface, x, y, segmentText.take(width).padTo(width, ' '))
       if segment.fontFamily.nonEmpty then surface.setFont(font)
 
   private def withAlpha(color: Color, alpha: Int): Color =
