@@ -42,7 +42,7 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     surface.fillPixelRectCalls.last.xPx should be >= metrics.toPixelX(1)
   }
 
-  it should "place an editable split row caret after the rendered value segment" in {
+  it should "place an editable split row caret after the inline value segment" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)
@@ -66,7 +66,9 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
 
     TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
-    val valueX          = 1 + math.max(0, 38 - query.length)
+    surface.getRow(1).slice(1, 1 + rowText.length) shouldBe rowText
+
+    val valueX          = 1 + "Find ".length
     val caretXs         = TextLayoutSnapshot.caretXsForText(query, font, surface.fontRenderContext.get)
     val expectedCursorX = metrics.toPixelX(valueX) + math.round(caretXs.last)
 
@@ -233,6 +235,41 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     val renderedRow = surface.getRow(1)
     renderedRow should include("Motio")
     renderedRow should not include "78901234567890"
+  }
+
+  it should "place an editable command setting caret on the rendered value cell" in {
+    val surface = new MockRenderSurface(80, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val value   = "250"
+    val rowText = s"Animation Duration: Duration in ms $value"
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 70, 6),
+      rows = List(
+        OverlayRow(
+          plainText = rowText,
+          selected = true,
+          cursorColumn = Some(rowText.length),
+          segments = List(
+            OverlaySegment("Animation Duration"),
+            OverlaySegment("Duration in ms"),
+            OverlaySegment(value, selected = true)
+          ),
+          layout = OverlayRowLayout.Columns
+        )
+      )
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+
+    val contentWidth = overlay.rect.width - 2
+    val labelWidth   = math.min(22, math.max(8, contentWidth / 3))
+    val valueWidth   = math.min(18, math.max(8, contentWidth / 4))
+    val hintWidth    = math.max(0, contentWidth - labelWidth - valueWidth - 2)
+    val valueX       = overlay.rect.x + 1 + labelWidth + hintWidth + 2
+
+    surface.getRow(1).slice(valueX, valueX + value.length) shouldBe value
+    surface.getBg(valueX + value.length, 1) shouldBe Theme.light.cursor
   }
 
   it should "render font preview segments with the segment font family" in {
