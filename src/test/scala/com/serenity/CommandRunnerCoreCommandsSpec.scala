@@ -1233,6 +1233,36 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface shouldBe None
   }
 
+  it should "set command runner visible rows from a typed settings command" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "command-runner-visible-rows",
+          "Set command runner visible rows.",
+          CommandIntent.SetCommandRunnerVisibleRows(Some(9)),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.commandRunnerVisibleRows shouldBe Some(9)
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "command-runner-visible-rows-auto",
+          "Reset command runner visible rows.",
+          CommandIntent.SetCommandRunnerVisibleRows(None),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.commandRunnerVisibleRows shouldBe None
+  }
+
   it should "apply a built-in writing preset from a searchable command" in {
     val stateManager = createStateManager()
 

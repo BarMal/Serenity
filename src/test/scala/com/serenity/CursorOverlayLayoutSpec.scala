@@ -126,6 +126,30 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     rect.bottom should be <= paneRect.bottom
   }
 
+  it should "size command runner overlays from configured visible rows" in {
+    val state = baseState().copy(
+      config = AppState.initial.config.withCommandRunnerVisibleRows(Some(7)),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(
+            CommandRunner(
+              isActive = true,
+              searchTerm = "",
+              selectedIndex = 0,
+              filteredCommands = List.empty
+            )
+          ),
+          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+
+    layout.belowCursorOverlayRect.map(_.height) shouldBe Some(11)
+  }
+
   it should "size a find overlay to fit its header, query row, and result footer" in {
     val state = baseState().copy(
       uiSurfaces = List(

@@ -313,6 +313,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         materialPreset = MaterialPreset.Crystal,
         motionPreset = MotionPreset.Reduced,
         elementTransitionSpeedScale = 1.75,
+        commandRunnerVisibleRows = Some(9),
         windowChromeMode = WindowChromeMode.Custom,
         interfaceDensity = InterfaceDensity.Spacious,
         cursorInfoBarMode = CursorInfoBarMode.Detailed,
@@ -341,6 +342,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.materialPreset shouldBe MaterialPreset.Crystal
     decoded.config.motionPreset shouldBe MotionPreset.Reduced
     decoded.config.elementTransitionSpeedScale shouldBe 1.75
+    decoded.config.commandRunnerVisibleRows shouldBe Some(9)
     decoded.config.windowChromeMode shouldBe WindowChromeMode.Custom
     decoded.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     decoded.config.cursorInfoBarMode shouldBe CursorInfoBarMode.Detailed
