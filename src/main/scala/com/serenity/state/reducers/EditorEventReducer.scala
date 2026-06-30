@@ -846,12 +846,13 @@ object EditorEventReducer:
     currentState: AppState,
     insertedText: String
   ): Buffer =
-    val entries = multiCursorEntries(buffer)
-    val edits = entries.zipWithIndex.map {
-      case (entry, index) =>
-        MultiCursorEdit(index, entry.offset, entry.offset, insertedText)
+    val insertionOffsets =
+      multiCursorEntries(buffer).map(entry => graphemeBoundaryAfterOrAt(buffer.content, entry.offset))
+    val edits = insertionOffsets.zipWithIndex.map {
+      case (offset, index) =>
+        MultiCursorEdit(index, offset, offset, insertedText)
     }
-    applyTrackedEdits(buffer, currentState, entries.map(_.offset), edits)
+    applyTrackedEdits(buffer, currentState, insertionOffsets, edits)
 
   private def applyMultiCursorDeletion(
     buffer: Buffer,
@@ -1674,10 +1675,11 @@ object EditorEventReducer:
           endOffset
         )
       case None =>
-        val startOffset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+        val startOffset =
+          graphemeBoundaryAfterOrAt(buffer.content, lineColumnToOffset(buffer.content, cursor.line, cursor.column))
         (
           buffer.content,
-          cursor,
+          offsetToCursorPosition(buffer.content, startOffset),
           startOffset,
           startOffset
         )

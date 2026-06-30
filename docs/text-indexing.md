@@ -10,9 +10,10 @@ avoids lossy translation at storage and rendering boundaries.
 
 User-facing text editing must not expose raw code-unit movement when that would split a visible
 character. Cursor-left, cursor-right, forward delete, and backward delete therefore route through
-`TextEditing` grapheme-boundary helpers before converting back to internal UTF-16 offsets. Selection
-replacement and deletion also expand non-empty ranges outward to grapheme boundaries, so an invalid
-or externally restored selection cannot replace only part of a visible character.
+`TextEditing` grapheme-boundary helpers before converting back to internal UTF-16 offsets. Empty
+insertions snap to the grapheme boundary after the supplied cursor position, and selection replacement
+or deletion expands non-empty ranges outward to grapheme boundaries. Invalid or externally restored
+cursor and selection positions therefore cannot edit only part of a visible character.
 
 ## Consequences
 
@@ -20,5 +21,3 @@ or externally restored selection cannot replace only part of a visible character
 - Regression tests should assert both the visible edit result and the UTF-16 cursor column.
 - APIs accepting offsets or columns should document whether they expect internal UTF-16 indexes or
   user-facing grapheme steps.
-- Empty insertions still occur at the supplied UTF-16 cursor position; callers that create cursors
-  from mouse, persisted, or external positions should snap them to grapheme boundaries before editing.

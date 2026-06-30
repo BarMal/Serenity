@@ -85,6 +85,13 @@ class EditorEventReducerOffsetSpec extends AnyFlatSpec with Matchers:
     updatedBuffer.cursors shouldBe List(CursorPosition(0, 4))
   }
 
+  it should "insert beside a grapheme when the cursor starts inside one" in {
+    val updatedBuffer = reduceTextEvent("cafe\u0301!", CursorPosition(0, 4), InsertChar('X'))
+
+    updatedBuffer.content.collect() shouldBe "cafe\u0301X!"
+    updatedBuffer.cursors shouldBe List(CursorPosition(0, 6))
+  }
+
   private def reduceTextEvent(text: String, cursor: CursorPosition, event: TextEntryEvent): Buffer =
     val buffer = Buffer.fromString(bufferId, text).copy(cursors = List(cursor))
     val state  = AppState.initial.copy(buffers = Map(bufferId -> buffer))
