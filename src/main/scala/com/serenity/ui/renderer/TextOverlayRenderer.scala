@@ -176,11 +176,14 @@ object TextOverlayRenderer:
   ): Option[CursorPlacement] =
     row.segments match
       case left :: rightSegments if rightSegments.nonEmpty =>
-        val rightTexts      = rightSegments.map(_.text)
-        val rightGroupText  = rightTexts.mkString(" ")
-        val rightGroupWidth = math.min(width, rightGroupText.length)
-        val rightStartX     = x + math.max(0, width - rightGroupWidth)
-        val rightStartCol   = left.text.length + 1
+        val rightTexts     = rightSegments.map(_.text)
+        val rightGroupText = rightTexts.mkString(" ")
+        val rightStartCol  = left.text.length + 1
+        val rightStartX =
+          if row.cursorColumn.nonEmpty then x + rightStartCol
+          else
+            val rightGroupWidth = math.min(width, rightGroupText.length)
+            x + math.max(0, width - rightGroupWidth)
         if cursorColumn <= left.text.length then
           Some(CursorPlacement(x, left.text.take(cursorColumn.max(0).min(left.text.length)), useMeasured = true))
         else
@@ -195,7 +198,7 @@ object TextOverlayRenderer:
         val labelWidth = math.min(22, math.max(8, width / 3))
         val valueWidth = math.min(18, math.max(8, width / 4))
         val hintWidth  = math.max(0, width - labelWidth - valueWidth - 2)
-        Some(CursorPlacement(x + labelWidth + hintWidth + 2, value.text.take(valueWidth), useMeasured = true))
+        Some(CursorPlacement(x + labelWidth + hintWidth + 2, fitCellText(value.text, valueWidth)))
       case _ =>
         row.cursorColumn.map(cursorColumn =>
           CursorPlacement(x, row.plainText.take(cursorColumn.max(0).min(row.plainText.length)))
@@ -275,44 +278,103 @@ object TextOverlayRenderer:
   ): Unit =
     row.segments match
       case left :: rightSegments if rightSegments.nonEmpty =>
-        val rightTexts      = rightSegments.map(_.text)
-        val rightGroupText  = rightTexts.mkString(" ")
-        val rightGroupWidth = math.min(width, rightGroupText.length)
-        val leftMaxWidth    = math.max(0, width - rightGroupWidth - 1)
-        val leftText        = left.text.take(leftMaxWidth)
-
-        renderSegmentText(
-          surface,
-          x,
-          y,
-          leftText.length,
-          leftText,
-          left,
-          theme,
-          defaultForeground,
-          defaultBackground,
-          font
-        )
-
-        val rightStartX = x + math.max(0, width - rightGroupWidth)
-        val _ = rightSegments.foldLeft(rightStartX) { (cursorX, segment) =>
-          val text = segment.text.take(math.max(0, x + width - cursorX))
-          renderSegmentText(
+        if row.cursorColumn.nonEmpty then
+          renderEditableSplitRow(
             surface,
-            cursorX,
+            x,
             y,
-            text.length,
-            text,
-            segment,
+            width,
+            left,
+            rightSegments,
             theme,
             defaultForeground,
             defaultBackground,
             font
           )
-          cursorX + text.length + 1
-        }
+        else
+          val rightTexts      = rightSegments.map(_.text)
+          val rightGroupText  = rightTexts.mkString(" ")
+          val rightGroupWidth = math.min(width, rightGroupText.length)
+          val leftMaxWidth    = math.max(0, width - rightGroupWidth - 1)
+          val leftText        = left.text.take(leftMaxWidth)
+
+          renderSegmentText(
+            surface,
+            x,
+            y,
+            leftText.length,
+            leftText,
+            left,
+            theme,
+            defaultForeground,
+            defaultBackground,
+            font
+          )
+
+          val rightStartX = x + math.max(0, width - rightGroupWidth)
+          val _ = rightSegments.foldLeft(rightStartX) { (cursorX, segment) =>
+            val text = segment.text.take(math.max(0, x + width - cursorX))
+            renderSegmentText(
+              surface,
+              cursorX,
+              y,
+              text.length,
+              text,
+              segment,
+              theme,
+              defaultForeground,
+              defaultBackground,
+              font
+            )
+            cursorX + text.length + 1
+          }
       case _ =>
         CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
+
+  private def renderEditableSplitRow(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    width: Int,
+    left: OverlaySegment,
+    rightSegments: List[OverlaySegment],
+    theme: Theme,
+    defaultForeground: Color,
+    defaultBackground: Color,
+    font: Font
+  ): Unit =
+    val leftText = left.text.take(width)
+    renderSegmentText(
+      surface,
+      x,
+      y,
+      leftText.length,
+      leftText,
+      left,
+      theme,
+      defaultForeground,
+      defaultBackground,
+      font
+    )
+
+    val firstRightX = x + leftText.length + 1
+    val _ = rightSegments.foldLeft(firstRightX) { (cursorX, segment) =>
+      val remainingWidth = math.max(0, x + width - cursorX)
+      val text           = segment.text.take(remainingWidth)
+      renderSegmentText(
+        surface,
+        cursorX,
+        y,
+        text.length,
+        text,
+        segment,
+        theme,
+        defaultForeground,
+        defaultBackground,
+        font
+      )
+      cursorX + text.length + 1
+    }
 
   private def renderColumnRow(
     surface: RenderSurface,
