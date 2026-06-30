@@ -16,6 +16,8 @@ or deletion expands non-empty ranges outward to grapheme boundaries. Invalid or 
 cursor and selection positions therefore cannot edit only part of a visible character.
 Measured text layout exposes caret stops only at grapheme boundaries, so rendering and pixel hit
 testing also avoid placing cursors inside a visible character.
+Authored document comments normalize their creation ranges through the same boundaries, so comment
+spans cannot split a visible character.
 
 ## Consequences
 

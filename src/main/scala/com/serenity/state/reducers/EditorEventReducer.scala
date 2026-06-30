@@ -1401,18 +1401,16 @@ object EditorEventReducer:
     FindResult(cursor.line, cursor.column)
 
   private def moveCursorLeft(cursor: CursorPosition, content: Rope): CursorPosition =
-    if cursor.column > 0 then cursor.moveLeft
-    else if cursor.line > 0 then
-      val prevLineEnd = findLineEnd(content, cursor.line - 1)
-      cursor.copy(line = cursor.line - 1, column = prevLineEnd)
+    val offset = lineColumnToOffset(content, cursor.line, cursor.column)
+    val target = previousGraphemeBoundary(content, offset)
+    if target < offset then offsetToCursorPosition(content, target)
     else cursor
 
   private def moveCursorRight(cursor: CursorPosition, content: Rope): CursorPosition =
-    val offset = content.lineColumnToOffset(cursor.line, cursor.column)
-    content.index(offset) match
-      case Some('\n') => cursor.copy(line = cursor.line + 1, column = 0)
-      case Some(_)    => cursor.moveRight
-      case None       => cursor
+    val offset = lineColumnToOffset(content, cursor.line, cursor.column)
+    val target = nextGraphemeBoundary(content, offset)
+    if offset < target then offsetToCursorPosition(content, target)
+    else cursor
 
   private def moveMultiCursorVertical(
     cursor: CursorPosition,
@@ -1670,7 +1668,7 @@ object EditorEventReducer:
         val endOffset   = selectionEndOffset(selection, buffer.content)
         (
           buffer.content.delete(startOffset, endOffset),
-          selection.start,
+          offsetToCursorPosition(buffer.content, startOffset),
           startOffset,
           endOffset
         )
@@ -1712,7 +1710,7 @@ object EditorEventReducer:
     val startOffset = selectionStartOffset(selection, buffer.content)
     val endOffset   = selectionEndOffset(selection, buffer.content)
     val newContent  = buffer.content.delete(startOffset, endOffset)
-    val newCursor   = selection.start
+    val newCursor   = offsetToCursorPosition(newContent, startOffset)
     val baseBuffer = buffer.copy(
       content = newContent,
       isDirty = true,
@@ -1773,10 +1771,10 @@ object EditorEventReducer:
       .reverse
 
   private def selectionStartOffset(selection: Selection, content: Rope): Int =
-    lineColumnToOffset(content, selection.start.line, selection.start.column)
+    graphemeBoundaryBeforeOrAt(content, lineColumnToOffset(content, selection.start.line, selection.start.column))
 
   private def selectionEndOffset(selection: Selection, content: Rope): Int =
-    lineColumnToOffset(content, selection.end.line, selection.end.column)
+    graphemeBoundaryAfterOrAt(content, lineColumnToOffset(content, selection.end.line, selection.end.column))
 
   private def collapseSelectionsToFocus(buffer: Buffer, currentState: AppState): Buffer =
     val cursors = activeSelections(buffer)
