@@ -14,7 +14,8 @@ case class CommandRunnerSubmenuState(
     editingItemId: Option[String] = None,
     editingText: String = "",
     searchTerm: String = "",
-    parentGroupId: Option[String] = None
+    parentGroupId: Option[String] = None,
+    ancestorGroupIds: List[String] = Nil
 ):
   def selectedItem(items: List[CommandSurfaceItem]): Option[CommandSurfaceItem] =
     items.lift(selectedIndex)
@@ -354,7 +355,14 @@ case class CommandRunner(
         copy(
           submenuSelections =
             submenuSelections + (submenu.groupId -> submenu.selectedIndex) + (parentId -> parentIndex),
-          activeSubmenu = Some(CommandRunnerSubmenuState(parentId, selectedIndex = parentIndex))
+          activeSubmenu = Some(
+            CommandRunnerSubmenuState(
+              parentId,
+              selectedIndex = parentIndex,
+              parentGroupId = submenu.ancestorGroupIds.lastOption,
+              ancestorGroupIds = submenu.ancestorGroupIds.dropRight(1)
+            )
+          )
         )
       case Some(submenu) =>
         copy(
@@ -389,6 +397,13 @@ case class CommandRunner(
 
   def focusedSubmenuItems: List[CommandSurfaceItem] =
     activeSubmenu.toList.flatMap(submenu => submenu.filteredItems(submenuItems(submenu.groupId)))
+
+  def submenuBreadcrumbLabels(groupId: String): List[String] =
+    activeSubmenu match
+      case Some(submenu) if submenu.groupId == groupId && submenu.ancestorGroupIds.nonEmpty =>
+        (submenu.ancestorGroupIds :+ groupId).flatMap(id => submenuGroup(id).map(_.label))
+      case _ =>
+        submenuGroup(groupId).map(_.label).toList
 
   def moveSubmenuSelection(delta: Int): CommandRunner =
     activeSubmenu match
@@ -428,7 +443,8 @@ case class CommandRunner(
                 CommandRunnerSubmenuState(
                   group.id,
                   selectedIndex = rememberedIndex,
-                  parentGroupId = Some(submenu.groupId)
+                  parentGroupId = Some(submenu.groupId),
+                  ancestorGroupIds = submenu.ancestorGroupIds :+ submenu.groupId
                 )
               )
             )
