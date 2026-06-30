@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Layout, ViewportSize}
+import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -60,7 +60,8 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
         editorPanes = Map(paneId -> pane),
         activeEditorPaneId = Some(paneId)
       ),
-      theme = Theme.light
+      theme = Theme.light,
+      config = com.serenity.config.AppConfig.default.copy(showLineNumbers = false)
     )
     val viewport = ViewportSize(80, 24)
     val surface  = new MockRenderSurface(viewport.width, viewport.height)
@@ -72,6 +73,33 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
 
     surface.getBg(0, 0) shouldBe state.theme.highlighted.background
     surface.getBg(viewport.width - 1, 0) shouldBe state.theme.highlighted.background
+    surface.getRow(0).substring(expectedStart, expectedStart + title.length) shouldBe title
+  }
+
+  it should "center the active buffer header over editor content when line numbers are visible" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val buffer   = Buffer.fromFile(bufferId, Path.of("notes.md"), "alpha\nbeta\ngamma")
+    val pane     = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = com.serenity.config.AppConfig.default.copy(showLineNumbers = true)
+    )
+    val viewport = ViewportSize(80, 24)
+    val surface  = new MockRenderSurface(viewport.width, viewport.height)
+    val layout   = LayoutEngine.calculateLayout(state, viewport)
+
+    Renderer.render(state, cursorVisible = false, surface, viewport)
+
+    val title         = "notes.md"
+    val expectedStart = layout.editorPanelRect.x + (layout.editorPanelRect.width - title.length) / 2
+
     surface.getRow(0).substring(expectedStart, expectedStart + title.length) shouldBe title
   }
 

@@ -302,6 +302,9 @@ object Renderer:
     val headerRect =
       if isActive then activeBufferHeaderRect(rect.y, context.layout)
       else rect
+    val titleRect =
+      if isActive then activeBufferTitleRect(rect.y, context.layout)
+      else rect
 
     if isActive then
       surface.setBackgroundColor(state.theme.highlighted.background)
@@ -321,15 +324,15 @@ object Renderer:
       case None =>
         "No Buffer"
 
-    val maxTitleWidth = math.max(1, headerRect.width - 2)
+    val maxTitleWidth = math.max(1, titleRect.width - 2)
     val displayTitle =
       if bufferTitle.length > maxTitleWidth then bufferTitle.take(maxTitleWidth - 3) + "..."
       else bufferTitle
 
     surface.putString(headerRect.x, headerRect.y, " " * headerRect.width)
 
-    val paddingLeft = (headerRect.width - displayTitle.length) / 2
-    val centeredX   = headerRect.x + paddingLeft
+    val paddingLeft = (titleRect.width - displayTitle.length) / 2
+    val centeredX   = titleRect.x + paddingLeft
     surface.putString(centeredX, headerRect.y, displayTitle)
 
     surface.setBackgroundColor(state.theme.background)
@@ -347,6 +350,10 @@ object Renderer:
     val right = workspaceRects.map(_.right).maxOption.getOrElse(layout.editorPanelRect.right)
 
     LayoutRect(left, y, math.max(1, right - left), 1)
+
+  private def activeBufferTitleRect(y: Int, layout: CalculatedLayout): LayoutRect =
+    if layout.lineNumberRect.isDefined then layout.editorPanelRect.copy(y = y, height = 1)
+    else activeBufferHeaderRect(y, layout)
 
   private def renderBufferContent(
     buffer: Buffer,
