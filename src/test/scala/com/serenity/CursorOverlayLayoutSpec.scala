@@ -90,7 +90,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     rect.width shouldBe contentRect.width
   }
 
-  it should "place an active command runner below the anchored cursor when space is available" in {
+  it should "place an active command runner at the parent content top instead of the editor cursor" in {
     val state = baseState().copy(
       uiSurfaces = List(
         UiSurface(
@@ -113,13 +113,11 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     layout.aboveCursorOverlayRect shouldBe None
     layout.belowCursorOverlayRect shouldBe defined
 
-    val rect          = layout.belowCursorOverlayRect.get
-    val paneRect      = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
-    val contentRect   = CursorLayout.contentRectForPane(paneRect)
-    val contentTopY   = paneRect.y + 1
-    val cursorScreenY = contentTopY + 6
+    val rect        = layout.belowCursorOverlayRect.get
+    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    rect.y should be > cursorScreenY
+    rect.y shouldBe contentRect.y
     rect.x shouldBe contentRect.x
     rect.width shouldBe contentRect.width
     rect.right shouldBe contentRect.right

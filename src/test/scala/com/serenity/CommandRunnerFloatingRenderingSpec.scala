@@ -120,6 +120,53 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     ) shouldBe true
   }
 
+  it should "keep command runner placement stable across editor cursor positions" in {
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val registry = CommandRegistry(commands)
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("open")(using registry)
+    val content = (1 to 60).map(i => s"line $i").mkString("\n")
+
+    def overlayFor(cursor: CursorPosition): (LayoutRect, LayoutRect) =
+      val buffer = Buffer
+        .fromString(bufferId, content)
+        .copy(cursors = List(cursor))
+      val pane = EditorPane.withBuffer(paneId, bufferId)
+      val state = AppState.initial.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("command-runner")),
+        theme = Theme.light,
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          )
+        )
+      )
+      val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
+      val paneRect = LayoutEngine
+        .calculatePaneLayouts(state, layout)
+        .getOrElse(paneId, fail("Expected pane layout"))
+
+      layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay")) ->
+        CursorLayout.contentRectForPane(paneRect)
+
+    val (topOverlay, topContentRect)     = overlayFor(CursorPosition(0, 0))
+    val (lowerOverlay, lowerContentRect) = overlayFor(CursorPosition(20, 0))
+
+    topOverlay.y shouldBe topContentRect.y
+    lowerOverlay.y shouldBe lowerContentRect.y
+    lowerOverlay.y shouldBe topOverlay.y
+    lowerOverlay.x shouldBe lowerContentRect.x
+  }
+
   it should "render category tabs in browse mode and show grouped settings rows" in {
     val commands = List(
       Command.typed("open", "Open file", com.serenity.command.CommandIntent.OpenFile),
