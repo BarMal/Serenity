@@ -92,12 +92,9 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       None
     )
 
-    val searchLine =
-      (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 1)).mkString.trim
     val commandLine =
       (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 2)).mkString.trim
 
-    searchLine should include("search: op")
     commandLine should include("Open")
     commandLine should include("Open file")
     overlay.width shouldBe contentRect.width
@@ -108,11 +105,14 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getBg(overlay.x + 1, overlay.y + 2) shouldBe state.theme.highlighted.background
 
     val uiFont     = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
-    val uiMetrics  = CellMetrics.fromFont(uiFont)
     val searchText = "search: op"
-    val searchCursorXPx = uiMetrics.toPixelX(overlay.x + 1) +
+    val searchRun  = surface.drawRunPxCalls.find(_.s == searchText).getOrElse(fail("Expected measured search text"))
+    searchRun.xPx shouldBe cellMetrics.toPixelX(overlay.x + 1).toFloat
+    searchRun.yPx shouldBe cellMetrics.toPixelY(overlay.y + 1)
+
+    val searchCursorXPx = cellMetrics.toPixelX(overlay.x + 1) +
       math.round(TextLayoutSnapshot.caretXsForText(searchText, uiFont, surface.fontRenderContext.get).last)
-    val searchCursorYPx = uiMetrics.toPixelY(overlay.y + 1)
+    val searchCursorYPx = cellMetrics.toPixelY(overlay.y + 1)
     surface.fillPixelRectCalls.exists(call =>
       call.xPx == searchCursorXPx &&
         call.yPx == searchCursorYPx &&
@@ -327,13 +327,13 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val submenuRect = layout.belowCursorOverlayStack
       .collectFirst { case (SurfaceId("command-runner-submenu"), rect) => rect }
       .getOrElse(fail("Expected command-runner submenu overlay"))
-    val codeFont   = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val uiFont     = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
-    val uiMetrics  = CellMetrics.fromFont(uiFont)
-    val searchText = "Language search: java"
-    val submenuCursorXPx = uiMetrics.toPixelX(submenuRect.x + 1) +
+    val codeFont       = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val uiFont         = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
+    val defaultMetrics = CellMetrics.fromFont(codeFont)
+    val searchText     = "Language search: java"
+    val submenuCursorXPx = defaultMetrics.toPixelX(submenuRect.x + 1) +
       math.round(TextLayoutSnapshot.caretXsForText(searchText, uiFont, visibleSurface.fontRenderContext.get).last)
-    val submenuCursorYPx = uiMetrics.toPixelY(submenuRect.y + 1)
+    val submenuCursorYPx = defaultMetrics.toPixelY(submenuRect.y + 1)
 
     val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
     val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
