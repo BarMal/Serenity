@@ -4,6 +4,7 @@ enum Modifier:
   case Ctrl
   case Alt
   case Shift
+  case Meta
 
 case class KeyStrokeInfo(
     keyType: InputKey,
@@ -14,5 +15,6 @@ case class KeyStrokeInfo(
   def hasCtrl: Boolean                         = hasModifier(Modifier.Ctrl)
   def hasAlt: Boolean                          = hasModifier(Modifier.Alt)
   def hasShift: Boolean                        = hasModifier(Modifier.Shift)
+  def hasMeta: Boolean                         = hasModifier(Modifier.Meta)
 
 object KeyStrokeInfo

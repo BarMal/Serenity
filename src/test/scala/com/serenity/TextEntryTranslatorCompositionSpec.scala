@@ -72,6 +72,23 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
       ] shouldBe true
   }
 
+  it should "respect configured meta global hotkey overrides" in {
+    val customConfig = AppConfig.default.withHotkeyOverride(
+      HotkeyAction.ToggleCommandRunner,
+      "cmd+p"
+    )
+    val customTranslator = new TextEntryTranslator(customConfig)
+
+    customTranslator.translate(
+      KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Meta))
+    ) shouldBe ToggleCommandRunner
+    customTranslator
+      .translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl)))
+      .isInstanceOf[
+        UnhandledEvent[?]
+      ] shouldBe true
+  }
+
   it should "respect configured editor-local keymap overrides" in {
     val customConfig = AppConfig.default.withEditorKeyOverride(
       EditorKeyAction.PageDown,

@@ -54,6 +54,7 @@ case class HotkeyTrigger(
       List(
         Option.when(modifiers.contains(Modifier.Ctrl))("ctrl"),
         Option.when(modifiers.contains(Modifier.Alt))("alt"),
+        Option.when(modifiers.contains(Modifier.Meta))("meta"),
         Option.when(modifiers.contains(Modifier.Shift))("shift")
       ).flatten
     val keyPart =
@@ -94,15 +95,16 @@ object HotkeyTrigger:
   def parse(input: String): Option[HotkeyTrigger] =
     val parts = input.trim.toLowerCase.split("\\+").toList.map(_.trim).filter(_.nonEmpty)
     val (modifierParts, keyParts) = parts.partition {
-      case "ctrl" | "alt" | "shift" => true
-      case _                        => false
+      case "ctrl" | "alt" | "shift" | "meta" | "cmd" | "command" => true
+      case _                                                     => false
     }
 
     val modifiers = modifierParts.foldLeft(Set.empty[Modifier]) {
-      case (acc, "ctrl")  => acc + Modifier.Ctrl
-      case (acc, "alt")   => acc + Modifier.Alt
-      case (acc, "shift") => acc + Modifier.Shift
-      case (acc, _)       => acc
+      case (acc, "ctrl")                     => acc + Modifier.Ctrl
+      case (acc, "alt")                      => acc + Modifier.Alt
+      case (acc, "shift")                    => acc + Modifier.Shift
+      case (acc, "meta" | "cmd" | "command") => acc + Modifier.Meta
+      case (acc, _)                          => acc
     }
 
     keyParts match
