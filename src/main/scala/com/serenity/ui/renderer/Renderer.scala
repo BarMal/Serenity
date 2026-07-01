@@ -216,21 +216,29 @@ object Renderer:
     state: AppState,
     context: RenderContext
   ): TextLayoutSnapshot =
-    val bufferFont     = context.fontForBuffer(buffer)
-    val panelWidthPx   = contentRect.width * context.cellMetrics.charWidth
-    val panelHeightPx  = contentRect.height * context.cellMetrics.lineHeight
-    val bufferMetrics  = CellMetrics.fromFont(bufferFont)
-    val visibleColumns = math.max(1, panelWidthPx / math.max(1, bufferMetrics.charWidth))
-    val visibleLines   = math.max(1, panelHeightPx / math.max(1, bufferMetrics.lineHeight))
-    val baseViewport   = LayoutEngine.updateBufferViewportDimensions(buffer, contentRect, state.config.wordWrapEnabled)
+    val bufferFont    = context.fontForBuffer(buffer)
+    val panelWidthPx  = contentRect.width * context.cellMetrics.charWidth
+    val panelHeightPx = contentRect.height * context.cellMetrics.lineHeight
+    val bufferMetrics = CellMetrics.fromFont(bufferFont)
+    val baseViewport  = LayoutEngine.updateBufferViewportDimensions(buffer, contentRect, state.config.wordWrapEnabled)
+    val fontRenderContext =
+      context.surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+    val visibleColumns =
+      if bufferFont == context.codeFont then baseViewport.visibleColumns
+      else visibleColumnsFor(bufferFont, fontRenderContext, panelWidthPx, baseViewport.visibleColumns)
+    val visibleLines = math.max(1, panelHeightPx / math.max(1, bufferMetrics.lineHeight))
     val sizedViewport = baseViewport.copy(
       visibleColumns = visibleColumns,
       visibleLines = visibleLines,
       topVisualLine = baseViewport.topVisualLine.min(math.max(0, visibleLines - 1))
     )
+    val scrollViewport = baseViewport.copy(
+      visibleLines = visibleLines,
+      topVisualLine = baseViewport.topVisualLine.min(math.max(0, visibleLines - 1))
+    )
     val leftColumn =
       if visibleColumns == baseViewport.visibleColumns then baseViewport.leftColumn
-      else renderedLeftColumn(buffer, sizedViewport, state.config.wordWrapEnabled)
+      else renderedLeftColumn(buffer, scrollViewport, state.config.wordWrapEnabled)
     val renderedViewport = sizedViewport.copy(
       leftColumn = leftColumn
     )
@@ -242,9 +250,23 @@ object Renderer:
       renderBuffer,
       panelWidthPx,
       bufferFont,
-      context.surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext()),
+      fontRenderContext,
       wordWrapEnabled = state.config.wordWrapEnabled
     )
+
+  private def visibleColumnsFor(
+    font: Font,
+    fontRenderContext: java.awt.font.FontRenderContext,
+    panelWidthPx: Int,
+    gridVisibleColumns: Int
+  ): Int =
+    val sample          = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    val measuredAdvance = TextLayoutSnapshot.caretXsForText(sample, font, fontRenderContext).lastOption.getOrElse(0.0f)
+    val averageAdvance  = math.max(1.0f, measuredAdvance / sample.length.toFloat)
+    val measuredColumns = math.ceil(panelWidthPx.toDouble / averageAdvance.toDouble).toInt + 32
+    val gridOverscan    = gridVisibleColumns + 64
+
+    math.max(gridOverscan, measuredColumns).max(1)
 
   private def renderedLeftColumn(buffer: Buffer, viewport: Viewport, wordWrapEnabled: Boolean): Int =
     if wordWrapEnabled then 0
@@ -1112,11 +1134,13 @@ object Renderer:
             val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
             val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
             val screenYPx =
-              cursorTopPx(
-                lineTopPx,
-                contentTopPx(rect, context),
-                snapshot.lineHeightPx
-              )
+              if snapshot.usesMeasuredLayout then lineTopPx
+              else
+                cursorTopPx(
+                  lineTopPx,
+                  contentTopPx(rect, context),
+                  snapshot.lineHeightPx
+                )
             context.surface.fillPixelRect(
               screenXPx,
               screenYPx,
@@ -1344,7 +1368,9 @@ object Renderer:
                     val numberWidth = math.max(1, lineRect.width - 1)
                     val lineNumberText =
                       (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
-                    if snapshot.usesMeasuredLayout then
+                    val measuredLineNumberFont = buffer.filter(useMeasuredLineNumberFont(_, context))
+                    if snapshot.usesMeasuredLayout && measuredLineNumberFont.nonEmpty then
+                      measuredLineNumberFont.foreach(buf => surface.setFont(context.fontForBuffer(buf)))
                       surface.drawRunPx(
                         context.cellMetrics.toPixelX(lineRect.x).toFloat,
                         lineTopPx,
@@ -1353,6 +1379,7 @@ object Renderer:
                         snapshot.ascentPx,
                         lineNumberText
                       )
+                      surface.setFont(context.uiFont)
                     else surface.putString(lineRect.x, screenY, lineNumberText)
                     buffer.foreach(
                       renderDiagnosticIndicator(surface, lineRect, screenY, visualLine.bufferLine, _, state)
@@ -1362,6 +1389,9 @@ object Renderer:
             }
           }
       }
+
+  private def useMeasuredLineNumberFont(buffer: Buffer, context: RenderContext): Boolean =
+    buffer.typographyRole != TypographyRole.Code && context.fontForBuffer(buffer) != context.codeFont
 
   private def shouldRenderLineNumberForVisualLine(visualLine: TextVisualLine, wordWrapEnabled: Boolean): Boolean =
     !wordWrapEnabled || visualLine.startColumn == 0

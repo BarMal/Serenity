@@ -242,19 +242,21 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     firstLineNumber.yPx shouldBe firstTextRun.yPx
     firstLineNumber.lineHeightPx shouldBe firstTextRun.lineHeightPx
     firstLineNumber.ascentPx shouldBe firstTextRun.ascentPx
+    firstLineNumber.font shouldBe firstTextRun.font
+    firstLineNumber.font shouldBe Some(textFont)
   }
 
-  it should "optically lift a full-height measured cursor below the first content row" in {
+  it should "keep a measured cursor on the rendered text row below the first content row" in {
     val font       = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
     val rowMetrics = CellMetrics.fromFont(font)
     val surface =
       renderState("top\nbottom", CursorPosition(1, 1), font, cellMetricsOverride = Some(rowMetrics))
-    val cursorRects  = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
-    val expectedLift = math.max(2, math.round(rowMetrics.lineHeight.toFloat * 0.125f))
+    val cursorRects = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
+    val bottomRun   = surface.drawRunPxCalls.find(_.s == "bottom").getOrElse(fail("expected bottom row draw"))
 
     cursorRects should have size 1
-    cursorRects.head.yPx shouldBe rowMetrics.toPixelY(2) - expectedLift
-    cursorRects.head.heightPx shouldBe rowMetrics.lineHeight
+    cursorRects.head.yPx shouldBe bottomRun.yPx
+    cursorRects.head.heightPx shouldBe bottomRun.lineHeightPx
   }
 
   it should "render proportional text via drawRunPx with the full content" in {
@@ -436,6 +438,49 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     renderedRow.take(60).trim.length should be >= 60
     surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor).head.xPx should be >=
       (60 * CellMetrics.fromFont(font).charWidth)
+  }
+
+  it should "render unwrapped document-font rows to at least the grid pane width" in {
+    val codeFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val textFont = Font(Font.SERIF, Font.PLAIN, 24)
+    val content =
+      "0123456789012345678901234567890123456789012345678901234-target-token"
+    val viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 12, visibleLines = 4)
+    val surface = renderState(
+      content,
+      CursorPosition(0, 0),
+      codeFont,
+      viewport,
+      viewportSize = ViewportSize(80, 10),
+      cellMetricsOverride = Some(CellMetrics.fromFont(codeFont)),
+      textFontOverride = Some(textFont),
+      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+    )
+    val renderedText = surface.drawRunPxCalls.map(_.s).mkString
+
+    renderedText should include("target-token")
+  }
+
+  it should "render unwrapped narrow document-font rows beyond the grid character budget" in {
+    val codeFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val textFont = Font(Font.SERIF, Font.PLAIN, 12)
+    val content =
+      "0123456789012345678901234567890123456789012345678901234567890123456789" +
+        "012345678901234567890123456789-target-token"
+    val viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 12, visibleLines = 4)
+    val surface = renderState(
+      content,
+      CursorPosition(0, 0),
+      codeFont,
+      viewport,
+      viewportSize = ViewportSize(100, 10),
+      cellMetricsOverride = Some(CellMetrics.fromFont(codeFont)),
+      textFontOverride = Some(textFont),
+      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+    )
+    val renderedText = surface.drawRunPxCalls.map(_.s).mkString
+
+    renderedText should include("target-token")
   }
 
   it should "clamp stale horizontal scroll when the pane is wider than the stored viewport" in {

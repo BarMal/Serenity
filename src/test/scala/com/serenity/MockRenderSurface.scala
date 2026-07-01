@@ -67,7 +67,8 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
       ascentPx: Int,
       s: String,
       foreground: Color,
-      background: Color
+      background: Color,
+      font: Option[Font]
   )
 
   private val drawRunPxCallsBuffer = scala.collection.mutable.ListBuffer.empty[DrawRunPxCall]
@@ -81,7 +82,8 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
       ascentPx,
       s,
       currentFg.get(),
-      currentBg.get()
+      currentBg.get(),
+      currentFont.get()
     )
     val metrics =
       currentFont
