@@ -8,15 +8,17 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.CharacterKey
+import com.serenity.app.AppStartup
 import com.serenity.command.*
 import com.serenity.config.SpellCheckConfig
 import com.serenity.io.{FileDialog, FileUtils}
-import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
+import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -76,6 +78,19 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     } shouldBe Some(expectedCommandName)
 
     stateManager.applyEvent(Enter).unsafeRunSync()
+
+  private def assertActiveBufferFitsViewport(state: AppState, viewportSize: ViewportSize): Unit =
+    state.viewportSize shouldBe Some(viewportSize)
+    val paneId = state.layout.activeEditorPaneId.getOrElse(fail("Expected active pane"))
+    val bufferId = state.layout.editorPanes
+      .get(paneId)
+      .flatMap(_.bufferId)
+      .getOrElse(fail("Expected active pane buffer"))
+    val layout      = LayoutEngine.calculateLayout(state, viewportSize)
+    val contentRect = LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect
+    val buffer      = state.buffers(bufferId)
+    buffer.viewport.visibleColumns shouldBe contentRect.width
+    buffer.viewport.visibleLines shouldBe contentRect.height
 
   "Command runner" should "create and focus a new empty buffer for the new command" in {
     val stateManager = createStateManager()
@@ -346,6 +361,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val sourcePath = Files.createTempDirectory("serenity-open").resolve("notes.md")
     Files.writeString(sourcePath, "# Notes")
     val stateManager = createStateManager(fileDialog = TestFileDialog(openSelection = Some(sourcePath)))
+    val viewportSize = ViewportSize(120, 40)
+    stateManager.handleViewportResize(viewportSize).unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "open", "open")
 
@@ -355,6 +372,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val openedBuffer = updatedState.buffers.values.find(_.filePath.contains(sourcePath))
     openedBuffer.map(_.content.collect()) shouldBe Some("# Notes")
     openedBuffer.flatMap(_.language) shouldBe Some(LanguageId.Markdown)
+    val paneId = updatedState.layout.activeEditorPaneId.getOrElse(fail("Expected active pane"))
+    val layout = LayoutEngine.calculateLayout(updatedState, viewportSize)
+    val contentRect = LayoutEngine
+      .calculateEditorPaneLayouts(updatedState, layout)(paneId)
+      .contentRect
+    openedBuffer.map(_.viewport.visibleColumns) shouldBe Some(contentRect.width)
+    openedBuffer.map(_.viewport.visibleLines) shouldBe Some(contentRect.height)
   }
 
   it should "save an unsaved buffer through the native save-as file dialog" in {
@@ -1205,6 +1229,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val sessionRoot  = Files.createTempDirectory("serenity-command-session")
     val stateManager = createStateManager(Some(sessionRoot))
     val bufferId     = BufferId(0)
+    val viewportSize = ViewportSize(120, 40)
 
     stateManager.updateBuffer(bufferId, "saved session").unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).isNewEmpty shouldBe false
@@ -1212,13 +1237,38 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "save-session", "save-session")
     stateManager.sessionExists.unsafeRunSync() shouldBe true
 
+    stateManager.handleViewportResize(viewportSize).unsafeRunSync()
     stateManager.updateBuffer(bufferId, "changed session").unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "restore-session", "restore-session")
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).content.collect() shouldBe "saved session"
+    val restoredState = stateManager.getCurrentState.unsafeRunSync()
+    restoredState.buffers(bufferId).content.collect() shouldBe "saved session"
+    assertActiveBufferFitsViewport(restoredState, viewportSize)
 
     executeCommandThroughRunner(stateManager, "clear-session", "clear-session")
     stateManager.sessionExists.unsafeRunSync() shouldBe false
+  }
+
+  it should "restore a startup session into the current startup viewport" in {
+    val sessionRoot     = Files.createTempDirectory("serenity-startup-session")
+    val savedManager    = createStateManager(Some(sessionRoot))
+    val restoredManager = createStateManager(Some(sessionRoot))
+    val bufferId        = BufferId(0)
+    val startupViewport = ViewportSize(120, 40)
+    val savedViewport   = ViewportSize(80, 24)
+
+    savedManager.updateBuffer(bufferId, "startup session").unsafeRunSync()
+    executeCommandThroughRunner(savedManager, "save-session", "save-session")
+
+    AppStartup.initializeState(restoredManager, Theme.default, startupViewport).unsafeRunSync()
+    restoredManager.applyEvent(MoveDown).unsafeRunSync()
+    restoredManager.applyEvent(Enter).unsafeRunSync()
+
+    val restoredState = restoredManager.getCurrentState.unsafeRunSync()
+    restoredState.buffers(bufferId).content.collect() shouldBe "startup session"
+    restoredState.buffers(bufferId).viewport.visibleColumns should not be savedViewport.width
+    restoredState.buffers(bufferId).viewport.visibleLines should not be savedViewport.height
+    assertActiveBufferFitsViewport(restoredState, startupViewport)
   }
 
   it should "write the current upgraded config from the command runner" in {

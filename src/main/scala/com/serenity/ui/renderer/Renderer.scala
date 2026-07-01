@@ -49,7 +49,6 @@ object Renderer:
 
   private val MinMarkdownPreviewSourceLines = 32
   private val MarkdownPreviewOverscanFactor = 4
-  private val CursorOpticalLiftPx           = 1
 
   private def withEffectiveTheme(state: AppState): AppState =
     state.themeTransition match
@@ -325,9 +324,29 @@ object Renderer:
 
     surface.putString(headerRect.x, headerRect.y, " " * headerRect.width)
 
-    val paddingLeft = (titleRect.width - displayTitle.length) / 2
-    val centeredX   = titleRect.x + paddingLeft
-    surface.putString(centeredX, headerRect.y, displayTitle)
+    val titlePlacement = TextAlignment.placeLine(
+      displayTitle,
+      TextAreaPx(
+        xPx = context.cellMetrics.toPixelX(titleRect.x).toFloat,
+        yPx = context.cellMetrics.toPixelY(titleRect.y),
+        widthPx = titleRect.width * context.cellMetrics.charWidth.toFloat,
+        heightPx = context.cellMetrics.lineHeight
+      ),
+      context.uiFont,
+      context.cellMetrics.lineHeight,
+      context.cellMetrics.ascent,
+      TextHorizontalAlignment.Center,
+      TextVerticalAlignment.Top,
+      surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+    )
+    surface.drawRunPx(
+      titlePlacement.xPx,
+      titlePlacement.yPx,
+      titlePlacement.widthPx,
+      titlePlacement.lineHeightPx,
+      titlePlacement.ascentPx,
+      displayTitle
+    )
 
     surface.setBackgroundColor(state.theme.background)
     surface.setForegroundColor(state.theme.foreground)
@@ -787,7 +806,8 @@ object Renderer:
                 val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
                 val screenYPx = cursorTopPx(
                   context.cellMetrics.toPixelY(screenYCell),
-                  context.cellMetrics.toPixelY(rect.y + placement.top)
+                  context.cellMetrics.toPixelY(rect.y + placement.top),
+                  context.cellMetrics.lineHeight
                 )
                 context.surface.fillPixelRect(
                   screenXPx,
@@ -1013,7 +1033,11 @@ object Renderer:
             val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
             val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
             val screenYPx =
-              cursorTopPx(context.cellMetrics.toPixelY(screenYCell), context.cellMetrics.toPixelY(rect.y))
+              cursorTopPx(
+                context.cellMetrics.toPixelY(screenYCell),
+                context.cellMetrics.toPixelY(rect.y),
+                context.cellMetrics.lineHeight
+              )
             context.surface.fillPixelRect(
               screenXPx,
               screenYPx,
@@ -1024,8 +1048,11 @@ object Renderer:
         case _ => ()
     }
 
-  private def cursorTopPx(rowTopPx: Int, contentTopPx: Int): Int =
-    math.max(contentTopPx, rowTopPx - CursorOpticalLiftPx)
+  private def cursorTopPx(rowTopPx: Int, contentTopPx: Int, lineHeightPx: Int): Int =
+    math.max(contentTopPx, rowTopPx - cursorOpticalLiftPx(lineHeightPx))
+
+  private def cursorOpticalLiftPx(lineHeightPx: Int): Int =
+    math.max(2, math.round(lineHeightPx.toFloat * 0.125f))
 
   private def calculateCursorVisualPosition(
     cursor: CursorPosition,

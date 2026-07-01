@@ -1,10 +1,11 @@
 package com.serenity
 
+import java.awt.Font
 import java.nio.file.Path
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
+import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -68,12 +69,30 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = false, surface, viewport)
 
-    val title         = "notes.md"
-    val expectedStart = (viewport.width - title.length) / 2
+    val title       = "notes.md"
+    val cellMetrics = CellMetrics.fromFont(Font(Font.MONOSPACED, Font.PLAIN, 12))
+    val uiFont      = Font(Font.SANS_SERIF, Font.PLAIN, 12).deriveFont(12.0f)
+    val expectedPlacement = TextAlignment.placeLine(
+      title,
+      TextAreaPx(
+        xPx = 0.0f,
+        yPx = 0,
+        widthPx = viewport.width * cellMetrics.charWidth.toFloat,
+        heightPx = cellMetrics.lineHeight
+      ),
+      uiFont,
+      cellMetrics.lineHeight,
+      cellMetrics.ascent,
+      TextHorizontalAlignment.Center,
+      TextVerticalAlignment.Top,
+      surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+    )
+    val titleDraw = surface.drawRunPxCalls.find(_.s == title).getOrElse(fail("Expected measured title draw call"))
 
     surface.getBg(0, 0) shouldBe state.theme.highlighted.background
     surface.getBg(viewport.width - 1, 0) shouldBe state.theme.highlighted.background
-    surface.getRow(0).substring(expectedStart, expectedStart + title.length) shouldBe title
+    titleDraw.xPx shouldBe expectedPlacement.xPx +- 0.001f
+    titleDraw.yPx shouldBe expectedPlacement.yPx
   }
 
   it should "center the active buffer header across the workspace row when line numbers are visible" in {
@@ -104,11 +123,29 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       Some(layout.editorPanelRect),
       Some(layout.rightSpacerRect)
     ).flatten
-    val headerLeft    = headerRects.map(_.x).min
-    val headerRight   = headerRects.map(_.right).max
-    val expectedStart = headerLeft + (headerRight - headerLeft - title.length) / 2
+    val headerLeft  = headerRects.map(_.x).min
+    val headerRight = headerRects.map(_.right).max
+    val cellMetrics = CellMetrics.fromFont(Font(Font.MONOSPACED, Font.PLAIN, 12))
+    val uiFont      = Font(Font.SANS_SERIF, Font.PLAIN, 12).deriveFont(12.0f)
+    val expectedPlacement = TextAlignment.placeLine(
+      title,
+      TextAreaPx(
+        xPx = cellMetrics.toPixelX(headerLeft).toFloat,
+        yPx = cellMetrics.toPixelY(0),
+        widthPx = (headerRight - headerLeft) * cellMetrics.charWidth.toFloat,
+        heightPx = cellMetrics.lineHeight
+      ),
+      uiFont,
+      cellMetrics.lineHeight,
+      cellMetrics.ascent,
+      TextHorizontalAlignment.Center,
+      TextVerticalAlignment.Top,
+      surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+    )
+    val titleDraw = surface.drawRunPxCalls.find(_.s == title).getOrElse(fail("Expected measured title draw call"))
 
-    surface.getRow(0).substring(expectedStart, expectedStart + title.length) shouldBe title
+    titleDraw.xPx shouldBe expectedPlacement.xPx +- 0.001f
+    titleDraw.yPx shouldBe expectedPlacement.yPx
   }
 
   it should "highlight every active selection in the editor pane" in {
