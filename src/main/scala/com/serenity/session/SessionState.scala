@@ -17,7 +17,7 @@ import com.serenity.ui.layout.{Layout, PaneSplitDirection}
 import com.serenity.ui.theme.Theme
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.given
-import io.circe.{Decoder, Encoder}
+import io.circe.{Decoder, DecodingFailure, Encoder}
 
 /** Represents the persistent session state that survives application restarts. This is a subset of AppState containing
   * only the information needed to restore the user's workspace.
@@ -29,7 +29,8 @@ case class SessionState(
     bufferOrder: List[Int], // Use Int IDs instead of BufferId for serialization
     config: AppConfig,
     themeName: String, // Store theme name instead of full theme object
-    recentFiles: List[String] = Nil
+    recentFiles: List[String] = Nil,
+    schemaVersion: Int = 1
 )
 
 /** Persistent representation of a buffer
@@ -101,6 +102,8 @@ case class SessionDocumentComment(
 )
 
 object SessionState:
+
+  val CurrentSchemaVersion: Int = 1
 
   /** Convert AppState to SessionState for persistence
     */
@@ -647,20 +650,26 @@ given Encoder[AppConfig] = Encoder.instance { config =>
 }
 
 given Decoder[AppConfig] = Decoder.instance { cursor =>
+  val defaultConfig = AppConfig.default
+
   for
-    characterAnimation        <- cursor.get[Option[AnimationConfig]]("characterAnimation")
-    syntaxHighlightingEnabled <- cursor.get[Boolean]("syntaxHighlightingEnabled")
-    hotkeyConfig              <- cursor.getOrElse[HotkeyConfig]("hotkeyConfig")(HotkeyConfig())
-    focusedKeymapConfig       <- cursor.getOrElse[FocusedKeymapConfig]("focusedKeymapConfig")(FocusedKeymapConfig())
-    fontConfig                <- cursor.get[FontConfig]("fontConfig")
-    minimumPaneWidth          <- cursor.get[Int]("minimumPaneWidth")
-    showLineNumbers           <- cursor.get[Boolean]("showLineNumbers")
-    showGutter                <- cursor.get[Boolean]("showGutter")
-    wordWrapEnabled           <- cursor.getOrElse[Boolean]("wordWrapEnabled")(true)
-    blurRadius                <- cursor.getOrElse[Float]("blurRadius")(0.0f)
-    backgroundStyle           <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
-    materialPreset            <- cursor.getOrElse[MaterialPreset]("materialPreset")(MaterialPreset.Frosted)
-    motionPreset              <- cursor.getOrElse[MotionPreset]("motionPreset")(MotionPreset.Smooth)
+    characterAnimation <- cursor.getOrElse[Option[AnimationConfig]]("characterAnimation")(
+      defaultConfig.characterAnimation
+    )
+    syntaxHighlightingEnabled <- cursor.getOrElse[Boolean]("syntaxHighlightingEnabled")(
+      defaultConfig.syntaxHighlightingEnabled
+    )
+    hotkeyConfig        <- cursor.getOrElse[HotkeyConfig]("hotkeyConfig")(HotkeyConfig())
+    focusedKeymapConfig <- cursor.getOrElse[FocusedKeymapConfig]("focusedKeymapConfig")(FocusedKeymapConfig())
+    fontConfig          <- cursor.getOrElse[FontConfig]("fontConfig")(defaultConfig.fontConfig)
+    minimumPaneWidth    <- cursor.getOrElse[Int]("minimumPaneWidth")(defaultConfig.minimumPaneWidth)
+    showLineNumbers     <- cursor.getOrElse[Boolean]("showLineNumbers")(defaultConfig.showLineNumbers)
+    showGutter          <- cursor.getOrElse[Boolean]("showGutter")(defaultConfig.showGutter)
+    wordWrapEnabled     <- cursor.getOrElse[Boolean]("wordWrapEnabled")(true)
+    blurRadius          <- cursor.getOrElse[Float]("blurRadius")(0.0f)
+    backgroundStyle     <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
+    materialPreset      <- cursor.getOrElse[MaterialPreset]("materialPreset")(MaterialPreset.Frosted)
+    motionPreset        <- cursor.getOrElse[MotionPreset]("motionPreset")(MotionPreset.Smooth)
     elementTransitionSpeedScale <- cursor
       .getOrElse[Double]("elementTransitionSpeedScale")(1.0)
       .map(AppConfig.clampElementTransitionSpeedScale)
@@ -744,7 +753,6 @@ private def formatColor(color: Color): String =
   if color.getAlpha == 255 then rgb else f"$rgb${color.getAlpha}%02X"
 
 given Encoder[SessionState] = deriveEncoder
-given Decoder[SessionState] = deriveDecoder
 
 given Encoder[SessionBuffer] = deriveEncoder
 given Decoder[SessionBuffer] = deriveDecoder
@@ -791,5 +799,35 @@ given Decoder[SessionFindState] = Decoder.instance { cursor =>
     query = query,
     results = results.getOrElse(resultLines.getOrElse(Nil).map(line => SessionFindResult(line, 0))),
     currentIndex = currentIndex
+  )
+}
+
+given Decoder[SessionState] = Decoder.instance { cursor =>
+  for
+    schemaVersion <- cursor.getOrElse[Int]("schemaVersion")(SessionState.CurrentSchemaVersion)
+    _ <- Either.cond(
+      schemaVersion <= SessionState.CurrentSchemaVersion,
+      (),
+      DecodingFailure(
+        s"Unsupported session schema version: $schemaVersion (current: ${SessionState.CurrentSchemaVersion})",
+        cursor.history
+      )
+    )
+    buffers     <- cursor.get[List[SessionBuffer]]("buffers")
+    layout      <- cursor.get[SessionLayout]("layout")
+    focus       <- cursor.get[Option[SessionFocus]]("focus")
+    bufferOrder <- cursor.get[List[Int]]("bufferOrder")
+    config      <- cursor.get[AppConfig]("config")
+    themeName   <- cursor.get[String]("themeName")
+    recentFiles <- cursor.getOrElse[List[String]]("recentFiles")(Nil)
+  yield SessionState(
+    buffers = buffers,
+    layout = layout,
+    focus = focus,
+    bufferOrder = bufferOrder,
+    config = config,
+    themeName = themeName,
+    recentFiles = recentFiles,
+    schemaVersion = schemaVersion
   )
 }

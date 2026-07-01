@@ -1,9 +1,12 @@
 package com.serenity
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
+
+import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
@@ -21,9 +24,26 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
 
   private def createManager(policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()): SessionManager =
     val tempDirectory = Files.createTempDirectory("session-manager-spec")
-    val themeManager  = AppThemeManager.create
-    val logger        = LoggerFactory[IO].getLogger(using LoggerName("SessionManagerSpec"))
+    createManagerAt(tempDirectory, policy)
+
+  private def createManagerAt(
+    tempDirectory: Path,
+    policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy()
+  ): SessionManager =
+    val themeManager = AppThemeManager.create
+    val logger       = LoggerFactory[IO].getLogger(using LoggerName("SessionManagerSpec"))
     SessionManager.create(tempDirectory, themeManager, logger, policy)
+
+  private def currentSessionFile(sessionRoot: Path): Path =
+    sessionRoot.resolve("sessions").resolve("session.json")
+
+  private def quarantinedSessionFiles(sessionRoot: Path): List[Path] =
+    val sessionsDirectory = sessionRoot.resolve("sessions")
+    if Files.exists(sessionsDirectory) then
+      val stream = Files.list(sessionsDirectory)
+      try stream.filter(_.getFileName.toString.startsWith("session.json.corrupt-")).iterator.asScala.toList
+      finally stream.close()
+    else Nil
 
   private def dirtyStateWithText(text: String): AppState =
     val initial  = AppState.initial
@@ -156,9 +176,85 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
+  it should "return None and keep a quarantined copy when the saved session file is malformed" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-corrupt")
+    val sessionManager = createManagerAt(sessionRoot)
+    val sessionFile    = currentSessionFile(sessionRoot)
+
+    val program = for
+      _      <- sessionManager.saveSession(stateWithText("recoverable"))
+      _      <- IO.blocking(Files.writeString(sessionFile, "{ this is not valid json"))
+      loaded <- sessionManager.loadSession()
+    yield
+      loaded shouldBe None
+      Files.exists(sessionFile) shouldBe true
+      Files.readString(sessionFile) should include("not valid json")
+      quarantinedSessionFiles(sessionRoot) should not be empty
+
+    program.unsafeRunSync()
+  }
+
+  it should "restore older session config JSON with formerly required fields missing" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-legacy-config")
+    val sessionManager = createManagerAt(sessionRoot)
+    val sessionFile    = currentSessionFile(sessionRoot)
+    val missingLegacyConfigKeys = List(
+      "characterAnimation",
+      "syntaxHighlightingEnabled",
+      "fontConfig",
+      "minimumPaneWidth",
+      "showLineNumbers",
+      "showGutter"
+    )
+
+    val program = for
+      _            <- sessionManager.saveSession(stateWithText("legacy config"))
+      originalJson <- IO.blocking(_root_.io.circe.parser.parse(Files.readString(sessionFile))).rethrow
+      configObject <- IO.fromOption(originalJson.hcursor.downField("config").focus.flatMap(_.asObject))(
+        new RuntimeException("Expected session config object")
+      )
+      migratedJson = originalJson.mapObject { sessionObject =>
+        sessionObject
+          .remove("schemaVersion")
+          .add(
+            "config",
+            _root_.io.circe.Json.fromJsonObject(missingLegacyConfigKeys.foldLeft(configObject)(_.remove(_)))
+          )
+      }
+      _      <- IO.blocking(Files.writeString(sessionFile, migratedJson.spaces2))
+      loaded <- sessionManager.loadSession()
+    yield
+      loaded.map(_.buffers.values.head.content.toString) shouldBe Some("legacy config")
+      loaded.map(_.config.characterAnimation) shouldBe Some(AppConfig.default.characterAnimation)
+      loaded.map(_.config.syntaxHighlightingEnabled) shouldBe Some(AppConfig.default.syntaxHighlightingEnabled)
+      loaded.map(_.config.fontConfig) shouldBe Some(AppConfig.default.fontConfig)
+      loaded.map(_.config.minimumPaneWidth) shouldBe Some(AppConfig.default.minimumPaneWidth)
+      loaded.map(_.config.showLineNumbers) shouldBe Some(AppConfig.default.showLineNumbers)
+      loaded.map(_.config.showGutter) shouldBe Some(AppConfig.default.showGutter)
+
+    program.unsafeRunSync()
+  }
+
+  it should "return None and quarantine sessions written by a newer schema version" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-future-schema")
+    val sessionManager = createManagerAt(sessionRoot)
+    val sessionFile    = currentSessionFile(sessionRoot)
+
+    val program = for
+      _            <- sessionManager.saveSession(stateWithText("future schema"))
+      originalJson <- IO.blocking(_root_.io.circe.parser.parse(Files.readString(sessionFile))).rethrow
+      futureJson = originalJson.mapObject(_.add("schemaVersion", _root_.io.circe.Json.fromInt(999)))
+      _      <- IO.blocking(Files.writeString(sessionFile, futureJson.spaces2))
+      loaded <- sessionManager.loadSession()
+    yield
+      loaded shouldBe None
+      quarantinedSessionFiles(sessionRoot) should not be empty
+
+    program.unsafeRunSync()
+  }
+
   it should "preserve config fields including blurRadius through full disk save/load" in {
     val sessionManager = createManager()
-    import com.serenity.config.AppConfig
 
     val state = AppState.initial.copy(config = AppConfig(blurRadius = 0.75f, showLineNumbers = false))
 

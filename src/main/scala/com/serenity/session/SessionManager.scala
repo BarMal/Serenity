@@ -159,22 +159,49 @@ class SessionManager(
 
   private def loadSessionFile(sessionFileName: String)(using com.serenity.rope.Balance): IO[Option[AppState]] =
     val sessionFile = sessionsDirectory.resolve(sessionFileName)
+    IO.blocking(Files.exists(sessionFile))
+      .flatMap {
+        case false => logger.debug(s"[SESSION] No session file found at $sessionFile").as(None)
+        case true =>
+          for
+            _            <- logger.debug(s"[SESSION] Loading session from $sessionFile")
+            jsonString   <- readUtf8(sessionFile)
+            sessionState <- IO.fromEither(_root_.io.circe.parser.decode[SessionState](jsonString))
+            theme <- themeManager
+              .initializeWithTheme(sessionState.themeName)
+              .handleErrorWith(_ =>
+                logger.warn(s"[SESSION] Theme '${sessionState.themeName}' not found, using default") >>
+                  themeManager.initializeWithTheme("dark")
+              )
+            appState <- SessionState.toAppStateIO(sessionState, theme)
+            _        <- logger.info(s"[SESSION] Session loaded successfully with ${sessionState.buffers.size} buffers")
+          yield Some(appState)
+      }
+      .handleErrorWith(recoverFailedSessionFile(sessionFile, _))
+
+  private def recoverFailedSessionFile(sessionFile: Path, error: Throwable): IO[Option[AppState]] =
+    quarantineSessionFile(sessionFile).attempt.flatMap {
+      case Right(Some(quarantineFile)) =>
+        logger.error(error)(s"[SESSION] Failed to load session file at $sessionFile; copied to $quarantineFile") >>
+          IO.pure(None)
+      case Right(None) =>
+        logger.error(error)(s"[SESSION] Failed to load session file at $sessionFile; no file was available to copy") >>
+          IO.pure(None)
+      case Left(quarantineError) =>
+        logger.error(quarantineError)(s"[SESSION] Failed to copy corrupt session file at $sessionFile") >>
+          logger.error(error)(s"[SESSION] Failed to load session file at $sessionFile") >>
+          IO.pure(None)
+    }
+
+  private def quarantineSessionFile(sessionFile: Path): IO[Option[Path]] =
     IO.blocking(Files.exists(sessionFile)).flatMap {
-      case false => logger.debug(s"[SESSION] No session file found at $sessionFile").as(None)
+      case false => IO.pure(None)
       case true =>
-        for
-          _            <- logger.debug(s"[SESSION] Loading session from $sessionFile")
-          jsonString   <- readUtf8(sessionFile)
-          sessionState <- IO.fromEither(_root_.io.circe.parser.decode[SessionState](jsonString))
-          theme <- themeManager
-            .initializeWithTheme(sessionState.themeName)
-            .handleErrorWith(_ =>
-              logger.warn(s"[SESSION] Theme '${sessionState.themeName}' not found, using default") >>
-                themeManager.initializeWithTheme("dark")
-            )
-          appState <- SessionState.toAppStateIO(sessionState, theme)
-          _        <- logger.info(s"[SESSION] Session loaded successfully with ${sessionState.buffers.size} buffers")
-        yield Some(appState)
+        currentTimeMillis().flatMap { now =>
+          val quarantineFile = sessionFile.resolveSibling(s"${sessionFile.getFileName}.corrupt-$now")
+          IO.blocking(Files.copy(sessionFile, quarantineFile, StandardCopyOption.REPLACE_EXISTING))
+            .as(Some(quarantineFile))
+        }
     }
 
   private def readIndex(): IO[SessionIndex] =
@@ -212,7 +239,7 @@ class SessionManager(
   private def writeUtf8(path: Path, value: String): IO[Unit] =
     IO.blocking {
       Option(path.getParent).foreach(Files.createDirectories(_))
-      Files.write(
+      val _ = Files.write(
         path,
         value.getBytes(StandardCharsets.UTF_8),
         StandardOpenOption.CREATE,
