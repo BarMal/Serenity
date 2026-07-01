@@ -285,38 +285,67 @@ object LayoutEngine:
       paneRect <- paneLayouts.get(paneId)
       bufferId <- pane.bufferId
       buffer   <- state.buffers.get(bufferId)
-      anchor   <- surfaceAnchor(surface).orElse(state.activeCursorPosition)
-      screenPosition <- CursorLayout.calculateScreenPosition(
-        anchor,
-        buffer.content,
-        paneRect,
-        buffer.viewport
-      )
-    yield
-      val contentRect     = CursorLayout.contentRectForPane(paneRect)
-      val preferredWidth  = calculateFloatingSurfaceWidth(surface.content, contentRect.width)
-      val preferredHeight = calculateFloatingSurfaceHeight(surface.content, contentRect.height, state)
-      val overlayX = math.max(
-        contentRect.x,
-        math.min(screenPosition.x - (preferredWidth / 2), contentRect.right - preferredWidth)
-      )
-      val overlayY = topYOverride.getOrElse(surface.presentation match
-        case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) =>
-          math.max(contentRect.y, screenPosition.y - preferredHeight)
-        case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) =>
-          val preferredBelowY = screenPosition.y + 1
-          if preferredBelowY + preferredHeight <= contentRect.bottom then preferredBelowY
-          else math.max(contentRect.y, screenPosition.y - preferredHeight)
-        case _ =>
-          contentRect.y)
-      val finalHeight = forcedHeight.getOrElse(preferredHeight)
+      rect     <- calculateFloatingSurfaceRect(surface, buffer, paneRect, state, topYOverride, forcedHeight)
+    yield rect
 
-      LayoutRect(
-        x = overlayX,
-        y = overlayY,
-        width = preferredWidth,
-        height = finalHeight
+  private def calculateFloatingSurfaceRect(
+    surface: UiSurface,
+    buffer: Buffer,
+    paneRect: LayoutRect,
+    state: AppState,
+    topYOverride: Option[Int],
+    forcedHeight: Option[Int]
+  ): Option[LayoutRect] =
+    val contentRect     = CursorLayout.contentRectForPane(paneRect)
+    val preferredWidth  = calculateFloatingSurfaceWidth(contentRect.width)
+    val preferredHeight = calculateFloatingSurfaceHeight(surface.content, contentRect.height, state)
+    val finalHeight     = forcedHeight.getOrElse(preferredHeight)
+
+    if isCommandSurfaceContent(surface.content) then
+      Some(
+        LayoutRect(
+          x = contentRect.x,
+          y = topYOverride.getOrElse(contentRect.y),
+          width = preferredWidth,
+          height = finalHeight
+        )
       )
+    else
+      for
+        anchor <- surfaceAnchor(surface).orElse(state.activeCursorPosition)
+        screenPosition <- CursorLayout.calculateScreenPosition(
+          anchor,
+          buffer.content,
+          paneRect,
+          buffer.viewport
+        )
+      yield
+        val overlayX = math.max(
+          contentRect.x,
+          math.min(screenPosition.x - (preferredWidth / 2), contentRect.right - preferredWidth)
+        )
+        val overlayY = topYOverride.getOrElse(surface.presentation match
+          case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) =>
+            math.max(contentRect.y, screenPosition.y - preferredHeight)
+          case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) =>
+            val preferredBelowY = screenPosition.y + 1
+            if preferredBelowY + preferredHeight <= contentRect.bottom then preferredBelowY
+            else math.max(contentRect.y, screenPosition.y - preferredHeight)
+          case _ =>
+            contentRect.y)
+
+        LayoutRect(
+          x = overlayX,
+          y = overlayY,
+          width = preferredWidth,
+          height = finalHeight
+        )
+
+  private def isCommandSurfaceContent(content: SurfaceContent): Boolean =
+    content match
+      case SurfaceContent.CommandPalette(_)              => true
+      case SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
+      case _                                             => false
 
   private case class BelowOverlayLayout(
       stack: List[(SurfaceId, LayoutRect)],
@@ -391,7 +420,7 @@ object LayoutEngine:
         case _ =>
           BelowOverlayLayout(Nil, Set.empty)
 
-  private def calculateFloatingSurfaceWidth(content: SurfaceContent, maxWidth: Int): Int =
+  private def calculateFloatingSurfaceWidth(maxWidth: Int): Int =
     maxWidth
 
   private def calculateFloatingSurfaceHeight(content: SurfaceContent, maxHeight: Int, state: AppState): Int =
