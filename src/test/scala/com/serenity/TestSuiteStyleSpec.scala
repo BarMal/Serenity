@@ -22,6 +22,12 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
         Option.when(DebugSuitePattern.findFirstIn(content).nonEmpty)(s"$relative uses a debug-era suite name"),
         Option.when(ConsoleOutputPattern.findFirstIn(content).nonEmpty)(
           s"$relative writes to stdout during normal tests"
+        ),
+        Option.when(DisabledAnnotationPattern.findFirstIn(content).nonEmpty)(
+          s"$relative disables a normal test suite"
+        ),
+        Option.when(DisabledTestCallPattern.findFirstIn(content).nonEmpty)(
+          s"$relative disables a normal test case"
         )
       ).flatten
     }
@@ -40,5 +46,7 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
         .toList
     }
 
-  private val DebugSuitePattern    = (raw"\bclass\s+" + "Deb" + "ug" + raw"\w*Sp" + "ec" + raw"\b").r
-  private val ConsoleOutputPattern = ("println" + raw"\s*\(").r
+  private val DebugSuitePattern         = (raw"\bclass\s+" + "Deb" + "ug" + raw"\w*Sp" + "ec" + raw"\b").r
+  private val ConsoleOutputPattern      = ("println" + raw"\s*\(").r
+  private val DisabledAnnotationPattern = ("@" + "Ignore").r
+  private val DisabledTestCallPattern   = (raw"\b" + "ignore" + raw"\s*\(").r
