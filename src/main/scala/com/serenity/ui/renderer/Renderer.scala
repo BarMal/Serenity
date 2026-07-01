@@ -813,7 +813,7 @@ object Renderer:
                   screenXPx,
                   screenYPx,
                   caretWidthPx,
-                  if snapshot.usesMeasuredLayout then snapshot.lineHeightPx else context.cellMetrics.lineHeight,
+                  context.cellMetrics.lineHeight,
                   effectiveCursorColor
                 )
             case _ => ()
@@ -1037,7 +1037,7 @@ object Renderer:
               screenXPx,
               screenYPx,
               caretWidthPx,
-              if snapshot.usesMeasuredLayout then snapshot.lineHeightPx else context.cellMetrics.lineHeight,
+              context.cellMetrics.lineHeight,
               effectiveCursorColor
             )
         case _ => ()
