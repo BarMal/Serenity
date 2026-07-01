@@ -195,7 +195,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
         activeCategory = CommandCategory.Settings,
-        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 1)),
+        activeSubmenu = Some(CommandRunnerSubmenuState("settings-preset-select", selectedIndex = 0)),
         inputItems = Nil
       )
 
@@ -203,7 +203,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .resolve(
         SurfaceContent.CommandPaletteSubmenu(
           runner,
-          "settings-ui-presets",
+          "settings-preset-select",
           previewOnly = false
         ),
         LayoutRect(0, 0, 80, 10),
@@ -254,9 +254,9 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
         activeCategory = CommandCategory.Settings,
         activeSubmenu = Some(
           CommandRunnerSubmenuState(
-            "settings-typography",
-            parentGroupId = Some("ui-preset-configure"),
-            ancestorGroupIds = List("settings-ui-presets", "ui-preset-configure")
+            "settings-preset-fonts",
+            parentGroupId = Some("settings-preset-edit"),
+            ancestorGroupIds = List("settings-ui-presets", "settings-preset-edit")
           )
         )
       )
@@ -264,14 +264,14 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val resolved = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPaletteSubmenu(
         runner,
-        "settings-typography",
+        "settings-preset-fonts",
         previewOnly = false
       ),
       LayoutRect(0, 0, 80, 10),
       SurfaceRenderMode.Floating
     )
 
-    resolved.header.map(_.plainText) shouldBe Some("UI Presets > Preset Options: Writing > Typography")
+    resolved.header.map(_.plainText) shouldBe Some("UI Presets > Edit Preset: Writing > Fonts")
   }
 
   it should "append a selected UI preset detail row in the preset submenu" in {
@@ -282,13 +282,13 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .copy(
         activeCategory = CommandCategory.Settings,
         optionSelections = Map("ui-preset-built-in" -> 1),
-        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 2))
+        activeSubmenu = Some(CommandRunnerSubmenuState("settings-preset-select", selectedIndex = 0))
       )
 
     val resolved = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPaletteSubmenu(
         runner,
-        "settings-ui-presets",
+        "settings-preset-select",
         previewOnly = false
       ),
       LayoutRect(0, 0, 90, 12),
@@ -307,32 +307,6 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .copy(
         activeCategory = CommandCategory.Settings,
-        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 0))
-      )
-
-    val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPaletteSubmenu(
-        runner,
-        "settings-ui-presets",
-        previewOnly = false
-      ),
-      LayoutRect(0, 0, 90, 12),
-      SurfaceRenderMode.Floating
-    )
-
-    resolved.rows.lastOption.map(_.plainText) shouldBe Some(
-      "Preset Preview Create Preset - name and save the current workspace setup"
-    )
-  }
-
-  it should "append a preset options detail row in the preset submenu" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-      .copy(
-        activeCategory = CommandCategory.Settings,
-        editingPresetName = Some("Research Notes"),
         activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 1))
       )
 
@@ -347,7 +321,33 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     resolved.rows.lastOption.map(_.plainText) shouldBe Some(
-      "Preset Preview Research Notes - document, layout, typography, motion, appearance"
+      "Preset Preview Create New Preset - name and save the current workspace setup"
+    )
+  }
+
+  it should "append a preset options detail row in the preset submenu" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(
+        activeCategory = CommandCategory.Settings,
+        editingPresetName = Some("Research Notes"),
+        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 2))
+      )
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPaletteSubmenu(
+        runner,
+        "settings-ui-presets",
+        previewOnly = false
+      ),
+      LayoutRect(0, 0, 90, 12),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.lastOption.map(_.plainText) shouldBe Some(
+      "Preset Preview Research Notes - name, active panels, animations, fonts, theme"
     )
   }
 

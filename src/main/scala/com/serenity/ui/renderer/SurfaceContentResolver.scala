@@ -494,17 +494,17 @@ object SurfaceContentResolver:
     selectedItem: Option[CommandSurfaceItem]
   ): List[OverlayRow] =
     selectedItem.collect {
-      case item: CommandSurfaceItem.InputItem if groupId == "settings-ui-presets" && item.id == "ui-preset-create" =>
-        presetPreviewDetail("Create Preset", "name and save the current workspace setup")
       case group: CommandSurfaceItem.GroupItem
-          if groupId == "settings-ui-presets" && group.id == "ui-preset-configure" =>
+          if groupId == "settings-ui-presets" && group.id == "settings-preset-create" =>
+        presetPreviewDetail("Create New Preset", "name and save the current workspace setup")
+      case group: CommandSurfaceItem.GroupItem
+          if groupId == "settings-ui-presets" && group.id == "settings-preset-edit" =>
         presetPreviewDetail(
-          runner.editingPresetName.getOrElse("Preset Options"),
-          "document, layout, typography, motion, appearance"
+          runner.editingPresetName.getOrElse("Edit Preset"),
+          "name, active panels, animations, fonts, theme"
         )
       case option: CommandSurfaceItem.OptionItem
-          if groupId == "settings-ui-presets" &&
-            (option.id == "ui-preset-built-in" || option.id == "ui-preset-custom") =>
+          if groupId == "settings-preset-select" && option.id == "ui-preset-select" =>
         val hint = option.selectedHint.getOrElse("")
         presetPreviewDetail(option.selectedOption, hint)
     }.toList

@@ -476,41 +476,42 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       firstUiFontIntent
   }
 
-  it should "enter the preset options submenu from UI presets" in {
+  it should "enter the edit preset submenu from UI presets" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-ui-presets", "ui-preset-configure")
+    val state    = settingsStateOnItem("settings-ui-presets", "settings-preset-edit")
 
     val entered = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val runner  = runnerFrom(entered.state)
 
-    runner.activeSubmenu.map(_.groupId) shouldBe Some("ui-preset-configure")
+    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-edit")
     runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-presets")
     runner.focusedSubmenuItems.map(_.id) should contain allOf (
-      "settings-document-writing",
-      "settings-editor-view",
-      "settings-typography",
-      "settings-appearance-motion"
+      "settings-preset-name",
+      "settings-preset-active-panels",
+      "settings-preset-animations",
+      "settings-preset-fonts",
+      "settings-preset-theme"
     )
   }
 
   it should "preserve nested submenu ancestry for settings breadcrumbs" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-ui-presets", "ui-preset-configure")
+    val state    = settingsStateOnItem("settings-ui-presets", "settings-preset-edit")
 
     val presetOptions = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
     val typographySelected = CommandRunnerReducer
-      .reduce(RunnerSelectSubmenuItem(4), presetOptions, registry)
+      .reduce(RunnerSelectSubmenuItem(3), presetOptions, registry)
       .state
     val typography = CommandRunnerReducer.reduce(RunnerSubmit, typographySelected, registry)
     val runner     = runnerFrom(typography.state)
 
-    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-typography")
-    runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("ui-preset-configure")
-    runner.activeSubmenu.map(_.ancestorGroupIds) shouldBe Some(List("settings-ui-presets", "ui-preset-configure"))
-    runner.submenuBreadcrumbLabels("settings-typography") shouldBe List(
+    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-fonts")
+    runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-preset-edit")
+    runner.activeSubmenu.map(_.ancestorGroupIds) shouldBe Some(List("settings-ui-presets", "settings-preset-edit"))
+    runner.submenuBreadcrumbLabels("settings-preset-fonts") shouldBe List(
       "UI Presets",
-      "Preset Options: Writing",
-      "Typography"
+      "Edit Preset: Writing",
+      "Fonts"
     )
   }
 

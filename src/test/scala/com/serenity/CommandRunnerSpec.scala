@@ -314,7 +314,11 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     )
     nestedGroup("settings-material-motion").children.map(_.id) should contain allOf ("material-preset", "motion-preset")
     group("settings-ui-presets").label shouldBe "UI Presets"
-    group("settings-ui-presets").children.map(_.id) should contain allOf ("ui-preset-save", "ui-preset-apply")
+    group("settings-ui-presets").children.map(_.id) shouldBe List(
+      "settings-preset-select",
+      "settings-preset-create",
+      "settings-preset-edit"
+    )
     nestedGroup("settings-text-display").label shouldBe "Text Display"
     nestedGroup("settings-text-display").children.map(_.id) shouldBe List("line-numbers", "gutter", "line-wrap")
     nestedGroup("settings-text-area").label shouldBe "Text Area"
@@ -540,58 +544,77 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .withActiveCategory(CommandCategory.Settings)
     val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
 
-    presetGroup.children.take(4).map(_.id) shouldBe List(
-      "ui-preset-create",
-      "ui-preset-configure",
-      "ui-preset-built-in",
-      "ui-preset-custom"
+    presetGroup.children.map(_.id) shouldBe List(
+      "settings-preset-select",
+      "settings-preset-create",
+      "settings-preset-edit"
     )
 
-    val builtInPreset = presetGroup.children
+    val selectPreset = presetGroup.children
       .collectFirst {
-        case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-built-in" => item
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-select" => group
       }
-      .getOrElse(fail("missing built-in preset picker"))
-    val customPreset = presetGroup.children
+      .getOrElse(fail("missing select preset group"))
+    val presetPicker = selectPreset.children
       .collectFirst {
-        case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-custom" => item
+        case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-select" => item
       }
-      .getOrElse(fail("missing custom preset picker"))
-    val inputs = presetGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
+      .getOrElse(fail("missing combined preset picker"))
 
-    builtInPreset.options.map(_.label) shouldBe List("Writing", "Documentation", "Code", "Review")
-    builtInPreset.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Writing"))
-    builtInPreset.options.headOption.flatMap(_.hint) shouldBe Some(
+    presetPicker.options
+      .map(_.label) shouldBe List("Writing", "Documentation", "Code", "Review", "Drafting", "Research Notes")
+    presetPicker.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Writing"))
+    presetPicker.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Research Notes"))
+    presetPicker.options.headOption.flatMap(_.hint) shouldBe Some(
       "rich text default; dark; subtle motion; typed text reveal; frosted material; frosted background; spacious density; Serif 18pt prose; 1 editor pane; Left outline 28"
     )
-    customPreset.options.map(_.label) shouldBe List("Drafting", "Research Notes")
-    customPreset.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Research Notes"))
-    customPreset.options.map(_.hint) shouldBe List(Some("Saved workspace setup"), Some("Saved workspace setup"))
-    val configurePreset = presetGroup.children
-      .collectFirst {
-        case item: CommandSurfaceItem.GroupItem if item.id == "ui-preset-configure" => item
-      }
-      .getOrElse(fail("missing preset options group"))
-
-    configurePreset.label shouldBe "Preset Options: Writing"
-    configurePreset.hint shouldBe Some("Editing Writing")
-    configurePreset.children.headOption.map(_.id) shouldBe Some("settings-preset-identity")
-    configurePreset.children.map(_.id) should contain allOf (
-      "settings-preset-identity",
-      "settings-workspace-layout",
-      "settings-document-writing",
-      "settings-editor-view",
-      "settings-typography",
-      "settings-appearance-motion"
+    presetPicker.options.takeRight(2).map(_.hint) shouldBe List(
+      Some("Saved workspace setup"),
+      Some("Saved workspace setup")
     )
-    configurePreset.children.map(_.id).distinct shouldBe configurePreset.children.map(_.id)
-    val presetIdentity = configurePreset.children
+
+    val createPreset = presetGroup.children
       .collectFirst {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-identity" => group
+        case item: CommandSurfaceItem.GroupItem if item.id == "settings-preset-create" => item
       }
-      .getOrElse(fail("missing preset identity group"))
-    presetIdentity.label shouldBe "Preset Identity"
-    presetIdentity.children.map(_.id) shouldBe List(
+      .getOrElse(fail("missing create preset group"))
+    val editPreset = presetGroup.children
+      .collectFirst {
+        case item: CommandSurfaceItem.GroupItem if item.id == "settings-preset-edit" => item
+      }
+      .getOrElse(fail("missing edit preset group"))
+
+    createPreset.label shouldBe "Create New Preset"
+    createPreset.children.map(_.id) shouldBe List(
+      "settings-preset-create-name",
+      "settings-preset-active-panels",
+      "settings-preset-animations",
+      "settings-preset-fonts",
+      "settings-preset-theme"
+    )
+    editPreset.label shouldBe "Edit Preset: Writing"
+    editPreset.hint shouldBe Some("Editing Writing")
+    editPreset.children.map(_.id) shouldBe List(
+      "settings-preset-name",
+      "settings-preset-active-panels",
+      "settings-preset-animations",
+      "settings-preset-fonts",
+      "settings-preset-theme"
+    )
+    val createName = createPreset.children
+      .collectFirst {
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-create-name" => group
+      }
+      .getOrElse(fail("missing create preset name group"))
+    createName.children.map(_.id) shouldBe List("ui-preset-create")
+
+    val presetName = editPreset.children
+      .collectFirst {
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-name" => group
+      }
+      .getOrElse(fail("missing preset name group"))
+    presetName.label shouldBe "Name"
+    presetName.children.map(_.id) shouldBe List(
       "ui-preset-save",
       "ui-preset-apply",
       "ui-preset-duplicate",
@@ -599,13 +622,13 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "ui-preset-delete",
       "ui-preset-reset"
     )
-    val workspaceLayout = configurePreset.children
+    val activePanels = editPreset.children
       .collectFirst {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-workspace-layout" => group
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-active-panels" => group
       }
-      .getOrElse(fail("missing workspace layout group"))
-    workspaceLayout.label shouldBe "Panels & Workspace"
-    val workspaceItems = descendants(workspaceLayout)
+      .getOrElse(fail("missing active panels group"))
+    activePanels.label shouldBe "Active Panels"
+    val workspaceItems = descendants(activePanels)
     workspaceItems.collect {
       case option: CommandSurfaceItem.OptionItem => option.options.map(_.intent)
     }.flatten should contain allOf (
@@ -626,22 +649,21 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.UnpinPanel(PanelPosition.Bottom),
       CommandIntent.CollapseExpandedPanel
     )
-    val navigation = groupByIdRecursive(List(configurePreset), "settings-navigation")
-    navigation.label shouldBe "Navigation"
-    navigation.children.collect {
-      case CommandSurfaceItem.CommandItem(command) => command.intent
-    } should contain allOf (
-      CommandIntent.ToggleCommentLens,
-      CommandIntent.ToggleBookmark,
-      CommandIntent.NextBookmark,
-      CommandIntent.PreviousBookmark,
-      CommandIntent.NextDocumentSymbol,
-      CommandIntent.PreviousDocumentSymbol,
-      CommandIntent.NavigateBack,
-      CommandIntent.NavigateForward
+    val animations = groupByIdRecursive(List(editPreset), "settings-preset-animations")
+    animations.children.map(_.id) shouldBe List("settings-cursor", "settings-material-motion", "settings-animation")
+    val fonts = groupByIdRecursive(List(editPreset), "settings-preset-fonts")
+    fonts.children.map(_.id) shouldBe List("settings-prose-font", "settings-code-font", "settings-ui-font")
+    val theme = groupByIdRecursive(List(editPreset), "settings-preset-theme")
+    theme.children.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } should contain allOf (
+      CommandIntent.OpenThemeChooser,
+      CommandIntent.ToggleTheme,
+      CommandIntent.ReloadTheme
     )
 
-    inputs.map(_.id) shouldBe List(
+    val inputs = descendants(presetGroup).collect {
+      case item: CommandSurfaceItem.InputItem if item.id.startsWith("ui-preset-") => item
+    }
+    inputs.map(_.id) should contain allOf (
       "ui-preset-create",
       "ui-preset-save",
       "ui-preset-apply",
@@ -650,19 +672,27 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "ui-preset-delete",
       "ui-preset-reset"
     )
-    inputs.head.label shouldBe "Create Preset"
-    inputs.head.hint shouldBe "New preset name"
-    inputs(1).currentValue shouldBe "Writing"
-    inputs(2).currentValue shouldBe "Writing"
-    inputs(3).currentValue shouldBe "Writing -> "
-    inputs(4).currentValue shouldBe "Writing -> "
-    inputs(5).currentValue shouldBe "Writing"
-    inputs(6).currentValue shouldBe "Writing"
-    inputs.head.parse("Longform Writing") shouldBe Some(CommandIntent.SaveUiPreset("Longform Writing"))
-    inputs(3).parse("Writing -> My Writing") shouldBe Some(CommandIntent.DuplicateUiPreset("Writing", "My Writing"))
-    inputs(4).parse("Draft -> Final") shouldBe Some(CommandIntent.RenameUiPreset("Draft", "Final"))
-    inputs(5).parse("Old Preset") shouldBe Some(CommandIntent.DeleteUiPreset("Old Preset"))
-    inputs(6).parse("Writing") shouldBe Some(CommandIntent.ResetUiPreset("Writing"))
+    val createInput = inputs.find(_.id == "ui-preset-create").getOrElse(fail("missing create input"))
+    val saveInput   = inputs.find(_.id == "ui-preset-save").getOrElse(fail("missing save input"))
+    val applyInput  = inputs.find(_.id == "ui-preset-apply").getOrElse(fail("missing apply input"))
+    val dupeInput   = inputs.find(_.id == "ui-preset-duplicate").getOrElse(fail("missing duplicate input"))
+    val renameInput = inputs.find(_.id == "ui-preset-rename").getOrElse(fail("missing rename input"))
+    val deleteInput = inputs.find(_.id == "ui-preset-delete").getOrElse(fail("missing delete input"))
+    val resetInput  = inputs.find(_.id == "ui-preset-reset").getOrElse(fail("missing reset input"))
+
+    createInput.label shouldBe "Create Preset"
+    createInput.hint shouldBe "New preset name"
+    saveInput.currentValue shouldBe "Writing"
+    applyInput.currentValue shouldBe "Writing"
+    dupeInput.currentValue shouldBe "Writing -> "
+    renameInput.currentValue shouldBe "Writing -> "
+    deleteInput.currentValue shouldBe "Writing"
+    resetInput.currentValue shouldBe "Writing"
+    createInput.parse("Longform Writing") shouldBe Some(CommandIntent.SaveUiPreset("Longform Writing"))
+    dupeInput.parse("Writing -> My Writing") shouldBe Some(CommandIntent.DuplicateUiPreset("Writing", "My Writing"))
+    renameInput.parse("Draft -> Final") shouldBe Some(CommandIntent.RenameUiPreset("Draft", "Final"))
+    deleteInput.parse("Old Preset") shouldBe Some(CommandIntent.DeleteUiPreset("Old Preset"))
+    resetInput.parse("Writing") shouldBe Some(CommandIntent.ResetUiPreset("Writing"))
     inputs.foreach { item =>
       item.accepts("", 'W') shouldBe true
       item.accepts("Work", ' ') shouldBe true
@@ -691,27 +721,31 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .withActiveCategory(CommandCategory.Settings)
 
     val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
-    val builtInPreset = presetGroup.children
+    val presetPicker = descendants(presetGroup)
       .collectFirst {
-        case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-built-in" => item
+        case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-select" => item
       }
-      .getOrElse(fail("missing built-in preset picker"))
-    val customPreset = presetGroup.children
-      .collectFirst {
-        case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-custom" => item
-      }
-      .getOrElse(fail("missing custom preset picker"))
+      .getOrElse(fail("missing preset picker"))
 
-    builtInPreset.selectedOption shouldBe "Code"
-    customPreset.selectedOption shouldBe "Research Notes"
+    presetPicker.options.map(_.label) shouldBe List(
+      "Writing",
+      "Documentation",
+      "Code",
+      "Review",
+      "Drafting",
+      "Research Notes"
+    )
+    presetPicker.selectedOption shouldBe "Research Notes"
 
-    val inputs = presetGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
-    inputs(1).currentValue shouldBe "Research Notes"
-    inputs(2).currentValue shouldBe "Research Notes"
-    inputs(3).currentValue shouldBe "Research Notes -> "
-    inputs(4).currentValue shouldBe "Research Notes -> "
-    inputs(5).currentValue shouldBe "Research Notes"
-    inputs(6).currentValue shouldBe "Research Notes"
+    val inputs = descendants(presetGroup).collect {
+      case item: CommandSurfaceItem.InputItem if item.id.startsWith("ui-preset-") => item
+    }
+    inputs.find(_.id == "ui-preset-save").map(_.currentValue) shouldBe Some("Research Notes")
+    inputs.find(_.id == "ui-preset-apply").map(_.currentValue) shouldBe Some("Research Notes")
+    inputs.find(_.id == "ui-preset-duplicate").map(_.currentValue) shouldBe Some("Research Notes -> ")
+    inputs.find(_.id == "ui-preset-rename").map(_.currentValue) shouldBe Some("Research Notes -> ")
+    inputs.find(_.id == "ui-preset-delete").map(_.currentValue) shouldBe Some("Research Notes")
+    inputs.find(_.id == "ui-preset-reset").map(_.currentValue) shouldBe Some("Research Notes")
   }
 
   it should "surface font settings groups ahead of command matches when searching font-related terms" in {
