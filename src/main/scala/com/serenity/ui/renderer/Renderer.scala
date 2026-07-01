@@ -218,9 +218,10 @@ object Renderer:
   ): TextLayoutSnapshot =
     val bufferFont   = context.fontForBuffer(buffer)
     val panelWidthPx = contentRect.width * context.cellMetrics.charWidth
+    val renderBuffer = buffer.copy(viewport = LayoutEngine.updateViewportDimensions(buffer.viewport, contentRect))
     context.surface.setFont(bufferFont)
     TextLayoutSnapshot.fromBuffer(
-      buffer,
+      renderBuffer,
       panelWidthPx,
       bufferFont,
       context.surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext()),

@@ -492,19 +492,6 @@ object LayoutEngine:
       topVisualLine = viewport.topVisualLine.min(math.max(0, panelRect.height - 1))
     )
 
-  def updateViewportDimensions(
-    viewport: Viewport,
-    panelRect: LayoutRect,
-    viewportSizing: com.serenity.config.ViewportSizing
-  ): Viewport =
-    val normalizedSizing = viewportSizing.normalized
-    val visibleLines     = normalizedSizing.height.resolve(panelRect.height)
-    viewport.copy(
-      visibleLines = visibleLines,
-      visibleColumns = normalizedSizing.width.resolve(panelRect.width),
-      topVisualLine = viewport.topVisualLine.min(math.max(0, visibleLines - 1))
-    )
-
   def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect, metrics: CellMetrics): Viewport =
     viewport.copy(
       visibleLines = panelRect.height / metrics.lineHeight,
@@ -520,11 +507,11 @@ object LayoutEngine:
         case ((buffers, panes), (paneId, pane)) =>
           val paneRect     = paneLayouts.get(paneId).map(_.paneRect).getOrElse(calculatedLayout.editorPanelRect)
           val contentRect  = paneLayouts.get(paneId).map(_.contentRect).getOrElse(paneRect)
-          val paneViewport = updateViewportDimensions(pane.viewport, contentRect, state.config.viewportSizing)
+          val paneViewport = updateViewportDimensions(pane.viewport, contentRect)
           val nextPanes    = panes + (paneId -> pane.copy(viewport = paneViewport))
           val updatedBuffer = pane.bufferId.flatMap(buffers.get).map { buffer =>
             buffer.id -> buffer
-              .copy(viewport = updateViewportDimensions(buffer.viewport, contentRect, state.config.viewportSizing))
+              .copy(viewport = updateViewportDimensions(buffer.viewport, contentRect))
           }
           val nextBuffers = updatedBuffer.fold(buffers)(buffers + _)
 

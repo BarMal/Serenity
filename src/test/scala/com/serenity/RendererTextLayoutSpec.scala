@@ -353,3 +353,24 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     rowX should be >= 0
     surface.getChar(rowX, 1) shouldBe 'c'
   }
+
+  it should "render unwrapped rows to the pane width when viewport columns are stale" in {
+    val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val content =
+      "0123456789012345678901234567890123456789012345678901234567890123456789"
+    val viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 12, visibleLines = 4)
+    val surface = renderState(
+      content,
+      CursorPosition(0, 65),
+      font,
+      viewport,
+      viewportSize = ViewportSize(80, 10),
+      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+    )
+
+    val renderedRow = surface.getRow(1)
+
+    renderedRow.take(60).trim.length should be >= 60
+    surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor).head.xPx should be >=
+      (60 * CellMetrics.fromFont(font).charWidth)
+  }

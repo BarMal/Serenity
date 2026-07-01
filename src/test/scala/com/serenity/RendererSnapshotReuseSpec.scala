@@ -222,10 +222,13 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       config = AppConfig.default.withLineNumbers(true).withGutter(false).withWordWrap(false)
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+    val layout  = LayoutEngine.calculateLayout(state, viewportSize)
+    val paneContentHeight =
+      LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect.height
 
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
 
-    lineReads.get() shouldBe buffer.viewport.visibleLines
+    lineReads.get() shouldBe math.min(buffer.content.lineCount, paneContentHeight)
   }
 
   it should "render rich text visible lines without materialising the whole rope" in {
@@ -309,8 +312,11 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
         .withMarkdownViewMode(MarkdownViewMode.InlineLens)
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+    val layout  = LayoutEngine.calculateLayout(state, viewportSize)
+    val paneContentHeight =
+      LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect.height
 
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
 
-    lineReads.get() shouldBe buffer.viewport.visibleLines + buffer.content.lineCount
+    lineReads.get() shouldBe math.min(buffer.content.lineCount, paneContentHeight) + buffer.content.lineCount
   }
