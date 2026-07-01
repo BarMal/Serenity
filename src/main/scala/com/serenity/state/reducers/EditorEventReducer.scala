@@ -284,6 +284,34 @@ object EditorEventReducer:
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
+          case MoveWordLeft =>
+            val movementStart   = selectionFocusOrCursor(buffer, cursor)
+            val offset          = lineColumnToOffset(buffer.content, movementStart.line, movementStart.column)
+            val newCursor       = offsetToCursorPosition(buffer.content, previousWordBoundary(buffer.content, offset))
+            val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
+            val updatedBuffer = buffer.copy(
+              cursors = newCursor :: buffer.cursors.tail,
+              selection = None,
+              preferredColumn = Some(newCursor.column),
+              preferredXPx = None,
+              viewport = updatedViewport
+            )
+            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+
+          case MoveWordRight =>
+            val movementStart   = selectionFocusOrCursor(buffer, cursor)
+            val offset          = lineColumnToOffset(buffer.content, movementStart.line, movementStart.column)
+            val newCursor       = offsetToCursorPosition(buffer.content, nextWordBoundary(buffer.content, offset))
+            val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
+            val updatedBuffer = buffer.copy(
+              cursors = newCursor :: buffer.cursors.tail,
+              selection = None,
+              preferredColumn = Some(newCursor.column),
+              preferredXPx = None,
+              viewport = updatedViewport
+            )
+            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+
           case MoveUp =>
             val movementStart         = selectionFocusOrCursor(buffer, cursor)
             val preferredColumn       = buffer.preferredColumn.getOrElse(movementStart.column)

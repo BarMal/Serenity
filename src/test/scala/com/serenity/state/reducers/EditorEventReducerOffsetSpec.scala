@@ -48,6 +48,17 @@ class EditorEventReducerOffsetSpec extends AnyFlatSpec with Matchers:
     reduceTextEvent("cafe\u0301!", CursorPosition(0, 3), MoveRight).cursors shouldBe List(CursorPosition(0, 5))
   }
 
+  it should "move left and right by word boundaries" in {
+    reduceTextEvent("alpha, beta gamma", CursorPosition(0, 17), MoveWordLeft).cursors shouldBe
+      List(CursorPosition(0, 12))
+    reduceTextEvent("alpha, beta gamma", CursorPosition(0, 12), MoveWordLeft).cursors shouldBe
+      List(CursorPosition(0, 7))
+    reduceTextEvent("alpha, beta gamma", CursorPosition(0, 0), MoveWordRight).cursors shouldBe
+      List(CursorPosition(0, 5))
+    reduceTextEvent("alpha, beta gamma", CursorPosition(0, 5), MoveWordRight).cursors shouldBe
+      List(CursorPosition(0, 7))
+  }
+
   it should "delete complete graphemes for backward and forward deletes" in {
     val deleteEmojiBackward = reduceTextEvent("a🙂b", CursorPosition(0, 3), DeleteBackward)
     deleteEmojiBackward.content.collect() shouldBe "ab"
