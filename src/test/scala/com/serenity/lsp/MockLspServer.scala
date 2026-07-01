@@ -1,6 +1,7 @@
 package com.serenity.lsp
 
-import java.io.{PipedInputStream, PipedOutputStream}
+import java.io.{InputStream, OutputStream}
+import java.net.{InetAddress, ServerSocket, Socket}
 
 import cats.effect.std.Queue
 import cats.effect.{IO, Resource}
@@ -12,13 +13,17 @@ import org.typelevel.log4cats.Logger
 
 class MockLspServer private (
     fixtures: Map[String, Json],
+    closeOnMethods: Set[String],
     received: Queue[IO, Json],
     outQueue: Queue[IO, Option[Json]],
-    serverIn: PipedInputStream,
-    serverOut: PipedOutputStream,
+    serverSocket: ServerSocket,
+    serverConnection: Socket,
+    clientSocket: Socket,
+    serverIn: InputStream,
+    serverOut: OutputStream,
     logger: Logger[IO],
-    val clientIn: PipedInputStream,
-    val clientOut: PipedOutputStream
+    val clientIn: InputStream,
+    val clientOut: OutputStream
 ):
 
   def shutdown(): IO[Unit] =
@@ -27,7 +32,10 @@ class MockLspServer private (
       closeQuietly(serverOut) >>
       closeQuietly(clientOut) >>
       closeQuietly(serverIn) >>
-      closeQuietly(clientIn)
+      closeQuietly(clientIn) >>
+      closeQuietly(serverConnection) >>
+      closeQuietly(clientSocket) >>
+      closeQuietly(serverSocket)
 
   def push(notification: Json): IO[Unit] =
     logger
@@ -37,6 +45,12 @@ class MockLspServer private (
       .attempt
       .void >>
       outQueue.offer(Some(notification))
+
+  def writeRaw(bytes: Array[Byte]): IO[Unit] =
+    IO.blocking {
+      serverOut.write(bytes)
+      serverOut.flush()
+    }
 
   def takeReceived: IO[Json] =
     received.take
@@ -82,16 +96,18 @@ class MockLspServer private (
     if hasId && hasMethod then
       val id     = json.hcursor.downField("id").as[Long].getOrElse(0L)
       val method = json.hcursor.downField("method").as[String].getOrElse("")
-      val result = fixtures.getOrElse(method, Json.obj())
-      outQueue.offer(
-        Some(
-          Json.obj(
-            "jsonrpc" -> "2.0".asJson,
-            "id"      -> id.asJson,
-            "result"  -> result
+      if closeOnMethods.contains(method) then closeQuietly(serverOut)
+      else
+        val result = fixtures.getOrElse(method, Json.obj())
+        outQueue.offer(
+          Some(
+            Json.obj(
+              "jsonrpc" -> "2.0".asJson,
+              "id"      -> id.asJson,
+              "result"  -> result
+            )
           )
         )
-      )
     else IO.unit
 
   private def closeQuietly(closeable: AutoCloseable): IO[Unit] =
@@ -99,22 +115,52 @@ class MockLspServer private (
 
 object MockLspServer:
 
-  private val PipeBufferSize = 65536
-
-  def create(fixtures: Map[String, Json], logger: Logger[IO]): IO[MockLspServer] =
+  def create(
+    fixtures: Map[String, Json],
+    logger: Logger[IO],
+    closeOnMethods: Set[String] = Set.empty
+  ): IO[MockLspServer] =
     for
       received <- Queue.unbounded[IO, Json]
       outQueue <- Queue.unbounded[IO, Option[Json]]
+      transport <- IO.blocking {
+        val serverSocket     = new ServerSocket(0, 1, InetAddress.getLoopbackAddress)
+        val clientSocket     = new Socket(InetAddress.getLoopbackAddress, serverSocket.getLocalPort)
+        val serverConnection = serverSocket.accept()
+        (
+          serverSocket,
+          serverConnection,
+          clientSocket,
+          serverConnection.getInputStream,
+          serverConnection.getOutputStream,
+          clientSocket.getInputStream,
+          clientSocket.getOutputStream
+        )
+      }
     yield
-      val serverIn  = new PipedInputStream(PipeBufferSize)
-      val clientOut = new PipedOutputStream(serverIn)
-      val clientIn  = new PipedInputStream(PipeBufferSize)
-      val serverOut = new PipedOutputStream(clientIn)
-      new MockLspServer(fixtures, received, outQueue, serverIn, serverOut, logger, clientIn, clientOut)
+      val (serverSocket, serverConnection, clientSocket, serverIn, serverOut, clientIn, clientOut) = transport
+      new MockLspServer(
+        fixtures,
+        closeOnMethods,
+        received,
+        outQueue,
+        serverSocket,
+        serverConnection,
+        clientSocket,
+        serverIn,
+        serverOut,
+        logger,
+        clientIn,
+        clientOut
+      )
 
-  def resource(fixtures: Map[String, Json], logger: Logger[IO]): Resource[IO, MockLspServer] =
+  def resource(
+    fixtures: Map[String, Json],
+    logger: Logger[IO],
+    closeOnMethods: Set[String] = Set.empty
+  ): Resource[IO, MockLspServer] =
     for
-      server <- Resource.eval(create(fixtures, logger))
+      server <- Resource.eval(create(fixtures, logger, closeOnMethods))
       _ <- Resource.make {
         for
           writerFiber <- server.writerLoop.start

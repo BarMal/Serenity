@@ -140,9 +140,10 @@ object LspConnection:
           readerFiber <- readInputStream(IO.pure(in), 8192)
             .through(LspFramer.decode)
             .evalMap(conn.handleIncomingJson)
+            .handleErrorWith(error => Stream.eval(logger.warn(error)("[LSP] reader stopped")))
             .compile
             .drain
-            .guarantee(conn.completeNotifications)
+            .guarantee(conn.closeQueues)
             .start
         yield ConnectionFibers(writer = writerFiber, reader = readerFiber)
       } {
