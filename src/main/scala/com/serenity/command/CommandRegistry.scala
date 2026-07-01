@@ -42,9 +42,9 @@ class CommandRegistry(private val commands: List[Command]):
     val optionItems =
       if category == CommandCategory.Settings then
         List(
-          CommandRunner.animationOptionItem(optionSelections),
-          CommandRunner.cursorModeOptionItem(optionSelections),
-          CommandRunner.backgroundStyleOptionItem(optionSelections)
+          CommandRunnerSettingsItems.animationOptionItem(optionSelections),
+          CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections),
+          CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
         )
       else Nil
 
@@ -57,9 +57,9 @@ class CommandRegistry(private val commands: List[Command]):
   ): List[CommandSurfaceItem] =
     val commandItems = searchCommands(term, maxResults).map(CommandItem(_))
     val optionItems = List(
-      CommandRunner.animationOptionItem(optionSelections),
-      CommandRunner.cursorModeOptionItem(optionSelections),
-      CommandRunner.backgroundStyleOptionItem(optionSelections)
+      CommandRunnerSettingsItems.animationOptionItem(optionSelections),
+      CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections),
+      CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
     ).filter { item =>
       val lowerTerm = term.toLowerCase
       lowerTerm.isEmpty || item.searchText.toLowerCase.contains(lowerTerm)

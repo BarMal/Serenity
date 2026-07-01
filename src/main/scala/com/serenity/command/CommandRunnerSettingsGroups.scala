@@ -12,35 +12,35 @@ object CommandRunnerSettingsGroups:
     uiPresetPreviews: List[UiPreset.Preview],
     editingPresetName: Option[String]
   ): List[CommandSurfaceItem.GroupItem] =
-    val animationItem        = CommandRunner.animationOptionItem(optionSelections)
-    val cursorModeItem       = CommandRunner.cursorModeOptionItem(optionSelections)
-    val cursorInfoBarItem    = CommandRunner.cursorInfoBarOptionItem(optionSelections)
-    val cursorInfoPlacement  = CommandRunner.cursorInfoBarPlacementOptionItem(optionSelections)
-    val backgroundStyleItem  = CommandRunner.backgroundStyleOptionItem(optionSelections)
-    val interfaceDensityItem = CommandRunner.interfaceDensityOptionItem(optionSelections)
-    val materialPresetItem   = CommandRunner.materialPresetOptionItem(optionSelections)
-    val motionPresetItem     = CommandRunner.motionPresetOptionItem(optionSelections)
-    val commandRunnerFade    = CommandRunner.commandRunnerFadeOptionItem(optionSelections)
-    val editorTextItem       = CommandRunner.editorTextTransitionOptionItem(optionSelections)
-    val markdownViewItem     = CommandRunner.markdownViewOptionItem(optionSelections)
-    val defaultDocumentItem  = CommandRunner.defaultDocumentModeOptionItem(optionSelections)
-    val spellCheckItem       = CommandRunner.spellCheckOptionItem(optionSelections)
-    val textScaleModeItem    = CommandRunner.textScaleModeOptionItem(optionSelections)
-    val lineNumbersItem      = CommandRunner.lineNumbersOptionItem(optionSelections)
-    val gutterItem           = CommandRunner.gutterOptionItem(optionSelections)
-    val lineWrapItem         = CommandRunner.lineWrapOptionItem(optionSelections)
+    val animationItem        = CommandRunnerSettingsItems.animationOptionItem(optionSelections)
+    val cursorModeItem       = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
+    val cursorInfoBarItem    = CommandRunnerSettingsItems.cursorInfoBarOptionItem(optionSelections)
+    val cursorInfoPlacement  = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
+    val backgroundStyleItem  = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
+    val interfaceDensityItem = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
+    val materialPresetItem   = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
+    val motionPresetItem     = CommandRunnerSettingsItems.motionPresetOptionItem(optionSelections)
+    val commandRunnerFade    = CommandRunnerSettingsItems.commandRunnerFadeOptionItem(optionSelections)
+    val editorTextItem       = CommandRunnerSettingsItems.editorTextTransitionOptionItem(optionSelections)
+    val markdownViewItem     = CommandRunnerSettingsItems.markdownViewOptionItem(optionSelections)
+    val defaultDocumentItem  = CommandRunnerSettingsItems.defaultDocumentModeOptionItem(optionSelections)
+    val spellCheckItem       = CommandRunnerSettingsItems.spellCheckOptionItem(optionSelections)
+    val textScaleModeItem    = CommandRunnerSettingsItems.textScaleModeOptionItem(optionSelections)
+    val lineNumbersItem      = CommandRunnerSettingsItems.lineNumbersOptionItem(optionSelections)
+    val gutterItem           = CommandRunnerSettingsItems.gutterOptionItem(optionSelections)
+    val lineWrapItem         = CommandRunnerSettingsItems.lineWrapOptionItem(optionSelections)
     val keymapItems          = inputItems.filter(_.id.startsWith("keymap-"))
     val workspaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-workspace-layout",
       label = "Panels & Workspace",
-      children = CommandRunner.workspaceLayoutItems(optionSelections),
+      children = CommandRunnerSettingsItems.workspaceLayoutItems(optionSelections),
       category = CommandCategory.Settings,
       hint = Some("Pin, focus, expand, and unpin panels")
     )
     val navigationGroup = CommandSurfaceItem.GroupItem(
       id = "settings-navigation",
       label = "Navigation",
-      children = inputItems.filter(_.id == "document-comment") ++ CommandRunner.navigationItems,
+      children = inputItems.filter(_.id == "document-comment") ++ CommandRunnerSettingsItems.navigationItems,
       category = CommandCategory.Settings,
       hint = Some("Comments, bookmarks, headings, history")
     )
@@ -102,8 +102,8 @@ object CommandRunnerSettingsGroups:
       id = "settings-code-font",
       label = "Code Font",
       children = List(
-        CommandRunner.codeFontGroupItem(optionSelections),
-        CommandRunner.codeLigaturesOptionItem(optionSelections)
+        CommandRunnerSettingsItems.codeFontGroupItem(optionSelections),
+        CommandRunnerSettingsItems.codeLigaturesOptionItem(optionSelections)
       ) ++ inputItems.filter(_.id == "code-font-size"),
       category = CommandCategory.Settings,
       hint = Some("Family, size, ligatures")
@@ -112,8 +112,8 @@ object CommandRunnerSettingsGroups:
       id = "settings-prose-font",
       label = "Prose Font",
       children = List(
-        CommandRunner.textFontGroupItem(optionSelections),
-        CommandRunner.textLigaturesOptionItem(optionSelections)
+        CommandRunnerSettingsItems.textFontGroupItem(optionSelections),
+        CommandRunnerSettingsItems.textLigaturesOptionItem(optionSelections)
       ) ++ inputItems.filter(_.id == "text-font-size"),
       category = CommandCategory.Settings,
       hint = Some("Family, size, ligatures")
@@ -129,8 +129,8 @@ object CommandRunnerSettingsGroups:
       id = "settings-ui-font",
       label = "UI Font",
       children = List(
-        CommandRunner.uiFontGroupItem(optionSelections),
-        CommandRunner.uiLigaturesOptionItem(optionSelections)
+        CommandRunnerSettingsItems.uiFontGroupItem(optionSelections),
+        CommandRunnerSettingsItems.uiLigaturesOptionItem(optionSelections)
       ) ++ inputItems.filter(_.id == "ui-font-size"),
       category = CommandCategory.Settings,
       hint = Some("Family, size, ligatures")
@@ -152,7 +152,7 @@ object CommandRunnerSettingsGroups:
     val languageGroup = CommandSurfaceItem.GroupItem(
       id = "settings-language",
       label = "Language",
-      children = CommandRunner.languageItems :+ defaultDocumentItem,
+      children = CommandRunnerSettingsItems.languageItems :+ defaultDocumentItem,
       category = CommandCategory.Settings,
       hint = Some("Set new document defaults and current buffer language")
     )
@@ -243,7 +243,7 @@ object CommandRunnerSettingsGroups:
     val presetThemeGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-theme",
       label = "Theme",
-      children = CommandRunner.themeItems,
+      children = CommandRunnerSettingsItems.themeItems,
       category = CommandCategory.Settings,
       hint = Some("Choose, toggle, or reload themes")
     )
@@ -252,7 +252,7 @@ object CommandRunnerSettingsGroups:
     val selectPresetGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-select",
       label = "Select Preset",
-      children = List(CommandRunner.uiPresetSelectOptionItem(uiPresetPreviews, optionSelections)),
+      children = List(CommandRunnerSettingsItems.uiPresetSelectOptionItem(uiPresetPreviews, optionSelections)),
       category = CommandCategory.Settings,
       hint = Some("Browse available presets")
     )
