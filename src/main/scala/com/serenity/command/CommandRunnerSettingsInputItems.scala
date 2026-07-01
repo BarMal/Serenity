@@ -270,8 +270,9 @@ object CommandRunnerSettingsInputItems:
       ),
       CommandSurfaceItem.InputItem(
         id = "command-runner-visible-rows",
-        label = "Command Rows",
-        hint = s"Rows (${AppConfig.MinCommandRunnerVisibleRows}-${AppConfig.MaxCommandRunnerVisibleRows}) or auto",
+        label = "Visible Commands",
+        hint =
+          s"Command rows (${AppConfig.MinCommandRunnerVisibleRows}-${AppConfig.MaxCommandRunnerVisibleRows}) or auto",
         currentValue = commandRowsValue,
         isDecimal = false,
         parse = text =>
