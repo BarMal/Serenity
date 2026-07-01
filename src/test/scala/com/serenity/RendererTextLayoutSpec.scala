@@ -342,10 +342,11 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val font     = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val viewport = Viewport(topLine = 0, leftColumn = 2, visibleColumns = 10, visibleLines = 4)
     val surface = renderState(
-      "abcdef",
+      "abcdefgh",
       CursorPosition(0, 6),
       font,
       viewport,
+      viewportSize = ViewportSize(5, 5),
       config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
     )
     val rowX = firstNonSpaceColumn(surface, 1)
@@ -373,4 +374,23 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     renderedRow.take(60).trim.length should be >= 60
     surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor).head.xPx should be >=
       (60 * CellMetrics.fromFont(font).charWidth)
+  }
+
+  it should "clamp stale horizontal scroll when the pane is wider than the stored viewport" in {
+    val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val content =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    val viewport = Viewport(topLine = 0, leftColumn = 80, visibleColumns = 12, visibleLines = 4)
+    val surface = renderState(
+      content,
+      CursorPosition(0, 90),
+      font,
+      viewport,
+      viewportSize = ViewportSize(80, 10),
+      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+    )
+
+    val rowX = firstNonSpaceColumn(surface, 1)
+
+    surface.getRow(1).slice(rowX, rowX + 4) shouldBe "LMNO"
   }

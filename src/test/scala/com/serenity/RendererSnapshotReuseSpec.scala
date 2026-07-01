@@ -228,7 +228,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
 
-    lineReads.get() shouldBe math.min(buffer.content.lineCount, paneContentHeight)
+    lineReads.get() shouldBe math.min(buffer.content.lineCount, paneContentHeight) + 1
   }
 
   it should "render rich text visible lines without materialising the whole rope" in {
@@ -318,5 +318,5 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
 
-    lineReads.get() shouldBe math.min(buffer.content.lineCount, paneContentHeight) + buffer.content.lineCount
+    lineReads.get() shouldBe math.min(buffer.content.lineCount, paneContentHeight) + buffer.content.lineCount + 1
   }

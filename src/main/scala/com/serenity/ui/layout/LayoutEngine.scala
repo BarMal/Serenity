@@ -492,6 +492,24 @@ object LayoutEngine:
       topVisualLine = viewport.topVisualLine.min(math.max(0, panelRect.height - 1))
     )
 
+  def updateBufferViewportDimensions(buffer: Buffer, panelRect: LayoutRect, wordWrapEnabled: Boolean): Viewport =
+    val resizedViewport = updateViewportDimensions(buffer.viewport, panelRect)
+    val clampedLeftColumn =
+      if wordWrapEnabled then 0
+      else clampLeftColumnForBuffer(buffer, resizedViewport)
+
+    resizedViewport.copy(leftColumn = clampedLeftColumn)
+
+  private def clampLeftColumnForBuffer(buffer: Buffer, viewport: Viewport): Int =
+    val visibleColumns = math.max(1, viewport.visibleColumns)
+    val cursor         = buffer.cursors.headOption.getOrElse(CursorPosition(viewport.topLine, 0))
+    val cursorColumn   = cursor.column.max(0)
+    val lineLength     = buffer.content.getLine(cursor.line).map(_.length).getOrElse(cursorColumn)
+    val maxForCursor   = math.max(0, cursorColumn - visibleColumns + 1)
+    val maxForLine     = math.max(0, lineLength - visibleColumns)
+
+    viewport.leftColumn.max(0).min(maxForCursor).min(maxForLine)
+
   def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect, metrics: CellMetrics): Viewport =
     viewport.copy(
       visibleLines = panelRect.height / metrics.lineHeight,
@@ -511,7 +529,7 @@ object LayoutEngine:
           val nextPanes    = panes + (paneId -> pane.copy(viewport = paneViewport))
           val updatedBuffer = pane.bufferId.flatMap(buffers.get).map { buffer =>
             buffer.id -> buffer
-              .copy(viewport = updateViewportDimensions(buffer.viewport, contentRect))
+              .copy(viewport = updateBufferViewportDimensions(buffer, contentRect, state.config.wordWrapEnabled))
           }
           val nextBuffers = updatedBuffer.fold(buffers)(buffers + _)
 
