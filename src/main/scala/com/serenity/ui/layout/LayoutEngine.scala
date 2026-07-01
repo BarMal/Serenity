@@ -32,15 +32,17 @@ object LayoutManager:
 
   def calculateLayout(
     state: AppState,
-    viewportSize: ViewportSize
-  ): Unit = ()
+    viewportSize: ViewportSize,
+    spacerPercentage: Double = LayoutEngine.DefaultSpacerPercentage
+  ): CalculatedLayout =
+    LayoutEngine.calculateLayout(state, viewportSize, spacerPercentage)
 
 object LayoutEngine:
 
   // Default spacer width as percentage of terminal width (15% each side = 30% total)
-  private val DefaultSpacerPercentage   = 0.15
-  private val MinimumVerticalPaneHeight = 5
-  private val CommandSurfaceChromeRows  = 4
+  private[layout] val DefaultSpacerPercentage = 0.15
+  private val MinimumVerticalPaneHeight       = 5
+  private val CommandSurfaceChromeRows        = 4
 
   def calculateLayout(
     state: AppState,
