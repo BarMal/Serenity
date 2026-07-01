@@ -1,6 +1,7 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.TextAreaInsets
 import com.serenity.keystroke.events.{MouseDrag, ResizeEvent}
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -11,6 +12,11 @@ class TextAreaResizeSpec extends AnyFlatSpec with Matchers with StateManagerTest
   "Text area resizing" should "update the left text area inset from mouse drags without resizing side panels" in {
     val stateManager = createStateManager("TextAreaResizeSpec")
 
+    stateManager
+      .updateState(state =>
+        state.copy(config = state.config.withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.0)))
+      )
+      .unsafeRunSync()
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 10).unsafeRunSync()
     stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 20).unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()

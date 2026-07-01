@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.TextAreaInsets
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
@@ -95,7 +96,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
     // Click at (18, 3): bufferLine = topLine(0) + (3-1) = 2, bufferCol = leftCol(0) + (18-15) = 3
-    sm.applyEvent(MouseClick(18, 3)).unsafeRunSync()
+    sm.applyEvent(MouseClick(6, 3)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
     buffer.cursors.headOption.map(_.line) shouldBe Some(2)
@@ -117,7 +118,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
     // Click at (15, 1): first cell of content area → bufferLine=0, bufferCol=0
-    sm.applyEvent(MouseClick(15, 1)).unsafeRunSync()
+    sm.applyEvent(MouseClick(3, 1)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
     buffer.cursors.headOption.map(_.line) shouldBe Some(0)
@@ -292,7 +293,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    sm.applyEvent(MouseMove(18, 2)).unsafeRunSync()
+    sm.applyEvent(MouseMove(6, 2)).unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().hoveredEditorTarget shouldBe Some(
       HoveredEditorTarget(PaneId(0), bufferId, CursorPosition(1, 3))
@@ -305,8 +306,8 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    sm.applyEvent(MouseMove(18, 2)).unsafeRunSync()
-    sm.applyEvent(MouseMove(5, 5)).unsafeRunSync()
+    sm.applyEvent(MouseMove(6, 2)).unsafeRunSync()
+    sm.applyEvent(MouseMove(0, 23)).unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().hoveredEditorTarget shouldBe None
   }
@@ -330,6 +331,8 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello").unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState(state => state.copy(config = state.config.withTextAreaInsets(TextAreaInsets(0.15, 0.15))))
+      .unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
     val initialCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.headOption

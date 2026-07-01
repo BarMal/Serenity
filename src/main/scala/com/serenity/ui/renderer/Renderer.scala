@@ -352,8 +352,7 @@ object Renderer:
     LayoutRect(left, y, math.max(1, right - left), 1)
 
   private def activeBufferTitleRect(y: Int, layout: CalculatedLayout): LayoutRect =
-    if layout.lineNumberRect.isDefined then layout.editorPanelRect.copy(y = y, height = 1)
-    else activeBufferHeaderRect(y, layout)
+    activeBufferHeaderRect(y, layout)
 
   private def renderBufferContent(
     buffer: Buffer,

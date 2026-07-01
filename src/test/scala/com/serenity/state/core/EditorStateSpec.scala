@@ -106,7 +106,7 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
   }
 
   "EditorState.closeFocusedTab" should "keep a single pane and focus the remaining buffer when other tabs exist" in {
-    val constrainedViewport = ViewportSize(120, 24)
+    val constrainedViewport = ViewportSize(80, 24)
     val withThreeBuffers = EditorState.openNewTab(
       EditorState.openNewTab(AppState.initial.copy(viewportSize = Some(constrainedViewport)))
     )

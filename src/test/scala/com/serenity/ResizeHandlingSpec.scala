@@ -41,7 +41,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val initialState  = stateManager.getCurrentState.unsafeRunSync()
     val initialLayout = LayoutEngine.calculateLayout(initialState, ViewportSize(80, 24))
 
-    initialLayout.editorPanelRect.width shouldBe 53
+    initialLayout.editorPanelRect.width shouldBe 77
     initialLayout.editorPanelRect.height shouldBe 23
 
     // Apply resize event
@@ -53,13 +53,19 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     val newLayout    = LayoutEngine.calculateLayout(updatedState, newSize)
 
-    newLayout.editorPanelRect.width shouldBe 81
+    newLayout.editorPanelRect.width shouldBe 117
     newLayout.editorPanelRect.height shouldBe 39
 
     updatedState.buffers.get(bufferId) match
       case Some(buffer) =>
-        buffer.viewport.visibleLines.shouldBe(newLayout.editorPanelRect.height)
-        buffer.viewport.visibleColumns.shouldBe(newLayout.editorPanelRect.width)
+        val paneId = updatedState.layout.editorPanes
+          .collectFirst {
+            case (paneId, pane) if pane.bufferId.contains(bufferId) => paneId
+          }
+          .getOrElse(fail("No pane found for buffer"))
+        val paneRect = LayoutEngine.calculatePaneLayouts(updatedState, newLayout)(paneId)
+        buffer.viewport.visibleLines.shouldBe(paneRect.height)
+        buffer.viewport.visibleColumns.shouldBe(paneRect.width)
       case None => fail("No buffer found in state")
   }
 
@@ -186,7 +192,13 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     state2.buffers.get(bufferId) match
       case Some(buffer) =>
-        buffer.viewport.visibleColumns.shouldBe(layout2.editorPanelRect.width)
+        val paneId = state2.layout.editorPanes
+          .collectFirst {
+            case (paneId, pane) if pane.bufferId.contains(bufferId) => paneId
+          }
+          .getOrElse(fail("No pane found for buffer"))
+        val paneRect = LayoutEngine.calculatePaneLayouts(state2, layout2)(paneId)
+        buffer.viewport.visibleColumns.shouldBe(paneRect.width)
       case None => fail("No buffer found in state")
   }
 

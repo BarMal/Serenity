@@ -120,7 +120,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     ) shouldBe true
   }
 
-  it should "keep command runner placement stable across editor cursor positions" in {
+  it should "place the command runner below the editor cursor when there is room" in {
     val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
@@ -161,9 +161,9 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val (topOverlay, topContentRect)     = overlayFor(CursorPosition(0, 0))
     val (lowerOverlay, lowerContentRect) = overlayFor(CursorPosition(20, 0))
 
-    topOverlay.y shouldBe topContentRect.y
-    lowerOverlay.y shouldBe lowerContentRect.y
-    lowerOverlay.y shouldBe topOverlay.y
+    topOverlay.y shouldBe topContentRect.y + 1
+    lowerOverlay.y shouldBe lowerContentRect.y + 21
+    lowerOverlay.y should be > topOverlay.y
     lowerOverlay.x shouldBe lowerContentRect.x
   }
 

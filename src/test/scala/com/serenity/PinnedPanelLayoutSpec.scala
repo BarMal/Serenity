@@ -100,7 +100,7 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     layout.pinnedPanelRects(PanelPosition.Left) shouldBe LayoutRect(0, 0, 24, 30)
     layout.pinnedSurfaceRects(SurfaceId("left-one")) shouldBe LayoutRect(0, 0, 24, 15)
     layout.pinnedSurfaceRects(SurfaceId("left-two")) shouldBe LayoutRect(0, 15, 24, 15)
-    layout.editorPanelRect.x shouldBe 38
+    layout.editorPanelRect.x shouldBe 27
   }
 
   it should "split same-side top and bottom panels into per-surface rects" in {

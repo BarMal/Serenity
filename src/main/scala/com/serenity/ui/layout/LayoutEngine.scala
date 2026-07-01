@@ -39,8 +39,7 @@ object LayoutManager:
 
 object LayoutEngine:
 
-  // Default spacer width as percentage of terminal width (15% each side = 30% total)
-  private[layout] val DefaultSpacerPercentage = 0.15
+  private[layout] val DefaultSpacerPercentage = 0.0
   private val MinimumVerticalPaneHeight       = 5
   private val EditorPaneHeaderHeight          = 1
   private val CommandSurfaceChromeRows        = 4
@@ -90,14 +89,7 @@ object LayoutEngine:
       math.max(1, contentHeight - topPinnedHeight - bottomPinnedHeight - topGap - bottomGap)
 
     val textAreaInsets =
-      if spacerPercentage == DefaultSpacerPercentage then
-        val configuredInsets = state.config.textAreaInsets.normalized
-        if configuredInsets == TextAreaInsets() then
-          TextAreaInsets(
-            densityAwareSpacerPercentage(spacerPercentage, densityMetrics),
-            densityAwareSpacerPercentage(spacerPercentage, densityMetrics)
-          ).normalized
-        else configuredInsets
+      if spacerPercentage == DefaultSpacerPercentage then state.config.textAreaInsets.normalized
       else TextAreaInsets(spacerPercentage, spacerPercentage).normalized
     val leftSpacerWidth  = (workspaceWidth * textAreaInsets.left).toInt
     val rightSpacerWidth = (workspaceWidth * textAreaInsets.right).toInt
@@ -301,51 +293,35 @@ object LayoutEngine:
     val preferredHeight = calculateFloatingSurfaceHeight(surface.content, contentRect.height, state)
     val finalHeight     = forcedHeight.getOrElse(preferredHeight)
 
-    if isCommandSurfaceContent(surface.content) then
-      Some(
-        LayoutRect(
-          x = contentRect.x,
-          y = topYOverride.getOrElse(contentRect.y),
-          width = preferredWidth,
-          height = finalHeight
-        )
+    for
+      anchor <- surfaceAnchor(surface).orElse(state.activeCursorPosition)
+      screenPosition <- CursorLayout.calculateScreenPosition(
+        anchor,
+        buffer.content,
+        paneRect,
+        buffer.viewport
       )
-    else
-      for
-        anchor <- surfaceAnchor(surface).orElse(state.activeCursorPosition)
-        screenPosition <- CursorLayout.calculateScreenPosition(
-          anchor,
-          buffer.content,
-          paneRect,
-          buffer.viewport
-        )
-      yield
-        val overlayX = math.max(
-          contentRect.x,
-          math.min(screenPosition.x - (preferredWidth / 2), contentRect.right - preferredWidth)
-        )
-        val overlayY = topYOverride.getOrElse(surface.presentation match
-          case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) =>
-            math.max(contentRect.y, screenPosition.y - preferredHeight)
-          case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) =>
-            val preferredBelowY = screenPosition.y + 1
-            if preferredBelowY + preferredHeight <= contentRect.bottom then preferredBelowY
-            else math.max(contentRect.y, screenPosition.y - preferredHeight)
-          case _ =>
-            contentRect.y)
+    yield
+      val overlayX = math.max(
+        contentRect.x,
+        math.min(screenPosition.x - (preferredWidth / 2), contentRect.right - preferredWidth)
+      )
+      val overlayY = topYOverride.getOrElse(surface.presentation match
+        case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) =>
+          math.max(contentRect.y, screenPosition.y - preferredHeight)
+        case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) =>
+          val preferredBelowY = screenPosition.y + 1
+          if preferredBelowY + preferredHeight <= contentRect.bottom then preferredBelowY
+          else math.max(contentRect.y, screenPosition.y - preferredHeight)
+        case _ =>
+          contentRect.y)
 
-        LayoutRect(
-          x = overlayX,
-          y = overlayY,
-          width = preferredWidth,
-          height = finalHeight
-        )
-
-  private def isCommandSurfaceContent(content: SurfaceContent): Boolean =
-    content match
-      case SurfaceContent.CommandPalette(_)              => true
-      case SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
-      case _                                             => false
+      LayoutRect(
+        x = overlayX,
+        y = overlayY,
+        width = preferredWidth,
+        height = finalHeight
+      )
 
   private case class BelowOverlayLayout(
       stack: List[(SurfaceId, LayoutRect)],
@@ -483,13 +459,6 @@ object LayoutEngine:
         cachedRect.height
 
     math.max(3, math.min(maxHeight, preferredHeight))
-
-  private def densityAwareSpacerPercentage(
-    spacerPercentage: Double,
-    densityMetrics: InterfaceDensityMetrics
-  ): Double =
-    if spacerPercentage == DefaultSpacerPercentage then densityMetrics.editorSpacerPercentage
-    else spacerPercentage
 
   private def surfaceAnchor(surface: UiSurface): Option[CursorPosition] =
     surface.presentation match
