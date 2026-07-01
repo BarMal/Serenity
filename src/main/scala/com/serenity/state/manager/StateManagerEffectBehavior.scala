@@ -921,11 +921,11 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
                 previewedGroupId = Some("settings-ui-presets"),
                 activeSubmenu = Some(
                   CommandRunnerSubmenuState(
-                    groupId = "ui-preset-configure",
+                    groupId = "settings-preset-edit",
                     parentGroupId = Some("settings-ui-presets")
                   )
                 ),
-                submenuSelections = runner.submenuSelections + ("settings-ui-presets" -> 1),
+                submenuSelections = runner.submenuSelections + ("settings-ui-presets" -> 2),
                 editingItemId = None,
                 editingText = "",
                 editingPresetName = Some(name.trim),
@@ -935,7 +935,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
                 id = CommandRunnerSubmenuSurfaceId,
                 content = SurfaceContent.CommandPaletteSubmenu(
                   updatedRunner,
-                  "ui-preset-configure",
+                  "settings-preset-edit",
                   previewOnly = false
                 ),
                 presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)

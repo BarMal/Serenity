@@ -282,34 +282,75 @@ case class CommandRunner(
       inputItems.filter(_.id.startsWith("ui-preset-")).map(withPresetInputContext(_, editingPreset))
     val createPresetItems    = presetInputItems.filter(_.id == "ui-preset-create")
     val remainingPresetItems = presetInputItems.filterNot(_.id == "ui-preset-create")
-    val presetIdentityGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-identity",
-      label = "Preset Identity",
+    val presetNameGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-name",
+      label = "Name",
       children = remainingPresetItems,
       category = CommandCategory.Settings,
       hint = Some("Save, apply, duplicate, rename, delete, reset")
     )
-    val presetOptionsGroup = CommandSurfaceItem.GroupItem(
-      id = "ui-preset-configure",
-      label = editingPreset.fold("Preset Options")(name => s"Preset Options: $name"),
-      children = List(
-        presetIdentityGroup,
-        workspaceLayoutGroup,
-        documentWritingGroup,
-        editorViewGroup,
-        typographyGroup,
-        appearanceMotionGroup
-      ),
+    val createPresetNameGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-create-name",
+      label = "Name",
+      children = createPresetItems,
+      category = CommandCategory.Settings,
+      hint = Some("Name and save the current workspace")
+    )
+    val activePanelsGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-active-panels",
+      label = "Active Panels",
+      children = workspaceLayoutGroup.children,
+      category = CommandCategory.Settings,
+      hint = Some("Choose pinned panels and panel actions")
+    )
+    val presetAnimationsGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-animations",
+      label = "Animations",
+      children = List(cursorGroup, materialMotionGroup, animationGroup),
+      category = CommandCategory.Settings,
+      hint = Some("Cursor, text entry, and UI motion")
+    )
+    val presetFontsGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-fonts",
+      label = "Fonts",
+      children = List(proseFontGroup, codeFontGroup, uiFontGroup),
+      category = CommandCategory.Settings,
+      hint = Some("Text entry, code, and UI fonts")
+    )
+    val presetThemeGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-theme",
+      label = "Theme",
+      children = CommandRunner.themeItems,
+      category = CommandCategory.Settings,
+      hint = Some("Choose, toggle, or reload themes")
+    )
+    val presetEditingSections =
+      List(activePanelsGroup, presetAnimationsGroup, presetFontsGroup, presetThemeGroup)
+    val selectPresetGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-select",
+      label = "Select Preset",
+      children = List(CommandRunner.uiPresetSelectOptionItem(uiPresetPreviews, optionSelections)),
+      category = CommandCategory.Settings,
+      hint = Some("Browse available presets")
+    )
+    val createPresetGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-create",
+      label = "Create New Preset",
+      children = createPresetNameGroup :: presetEditingSections,
+      category = CommandCategory.Settings,
+      hint = Some("Start from current workspace settings")
+    )
+    val editPresetGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-edit",
+      label = editingPreset.fold("Edit Preset")(name => s"Edit Preset: $name"),
+      children = presetNameGroup :: presetEditingSections,
       category = CommandCategory.Settings,
       hint = Some(editingPreset.fold("Document, layout, typography, motion")(name => s"Editing $name"))
     )
     val uiPresetsGroup = CommandSurfaceItem.GroupItem(
       id = "settings-ui-presets",
       label = "UI Presets",
-      children = createPresetItems ++
-        List(presetOptionsGroup, CommandRunner.builtInUiPresetOptionItem(optionSelections)) ++
-        CommandRunner.customUiPresetOptionItem(uiPresetPreviews, optionSelections).toList ++
-        remainingPresetItems,
+      children = List(selectPresetGroup, createPresetGroup, editPresetGroup),
       category = CommandCategory.Settings,
       hint = Some("Save or apply named layouts")
     )
@@ -334,8 +375,10 @@ case class CommandRunner(
       case Some(group: CommandSurfaceItem.GroupItem) =>
         val rememberedIndex = submenuSelections.getOrElse(group.id, 0)
         val editContext =
-          if group.id == "ui-preset-configure" then presetEditContextName
-          else editingPresetName
+          group.id match
+            case "settings-preset-edit"   => presetEditContextName
+            case "settings-preset-create" => None
+            case _                        => editingPresetName
         copy(
           previewedGroupId = Some(group.id),
           activeSubmenu = Some(CommandRunnerSubmenuState(group.id, selectedIndex = rememberedIndex)),
@@ -909,43 +952,64 @@ object CommandRunner:
       hint = Some("None, subtle, or full")
     )
 
-  private[command] def builtInUiPresetOptionItem(
+  private[command] def uiPresetSelectOptionItem(
+    previews: List[UiPreset.Preview],
     optionSelections: Map[String, Int] = Map.empty
   ): CommandSurfaceItem.OptionItem =
-    val options = UiPreset.builtIns.map { preset =>
+    val builtInOptions = UiPreset.builtIns.map { preset =>
       val preview = UiPreset.Preview.fromPreset(preset)
       CommandOption(preview.name, CommandIntent.ApplyUiPreset(preview.name), hint = Some(preview.hint))
     }
+    val customOptions = normalizedUiPresetPreviews(previews).map { preview =>
+      CommandOption(preview.name, CommandIntent.ApplyUiPreset(preview.name), hint = Some(preview.hint))
+    }
+    val options = builtInOptions ++ customOptions
+    val selectedIndex =
+      optionSelections
+        .get("ui-preset-custom")
+        .filter(_ => customOptions.nonEmpty)
+        .map(index => builtInOptions.size + boundedOptionIndex(index, customOptions))
+        .getOrElse(boundedOptionIndex(optionSelections.getOrElse("ui-preset-built-in", 0), builtInOptions))
+
     CommandSurfaceItem.OptionItem(
-      id = "ui-preset-built-in",
-      label = "Built-In Preset",
+      id = "ui-preset-select",
+      label = "Select Preset",
       options = options,
-      selectedIndex = boundedOptionIndex(optionSelections.getOrElse("ui-preset-built-in", 0), options),
+      selectedIndex = boundedOptionIndex(selectedIndex, options),
       category = CommandCategory.Settings,
-      hint = Some("Writing, docs, code, review")
+      hint = Some("Built-in and saved presets")
     )
 
-  private[command] def customUiPresetOptionItem(
-    previews: List[UiPreset.Preview],
-    optionSelections: Map[String, Int] = Map.empty
-  ): Option[CommandSurfaceItem.OptionItem] =
-    normalizedUiPresetPreviews(previews) match
-      case Nil =>
-        None
-      case normalizedPreviews =>
-        val options = normalizedPreviews.map(preview =>
-          CommandOption(preview.name, CommandIntent.ApplyUiPreset(preview.name), hint = Some(preview.hint))
+  private[command] val themeItems: List[CommandSurfaceItem] =
+    List(
+      CommandSurfaceItem.CommandItem(
+        Command.typed(
+          "theme-chooser",
+          "Choose a theme with live preview.",
+          CommandIntent.OpenThemeChooser,
+          CommandCategory.Settings,
+          label = "Theme Chooser"
         )
-        Some(
-          CommandSurfaceItem.OptionItem(
-            id = "ui-preset-custom",
-            label = "Custom Presets",
-            options = options,
-            selectedIndex = boundedOptionIndex(optionSelections.getOrElse("ui-preset-custom", 0), options),
-            category = CommandCategory.Settings,
-            hint = Some("Saved workspace setups")
-          )
+      ),
+      CommandSurfaceItem.CommandItem(
+        Command.typed(
+          "toggle-theme",
+          "Switch between the light and dark themes.",
+          CommandIntent.ToggleTheme,
+          CommandCategory.Settings,
+          label = "Toggle Theme"
         )
+      ),
+      CommandSurfaceItem.CommandItem(
+        Command.typed(
+          "reload-theme",
+          "Reload the current theme configuration.",
+          CommandIntent.ReloadTheme,
+          CommandCategory.Settings,
+          label = "Reload Theme"
+        )
+      )
+    )
 
   private[command] def workspaceLayoutItems(optionSelections: Map[String, Int]): List[CommandSurfaceItem] =
     val panelPinItems = List(

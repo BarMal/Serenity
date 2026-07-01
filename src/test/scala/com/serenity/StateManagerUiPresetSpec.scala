@@ -5,7 +5,7 @@ import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
-import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.lsp.config.LanguageId
@@ -39,6 +39,12 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         onPreferredWindowSizeChanged = onWindowSizeChanged
       )
       .unsafeRunSync()
+
+  private def descendants(group: CommandSurfaceItem.GroupItem): List[CommandSurfaceItem] =
+    group.children.flatMap {
+      case child: CommandSurfaceItem.GroupItem => child :: descendants(child)
+      case child                               => List(child)
+    }
 
   private def commandRunnerState(sm: StateManager): com.serenity.command.CommandRunner =
     sm.getCurrentState
@@ -451,15 +457,17 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
       .getOrElse(fail("command runner should be open"))
     val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
-    val customPreset = presetGroup.children
+    val presetPicker = descendants(presetGroup)
       .collectFirst {
-        case item: com.serenity.command.CommandSurfaceItem.OptionItem if item.id == "ui-preset-custom" => item
+        case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-select" => item
       }
-      .getOrElse(fail("missing custom preset picker"))
+      .getOrElse(fail("missing preset picker"))
 
-    customPreset.options.map(_.label) shouldBe List("Drafting")
-    customPreset.options.headOption.map(_.intent) shouldBe Some(CommandIntent.ApplyUiPreset("Drafting"))
-    customPreset.options.headOption.flatMap(_.hint) shouldBe Some(
+    presetPicker.options.map(_.label) should contain("Drafting")
+    presetPicker.options.find(_.label == "Drafting").map(_.intent) shouldBe Some(
+      CommandIntent.ApplyUiPreset("Drafting")
+    )
+    presetPicker.options.find(_.label == "Drafting").flatMap(_.hint) shouldBe Some(
       "plain text default; dark; reduced motion; fade text reveal; solid material; solid background; comfortable density; SansSerif 12pt prose; Right outline 34"
     )
   }
@@ -490,14 +498,16 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
       .getOrElse(fail("command runner should stay open"))
     val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
-    val customPreset = presetGroup.children
+    val presetPicker = descendants(presetGroup)
       .collectFirst {
-        case item: com.serenity.command.CommandSurfaceItem.OptionItem if item.id == "ui-preset-custom" => item
+        case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-select" => item
       }
-      .getOrElse(fail("missing custom preset picker"))
+      .getOrElse(fail("missing preset picker"))
 
-    customPreset.options.map(_.label) shouldBe List("Drafting")
-    customPreset.options.headOption.map(_.intent) shouldBe Some(CommandIntent.ApplyUiPreset("Drafting"))
+    presetPicker.options.map(_.label) should contain("Drafting")
+    presetPicker.options.find(_.label == "Drafting").map(_.intent) shouldBe Some(
+      CommandIntent.ApplyUiPreset("Drafting")
+    )
   }
 
   it should "keep command runner preset context current after preset management actions" in {
@@ -590,12 +600,12 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         groupId -> previewOnly
     }
 
-    runner.activeSubmenu.map(_.groupId) shouldBe Some("ui-preset-configure")
+    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-edit")
     runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-presets")
     runner.editingPresetName shouldBe Some("Drafting")
     runner.statusMessage shouldBe Some("Preset saved. Configure workspace options.")
     state.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
-    submenu shouldBe Some("ui-preset-configure" -> false)
+    submenu shouldBe Some("settings-preset-edit" -> false)
   }
 
   it should "persist config changes to the preset currently being edited" in {
