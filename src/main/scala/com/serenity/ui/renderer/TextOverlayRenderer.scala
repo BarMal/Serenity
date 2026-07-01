@@ -198,7 +198,7 @@ object TextOverlayRenderer:
         val labelWidth = math.min(22, math.max(8, width / 3))
         val valueWidth = math.min(18, math.max(8, width / 4))
         val hintWidth  = math.max(0, width - labelWidth - valueWidth - 2)
-        Some(CursorPlacement(x + labelWidth + hintWidth + 2, fitCellText(value.text, valueWidth)))
+        Some(CursorPlacement(x + labelWidth + hintWidth + 2, fitCellText(value.text, valueWidth), useMeasured = true))
       case _ =>
         row.cursorColumn.map(cursorColumn =>
           CursorPlacement(x, row.plainText.take(cursorColumn.max(0).min(row.plainText.length)))
