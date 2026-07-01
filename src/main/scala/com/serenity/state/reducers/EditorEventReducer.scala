@@ -319,7 +319,6 @@ object EditorEventReducer:
             val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, movementStart))
             val newCursor =
               measuredVerticalMoveBySnapshot(
-                buffer,
                 currentState.config.wordWrapEnabled,
                 movementStart,
                 navSnap,
@@ -346,7 +345,6 @@ object EditorEventReducer:
             val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, movementStart))
             val newCursor =
               measuredVerticalMoveBySnapshot(
-                buffer,
                 currentState.config.wordWrapEnabled,
                 movementStart,
                 navSnap,
@@ -384,7 +382,6 @@ object EditorEventReducer:
             val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, cursor))
             val newCursor =
               measuredVerticalMoveBySnapshot(
-                buffer,
                 currentState.config.wordWrapEnabled,
                 cursor,
                 navSnap,
@@ -408,7 +405,6 @@ object EditorEventReducer:
             val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, cursor))
             val newCursor =
               measuredVerticalMoveBySnapshot(
-                buffer,
                 currentState.config.wordWrapEnabled,
                 cursor,
                 navSnap,
@@ -1667,7 +1663,7 @@ object EditorEventReducer:
     direction: Int
   ): Option[CursorPosition] =
     Option
-      .when(usesMeasuredVerticalNavigation(buffer, currentState.config.wordWrapEnabled)) {
+      .when(usesMeasuredVerticalNavigation(currentState.config.wordWrapEnabled)) {
         moveVerticalByLayout(cursor, buffer, currentState, preferredXPx, direction)
       }
       .flatten
@@ -1700,7 +1696,6 @@ object EditorEventReducer:
     snap.moveVertical(cursor, direction, preferredXPx)
 
   private def measuredVerticalMoveBySnapshot(
-    buffer: Buffer,
     wordWrapEnabled: Boolean,
     cursor: CursorPosition,
     snap: TextLayoutSnapshot,
@@ -1708,13 +1703,13 @@ object EditorEventReducer:
     direction: Int
   ): Option[CursorPosition] =
     Option
-      .when(usesMeasuredVerticalNavigation(buffer, wordWrapEnabled)) {
+      .when(usesMeasuredVerticalNavigation(wordWrapEnabled)) {
         moveVerticalBySnapshot(cursor, snap, preferredXPx, direction)
       }
       .flatten
 
-  private def usesMeasuredVerticalNavigation(buffer: Buffer, wordWrapEnabled: Boolean): Boolean =
-    buffer.usesTextFont && wordWrapEnabled
+  private def usesMeasuredVerticalNavigation(wordWrapEnabled: Boolean): Boolean =
+    wordWrapEnabled
 
   private def previewFontForBuffer(
     buffer: Buffer,

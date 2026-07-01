@@ -23,19 +23,20 @@ private[manager] trait StateManagerViewportBehavior extends StateManagerSurfaceF
               val lineText        = buffer.content.getLine(cursor.line).getOrElse("")
               val wordWrapEnabled = state.config.wordWrapEnabled
               val measuredCursorVisualLine =
-                TextLayoutSnapshot.visualLineIndexForCursor(
-                  lineText,
-                  cursor.column,
-                  visibleWidthPx,
-                  font,
-                  wordWrapEnabled = wordWrapEnabled
-                )
-              val cellCursorVisualLine = cursor.column / math.max(1, viewport.visibleColumns)
+                if buffer.usesTextFont then
+                  TextLayoutSnapshot.visualLineIndexForCursor(
+                    lineText,
+                    cursor.column,
+                    visibleWidthPx,
+                    font,
+                    wordWrapEnabled = wordWrapEnabled
+                  )
+                else cursor.column / math.max(1, viewport.visibleColumns)
               val cursorVisualLine =
-                if wordWrapEnabled then math.max(measuredCursorVisualLine, cellCursorVisualLine)
+                if wordWrapEnabled then measuredCursorVisualLine
                 else 0
               val newLeftColumn =
-                if buffer.usesTextFont && wordWrapEnabled then 0
+                if wordWrapEnabled then 0
                 else
                   val measuredLeftColumn =
                     TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)

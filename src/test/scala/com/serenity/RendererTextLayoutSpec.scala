@@ -78,6 +78,38 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     cursorRects.head.xPx should be > runCalls.head.xPx.toInt
   }
 
+  it should "leave wrapped continuation rows unnumbered after vertical visual scrolling" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val buffer = Buffer
+      .fromString(bufferId, "alpha beta gamma\nnext")
+      .copy(
+        language = Some(com.serenity.lsp.config.LanguageId.JsonLang),
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 8, visibleLines = 4, topVisualLine = 1)
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default.withGutter(false).withWordWrap(true)
+    )
+    val viewportSize = ViewportSize(11, 6)
+    val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height)
+    val font         = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val cellMetrics  = CellMetrics.fromFont(font)
+
+    Renderer.render(state, cursorVisible = false, surface, viewportSize, font, font, cellMetrics, None)
+
+    surface.getRow(1).take(3).trim shouldBe ""
+    surface.getRow(2).take(3).trim shouldBe ""
+    surface.getRow(3).take(3).trim shouldBe "2"
+  }
+
   it should "center the active buffer title across the painted header bar" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
@@ -309,8 +341,14 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
   it should "render from the viewport left column when horizontally scrolled" in {
     val font     = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val viewport = Viewport(topLine = 0, leftColumn = 2, visibleColumns = 10, visibleLines = 4)
-    val surface  = renderState("abcdef", CursorPosition(0, 6), font, viewport)
-    val rowX     = firstNonSpaceColumn(surface, 1)
+    val surface = renderState(
+      "abcdef",
+      CursorPosition(0, 6),
+      font,
+      viewport,
+      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+    )
+    val rowX = firstNonSpaceColumn(surface, 1)
 
     rowX should be >= 0
     surface.getChar(rowX, 1) shouldBe 'c'

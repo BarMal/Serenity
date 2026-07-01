@@ -1,11 +1,13 @@
 package com.serenity
 
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -1516,6 +1518,32 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
       ) shouldBe true
     }
+  }
+
+  it should "move through wrapped code buffer visual rows using rendered wrap boundaries" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      viewportSize = Some(ViewportSize(8, 6)),
+      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(true),
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = Rope("alpha beta gamma"),
+            language = Some(LanguageId.JsonLang),
+            cursors = List(CursorPosition(0, 0)),
+            viewport = Viewport(0, 0, visibleLines = 5, visibleColumns = 8)
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(MoveDown, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.cursors shouldBe List(CursorPosition(0, 6))
+    buffer.viewport.leftColumn shouldBe 0
   }
 
   it should "refresh stored find-all results after text is inserted before matches" in {

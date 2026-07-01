@@ -1257,14 +1257,10 @@ object Renderer:
                   yield snapshotForBuffer(buf, paneLayout.contentRect, state, context)
                 }
             snapshot.foreach { snapshot =>
-              val firstVisualRows =
-                snapshot.visualLines.zipWithIndex
-                  .groupMapReduce(_._1.bufferLine)(_._2)(math.min)
-
               snapshot.visualLines.zipWithIndex.foreach {
                 case (visualLine, index) if index < lineRect.height =>
                   val screenY = lineRect.y + index
-                  if firstVisualRows.get(visualLine.bufferLine).contains(index) then
+                  if shouldRenderLineNumberForVisualLine(visualLine, state.config.wordWrapEnabled) then
                     val numberWidth = math.max(1, lineRect.width - 1)
                     val lineNumberText =
                       (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
@@ -1277,6 +1273,9 @@ object Renderer:
             }
           }
       }
+
+  private def shouldRenderLineNumberForVisualLine(visualLine: TextVisualLine, wordWrapEnabled: Boolean): Boolean =
+    !wordWrapEnabled || visualLine.startColumn == 0
 
   private def renderDiagnosticIndicator(
     surface: RenderSurface,

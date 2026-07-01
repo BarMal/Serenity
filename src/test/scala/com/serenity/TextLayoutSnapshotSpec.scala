@@ -159,6 +159,19 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     snapshot.visualLines.map(_.text) shouldBe Vector("beta ", "gamma")
   }
 
+  it should "ignore horizontal scroll when word wrap is enabled" in {
+    val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val metrics = CellMetrics.fromFont(font)
+    val buffer = Buffer
+      .fromString(BufferId(16), "alpha beta gamma")
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 6, visibleColumns = 8, visibleLines = 3))
+
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 8, font)
+
+    snapshot.visualLines.map(_.text) shouldBe Vector("alpha ", "beta ", "gamma")
+    snapshot.visualLines.map(line => line.startColumn -> line.endColumn) shouldBe Vector(0 -> 6, 6 -> 11, 11 -> 16)
+  }
+
   it should "bound wrapped line shaping to the requested visible rows" in {
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val metrics = CellMetrics.fromFont(font)
@@ -210,7 +223,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2))
     val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font)
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font, wordWrapEnabled = false)
     val line     = snapshot.visualLines.head
 
     line.caretStops.map(_.column) shouldBe Vector(0, 1, 3, 4, 5, 6, 7, 8, 10, 11)
@@ -345,7 +358,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       .copy(viewport = Viewport(topLine = 0, leftColumn = 2, visibleColumns = 20, visibleLines = 2))
     val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font)
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font, wordWrapEnabled = false)
     val line     = snapshot.visualLines.head
 
     line.text shouldBe "cdef"

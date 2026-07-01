@@ -78,6 +78,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       _        <- sm.setBufferForPane(paneId, bufferId)
       _ <- sm.updateState { current =>
         current.copy(
+          config = current.config.withWordWrap(false),
           buffers = current.buffers.updated(
             bufferId,
             current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
