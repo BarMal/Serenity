@@ -132,12 +132,13 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
     Set(
       Option.when(e.isControlDown)(Modifier.Ctrl),
       Option.when(e.isAltDown)(Modifier.Alt),
-      Option.when(e.isShiftDown)(Modifier.Shift)
+      Option.when(e.isShiftDown)(Modifier.Shift),
+      Option.when(e.isMetaDown)(Modifier.Meta)
     ).flatten
 
   private def translateTyped(e: KeyEvent): Option[KeyStrokeInfo] =
     val char = e.getKeyChar
-    if !e.isControlDown && char != KeyEvent.CHAR_UNDEFINED && !Character.isISOControl(char) then
+    if !e.isControlDown && !e.isMetaDown && char != KeyEvent.CHAR_UNDEFINED && !Character.isISOControl(char) then
       Some(KeyStrokeInfo(InputKey.Character, Some(char), Set.empty))
     else None
 
@@ -158,25 +159,25 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
         val tabMods = m - Modifier.Shift
         if e.isShiftDown then Some(KeyStrokeInfo(InputKey.ReverseTab, None, tabMods))
         else Some(KeyStrokeInfo(InputKey.Tab, None, tabMods))
-      case VK_ESCAPE               => Some(KeyStrokeInfo(InputKey.Escape, None, m))
-      case VK_HOME                 => Some(KeyStrokeInfo(InputKey.Home, None, m))
-      case VK_END                  => Some(KeyStrokeInfo(InputKey.End, None, m))
-      case VK_PAGE_UP              => Some(KeyStrokeInfo(InputKey.PageUp, None, m))
-      case VK_PAGE_DOWN            => Some(KeyStrokeInfo(InputKey.PageDown, None, m))
-      case VK_F1                   => Some(KeyStrokeInfo(InputKey.F1, None, m))
-      case VK_F2                   => Some(KeyStrokeInfo(InputKey.F2, None, m))
-      case VK_F3                   => Some(KeyStrokeInfo(InputKey.F3, None, m))
-      case VK_F4                   => Some(KeyStrokeInfo(InputKey.F4, None, m))
-      case VK_F5                   => Some(KeyStrokeInfo(InputKey.F5, None, m))
-      case VK_F6                   => Some(KeyStrokeInfo(InputKey.F6, None, m))
-      case VK_F7                   => Some(KeyStrokeInfo(InputKey.F7, None, m))
-      case VK_F8                   => Some(KeyStrokeInfo(InputKey.F8, None, m))
-      case VK_F9                   => Some(KeyStrokeInfo(InputKey.F9, None, m))
-      case VK_F10                  => Some(KeyStrokeInfo(InputKey.F10, None, m))
-      case VK_F11                  => Some(KeyStrokeInfo(InputKey.F11, None, m))
-      case VK_F12                  => Some(KeyStrokeInfo(InputKey.F12, None, m))
-      case code if e.isControlDown =>
-        // Ctrl+letter: map VK_A–VK_Z and VK_0–VK_9 to Character strokes
+      case VK_ESCAPE                               => Some(KeyStrokeInfo(InputKey.Escape, None, m))
+      case VK_HOME                                 => Some(KeyStrokeInfo(InputKey.Home, None, m))
+      case VK_END                                  => Some(KeyStrokeInfo(InputKey.End, None, m))
+      case VK_PAGE_UP                              => Some(KeyStrokeInfo(InputKey.PageUp, None, m))
+      case VK_PAGE_DOWN                            => Some(KeyStrokeInfo(InputKey.PageDown, None, m))
+      case VK_F1                                   => Some(KeyStrokeInfo(InputKey.F1, None, m))
+      case VK_F2                                   => Some(KeyStrokeInfo(InputKey.F2, None, m))
+      case VK_F3                                   => Some(KeyStrokeInfo(InputKey.F3, None, m))
+      case VK_F4                                   => Some(KeyStrokeInfo(InputKey.F4, None, m))
+      case VK_F5                                   => Some(KeyStrokeInfo(InputKey.F5, None, m))
+      case VK_F6                                   => Some(KeyStrokeInfo(InputKey.F6, None, m))
+      case VK_F7                                   => Some(KeyStrokeInfo(InputKey.F7, None, m))
+      case VK_F8                                   => Some(KeyStrokeInfo(InputKey.F8, None, m))
+      case VK_F9                                   => Some(KeyStrokeInfo(InputKey.F9, None, m))
+      case VK_F10                                  => Some(KeyStrokeInfo(InputKey.F10, None, m))
+      case VK_F11                                  => Some(KeyStrokeInfo(InputKey.F11, None, m))
+      case VK_F12                                  => Some(KeyStrokeInfo(InputKey.F12, None, m))
+      case code if e.isControlDown || e.isMetaDown =>
+        // Modified letters/digits are represented as character strokes for hotkey matching.
         val ch = code.toChar.toLower
         if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') then
           Some(KeyStrokeInfo(InputKey.Character, Some(ch), m))

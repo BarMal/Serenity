@@ -11,7 +11,7 @@ import cats.syntax.parallel.*
 import com.serenity.input.{InputRouter, SwingInputHandler}
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -51,4 +51,23 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
 
     handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(2.seconds).flatten shouldBe
       Some(KeyStrokeInfo(InputKey.Character, Some('£'), Set.empty))
+  }
+
+  it should "emit command-modified pressed letters as meta character strokes" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val event = KeyEvent(
+      component,
+      KeyEvent.KEY_PRESSED,
+      System.currentTimeMillis(),
+      InputEvent.META_DOWN_MASK,
+      KeyEvent.VK_P,
+      'P'
+    )
+
+    component.getKeyListeners.head.keyPressed(event)
+
+    handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(2.seconds).flatten shouldBe
+      Some(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Meta)))
   }

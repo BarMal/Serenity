@@ -51,6 +51,46 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     )
   }
 
+  it should "load and write meta hotkey overrides using command-key aliases" in {
+    val configFile = Files.createTempFile("serenity-config", ".conf")
+    Files.writeString(
+      configFile,
+      """hotkey.command_palette = cmd+p
+        |hotkey.file_search = command+shift+f
+        |keymap.command_runner.submit = meta+enter
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.hotkeyConfig
+      .bindingsFor(HotkeyAction.ToggleCommandRunner)
+      .head shouldBe com.serenity.config.HotkeyTrigger(
+      keyType = InputKey.Character,
+      character = Some('p'),
+      modifiers = Set(Modifier.Meta)
+    )
+    config.hotkeyConfig
+      .bindingsFor(HotkeyAction.FileSearch)
+      .head shouldBe com.serenity.config.HotkeyTrigger(
+      keyType = InputKey.Character,
+      character = Some('f'),
+      modifiers = Set(Modifier.Meta, Modifier.Shift)
+    )
+    config.focusedKeymapConfig.commandRunner
+      .bindingsFor(CommandRunnerKeyAction.Submit)
+      .head shouldBe com.serenity.config.HotkeyTrigger(
+      keyType = InputKey.Enter,
+      character = None,
+      modifiers = Set(Modifier.Meta)
+    )
+
+    val written = ConfigManager.configToString(config)
+    written should include("hotkey.command_palette = meta+p")
+    written should include("hotkey.file_search = meta+shift+f")
+    written should include("keymap.command_runner.submit = meta+enter")
+  }
+
   it should "load configuration through the effectful blocking-safe API" in {
     val configFile = Files.createTempFile("serenity-config-io", ".conf")
     Files.writeString(
