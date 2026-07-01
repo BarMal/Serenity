@@ -1096,7 +1096,7 @@ object Renderer:
         state.config,
         context.cursorVisible,
         context.uiFont,
-        context.uiMetrics
+        context.cellMetrics
       )
     }
     val belowOverlays =
@@ -1118,7 +1118,7 @@ object Renderer:
         state.config,
         context.cursorVisible,
         context.uiFont,
-        context.uiMetrics
+        context.cellMetrics
       )
     }
 
