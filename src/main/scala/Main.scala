@@ -1,5 +1,5 @@
 import cats.effect.*
-import com.serenity.app.{AppRuntime, CrashReporter, RuntimeDisplayState}
+import com.serenity.app.*
 import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
@@ -20,7 +20,8 @@ object Main extends IOApp:
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
 
     for
-      _          <- IO(CrashReporter.install())
+      _ <- IO(CrashReporter.install())
+      launchOptions = LaunchOptions.parse(args)
       configLoad <- ConfigManager.loadConfigResultIO()
       _ <- ConfigMigrationWarning
         .message(ConfigManager.defaultConfigPath, configLoad.report)
@@ -98,7 +99,8 @@ object Main extends IOApp:
               )
             ),
             awaitExternalQuit = swingWin.awaitClose,
-            registerResizeCallback = cb => swingWin.setOnResize(cb)
+            registerResizeCallback = cb => swingWin.setOnResize(cb),
+            openPath = launchOptions.openPath
           )
         }
     yield ExitCode.Success

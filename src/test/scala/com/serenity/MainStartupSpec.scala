@@ -80,6 +80,39 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       case other => fail(s"Expected StartPage surface content, got: $other")
   }
 
+  it should "open a launch path instead of showing the startup page" in {
+    given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+    given LoggerFactory[IO]         = Slf4jFactory.create[IO]
+
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("MainLaunchPathSpec"))
+    val selectedFile        = Files.createTempFile("serenity-launch-open", ".txt")
+    val initialViewportSize = ViewportSize(120, 30)
+
+    try
+      Files.writeString(selectedFile, "opened from launch option")
+
+      val result = for
+        themeManager <- IO.pure(AppThemeManager.create)
+        defaultTheme <- themeManager.initializeWithTheme()
+        stateManager <- StateManager.apply(logger)
+        finalState <- AppStartup.initializeState(
+          stateManager,
+          defaultTheme,
+          initialViewportSize,
+          openPath = Some(selectedFile)
+        )
+      yield finalState
+
+      val finalState = result.unsafeRunSync()
+
+      finalState.startPageSurface shouldBe None
+      finalState.buffers.values.find(_.filePath.contains(selectedFile)).map(_.content.collect()) shouldBe Some(
+        "opened from launch option"
+      )
+      finalState.focus should matchPattern { case Focus.EditorPane(_) => }
+    finally Files.deleteIfExists(selectedFile)
+  }
+
   it should "use the current session theme for startup instead of defaulting to dark" in {
     given com.serenity.rope.Balance = com.serenity.rope.Balance.default
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
