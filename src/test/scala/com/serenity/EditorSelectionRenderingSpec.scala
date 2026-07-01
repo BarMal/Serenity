@@ -313,13 +313,11 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
 
-    val firstLineHighlights  = (0 until surface.width).count(x => surface.getBg(x, 1) == commentBackground)
-    val secondLineHighlights = (0 until surface.width).count(x => surface.getBg(x, 2) == commentBackground)
-    val thirdLineHighlights  = (0 until surface.width).count(x => surface.getBg(x, 3) == commentBackground)
+    val highlightedRuns = surface.drawRunPxCalls.filter(_.background == commentBackground).map(_.s)
 
-    firstLineHighlights shouldBe 4
-    secondLineHighlights shouldBe 11
-    thirdLineHighlights shouldBe 5
+    highlightedRuns should contain("line")
+    highlightedRuns should contain("second line")
+    highlightedRuns should contain("third")
   }
 
   it should "show a marker for zero-length authored document comments" in {

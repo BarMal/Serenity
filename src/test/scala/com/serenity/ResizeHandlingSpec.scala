@@ -116,7 +116,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     ).contentRect.height
   }
 
-  it should "apply configured relative and bounded viewport sizing to pane layouts" in {
+  it should "keep editor viewport dimensions matched to the available pane area" in {
     val viewportSizing = ViewportSizing(
       width = ViewportAxisSizing(percent = 0.8, maxCells = None),
       height = ViewportAxisSizing(percent = 1.0, maxCells = Some(20))
@@ -134,10 +134,10 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val paneRect         = LayoutEngine.calculatePaneLayouts(resizedState, calculatedLayout)(paneId)
     val bufferId         = resizedState.layout.editorPanes(paneId).bufferId.getOrElse(fail("Expected active buffer"))
 
-    resizedState.buffers(bufferId).viewport.visibleColumns shouldBe math.max(1, (paneRect.width * 0.8).toInt)
-    resizedState.buffers(bufferId).viewport.visibleLines shouldBe 20
-    resizedState.layout.editorPanes(paneId).viewport.visibleColumns shouldBe math.max(1, (paneRect.width * 0.8).toInt)
-    resizedState.layout.editorPanes(paneId).viewport.visibleLines shouldBe 20
+    resizedState.buffers(bufferId).viewport.visibleColumns shouldBe paneRect.width
+    resizedState.buffers(bufferId).viewport.visibleLines shouldBe paneRect.height - 1
+    resizedState.layout.editorPanes(paneId).viewport.visibleColumns shouldBe paneRect.width
+    resizedState.layout.editorPanes(paneId).viewport.visibleLines shouldBe paneRect.height - 1
   }
 
   it should "sync a newly assigned buffer to the current pane viewport" in {

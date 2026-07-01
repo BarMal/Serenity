@@ -37,6 +37,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState { current =>
         current.copy(
+          config = current.config.withWordWrap(false),
           buffers = current.buffers.updated(
             bufferId,
             current.buffers(bufferId).copy(language = Some(LanguageId.Scala))

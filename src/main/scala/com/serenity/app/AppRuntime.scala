@@ -1,6 +1,7 @@
 package com.serenity.app
 
 import java.awt.Color
+import java.nio.file.Path
 
 import scala.concurrent.duration.*
 
@@ -38,7 +39,8 @@ object AppRuntime:
     appConfig: AppConfig,
     makeStateManager: Option[Logger[IO] => IO[StateManager]] = None,
     awaitExternalQuit: IO[Unit] = IO.never,
-    registerResizeCallback: (() => Unit) => Unit = _ => ()
+    registerResizeCallback: (() => Unit) => Unit = _ => (),
+    openPath: Option[Path] = None
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     Dispatcher.parallel[IO].use { resizeCallbackDispatcher =>
       for
@@ -48,7 +50,7 @@ object AppRuntime:
           logger
         )
         startupTheme <- AppStartup.startupTheme(stateManager, themeManager)
-        initialState <- AppStartup.initializeState(stateManager, startupTheme, initialViewportSize, appConfig)
+        initialState <- AppStartup.initializeState(stateManager, startupTheme, initialViewportSize, appConfig, openPath)
         inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
         systemClipboard = SystemClipboard.awt[IO]
         inputHandler    = makeInputHandler(inputRouter)

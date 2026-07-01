@@ -76,6 +76,7 @@ trait StateManager:
 
   // File operations
   def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit]
+  def openFile(filePath: Path): IO[Unit]
   def saveBuffer(bufferId: BufferId): IO[Unit]
   def saveBufferAs(bufferId: BufferId, filePath: String): IO[Unit]
   def markBufferSaved(bufferId: BufferId): IO[Unit]

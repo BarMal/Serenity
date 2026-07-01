@@ -85,6 +85,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     // Get panel dimensions
+    stateManager.updateState(current => current.copy(config = current.config.withWordWrap(false))).unsafeRunSync()
     val currentState = stateManager.getCurrentState.unsafeRunSync()
     val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(mockScreen.cols, mockScreen.rows))
     val panelRect    = layout.editorPanelRect
@@ -122,6 +123,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState { current =>
         current.copy(
+          config = current.config.withWordWrap(false),
           buffers = current.buffers.updated(
             bufferId,
             current.buffers(bufferId).copy(language = Some(LanguageId.Scala))

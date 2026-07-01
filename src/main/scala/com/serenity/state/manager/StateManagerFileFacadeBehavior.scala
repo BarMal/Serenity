@@ -17,6 +17,9 @@ private[manager] trait StateManagerFileFacadeBehavior extends StateManagerViewpo
           state
     }
 
+  def openFile(filePath: Path): IO[Unit] =
+    directLoadFileEffect(filePath)
+
   def saveBuffer(bufferId: BufferId): IO[Unit] =
     saveBufferEffect(bufferId)
 

@@ -2,6 +2,7 @@ package com.serenity
 
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
+import javax.swing.JPanel
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
@@ -86,6 +87,18 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     surface.viewportWidth shouldBe 10
     surface.viewportHeight shouldBe 5
+  }
+
+  it should "use the canvas preferred size before Swing reports a non-zero runtime size" in {
+    val canvas = new JPanel()
+    canvas.setPreferredSize(new java.awt.Dimension(640, 480))
+
+    val metrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 12)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = Java2DRenderSurface.forFrame(metrics, font, canvas, _ => ())
+
+    surface.viewportWidth shouldBe 80
+    surface.viewportHeight shouldBe 30
   }
 
   "Renderer.render" should "clear pixels outside the whole-cell grid to the theme background" in {

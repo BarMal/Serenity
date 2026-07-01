@@ -78,7 +78,7 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
     runtime.uiMetrics shouldBe CellMetrics.fromFont(runtime.uiFont)
   }
 
-  it should "provide primaryMetrics that contain all runtime font roles" in {
+  it should "use code metrics for the primary editor grid" in {
     val runtime = RuntimeDisplayState
       .create(
         FontConfig(
@@ -91,38 +91,31 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    runtime.primaryMetrics.charWidth shouldBe List(
-      runtime.codeMetrics.charWidth,
-      runtime.textMetrics.charWidth,
-      runtime.uiMetrics.charWidth
-    ).max
-    runtime.primaryMetrics.lineHeight shouldBe List(
-      runtime.codeMetrics.lineHeight,
-      runtime.textMetrics.lineHeight,
-      runtime.uiMetrics.lineHeight
-    ).max
-    runtime.primaryMetrics.ascent shouldBe List(
-      runtime.codeMetrics.ascent,
-      runtime.textMetrics.ascent,
-      runtime.uiMetrics.ascent
-    ).max
+    runtime.textMetrics.charWidth should be > runtime.codeMetrics.charWidth
+    runtime.uiMetrics.lineHeight should be > runtime.codeMetrics.lineHeight
+    runtime.primaryMetrics shouldBe runtime.codeMetrics
   }
 
-  it should "update primaryMetrics when font config changes" in {
+  it should "update primaryMetrics when code font config changes" in {
     val runtime = RuntimeDisplayState.create(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val before  = runtime.primaryMetrics
 
-    runtime.update(FontConfig(codeFontFamily = "Monospaced", fontSize = 12.0f, uiFontSize = 28.0f)).unsafeRunSync()
+    runtime.update(FontConfig(codeFontFamily = "Monospaced", fontSize = 18.0f, uiFontSize = 28.0f)).unsafeRunSync()
 
-    runtime.primaryMetrics.lineHeight shouldBe math.max(runtime.codeMetrics.lineHeight, runtime.uiMetrics.lineHeight)
-    runtime.primaryMetrics.lineHeight shouldBe >=(runtime.uiMetrics.lineHeight)
+    runtime.primaryMetrics shouldBe runtime.codeMetrics
     runtime.primaryMetrics should not be before
   }
 
-  it should "keep primaryMetrics stable when font family changes do not change maximum metrics" in {
+  it should "keep primaryMetrics stable when only text or UI font metrics change" in {
     val runtime = RuntimeDisplayState
       .create(
-        FontConfig(codeFontFamily = "Monospaced", textFontFamily = "SansSerif", fontSize = 14.0f, uiFontSize = 30.0f)
+        FontConfig(
+          codeFontFamily = "Monospaced",
+          textFontFamily = "SansSerif",
+          fontSize = 14.0f,
+          textFontSize = 18.0f,
+          uiFontSize = 20.0f
+        )
       )
       .unsafeRunSync()
 
@@ -130,7 +123,13 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
 
     runtime
       .update(
-        FontConfig(codeFontFamily = "Monospaced", textFontFamily = "Dialog", fontSize = 14.0f, uiFontSize = 30.0f)
+        FontConfig(
+          codeFontFamily = "Monospaced",
+          textFontFamily = "Dialog",
+          fontSize = 14.0f,
+          textFontSize = 30.0f,
+          uiFontSize = 32.0f
+        )
       )
       .unsafeRunSync()
 

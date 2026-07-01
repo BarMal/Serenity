@@ -1,5 +1,7 @@
 package com.serenity.app
 
+import java.nio.file.Path
+
 import cats.effect.IO
 import com.serenity.config.AppConfig
 import com.serenity.state.manager.StateManager
@@ -67,10 +69,26 @@ object AppStartup:
     stateManager: StateManager,
     theme: Theme,
     initialViewportSize: ViewportSize,
-    appConfig: AppConfig = AppConfig.default
+    appConfig: AppConfig = AppConfig.default,
+    openPath: Option[Path] = None
   ): IO[AppState] =
-    for
-      startState <- startPageState(stateManager, theme, initialViewportSize, appConfig)
-      _          <- stateManager.updateState(_ => startState)
-      state      <- stateManager.getCurrentState
-    yield state
+    openPath match
+      case Some(path) =>
+        for
+          _ <- stateManager.updateState(_ =>
+            AppState.empty.copy(
+              uiSurfaces = List.empty,
+              config = appConfig,
+              viewportSize = Some(initialViewportSize),
+              theme = theme
+            )
+          )
+          _     <- stateManager.openFile(path)
+          state <- stateManager.getCurrentState
+        yield state
+      case None =>
+        for
+          startState <- startPageState(stateManager, theme, initialViewportSize, appConfig)
+          _          <- stateManager.updateState(_ => startState)
+          state      <- stateManager.getCurrentState
+        yield state

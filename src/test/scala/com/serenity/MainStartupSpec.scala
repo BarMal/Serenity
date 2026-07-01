@@ -7,7 +7,10 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{Focus, SurfaceContent}
-import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -78,6 +81,56 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         // Status message should be either None (session exists) or Some("No previous session found")
         startPage.statusMessage should (be(None) or be(Some("No previous session found")))
       case other => fail(s"Expected StartPage surface content, got: $other")
+  }
+
+  it should "open a launch path instead of showing the startup page" in {
+    given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+    given LoggerFactory[IO]         = Slf4jFactory.create[IO]
+
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("MainLaunchPathSpec"))
+    val selectedFile        = Files.createTempFile("serenity-launch-open", ".txt")
+    val initialViewportSize = ViewportSize(120, 30)
+
+    try
+      Files.writeString(selectedFile, "opened from launch option")
+
+      val result = for
+        themeManager <- IO.pure(AppThemeManager.create)
+        defaultTheme <- themeManager.initializeWithTheme()
+        stateManager <- StateManager.apply(logger)
+        finalState <- AppStartup.initializeState(
+          stateManager,
+          defaultTheme,
+          initialViewportSize,
+          openPath = Some(selectedFile)
+        )
+      yield finalState
+
+      val finalState = result.unsafeRunSync()
+
+      finalState.startPageSurface shouldBe None
+      finalState.buffers.size shouldBe 1
+      finalState.layout.editorPanes.size shouldBe 1
+      finalState.bufferOrder.size shouldBe 1
+      finalState.buffers.values.find(_.filePath.contains(selectedFile)).map(_.content.collect()) shouldBe Some(
+        "opened from launch option"
+      )
+      val paneId = finalState.layout.activeEditorPaneId.getOrElse(fail("Expected an active editor pane"))
+      finalState.focus shouldBe Focus.EditorPane(paneId)
+      val activeBufferId =
+        finalState.layout.editorPanes.get(paneId).flatMap(_.bufferId).getOrElse(fail("Expected active pane buffer"))
+      finalState.buffers(activeBufferId).filePath shouldBe Some(selectedFile)
+
+      val surface     = new MockRenderSurface(initialViewportSize.width, initialViewportSize.height)
+      val font        = FontLoader.previewCodeFont(FontConfig(fontSize = 12.0f))
+      val cellMetrics = CellMetrics.fromFont(font)
+
+      Renderer.render(finalState, cursorVisible = true, surface, initialViewportSize, font, font, cellMetrics, None)
+
+      (0 until initialViewportSize.height).map(surface.getRow).mkString("\n") should include(
+        "opened from launch option"
+      )
+    finally Files.deleteIfExists(selectedFile)
   }
 
   it should "use the current session theme for startup instead of defaulting to dark" in {

@@ -204,7 +204,7 @@ object TextLayoutSnapshot:
       else
         val (lineIndex, rawLine) = lines.head
         val startColumn =
-          if buffer.viewport.topVisualLine > 0 then 0
+          if wordWrapEnabled then 0
           else math.min(buffer.viewport.leftColumn, rawLine.length)
         val visibleSlice =
           if wordWrapEnabled then rawLine.drop(startColumn)

@@ -216,16 +216,69 @@ object Renderer:
     state: AppState,
     context: RenderContext
   ): TextLayoutSnapshot =
-    val bufferFont   = context.fontForBuffer(buffer)
-    val panelWidthPx = contentRect.width * context.cellMetrics.charWidth
+    val bufferFont    = context.fontForBuffer(buffer)
+    val panelWidthPx  = contentRect.width * context.cellMetrics.charWidth
+    val panelHeightPx = contentRect.height * context.cellMetrics.lineHeight
+    val bufferMetrics = CellMetrics.fromFont(bufferFont)
+    val baseViewport  = LayoutEngine.updateBufferViewportDimensions(buffer, contentRect, state.config.wordWrapEnabled)
+    val fontRenderContext =
+      context.surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+    val visibleColumns =
+      if bufferFont == context.codeFont then baseViewport.visibleColumns
+      else visibleColumnsFor(bufferFont, fontRenderContext, panelWidthPx, baseViewport.visibleColumns)
+    val visibleLines = math.max(1, panelHeightPx / math.max(1, bufferMetrics.lineHeight))
+    val sizedViewport = baseViewport.copy(
+      visibleColumns = visibleColumns,
+      visibleLines = visibleLines,
+      topVisualLine = baseViewport.topVisualLine.min(math.max(0, visibleLines - 1))
+    )
+    val scrollViewport = baseViewport.copy(
+      visibleLines = visibleLines,
+      topVisualLine = baseViewport.topVisualLine.min(math.max(0, visibleLines - 1))
+    )
+    val leftColumn =
+      if visibleColumns == baseViewport.visibleColumns then baseViewport.leftColumn
+      else renderedLeftColumn(buffer, scrollViewport, state.config.wordWrapEnabled)
+    val renderedViewport = sizedViewport.copy(
+      leftColumn = leftColumn
+    )
+    val renderBuffer = buffer.copy(
+      viewport = renderedViewport
+    )
     context.surface.setFont(bufferFont)
     TextLayoutSnapshot.fromBuffer(
-      buffer,
+      renderBuffer,
       panelWidthPx,
       bufferFont,
-      context.surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext()),
+      fontRenderContext,
       wordWrapEnabled = state.config.wordWrapEnabled
     )
+
+  private def visibleColumnsFor(
+    font: Font,
+    fontRenderContext: java.awt.font.FontRenderContext,
+    panelWidthPx: Int,
+    gridVisibleColumns: Int
+  ): Int =
+    val sample          = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    val measuredAdvance = TextLayoutSnapshot.caretXsForText(sample, font, fontRenderContext).lastOption.getOrElse(0.0f)
+    val averageAdvance  = math.max(1.0f, measuredAdvance / sample.length.toFloat)
+    val measuredColumns = math.ceil(panelWidthPx.toDouble / averageAdvance.toDouble).toInt + 32
+    val gridOverscan    = gridVisibleColumns + 64
+
+    math.max(gridOverscan, measuredColumns).max(1)
+
+  private def renderedLeftColumn(buffer: Buffer, viewport: Viewport, wordWrapEnabled: Boolean): Int =
+    if wordWrapEnabled then 0
+    else
+      val visibleColumns = math.max(1, viewport.visibleColumns)
+      val cursor         = buffer.cursors.headOption.getOrElse(CursorPosition(viewport.topLine, 0))
+      val cursorColumn   = cursor.column.max(0)
+      val lineLength     = buffer.content.getLine(cursor.line).map(_.length).getOrElse(cursorColumn)
+      val maxForCursor   = math.max(0, cursorColumn - visibleColumns + 1)
+      val maxForLine     = math.max(0, lineLength - visibleColumns)
+
+      viewport.leftColumn.max(0).min(maxForCursor).min(maxForLine)
 
   private def renderEditorPanes(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
     val activePaneId = state.layout.activeEditorPaneId
@@ -378,17 +431,17 @@ object Renderer:
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
-        if screenLineIndex < rect.height then
-          val screenY = rect.y + screenLineIndex
-          val screenX = rect.x + visualLineCellOffset(visualLine, context)
+        if visualLineFits(rect, screenLineIndex, context, snapshot) then
+          val screenY   = rect.y + screenLineIndex
+          val lineTopPx = visualLineTopPx(rect, screenLineIndex, context, snapshot)
+          val screenX   = rect.x + visualLineCellOffset(visualLine, context)
 
           context.surface.setForegroundColor(state.theme.foreground)
 
-          if screenY < context.surface.viewportHeight &&
+          if visualLineVisible(rect, screenLineIndex, context, snapshot) &&
               screenY >= 0 &&
               screenX < context.surface.viewportWidth &&
               screenX >= 0 &&
-              screenY < rect.bottom &&
               screenX < rect.right
           then
             val lineTheme      = state.theme
@@ -397,7 +450,7 @@ object Renderer:
               CharacterRenderer.renderMeasuredLineWithAnimation(
                 context.surface,
                 xOriginPx,
-                context.cellMetrics.toPixelY(screenY),
+                lineTopPx,
                 snapshot.lineHeightPx,
                 snapshot.ascentPx,
                 visualLine,
@@ -428,6 +481,7 @@ object Renderer:
               visualLine,
               rect,
               screenY,
+              lineTopPx,
               state.theme,
               context,
               snapshot
@@ -439,6 +493,7 @@ object Renderer:
               visualLine,
               rect,
               screenY,
+              lineTopPx,
               state.theme,
               context,
               snapshot
@@ -456,6 +511,49 @@ object Renderer:
                   context.surface.putString(bgScreenX, screenY, " ")
               }
     }
+
+  private def visualLineFits(
+    rect: LayoutRect,
+    screenLineIndex: Int,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
+  ): Boolean =
+    if snapshot.usesMeasuredLayout then
+      visualLineTopPx(rect, screenLineIndex, context, snapshot) < contentBottomPx(rect, context)
+    else screenLineIndex < rect.height
+
+  private def visualLineVisible(
+    rect: LayoutRect,
+    screenLineIndex: Int,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
+  ): Boolean =
+    if snapshot.usesMeasuredLayout then
+      val lineTopPx = visualLineTopPx(rect, screenLineIndex, context, snapshot)
+      lineTopPx >= contentTopPx(rect, context) &&
+      lineTopPx < contentBottomPx(rect, context) &&
+      lineTopPx < surfaceBottomPx(context)
+    else
+      val screenY = rect.y + screenLineIndex
+      screenY < context.surface.viewportHeight && screenY >= 0 && screenY < rect.bottom
+
+  private def visualLineTopPx(
+    rect: LayoutRect,
+    screenLineIndex: Int,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
+  ): Int =
+    if snapshot.usesMeasuredLayout then contentTopPx(rect, context) + screenLineIndex * snapshot.lineHeightPx
+    else context.cellMetrics.toPixelY(rect.y + screenLineIndex)
+
+  private def contentTopPx(rect: LayoutRect, context: RenderContext): Int =
+    context.cellMetrics.toPixelY(rect.y)
+
+  private def contentBottomPx(rect: LayoutRect, context: RenderContext): Int =
+    context.cellMetrics.toPixelY(rect.bottom)
+
+  private def surfaceBottomPx(context: RenderContext): Int =
+    context.cellMetrics.toPixelY(context.surface.viewportHeight)
 
   private def visualLineCellOffset(visualLine: TextVisualLine, context: RenderContext): Int =
     if visualLine.xOffsetPx <= 0.0f then 0
@@ -507,6 +605,7 @@ object Renderer:
     visualLine: TextVisualLine,
     rect: LayoutRect,
     screenY: Int,
+    lineTopPx: Int,
     theme: Theme,
     context: RenderContext,
     snapshot: TextLayoutSnapshot
@@ -526,7 +625,7 @@ object Renderer:
               surface.setBackgroundColor(theme.highlighted.background)
               surface.drawRunPx(
                 startXPx,
-                context.cellMetrics.toPixelY(screenY),
+                lineTopPx,
                 endXPx - startXPx,
                 snapshot.lineHeightPx,
                 snapshot.ascentPx,
@@ -554,6 +653,7 @@ object Renderer:
     visualLine: TextVisualLine,
     rect: LayoutRect,
     screenY: Int,
+    lineTopPx: Int,
     theme: Theme,
     context: RenderContext,
     snapshot: TextLayoutSnapshot
@@ -567,6 +667,7 @@ object Renderer:
             visualLine,
             rect,
             screenY,
+            lineTopPx,
             foreground,
             commentHighlightBackground(theme),
             context,
@@ -593,6 +694,7 @@ object Renderer:
     visualLine: TextVisualLine,
     rect: LayoutRect,
     screenY: Int,
+    lineTopPx: Int,
     foreground: java.awt.Color,
     background: java.awt.Color,
     context: RenderContext,
@@ -618,7 +720,7 @@ object Renderer:
         surface.setBackgroundColor(background)
         surface.drawRunPx(
           startXPx,
-          context.cellMetrics.toPixelY(screenY),
+          lineTopPx,
           math.max(context.cellMetrics.charWidth.toFloat, endXPx - startXPx),
           snapshot.lineHeightPx,
           snapshot.ascentPx,
@@ -1025,24 +1127,25 @@ object Renderer:
         context.cursorVisible || (buffer.cursors.size > 1 && !isPrimaryCursor)
       calculateCursorVisualPosition(cursor, snapshot) match
         case Some((visualLine, xPx)) if shouldRenderCursor =>
-          val screenYCell = rect.y + visualLine
-          if screenYCell >= rect.y && screenYCell < rect.bottom &&
-              screenYCell >= 0 && screenYCell < context.surface.viewportHeight
+          val lineTopPx = visualLineTopPx(rect, visualLine, context, snapshot)
+          if visualLineVisible(rect, visualLine, context, snapshot)
           then
             val effectiveCursorColor = cursorColorFor(config, theme, context, isPrimaryCursor)
             val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
             val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
             val screenYPx =
-              cursorTopPx(
-                context.cellMetrics.toPixelY(screenYCell),
-                context.cellMetrics.toPixelY(rect.y),
-                context.cellMetrics.lineHeight
-              )
+              if snapshot.usesMeasuredLayout then lineTopPx
+              else
+                cursorTopPx(
+                  lineTopPx,
+                  contentTopPx(rect, context),
+                  snapshot.lineHeightPx
+                )
             context.surface.fillPixelRect(
               screenXPx,
               screenYPx,
               caretWidthPx,
-              context.cellMetrics.lineHeight,
+              snapshot.lineHeightPx,
               effectiveCursorColor
             )
         case _ => ()
@@ -1257,18 +1360,27 @@ object Renderer:
                   yield snapshotForBuffer(buf, paneLayout.contentRect, state, context)
                 }
             snapshot.foreach { snapshot =>
-              val firstVisualRows =
-                snapshot.visualLines.zipWithIndex
-                  .groupMapReduce(_._1.bufferLine)(_._2)(math.min)
-
               snapshot.visualLines.zipWithIndex.foreach {
-                case (visualLine, index) if index < lineRect.height =>
-                  val screenY = lineRect.y + index
-                  if firstVisualRows.get(visualLine.bufferLine).contains(index) then
+                case (visualLine, index) if visualLineFits(lineRect, index, context, snapshot) =>
+                  val screenY   = lineRect.y + index
+                  val lineTopPx = visualLineTopPx(lineRect, index, context, snapshot)
+                  if shouldRenderLineNumberForVisualLine(visualLine, state.config.wordWrapEnabled) then
                     val numberWidth = math.max(1, lineRect.width - 1)
                     val lineNumberText =
                       (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
-                    surface.putString(lineRect.x, screenY, lineNumberText)
+                    val measuredLineNumberFont = buffer.filter(useMeasuredLineNumberFont(_, context))
+                    if snapshot.usesMeasuredLayout && measuredLineNumberFont.nonEmpty then
+                      measuredLineNumberFont.foreach(buf => surface.setFont(context.fontForBuffer(buf)))
+                      surface.drawRunPx(
+                        context.cellMetrics.toPixelX(lineRect.x).toFloat,
+                        lineTopPx,
+                        lineRect.width * context.cellMetrics.charWidth.toFloat,
+                        snapshot.lineHeightPx,
+                        snapshot.ascentPx,
+                        lineNumberText
+                      )
+                      surface.setFont(context.uiFont)
+                    else surface.putString(lineRect.x, screenY, lineNumberText)
                     buffer.foreach(
                       renderDiagnosticIndicator(surface, lineRect, screenY, visualLine.bufferLine, _, state)
                     )
@@ -1277,6 +1389,12 @@ object Renderer:
             }
           }
       }
+
+  private def useMeasuredLineNumberFont(buffer: Buffer, context: RenderContext): Boolean =
+    buffer.typographyRole != TypographyRole.Code && context.fontForBuffer(buffer) != context.codeFont
+
+  private def shouldRenderLineNumberForVisualLine(visualLine: TextVisualLine, wordWrapEnabled: Boolean): Boolean =
+    !wordWrapEnabled || visualLine.startColumn == 0
 
   private def renderDiagnosticIndicator(
     surface: RenderSurface,
