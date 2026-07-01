@@ -38,7 +38,7 @@ case class RenderContext(
 object Renderer:
 
   private case class EditorPaneRenderPlan(
-      paneLayouts: Map[PaneId, LayoutRect],
+      paneLayouts: Map[PaneId, EditorPaneLayout],
       snapshots: Map[PaneId, TextLayoutSnapshot]
   )
 
@@ -198,15 +198,15 @@ object Renderer:
   private def renderSpacerColumns(context: RenderContext): Unit = ()
 
   private def prepareEditorPaneRenderPlan(state: AppState, context: RenderContext): EditorPaneRenderPlan =
-    val paneLayouts = LayoutEngine.calculatePaneLayouts(state, context.layout)
+    val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, context.layout)
     val snapshots =
       state.layout.editorPanes.flatMap {
         case (paneId, pane) =>
           for
-            paneRect <- paneLayouts.get(paneId)
-            bufferId <- pane.bufferId
-            buffer   <- state.buffers.get(bufferId)
-          yield paneId -> snapshotForBuffer(buffer, editorContentRect(paneRect), state, context)
+            paneLayout <- paneLayouts.get(paneId)
+            bufferId   <- pane.bufferId
+            buffer     <- state.buffers.get(bufferId)
+          yield paneId -> snapshotForBuffer(buffer, paneLayout.contentRect, state, context)
       }
 
     EditorPaneRenderPlan(paneLayouts, snapshots)
@@ -228,9 +228,6 @@ object Renderer:
       wordWrapEnabled = state.config.wordWrapEnabled
     )
 
-  private def editorContentRect(rect: LayoutRect): LayoutRect =
-    LayoutRect(rect.x, rect.y + 1, rect.width, math.max(1, rect.height - 1))
-
   private def renderEditorPanes(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
     val activePaneId = state.layout.activeEditorPaneId
     val orderedPanes =
@@ -240,22 +237,22 @@ object Renderer:
 
     orderedPanes.foreach { (paneId, pane) =>
       renderPlan.paneLayouts.get(paneId) match
-        case Some(paneRect) => renderEditorPane(pane, paneRect, state, context, renderPlan.snapshots.get(paneId))
-        case None           => ()
+        case Some(paneLayout) => renderEditorPane(pane, paneLayout, state, context, renderPlan.snapshots.get(paneId))
+        case None             => ()
     }
 
   private def renderEditorPane(
     pane: EditorPane,
-    rect: LayoutRect,
+    paneLayout: EditorPaneLayout,
     state: AppState,
     context: RenderContext,
     preparedSnapshot: Option[TextLayoutSnapshot]
   ): Unit =
     val buffer = pane.bufferId.flatMap(state.buffers.get)
 
-    renderBufferHeader(pane, buffer, rect, state, context)
+    renderBufferHeader(pane, buffer, paneLayout, state, context)
 
-    val contentRect = editorContentRect(rect)
+    val contentRect = paneLayout.contentRect
 
     val bufferSnapshot = preparedSnapshot.orElse(buffer.map(snapshotForBuffer(_, contentRect, state, context)))
     val markdownLensFrame =
@@ -293,19 +290,15 @@ object Renderer:
   private def renderBufferHeader(
     pane: EditorPane,
     buffer: Option[Buffer],
-    rect: LayoutRect,
+    paneLayout: EditorPaneLayout,
     state: AppState,
     context: RenderContext
   ): Unit =
     context.surface.setFont(context.uiFont)
-    val surface  = context.surface
-    val isActive = state.layout.activeEditorPaneId.contains(pane.id)
-    val headerRect =
-      if isActive then activeBufferHeaderRect(rect.y, context.layout)
-      else rect
-    val titleRect =
-      if isActive then activeBufferTitleRect(rect.y, context.layout)
-      else rect
+    val surface    = context.surface
+    val isActive   = state.layout.activeEditorPaneId.contains(pane.id)
+    val headerRect = paneLayout.headerRect
+    val titleRect  = paneLayout.titleRect
 
     if isActive then
       surface.setBackgroundColor(state.theme.highlighted.background)
@@ -338,22 +331,6 @@ object Renderer:
 
     surface.setBackgroundColor(state.theme.background)
     surface.setForegroundColor(state.theme.foreground)
-
-  private def activeBufferHeaderRect(y: Int, layout: CalculatedLayout): LayoutRect =
-    val workspaceRects =
-      List(
-        Some(layout.leftSpacerRect),
-        layout.lineNumberRect,
-        Some(layout.editorPanelRect),
-        Some(layout.rightSpacerRect)
-      ).flatten
-    val left  = workspaceRects.map(_.x).minOption.getOrElse(layout.editorPanelRect.x)
-    val right = workspaceRects.map(_.right).maxOption.getOrElse(layout.editorPanelRect.right)
-
-    LayoutRect(left, y, math.max(1, right - left), 1)
-
-  private def activeBufferTitleRect(y: Int, layout: CalculatedLayout): LayoutRect =
-    activeBufferHeaderRect(y, layout)
 
   private def renderBufferContent(
     buffer: Buffer,
@@ -1248,9 +1225,9 @@ object Renderer:
                 .flatMap(renderPlan.snapshots.get)
                 .orElse {
                   for
-                    paneRect <- state.layout.activeEditorPaneId.flatMap(renderPlan.paneLayouts.get)
-                    buf      <- buffer
-                  yield snapshotForBuffer(buf, editorContentRect(paneRect), state, context)
+                    paneLayout <- state.layout.activeEditorPaneId.flatMap(renderPlan.paneLayouts.get)
+                    buf        <- buffer
+                  yield snapshotForBuffer(buf, paneLayout.contentRect, state, context)
                 }
             snapshot.foreach { snapshot =>
               val firstVisualRows =

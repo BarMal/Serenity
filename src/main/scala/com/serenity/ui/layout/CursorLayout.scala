@@ -8,12 +8,7 @@ case class ScreenPosition(x: Int, y: Int)
 object CursorLayout:
 
   def contentRectForPane(paneRect: LayoutRect): LayoutRect =
-    LayoutRect(
-      paneRect.x,
-      paneRect.y + 1,
-      paneRect.width,
-      math.max(1, paneRect.height - 1)
-    )
+    LayoutEngine.contentRectForPane(paneRect)
 
   def calculateVisualPosition(
     cursor: CursorPosition,
@@ -43,8 +38,14 @@ object CursorLayout:
     paneRect: LayoutRect,
     viewport: Viewport
   ): Option[ScreenPosition] =
-    val contentRect = contentRectForPane(paneRect)
+    calculateScreenPositionInContent(cursor, rope, contentRectForPane(paneRect), viewport)
 
+  def calculateScreenPositionInContent(
+    cursor: CursorPosition,
+    rope: Rope,
+    contentRect: LayoutRect,
+    viewport: Viewport
+  ): Option[ScreenPosition] =
     calculateVisualPosition(cursor, rope, contentRect.width, viewport).map {
       case (visualLine, visualColumn) =>
         ScreenPosition(

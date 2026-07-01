@@ -11,6 +11,13 @@ case class LayoutRect(x: Int, y: Int, width: Int, height: Int):
   def centerX: Int = x + width / 2
   def centerY: Int = y + height / 2
 
+case class EditorPaneLayout(
+    paneRect: LayoutRect,
+    headerRect: LayoutRect,
+    titleRect: LayoutRect,
+    contentRect: LayoutRect
+)
+
 case class CalculatedLayout(
     editorPanelRect: LayoutRect,
     leftSpacerRect: LayoutRect,
@@ -142,7 +149,7 @@ object LayoutEngine:
       gutterRect = gutterRect
     )
 
-    val paneLayouts = calculatePaneLayouts(state, baseLayout)
+    val paneLayouts = calculateEditorPaneLayouts(state, baseLayout)
 
     val aboveSurfaces = state.floatingSurfaces.filter {
       _.presentation match
@@ -267,38 +274,37 @@ object LayoutEngine:
   private def calculateFloatingSurfaceRect(
     surface: UiSurface,
     state: AppState,
-    paneLayouts: Map[PaneId, LayoutRect],
+    paneLayouts: Map[PaneId, EditorPaneLayout],
     topYOverride: Option[Int] = None,
     forcedHeight: Option[Int] = None
   ): Option[LayoutRect] =
     for
-      paneId   <- state.layout.activeEditorPaneId
-      pane     <- state.layout.editorPanes.get(paneId)
-      paneRect <- paneLayouts.get(paneId)
-      bufferId <- pane.bufferId
-      buffer   <- state.buffers.get(bufferId)
-      rect     <- calculateFloatingSurfaceRect(surface, buffer, paneRect, state, topYOverride, forcedHeight)
+      paneId     <- state.layout.activeEditorPaneId
+      pane       <- state.layout.editorPanes.get(paneId)
+      paneLayout <- paneLayouts.get(paneId)
+      bufferId   <- pane.bufferId
+      buffer     <- state.buffers.get(bufferId)
+      rect <- calculateFloatingSurfaceRect(surface, buffer, paneLayout.contentRect, state, topYOverride, forcedHeight)
     yield rect
 
   private def calculateFloatingSurfaceRect(
     surface: UiSurface,
     buffer: Buffer,
-    paneRect: LayoutRect,
+    contentRect: LayoutRect,
     state: AppState,
     topYOverride: Option[Int],
     forcedHeight: Option[Int]
   ): Option[LayoutRect] =
-    val contentRect     = CursorLayout.contentRectForPane(paneRect)
     val preferredWidth  = calculateFloatingSurfaceWidth(contentRect.width)
     val preferredHeight = calculateFloatingSurfaceHeight(surface.content, contentRect.height, state)
     val finalHeight     = forcedHeight.getOrElse(preferredHeight)
 
     for
       anchor <- surfaceAnchor(surface).orElse(state.activeCursorPosition)
-      screenPosition <- CursorLayout.calculateScreenPosition(
+      screenPosition <- CursorLayout.calculateScreenPositionInContent(
         anchor,
         buffer.content,
-        paneRect,
+        contentRect,
         buffer.viewport
       )
     yield
@@ -355,7 +361,7 @@ object LayoutEngine:
   private def calculateBelowCursorOverlayStack(
     surfaces: List[UiSurface],
     state: AppState,
-    paneLayouts: Map[PaneId, LayoutRect]
+    paneLayouts: Map[PaneId, EditorPaneLayout]
   ): BelowOverlayLayout =
     if surfaces.isEmpty then BelowOverlayLayout(Nil, Set.empty)
     else if surfaces.length == 1 then
@@ -374,7 +380,7 @@ object LayoutEngine:
               val gapRows         = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows
               val availableBottom = state.layout.activeEditorPaneId
                 .flatMap(paneLayouts.get)
-                .map(CursorLayout.contentRectForPane)
+                .map(_.contentRect)
                 .map(_.bottom)
                 .getOrElse(mainRect.bottom + submenuRect.height + gapRows)
               val totalHeight           = mainRect.height + gapRows + submenuRect.height
@@ -508,16 +514,17 @@ object LayoutEngine:
 
   def syncViewportDimensions(state: AppState, viewportSize: ViewportSize): AppState =
     val calculatedLayout = calculateLayout(state, viewportSize)
-    val paneLayouts      = calculatePaneLayouts(state, calculatedLayout)
+    val paneLayouts      = calculateEditorPaneLayouts(state, calculatedLayout)
     val (updatedBuffers, updatedPanes) =
       state.layout.editorPanes.foldLeft((state.buffers, state.layout.editorPanes)) {
         case ((buffers, panes), (paneId, pane)) =>
-          val paneRect     = paneLayouts.getOrElse(paneId, calculatedLayout.editorPanelRect)
-          val paneViewport = updateViewportDimensions(pane.viewport, paneRect, state.config.viewportSizing)
+          val paneRect     = paneLayouts.get(paneId).map(_.paneRect).getOrElse(calculatedLayout.editorPanelRect)
+          val contentRect  = paneLayouts.get(paneId).map(_.contentRect).getOrElse(paneRect)
+          val paneViewport = updateViewportDimensions(pane.viewport, contentRect, state.config.viewportSizing)
           val nextPanes    = panes + (paneId -> pane.copy(viewport = paneViewport))
           val updatedBuffer = pane.bufferId.flatMap(buffers.get).map { buffer =>
             buffer.id -> buffer
-              .copy(viewport = updateViewportDimensions(buffer.viewport, paneRect, state.config.viewportSizing))
+              .copy(viewport = updateViewportDimensions(buffer.viewport, contentRect, state.config.viewportSizing))
           }
           val nextBuffers = updatedBuffer.fold(buffers)(buffers + _)
 
@@ -531,10 +538,29 @@ object LayoutEngine:
 
   /** Calculate individual pane layouts within the editor area */
   def calculatePaneLayouts(state: AppState, calculatedLayout: CalculatedLayout): Map[PaneId, LayoutRect] =
-    calculatePaneLayoutsWithMinWidth(state, calculatedLayout, state.config.minimumPaneWidth)
+    calculateEditorPaneLayouts(state, calculatedLayout).view.mapValues(_.paneRect).toMap
 
   /** Calculate individual pane layouts with minimum width constraint */
   def calculatePaneLayoutsWithMinWidth(
+    state: AppState,
+    calculatedLayout: CalculatedLayout,
+    minWidth: Int
+  ): Map[PaneId, LayoutRect] =
+    calculateEditorPaneLayoutsWithMinWidth(state, calculatedLayout, minWidth).view.mapValues(_.paneRect).toMap
+
+  def calculateEditorPaneLayouts(state: AppState, calculatedLayout: CalculatedLayout): Map[PaneId, EditorPaneLayout] =
+    calculateEditorPaneLayoutsWithMinWidth(state, calculatedLayout, state.config.minimumPaneWidth)
+
+  def calculateEditorPaneLayoutsWithMinWidth(
+    state: AppState,
+    calculatedLayout: CalculatedLayout,
+    minWidth: Int
+  ): Map[PaneId, EditorPaneLayout] =
+    calculatePaneRectsWithMinWidth(state, calculatedLayout, minWidth).view
+      .map((paneId, paneRect) => paneId -> editorPaneLayoutFor(paneId, paneRect, state, calculatedLayout))
+      .toMap
+
+  private def calculatePaneRectsWithMinWidth(
     state: AppState,
     calculatedLayout: CalculatedLayout,
     minWidth: Int
@@ -554,6 +580,44 @@ object LayoutEngine:
           calculateHorizontalPaneLayouts(state, editorRect, paneIds, minWidth)
         case PaneSplitDirection.Vertical =>
           calculateVerticalPaneLayouts(state, editorRect, paneIds)
+
+  private def editorPaneLayoutFor(
+    paneId: PaneId,
+    paneRect: LayoutRect,
+    state: AppState,
+    calculatedLayout: CalculatedLayout
+  ): EditorPaneLayout =
+    val paneHeaderRect = paneRect.copy(height = EditorPaneHeaderHeight)
+    val headerRect =
+      if state.layout.activeEditorPaneId.contains(paneId) then activeWorkspaceHeaderRect(paneRect.y, calculatedLayout)
+      else paneHeaderRect
+    EditorPaneLayout(
+      paneRect = paneRect,
+      headerRect = headerRect,
+      titleRect = headerRect,
+      contentRect = contentRectForPane(paneRect)
+    )
+
+  private[layout] def contentRectForPane(paneRect: LayoutRect): LayoutRect =
+    LayoutRect(
+      paneRect.x,
+      paneRect.y + EditorPaneHeaderHeight,
+      paneRect.width,
+      math.max(1, paneRect.height - EditorPaneHeaderHeight)
+    )
+
+  private def activeWorkspaceHeaderRect(y: Int, layout: CalculatedLayout): LayoutRect =
+    val workspaceRects =
+      List(
+        Some(layout.leftSpacerRect),
+        layout.lineNumberRect,
+        Some(layout.editorPanelRect),
+        Some(layout.rightSpacerRect)
+      ).flatten
+    val left  = workspaceRects.map(_.x).minOption.getOrElse(layout.editorPanelRect.x)
+    val right = workspaceRects.map(_.right).maxOption.getOrElse(layout.editorPanelRect.right)
+
+    LayoutRect(left, y, math.max(1, right - left), EditorPaneHeaderHeight)
 
   private def calculateHorizontalPaneLayouts(
     state: AppState,

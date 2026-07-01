@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.{ExplorerEvent, ResizeEvent, UnhandledEvent
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, SurfaceContent, SurfacePresentation}
+import com.serenity.state.models.*
 import com.serenity.state.reducers.{ReducerResult, SystemEventReducer}
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -27,11 +27,14 @@ class SystemEventReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.viewportSize shouldBe Some(newSize)
 
     val expectedLayout = LayoutEngine.calculateLayout(updatedState, newSize)
-    val bufferId       = updatedState.bufferOrder.head
-    val buffer         = updatedState.buffers(bufferId)
+    val contentRect = LayoutEngine
+      .calculateEditorPaneLayouts(updatedState, expectedLayout)(PaneId(0))
+      .contentRect
+    val bufferId = updatedState.bufferOrder.head
+    val buffer   = updatedState.buffers(bufferId)
 
-    buffer.viewport.visibleColumns shouldBe expectedLayout.editorPanelRect.width
-    buffer.viewport.visibleLines shouldBe expectedLayout.editorPanelRect.height
+    buffer.viewport.visibleColumns shouldBe contentRect.width
+    buffer.viewport.visibleLines shouldBe contentRect.height
   }
 
   it should "leave unrelated system events as no-ops" in {
