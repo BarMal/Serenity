@@ -38,6 +38,18 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     pane0Layout shouldBe calculatedLayout.editorPanelRect
   }
 
+  it should "use the full workspace width by default" in {
+    val state        = AppState.initial
+    val viewportSize = ViewportSize(100, 30)
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
+
+    calculatedLayout.leftSpacerRect.width shouldBe 0
+    calculatedLayout.rightSpacerRect.width shouldBe 0
+    calculatedLayout.lineNumberRect.map(_.width) shouldBe Some(3)
+    calculatedLayout.editorPanelRect shouldBe LayoutRect(3, 0, 97, 29)
+  }
+
   it should "delegate legacy LayoutManager layout calculation to the real layout engine" in {
     val state        = AppState.initial
     val viewportSize = ViewportSize(100, 30)
@@ -194,21 +206,22 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
     val paneLayouts      = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
 
-    // Then: With minimum width constraints, only one pane should be visible
+    // Then: With minimum width constraints, as many panes as fit should be visible
     paneLayouts should have size 3 // All panes exist in layout
 
     val editorRect = calculatedLayout.editorPanelRect
 
-    // Only one pane should be visible (focused pane: PaneId(0))
     val pane0Layout = paneLayouts(PaneId(0))
-    pane0Layout shouldBe editorRect
-
-    // Other panes should be positioned off-screen (left or right)
     val pane1Layout = paneLayouts(PaneId(1))
     val pane2Layout = paneLayouts(PaneId(2))
-    // Off-screen means either left of editor area or right of editor area
+
+    pane0Layout shouldBe LayoutRect(editorRect.x, editorRect.y, editorRect.width / 2, editorRect.height)
+    pane1Layout.x shouldBe editorRect.x + editorRect.width / 2
+    pane1Layout.y shouldBe editorRect.y
+    pane1Layout.height shouldBe editorRect.height
+
+    // Other panes should be positioned off-screen (left or right)
     val editorRight = editorRect.x + editorRect.width
-    pane1Layout.x should (be < editorRect.x or be >= editorRight) // Off-screen
     pane2Layout.x should (be < editorRect.x or be >= editorRight) // Off-screen
   }
 
@@ -237,8 +250,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val visiblePane = paneLayouts(PaneId(0))
     visiblePane.width should be >= minPaneWidth
 
-    // Other panes should be positioned off-screen (negative x or beyond screen width)
-    for i <- 1 until 5 do
+    // Panes beyond the visible capacity should be positioned off-screen.
+    for i <- 2 until 5 do
       val hiddenPane = paneLayouts(PaneId(i))
       (hiddenPane.x < 0 || hiddenPane.x >= viewportSize.width) shouldBe true
   }
@@ -299,10 +312,9 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       ViewportSize(120, 30)
     )
 
-    compact.editorPanelRect.x should be < comfortable.editorPanelRect.x
-    compact.editorPanelRect.width should be > comfortable.editorPanelRect.width
-    spacious.editorPanelRect.x should be > comfortable.editorPanelRect.x
-    spacious.editorPanelRect.width should be < comfortable.editorPanelRect.width
+    compact.editorPanelRect shouldBe comfortable.editorPanelRect
+    spacious.editorPanelRect.x shouldBe comfortable.editorPanelRect.x
+    spacious.editorPanelRect.width shouldBe comfortable.editorPanelRect.width
     compact.gutterRect.map(_.height) shouldBe Some(1)
     spacious.gutterRect.map(_.height) shouldBe Some(2)
     compact.belowCursorOverlayRect.map(_.height) should be < comfortable.belowCursorOverlayRect.map(_.height)

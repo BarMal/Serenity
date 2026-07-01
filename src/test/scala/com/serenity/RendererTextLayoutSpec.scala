@@ -1,6 +1,7 @@
 package com.serenity
 
 import java.awt.{Color, Font}
+import java.nio.file.Path
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -75,6 +76,43 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     cursorRects.head.widthPx should be < cellMetrics.charWidth
     // The cursor must be positioned after the first character (measured advance > 0).
     cursorRects.head.xPx should be > runCalls.head.xPx.toInt
+  }
+
+  it should "center the active buffer title across the painted header bar" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(1)
+    val title    = "api-spec.json"
+    val buffer = Buffer
+      .fromString(bufferId, "content")
+      .copy(filePath = Some(Path.of(title)))
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light
+    )
+    val viewportSize = ViewportSize(100, 30)
+    val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height)
+    val font = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val cellMetrics = CellMetrics.fromFont(font)
+    val layout      = com.serenity.ui.layout.LayoutEngine.calculateLayout(state, viewportSize)
+    val headerRect = List(
+      Some(layout.leftSpacerRect),
+      layout.lineNumberRect,
+      Some(layout.editorPanelRect),
+      Some(layout.rightSpacerRect)
+    ).flatten
+    val headerLeft  = headerRect.map(_.x).min
+    val headerRight = headerRect.map(_.right).max
+    val expectedX   = headerLeft + (headerRight - headerLeft - title.length) / 2
+
+    Renderer.render(state, cursorVisible = true, surface, viewportSize, font, font, cellMetrics, None)
+
+    firstNonSpaceColumn(surface, 0) shouldBe expectedX
   }
 
   it should "render a measured editor cursor using the full primary row height" in {

@@ -317,10 +317,18 @@ object EditorEventReducer:
             val preferredColumn       = buffer.preferredColumn.getOrElse(movementStart.column)
             val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
             val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, movementStart))
-            val newCursor = measuredVerticalMoveBySnapshot(buffer, movementStart, navSnap, preferredXPx, direction = -1)
-              .getOrElse(
-                fallbackVerticalMove(movementStart, buffer, currentState, preferredColumn, direction = -1)
+            val newCursor =
+              measuredVerticalMoveBySnapshot(
+                buffer,
+                currentState.config.wordWrapEnabled,
+                movementStart,
+                navSnap,
+                preferredXPx,
+                direction = -1
               )
+                .getOrElse(
+                  fallbackVerticalMove(movementStart, buffer, currentState, preferredColumn, direction = -1)
+                )
             val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
@@ -336,10 +344,18 @@ object EditorEventReducer:
             val preferredColumn       = buffer.preferredColumn.getOrElse(movementStart.column)
             val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
             val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, movementStart))
-            val newCursor = measuredVerticalMoveBySnapshot(buffer, movementStart, navSnap, preferredXPx, direction = 1)
-              .getOrElse(
-                fallbackVerticalMove(movementStart, buffer, currentState, preferredColumn, direction = 1)
+            val newCursor =
+              measuredVerticalMoveBySnapshot(
+                buffer,
+                currentState.config.wordWrapEnabled,
+                movementStart,
+                navSnap,
+                preferredXPx,
+                direction = 1
               )
+                .getOrElse(
+                  fallbackVerticalMove(movementStart, buffer, currentState, preferredColumn, direction = 1)
+                )
             val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
             val updatedBuffer = buffer.copy(
               cursors = newCursor :: buffer.cursors.tail,
@@ -366,8 +382,16 @@ object EditorEventReducer:
             val preferredColumn       = buffer.preferredColumn.getOrElse(cursor.column)
             val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
             val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, cursor))
-            val newCursor = measuredVerticalMoveBySnapshot(buffer, cursor, navSnap, preferredXPx, direction = -1)
-              .getOrElse(fallbackVerticalMove(cursor, buffer, currentState, preferredColumn, direction = -1))
+            val newCursor =
+              measuredVerticalMoveBySnapshot(
+                buffer,
+                currentState.config.wordWrapEnabled,
+                cursor,
+                navSnap,
+                preferredXPx,
+                direction = -1
+              )
+                .getOrElse(fallbackVerticalMove(cursor, buffer, currentState, preferredColumn, direction = -1))
             val updatedBuffer = extendSelection(
               buffer,
               currentState,
@@ -382,8 +406,16 @@ object EditorEventReducer:
             val preferredColumn       = buffer.preferredColumn.getOrElse(cursor.column)
             val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
             val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, cursor))
-            val newCursor = measuredVerticalMoveBySnapshot(buffer, cursor, navSnap, preferredXPx, direction = 1)
-              .getOrElse(fallbackVerticalMove(cursor, buffer, currentState, preferredColumn, direction = 1))
+            val newCursor =
+              measuredVerticalMoveBySnapshot(
+                buffer,
+                currentState.config.wordWrapEnabled,
+                cursor,
+                navSnap,
+                preferredXPx,
+                direction = 1
+              )
+                .getOrElse(fallbackVerticalMove(cursor, buffer, currentState, preferredColumn, direction = 1))
             val updatedBuffer = extendSelection(
               buffer,
               currentState,
@@ -1635,7 +1667,7 @@ object EditorEventReducer:
     direction: Int
   ): Option[CursorPosition] =
     Option
-      .when(usesMeasuredVerticalNavigation(buffer)) {
+      .when(usesMeasuredVerticalNavigation(buffer, currentState.config.wordWrapEnabled)) {
         moveVerticalByLayout(cursor, buffer, currentState, preferredXPx, direction)
       }
       .flatten
@@ -1669,19 +1701,20 @@ object EditorEventReducer:
 
   private def measuredVerticalMoveBySnapshot(
     buffer: Buffer,
+    wordWrapEnabled: Boolean,
     cursor: CursorPosition,
     snap: TextLayoutSnapshot,
     preferredXPx: Float,
     direction: Int
   ): Option[CursorPosition] =
     Option
-      .when(usesMeasuredVerticalNavigation(buffer)) {
+      .when(usesMeasuredVerticalNavigation(buffer, wordWrapEnabled)) {
         moveVerticalBySnapshot(cursor, snap, preferredXPx, direction)
       }
       .flatten
 
-  private def usesMeasuredVerticalNavigation(buffer: Buffer): Boolean =
-    buffer.usesTextFont
+  private def usesMeasuredVerticalNavigation(buffer: Buffer, wordWrapEnabled: Boolean): Boolean =
+    buffer.usesTextFont && wordWrapEnabled
 
   private def previewFontForBuffer(
     buffer: Buffer,

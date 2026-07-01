@@ -76,7 +76,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getRow(0).substring(expectedStart, expectedStart + title.length) shouldBe title
   }
 
-  it should "center the active buffer header over editor content when line numbers are visible" in {
+  it should "center the active buffer header across the workspace row when line numbers are visible" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val buffer   = Buffer.fromFile(bufferId, Path.of("notes.md"), "alpha\nbeta\ngamma")
@@ -97,8 +97,16 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = false, surface, viewport)
 
-    val title         = "notes.md"
-    val expectedStart = layout.editorPanelRect.x + (layout.editorPanelRect.width - title.length) / 2
+    val title = "notes.md"
+    val headerRects = List(
+      Some(layout.leftSpacerRect),
+      layout.lineNumberRect,
+      Some(layout.editorPanelRect),
+      Some(layout.rightSpacerRect)
+    ).flatten
+    val headerLeft    = headerRects.map(_.x).min
+    val headerRight   = headerRects.map(_.right).max
+    val expectedStart = headerLeft + (headerRight - headerLeft - title.length) / 2
 
     surface.getRow(0).substring(expectedStart, expectedStart + title.length) shouldBe title
   }

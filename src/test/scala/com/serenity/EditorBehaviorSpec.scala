@@ -440,8 +440,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     finalCursors shouldBe expectedCursors
 
   it should "move between logical lines when word wrap is disabled and the cursor is past the viewport" in new EditorFixture:
-    val firstLine  = "a" * 180
-    val secondLine = "b" * 100
+    val firstLine  = "W" * 180
+    val secondLine = "i" * 100
     val bufferId   = stateManager.createBuffer(s"$firstLine\n$secondLine").unsafeRunSync()
     val state      = stateManager.getCurrentState.unsafeRunSync()
     val paneId     = state.layout.editorPanes.keys.head

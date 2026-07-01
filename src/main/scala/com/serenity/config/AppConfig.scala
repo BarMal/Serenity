@@ -190,7 +190,7 @@ case class TextAreaInsets(
     right * 100.0
 
 object TextAreaInsets:
-  val DefaultInset: Double     = 0.15
+  val DefaultInset: Double     = 0.0
   val MaxInset: Double         = 0.45
   val MaxCombinedInset: Double = 0.8
   val MinTextAreaWidth: Double = 1.0 - MaxCombinedInset
