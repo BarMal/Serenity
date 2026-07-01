@@ -43,15 +43,10 @@ class SinglePaneRenderingSpec extends AnyFlatSpec with Matchers:
       paneRect.width.shouldBe(editorRect.width)
       paneRect.height.shouldBe(editorRect.height)
 
-      println(s"Initial state panes: ${state.layout.editorPanes.size}")
-      println(s"Layout generates pane rects: ${paneLayouts.size}")
-      println(s"Pane rect: $paneRect")
-      println(s"Editor rect: $editorRect")
-
     program.unsafeRunSync()
   }
 
-  it should "show the difference between state panes and rendered panes" in {
+  it should "keep one rendered pane when a new tab adds a buffer" in {
     given com.serenity.rope.Balance = com.serenity.rope.Balance.default
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
 
@@ -62,31 +57,11 @@ class SinglePaneRenderingSpec extends AnyFlatSpec with Matchers:
       _                <- stateManager.applyEvent(com.serenity.keystroke.events.NewTab)
       stateAfterNewTab <- stateManager.getCurrentState
     yield
-      // Check initial state
-      println("=== INITIAL STATE ===")
-      println(s"Panes in state: ${initialState.layout.editorPanes.size}")
-      println(s"Pane IDs: ${initialState.layout.editorPanes.keys.toList}")
-      println(s"Active pane: ${initialState.layout.activeEditorPaneId}")
-      println(s"Focus: ${initialState.focus}")
-
-      // Check layout calculation
       val viewportSize     = ViewportSize(100, 30)
       val calculatedLayout = LayoutEngine.calculateLayout(initialState, viewportSize)
       val paneLayouts      = LayoutEngine.calculatePaneLayouts(initialState, calculatedLayout)
-
-      println("=== CALCULATED LAYOUT ===")
-      println(s"Pane layouts generated: ${paneLayouts.size}")
-      paneLayouts.foreach((paneId, rect) => println(s"PaneId($paneId) -> $rect"))
-
-      println("=== AFTER NEW TAB ===")
-      println(s"Panes in state: ${stateAfterNewTab.layout.editorPanes.size}")
-      println(s"Pane IDs: ${stateAfterNewTab.layout.editorPanes.keys.toList}")
-      println(s"Active pane: ${stateAfterNewTab.layout.activeEditorPaneId}")
-      println(s"Focus: ${stateAfterNewTab.focus}")
-
-      val newTabLayouts = LayoutEngine.calculatePaneLayouts(stateAfterNewTab, calculatedLayout)
-      println(s"Pane layouts generated: ${newTabLayouts.size}")
-      newTabLayouts.foreach((paneId, rect) => println(s"PaneId($paneId) -> $rect"))
+      val newTabLayout     = LayoutEngine.calculateLayout(stateAfterNewTab, viewportSize)
+      val newTabLayouts    = LayoutEngine.calculatePaneLayouts(stateAfterNewTab, newTabLayout)
 
       // Assertions
       initialState.layout.editorPanes.should(have).size(1)
