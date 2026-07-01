@@ -2,6 +2,8 @@ package com.serenity.lsp.client
 
 import java.io.{BufferedInputStream, BufferedOutputStream}
 
+import scala.concurrent.duration.*
+
 import cats.effect.*
 import cats.effect.std.Queue
 import cats.syntax.all.*
@@ -18,25 +20,32 @@ class LspConnection private (
     idRef: Ref[IO, Long],
     pendingRef: Ref[IO, Map[Long, Deferred[IO, Either[Throwable, Json]]]],
     notifQueue: Queue[IO, Option[Json]],
+    requestTimeout: FiniteDuration,
     logger: Logger[IO]
 ):
 
   def sendRequest(method: String, params: Json): IO[Json] =
+    sendRequest(method, params, requestTimeout)
+
+  def sendRequest(method: String, params: Json, timeout: FiniteDuration): IO[Json] =
     for
       id       <- idRef.updateAndGet(_ + 1)
       deferred <- Deferred[IO, Either[Throwable, Json]]
       _        <- pendingRef.update(_ + (id -> deferred))
-      _ <- sendQueue.offer(
-        Some(
-          Json.obj(
-            "jsonrpc" -> io.circe.Json.fromString("2.0"),
-            "id"      -> io.circe.Json.fromLong(id),
-            "method"  -> io.circe.Json.fromString(method),
-            "params"  -> params
-          )
+      result <-
+        val cleanup = pendingRef.update(_ - id)
+        val request = Json.obj(
+          "jsonrpc" -> io.circe.Json.fromString("2.0"),
+          "id"      -> io.circe.Json.fromLong(id),
+          "method"  -> io.circe.Json.fromString(method),
+          "params"  -> params
         )
-      )
-      result <- deferred.get.flatMap(IO.fromEither)
+        val timeoutError = LspConnection.LspRequestTimeout(languageId, method, timeout)
+
+        (sendQueue.offer(Some(request)) >> deferred.get.flatMap(IO.fromEither))
+          .timeoutTo(timeout, cleanup >> IO.raiseError(timeoutError))
+          .onCancel(cleanup)
+          .onError(_ => cleanup)
     yield result
 
   def sendNotification(method: String, params: Json): IO[Unit] =
@@ -84,6 +93,9 @@ class LspConnection private (
   private[lsp] def takeOutgoing: IO[Option[Json]] =
     sendQueue.take
 
+  private[lsp] def pendingRequestCount: IO[Int] =
+    pendingRef.get.map(_.size)
+
   private[lsp] def outgoingMessages: Stream[IO, Json] =
     Stream.fromQueueNoneTerminated(sendQueue)
 
@@ -102,6 +114,11 @@ class LspConnection private (
 
 object LspConnection:
 
+  val DefaultRequestTimeout: FiniteDuration = 10.seconds
+
+  final case class LspRequestTimeout(languageId: LanguageId, method: String, timeout: FiniteDuration)
+      extends RuntimeException(s"LSP request timed out: ${languageId.id} $method after ${timeout.toMillis} ms")
+
   private case class ConnectionFibers(
       writer: Fiber[IO, Throwable, Unit],
       reader: Fiber[IO, Throwable, Unit]
@@ -109,14 +126,15 @@ object LspConnection:
 
   private[lsp] def create(
     languageId: LanguageId,
-    logger: Logger[IO]
+    logger: Logger[IO],
+    requestTimeout: FiniteDuration = DefaultRequestTimeout
   ): IO[LspConnection] =
     for
       sendQueue  <- Queue.bounded[IO, Option[Json]](256)
       idRef      <- Ref.of[IO, Long](0L)
       pendingRef <- Ref.of[IO, Map[Long, Deferred[IO, Either[Throwable, Json]]]](Map.empty)
       notifQueue <- Queue.bounded[IO, Option[Json]](256)
-    yield new LspConnection(languageId, sendQueue, idRef, pendingRef, notifQueue, logger)
+    yield new LspConnection(languageId, sendQueue, idRef, pendingRef, notifQueue, requestTimeout, logger)
 
   // Package-visible entry point — accepts pre-opened streams; used by tests via MockLspServer.
   private[lsp] def connect(
@@ -124,10 +142,11 @@ object LspConnection:
     rawIn: java.io.InputStream,
     rawOut: java.io.OutputStream,
     rootUri: String,
-    logger: Logger[IO]
+    logger: Logger[IO],
+    requestTimeout: FiniteDuration = DefaultRequestTimeout
   ): Resource[IO, LspConnection] =
     for
-      conn <- Resource.eval(create(languageId, logger))
+      conn <- Resource.eval(create(languageId, logger, requestTimeout))
       in  = new BufferedInputStream(rawIn)
       out = new BufferedOutputStream(rawOut)
       _ <- Resource.make {
@@ -160,7 +179,8 @@ object LspConnection:
   def apply(
     config: LspServerConfig,
     rootUri: String,
-    logger: Logger[IO]
+    logger: Logger[IO],
+    requestTimeout: FiniteDuration = DefaultRequestTimeout
   ): Resource[IO, LspConnection] =
     for
       process <- Resource.make(
@@ -170,7 +190,14 @@ object LspConnection:
           ).start()
         )
       )(proc => IO.blocking(proc.destroyForcibly()).void)
-      conn <- connect(config.languageId, process.getInputStream, process.getOutputStream, rootUri, logger)
+      conn <- connect(
+        config.languageId,
+        process.getInputStream,
+        process.getOutputStream,
+        rootUri,
+        logger,
+        requestTimeout
+      )
     yield conn
 
   private def initHandshake(conn: LspConnection, rootUri: String, logger: Logger[IO]): IO[Unit] =

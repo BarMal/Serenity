@@ -19,9 +19,10 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach:
 
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
-  private val logger      = LoggerFactory[IO].getLogger(using LoggerName("LspConnectionSpec"))
-  private val testTimeout = 3.seconds
+  given LoggerFactory[IO]  = Slf4jFactory.create[IO]
+  private val logger       = LoggerFactory[IO].getLogger(using LoggerName("LspConnectionSpec"))
+  private val testTimeout  = 3.seconds
+  private val shortTimeout = 100.millis
 
   override protected def beforeEach(): Unit =
     logger.info("[test] starting LspConnectionSpec case").unsafeRunSync()
@@ -43,6 +44,9 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
 
   private def makeConnection(): IO[LspConnection] =
     LspConnection.create(LanguageId.Scala, logger)
+
+  private def makeConnection(requestTimeout: FiniteDuration): IO[LspConnection] =
+    LspConnection.create(LanguageId.Scala, logger, requestTimeout)
 
   private def withIncomingProcessor[A](
     conn: LspConnection
@@ -94,15 +98,58 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
 
   "LspConnection.closeQueues" should "fail pending requests" in
     (for
+      conn <- makeConnection()
+      requestFiber <- conn
+        .sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace"))
+        .attempt
+        .start
+      _      <- conn.takeOutgoing
+      _      <- conn.closeQueues
+      result <- requestFiber.joinWithNever
+    yield result.left.toOption shouldBe defined).timeout(testTimeout).unsafeRunSync()
+
+  "LspConnection.sendRequest" should "time out and remove pending requests when the server does not respond" in
+    (for
+      conn <- makeConnection(shortTimeout)
+      requestFiber <- conn
+        .sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace"))
+        .attempt
+        .start
+      _            <- conn.takeOutgoing
+      result       <- requestFiber.joinWithNever
+      pendingCount <- conn.pendingRequestCount
+    yield
+      result.left.toOption.map(_.getMessage).getOrElse("") should include("LSP request timed out: scala initialize")
+      pendingCount shouldBe 0
+    ).timeout(testTimeout).unsafeRunSync()
+
+  it should "ignore delayed responses after the original request timed out" in
+    (for
+      conn <- makeConnection(shortTimeout)
+      requestFiber <- conn
+        .sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace"))
+        .attempt
+        .start
+      outgoing    <- conn.takeOutgoing
+      requestJson <- IO.fromOption(outgoing)(new RuntimeException("Missing outgoing request"))
+      requestId <- IO
+        .fromOption(requestJson.hcursor.downField("id").as[Long].toOption)(new RuntimeException("Missing request id"))
+      _ <- requestFiber.joinWithNever
+      _ <- conn.handleIncomingJson(
+        Json.obj("jsonrpc" -> "2.0".asJson, "id" -> requestId.asJson, "result" -> Json.obj())
+      )
+      pendingCount <- conn.pendingRequestCount
+    yield pendingCount shouldBe 0).timeout(testTimeout).unsafeRunSync()
+
+  it should "remove pending requests when a waiting fiber is canceled" in
+    (for
       conn         <- makeConnection()
       requestFiber <- conn.sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace")).start
       _            <- conn.takeOutgoing
-      _            <- conn.closeQueues
-      outcome      <- requestFiber.join
-    yield outcome match
-      case cats.effect.kernel.Outcome.Errored(_) => succeed
-      case other                                 => fail(s"Expected pending request to fail, got $other")
-    ).timeout(testTimeout).unsafeRunSync()
+      _            <- requestFiber.cancel
+      _            <- requestFiber.join
+      pendingCount <- conn.pendingRequestCount
+    yield pendingCount shouldBe 0).timeout(testTimeout).unsafeRunSync()
 
   "LspConnection.processIncoming" should "route publishDiagnostics to the callback" in
     (for
