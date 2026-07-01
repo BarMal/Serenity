@@ -1,0 +1,82 @@
+package com.serenity.command
+
+import com.serenity.config.BackgroundStyle
+import com.serenity.ui.layout.PanelPosition
+import com.serenity.ui.presets.UiPreset
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
+
+  "CommandRunnerSettingsItems" should "build typed option rows independently of runner state" in {
+    val background = CommandRunnerSettingsItems.backgroundStyleOptionItem(Map("background-style" -> 3))
+    val cursor     = CommandRunnerSettingsItems.cursorModeOptionItem(Map("cursor-mode" -> 1))
+
+    background.label shouldBe "Background Style"
+    background.selectedOption shouldBe "Glass"
+    background.selectedIntent shouldBe Some(CommandIntent.SetBackgroundStyle(BackgroundStyle.GlassLike))
+    background.options.map(_.label) shouldBe List("Solid", "Transparent", "Frosted", "Glass")
+
+    cursor.label shouldBe "Cursor Style"
+    cursor.selectedOption shouldBe "Breathe"
+  }
+
+  it should "build workspace panel controls with bounded selections" in {
+    val workspaceItems = CommandRunnerSettingsItems.workspaceLayoutItems(
+      Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 99)
+    )
+
+    val panelPins = workspaceItems
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-panel-pins" => group }
+      .getOrElse(fail("missing panel pins group"))
+    val outline = panelPins.children
+      .collectFirst { case option: CommandSurfaceItem.OptionItem if option.id == "panel-outline-pin" => option }
+      .getOrElse(fail("missing outline pin option"))
+    val diagnostics = panelPins.children
+      .collectFirst { case option: CommandSurfaceItem.OptionItem if option.id == "panel-diagnostics-pin" => option }
+      .getOrElse(fail("missing diagnostics pin option"))
+
+    panelPins.children.map(_.id) shouldBe List(
+      "panel-explorer-pin",
+      "panel-outline-pin",
+      "panel-diagnostics-pin",
+      "panel-markdown-preview-pin"
+    )
+    outline.selectedOption shouldBe "Right"
+    outline.selectedIntent shouldBe Some(CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)))
+    diagnostics.selectedOption shouldBe "Left"
+    diagnostics.selectedIntent shouldBe Some(
+      CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Left))
+    )
+  }
+
+  it should "normalize preset previews for the combined preset picker" in {
+    val picker = CommandRunnerSettingsItems.uiPresetSelectOptionItem(
+      previews = List(
+        UiPreset.Preview(" Review ", " Saved workspace setup "),
+        UiPreset.Preview("review", "duplicate"),
+        UiPreset.Preview("Drafting", "Saved workspace setup")
+      ),
+      optionSelections = Map("ui-preset-custom" -> 1)
+    )
+
+    picker.options.map(_.label) shouldBe List("Writing", "Documentation", "Code", "Review", "Drafting", "Review")
+    picker.selectedOption shouldBe "Review"
+    picker.options.takeRight(2).map(_.hint) shouldBe List(Some("Saved workspace setup"), Some("Saved workspace setup"))
+  }
+
+  it should "build language and theme command items as settings surface rows" in {
+    val themeIntents = CommandRunnerSettingsItems.themeItems.collect {
+      case CommandSurfaceItem.CommandItem(command) =>
+        command.intent
+    }
+    val languageIds = CommandRunnerSettingsItems.languageItems.map(_.id)
+
+    themeIntents should contain allOf (
+      CommandIntent.OpenThemeChooser,
+      CommandIntent.ToggleTheme,
+      CommandIntent.ReloadTheme
+    )
+    languageIds.headOption shouldBe Some("lang-plain-text")
+    languageIds should contain("lang-scala")
+  }
