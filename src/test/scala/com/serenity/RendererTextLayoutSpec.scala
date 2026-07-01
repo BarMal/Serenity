@@ -28,6 +28,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     font: Font,
     viewport: Viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 10, visibleLines = 4),
     viewportSize: ViewportSize = ViewportSize(100, 30),
+    cellMetricsOverride: Option[CellMetrics] = None,
     config: AppConfig = AppConfig.default.withLineNumbers(false).withGutter(false)
   ): MockRenderSurface =
     val paneId   = PaneId(0)
@@ -52,7 +53,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     )
 
     val surface     = new MockRenderSurface(viewportSize.width, viewportSize.height)
-    val cellMetrics = CellMetrics.fromFont(font)
+    val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     Renderer.render(state, cursorVisible = true, surface, viewportSize, font, font, cellMetrics, None)
     surface
 
@@ -74,6 +75,22 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     cursorRects.head.widthPx should be < cellMetrics.charWidth
     // The cursor must be positioned after the first character (measured advance > 0).
     cursorRects.head.xPx should be > runCalls.head.xPx.toInt
+  }
+
+  it should "render a measured editor cursor using the full primary row height" in {
+    val font = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val textMetrics = CellMetrics.fromFont(font)
+    val rowMetrics = CellMetrics(
+      charWidth = textMetrics.charWidth,
+      lineHeight = textMetrics.lineHeight + 6,
+      ascent = textMetrics.ascent + 4
+    )
+    val surface     = renderState("iW", CursorPosition(0, 1), font, cellMetricsOverride = Some(rowMetrics))
+    val cursorRects = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
+
+    cursorRects should have size 1
+    cursorRects.head.yPx shouldBe rowMetrics.toPixelY(1)
+    cursorRects.head.heightPx shouldBe rowMetrics.lineHeight
   }
 
   it should "render proportional text via drawRunPx with the full content" in {
