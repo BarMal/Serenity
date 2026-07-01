@@ -60,6 +60,7 @@ trait StateManager:
   // Session persistence operations
   def saveSession(): IO[Unit]
   def loadSession(): IO[Option[AppState]]
+  def currentSessionThemeName: IO[Option[String]]
   def sessionExists: IO[Boolean]
   def clearSession(): IO[Unit]
 
@@ -199,6 +200,9 @@ object StateManager:
 
     def loadSession(): IO[Option[AppState]] =
       sessionManager.loadSession()
+
+    def currentSessionThemeName: IO[Option[String]] =
+      sessionManager.currentSessionThemeName
 
     def sessionExists: IO[Boolean] =
       sessionManager.sessionExists

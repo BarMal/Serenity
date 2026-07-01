@@ -1,11 +1,14 @@
 package com.serenity
 
+import java.nio.file.Files
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{Focus, SurfaceContent}
 import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -75,4 +78,33 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         // Status message should be either None (session exists) or Some("No previous session found")
         startPage.statusMessage should (be(None) or be(Some("No previous session found")))
       case other => fail(s"Expected StartPage surface content, got: $other")
+  }
+
+  it should "use the current session theme for startup instead of defaulting to dark" in {
+    given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+    given LoggerFactory[IO]         = Slf4jFactory.create[IO]
+
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("MainStartupThemeSpec"))
+    val sessionRoot         = Files.createTempDirectory("serenity-startup-theme")
+    val initialViewportSize = ViewportSize(120, 30)
+
+    val program = for
+      firstManager <- StateManager.apply(logger, sessionRootOverride = Some(sessionRoot))
+      _            <- firstManager.updateState(_.copy(theme = Theme.light))
+      _            <- firstManager.saveSession()
+      secondManager <- StateManager.apply(
+        logger,
+        sessionRootOverride = Some(sessionRoot)
+      )
+      startupTheme <- AppStartup.startupTheme(secondManager, AppThemeManager.create)
+      finalState <- AppStartup.initializeState(
+        secondManager,
+        startupTheme,
+        initialViewportSize
+      )
+    yield finalState
+
+    val finalState = program.unsafeRunSync()
+
+    finalState.theme.name shouldBe Theme.light.name
   }

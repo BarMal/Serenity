@@ -6,6 +6,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
+import com.serenity.ui.theme.config.AppThemeManager
 
 object AppStartup:
 
@@ -49,6 +50,17 @@ object AppStartup:
         theme = theme,
         nextSurfaceId = 1
       )
+
+  /** Resolve the theme to use for startup before a saved session is restored. */
+  def startupTheme(
+    stateManager: StateManager,
+    themeManager: AppThemeManager,
+    fallbackThemeName: String = "dark"
+  ): IO[Theme] =
+    for
+      savedThemeName <- stateManager.currentSessionThemeName
+      theme          <- themeManager.initializeWithTheme(savedThemeName.getOrElse(fallbackThemeName))
+    yield theme
 
   /** Initialize the application state for first render using the active theme and current viewport size. */
   def initializeState(
