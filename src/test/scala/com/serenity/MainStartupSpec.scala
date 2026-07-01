@@ -109,6 +109,9 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       val finalState = result.unsafeRunSync()
 
       finalState.startPageSurface shouldBe None
+      finalState.buffers.size shouldBe 1
+      finalState.layout.editorPanes.size shouldBe 1
+      finalState.bufferOrder.size shouldBe 1
       finalState.buffers.values.find(_.filePath.contains(selectedFile)).map(_.content.collect()) shouldBe Some(
         "opened from launch option"
       )

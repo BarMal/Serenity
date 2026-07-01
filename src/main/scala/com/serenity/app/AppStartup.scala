@@ -75,8 +75,8 @@ object AppStartup:
     openPath match
       case Some(path) =>
         for
-          _ <- stateManager.updateState(current =>
-            current.copy(
+          _ <- stateManager.updateState(_ =>
+            AppState.empty.copy(
               uiSurfaces = List.empty,
               config = appConfig,
               viewportSize = Some(initialViewportSize),
