@@ -207,8 +207,8 @@ object Java2DRenderSurface:
     canvas: javax.swing.JPanel,
     onFlush: BufferedImage => Unit
   ): Java2DRenderSurface =
-    val logicalWidth  = canvas.getWidth.max(1)
-    val logicalHeight = canvas.getHeight.max(1)
+    val logicalWidth  = logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
+    val logicalHeight = logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
     val scale         = deviceScaleFor(canvas)
     val image = new BufferedImage(
       deviceImageDimension(logicalWidth, scale.x),
@@ -228,6 +228,10 @@ object Java2DRenderSurface:
 
   private[serenity] def deviceImageDimension(logicalDimensionPx: Int, deviceScale: Double): Int =
     math.ceil(logicalDimensionPx.max(1) * deviceScale.max(1.0)).toInt.max(1)
+
+  private[serenity] def logicalCanvasDimension(currentPx: Int, preferredPx: Int): Int =
+    if currentPx > 0 then currentPx
+    else preferredPx.max(1)
 
   private[serenity] def deviceRegionFor(
     logicalX: Int,

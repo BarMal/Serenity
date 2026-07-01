@@ -7,7 +7,10 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{Focus, SurfaceContent}
-import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -109,7 +112,21 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       finalState.buffers.values.find(_.filePath.contains(selectedFile)).map(_.content.collect()) shouldBe Some(
         "opened from launch option"
       )
-      finalState.focus should matchPattern { case Focus.EditorPane(_) => }
+      val paneId = finalState.layout.activeEditorPaneId.getOrElse(fail("Expected an active editor pane"))
+      finalState.focus shouldBe Focus.EditorPane(paneId)
+      val activeBufferId =
+        finalState.layout.editorPanes.get(paneId).flatMap(_.bufferId).getOrElse(fail("Expected active pane buffer"))
+      finalState.buffers(activeBufferId).filePath shouldBe Some(selectedFile)
+
+      val surface     = new MockRenderSurface(initialViewportSize.width, initialViewportSize.height)
+      val font        = FontLoader.previewCodeFont(FontConfig(fontSize = 12.0f))
+      val cellMetrics = CellMetrics.fromFont(font)
+
+      Renderer.render(finalState, cursorVisible = true, surface, initialViewportSize, font, font, cellMetrics, None)
+
+      (0 until initialViewportSize.height).map(surface.getRow).mkString("\n") should include(
+        "opened from launch option"
+      )
     finally Files.deleteIfExists(selectedFile)
   }
 
