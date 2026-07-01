@@ -1254,7 +1254,9 @@ object Renderer:
                 case (visualLine, index) if index < lineRect.height =>
                   val screenY = lineRect.y + index
                   if firstVisualRows.get(visualLine.bufferLine).contains(index) then
-                    val lineNumberText = (visualLine.bufferLine + 1).toString.padTo(lineRect.width - 1, ' ') + " "
+                    val numberWidth = math.max(1, lineRect.width - 1)
+                    val lineNumberText =
+                      (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
                     surface.putString(lineRect.x, screenY, lineNumberText)
                     buffer.foreach(
                       renderDiagnosticIndicator(surface, lineRect, screenY, visualLine.bufferLine, _, state)

@@ -22,6 +22,7 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
     inputById(items, "ui-element-gap").parse("4") shouldBe Some(CommandIntent.SetUiElementGap(4))
     inputById(items, "ui-element-gap").parse("9") shouldBe None
     inputById(items, "command-runner-visible-rows").currentValue shouldBe "9"
+    inputById(items, "command-runner-visible-rows").searchText.toLowerCase should include("visible commands")
     inputById(items, "command-runner-visible-rows").parse("auto") shouldBe
       Some(CommandIntent.SetCommandRunnerVisibleRows(None))
     inputById(items, "spellcheck-languages").currentValue shouldBe "en,fr"

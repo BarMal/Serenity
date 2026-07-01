@@ -196,6 +196,33 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
+  it should "right-align line numbers in a widened gutter" in {
+    val lines = (1 to 1000).map(i => s"Line $i").mkString("\n")
+    val buffer = Buffer
+      .fromString(BufferId(1), lines)
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 5, visibleColumns = 20))
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = com.serenity.ui.layout.Layout(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.EditorPane(PaneId(0)),
+      theme = Theme.light
+    )
+    val surface  = new MockRenderSurface(80, 24)
+    val viewport = ViewportSize(80, 24)
+    val layout   = LayoutEngine.calculateLayout(state, viewport)
+    val gutter   = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
+
+    Renderer.render(state, cursorVisible = true, surface, viewport)
+
+    surface.getRow(gutter.y).slice(gutter.x, gutter.x + gutter.width) shouldBe "   1 "
+    surface.getRow(gutter.y + 1).slice(gutter.x, gutter.x + gutter.width) shouldBe "   2 "
+  }
+
   it should "render shared gutter line numbers from the active pane only" in {
     val buffer1 = Buffer
       .fromString(BufferId(1), (1 to 20).map(i => s"left $i").mkString("\n"))
