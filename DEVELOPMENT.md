@@ -25,6 +25,10 @@ git switch -c codex/my-change
 
 ## Checks
 
+Project coding standards live in `docs/coding-standards.md`. Read that document
+before changing core reducers, runtime loops, configuration schema, rendering,
+or state-management code.
+
 Run the Scala checks before opening or updating a PR:
 
 ```bash
