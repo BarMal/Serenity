@@ -1,0 +1,87 @@
+package com.serenity
+
+import com.serenity.animation.{AnimationConfig, TransitionKind}
+import com.serenity.command.CommandRunnerOptionSelections
+import com.serenity.config.*
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.FontLoader.TextScaleMode
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
+
+  "CommandRunnerOptionSelections" should "derive option indices from current app config" in {
+    val codeFont = FontLoader.availableMonospaceFamilies.drop(1).headOption.getOrElse("missing-code-font")
+    val textFont = FontLoader.availableTextFamilies.drop(1).headOption.getOrElse("missing-text-font")
+    val uiFont   = FontLoader.availableUiFamilies.drop(1).headOption.getOrElse("missing-ui-font")
+    val config = AppConfig.default.copy(
+      characterAnimation = AnimationConfig.subtle,
+      materialPreset = MaterialPreset.Crystal,
+      motionPreset = MotionPreset.Expressive,
+      commandRunnerAnimation = AnimationConfig.quick,
+      editorInsertionTransitionKind = TransitionKind.Disabled,
+      cursorMode = CursorMode.Breathe,
+      cursorInfoBarMode = CursorInfoBarMode.Detailed,
+      cursorInfoBarPlacement = CursorInfoBarPlacement.PinnedBottom,
+      backgroundStyle = BackgroundStyle.GlassLike,
+      interfaceDensity = InterfaceDensity.Compact,
+      markdownViewMode = MarkdownViewMode.InlineLens,
+      defaultDocumentMode = DefaultDocumentMode.RichText,
+      spellCheck = SpellCheckConfig(enabled = true),
+      showLineNumbers = false,
+      showGutter = false,
+      wordWrapEnabled = false,
+      fontConfig = AppConfig.default.fontConfig.copy(
+        codeFontFamily = codeFont,
+        textFontFamily = textFont,
+        uiFontFamily = uiFont,
+        textScaleMode = TextScaleMode.Off,
+        enableLigatures = false,
+        textLigatures = false,
+        uiLigatures = true
+      )
+    )
+
+    val selections = CommandRunnerOptionSelections.default(config)
+
+    selections("animation-mode") shouldBe 1
+    selections("material-preset") shouldBe 3
+    selections("motion-preset") shouldBe 3
+    selections("command-runner-fade") shouldBe 3
+    selections("editor-text-transition") shouldBe 4
+    selections("cursor-mode") shouldBe 1
+    selections("cursor-info-bar") shouldBe 2
+    selections("cursor-info-bar-placement") shouldBe 1
+    selections("background-style") shouldBe 3
+    selections("interface-density") shouldBe 0
+    selections("markdown-view") shouldBe 2
+    selections("default-document-mode") shouldBe 2
+    selections("spellcheck-enabled") shouldBe 1
+    selections("line-numbers") shouldBe 1
+    selections("gutter") shouldBe 1
+    selections("line-wrap") shouldBe 1
+    selections("word-wrap") shouldBe 1
+    selections("code-font") shouldBe FontLoader.availableMonospaceFamilies.indexOf(codeFont)
+    selections("text-font") shouldBe FontLoader.availableTextFamilies.indexOf(textFont)
+    selections("ui-font") shouldBe FontLoader.availableUiFamilies.indexOf(uiFont)
+    selections("text-scale-mode") shouldBe 2
+    selections("code-ligatures") shouldBe 1
+    selections("text-ligatures") shouldBe 1
+    selections("ui-ligatures") shouldBe 0
+  }
+
+  it should "fall back to the first font option when a configured family is unavailable" in {
+    val config = AppConfig.default.copy(
+      fontConfig = AppConfig.default.fontConfig.copy(
+        codeFontFamily = "Unavailable Code",
+        textFontFamily = "Unavailable Text",
+        uiFontFamily = "Unavailable UI"
+      )
+    )
+
+    val selections = CommandRunnerOptionSelections.default(config)
+
+    selections("code-font") shouldBe 0
+    selections("text-font") shouldBe 0
+    selections("ui-font") shouldBe 0
+  }
