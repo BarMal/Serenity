@@ -49,6 +49,7 @@ object Renderer:
 
   private val MinMarkdownPreviewSourceLines = 32
   private val MarkdownPreviewOverscanFactor = 4
+  private val CursorOpticalLiftPx           = 1
 
   private def withEffectiveTheme(state: AppState): AppState =
     state.themeTransition match
@@ -807,7 +808,10 @@ object Renderer:
                 val effectiveCursorColor = cursorColorFor(config, theme, context, isPrimaryCursor)
                 val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
                 val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
-                val screenYPx            = context.cellMetrics.toPixelY(screenYCell)
+                val screenYPx = cursorTopPx(
+                  context.cellMetrics.toPixelY(screenYCell),
+                  context.cellMetrics.toPixelY(rect.y + placement.top)
+                )
                 context.surface.fillPixelRect(
                   screenXPx,
                   screenYPx,
@@ -1031,7 +1035,8 @@ object Renderer:
             val effectiveCursorColor = cursorColorFor(config, theme, context, isPrimaryCursor)
             val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
             val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
-            val screenYPx            = context.cellMetrics.toPixelY(screenYCell)
+            val screenYPx =
+              cursorTopPx(context.cellMetrics.toPixelY(screenYCell), context.cellMetrics.toPixelY(rect.y))
             context.surface.fillPixelRect(
               screenXPx,
               screenYPx,
@@ -1041,6 +1046,9 @@ object Renderer:
             )
         case _ => ()
     }
+
+  private def cursorTopPx(rowTopPx: Int, contentTopPx: Int): Int =
+    math.max(contentTopPx, rowTopPx - CursorOpticalLiftPx)
 
   private def calculateCursorVisualPosition(
     cursor: CursorPosition,

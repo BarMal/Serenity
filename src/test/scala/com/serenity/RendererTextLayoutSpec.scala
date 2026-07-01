@@ -131,6 +131,18 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     cursorRects.head.heightPx shouldBe rowMetrics.lineHeight
   }
 
+  it should "optically lift a full-height measured cursor below the first content row" in {
+    val font       = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val rowMetrics = CellMetrics.fromFont(font)
+    val surface =
+      renderState("top\nbottom", CursorPosition(1, 1), font, cellMetricsOverride = Some(rowMetrics))
+    val cursorRects = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
+
+    cursorRects should have size 1
+    cursorRects.head.yPx shouldBe rowMetrics.toPixelY(2) - 1
+    cursorRects.head.heightPx shouldBe rowMetrics.lineHeight
+  }
+
   it should "render proportional text via drawRunPx with the full content" in {
     val font    = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
     val surface = renderState("WWW", CursorPosition(0, 0), font)
