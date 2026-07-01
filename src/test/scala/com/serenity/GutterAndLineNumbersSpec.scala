@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{CursorInfoBarMode, CursorInfoBarPlacement}
+import com.serenity.config.{CursorInfoBarMode, CursorInfoBarPlacement, InterfaceDensity}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -229,6 +229,39 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
     firstRenderedLine shouldBe "6"
   }
+
+  it should "align the first line number with the first content row for every interface density" in
+    List(InterfaceDensity.Compact, InterfaceDensity.Comfortable, InterfaceDensity.Spacious).foreach { density =>
+      val buffer = Buffer
+        .fromString(BufferId(5), "alpha\nbeta\ngamma")
+        .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 8, visibleColumns = 40))
+      val state = AppState.initial.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0)),
+        config = AppState.initial.config
+          .withInterfaceDensity(density)
+          .copy(showLineNumbers = true),
+        theme = Theme.light
+      )
+      val surface   = new MockRenderSurface(80, 24)
+      val viewport  = ViewportSize(80, 24)
+      val layout    = LayoutEngine.calculateLayout(state, viewport)
+      val lineRect  = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
+      val firstRowY = layout.editorPanelRect.y + 1
+
+      Renderer.render(state, cursorVisible = true, surface, viewport)
+
+      withClue(s"density=$density:") {
+        val firstNumber = (lineRect.x until lineRect.right).map(x => surface.getChar(x, firstRowY)).mkString.trim
+        firstNumber shouldBe "1"
+      }
+    }
 
   it should "leave continuation rows blank when a logical line wraps" in {
     val longLine = List.fill(20)("alpha").mkString(" ")
