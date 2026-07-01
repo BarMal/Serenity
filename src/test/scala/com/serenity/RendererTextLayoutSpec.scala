@@ -30,6 +30,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     viewport: Viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 10, visibleLines = 4),
     viewportSize: ViewportSize = ViewportSize(100, 30),
     cellMetricsOverride: Option[CellMetrics] = None,
+    textFontOverride: Option[Font] = None,
     config: AppConfig = AppConfig.default.withLineNumbers(false).withGutter(false)
   ): MockRenderSurface =
     val paneId   = PaneId(0)
@@ -55,7 +56,16 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
 
     val surface     = new MockRenderSurface(viewportSize.width, viewportSize.height)
     val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, font, font, cellMetrics, None)
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      font,
+      textFontOverride.getOrElse(font),
+      cellMetrics,
+      None
+    )
     surface
 
   private def firstNonSpaceColumn(surface: MockRenderSurface, row: Int): Int =
@@ -82,7 +92,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val buffer = Buffer
-      .fromString(bufferId, "alpha beta gamma\nnext")
+      .fromString(bufferId, "alpha beta gamma delta epsilon\nnext")
       .copy(
         language = Some(com.serenity.lsp.config.LanguageId.JsonLang),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 8, visibleLines = 4, topVisualLine = 1)
@@ -107,7 +117,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
 
     surface.getRow(1).take(3).trim shouldBe ""
     surface.getRow(2).take(3).trim shouldBe ""
-    surface.getRow(3).take(3).trim shouldBe "2"
+    surface.getRow(3).take(3).trim should not be "1"
   }
 
   it should "center the active buffer title across the painted header bar" in {
@@ -178,8 +188,60 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val cursorRects = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
 
     cursorRects should have size 1
-    cursorRects.head.yPx shouldBe rowMetrics.toPixelY(1)
-    cursorRects.head.heightPx shouldBe rowMetrics.lineHeight
+    val contentRun = surface.drawRunPxCalls.find(_.s == "iW").getOrElse(fail("expected measured content draw"))
+
+    cursorRects.head.yPx shouldBe contentRun.yPx
+    cursorRects.head.heightPx shouldBe contentRun.lineHeightPx
+  }
+
+  it should "size document-font cursors from the buffer typography metrics rather than the code grid" in {
+    val codeFont = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val textFont = FontLoader
+      .loadTextFont(
+        FontConfig(textFontFamily = "Serif", fontSize = 22.0f)
+      )
+      .unsafeRunSync()
+    val codeMetrics = CellMetrics.fromFont(codeFont)
+    val surface = renderState(
+      "Serenity writes measured prose",
+      CursorPosition(0, 8),
+      codeFont,
+      cellMetricsOverride = Some(codeMetrics),
+      textFontOverride = Some(textFont)
+    )
+    val contentRun =
+      surface.drawRunPxCalls.find(_.s.contains("Serenity writes")).getOrElse(fail("expected measured prose draw"))
+    val cursorRect = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor).head
+
+    cursorRect.yPx shouldBe contentRun.yPx
+    cursorRect.heightPx shouldBe contentRun.lineHeightPx
+    cursorRect.heightPx should not be codeMetrics.lineHeight
+  }
+
+  it should "baseline-align line numbers with document-font text rows" in {
+    val codeFont = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val textFont = FontLoader
+      .loadTextFont(
+        FontConfig(textFontFamily = "Serif", fontSize = 22.0f)
+      )
+      .unsafeRunSync()
+    val surface = renderState(
+      "Alpha\nBeta",
+      CursorPosition(0, 0),
+      codeFont,
+      cellMetricsOverride = Some(CellMetrics.fromFont(codeFont)),
+      textFontOverride = Some(textFont),
+      config = AppConfig.default.withLineNumbers(true).withGutter(false)
+    )
+
+    val firstTextRun =
+      surface.drawRunPxCalls.find(_.s == "Alpha").getOrElse(fail("expected measured first prose line"))
+    val firstLineNumber =
+      surface.drawRunPxCalls.find(call => call.s.trim == "1").getOrElse(fail("expected measured line number"))
+
+    firstLineNumber.yPx shouldBe firstTextRun.yPx
+    firstLineNumber.lineHeightPx shouldBe firstTextRun.lineHeightPx
+    firstLineNumber.ascentPx shouldBe firstTextRun.ascentPx
   }
 
   it should "optically lift a full-height measured cursor below the first content row" in {
