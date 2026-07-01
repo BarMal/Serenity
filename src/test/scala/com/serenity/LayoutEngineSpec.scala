@@ -50,6 +50,42 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     calculatedLayout.editorPanelRect shouldBe LayoutRect(3, 0, 97, 29)
   }
 
+  it should "expose owned child rectangles for editor pane chrome and content" in {
+    val state        = AppState.initial
+    val viewportSize = ViewportSize(100, 30)
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
+    val paneLayout       = LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0))
+
+    paneLayout.paneRect shouldBe calculatedLayout.editorPanelRect
+    paneLayout.headerRect shouldBe LayoutRect(0, 0, 100, 1)
+    paneLayout.titleRect shouldBe paneLayout.headerRect
+    paneLayout.contentRect shouldBe LayoutRect(3, 1, 97, 28)
+  }
+
+  it should "place cursors using the pane content rectangle owned by editor pane layout" in {
+    val buffer = Buffer.fromString(BufferId(0), "abc\ndef").copy(cursors = List(CursorPosition(1, 2)))
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0))
+      )
+    )
+    val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val paneLayout       = LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0))
+
+    val cursorPosition = CursorLayout.calculateScreenPositionInContent(
+      CursorPosition(1, 2),
+      buffer.content,
+      paneLayout.contentRect,
+      buffer.viewport
+    )
+
+    cursorPosition shouldBe Some(ScreenPosition(paneLayout.contentRect.x + 2, paneLayout.contentRect.y + 1))
+  }
+
   it should "delegate legacy LayoutManager layout calculation to the real layout engine" in {
     val state        = AppState.initial
     val viewportSize = ViewportSize(100, 30)
