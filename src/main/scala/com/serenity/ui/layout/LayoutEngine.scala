@@ -42,6 +42,7 @@ object LayoutEngine:
   // Default spacer width as percentage of terminal width (15% each side = 30% total)
   private[layout] val DefaultSpacerPercentage = 0.15
   private val MinimumVerticalPaneHeight       = 5
+  private val EditorPaneHeaderHeight          = 1
   private val CommandSurfaceChromeRows        = 4
 
   def calculateLayout(
@@ -113,7 +114,7 @@ object LayoutEngine:
     val leftSpacerRect = LayoutRect(workspaceX, workspaceY, leftSpacerWidth, workspaceHeight)
     val lineNumberRect =
       if state.config.showLineNumbers then
-        val topInset = densityMetrics.lineNumberTopInset.min(math.max(0, availableHeight - 1))
+        val topInset = EditorPaneHeaderHeight.min(math.max(0, availableHeight - 1))
         Some(
           LayoutRect(workspaceX + leftSpacerWidth, workspaceY + topInset, lineNumberWidth, availableHeight - topInset)
         )

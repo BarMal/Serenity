@@ -104,7 +104,6 @@ enum InterfaceDensity:
 
 case class InterfaceDensityMetrics(
     editorSpacerPercentage: Double,
-    lineNumberTopInset: Int,
     gutterHeight: Int,
     overlayGapRows: Int,
     commandSurfaceMaxHeight: Int,
@@ -119,7 +118,6 @@ object InterfaceDensityMetrics:
       case InterfaceDensity.Compact =>
         InterfaceDensityMetrics(
           editorSpacerPercentage = 0.08,
-          lineNumberTopInset = 0,
           gutterHeight = 1,
           overlayGapRows = 0,
           commandSurfaceMaxHeight = 6,
@@ -129,7 +127,6 @@ object InterfaceDensityMetrics:
       case InterfaceDensity.Comfortable =>
         InterfaceDensityMetrics(
           editorSpacerPercentage = 0.15,
-          lineNumberTopInset = 1,
           gutterHeight = 1,
           overlayGapRows = 1,
           commandSurfaceMaxHeight = 8,
@@ -139,7 +136,6 @@ object InterfaceDensityMetrics:
       case InterfaceDensity.Spacious =>
         InterfaceDensityMetrics(
           editorSpacerPercentage = 0.22,
-          lineNumberTopInset = 2,
           gutterHeight = 2,
           overlayGapRows = 2,
           commandSurfaceMaxHeight = 10,
