@@ -238,11 +238,12 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "place an editable command setting caret on the rendered value cell" in {
-    val surface = new MockRenderSurface(80, 8)
-    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
-    val value   = "250"
-    val rowText = s"Animation Duration: Duration in ms $value"
+    val surface  = new MockRenderSurface(80, 8)
+    val gridFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val font     = Font(Font.SANS_SERIF, Font.PLAIN, 12)
+    val metrics  = CellMetrics.fromFont(gridFont)
+    val value    = "250"
+    val rowText  = s"Animation Duration: Duration in ms $value"
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 70, 6),
       rows = List(
@@ -260,6 +261,7 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
       )
     )
 
+    surface.setFont(font)
     TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     val contentWidth = overlay.rect.width - 2
@@ -269,7 +271,9 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     val valueX       = overlay.rect.x + 1 + labelWidth + hintWidth + 2
 
     surface.getRow(1).slice(valueX, valueX + value.length) shouldBe value
-    surface.getBg(valueX + value.length, 1) shouldBe Theme.light.cursor
+    val caretXs = TextLayoutSnapshot.caretXsForText(value, font, surface.fontRenderContext.get)
+    surface.fillPixelRectCalls.last.xPx shouldBe metrics.toPixelX(valueX) + math.round(caretXs.last)
+    surface.fillPixelRectCalls.last.xPx should not be metrics.toPixelX(valueX + value.length)
   }
 
   it should "render font preview segments with the segment font family" in {
