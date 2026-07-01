@@ -8,6 +8,12 @@ object TextNavigationConverters:
   val navigationConverter: PartialFunction[KeyStrokeInfo, TextEntryEvent] = {
     case KeyStrokeInfo(InputKey.Home, _, modifiers) if modifiers.contains(Modifier.Ctrl) => MoveToStartOfFile
     case KeyStrokeInfo(InputKey.End, _, modifiers) if modifiers.contains(Modifier.Ctrl)  => MoveToEndOfFile
+    case KeyStrokeInfo(InputKey.ArrowLeft, _, modifiers)
+        if modifiers.contains(Modifier.Ctrl) || modifiers.contains(Modifier.Alt) =>
+      MoveWordLeft
+    case KeyStrokeInfo(InputKey.ArrowRight, _, modifiers)
+        if modifiers.contains(Modifier.Ctrl) || modifiers.contains(Modifier.Alt) =>
+      MoveWordRight
     case KeyStrokeInfo(InputKey.ArrowLeft, _, modifiers) if modifiers.contains(Modifier.Shift) =>
       ExtendSelectionLeft
     case KeyStrokeInfo(InputKey.ArrowRight, _, modifiers) if modifiers.contains(Modifier.Shift) =>
