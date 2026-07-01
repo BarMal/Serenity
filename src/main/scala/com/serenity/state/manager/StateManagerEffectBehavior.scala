@@ -265,7 +265,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         saveSession()
       case CommandIntent.RestoreSession =>
         loadSession().flatMap {
-          case Some(restored) => validateAndUpdateState(restored, state)
+          case Some(restored) => validateAndUpdateState(restoreSessionIntoCurrentViewport(restored, state), state)
           case None           => logger.debug("[SESSION] Restore requested without a saved session")
         }
       case CommandIntent.ClearSession =>
@@ -1631,7 +1631,11 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
               val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
               val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
               val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
-              (focused, loadedBuffer)
+              val resized =
+                focused.viewportSize
+                  .map(viewportSize => LayoutEngine.syncViewportDimensions(focused, viewportSize))
+                  .getOrElse(focused)
+              (resized, loadedBuffer)
             }
           }
           .flatTap { loadedBuffer =>

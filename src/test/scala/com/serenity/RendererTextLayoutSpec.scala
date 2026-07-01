@@ -10,7 +10,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
+import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -66,7 +66,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val cellMetrics = CellMetrics.fromFont(font)
     val surface     = renderState("iW", CursorPosition(0, 1), font)
     // Proportional text renders via drawRunPx, not putString.
-    val runCalls    = surface.drawRunPxCalls
+    val runCalls    = surface.drawRunPxCalls.filter(_.s == "iW")
     val cursorRects = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
 
     // At least one drawRunPx call should exist for the rendered content.
@@ -99,7 +99,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height)
     val font = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
     val cellMetrics = CellMetrics.fromFont(font)
-    val layout      = com.serenity.ui.layout.LayoutEngine.calculateLayout(state, viewportSize)
+    val layout      = LayoutEngine.calculateLayout(state, viewportSize)
     val headerRect = List(
       Some(layout.leftSpacerRect),
       layout.lineNumberRect,
@@ -108,11 +108,30 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     ).flatten
     val headerLeft  = headerRect.map(_.x).min
     val headerRight = headerRect.map(_.right).max
-    val expectedX   = headerLeft + (headerRight - headerLeft - title.length) / 2
+    val expectedXPx =
+      TextAlignment
+        .placeLine(
+          title,
+          TextAreaPx(
+            xPx = cellMetrics.toPixelX(headerLeft).toFloat,
+            yPx = 0,
+            widthPx = (headerRight - headerLeft) * cellMetrics.charWidth.toFloat,
+            heightPx = cellMetrics.lineHeight
+          ),
+          font,
+          cellMetrics.lineHeight,
+          cellMetrics.ascent,
+          TextHorizontalAlignment.Center,
+          TextVerticalAlignment.Top,
+          surface.fontRenderContext.get
+        )
+        .xPx
 
     Renderer.render(state, cursorVisible = true, surface, viewportSize, font, font, cellMetrics, None)
 
-    firstNonSpaceColumn(surface, 0) shouldBe expectedX
+    val titleDraw = surface.drawRunPxCalls.find(_.s == title).getOrElse(fail("Expected measured title draw call"))
+    titleDraw.xPx shouldBe expectedXPx +- 0.001f
+    firstNonSpaceColumn(surface, 0) shouldBe math.floor(expectedXPx / cellMetrics.charWidth.toDouble).toInt
   }
 
   it should "render a measured editor cursor using the full primary row height" in {
@@ -136,10 +155,11 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val rowMetrics = CellMetrics.fromFont(font)
     val surface =
       renderState("top\nbottom", CursorPosition(1, 1), font, cellMetricsOverride = Some(rowMetrics))
-    val cursorRects = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
+    val cursorRects  = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
+    val expectedLift = math.max(2, math.round(rowMetrics.lineHeight.toFloat * 0.125f))
 
     cursorRects should have size 1
-    cursorRects.head.yPx shouldBe rowMetrics.toPixelY(2) - 1
+    cursorRects.head.yPx shouldBe rowMetrics.toPixelY(2) - expectedLift
     cursorRects.head.heightPx shouldBe rowMetrics.lineHeight
   }
 

@@ -8,6 +8,7 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
+import com.serenity.ui.layout.LayoutEngine
 
 private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeSupport:
   this: StateManager =>
@@ -461,7 +462,11 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
                 val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
                 val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
                 val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
-                (focused, ())
+                val resized =
+                  focused.viewportSize
+                    .map(viewportSize => LayoutEngine.syncViewportDimensions(focused, viewportSize))
+                    .getOrElse(focused)
+                (resized, ())
               }
             }
             .handleErrorWith(ex => logger.error(ex)(s"[FILE-WORKFLOW] Failed to open $targetPath"))
@@ -731,7 +736,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
       loadSession().flatMap {
         case Some(restoredState) =>
           logger.info("[CMD] Session loaded successfully") >>
-            updateState(_ => restoredState.copy(uiSurfaces = List.empty))
+            updateState(current => restoreSessionIntoCurrentViewport(restoredState, current))
         case None =>
           logger.info("[CMD] No session found - creating default session") >>
             updateState(_.copy(uiSurfaces = List.empty)) >>
@@ -747,3 +752,12 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
         updateState(s => s.copy(bufferOrder = s.bufferOrder :+ bufferId)) >>
           createPane(Some(bufferId)).flatMap(paneId => switchToPane(paneId))
       }
+
+  protected def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
+    val restored = restoredState.copy(
+      uiSurfaces = List.empty,
+      viewportSize = currentState.viewportSize
+    )
+    currentState.viewportSize
+      .map(viewportSize => LayoutEngine.syncViewportDimensions(restored, viewportSize))
+      .getOrElse(restored)
