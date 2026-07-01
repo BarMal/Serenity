@@ -148,6 +148,27 @@ class SessionManager(
         case None       => IO.pure(false)
     }
 
+  /** Read the current session's saved theme name without restoring the full session.
+    */
+  def currentSessionThemeName: IO[Option[String]] =
+    readIndex().flatMap { index =>
+      index.currentSessionId
+        .flatMap(sessionId => index.sessions.find(_.id == sessionId))
+        .map(metadata => sessionsDirectory.resolve(metadata.sessionFileName)) match
+        case Some(path) =>
+          IO.blocking(Files.exists(path)).flatMap {
+            case false => IO.pure(None)
+            case true =>
+              readUtf8(path)
+                .flatMap(jsonString => IO.fromEither(_root_.io.circe.parser.decode[SessionState](jsonString)))
+                .map(sessionState => Some(sessionState.themeName))
+                .handleErrorWith(error =>
+                  logger.warn(error)(s"[SESSION] Failed to read current session theme from $path").as(None)
+                )
+          }
+        case None => IO.pure(None)
+    }
+
   /** Delete the current session.
     */
   def clearSession(): IO[Unit] =
