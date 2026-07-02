@@ -217,6 +217,8 @@ object ConfigManager:
                 .getOrElse(config)
             case "document.default_mode" | "document.default.mode" | "document_default_mode" =>
               parseDefaultDocumentMode(value.trim).map(config.withDefaultDocumentMode).getOrElse(config)
+            case "window.chrome" | "window.chrome.mode" | "window_chrome" | "window_chrome_mode" =>
+              parseWindowChromeMode(value.trim).map(config.withWindowChromeMode).getOrElse(config)
             case "window.preferred.width" | "window_preferred_width" =>
               value.trim.toIntOption
                 .map(width =>
@@ -363,6 +365,7 @@ object ConfigManager:
        |
        |# Interface density: compact, comfortable, spacious
        |interface.density = ${config.interfaceDensity.configKey}
+       |window.chrome = ${windowChromeModeConfigKey(config.windowChromeMode)}
        |ui.element_gap = ${config.uiElementGap}
        |ui.corner_radius = ${config.uiCornerRadiusPx}
        |command_runner.visible_rows = ${config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")}
@@ -507,6 +510,8 @@ object ConfigManager:
           parseAnimationPreset(value).isEmpty
         case "ui.motion.editor_text" | "ui.motion.editor.text" | "ui_motion_editor_text" =>
           parseEditorInsertionTransitionKind(value).isEmpty
+        case "window.chrome" | "window.chrome.mode" | "window_chrome" | "window_chrome_mode" =>
+          parseWindowChromeMode(value).isEmpty
         case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
           parseUiElementGap(value).isEmpty
         case "ui.corner_radius" | "ui.corner.radius" | "ui_corner_radius" =>
@@ -593,6 +598,17 @@ object ConfigManager:
       case "markdown" | "md"                             => Some(DefaultDocumentMode.Markdown)
       case "rich-text" | "richtext" | "rich" | "rtf"     => Some(DefaultDocumentMode.RichText)
       case _                                             => None
+
+  private def parseWindowChromeMode(value: String): Option[WindowChromeMode] =
+    value.toLowerCase match
+      case "custom" | "themed" | "serenity" => Some(WindowChromeMode.Custom)
+      case "native" | "os" | "system"       => Some(WindowChromeMode.Native)
+      case _                                => None
+
+  private def windowChromeModeConfigKey(mode: WindowChromeMode): String =
+    mode match
+      case WindowChromeMode.Custom => "custom"
+      case WindowChromeMode.Native => "native"
 
   private def parseElementTransitionSpeedScale(value: String): Option[Double] =
     value.toDoubleOption

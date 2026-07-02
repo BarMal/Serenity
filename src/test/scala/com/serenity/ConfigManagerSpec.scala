@@ -342,6 +342,20 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("window.preferred.height = 900")
   }
 
+  it should "load and write window chrome mode" in {
+    val configFile = Files.createTempFile("serenity-window-chrome-config", ".conf")
+    Files.writeString(
+      configFile,
+      """window.chrome = native
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.windowChromeMode shouldBe WindowChromeMode.Native
+    ConfigManager.configToString(config) should include("window.chrome = native")
+  }
+
   it should "load and write interface density mode" in {
     val configFile = Files.createTempFile("serenity-density-config", ".conf")
     Files.writeString(

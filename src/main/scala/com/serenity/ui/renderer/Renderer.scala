@@ -1435,8 +1435,27 @@ object Renderer:
         if gutterContent.length > gutterRect.width then gutterContent.take(gutterRect.width - 3) + "..."
         else gutterContent.padTo(gutterRect.width, ' ')
 
-      surface.putString(gutterRect.x, gutterRect.y, displayContent)
+      drawUiTextInCellRect(surface, context, gutterRect, displayContent)
     }
+
+  private def drawUiTextInCellRect(
+    surface: RenderSurface,
+    context: RenderContext,
+    rect: LayoutRect,
+    text: String
+  ): Unit =
+    val rowHeightPx = math.max(1, rect.height * context.cellMetrics.lineHeight)
+    val extraTopPx  = math.max(0, rowHeightPx - context.uiMetrics.lineHeight) / 2
+    val ascentPx    = math.max(1, math.min(rowHeightPx, context.uiMetrics.ascent + extraTopPx))
+
+    surface.drawRunPx(
+      xPx = context.cellMetrics.toPixelX(rect.x).toFloat,
+      yPx = context.cellMetrics.toPixelY(rect.y),
+      bgWidthPx = (rect.width * context.cellMetrics.charWidth).toFloat,
+      lineHeightPx = rowHeightPx,
+      ascentPx = ascentPx,
+      s = text
+    )
 
   private def buildGutterContent(state: AppState): String =
     if state.config.cursorInfoBarPlacement == CursorInfoBarPlacement.PinnedBottom then
