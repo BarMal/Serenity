@@ -181,6 +181,34 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     firstRow.indexOf("Monaspace") shouldBe secondRow.indexOf("SansSerif")
   }
 
+  it should "render close workflow action choices when the frame reserves enough content rows" in {
+    val surface = new MockRenderSurface(80, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 50, 5),
+      header = Some(OverlayRow("unsaved changes")),
+      rows = List(
+        OverlayRow("Buffer 0 - unsaved"),
+        OverlayRow(
+          plainText = "Save Close Anyway Cancel",
+          segments = List(
+            OverlaySegment("Save", selected = true),
+            OverlaySegment("Close Anyway"),
+            OverlaySegment("Cancel")
+          ),
+          layout = OverlayRowLayout.Distributed
+        )
+      )
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.getRow(1) should include("unsaved changes")
+    surface.getRow(2) should include("Buffer 0 - unsaved")
+    surface.getRow(3) should include("Close Anyway")
+  }
+
   it should "truncate long selected column text from the end instead of dropping the leading characters" in {
     val surface = new MockRenderSurface(40, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)

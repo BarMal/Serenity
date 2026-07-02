@@ -89,6 +89,17 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers should not contain key(bufferId)
   }
 
+  it should "close an untouched empty buffer without prompting" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager.applyEvent(CloseTab).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.modalSurface shouldBe None
+    updatedState.buffers should not contain key(bufferId)
+  }
+
   it should "warn before closing an untitled content buffer that has not been saved" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)

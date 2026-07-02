@@ -192,6 +192,30 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     layout.belowCursorOverlayRect.map(_.height) shouldBe Some(5)
   }
 
+  it should "size a close workflow overlay to fit its header, buffer label, and action row" in {
+    val state = baseState().copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("close"),
+          SurfaceContent.ModalWorkflow(
+            Modal.CloseWorkflow(
+              CloseWorkflowState(
+                scope = CloseScope.Current,
+                currentBufferId = BufferId(0),
+                currentBufferLabel = "Buffer 0 - unsaved"
+              )
+            )
+          ),
+          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+
+    layout.belowCursorOverlayRect.map(_.height) shouldBe Some(5)
+  }
+
   it should "size a replace overlay to fit fields, actions, scope, and status" in {
     val state = baseState().copy(
       uiSurfaces = List(
