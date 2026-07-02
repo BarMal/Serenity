@@ -688,7 +688,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     cursorInfoBarPlacement <- cursor.getOrElse[CursorInfoBarPlacement]("cursorInfoBarPlacement")(
       CursorInfoBarPlacement.Floating
     )
-    windowChromeMode    <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(WindowChromeMode.Native)
+    windowChromeMode    <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(defaultConfig.windowChromeMode)
     markdownViewMode    <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
     defaultDocumentMode <- cursor.getOrElse[DefaultDocumentMode]("defaultDocumentMode")(DefaultDocumentMode.PlainText)
     interfaceDensity    <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(InterfaceDensity.Comfortable)

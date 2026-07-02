@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.awt.Font
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{CursorInfoBarMode, CursorInfoBarPlacement, InterfaceDensity}
@@ -47,15 +49,10 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     )
     val surface  = new MockRenderSurface(80, 24)
     val viewport = ViewportSize(80, 24)
-    val layout   = LayoutEngine.calculateLayout(state, viewport)
-    val gutter   = layout.gutterRect.getOrElse(fail("Expected gutter rect"))
 
     Renderer.render(state, cursorVisible = true, surface, viewport)
 
-    val renderedGutter =
-      (gutter.x until gutter.right).map(x => surface.getChar(x, gutter.y)).mkString
-
-    renderedGutter should include("Language: Markdown")
+    surface.drawRunPxCalls.map(_.s).mkString should include("Language: Markdown")
   }
 
   it should "show current cursor position and buffer path when gutter is enabled" in {
@@ -393,11 +390,62 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = true, surface, viewport)
 
-    val renderedGutter =
-      (gutter.x until gutter.right).map(x => surface.getChar(x, gutter.y)).mkString
-
-    renderedGutter should include("Line 2, Col 3")
+    surface.drawRunPxCalls.map(_.s).mkString should include("Line 2, Col 3")
     layout.pinnedSurfaceRects.get(SurfaceId("cursor-info-bar")) shouldBe None
+  }
+
+  it should "render pinned cursor info with UI font metrics inside the gutter row" in {
+    val buffer = Buffer
+      .fromString(BufferId(5), "alpha")
+      .copy(cursors = List(CursorPosition(0, 4)))
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.EditorPane(PaneId(0)),
+      config = AppState.initial.config
+        .withCursorInfoBarMode(CursorInfoBarMode.Position)
+        .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+        .copy(showGutter = false),
+      theme = Theme.light
+    )
+    val surface     = new MockRenderSurface(80, 12)
+    val viewport    = ViewportSize(80, 12)
+    val codeFont    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val textFont    = codeFont
+    val uiFont      = new Font(Font.SANS_SERIF, Font.PLAIN, 18)
+    val cellMetrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 11)
+    val uiMetrics   = CellMetrics.fromFont(uiFont)
+    val gutter      = LayoutEngine.calculateLayout(state, viewport).gutterRect.getOrElse(fail("Expected gutter rect"))
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewport,
+      codeFont,
+      textFont,
+      uiFont,
+      cellMetrics,
+      uiMetrics,
+      None
+    )
+
+    val gutterTextDraw =
+      surface.drawRunPxCalls.find(_.s.contains("Line 1, Col 5")).getOrElse(fail("Expected measured gutter text"))
+    val gutterTopPx    = cellMetrics.toPixelY(gutter.y)
+    val gutterHeightPx = gutter.height * cellMetrics.lineHeight
+
+    gutterTextDraw.font shouldBe Some(uiFont)
+    gutterTextDraw.yPx shouldBe gutterTopPx
+    gutterTextDraw.lineHeightPx shouldBe gutterHeightPx
+    gutterTextDraw.ascentPx should be > cellMetrics.ascent
+    gutterTextDraw.ascentPx should be <= gutterHeightPx
+    surface.putStringCalls.map(_.s).mkString should not include "Line 1, Col 5"
   }
 
   // Helper functions that will need to be implemented
