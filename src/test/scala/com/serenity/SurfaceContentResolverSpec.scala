@@ -583,8 +583,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.rows.map(_.plainText) should contain("notes.scala")
     val choiceRow = floating.rows.last
     choiceRow.layout shouldBe OverlayRowLayout.Distributed
-    choiceRow.segments.map(_.text) shouldBe List("Save", "Discard", "Cancel")
-    choiceRow.segments.find(_.selected).map(_.text) shouldBe Some("Discard")
+    choiceRow.segments.map(_.text) shouldBe List("Save", "Close Anyway", "Cancel")
+    choiceRow.segments.find(_.selected).map(_.text) shouldBe Some("Close Anyway")
   }
 
   it should "render replace workflow modals with separate find and replace rows" in {

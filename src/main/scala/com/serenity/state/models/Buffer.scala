@@ -92,6 +92,10 @@ case class Buffer(
   def clearSelections: Buffer =
     copy(selection = None, selections = Nil)
 
+  /** True when closing this buffer may lose user-authored content. */
+  def hasUnsavedChanges: Boolean =
+    isDirty || (filePath.isEmpty && !isNewEmpty && content.weight > 0)
+
 object Buffer:
   def empty(id: BufferId)(using com.serenity.rope.Balance): Buffer =
     Buffer(id, Rope.empty)

@@ -89,6 +89,80 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers should not contain key(bufferId)
   }
 
+  it should "warn before closing an untitled content buffer that has not been saved" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("draft"),
+            filePath = None,
+            isDirty = false,
+            isNewEmpty = false
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(CloseTab).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.buffers should contain key bufferId
+    currentCloseWorkflow(stateManager).currentBufferId shouldBe bufferId
+  }
+
+  it should "close an untitled content buffer when close anyway is selected" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("draft"),
+            filePath = None,
+            isDirty = false,
+            isNewEmpty = false
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(CloseTab).unsafeRunSync()
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.modalSurface shouldBe None
+    updatedState.buffers should not contain key(bufferId)
+  }
+
+  it should "report untitled content buffers as unsaved changes" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("draft"),
+            filePath = None,
+            isDirty = false,
+            isNewEmpty = false
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.checkUnsavedChanges(Some(bufferId)).unsafeRunSync() shouldBe true
+    stateManager.checkUnsavedChanges().unsafeRunSync() shouldBe true
+  }
+
   it should "cancel the close workflow without closing the dirty buffer" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)

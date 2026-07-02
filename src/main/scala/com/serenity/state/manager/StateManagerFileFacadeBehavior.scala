@@ -38,8 +38,8 @@ private[manager] trait StateManagerFileFacadeBehavior extends StateManagerViewpo
   def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean] =
     stateRef.get.map { state =>
       bufferId match
-        case Some(id) => state.buffers.get(id).exists(_.isDirty)
-        case None     => state.buffers.values.exists(_.isDirty)
+        case Some(id) => state.buffers.get(id).exists(_.hasUnsavedChanges)
+        case None     => state.buffers.values.exists(_.hasUnsavedChanges)
     }
 
   def forceCloseBuffer(bufferId: BufferId): IO[Unit] =

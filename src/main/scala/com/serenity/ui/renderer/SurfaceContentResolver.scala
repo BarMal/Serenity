@@ -279,7 +279,7 @@ object SurfaceContentResolver:
   ): ResolvedSurfaceContent =
     val choiceSegments = List(
       OverlaySegment("Save", selected = workflow.selectedChoice == CloseWorkflowChoice.Save),
-      OverlaySegment("Discard", selected = workflow.selectedChoice == CloseWorkflowChoice.Discard),
+      OverlaySegment("Close Anyway", selected = workflow.selectedChoice == CloseWorkflowChoice.Discard),
       OverlaySegment("Cancel", selected = workflow.selectedChoice == CloseWorkflowChoice.Cancel)
     )
 
