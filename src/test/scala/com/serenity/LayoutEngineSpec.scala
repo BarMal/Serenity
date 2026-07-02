@@ -63,6 +63,36 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     paneLayout.contentRect shouldBe LayoutRect(3, 1, 97, 28)
   }
 
+  it should "expose a single editor workspace contract for panes, line numbers, and gutter" in {
+    val state = AppState.initial.copy(
+      config = AppConfig.default
+        .withLineNumbers(true)
+        .withGutter(true)
+        .copy(textAreaInsets = TextAreaInsets(left = 0.10, right = 0.20))
+    )
+    val viewportSize     = ViewportSize(100, 30)
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
+    val workspaceLayout  = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
+
+    workspaceLayout.editorPanelRect shouldBe calculatedLayout.editorPanelRect
+    workspaceLayout.lineNumberRect shouldBe calculatedLayout.lineNumberRect
+    workspaceLayout.gutterRect shouldBe calculatedLayout.gutterRect
+    workspaceLayout.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
+
+    val activeHeader  = workspaceLayout.activeHeaderRect(state).getOrElse(fail("expected active header"))
+    val activeContent = workspaceLayout.activeContentRect(state).getOrElse(fail("expected active content"))
+    val lineNumbers   = workspaceLayout.lineNumberRect.getOrElse(fail("expected line numbers"))
+    val gutter        = workspaceLayout.gutterRect.getOrElse(fail("expected gutter"))
+
+    activeHeader.y shouldBe calculatedLayout.editorPanelRect.y
+    activeHeader.height shouldBe 1
+    activeContent.y shouldBe lineNumbers.y
+    activeContent.bottom should be <= gutter.y
+    lineNumbers.bottom should be <= gutter.y
+    gutter.y shouldBe viewportSize.height - gutter.height
+    gutter.bottom shouldBe viewportSize.height
+  }
+
   it should "place cursors using the pane content rectangle owned by editor pane layout" in {
     val buffer = Buffer.fromString(BufferId(0), "abc\ndef").copy(cursors = List(CursorPosition(1, 2)))
     val state = AppState.initial.copy(
