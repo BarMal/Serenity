@@ -5,11 +5,6 @@ on:
     branches:
       - master
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Auto Squash Merge
-    types:
-      - completed
 
 concurrency:
   group: desktop-publish
@@ -21,7 +16,6 @@ permissions:
 jobs:
   build:
     name: Build ${{ matrix.artifact_suffix }}
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -239,7 +233,6 @@ jobs:
   publish:
     name: Publish latest desktop release
     needs: build
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
 
     steps:
