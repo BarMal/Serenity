@@ -47,7 +47,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
 
   protected def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
     val targetBufferIds = closeTargets(scope, state)
-    val dirtyBufferIds  = targetBufferIds.filter(bufferId => state.buffers.get(bufferId).exists(_.isDirty))
+    val dirtyBufferIds  = targetBufferIds.filter(bufferId => state.buffers.get(bufferId).exists(_.hasUnsavedChanges))
     val cleanBufferIds =
       if scope == CloseScope.Quit then Nil
       else targetBufferIds.filterNot(dirtyBufferIds.contains)
