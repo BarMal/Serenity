@@ -746,37 +746,41 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
                 handlePinnedPanelMouseClick(click, state).flatMap {
                   case true => cats.effect.IO.unit
                   case false =>
-                    resolveMouseTarget(click, state).flatMap {
-                      _.fold(dismissContextMenuIfOpen(state)) { (paneId, buffer, clickedCursor) =>
-                        stateRef.update { s =>
-                          s.buffers.get(buffer.id) match
-                            case Some(current) =>
-                              val selection =
-                                if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
-                                else if click.clickCount >= 3 then lineSelectionAtCursor(current, clickedCursor)
-                                else if click.clickCount >= 2 then wordSelectionAtCursor(current, clickedCursor)
-                                else None
-                              val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
-                              dismissContextMenu(
-                                s.copy(
-                                  buffers = s.buffers.updated(
-                                    buffer.id,
-                                    current.copy(
-                                      cursors = List(focusCursor),
-                                      selection = selection,
-                                      selections = Nil,
-                                      preferredColumn = Some(focusCursor.column),
-                                      preferredXPx = None,
-                                      multiCursorVerticalStates = Nil
+                    handlePinnedPanelLocationClick(click, state).flatMap {
+                      case true => cats.effect.IO.unit
+                      case false =>
+                        resolveMouseTarget(click, state).flatMap {
+                          _.fold(dismissContextMenuIfOpen(state)) { (paneId, buffer, clickedCursor) =>
+                            stateRef.update { s =>
+                              s.buffers.get(buffer.id) match
+                                case Some(current) =>
+                                  val selection =
+                                    if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
+                                    else if click.clickCount >= 3 then lineSelectionAtCursor(current, clickedCursor)
+                                    else if click.clickCount >= 2 then wordSelectionAtCursor(current, clickedCursor)
+                                    else None
+                                  val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
+                                  dismissContextMenu(
+                                    s.copy(
+                                      buffers = s.buffers.updated(
+                                        buffer.id,
+                                        current.copy(
+                                          cursors = List(focusCursor),
+                                          selection = selection,
+                                          selections = Nil,
+                                          preferredColumn = Some(focusCursor.column),
+                                          preferredXPx = None,
+                                          multiCursorVerticalStates = Nil
+                                        )
+                                      ),
+                                      focus = Focus.EditorPane(paneId),
+                                      layout = s.layout.copy(activeEditorPaneId = Some(paneId))
                                     )
-                                  ),
-                                  focus = Focus.EditorPane(paneId),
-                                  layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-                                )
-                              )
-                            case None => dismissContextMenu(s)
+                                  )
+                                case None => dismissContextMenu(s)
+                            }
+                          }
                         }
-                      }
                     }
                 }
             }
@@ -912,6 +916,15 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       case None =>
         cats.effect.IO.pure(false)
 
+  private def handlePinnedPanelLocationClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =
+    if click.button != MouseButton.Primary then cats.effect.IO.pure(false)
+    else
+      pinnedLocationMouseHitAt(click, state) match
+        case Some(location) =>
+          stateRef.update(current => navigateActiveEditorToLocation(current, location)).as(true)
+        case None =>
+          cats.effect.IO.pure(false)
+
   private def selectPinnedDirectoryRow(
     state: AppState,
     hit: PinnedDirectoryMouseHit,
@@ -939,6 +952,49 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         case _ =>
           None
     yield directoryHit
+
+  private def pinnedLocationMouseHitAt(
+    event: MouseInputEvent,
+    state: AppState
+  ): Option[Location] =
+    for
+      hit <- pinnedPanelRowHitAt(event, state)
+      location <- hit.surface.content match
+        case SurfaceContent.Outline(symbols, _) =>
+          symbols.lift(hit.rowIndex).map(_.location)
+        case SurfaceContent.Diagnostics(issues) =>
+          issues.lift(hit.rowIndex).map(_.location)
+        case _ =>
+          None
+    yield location
+
+  private def navigateActiveEditorToLocation(state: AppState, location: Location): AppState =
+    state.layout.activeEditorPaneId match
+      case Some(paneId) =>
+        state.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.buffers.get) match
+          case Some(buffer) =>
+            val line     = math.max(0, math.min(location.line, math.max(0, buffer.content.lineCount - 1)))
+            val column   = math.max(0, math.min(location.column, buffer.content.getLine(line).getOrElse("").length))
+            val cursor   = CursorPosition(line, column)
+            val viewport = CursorViewport.adjustForCursor(buffer, state, cursor)
+            val updatedBuffer = buffer.copy(
+              cursors = List(cursor),
+              selection = None,
+              selections = Nil,
+              preferredColumn = Some(cursor.column),
+              preferredXPx = None,
+              multiCursorVerticalStates = Nil,
+              viewport = viewport
+            )
+            state.copy(
+              buffers = state.buffers.updated(buffer.id, updatedBuffer),
+              focus = Focus.EditorPane(paneId),
+              layout = state.layout.copy(activeEditorPaneId = Some(paneId))
+            )
+          case None =>
+            state
+      case None =>
+        state
 
   private case class PinnedPanelRowHit(surface: UiSurface, position: PanelPosition, rowIndex: Int)
 

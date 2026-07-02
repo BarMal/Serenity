@@ -35,8 +35,28 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     )
 
   private def leftPanelContentRect(state: AppState): LayoutRect =
+    panelContentRect(state, SurfaceId("explorer"))
+
+  private def panelContentRect(state: AppState, surfaceId: SurfaceId): LayoutRect =
     val layout = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    SurfaceFrameLayout(layout.pinnedSurfaceRects(SurfaceId("explorer"))).contentRect
+    SurfaceFrameLayout(layout.pinnedSurfaceRects(surfaceId)).contentRect
+
+  private def withActiveBuffer(sm: StateManager, text: String): BufferId =
+    val bufferId = BufferId(42)
+    val paneId   = PaneId(0)
+    val buffer   = Buffer.fromString(bufferId, text)
+    sm.updateState(
+      _.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.EditorPane(paneId)
+      )
+    ).unsafeRunSync()
+    bufferId
 
   "Pinned panel mouse support" should "select and focus a directory tree row on primary click" in {
     val root = Paths.get("/repo")
@@ -107,4 +127,50 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val updated      = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe Focus.Surface(surface.id)
     updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(expandedTree, Some(src)))
+  }
+
+  it should "navigate to an outline row on primary click" in {
+    val sm       = makeStateManager()
+    val bufferId = withActiveBuffer(sm, "intro\nmiddle\nend")
+    val symbols = List(
+      Symbol("Intro", SymbolKind.Heading, Location(0, 0)),
+      Symbol("Middle", SymbolKind.Heading, Location(1, 2))
+    )
+    val surface = UiSurface(
+      id = SurfaceId("outline"),
+      content = SurfaceContent.Outline(symbols),
+      presentation = SurfacePresentation.Pinned(PanelPosition.Right, 28)
+    )
+    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+
+    val rect = panelContentRect(sm.getCurrentState.unsafeRunSync(), surface.id)
+    sm.applyEvent(MouseClick(rect.x + 1, rect.y + 1)).unsafeRunSync()
+
+    val updated = sm.getCurrentState.unsafeRunSync()
+    updated.focus shouldBe Focus.EditorPane(PaneId(0))
+    updated.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 2))
+  }
+
+  it should "navigate to a diagnostics row on primary click" in {
+    val sm       = makeStateManager()
+    val bufferId = withActiveBuffer(sm, "first\nsecond\nthird")
+    val issues = List(
+      Diagnostic("unused import", DiagnosticSeverity.Warning, Location(0, 1)),
+      Diagnostic("type mismatch", DiagnosticSeverity.Error, Location(2, 3))
+    )
+    val surface = UiSurface(
+      id = SurfaceId("diagnostics"),
+      content = SurfaceContent.Diagnostics(issues),
+      presentation = SurfacePresentation.Pinned(PanelPosition.Left, 28)
+    )
+    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+
+    val rect = panelContentRect(sm.getCurrentState.unsafeRunSync(), surface.id)
+    sm.applyEvent(MouseClick(rect.x + 1, rect.y + 1)).unsafeRunSync()
+
+    val updated = sm.getCurrentState.unsafeRunSync()
+    updated.focus shouldBe Focus.EditorPane(PaneId(0))
+    updated.buffers(bufferId).cursors shouldBe List(CursorPosition(2, 3))
   }
