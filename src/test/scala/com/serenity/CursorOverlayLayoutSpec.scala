@@ -152,6 +152,49 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     rect.y shouldBe contentRect.y + 7
   }
 
+  it should "place command runner overlays below the visible wrapped cursor row" in {
+    val longLine = "a" * 260
+    val cursor   = CursorPosition(0, 215)
+    val buffer = Buffer
+      .fromString(bufferId, longLine)
+      .copy(
+        cursors = List(cursor),
+        viewport = Viewport(topLine = 0, topVisualLine = 2, leftColumn = 0, visibleColumns = 80, visibleLines = 20)
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(
+            CommandRunner(
+              isActive = true,
+              searchTerm = "",
+              selectedIndex = 0,
+              filteredCommands = List.empty
+            )
+          ),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+
+    val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
+    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
+
+    rect.y shouldBe contentRect.y + 2
+  }
+
   it should "size command runner overlays from configured visible rows" in {
     val state = baseState().copy(
       config = AppState.initial.config.withCommandRunnerVisibleRows(Some(7)),
