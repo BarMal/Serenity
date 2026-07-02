@@ -420,6 +420,31 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.focus shouldBe Focus.Surface(updatedState.modalSurface.get.id)
   }
 
+  it should "open an unsaved-changes workflow for the close command when an untitled buffer was edited back to empty" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(content = com.serenity.rope.Rope.empty, filePath = None, isDirty = false, isNewEmpty = false)
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "close", "close")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.commandRunnerSurface shouldBe None
+    updatedState.buffers.contains(bufferId) shouldBe true
+    updatedState.modalSurface
+      .flatMap(_.content match
+        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
+        case _                                                           => None)
+      .map(workflow => (workflow.scope, workflow.currentBufferId)) shouldBe Some((CloseScope.Current, bufferId))
+  }
+
   it should "open an unsaved-changes workflow for the close-all command when any affected buffer is dirty" in {
     val stateManager  = createStateManager()
     val dirtyBufferId = stateManager.createBuffer("dirty buffer").unsafeRunSync()

@@ -74,10 +74,10 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
 
   protected def closeTargets(scope: CloseScope, state: AppState): List[BufferId] =
     scope match
-      case CloseScope.Current => state.focusedBufferId.toList
+      case CloseScope.Current => activeEditorBufferId(state).toList
       case CloseScope.All     => state.bufferOrder
       case CloseScope.Others =>
-        state.focusedBufferId match
+        activeEditorBufferId(state) match
           case Some(focused) => state.bufferOrder.filterNot(_ == focused)
           case None          => state.bufferOrder
       case CloseScope.Quit => state.bufferOrder
