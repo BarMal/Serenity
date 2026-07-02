@@ -13,6 +13,7 @@ object CommandRunnerOptionSelections:
       "material-preset"           -> materialPresetIndex(config.materialPreset),
       "motion-preset"             -> motionPresetIndex(config.motionPreset),
       "command-runner-fade"       -> commandRunnerFadeIndex(config.commandRunnerAnimation),
+      "render-fps"                -> renderFpsTargetIndex(config.renderFpsTarget),
       "editor-text-transition"    -> editorTextTransitionIndex(config.editorInsertionTransitionKind),
       "cursor-mode"               -> cursorModeIndex(config.cursorMode),
       "cursor-info-bar"           -> cursorInfoBarModeIndex(config.cursorInfoBarMode),
@@ -93,6 +94,14 @@ object CommandRunnerOptionSelections:
       case Some(value) if AnimationConfig.smooth.contains(value) => 2
       case Some(value) if AnimationConfig.quick.contains(value)  => 3
       case Some(_)                                               => 2
+
+  private def renderFpsTargetIndex(target: RenderFpsTarget): Int =
+    target match
+      case RenderFpsTarget.Fps30    => 0
+      case RenderFpsTarget.Fps60    => 1
+      case RenderFpsTarget.Fps90    => 2
+      case RenderFpsTarget.Fps120   => 3
+      case RenderFpsTarget.Uncapped => 4
 
   private def editorTextTransitionIndex(kind: TransitionKind): Int =
     kind match

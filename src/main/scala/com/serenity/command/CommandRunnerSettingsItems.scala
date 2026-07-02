@@ -62,6 +62,24 @@ object CommandRunnerSettingsItems:
       hint = Some("Palette fade in and out")
     )
 
+  private[command] def renderFpsOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "render-fps",
+      label = "Render FPS",
+      options = List(
+        CommandOption("30 FPS", CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Fps30)),
+        CommandOption("60 FPS", CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Fps60)),
+        CommandOption("90 FPS", CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Fps90)),
+        CommandOption("120 FPS", CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Fps120)),
+        CommandOption("Uncapped", CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Uncapped))
+      ),
+      selectedIndex = optionSelections.getOrElse("render-fps", 1),
+      category = CommandCategory.Settings,
+      hint = Some("Render loop cadence")
+    )
+
   private[command] def cursorInfoBarOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "cursor-info-bar",

@@ -410,6 +410,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateMotionConfig(_.withCommandRunnerAnimation(animation)).void
       case CommandIntent.SetCommandRunnerVisibleRows(rows) =>
         updateAppearanceConfig(_.withCommandRunnerVisibleRows(rows)).void
+      case CommandIntent.SetRenderFpsTarget(target) =>
+        updateAppearanceConfig(_.withRenderFpsTarget(target)).void
       case CommandIntent.SetEditorInsertionTransitionKind(kind) =>
         updateMotionConfig(_.withEditorInsertionTransitionKind(kind)).void
       case CommandIntent.SetBackgroundStyle(style) =>

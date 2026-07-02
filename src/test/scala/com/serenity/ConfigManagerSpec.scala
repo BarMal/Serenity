@@ -384,6 +384,34 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("command_runner.visible_rows = 9")
   }
 
+  it should "load and write render FPS targets" in {
+    val configFile = Files.createTempFile("serenity-render-fps-config", ".conf")
+    Files.writeString(
+      configFile,
+      """render.fps = 120
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.renderFpsTarget shouldBe RenderFpsTarget.Fps120
+    ConfigManager.configToString(config) should include("render.fps = 120")
+  }
+
+  it should "load uncapped render FPS targets" in {
+    val configFile = Files.createTempFile("serenity-render-fps-uncapped-config", ".conf")
+    Files.writeString(
+      configFile,
+      """render.fps = uncapped
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.renderFpsTarget shouldBe RenderFpsTarget.Uncapped
+    ConfigManager.configToString(config) should include("render.fps = uncapped")
+  }
+
   it should "load and write LSP language server overrides" in {
     val configFile = Files.createTempFile("serenity-lsp-config", ".conf")
     Files.writeString(

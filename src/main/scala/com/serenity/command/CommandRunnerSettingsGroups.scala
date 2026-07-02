@@ -21,6 +21,7 @@ object CommandRunnerSettingsGroups:
     val materialPresetItem   = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
     val motionPresetItem     = CommandRunnerSettingsItems.motionPresetOptionItem(optionSelections)
     val commandRunnerFade    = CommandRunnerSettingsItems.commandRunnerFadeOptionItem(optionSelections)
+    val renderFpsItem        = CommandRunnerSettingsItems.renderFpsOptionItem(optionSelections)
     val editorTextItem       = CommandRunnerSettingsItems.editorTextTransitionOptionItem(optionSelections)
     val markdownViewItem     = CommandRunnerSettingsItems.markdownViewOptionItem(optionSelections)
     val defaultDocumentItem  = CommandRunnerSettingsItems.defaultDocumentModeOptionItem(optionSelections)
@@ -86,7 +87,7 @@ object CommandRunnerSettingsGroups:
     val materialMotionGroup = CommandSurfaceItem.GroupItem(
       id = "settings-material-motion",
       label = "Material & Motion",
-      children = List(materialPresetItem, motionPresetItem, commandRunnerFade, editorTextItem) ++
+      children = List(materialPresetItem, motionPresetItem, commandRunnerFade, renderFpsItem, editorTextItem) ++
         inputItems.filter(_.id == "element-transition-speed-scale"),
       category = CommandCategory.Settings,
       hint = Some("Named UI material and animation timing")
