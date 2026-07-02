@@ -345,6 +345,28 @@ object LayoutEngine:
         height = finalHeight
       )
 
+  private case class FloatingAnchorFrame(contentRect: LayoutRect, screenPosition: ScreenPosition)
+
+  private def calculateFloatingAnchorFrame(
+    surface: UiSurface,
+    state: AppState,
+    paneLayouts: Map[PaneId, EditorPaneLayout]
+  ): Option[FloatingAnchorFrame] =
+    for
+      paneId     <- state.layout.activeEditorPaneId
+      pane       <- state.layout.editorPanes.get(paneId)
+      paneLayout <- paneLayouts.get(paneId)
+      bufferId   <- pane.bufferId
+      buffer     <- state.buffers.get(bufferId)
+      anchor     <- surfaceAnchor(surface).orElse(state.activeCursorPosition)
+      screenPosition <- CursorLayout.calculateScreenPositionInContent(
+        anchor,
+        buffer.content,
+        paneLayout.contentRect,
+        buffer.viewport
+      )
+    yield FloatingAnchorFrame(paneLayout.contentRect, screenPosition)
+
   private case class BelowOverlayLayout(
       stack: List[(SurfaceId, LayoutRect)],
       collapsedSurfaceIds: Set[SurfaceId]
@@ -390,19 +412,26 @@ object LayoutEngine:
         case main :: submenu :: _ =>
           val mainRectOpt        = calculateFloatingSurfaceRect(main, state, paneLayouts)
           val submenuBaseRectOpt = calculateFloatingSurfaceRect(submenu, state, paneLayouts)
-          (mainRectOpt, submenuBaseRectOpt) match
-            case (Some(mainRect), Some(submenuRect)) =>
+          val anchorFrameOpt     = calculateFloatingAnchorFrame(main, state, paneLayouts)
+          (mainRectOpt, submenuBaseRectOpt, anchorFrameOpt) match
+            case (Some(mainRect), Some(submenuRect), Some(anchorFrame)) =>
               val collapsedHeight = 3
               val gapRows         = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows
-              val availableBottom = state.layout.activeEditorPaneId
-                .flatMap(paneLayouts.get)
-                .map(_.contentRect)
-                .map(_.bottom)
-                .getOrElse(mainRect.bottom + submenuRect.height + gapRows)
-              val totalHeight           = mainRect.height + gapRows + submenuRect.height
-              val shouldCollapse        = mainRect.y + totalHeight > availableBottom
+              val availableBottom = anchorFrame.contentRect.bottom
+              val totalHeight     = mainRect.height + gapRows + submenuRect.height
+              val preferredBelowY = anchorFrame.screenPosition.y + 1 + gapRows
+              val preferredAboveY = anchorFrame.screenPosition.y - gapRows - totalHeight
+              val stackY =
+                if preferredBelowY + totalHeight <= availableBottom then preferredBelowY
+                else if preferredAboveY >= anchorFrame.contentRect.y then preferredAboveY
+                else
+                  math.max(
+                    anchorFrame.contentRect.y,
+                    math.min(preferredBelowY, availableBottom - math.min(totalHeight, anchorFrame.contentRect.height))
+                  )
+              val shouldCollapse        = stackY + totalHeight > availableBottom
               val adjustedMainHeight    = if shouldCollapse then collapsedHeight else mainRect.height
-              val adjustedMainRect      = mainRect.copy(height = adjustedMainHeight)
+              val adjustedMainRect      = mainRect.copy(y = stackY, height = adjustedMainHeight)
               val remainingHeight       = math.max(3, availableBottom - adjustedMainRect.bottom - gapRows)
               val adjustedSubmenuHeight = math.min(submenuRect.height, remainingHeight)
               val adjustedSubmenuRect = submenuRect.copy(
