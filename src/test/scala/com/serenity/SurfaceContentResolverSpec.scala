@@ -7,7 +7,7 @@ import com.serenity.config.AppConfig
 import com.serenity.document.RenderedComment
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, LayoutRect}
+import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -401,6 +401,70 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       "JavaScript - Use JavaScript mode for the current buffer."
     )
     floating.footer.map(_.plainText) shouldBe Some("11/24")
+  }
+
+  it should "derive command runner visible rows from the framed surface content contract" in {
+    val commands = (1 to 8).toList.map(index =>
+      Command.typed(
+        s"cmd-$index",
+        s"Command number $index",
+        CommandIntent.ToggleTheme
+      )
+    )
+    val registry = CommandRegistry(commands)
+    val runner   = CommandRunner.empty.activate(registry, AppConfig.default)
+    val rect = LayoutRect(
+      x = 0,
+      y = 0,
+      width = 80,
+      height = SurfaceFrameLayout.frameHeightForItemRows(
+        itemRows = 5,
+        hasHeader = true,
+        hasFooter = true
+      )
+    )
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      rect,
+      SurfaceRenderMode.Floating
+    )
+
+    floating.header shouldBe defined
+    floating.rows should have size 5
+    floating.footer shouldBe defined
+  }
+
+  it should "reserve submenu detail rows without clipping available submenu items or footer" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 1)))
+    val rect = LayoutRect(
+      x = 0,
+      y = 0,
+      width = 90,
+      height = SurfaceFrameLayout.frameHeightForItemRows(
+        itemRows = 3,
+        hasHeader = true,
+        hasFooter = true,
+        reservedContentRows = 1
+      )
+    )
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPaletteSubmenu(runner, "settings-ui-presets", previewOnly = false),
+      rect,
+      SurfaceRenderMode.Floating
+    )
+
+    floating.header shouldBe defined
+    floating.rows.dropRight(1) should have size 3
+    floating.rows.lastOption.map(_.plainText) shouldBe Some(
+      "Preset Preview Create New Preset - name and save the current workspace setup"
+    )
+    floating.footer shouldBe defined
   }
 
   it should "render focused submenu search text and filtered results" in {

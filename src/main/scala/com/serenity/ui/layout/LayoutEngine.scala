@@ -49,7 +49,7 @@ object LayoutEngine:
   private[layout] val DefaultSpacerPercentage = 0.0
   private val MinimumVerticalPaneHeight       = 5
   private val EditorPaneHeaderHeight          = 1
-  private val CommandSurfaceChromeRows        = 4
+  private val CommandSurfaceChromeRows        = SurfaceFrameLayout.frameChromeRows(hasHeader = true, hasFooter = true)
 
   def calculateLayout(
     state: AppState,
@@ -298,6 +298,7 @@ object LayoutEngine:
     val preferredWidth  = calculateFloatingSurfaceWidth(contentRect.width)
     val preferredHeight = calculateFloatingSurfaceHeight(surface.content, contentRect.height, state)
     val finalHeight     = forcedHeight.getOrElse(preferredHeight)
+    val gapRows         = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows
 
     for
       anchor <- surfaceAnchor(surface).orElse(state.activeCursorPosition)
@@ -314,11 +315,11 @@ object LayoutEngine:
       )
       val overlayY = topYOverride.getOrElse(surface.presentation match
         case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) =>
-          math.max(contentRect.y, screenPosition.y - preferredHeight)
+          math.max(contentRect.y, screenPosition.y - preferredHeight - gapRows)
         case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) =>
-          val preferredBelowY = screenPosition.y + 1
+          val preferredBelowY = screenPosition.y + 1 + gapRows
           if preferredBelowY + preferredHeight <= contentRect.bottom then preferredBelowY
-          else math.max(contentRect.y, screenPosition.y - preferredHeight)
+          else math.max(contentRect.y, screenPosition.y - preferredHeight - gapRows)
         case _ =>
           contentRect.y)
 

@@ -161,8 +161,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val (topOverlay, topContentRect)     = overlayFor(CursorPosition(0, 0))
     val (lowerOverlay, lowerContentRect) = overlayFor(CursorPosition(20, 0))
 
-    topOverlay.y shouldBe topContentRect.y + 1
-    lowerOverlay.y shouldBe lowerContentRect.y + 21
+    topOverlay.y shouldBe topContentRect.y + 2
+    lowerOverlay.y shouldBe lowerContentRect.y + 22
     lowerOverlay.y should be > topOverlay.y
     lowerOverlay.x shouldBe lowerContentRect.x
   }
