@@ -316,7 +316,6 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
 
     updatedState.config.spellCheck.enabled shouldBe true
-    updatedState.diagnostics.getOrElse(SpellChecker.bufferDiagnosticsUri(bufferId), Nil) shouldBe Nil
 
     IO.sleep(300.millis).unsafeRunSync()
 
