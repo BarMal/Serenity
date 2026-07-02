@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.config.RenderFpsTarget
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -69,6 +70,23 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().config.commandRunnerAnimation shouldBe AnimationConfig.subtle
+  }
+
+  it should "update the render FPS target config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "render-fps",
+          "Set render FPS target",
+          CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Fps120),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.renderFpsTarget shouldBe RenderFpsTarget.Fps120
   }
 
   it should "update the UI element gap config" in {

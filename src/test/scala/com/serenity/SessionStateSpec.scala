@@ -314,6 +314,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         motionPreset = MotionPreset.Reduced,
         elementTransitionSpeedScale = 1.75,
         commandRunnerVisibleRows = Some(9),
+        renderFpsTarget = RenderFpsTarget.Fps120,
         windowChromeMode = WindowChromeMode.Custom,
         interfaceDensity = InterfaceDensity.Spacious,
         cursorInfoBarMode = CursorInfoBarMode.Detailed,
@@ -343,6 +344,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.motionPreset shouldBe MotionPreset.Reduced
     decoded.config.elementTransitionSpeedScale shouldBe 1.75
     decoded.config.commandRunnerVisibleRows shouldBe Some(9)
+    decoded.config.renderFpsTarget shouldBe RenderFpsTarget.Fps120
     decoded.config.windowChromeMode shouldBe WindowChromeMode.Custom
     decoded.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     decoded.config.cursorInfoBarMode shouldBe CursorInfoBarMode.Detailed
@@ -436,6 +438,21 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.commandRunnerAnimation shouldBe com.serenity.animation.AnimationConfig.smooth
+  }
+
+  it should "default renderFpsTarget to 60 FPS when loading older JSON without the field" in {
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val jsonWithoutRenderFps =
+      originalJson.mapObject(
+        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("renderFpsTarget")))
+      )
+
+    val decoded = jsonWithoutRenderFps.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.renderFpsTarget shouldBe RenderFpsTarget.Fps60
   }
 
   it should "default windowChromeMode to the app default when loading older JSON without the field" in {

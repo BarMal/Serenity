@@ -486,6 +486,11 @@ given Decoder[DefaultDocumentMode] = Decoder.decodeString.emap {
   case other       => Left(s"Unknown DefaultDocumentMode: $other")
 }
 
+given Encoder[RenderFpsTarget] = Encoder.encodeString.contramap(_.configKey)
+
+given Decoder[RenderFpsTarget] =
+  Decoder.decodeString.emap(value => RenderFpsTarget.fromConfigKey(value).toRight(s"Unknown RenderFpsTarget: $value"))
+
 given Encoder[InterfaceDensity] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[InterfaceDensity] = Decoder.decodeString.emap {
@@ -631,6 +636,7 @@ given Encoder[AppConfig] = Encoder.instance { config =>
     "elementTransitionSpeedScale"   -> config.elementTransitionSpeedScale.asJson,
     "commandRunnerAnimation"        -> config.commandRunnerAnimation.asJson,
     "commandRunnerVisibleRows"      -> config.commandRunnerVisibleRows.asJson,
+    "renderFpsTarget"               -> config.renderFpsTarget.asJson,
     "editorInsertionTransitionKind" -> config.editorInsertionTransitionKind.asJson,
     "cursorMode"                    -> config.cursorMode.asJson,
     "cursorColors"                  -> config.cursorColors.asJson,
@@ -679,6 +685,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     commandRunnerVisibleRows <- cursor
       .getOrElse[Option[Int]]("commandRunnerVisibleRows")(None)
       .map(_.map(AppConfig.clampCommandRunnerVisibleRows))
+    renderFpsTarget <- cursor.getOrElse[RenderFpsTarget]("renderFpsTarget")(RenderFpsTarget.Fps60)
     editorInsertionTransitionKind <- cursor.getOrElse[TransitionKind]("editorInsertionTransitionKind")(
       TransitionKind.Fade
     )
@@ -715,6 +722,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     elementTransitionSpeedScale = elementTransitionSpeedScale,
     commandRunnerAnimation = commandRunnerAnimation,
     commandRunnerVisibleRows = commandRunnerVisibleRows,
+    renderFpsTarget = renderFpsTarget,
     editorInsertionTransitionKind = editorInsertionTransitionKind,
     cursorMode = cursorMode,
     cursorColors = cursorColors,

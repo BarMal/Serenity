@@ -9,7 +9,7 @@ import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntime
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, RenderFpsTarget}
 import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.Event
@@ -52,7 +52,38 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     override def debug(message: => String): IO[Unit]               = record("debug", message, None)
     override def trace(message: => String): IO[Unit]               = record("trace", message, None)
 
-  "AppRuntime" should "terminate the app loop when the external close signal fires" in {
+  "AppRuntime" should "derive render frame intervals from the configured FPS target" in {
+    AppRuntime.fastFrameInterval(RenderFpsTarget.Fps30).toNanos shouldBe 33333333L
+    AppRuntime.fastFrameInterval(RenderFpsTarget.Fps60).toNanos shouldBe 16666666L
+    AppRuntime.fastFrameInterval(RenderFpsTarget.Fps90).toNanos shouldBe 11111111L
+    AppRuntime.fastFrameInterval(RenderFpsTarget.Fps120).toNanos shouldBe 8333333L
+    AppRuntime.fastFrameInterval(RenderFpsTarget.Uncapped).toNanos shouldBe 3333333L
+  }
+
+  it should "advance animations at a stable 60 FPS cadence across render targets" in {
+    val sixtyFpsCadence = AppRuntime.AnimationTickCadence.empty
+    val (after60, ticks60) =
+      sixtyFpsCadence.advance(AppRuntime.fastFrameInterval(RenderFpsTarget.Fps60))
+
+    ticks60 shouldBe 1
+    after60.remainderNanos shouldBe 0L
+
+    val (afterFirst120, first120Ticks) =
+      AppRuntime.AnimationTickCadence.empty.advance(AppRuntime.fastFrameInterval(RenderFpsTarget.Fps120))
+    val (afterSecond120, second120Ticks) =
+      afterFirst120.advance(AppRuntime.fastFrameInterval(RenderFpsTarget.Fps120))
+
+    first120Ticks shouldBe 0
+    second120Ticks shouldBe 1
+    afterSecond120.remainderNanos shouldBe 0L
+
+    val (_, ticks30) =
+      AppRuntime.AnimationTickCadence.empty.advance(AppRuntime.fastFrameInterval(RenderFpsTarget.Fps30))
+
+    ticks30 shouldBe 2
+  }
+
+  it should "terminate the app loop when the external close signal fires" in {
     given org.typelevel.log4cats.Logger[IO] =
       LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeSpec"))
 

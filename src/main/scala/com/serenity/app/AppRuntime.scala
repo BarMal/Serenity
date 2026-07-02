@@ -8,7 +8,7 @@ import scala.concurrent.duration.*
 import cats.effect.*
 import cats.effect.std.Dispatcher
 import cats.syntax.parallel.*
-import com.serenity.config.{AppConfig, CursorMode}
+import com.serenity.config.{AppConfig, CursorMode, RenderFpsTarget}
 import com.serenity.input.*
 import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -22,6 +22,23 @@ import fs2.concurrent.SignallingRef
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 object AppRuntime:
+
+  private val NanosPerSecond: Long = 1_000_000_000L
+
+  private[serenity] def fastFrameInterval(target: RenderFpsTarget): FiniteDuration =
+    FiniteDuration(NanosPerSecond / target.framesPerSecond.toLong, NANOSECONDS)
+
+  final private[serenity] case class AnimationTickCadence(remainderNanos: Long):
+
+    def advance(frameInterval: FiniteDuration): (AnimationTickCadence, Int) =
+      val totalNanos     = remainderNanos + frameInterval.toNanos
+      val animationNanos = fastFrameInterval(RenderFpsTarget.Fps60).toNanos
+      val ticks          = (totalNanos / animationNanos).toInt
+      val nextRemainder  = totalNanos % animationNanos
+      (AnimationTickCadence(nextRemainder), ticks)
+
+  private[serenity] object AnimationTickCadence:
+    val empty: AnimationTickCadence = AnimationTickCadence(0L)
 
   final private[serenity] case class RuntimeFailure(
       loopName: String,
@@ -61,6 +78,9 @@ object AppRuntime:
         _             <- IO(registerResizeCallback(resizeCallbackBridge(fastMode.set(true), resizeCallbackDispatcher)))
         cursorVisible <- Ref.of[IO, Boolean](true)
         breathIndex   <- Ref.of[IO, Int](0)
+        animationTickCadence <- Ref.of[IO, AnimationTickCadence](
+          AnimationTickCadence.empty
+        )
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, fastMode.set(true)))
         inputFunnel = (s: Stream[IO, Event]) =>
           s.evalMap(event =>
@@ -137,14 +157,18 @@ object AppRuntime:
 
           def fastPhase: Stream[IO, Unit] =
             Stream
-              .fixedRate[IO](16.millis)
-              .evalMap { _ =>
+              .repeatEval(
+                stateManager.getCurrentState.map(state => fastFrameInterval(state.config.renderFpsTarget))
+              )
+              .evalMap { interval =>
                 for
-                  _ <- withRuntimeDiagnostics("render loop", "fast.resize")(checkResizeAndHandle)
+                  _              <- IO.sleep(interval)
+                  _              <- withRuntimeDiagnostics("render loop", "fast.resize")(checkResizeAndHandle)
+                  animationTicks <- animationTickCadence.modify(_.advance(interval))
                   active <- withRuntimeDiagnostics(
                     "render loop",
                     "fast.animation-tick"
-                  )(stateManager.advanceAnimationsOnTick())
+                  )(advanceAnimationsForCadence(animationTicks, stateManager))
                   state <- withRuntimeDiagnostics("render loop", "fast.state")(stateManager.getCurrentState)
                   _ <- withRuntimeDiagnostics(
                     "render loop",
@@ -157,10 +181,7 @@ object AppRuntime:
               .map(_ => ())
               .onFinalize {
                 stateManager.getCurrentState.flatMap { state =>
-                  val stillActive =
-                    state.buffers.values.exists(_.animations.hasActiveAnimations) ||
-                      state.themeTransition.isDefined ||
-                      state.surfaceAnimations.nonEmpty
+                  val stillActive = hasActiveAnimations(state)
                   if stillActive then IO.unit else fastMode.set(false)
                 }
               }
@@ -217,6 +238,18 @@ object AppRuntime:
       dispatcher.unsafeRunAndForget(
         signalResize.handleErrorWith(error => logger.error(error)("[RUNTIME] resize callback failed"))
       )
+
+  private def advanceAnimationsForCadence(ticks: Int, stateManager: StateManager): IO[Boolean] =
+    if ticks <= 0 then stateManager.getCurrentState.map(hasActiveAnimations)
+    else
+      (0 until ticks).toList.foldLeft(IO.pure(false)) { (previous, _) =>
+        previous.flatMap(_ => stateManager.advanceAnimationsOnTick())
+      }
+
+  private def hasActiveAnimations(state: AppState): Boolean =
+    state.buffers.values.exists(_.animations.hasActiveAnimations) ||
+      state.themeTransition.isDefined ||
+      state.surfaceAnimations.nonEmpty
 
   private def logSelectiveEvents(
     event: Event,

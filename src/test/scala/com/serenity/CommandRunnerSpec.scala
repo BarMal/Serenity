@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.*
-import com.serenity.config.{AppConfig, DefaultDocumentMode, SpellCheckConfig}
+import com.serenity.config.*
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.{CommandRunnerComponent, ComponentResult}
@@ -438,6 +438,23 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     input.parse("12") shouldBe Some(CommandIntent.SetCommandRunnerVisibleRows(Some(12)))
     input.parse("auto") shouldBe Some(CommandIntent.SetCommandRunnerVisibleRows(None))
     input.parse("0") shouldBe None
+  }
+
+  it should "surface render FPS target as a material and motion setting" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default.withRenderFpsTarget(RenderFpsTarget.Fps120))
+      .withActiveCategory(CommandCategory.Settings)
+
+    val materialMotionGroup = groupByIdRecursive(runner.settingsGroups, "settings-material-motion")
+    val option = materialMotionGroup.children
+      .collectFirst { case item: CommandSurfaceItem.OptionItem if item.id == "render-fps" => item }
+      .getOrElse(fail("missing render FPS option"))
+
+    option.selectedOption shouldBe "120 FPS"
+    option.options.map(_.label) shouldBe List("30 FPS", "60 FPS", "90 FPS", "120 FPS", "Uncapped")
+    option.selectedIntent shouldBe Some(CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Fps120))
   }
 
   it should "reuse derived settings groups within a command runner state" in {

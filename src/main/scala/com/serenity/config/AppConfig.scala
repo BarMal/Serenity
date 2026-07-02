@@ -57,6 +57,24 @@ enum MotionPreset(val configKey: String):
       case Expressive => ElementTransitionSettings.expressive
       case Custom     => ElementTransitionSettings.smooth
 
+enum RenderFpsTarget(val configKey: String, val framesPerSecond: Int):
+  case Fps30    extends RenderFpsTarget("30", 30)
+  case Fps60    extends RenderFpsTarget("60", 60)
+  case Fps90    extends RenderFpsTarget("90", 90)
+  case Fps120   extends RenderFpsTarget("120", 120)
+  case Uncapped extends RenderFpsTarget("uncapped", 300)
+
+object RenderFpsTarget:
+
+  def fromConfigKey(value: String): Option[RenderFpsTarget] =
+    value.trim.toLowerCase match
+      case "30" | "30fps" | "fps30"       => Some(Fps30)
+      case "60" | "60fps" | "fps60"       => Some(Fps60)
+      case "90" | "90fps" | "fps90"       => Some(Fps90)
+      case "120" | "120fps" | "fps120"    => Some(Fps120)
+      case "uncapped" | "max" | "maximum" => Some(Uncapped)
+      case _                              => None
+
 enum CursorMode:
   case Blink
   case Breathe
@@ -257,6 +275,7 @@ case class AppConfig(
     elementTransitionSpeedScale: Double = 1.0,
     commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     commandRunnerVisibleRows: Option[Int] = None,
+    renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
     cursorMode: CursorMode = CursorMode.Blink,
     cursorColors: CursorColorConfig = CursorColorConfig(),
@@ -394,6 +413,9 @@ case class AppConfig(
 
   def withCommandRunnerVisibleRows(rows: Option[Int]): AppConfig =
     copy(commandRunnerVisibleRows = rows.map(AppConfig.clampCommandRunnerVisibleRows))
+
+  def withRenderFpsTarget(target: RenderFpsTarget): AppConfig =
+    copy(renderFpsTarget = target)
 
   /** Character insertion animation after applying the global motion speed. */
   def scaledCharacterAnimation: Option[AnimationConfig] =

@@ -179,6 +179,8 @@ object ConfigManager:
               parseUiCornerRadiusPx(value.trim).map(config.withUiCornerRadiusPx).getOrElse(config)
             case "command_runner.visible_rows" | "command.runner.visible.rows" | "command_runner_visible_rows" =>
               parseCommandRunnerVisibleRows(value.trim).map(config.withCommandRunnerVisibleRows).getOrElse(config)
+            case "render.fps" | "render_fps" | "ui.render.fps" | "ui_render_fps" =>
+              RenderFpsTarget.fromConfigKey(value.trim).map(config.withRenderFpsTarget).getOrElse(config)
             case "display.word_wrap" | "display.word.wrap" | "display_word_wrap" =>
               parseBoolean(value.trim).map(config.withWordWrap).getOrElse(config)
             case "cursor.info_bar" | "cursor.info.bar" | "cursor_info_bar" =>
@@ -369,6 +371,7 @@ object ConfigManager:
        |ui.element_gap = ${config.uiElementGap}
        |ui.corner_radius = ${config.uiCornerRadiusPx}
        |command_runner.visible_rows = ${config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")}
+       |render.fps = ${config.renderFpsTarget.configKey}
        |display.word_wrap = ${config.wordWrapEnabled}
        |
        |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
@@ -518,6 +521,8 @@ object ConfigManager:
           parseUiCornerRadiusPx(value).isEmpty
         case "command_runner.visible_rows" | "command.runner.visible.rows" | "command_runner_visible_rows" =>
           parseCommandRunnerVisibleRows(value).isEmpty
+        case "render.fps" | "render_fps" | "ui.render.fps" | "ui_render_fps" =>
+          RenderFpsTarget.fromConfigKey(value).isEmpty
         case "window.preferred.width" | "window_preferred_width" | "window.preferred.height" |
             "window_preferred_height" =>
           value.trim.nonEmpty && value.trim.toIntOption.isEmpty
@@ -770,6 +775,7 @@ object ConfigManager:
                           |
                           |# Interface density: compact, comfortable, spacious
                           |interface.density = comfortable
+                          |render.fps = 60
                           |
                           |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
                           |ui.material = frosted

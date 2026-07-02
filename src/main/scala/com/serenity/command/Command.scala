@@ -79,6 +79,7 @@ enum CommandIntent:
   case SetElementTransitionSpeedScale(scale: Double)
   case SetCommandRunnerAnimation(animation: Option[AnimationConfig])
   case SetCommandRunnerVisibleRows(rows: Option[Int])
+  case SetRenderFpsTarget(target: RenderFpsTarget)
   case SetEditorInsertionTransitionKind(kind: TransitionKind)
   case SetBackgroundStyle(style: BackgroundStyle)
   case SetBlurRadius(r: Float)
