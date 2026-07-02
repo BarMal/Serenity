@@ -117,11 +117,39 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    rect.y shouldBe contentRect.y + 7
+    rect.y shouldBe contentRect.y + 8
     rect.x shouldBe contentRect.x
     rect.width shouldBe contentRect.width
     rect.right shouldBe contentRect.right
     rect.bottom should be <= paneRect.bottom
+  }
+
+  it should "place compact command runner overlays directly below the cursor row" in {
+    val state = baseState().copy(
+      config = AppState.initial.config.withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(
+            CommandRunner(
+              isActive = true,
+              searchTerm = "",
+              selectedIndex = 0,
+              filteredCommands = List.empty
+            )
+          ),
+          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+
+    val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
+    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
+
+    rect.y shouldBe contentRect.y + 7
   }
 
   it should "size command runner overlays from configured visible rows" in {

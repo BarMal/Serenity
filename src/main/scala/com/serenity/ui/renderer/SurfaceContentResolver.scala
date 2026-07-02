@@ -379,8 +379,11 @@ object SurfaceContentResolver:
             )
           )
 
-      val allItems    = runner.visibleItems
-      val maxItemRows = math.max(1, rect.height - 4)
+      val allItems = runner.visibleItems
+      val maxItemRows = math.max(
+        1,
+        SurfaceFrameLayout(rect).visibleItemRows(hasHeader = true, hasFooter = true)
+      )
       val offset =
         if allItems.size <= maxItemRows then 0
         else
@@ -436,7 +439,15 @@ object SurfaceContentResolver:
     val allItems      = runner.submenuItems(groupId)
     val items         = submenuState.map(_.filteredItems(allItems)).getOrElse(allItems)
     val selectedIndex = submenuState.map(_.selectedIndex).getOrElse(0)
-    val maxItemRows   = math.max(1, rect.height - 4)
+    val detailRows    = presetPreviewRow(runner, groupId, items.lift(selectedIndex))
+    val maxItemRows = math.max(
+      1,
+      SurfaceFrameLayout(rect).visibleItemRows(
+        hasHeader = group.nonEmpty,
+        hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
+        reservedContentRows = detailRows.size
+      )
+    )
     val offset =
       if items.size <= maxItemRows then 0
       else
@@ -465,7 +476,6 @@ object SurfaceContentResolver:
           layout = OverlayRowLayout.Columns
         )
     }
-    val detailRows = presetPreviewRow(runner, groupId, items.lift(selectedIndex))
     val footer =
       runner.statusMessage
         .map(OverlayRow(_))

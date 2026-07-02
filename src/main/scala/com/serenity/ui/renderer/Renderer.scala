@@ -1307,8 +1307,9 @@ object Renderer:
     val shell = TextPanelView(rect, s"Preview: $title", Nil)
     PinnedPanelRenderer.render(context.surface, shell, state.theme, state.config, animationState)
 
-    val contentWidthCells  = math.max(1, rect.width - 2)
-    val contentHeightCells = math.max(1, rect.height - 2)
+    val contentRect        = SurfaceFrameLayout(rect).contentRect
+    val contentWidthCells  = math.max(1, contentRect.width)
+    val contentHeightCells = math.max(1, contentRect.height)
     val widthPx            = contentWidthCells * context.cellMetrics.charWidth
     val heightPx           = contentHeightCells * context.cellMetrics.lineHeight
     val buffer             = state.buffers.get(bufferId)
@@ -1326,7 +1327,7 @@ object Renderer:
       font = context.textFont,
       baseUri = baseUri
     )
-    context.surface.drawImage(image, rect.x + 1, rect.y + 1, contentWidthCells, contentHeightCells)
+    context.surface.drawImage(image, contentRect.x, contentRect.y, contentWidthCells, contentHeightCells)
 
   private def renderFloatingPanelPlaceholder(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
     context.surface.setBackgroundColor(theme.panel.background)

@@ -61,6 +61,22 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getBg(panel.rect.x + 1, panel.rect.y + 1) shouldBe Theme.light.panel.background
   }
 
+  it should "render rows inside the shared framed content rectangle" in {
+    val surface = new MockRenderSurface(20, 8)
+    val panel = TextPanelView(
+      rect = LayoutRect(2, 1, 8, 5),
+      title = "outline",
+      rows = List(TextPanelRow("abcdefghi"))
+    )
+    val contentRect = SurfaceFrameLayout(panel.rect).contentRect
+
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default)
+
+    surface.getRow(contentRect.y).slice(contentRect.x, contentRect.right) shouldBe "abcdef"
+    surface.getRow(contentRect.y)(panel.rect.x) should not be 'a'
+    surface.getRow(contentRect.y).lift(contentRect.right).getOrElse(' ') should not be 'g'
+  }
+
   it should "apply active animation foreground colors to panel text" in {
     val surface            = new MockRenderSurface(40, 12)
     val animatedForeground = new Color(10, 20, 30, 96)

@@ -4,7 +4,7 @@ import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.layout.{CellMetrics, SurfaceFrameLayout, TextLayoutSnapshot}
 import com.serenity.ui.theme.Theme
 
 object TextOverlayRenderer:
@@ -67,9 +67,10 @@ object TextOverlayRenderer:
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
-    val rect        = overlay.rect
-    val maxLineSize = math.max(0, rect.width - 2)
-    val maxLines    = math.max(0, rect.height - 2)
+    val frameLayout = SurfaceFrameLayout(overlay.rect)
+    val contentRect = frameLayout.contentRect
+    val maxLineSize = contentRect.width
+    val maxLines    = frameLayout.maxContentRows
 
     val contentRows = overlay.header.toList ++ overlay.rows ++ overlay.footer.toList
 
@@ -79,8 +80,8 @@ object TextOverlayRenderer:
         val (animFg, animBg) = rowColors(rowOffset)
         renderRow(
           surface,
-          rect.x + 1,
-          rect.y + 1 + index,
+          contentRect.x,
+          contentRect.y + index,
           maxLineSize,
           row,
           theme,
@@ -597,11 +598,12 @@ object TextOverlayRenderer:
     config: AppConfig
   ): Unit =
     SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
-      val sheenWidth  = math.max(0, rect.width - 2)
-      val sheenHeight = math.min(2, math.max(0, rect.height - 2))
+      val contentRect = SurfaceFrameLayout(rect).contentRect
+      val sheenWidth  = contentRect.width
+      val sheenHeight = math.min(2, contentRect.height)
       if sheenWidth > 0 && sheenHeight > 0 then
         surface.setBackgroundColor(sheenColor)
         (0 until sheenHeight).foreach { rowOffset =>
-          CharacterRenderer.renderStringPlain(surface, rect.x + 1, rect.y + 1 + rowOffset, " " * sheenWidth)
+          CharacterRenderer.renderStringPlain(surface, contentRect.x, contentRect.y + rowOffset, " " * sheenWidth)
         }
     }

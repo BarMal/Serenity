@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import com.serenity.animation.AnimationState
 import com.serenity.config.AppConfig
+import com.serenity.ui.layout.SurfaceFrameLayout
 import com.serenity.ui.theme.Theme
 
 object PinnedPanelRenderer:
@@ -52,10 +53,11 @@ object PinnedPanelRenderer:
     theme: Theme,
     animationState: AnimationState
   ): Unit =
-    val rect  = panel.rect
-    val title = panel.title.take(math.max(0, rect.width - 2)).padTo(math.max(0, rect.width - 2), ' ')
-    if rect.width >= 2 then
-      renderAnimatedText(surface, rect.x + 1, rect.y, title, 0, theme.panel.foreground, animationState)
+    val frameLayout = SurfaceFrameLayout(panel.rect)
+    val contentRect = frameLayout.contentRect
+    val title       = panel.title.take(contentRect.width).padTo(contentRect.width, ' ')
+    if contentRect.width > 0 then
+      renderAnimatedText(surface, contentRect.x, panel.rect.y, title, 0, theme.panel.foreground, animationState)
 
   private def drawLines(
     surface: RenderSurface,
@@ -63,9 +65,10 @@ object PinnedPanelRenderer:
     theme: Theme,
     animationState: AnimationState
   ): Unit =
-    val rect        = panel.rect
-    val maxLineSize = math.max(0, rect.width - 2)
-    val maxLines    = math.max(0, rect.height - 2)
+    val frameLayout = SurfaceFrameLayout(panel.rect)
+    val contentRect = frameLayout.contentRect
+    val maxLineSize = contentRect.width
+    val maxLines    = frameLayout.maxContentRows
 
     panel.rows.take(maxLines).zipWithIndex.foreach {
       case (row, index) =>
@@ -78,7 +81,15 @@ object PinnedPanelRenderer:
           surface.setBackgroundColor(theme.panel.background)
         val baseForeground =
           if row.selected then theme.highlighted.foreground else theme.panel.foreground
-        renderAnimatedText(surface, rect.x + 1, rect.y + 1 + index, padded, index + 1, baseForeground, animationState)
+        renderAnimatedText(
+          surface,
+          contentRect.x,
+          contentRect.y + index,
+          padded,
+          index + 1,
+          baseForeground,
+          animationState
+        )
     }
 
   private def renderAnimatedText(
@@ -105,12 +116,12 @@ object PinnedPanelRenderer:
     config: AppConfig
   ): Unit =
     SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
-      val rect        = panel.rect
-      val sheenWidth  = math.max(0, rect.width - 2)
-      val sheenHeight = math.min(2, math.max(0, rect.height - 2))
+      val contentRect = SurfaceFrameLayout(panel.rect).contentRect
+      val sheenWidth  = contentRect.width
+      val sheenHeight = math.min(2, contentRect.height)
       if sheenWidth > 0 && sheenHeight > 0 then
         surface.setBackgroundColor(sheenColor)
         (0 until sheenHeight).foreach { rowOffset =>
-          CharacterRenderer.renderStringPlain(surface, rect.x + 1, rect.y + 1 + rowOffset, " " * sheenWidth)
+          CharacterRenderer.renderStringPlain(surface, contentRect.x, contentRect.y + rowOffset, " " * sheenWidth)
         }
     }
