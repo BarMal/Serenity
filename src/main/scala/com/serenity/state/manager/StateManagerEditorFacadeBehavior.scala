@@ -68,7 +68,9 @@ private[manager] trait StateManagerEditorFacadeBehavior extends StateManagerEven
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId] =
     stateRef.modify { state =>
       val bufferId = state.nextBufferId
-      val buffer   = Buffer.fromString(bufferId, content)(using balance).copy(filePath = filePath)
+      val buffer =
+        if content.isEmpty && filePath.isEmpty then Buffer.newEmpty(bufferId)(using balance)
+        else Buffer.fromString(bufferId, content)(using balance).copy(filePath = filePath)
       val newState = state.copy(
         buffers = state.buffers + (bufferId -> buffer),
         bufferOrder = state.bufferOrder :+ bufferId,

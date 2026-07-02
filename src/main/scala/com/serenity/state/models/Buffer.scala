@@ -94,7 +94,7 @@ case class Buffer(
 
   /** True when closing this buffer may lose user-authored content. */
   def hasUnsavedChanges: Boolean =
-    isDirty || (filePath.isEmpty && !isNewEmpty && content.weight > 0)
+    isDirty || (filePath.isEmpty && !isNewEmpty)
 
 object Buffer:
   def empty(id: BufferId)(using com.serenity.rope.Balance): Buffer =

@@ -114,6 +114,62 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     currentCloseWorkflow(stateManager).currentBufferId shouldBe bufferId
   }
 
+  it should "warn before closing an untitled buffer that was edited back to empty" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope.empty,
+            filePath = None,
+            isDirty = false,
+            isNewEmpty = false
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(CloseTab).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.buffers should contain key bufferId
+    currentCloseWorkflow(stateManager).currentBufferId shouldBe bufferId
+  }
+
+  it should "warn before closing the active editor buffer when a surface has focus" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope.empty,
+            filePath = None,
+            isDirty = false,
+            isNewEmpty = false
+          )
+        val (stateWithId, surfaceId) = state.copy(buffers = state.buffers + (bufferId -> buffer)).allocateSurfaceId
+        val surface = UiSurface(
+          id = surfaceId,
+          content = SurfaceContent.QuickInfo("hint"),
+          presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+        stateWithId.copy(uiSurfaces = stateWithId.uiSurfaces :+ surface, focus = Focus.Surface(surfaceId))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(CloseTab).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.buffers should contain key bufferId
+    currentCloseWorkflow(stateManager).currentBufferId shouldBe bufferId
+  }
+
   it should "close an untitled content buffer when close anyway is selected" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
