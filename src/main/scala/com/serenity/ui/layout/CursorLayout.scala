@@ -29,8 +29,8 @@ object CursorLayout:
         val visualLinesInThisBuffer = math.max(1, (lineContent.length + panelWidth - 1) / panelWidth)
         findCursorPosition(bufferLine + 1, currentVisualLine + visualLinesInThisBuffer)
 
-    if panelWidth <= 0 then None
-    else findCursorPosition(0, 0)
+    if panelWidth <= 0 || cursor.line < viewport.topLine then None
+    else findCursorPosition(viewport.topLine, 0)
 
   def calculateScreenPosition(
     cursor: CursorPosition,
@@ -50,6 +50,6 @@ object CursorLayout:
       case (visualLine, visualColumn) =>
         ScreenPosition(
           x = contentRect.x + visualColumn,
-          y = contentRect.y + (visualLine - viewport.topLine)
+          y = contentRect.y + (visualLine - viewport.topVisualLine)
         )
     }
