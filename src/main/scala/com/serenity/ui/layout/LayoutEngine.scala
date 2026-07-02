@@ -18,6 +18,21 @@ case class EditorPaneLayout(
     contentRect: LayoutRect
 )
 
+case class EditorWorkspaceLayout(
+    editorPanelRect: LayoutRect,
+    lineNumberRect: Option[LayoutRect],
+    gutterRect: Option[LayoutRect],
+    paneLayouts: Map[PaneId, EditorPaneLayout]
+):
+  def activePaneLayout(state: AppState): Option[EditorPaneLayout] =
+    state.layout.activeEditorPaneId.flatMap(paneLayouts.get)
+
+  def activeHeaderRect(state: AppState): Option[LayoutRect] =
+    activePaneLayout(state).map(_.headerRect)
+
+  def activeContentRect(state: AppState): Option[LayoutRect] =
+    activePaneLayout(state).map(_.contentRect)
+
 case class CalculatedLayout(
     editorPanelRect: LayoutRect,
     leftSpacerRect: LayoutRect,
@@ -521,12 +536,13 @@ object LayoutEngine:
 
   def syncViewportDimensions(state: AppState, viewportSize: ViewportSize): AppState =
     val calculatedLayout = calculateLayout(state, viewportSize)
-    val paneLayouts      = calculateEditorPaneLayouts(state, calculatedLayout)
+    val workspaceLayout  = calculateEditorWorkspaceLayout(state, calculatedLayout)
     val (updatedBuffers, updatedPanes) =
       state.layout.editorPanes.foldLeft((state.buffers, state.layout.editorPanes)) {
         case ((buffers, panes), (paneId, pane)) =>
-          val paneRect     = paneLayouts.get(paneId).map(_.paneRect).getOrElse(calculatedLayout.editorPanelRect)
-          val contentRect  = paneLayouts.get(paneId).map(_.contentRect).getOrElse(paneRect)
+          val paneRect =
+            workspaceLayout.paneLayouts.get(paneId).map(_.paneRect).getOrElse(calculatedLayout.editorPanelRect)
+          val contentRect  = workspaceLayout.paneLayouts.get(paneId).map(_.contentRect).getOrElse(paneRect)
           val paneViewport = updateViewportDimensions(pane.viewport, contentRect)
           val nextPanes    = panes + (paneId -> pane.copy(viewport = paneViewport))
           val updatedBuffer = pane.bufferId.flatMap(buffers.get).map { buffer =>
@@ -557,6 +573,14 @@ object LayoutEngine:
 
   def calculateEditorPaneLayouts(state: AppState, calculatedLayout: CalculatedLayout): Map[PaneId, EditorPaneLayout] =
     calculateEditorPaneLayoutsWithMinWidth(state, calculatedLayout, state.config.minimumPaneWidth)
+
+  def calculateEditorWorkspaceLayout(state: AppState, calculatedLayout: CalculatedLayout): EditorWorkspaceLayout =
+    EditorWorkspaceLayout(
+      editorPanelRect = calculatedLayout.editorPanelRect,
+      lineNumberRect = calculatedLayout.lineNumberRect,
+      gutterRect = calculatedLayout.gutterRect,
+      paneLayouts = calculateEditorPaneLayouts(state, calculatedLayout)
+    )
 
   def calculateEditorPaneLayoutsWithMinWidth(
     state: AppState,

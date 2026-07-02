@@ -38,9 +38,10 @@ case class RenderContext(
 object Renderer:
 
   private case class EditorPaneRenderPlan(
-      paneLayouts: Map[PaneId, EditorPaneLayout],
+      workspaceLayout: EditorWorkspaceLayout,
       snapshots: Map[PaneId, TextLayoutSnapshot]
-  )
+  ):
+    def paneLayouts: Map[PaneId, EditorPaneLayout] = workspaceLayout.paneLayouts
 
   private case class MarkdownLensFrame(
       lines: Vector[String],
@@ -187,7 +188,7 @@ object Renderer:
         val editorRenderPlan = prepareEditorPaneRenderPlan(state, context)
         renderSpacerColumns(context)
         renderLineNumbers(state, context, editorRenderPlan)
-        renderGutter(state, context)
+        renderGutter(state, context, editorRenderPlan.workspaceLayout)
         renderPinnedPanels(state, context)
         renderEditorPanes(state, context, editorRenderPlan)
         renderFloatingPanels(state, context)
@@ -197,18 +198,18 @@ object Renderer:
   private def renderSpacerColumns(context: RenderContext): Unit = ()
 
   private def prepareEditorPaneRenderPlan(state: AppState, context: RenderContext): EditorPaneRenderPlan =
-    val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, context.layout)
+    val workspaceLayout = LayoutEngine.calculateEditorWorkspaceLayout(state, context.layout)
     val snapshots =
       state.layout.editorPanes.flatMap {
         case (paneId, pane) =>
           for
-            paneLayout <- paneLayouts.get(paneId)
+            paneLayout <- workspaceLayout.paneLayouts.get(paneId)
             bufferId   <- pane.bufferId
             buffer     <- state.buffers.get(bufferId)
           yield paneId -> snapshotForBuffer(buffer, paneLayout.contentRect, state, context)
       }
 
-    EditorPaneRenderPlan(paneLayouts, snapshots)
+    EditorPaneRenderPlan(workspaceLayout, snapshots)
 
   private def snapshotForBuffer(
     buffer: Buffer,
@@ -1340,7 +1341,7 @@ object Renderer:
   private def renderLineNumbers(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
     if state.config.showLineNumbers then
       context.surface.setFont(context.uiFont)
-      context.layout.lineNumberRect foreach { lineRect =>
+      renderPlan.workspaceLayout.lineNumberRect foreach { lineRect =>
         val surface = context.surface
 
         surface.setBackgroundColor(state.theme.panel.background)
@@ -1421,8 +1422,8 @@ object Renderer:
         surface.putString(lineRect.x + lineRect.width - 1, screenY, "!")
     }
 
-  private def renderGutter(state: AppState, context: RenderContext): Unit =
-    context.layout.gutterRect.foreach { gutterRect =>
+  private def renderGutter(state: AppState, context: RenderContext, workspaceLayout: EditorWorkspaceLayout): Unit =
+    workspaceLayout.gutterRect.foreach { gutterRect =>
       context.surface.setFont(context.uiFont)
       val surface = context.surface
 
