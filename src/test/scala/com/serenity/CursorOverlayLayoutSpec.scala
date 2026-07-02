@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.command.CommandRunner
+import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -217,6 +218,44 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
     layout.belowCursorOverlayRect.map(_.height) shouldBe Some(11)
+  }
+
+  it should "move a command runner stack above the cursor as one unit when it cannot fit below" in {
+    val registry                               = com.serenity.command.CommandRegistry.default
+    given com.serenity.command.CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(com.serenity.command.CommandCategory.Settings)
+      .enterSelectedGroup
+    val cursor = CursorPosition(18, 4)
+    val state = baseState(cursor = cursor).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner-submenu"),
+          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout      = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val paneLayout  = LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId)
+    val contentRect = paneLayout.contentRect
+    val cursorY     = contentRect.y + cursor.line
+    val stack       = layout.belowCursorOverlayStack.toMap
+
+    val runnerRect  = stack.getOrElse(SurfaceId("command-runner"), fail("Expected command runner overlay"))
+    val submenuRect = stack.getOrElse(SurfaceId("command-runner-submenu"), fail("Expected submenu overlay"))
+
+    runnerRect.y should be >= contentRect.y
+    runnerRect.bottom should be <= submenuRect.y
+    submenuRect.bottom should be <= cursorY
+    layout.collapsedFloatingSurfaceIds shouldBe empty
   }
 
   it should "size a find overlay to fit its header, query row, and result footer" in {
