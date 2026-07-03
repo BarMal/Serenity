@@ -31,6 +31,15 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
       }
       .getOrElse(fail("Expected command runner"))
 
+  private def moveSubmenuSelectionTo(stateManager: StateManager, itemId: String): Unit =
+    val runner  = currentRunner(stateManager)
+    val submenu = runner.activeSubmenu.getOrElse(fail("Expected active submenu"))
+    val items   = submenu.filteredItems(runner.submenuItems(submenu.groupId))
+    val target  = items.indexWhere(_.id == itemId)
+    if target < 0 then fail(s"Expected submenu item $itemId")
+    val moves = (target - submenu.selectedIndex + items.length) % items.length
+    (1 to moves).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
+
   "Command runner focus ownership" should "keep submenu navigation inside the command-runner domain" in {
     val stateManager = createStateManager()
 
@@ -54,41 +63,49 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     (1 to 5).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())
-    "animation".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    (1 to 4).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
-    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    moveSubmenuSelectionTo(stateManager, "settings-animation")
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    moveSubmenuSelectionTo(stateManager, "animation-duration")
 
     currentRunner(stateManager).activeSubmenu.flatMap(_.editingItemId) shouldBe None
-
-    stateManager.applyEvent(Escape).unsafeRunSync()
-    val afterFirstEscape = stateManager.getCurrentState.unsafeRunSync()
-    afterFirstEscape.commandRunnerSurface shouldBe defined
-    afterFirstEscape.commandRunnerSubmenuSurface shouldBe defined
-    afterFirstEscape.focus shouldBe Focus.Surface(afterFirstEscape.commandRunnerSurface.get.id)
 
     stateManager.applyEvent(Enter).unsafeRunSync()
     stateManager.applyEvent(InsertChar('9')).unsafeRunSync()
     currentRunner(stateManager).activeSubmenu.flatMap(_.editingItemId) shouldBe Some("animation-duration")
 
     stateManager.applyEvent(Escape).unsafeRunSync()
+    val afterFirstEscape = stateManager.getCurrentState.unsafeRunSync()
+    afterFirstEscape.commandRunnerSurface shouldBe defined
+    afterFirstEscape.commandRunnerSubmenuSurface shouldBe defined
+    afterFirstEscape.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    currentRunner(stateManager).activeSubmenu.flatMap(_.editingItemId) shouldBe None
+
+    stateManager.applyEvent(Escape).unsafeRunSync()
     val afterSecondEscape = stateManager.getCurrentState.unsafeRunSync()
     afterSecondEscape.commandRunnerSurface shouldBe defined
     afterSecondEscape.commandRunnerSubmenuSurface shouldBe defined
     afterSecondEscape.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
-    currentRunner(stateManager).activeSubmenu.flatMap(_.editingItemId) shouldBe None
 
     stateManager.applyEvent(Escape).unsafeRunSync()
     val afterThirdEscape = stateManager.getCurrentState.unsafeRunSync()
     afterThirdEscape.commandRunnerSurface shouldBe defined
     afterThirdEscape.commandRunnerSubmenuSurface shouldBe defined
-    afterThirdEscape.focus shouldBe Focus.Surface(afterThirdEscape.commandRunnerSurface.get.id)
+    afterThirdEscape.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
 
     stateManager.applyEvent(Escape).unsafeRunSync()
     val afterFourthEscape = stateManager.getCurrentState.unsafeRunSync()
-    afterFourthEscape.commandRunnerSurface shouldBe None
-    afterFourthEscape.commandRunnerSubmenuSurface shouldBe None
-    afterFourthEscape.focus should not be Focus.Surface(SurfaceId("command-runner"))
-    afterFourthEscape.focus should not be Focus.Surface(SurfaceId("command-runner-submenu"))
+    afterFourthEscape.commandRunnerSurface shouldBe defined
+    afterFourthEscape.commandRunnerSubmenuSurface shouldBe defined
+    afterFourthEscape.focus shouldBe Focus.Surface(afterFourthEscape.commandRunnerSurface.get.id)
+
+    stateManager.applyEvent(Escape).unsafeRunSync()
+    val afterFifthEscape = stateManager.getCurrentState.unsafeRunSync()
+    afterFifthEscape.commandRunnerSurface shouldBe None
+    afterFifthEscape.commandRunnerSubmenuSurface shouldBe None
+    afterFifthEscape.focus should not be Focus.Surface(SurfaceId("command-runner"))
+    afterFifthEscape.focus should not be Focus.Surface(SurfaceId("command-runner-submenu"))
   }
 
   it should "close the runner even if focus has leaked back to the editor while the runner remains visible" in {

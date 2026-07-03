@@ -19,6 +19,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
       materialPreset = MaterialPreset.Crystal,
       motionPreset = MotionPreset.Expressive,
       commandRunnerAnimation = AnimationConfig.quick,
+      uiAnimation = AnimationConfig.subtle,
       editorInsertionTransitionKind = TransitionKind.Disabled,
       cursorMode = CursorMode.Breathe,
       cursorInfoBarMode = CursorInfoBarMode.Detailed,
@@ -48,6 +49,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("material-preset") shouldBe 3
     selections("motion-preset") shouldBe 3
     selections("command-runner-fade") shouldBe 3
+    selections("ui-animation") shouldBe 1
     selections("editor-text-transition") shouldBe 4
     selections("cursor-mode") shouldBe 1
     selections("cursor-info-bar") shouldBe 2

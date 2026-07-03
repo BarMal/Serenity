@@ -13,6 +13,7 @@ object CommandRunnerOptionSelections:
       "material-preset"           -> materialPresetIndex(config.materialPreset),
       "motion-preset"             -> motionPresetIndex(config.motionPreset),
       "command-runner-fade"       -> commandRunnerFadeIndex(config.commandRunnerAnimation),
+      "ui-animation"              -> animationPresetIndex(config.uiAnimation),
       "render-fps"                -> renderFpsTargetIndex(config.renderFpsTarget),
       "editor-text-transition"    -> editorTextTransitionIndex(config.editorInsertionTransitionKind),
       "cursor-mode"               -> cursorModeIndex(config.cursorMode),
@@ -88,6 +89,9 @@ object CommandRunnerOptionSelections:
       case MotionPreset.Custom     => 4
 
   private def commandRunnerFadeIndex(animation: Option[AnimationConfig]): Int =
+    animationPresetIndex(animation)
+
+  private def animationPresetIndex(animation: Option[AnimationConfig]): Int =
     animation match
       case None                                                  => 0
       case Some(value) if AnimationConfig.subtle.contains(value) => 1

@@ -89,6 +89,16 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
     plan.kind shouldBe TransitionKind.TypedText
   }
 
+  it should "derive general UI animation from its own config rather than editor text animation" in {
+    val config = AppConfig.default
+      .withMotionPreset(MotionPreset.Smooth)
+      .withCharacterAnimation(AnimationConfig.quick.get)
+      .withUiAnimation(AnimationConfig.subtle)
+
+    config.scaledCharacterAnimation.map(_.steps) shouldBe AnimationConfig.quick.map(_.steps)
+    config.scaledUiAnimation.map(_.steps) shouldBe AnimationConfig.subtle.map(_.steps)
+  }
+
   it should "keep reduced motion disabled even when app config has a custom speed scale" in {
     val config = AppConfig.default
       .withMotionPreset(MotionPreset.Reduced)
