@@ -6,6 +6,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 import scala.util.control.NonFatal
+import scala.util.matching.Regex
 
 import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.lsp.model.*
@@ -19,9 +20,27 @@ object SpellChecker:
 
   private val DictionaryCache = ConcurrentHashMap[DictionaryCacheKey, DictionaryLoadResult]()
 
-  private case class DictionaryCacheKey(path: String, size: Long, lastModifiedMillis: Long)
+  private case class DictionaryCacheKey(fingerprints: List[SpellCheckDictionaryFingerprint])
   private case class DictionaryLoadResult(words: Set[String], failures: List[String])
   private case class DictionaryContext(words: Set[String], failures: List[String])
+
+  private enum HunspellFlagMode:
+    case Simple
+    case Long
+    case Num
+
+  private case class HunspellAffixRules(
+      flagMode: HunspellFlagMode,
+      prefixes: Map[String, List[HunspellAffixRule]],
+      suffixes: Map[String, List[HunspellAffixRule]]
+  )
+
+  private object HunspellAffixRules:
+    val empty: HunspellAffixRules =
+      HunspellAffixRules(HunspellFlagMode.Simple, Map.empty, Map.empty)
+
+  private case class HunspellAffixRule(strip: String, append: String, condition: String, combineable: Boolean)
+  private case class HunspellEntry(word: String, flags: Set[String])
 
   private val BuiltInDictionaries: Map[String, Set[String]] = Map(
     "en" -> Set(
@@ -163,12 +182,8 @@ object SpellChecker:
     )
 
   private def loadDictionary(path: Path): DictionaryLoadResult =
-    val fingerprint = SpellCheckDictionaryFingerprint.fromPath(path)
-    val cacheKey = DictionaryCacheKey(
-      fingerprint.path,
-      fingerprint.size,
-      fingerprint.lastModifiedMillis
-    )
+    val dependencyPaths = SpellCheckConfig.dictionaryDependencyPaths(List(path))
+    val cacheKey        = DictionaryCacheKey(dependencyPaths.map(SpellCheckDictionaryFingerprint.fromPath))
     DictionaryCache.computeIfAbsent(cacheKey, _ => readDictionary(path))
 
   private def readDictionary(path: Path): DictionaryLoadResult =
@@ -176,12 +191,16 @@ object SpellChecker:
     else if Files.isDirectory(path) then DictionaryLoadResult(Set.empty, List(s"Dictionary path is a directory: $path"))
     else
       try
-        val lines = Files.readAllLines(path, StandardCharsets.UTF_8)
-        val words = lines.toArray.toList
+        val affixRules = readAffixRules(path)
+        val lines      = Files.readAllLines(path, StandardCharsets.UTF_8)
+        val entries = lines.toArray.toList
           .collect { case line: String => line.trim }
           .dropWhile(line => line.forall(_.isDigit))
           .filter(line => line.nonEmpty && !line.startsWith("#"))
-          .flatMap(parseHunspellDictionaryWord)
+          .flatMap(line => parseHunspellDictionaryEntry(line, affixRules.flagMode))
+
+        val words = entries
+          .flatMap(entry => expandHunspellEntry(entry, affixRules))
           .map(normalizeWord)
           .toSet
 
@@ -190,10 +209,115 @@ object SpellChecker:
         case NonFatal(error) =>
           DictionaryLoadResult(Set.empty, List(s"Could not load dictionary $path: ${error.getMessage}"))
 
-  private def parseHunspellDictionaryWord(line: String): Option[String] =
+  private def readAffixRules(dictionaryPath: Path): HunspellAffixRules =
+    SpellCheckConfig
+      .affixPathForDictionary(dictionaryPath)
+      .filter(Files.exists(_))
+      .filterNot(Files.isDirectory(_))
+      .map(parseAffixRules)
+      .getOrElse(HunspellAffixRules.empty)
+
+  private def parseAffixRules(path: Path): HunspellAffixRules =
+    val lines =
+      Files.readAllLines(path, StandardCharsets.UTF_8).toArray.toList.collect { case line: String => line.trim }
+    val flagMode    = parseFlagMode(lines)
+    val prefixRules = parseAffixRules(lines, "PFX")
+    val suffixRules = parseAffixRules(lines, "SFX")
+    HunspellAffixRules(flagMode, prefixRules, suffixRules)
+
+  private def parseFlagMode(lines: List[String]): HunspellFlagMode =
+    lines
+      .collectFirst {
+        case line if line.startsWith("FLAG ") =>
+          line.stripPrefix("FLAG ").trim.toLowerCase(Locale.ROOT)
+      }
+      .flatMap {
+        case "long" => Some(HunspellFlagMode.Long)
+        case "num"  => Some(HunspellFlagMode.Num)
+        case _      => Some(HunspellFlagMode.Simple)
+      }
+      .getOrElse(HunspellFlagMode.Simple)
+
+  private def parseAffixRules(lines: List[String], kind: String): Map[String, List[HunspellAffixRule]] =
+    val combinability = parseAffixRuleCombinability(lines, kind)
+    lines.foldLeft(Map.empty[String, List[HunspellAffixRule]]) { (rules, line) =>
+      val columns = line.split("\\s+").toList
+      columns match
+        case ruleKind :: flag :: strip :: append :: condition :: _ if ruleKind == kind =>
+          val rule = HunspellAffixRule(
+            strip = zeroAsEmpty(strip),
+            append = zeroAsEmpty(append.takeWhile(_ != '/')),
+            condition = condition,
+            combineable = combinability.getOrElse(flag, false)
+          )
+          rules.updated(flag, rules.getOrElse(flag, Nil) :+ rule)
+        case _ => rules
+    }
+
+  private def parseAffixRuleCombinability(lines: List[String], kind: String): Map[String, Boolean] =
+    lines.foldLeft(Map.empty[String, Boolean]) { (combinability, line) =>
+      line.split("\\s+").toList match
+        case ruleKind :: flag :: crossProduct :: count :: Nil if ruleKind == kind && count.forall(_.isDigit) =>
+          combinability.updated(flag, crossProduct.equalsIgnoreCase("Y"))
+        case _ => combinability
+    }
+
+  private def parseHunspellDictionaryEntry(line: String, flagMode: HunspellFlagMode): Option[HunspellEntry] =
     val withoutMorphology = line.takeWhile(char => !char.isWhitespace)
     val word              = withoutMorphology.takeWhile(_ != '/').trim
-    Option(word).filter(_.exists(_.isLetter))
+    Option(word)
+      .filter(_.exists(_.isLetter))
+      .map(word => HunspellEntry(word, parseHunspellFlags(withoutMorphology, flagMode)))
+
+  private def parseHunspellFlags(entry: String, flagMode: HunspellFlagMode): Set[String] =
+    entry.dropWhile(_ != '/') match
+      case "" => Set.empty
+      case flagsWithSlash =>
+        val flags = flagsWithSlash.drop(1)
+        flagMode match
+          case HunspellFlagMode.Simple =>
+            flags.toList.map(_.toString).toSet
+          case HunspellFlagMode.Long =>
+            flags.grouped(2).filter(_.length == 2).toSet
+          case HunspellFlagMode.Num =>
+            flags.split(",").map(_.trim).filter(_.nonEmpty).toSet
+
+  private def expandHunspellEntry(entry: HunspellEntry, affixRules: HunspellAffixRules): Set[String] =
+    val prefixRules = entry.flags.flatMap(flag => affixRules.prefixes.getOrElse(flag, Nil))
+    val suffixRules = entry.flags.flatMap(flag => affixRules.suffixes.getOrElse(flag, Nil))
+    val prefixes    = prefixRules.flatMap(applyPrefix(entry.word, _))
+    val suffixes    = suffixRules.flatMap(applySuffix(entry.word, _))
+    val combined =
+      for
+        prefixRule <- prefixRules if prefixRule.combineable
+        suffixRule <- suffixRules if suffixRule.combineable
+        suffixed   <- applySuffix(entry.word, suffixRule)
+        combined   <- applyPrefix(suffixed, prefixRule)
+      yield combined
+    Set(entry.word) ++ prefixes ++ suffixes ++ combined
+
+  private def applyPrefix(word: String, rule: HunspellAffixRule): Option[String] =
+    Option.when(word.startsWith(rule.strip) && prefixConditionMatches(word, rule.condition)) {
+      rule.append + word.drop(rule.strip.length)
+    }
+
+  private def applySuffix(word: String, rule: HunspellAffixRule): Option[String] =
+    Option.when(word.endsWith(rule.strip) && suffixConditionMatches(word, rule.condition)) {
+      word.dropRight(rule.strip.length) + rule.append
+    }
+
+  private def prefixConditionMatches(word: String, condition: String): Boolean =
+    condition == "." || regexMatches(s"^(?:$condition).*", word)
+
+  private def suffixConditionMatches(word: String, condition: String): Boolean =
+    condition == "." || regexMatches(s".*(?:$condition)$$", word)
+
+  private def regexMatches(pattern: String, word: String): Boolean =
+    try Regex(pattern).pattern.matcher(word).matches
+    catch case NonFatal(_) => false
+
+  private def zeroAsEmpty(value: String): String =
+    if value == "0" then "" else value
 
   private def dictionaryLoadDiagnostics(failures: List[String]): List[Diagnostic] =
     failures.map { message =>

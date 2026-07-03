@@ -75,6 +75,18 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     Files.writeString(path, (words.length.toString :: words).mkString("\n"), StandardCharsets.UTF_8)
     path
 
+  private def writeHunspellDictionary(
+    name: String,
+    words: List[String],
+    affixRules: List[String]
+  ): (java.nio.file.Path, java.nio.file.Path) =
+    val directory = Files.createTempDirectory(name)
+    val dic       = directory.resolve(s"$name.dic")
+    val aff       = directory.resolve(s"$name.aff")
+    Files.writeString(dic, (words.length.toString :: words).mkString("\n"), StandardCharsets.UTF_8)
+    Files.writeString(aff, affixRules.mkString("\n"), StandardCharsets.UTF_8)
+    dic -> aff
+
   "SpellChecker" should "report unknown words with unicode-aware ranges" in {
     val config = SpellCheckConfig(
       enabled = true,
@@ -132,6 +144,110 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     val diagnostics = SpellChecker.check("external serenity calm drafting wurld", config)
 
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: wurld")
+  }
+
+  it should "expand Hunspell suffix rules from sibling affix files" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-suffix",
+      List("draft/G", "city/S"),
+      List(
+        "SET UTF-8",
+        "SFX G Y 1",
+        "SFX G 0 ing .",
+        "SFX S Y 1",
+        "SFX S y ies [^aeiou]y"
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("draft drafting city cities citie wurld", config)
+
+    diagnostics.map(_.message) shouldBe List(
+      "Possible spelling issue: citie",
+      "Possible spelling issue: wurld"
+    )
+  }
+
+  it should "expand Hunspell prefix rules from sibling affix files" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-prefix",
+      List("kind/U", "clear/U"),
+      List(
+        "SET UTF-8",
+        "PFX U Y 1",
+        "PFX U 0 un ."
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("kind unkind clear unclear unklear", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: unklear")
+  }
+
+  it should "combine Hunspell prefix and suffix rules when both rules are combinable" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-cross-product",
+      List("kind/US"),
+      List(
+        "SET UTF-8",
+        "PFX U Y 1",
+        "PFX U 0 un .",
+        "SFX S Y 1",
+        "SFX S 0 ness ."
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("kind unkind kindness unkindness unkindish", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: unkindish")
+  }
+
+  it should "load a Hunspell dictionary when the configured path points at the affix file" in {
+    val (_, affix) = writeHunspellDictionary(
+      "serenity-affix-path",
+      List("draft/G"),
+      List(
+        "SET UTF-8",
+        "SFX G Y 1",
+        "SFX G 0 ing ."
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(affix.toString))
+
+    val diagnostics = SpellChecker.check("draft drafting drafter", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: drafter")
+  }
+
+  it should "expand Hunspell long and numeric affix flags" in {
+    val (longDictionary, _) = writeHunspellDictionary(
+      "serenity-long-flags",
+      List("kind/AB"),
+      List(
+        "FLAG long",
+        "SFX AB Y 1",
+        "SFX AB 0 ness ."
+      )
+    )
+    val (numericDictionary, _) = writeHunspellDictionary(
+      "serenity-numeric-flags",
+      List("soft/12"),
+      List(
+        "FLAG num",
+        "SFX 12 Y 1",
+        "SFX 12 0 ly ."
+      )
+    )
+    val config = SpellCheckConfig(
+      enabled = true,
+      dictionaryPaths = List(longDictionary.toString, numericDictionary.toString)
+    )
+
+    val diagnostics = SpellChecker.check("kind kindness soft softly softless", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: softless")
   }
 
   it should "combine multiple external dictionaries for multilingual spell checking" in {
@@ -225,6 +341,35 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
 
     Files.writeString(dictionary, "2\nhello\nadded\n", StandardCharsets.UTF_8)
     Files.setLastModifiedTime(dictionary, FileTime.fromMillis(System.currentTimeMillis() + 10_000L))
+    val refreshed = SpellChecker.refreshDiagnostics(staleDiagnostics)
+
+    refreshed.diagnostics.get(uri) shouldBe None
+  }
+
+  it should "invalidate cached spell-check diagnostics when affix file content changes" in {
+    val (dictionary, affix) = writeHunspellDictionary(
+      "serenity-affix-cache",
+      List("draft/G"),
+      List("SET UTF-8")
+    )
+    val config   = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val bufferId = BufferId(0)
+    val buffer   = AppState.initial.buffers(bufferId).copy(content = Rope("drafting"))
+    val uri      = SpellChecker.diagnosticsUri(buffer)
+    val staleState = AppState.initial.copy(
+      config = AppConfig.default.withSpellCheck(config),
+      buffers = Map(bufferId -> buffer)
+    )
+    val staleDiagnostics = SpellChecker.refreshDiagnostics(staleState)
+    staleDiagnostics.diagnostics.getOrElse(uri, Nil).map(_.message) shouldBe
+      List("Possible spelling issue: drafting")
+
+    Files.writeString(
+      affix,
+      List("SET UTF-8", "SFX G Y 1", "SFX G 0 ing .").mkString("\n"),
+      StandardCharsets.UTF_8
+    )
+    Files.setLastModifiedTime(affix, FileTime.fromMillis(System.currentTimeMillis() + 10_000L))
     val refreshed = SpellChecker.refreshDiagnostics(staleDiagnostics)
 
     refreshed.diagnostics.get(uri) shouldBe None
