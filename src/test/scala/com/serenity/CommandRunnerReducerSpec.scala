@@ -490,6 +490,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       "settings-preset-active-panels",
       "settings-preset-animations",
       "settings-preset-fonts",
+      "settings-preset-document-defaults",
       "settings-preset-theme"
     )
   }

@@ -241,6 +241,13 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Text entry, code, and UI fonts")
     )
+    val presetDocumentDefaultsGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-document-defaults",
+      label = "Document Defaults",
+      children = List(defaultDocumentItem, markdownGroup, spellCheckGroup),
+      category = CommandCategory.Settings,
+      hint = Some("Default mode, Markdown view, spelling")
+    )
     val presetThemeGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-theme",
       label = "Theme",
@@ -249,7 +256,7 @@ object CommandRunnerSettingsGroups:
       hint = Some("Choose, toggle, or reload themes")
     )
     val presetEditingSections =
-      List(activePanelsGroup, presetAnimationsGroup, presetFontsGroup, presetThemeGroup)
+      List(activePanelsGroup, presetAnimationsGroup, presetFontsGroup, presetDocumentDefaultsGroup, presetThemeGroup)
     val selectPresetGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-select",
       label = "Select Preset",
