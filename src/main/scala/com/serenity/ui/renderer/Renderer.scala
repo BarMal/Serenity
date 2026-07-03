@@ -1446,15 +1446,17 @@ object Renderer:
     rect: LayoutRect,
     text: String
   ): Unit =
-    val rowHeightPx = math.max(1, rect.height * context.cellMetrics.lineHeight)
-    val extraTopPx  = math.max(0, rowHeightPx - context.uiMetrics.lineHeight) / 2
-    val ascentPx    = math.max(1, math.min(rowHeightPx, context.uiMetrics.ascent + extraTopPx))
+    val rowHeightPx     = math.max(1, rect.height * context.cellMetrics.lineHeight)
+    val verticalInsetPx = if rowHeightPx > 2 then 1 else 0
+    val textHeightPx    = math.max(1, rowHeightPx - (verticalInsetPx * 2))
+    val extraTopPx      = math.max(0, textHeightPx - context.uiMetrics.lineHeight) / 2
+    val ascentPx        = math.max(1, math.min(textHeightPx, context.uiMetrics.ascent + extraTopPx))
 
     surface.drawRunPx(
       xPx = context.cellMetrics.toPixelX(rect.x).toFloat,
-      yPx = context.cellMetrics.toPixelY(rect.y),
+      yPx = context.cellMetrics.toPixelY(rect.y) + verticalInsetPx,
       bgWidthPx = (rect.width * context.cellMetrics.charWidth).toFloat,
-      lineHeightPx = rowHeightPx,
+      lineHeightPx = textHeightPx,
       ascentPx = ascentPx,
       s = text
     )

@@ -441,8 +441,9 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val gutterHeightPx = gutter.height * cellMetrics.lineHeight
 
     gutterTextDraw.font shouldBe Some(uiFont)
-    gutterTextDraw.yPx shouldBe gutterTopPx
-    gutterTextDraw.lineHeightPx shouldBe gutterHeightPx
+    gutterTextDraw.yPx should be > gutterTopPx
+    gutterTextDraw.yPx + gutterTextDraw.lineHeightPx should be <= (gutterTopPx + gutterHeightPx)
+    gutterTextDraw.lineHeightPx should be < gutterHeightPx
     gutterTextDraw.ascentPx should be > cellMetrics.ascent
     gutterTextDraw.ascentPx should be <= gutterHeightPx
     surface.putStringCalls.map(_.s).mkString should not include "Line 1, Col 5"
