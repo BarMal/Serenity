@@ -614,6 +614,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-preset-active-panels",
       "settings-preset-animations",
       "settings-preset-fonts",
+      "settings-preset-document-defaults",
       "settings-preset-theme"
     )
     editPreset.label shouldBe "Edit Preset: Writing"
@@ -623,6 +624,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-preset-active-panels",
       "settings-preset-animations",
       "settings-preset-fonts",
+      "settings-preset-document-defaults",
       "settings-preset-theme"
     )
     val createName = createPreset.children
@@ -677,6 +679,19 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     animations.children.map(_.id) shouldBe List("settings-cursor", "settings-material-motion", "settings-animation")
     val fonts = groupByIdRecursive(List(editPreset), "settings-preset-fonts")
     fonts.children.map(_.id) shouldBe List("settings-prose-font", "settings-code-font", "settings-ui-font")
+    val documentDefaults = groupByIdRecursive(List(editPreset), "settings-preset-document-defaults")
+    documentDefaults.children.map(_.id) shouldBe List(
+      "default-document-mode",
+      "settings-markdown",
+      "settings-spellcheck"
+    )
+    descendants(documentDefaults).map(_.id) should contain allOf (
+      "markdown-view",
+      "spellcheck-enabled",
+      "spellcheck-languages",
+      "spellcheck-words"
+    )
+    descendants(documentDefaults).map(_.id) should not contain "lang-plain-text"
     val theme = groupByIdRecursive(List(editPreset), "settings-preset-theme")
     theme.children.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } should contain allOf (
       CommandIntent.OpenThemeChooser,
