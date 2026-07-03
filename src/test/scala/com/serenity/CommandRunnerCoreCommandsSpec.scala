@@ -79,6 +79,23 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
+  private def awaitDiagnosticMessages(
+    stateManager: StateManager,
+    uri: String,
+    expectedMessages: List[String],
+    attempts: Int = 40
+  ): List[String] =
+    def readMessages: IO[List[String]] =
+      stateManager.getCurrentState.map(_.diagnostics.getOrElse(uri, Nil).map(_.message))
+
+    def loop(remaining: Int): IO[List[String]] =
+      readMessages.flatMap { messages =>
+        if messages == expectedMessages || remaining <= 0 then IO.pure(messages)
+        else IO.sleep(100.millis) >> loop(remaining - 1)
+      }
+
+    loop(attempts).unsafeRunSync()
+
   private def assertActiveBufferFitsViewport(state: AppState, viewportSize: ViewportSize): Unit =
     state.viewportSize shouldBe Some(viewportSize)
     val paneId = state.layout.activeEditorPaneId.getOrElse(fail("Expected active pane"))
@@ -317,14 +334,11 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     updatedState.config.spellCheck.enabled shouldBe true
 
-    IO.sleep(300.millis).unsafeRunSync()
-
-    val diagnostics =
-      stateManager.getCurrentState
-        .unsafeRunSync()
-        .diagnostics
-        .getOrElse(SpellChecker.bufferDiagnosticsUri(bufferId), Nil)
-    diagnostics.map(_.message) shouldBe List("Possible spelling issue: wurld")
+    awaitDiagnosticMessages(
+      stateManager,
+      SpellChecker.bufferDiagnosticsUri(bufferId),
+      List("Possible spelling issue: wurld")
+    ) shouldBe List("Possible spelling issue: wurld")
   }
 
   it should "save the focused buffer through the native save-as file dialog" in {
