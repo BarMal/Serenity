@@ -983,9 +983,19 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       hit <- pinnedPanelRowHitAt(event, state)
       location <- hit.surface.content match
         case SurfaceContent.Outline(symbols, _) =>
-          symbols.lift(hit.rowIndex).map(_.location)
+          hit.layoutKind match
+            case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square =>
+              symbols.lift(hit.rowIndex).map(_.location)
+            case SurfaceLayoutKind.Horizontal | SurfaceLayoutKind.Compact =>
+              None
         case SurfaceContent.Diagnostics(issues) =>
-          issues.lift(hit.rowIndex).map(_.location)
+          hit.layoutKind match
+            case SurfaceLayoutKind.Vertical =>
+              issues.lift(hit.rowIndex).map(_.location)
+            case SurfaceLayoutKind.Square =>
+              Option.when(hit.rowIndex > 0)(hit.rowIndex - 1).flatMap(issues.lift).map(_.location)
+            case SurfaceLayoutKind.Horizontal | SurfaceLayoutKind.Compact =>
+              None
         case _ =>
           None
     yield location
@@ -1018,7 +1028,12 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       case None =>
         state
 
-  private case class PinnedPanelRowHit(surface: UiSurface, position: PanelPosition, rowIndex: Int)
+  private case class PinnedPanelRowHit(
+      surface: UiSurface,
+      position: PanelPosition,
+      rowIndex: Int,
+      layoutKind: SurfaceLayoutKind
+  )
 
   private def pinnedPanelRowHitAt(event: MouseInputEvent, state: AppState): Option[PinnedPanelRowHit] =
     state.viewportSize.flatMap { viewportSize =>
@@ -1031,7 +1046,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
               val insideColumns = event.col >= contentRect.x && event.col < contentRect.right
               val rowIndex      = event.row - contentRect.y
               Option.when(insideColumns && rowIndex >= 0 && rowIndex < contentRect.height) {
-                PinnedPanelRowHit(surface, position, rowIndex)
+                PinnedPanelRowHit(surface, position, rowIndex, SurfaceLayoutKind.classify(contentRect))
               }
             }
           }
