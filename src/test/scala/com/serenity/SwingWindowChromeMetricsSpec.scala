@@ -83,4 +83,29 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     darkPalette.buttonHoverBackground should not be lightPalette.buttonHoverBackground
   }
 
+  "SwingWindow.ChromeIconGeometry" should "draw every control icon inside the same centered box" in {
+    val icons = List(
+      SwingWindow.ChromeControlKind.Minimize,
+      SwingWindow.ChromeControlKind.Maximize,
+      SwingWindow.ChromeControlKind.Restore,
+      SwingWindow.ChromeControlKind.Close
+    )
+
+    icons.foreach { kind =>
+      val lines = SwingWindow.ChromeIconGeometry.lines(kind, width = 46, height = 32)
+
+      lines should not be empty
+      lines.foreach { line =>
+        line.x1 should be >= 14
+        line.x1 should be <= 32
+        line.x2 should be >= 14
+        line.x2 should be <= 32
+        line.y1 should be >= 7
+        line.y1 should be <= 25
+        line.y2 should be >= 7
+        line.y2 should be <= 25
+      }
+    }
+  }
+
 end SwingWindowChromeMetricsSpec

@@ -33,8 +33,8 @@ class SwingWindow(
   private val renderedImageRef    = new AtomicReference[Option[BufferedImage]](None)
   private val savedBoundsRef      = new AtomicReference[Option[Rectangle]](None)
   private val maximizedRef        = new AtomicBoolean(false)
-  private val maxBtnRef           = new AtomicReference[Option[JLabel]](None)
-  private val controlButtonsRef   = new AtomicReference[scala.List[JLabel]](Nil)
+  private val maxBtnRef           = new AtomicReference[Option[ChromeControlButton]](None)
+  private val controlButtonsRef   = new AtomicReference[scala.List[ChromeControlButton]](Nil)
   private val controlPanelRef     = new AtomicReference[Option[JPanel]](None)
   private val titleBarRef         = new AtomicReference[Option[JPanel]](None)
   private val titleLabelRef       = new AtomicReference[Option[JLabel]](None)
@@ -78,32 +78,80 @@ class SwingWindow(
       savedBoundsRef.set(Some(frame.getBounds))
       frame.setExtendedState(Frame.MAXIMIZED_BOTH)
 
-  private def makeCtrlBtn(label: String, isClose: Boolean): JLabel =
-    new JLabel(label, SwingConstants.CENTER):
-      setOpaque(true)
-      applyChromeButtonRestingStyle(this)
-      setFont(chromeControlFont)
-      setPreferredSize(chromeButtonSize)
-      addMouseListener(new MouseAdapter:
-        override def mouseEntered(e: MouseEvent): Unit =
-          val palette = chromePaletteRef.get()
-          setBackground(if isClose then palette.closeHoverBackground else palette.buttonHoverBackground)
-          setForeground(if isClose then palette.closeHoverForeground else palette.titleForeground)
-        override def mouseExited(e: MouseEvent): Unit =
-          e.getComponent match
-            case label: JLabel => applyChromeButtonRestingStyle(label)
-            case _             => ()
-        override def mouseReleased(e: MouseEvent): Unit =
-          if e.getX >= 0 && e.getX < getWidth && e.getY >= 0 && e.getY < getHeight then
-            if isClose then closeLatch.countDown()
-            else if label == "─" then frame.setExtendedState(Frame.ICONIFIED)
-            else toggleMaximize())
+  private class ChromeControlButton(initialKind: SwingWindow.ChromeControlKind) extends JComponent:
+    private val kindRef  = new AtomicReference(initialKind)
+    private val hoverRef = new AtomicBoolean(false)
+
+    setOpaque(true)
+    setFocusable(true)
+    setPreferredSize(chromeButtonSize)
+    getAccessibleContext.setAccessibleName(initialKind.accessibleName)
+
+    def setKind(kind: SwingWindow.ChromeControlKind): Unit =
+      kindRef.set(kind)
+      getAccessibleContext.setAccessibleName(kind.accessibleName)
+      repaint()
+
+    private def isClose: Boolean =
+      kindRef.get() == SwingWindow.ChromeControlKind.Close
+
+    override def paintComponent(g: Graphics): Unit =
+      val palette = chromePaletteRef.get()
+      val background =
+        if hoverRef.get() && isClose then palette.closeHoverBackground
+        else if hoverRef.get() then palette.buttonHoverBackground
+        else palette.titleBackground
+      val foreground =
+        if hoverRef.get() && isClose then palette.closeHoverForeground
+        else palette.titleForeground
+      val g2 = g.create().asInstanceOf[Graphics2D]
+      try
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        g2.setColor(background)
+        g2.fillRect(0, 0, getWidth, getHeight)
+        g2.setColor(foreground)
+        g2.setStroke(new BasicStroke(SwingWindow.ChromeIconGeometry.strokeWidth(getHeight).toFloat))
+        SwingWindow.ChromeIconGeometry.lines(kindRef.get(), getWidth, getHeight).foreach { line =>
+          g2.drawLine(line.x1, line.y1, line.x2, line.y2)
+        }
+        if hasFocus then
+          g2.setColor(palette.border)
+          g2.drawRect(1, 1, getWidth - 3, getHeight - 3)
+      finally g2.dispose()
+
+    addMouseListener(new MouseAdapter:
+      override def mouseEntered(e: MouseEvent): Unit =
+        hoverRef.set(true)
+        repaint()
+      override def mouseExited(e: MouseEvent): Unit =
+        hoverRef.set(false)
+        repaint()
+      override def mouseReleased(e: MouseEvent): Unit =
+        if e.getX >= 0 && e.getX < getWidth && e.getY >= 0 && e.getY < getHeight then activate())
+
+    addKeyListener(
+      new KeyAdapter:
+        override def keyReleased(e: KeyEvent): Unit =
+          if e.getKeyCode == KeyEvent.VK_ENTER || e.getKeyCode == KeyEvent.VK_SPACE then activate()
+    )
+
+    private def activate(): Unit =
+      kindRef.get() match
+        case SwingWindow.ChromeControlKind.Minimize =>
+          frame.setExtendedState(Frame.ICONIFIED)
+        case SwingWindow.ChromeControlKind.Maximize | SwingWindow.ChromeControlKind.Restore =>
+          toggleMaximize()
+        case SwingWindow.ChromeControlKind.Close =>
+          closeLatch.countDown()
+
+  private def makeCtrlBtn(kind: SwingWindow.ChromeControlKind): ChromeControlButton =
+    new ChromeControlButton(kind)
 
   private val titleBar: JPanel =
-    val minBtn = makeCtrlBtn("─", isClose = false)
-    val maxBtn = makeCtrlBtn("□", isClose = false)
+    val minBtn = makeCtrlBtn(SwingWindow.ChromeControlKind.Minimize)
+    val maxBtn = makeCtrlBtn(SwingWindow.ChromeControlKind.Maximize)
     maxBtnRef.set(Some(maxBtn))
-    val closeBtn = makeCtrlBtn("✕", isClose = true)
+    val closeBtn = makeCtrlBtn(SwingWindow.ChromeControlKind.Close)
     controlButtonsRef.set(scala.List(minBtn, maxBtn, closeBtn))
 
     val btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0)):
@@ -268,7 +316,11 @@ class SwingWindow(
       maximizedRef.set(isMax)
       SwingUtilities.invokeLater { () =>
         if usesCustomChrome then
-          maxBtnRef.get().foreach(_.setText(if isMax then "❐" else "□"))
+          maxBtnRef
+            .get()
+            .foreach(_.setKind {
+              if isMax then SwingWindow.ChromeControlKind.Restore else SwingWindow.ChromeControlKind.Maximize
+            })
           updateShape()
       }
     )
@@ -376,10 +428,7 @@ class SwingWindow(
       val chrome = SwingWindow.ChromeMetrics.fromCellMetrics(metrics)
       chromeMetricsRef.set(chrome)
       val controlFont = chromeControlFont
-      controlButtonsRef.get().foreach { button =>
-        button.setFont(controlFont)
-        button.setPreferredSize(chromeButtonSize)
-      }
+      controlButtonsRef.get().foreach(button => button.setPreferredSize(chromeButtonSize))
       titleLabelRef.get().foreach(_.setFont(controlFont))
       titleSpacerRef.get().foreach(_.setPreferredSize(chromeSpacerSize))
       titleBarRef.get().foreach(_.setPreferredSize(chromeTitleBarSize))
@@ -389,7 +438,7 @@ class SwingWindow(
     else frame.setMinimumSize(new Dimension(SwingWindow.BaseMinWidth, SwingWindow.BaseMinHeight))
 
   private def applyChromePalette(palette: SwingWindow.ChromePalette): Unit =
-    controlButtonsRef.get().foreach(applyChromeButtonRestingStyle)
+    controlButtonsRef.get().foreach(_.repaint())
     controlPanelRef.get().foreach(_.setBackground(palette.titleBackground))
     titleSpacerRef.get().foreach(_.setBackground(palette.titleBackground))
     titleLabelRef.get().foreach(_.setForeground(palette.titleForeground))
@@ -398,11 +447,6 @@ class SwingWindow(
       titleBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, palette.border))
       titleBar.repaint()
     }
-
-  private def applyChromeButtonRestingStyle(button: JLabel): Unit =
-    val palette = chromePaletteRef.get()
-    button.setBackground(palette.titleBackground)
-    button.setForeground(palette.titleForeground)
 
   private def publishCanvasResize(canvasSize: Dimension): Unit =
     publishCanvasResize(canvasSize, pixelSize.get())
@@ -432,6 +476,56 @@ object SwingWindow:
   )
 
   case class CanvasResizeSnapshot(pixelSize: Dimension, viewportSize: ViewportSize)
+
+  enum ChromeControlKind(val accessibleName: String):
+    case Minimize extends ChromeControlKind("Minimize")
+    case Maximize extends ChromeControlKind("Maximize")
+    case Restore  extends ChromeControlKind("Restore")
+    case Close    extends ChromeControlKind("Close")
+
+  case class ChromeIconLine(x1: Int, y1: Int, x2: Int, y2: Int)
+
+  object ChromeIconGeometry:
+
+    def lines(kind: ChromeControlKind, width: Int, height: Int): scala.List[ChromeIconLine] =
+      val box     = iconBox(width, height)
+      val left    = box.x
+      val right   = box.x + box.width
+      val top     = box.y
+      val bottom  = box.y + box.height
+      val middleY = box.y + box.height / 2
+      kind match
+        case ChromeControlKind.Minimize =>
+          scala.List(ChromeIconLine(left, middleY + box.height / 3, right, middleY + box.height / 3))
+        case ChromeControlKind.Maximize =>
+          scala.List(
+            ChromeIconLine(left, top, right, top),
+            ChromeIconLine(right, top, right, bottom),
+            ChromeIconLine(right, bottom, left, bottom),
+            ChromeIconLine(left, bottom, left, top)
+          )
+        case ChromeControlKind.Restore =>
+          val offset = math.max(2, box.width / 4)
+          scala.List(
+            ChromeIconLine(left + offset, top, right, top),
+            ChromeIconLine(right, top, right, bottom - offset),
+            ChromeIconLine(left, top + offset, right - offset, top + offset),
+            ChromeIconLine(right - offset, top + offset, right - offset, bottom),
+            ChromeIconLine(right - offset, bottom, left, bottom),
+            ChromeIconLine(left, bottom, left, top + offset)
+          )
+        case ChromeControlKind.Close =>
+          scala.List(
+            ChromeIconLine(left, top, right, bottom),
+            ChromeIconLine(right, top, left, bottom)
+          )
+
+    def strokeWidth(height: Int): Int =
+      math.max(1, math.round(height.toDouble / 16.0).toInt)
+
+    private def iconBox(width: Int, height: Int): Rectangle =
+      val size = math.max(8, math.min(width, height) / 3)
+      new Rectangle((width - size) / 2, (height - size) / 2, size, size)
 
   case class ChromePalette(
       titleBackground: Color,
