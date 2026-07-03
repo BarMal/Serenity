@@ -1041,6 +1041,102 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "expose panel reorder commands while editing a preset" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-edit-panel-order-menu").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "ui-preset-create",
+        "Create preset",
+        CommandIntent.SaveUiPreset("Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "pin-drafting-outline-right",
+        "Pin drafting outline right",
+        CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "pin-drafting-diagnostics-right",
+        "Pin drafting diagnostics right",
+        CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Right)),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val runner      = commandRunnerState(sm)
+    val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
+    val activePanelsGroup = descendants(presetGroup)
+      .collectFirst {
+        case item: CommandSurfaceItem.GroupItem if item.id == "settings-preset-active-panels" => item
+      }
+      .getOrElse(fail("missing active panels group"))
+    val commands = descendants(activePanelsGroup).collect {
+      case item: CommandSurfaceItem.CommandItem =>
+        item.command.label -> item.command.intent
+    }
+
+    commands should contain("Move Outline Earlier" -> CommandIntent.MovePanelEarlier(PanelKind.Outline))
+    commands should contain("Move Outline Later" -> CommandIntent.MovePanelLater(PanelKind.Outline))
+    commands should contain("Move Diagnostics Earlier" -> CommandIntent.MovePanelEarlier(PanelKind.Diagnostics))
+    commands should contain("Move Diagnostics Later" -> CommandIntent.MovePanelLater(PanelKind.Diagnostics))
+  }
+
+  it should "persist reordered active panels to the preset currently being edited" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-edit-panel-order").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "ui-preset-create",
+        "Create preset",
+        CommandIntent.SaveUiPreset("Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "pin-drafting-outline-right",
+        "Pin drafting outline right",
+        CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "pin-drafting-diagnostics-right",
+        "Pin drafting diagnostics right",
+        CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Right)),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "move-drafting-diagnostics-earlier",
+        "Move drafting diagnostics earlier",
+        CommandIntent.MovePanelEarlier(PanelKind.Diagnostics),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
+
+    saved.pinnedPanels.filter(_.position == PanelPosition.Right).map(_.content) shouldBe List(
+      UiPreset.PanelContentSnapshot.Diagnostics(Nil),
+      UiPreset.PanelContentSnapshot.Outline(Nil)
+    )
+  }
+
   it should "persist unpinned panel changes to the preset currently being edited" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-unpin").resolve("ui-presets.json")
     val store = UiPresetStore(path)

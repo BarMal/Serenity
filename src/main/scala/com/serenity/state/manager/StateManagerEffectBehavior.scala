@@ -370,6 +370,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         setPanelPin(PanelKind.MarkdownPreview, Some(PanelPosition.Right))
       case CommandIntent.SetPanelPin(kind, position) =>
         setPanelPin(kind, position)
+      case CommandIntent.MovePanelEarlier(kind) =>
+        movePanelKind(kind, delta = -1)
+      case CommandIntent.MovePanelLater(kind) =>
+        movePanelKind(kind, delta = 1)
       case CommandIntent.SetMarkdownViewMode(mode) =>
         setMarkdownViewMode(mode)
       case CommandIntent.SetDefaultDocumentMode(mode) =>
@@ -1117,6 +1121,9 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         pinPanelKind(kind, targetPosition)
     updateEffect >> refreshCommandRunnerPanelSelections >> persistEditedUiPresetFromCommandRunner
 
+  private def movePanelKind(kind: PanelKind, delta: Int): IO[Unit] =
+    updatePanelState(reorderPanelKind(kind, delta)) >> persistEditedUiPresetFromCommandRunner
+
   private def pinPanelKind(kind: PanelKind, position: PanelPosition): IO[Unit] =
     kind match
       case PanelKind.Explorer =>
@@ -1217,6 +1224,41 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case Focus.Surface(surfaceId) if matchingSurfaces.exists(_.id == surfaceId) => Focus.Surface(surface.id)
       case _                                                                      => state.focus
     stateWithId.copy(uiSurfaces = stateWithId.uiSurfaces :+ surface, focus = nextFocus)
+
+  private def reorderPanelKind(kind: PanelKind, delta: Int)(state: AppState): AppState =
+    if delta == 0 then state
+    else
+      val pinnedPanels = state.uiSurfaces.collect {
+        case surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, _), _)
+            if panelKindOf(surface.content).isDefined =>
+          surface -> position
+      }
+      pinnedPanels.find((surface, _) => panelKindOf(surface.content).contains(kind)) match
+        case None => state
+        case Some((targetSurface, targetPosition)) =>
+          val sameEdge = pinnedPanels.collect {
+            case (surface, position) if position == targetPosition => surface
+          }
+          val currentIndex = sameEdge.indexWhere(_.id == targetSurface.id)
+          val targetIndex  = (currentIndex + delta).max(0).min(sameEdge.length - 1)
+          if currentIndex < 0 || currentIndex == targetIndex then state
+          else
+            val reorderedSameEdge = moveWithinList(sameEdge, currentIndex, targetIndex)
+            val replacements      = reorderedSameEdge.iterator
+            val updatedSurfaces = state.uiSurfaces.map { surface =>
+              if sameEdge.exists(_.id == surface.id) then replacements.next()
+              else surface
+            }
+            state.copy(uiSurfaces = updatedSurfaces)
+
+  private def moveWithinList[A](values: List[A], from: Int, to: Int): List[A] =
+    if from == to then values
+    else
+      values.lift(from) match
+        case None => values
+        case Some(value) =>
+          val withoutValue = values.patch(from, Nil, 1)
+          withoutValue.patch(to, List(value), 0)
 
   private def newestPanelKindSurface(kind: PanelKind, state: AppState): Option[UiSurface] =
     state.uiSurfaces.reverse.find(surface => panelKindOf(surface.content).contains(kind))

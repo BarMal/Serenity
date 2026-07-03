@@ -299,6 +299,35 @@ object CommandRunnerSettingsItems:
       panelPinOptionItem("panel-diagnostics-pin", "Diagnostics", PanelKind.Diagnostics, optionSelections),
       panelPinOptionItem("panel-markdown-preview-pin", "Markdown Preview", PanelKind.MarkdownPreview, optionSelections)
     )
+    val panelOrderItems =
+      List(
+        ("Explorer", PanelKind.Explorer, "panel-explorer-pin"),
+        ("Outline", PanelKind.Outline, "panel-outline-pin"),
+        ("Diagnostics", PanelKind.Diagnostics, "panel-diagnostics-pin"),
+        ("Markdown Preview", PanelKind.MarkdownPreview, "panel-markdown-preview-pin")
+      ).filter((_, _, optionId) => optionSelections.getOrElse(optionId, 0) > 0).flatMap {
+        case (label, kind, _) =>
+          List(
+            CommandSurfaceItem.CommandItem(
+              Command.typed(
+                s"move-${commandId(label)}-panel-earlier",
+                s"Move the $label panel earlier within its pinned edge.",
+                CommandIntent.MovePanelEarlier(kind),
+                CommandCategory.Settings,
+                label = s"Move $label Earlier"
+              )
+            ),
+            CommandSurfaceItem.CommandItem(
+              Command.typed(
+                s"move-${commandId(label)}-panel-later",
+                s"Move the $label panel later within its pinned edge.",
+                CommandIntent.MovePanelLater(kind),
+                CommandCategory.Settings,
+                label = s"Move $label Later"
+              )
+            )
+          )
+      }
     val commandItems = List(
       Command.typed(
         "focus-left-panel",
@@ -380,6 +409,13 @@ object CommandRunnerSettingsItems:
         hint = Some("Choose panel edge placement")
       ),
       CommandSurfaceItem.GroupItem(
+        id = "settings-panel-order",
+        label = "Panel Order",
+        children = panelOrderItems,
+        category = CommandCategory.Settings,
+        hint = Some("Reorder panels on the same edge")
+      ),
+      CommandSurfaceItem.GroupItem(
         id = "settings-panel-actions",
         label = "Panel Actions",
         children = commandItems,
@@ -387,6 +423,9 @@ object CommandRunnerSettingsItems:
         hint = Some("Focus, expand, unpin, collapse")
       )
     )
+
+  private def commandId(label: String): String =
+    label.toLowerCase.replaceAll("[^a-z0-9]+", "-").stripPrefix("-").stripSuffix("-")
 
   private[command] def panelPinOptionItem(
     id: String,
