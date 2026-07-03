@@ -575,6 +575,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
       configFile,
       """spellcheck.enabled = true
         |spellcheck.languages = en,fr
+        |spellcheck.dictionary_paths = C:\Dictionaries\en_US.dic,/usr/share/hunspell/fr.dic
         |spellcheck.words = Serenity,κόσμος,café
         |""".stripMargin
     )
@@ -583,11 +584,13 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     config.spellCheck.enabled shouldBe true
     config.spellCheck.languages shouldBe List("en", "fr")
+    config.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic")
     config.spellCheck.additionalWords shouldBe List("serenity", "κόσμος", "café")
 
     val written = ConfigManager.configToString(config)
     written should include("spellcheck.enabled = true")
     written should include("spellcheck.languages = en,fr")
+    written should include("spellcheck.dictionary_paths = C:\\Dictionaries\\en_US.dic,/usr/share/hunspell/fr.dic")
     written should include("spellcheck.words = serenity,κόσμος,café")
   }
 

@@ -1,6 +1,9 @@
 package com.serenity.config
 
 import java.awt.Color
+import java.nio.file.{Files, Path, Paths}
+
+import scala.util.control.NonFatal
 
 import com.serenity.animation.*
 import com.serenity.lsp.config.LspUserConfig
@@ -161,17 +164,86 @@ object InterfaceDensityMetrics:
           commandSurfaceVerticalPadding = 4
         )
 
+case class SpellCheckDictionaryFingerprint(
+    path: String,
+    exists: Boolean,
+    isDirectory: Boolean,
+    size: Long,
+    lastModifiedMillis: Long
+)
+
+object SpellCheckDictionaryFingerprint:
+
+  def fromPath(path: Path): SpellCheckDictionaryFingerprint =
+    try
+      val exists      = Files.exists(path)
+      val isDirectory = exists && Files.isDirectory(path)
+      SpellCheckDictionaryFingerprint(
+        path = path.toAbsolutePath.normalize().toString,
+        exists = exists,
+        isDirectory = isDirectory,
+        size = if exists && !isDirectory then Files.size(path) else 0L,
+        lastModifiedMillis = if exists then Files.getLastModifiedTime(path).toMillis else 0L
+      )
+    catch
+      case NonFatal(_) =>
+        SpellCheckDictionaryFingerprint(
+          path = path.toString,
+          exists = false,
+          isDirectory = false,
+          size = 0L,
+          lastModifiedMillis = 0L
+        )
+
 case class SpellCheckConfig(
     enabled: Boolean = false,
     languages: List[String] = List("en"),
+    dictionaryPaths: List[String] = Nil,
     additionalWords: List[String] = Nil
 ):
 
   def normalized: SpellCheckConfig =
     copy(
       languages = languages.map(_.trim.toLowerCase).filter(_.nonEmpty).distinct,
+      dictionaryPaths = dictionaryPaths.map(_.trim).filter(_.nonEmpty).distinct,
       additionalWords = additionalWords.map(_.trim.toLowerCase).filter(_.nonEmpty).distinct
     )
+
+  def dictionarySourcePaths: List[Path] =
+    val config = normalized
+    config.dictionaryPaths.flatMap(path => SpellCheckConfig.expandDictionaryPath(path, config.languages)).distinct
+
+  def dictionaryFingerprints: List[SpellCheckDictionaryFingerprint] =
+    dictionarySourcePaths.map(SpellCheckDictionaryFingerprint.fromPath)
+
+object SpellCheckConfig:
+
+  private def expandDictionaryPath(path: String, languages: List[String]): List[Path] =
+    pathOption(path)
+      .map { sourcePath =>
+        if Files.isDirectory(sourcePath) then
+          val candidates = languages.flatMap(languageCandidates).map(sourcePath.resolve)
+          val existing   = candidates.filter(path => Files.exists(path))
+          if existing.nonEmpty then existing else List(sourcePath)
+        else
+          val normalizedPath = sourcePath.toString
+          if normalizedPath.toLowerCase.endsWith(".aff") then
+            List(sourcePath.resolveSibling(sourcePath.getFileName.toString.dropRight(4) + ".dic"))
+          else List(sourcePath)
+      }
+      .getOrElse(Nil)
+
+  private def languageCandidates(language: String): List[String] =
+    val normalized = language.trim.toLowerCase
+    List(
+      normalized,
+      normalized.replace("-", "_"),
+      normalized.replace("_", "-")
+    ).distinct.map(_ + ".dic")
+
+  private def pathOption(path: String): Option[Path] =
+    try Some(Paths.get(path))
+    catch case NonFatal(_) => None
 
 case class PreferredWindowSize(width: Int, height: Int):
   def normalized: PreferredWindowSize =

@@ -275,6 +275,8 @@ object ConfigManager:
                 .getOrElse(config)
             case "spellcheck.languages" | "spellcheck_languages" =>
               config.withSpellCheck(config.spellCheck.copy(languages = parseCommaList(value.trim)))
+            case "spellcheck.dictionary_paths" | "spellcheck.dictionary.paths" | "spellcheck_dictionary_paths" =>
+              config.withSpellCheck(config.spellCheck.copy(dictionaryPaths = parseCommaListPreserveCase(value.trim)))
             case "spellcheck.words" | "spellcheck_words" =>
               config.withSpellCheck(config.spellCheck.copy(additionalWords = parseCommaList(value.trim)))
             case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
@@ -413,6 +415,7 @@ object ConfigManager:
        |# Spell-checking for prose buffers
        |spellcheck.enabled = ${config.spellCheck.enabled}
        |spellcheck.languages = ${config.spellCheck.normalized.languages.mkString(",")}
+       |spellcheck.dictionary_paths = ${config.spellCheck.normalized.dictionaryPaths.mkString(",")}
        |spellcheck.words = ${config.spellCheck.normalized.additionalWords.mkString(",")}
        |
        |# Hotkey overrides
@@ -750,6 +753,14 @@ object ConfigManager:
       .filter(_.nonEmpty)
       .distinct
 
+  private def parseCommaListPreserveCase(value: String): List[String] =
+    value
+      .split(",")
+      .toList
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .distinct
+
   /** Create a sample configuration file */
   def createSampleConfig(path: String): Boolean =
     try
@@ -805,6 +816,7 @@ object ConfigManager:
                           |# Spell-checking for prose buffers
                           |spellcheck.enabled = false
                           |spellcheck.languages = en
+                          |spellcheck.dictionary_paths =
                           |spellcheck.words =
                           |
                           |# Hotkey overrides

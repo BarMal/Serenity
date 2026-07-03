@@ -163,10 +163,10 @@ object CommandRunnerSettingsGroups:
       id = "settings-spellcheck",
       label = "Spell Check",
       children = List(spellCheckItem) ++ inputItems.filter(item =>
-        item.id == "spellcheck-languages" || item.id == "spellcheck-words"
+        item.id == "spellcheck-languages" || item.id == "spellcheck-dictionaries" || item.id == "spellcheck-words"
       ),
       category = CommandCategory.Settings,
-      hint = Some("Enable, languages, accepted words")
+      hint = Some("Enable, languages, dictionaries, accepted words")
     )
     val keymapGroup = CommandSurfaceItem.GroupItem(
       id = "settings-keymap",

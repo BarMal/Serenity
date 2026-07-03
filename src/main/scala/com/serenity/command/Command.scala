@@ -108,6 +108,7 @@ enum CommandIntent:
   case SetDefaultDocumentMode(mode: DefaultDocumentMode)
   case SetSpellCheckEnabled(enabled: Boolean)
   case SetSpellCheckLanguages(languages: List[String])
+  case SetSpellCheckDictionaryPaths(paths: List[String])
   case SetSpellCheckWords(words: List[String])
   case SetInterfaceDensity(density: InterfaceDensity)
   case SetTextAreaLeftInset(value: Double)
