@@ -25,9 +25,12 @@ class SwingWindow(
   private val ColBtnHover   = new Color(0x3f3f3f)
   private val ColCloseHover = new Color(0xc42b1c)
 
-  private val pixelSize           = new AtomicReference(initialPixelSize)
+  private val initialChromeLayoutMetrics = SwingWindow.ChromeMetrics.fromCellMetrics(initialChromeMetrics)
+  private val initialCanvasPixelSize =
+    SwingWindow.canvasFallbackSize(initialPixelSize, chromeMode, initialChromeLayoutMetrics)
+  private val pixelSize           = new AtomicReference(initialCanvasPixelSize)
   private val metricsRef          = new AtomicReference(initialMetrics)
-  private val chromeMetricsRef    = new AtomicReference(SwingWindow.ChromeMetrics.fromCellMetrics(initialChromeMetrics))
+  private val chromeMetricsRef    = new AtomicReference(initialChromeLayoutMetrics)
   private val pendingResize       = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch          = new CountDownLatch(1)
   private val renderedImageRef    = new AtomicReference[Option[BufferedImage]](None)
@@ -45,7 +48,7 @@ class SwingWindow(
 
   val canvas: JPanel = new JPanel:
     setBackground(Color.BLACK)
-    setPreferredSize(initialPixelSize)
+    setPreferredSize(initialCanvasPixelSize)
     setFocusable(true)
     setFocusTraversalKeysEnabled(false)
     addComponentListener(
@@ -317,12 +320,13 @@ class SwingWindow(
   def resizeToPreferred(size: PreferredWindowSize): Unit =
     val normalized = size.normalized
     SwingUtilities.invokeLater { () =>
-      val dimension = new Dimension(normalized.width, normalized.height)
-      canvas.setPreferredSize(dimension)
+      val dimension      = new Dimension(normalized.width, normalized.height)
+      val canvasFallback = SwingWindow.canvasFallbackSize(dimension, chromeMode, chromeMetricsRef.get())
+      canvas.setPreferredSize(canvasFallback)
       frame.setSize(dimension)
       frame.validate()
       frame.setLocationRelativeTo(null)
-      publishCanvasResize(canvas.getSize(), dimension)
+      publishCanvasResize(canvas.getSize(), canvasFallback)
       val _ = canvas.requestFocusInWindow()
     }
 
@@ -433,6 +437,17 @@ object SwingWindow:
       if canvasSize.width > 0 && canvasSize.height > 0 then new Dimension(canvasSize)
       else new Dimension(fallbackSize)
     CanvasResizeSnapshot(size, metrics.viewportSize(size.width, size.height))
+
+  def canvasFallbackSize(
+    windowSize: Dimension,
+    chromeMode: WindowChromeMode,
+    chromeMetrics: ChromeMetrics
+  ): Dimension =
+    val chromeHeight =
+      chromeMode match
+        case WindowChromeMode.Custom => chromeMetrics.titleBarHeight
+        case WindowChromeMode.Native => 0
+    new Dimension(windowSize.width.max(1), (windowSize.height - chromeHeight).max(1))
 
   def resource(
     metrics: CellMetrics = DefaultMetrics,
