@@ -359,6 +359,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-spellcheck").children.map(_.id) should contain allOf (
       "spellcheck-enabled",
       "spellcheck-languages",
+      "spellcheck-dictionaries",
       "spellcheck-words"
     )
     group("settings-keymap").label shouldBe "Keymap"
@@ -534,7 +535,12 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(
         registry,
         AppConfig.default.withSpellCheck(
-          SpellCheckConfig(enabled = true, languages = List("en", "fr"), additionalWords = List("serenity"))
+          SpellCheckConfig(
+            enabled = true,
+            languages = List("en", "fr"),
+            dictionaryPaths = List("C:\\Dictionaries\\en_US.dic"),
+            additionalWords = List("serenity")
+          )
         )
       )
       .withActiveCategory(CommandCategory.Settings)
@@ -552,11 +558,15 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     enabledOption.selectedOption shouldBe "On"
     enabledOption.selectedIntent shouldBe Some(CommandIntent.SetSpellCheckEnabled(true))
-    inputs.map(_.id) shouldBe List("spellcheck-languages", "spellcheck-words")
+    inputs.map(_.id) shouldBe List("spellcheck-languages", "spellcheck-dictionaries", "spellcheck-words")
     inputs.head.currentValue shouldBe "en,fr"
     inputs.head.parse("fr,en") shouldBe Some(CommandIntent.SetSpellCheckLanguages(List("fr", "en")))
-    inputs(1).currentValue shouldBe "serenity"
-    inputs(1).parse("Serenity,caf\u00e9") shouldBe Some(CommandIntent.SetSpellCheckWords(List("serenity", "caf\u00e9")))
+    inputs(1).currentValue shouldBe "C:\\Dictionaries\\en_US.dic"
+    inputs(1).parse("C:\\Dictionaries\\en_US.dic,/usr/share/hunspell/fr.dic") shouldBe Some(
+      CommandIntent.SetSpellCheckDictionaryPaths(List("C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic"))
+    )
+    inputs(2).currentValue shouldBe "serenity"
+    inputs(2).parse("Serenity,caf\u00e9") shouldBe Some(CommandIntent.SetSpellCheckWords(List("serenity", "caf\u00e9")))
   }
 
   it should "surface UI preset save and apply inputs in settings" in {
@@ -689,6 +699,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "markdown-view",
       "spellcheck-enabled",
       "spellcheck-languages",
+      "spellcheck-dictionaries",
       "spellcheck-words"
     )
     descendants(documentDefaults).map(_.id) should not contain "lang-plain-text"

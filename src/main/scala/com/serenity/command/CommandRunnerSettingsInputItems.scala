@@ -181,6 +181,16 @@ object CommandRunnerSettingsInputItems:
         acceptsFreeText = true
       ),
       CommandSurfaceItem.InputItem(
+        id = "spellcheck-dictionaries",
+        label = "Spell Check Dictionaries",
+        hint = "Comma-separated .dic paths",
+        currentValue = spellCheck.dictionaryPaths.mkString(","),
+        isDecimal = false,
+        parse = text => Some(CommandIntent.SetSpellCheckDictionaryPaths(commaListPreserveCase(text))),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
         id = "spellcheck-words",
         label = "Accepted Words",
         hint = "Comma-separated words",
@@ -376,6 +386,14 @@ object CommandRunnerSettingsInputItems:
       .split(",")
       .toList
       .map(_.trim.toLowerCase)
+      .filter(_.nonEmpty)
+      .distinct
+
+  private def commaListPreserveCase(text: String): List[String] =
+    text
+      .split(",")
+      .toList
+      .map(_.trim)
       .filter(_.nonEmpty)
       .distinct
 

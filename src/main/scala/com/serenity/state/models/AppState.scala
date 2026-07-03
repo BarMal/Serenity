@@ -101,6 +101,7 @@ case class SpellCheckFingerprint(
     contentNewlineCount: Int,
     contentLastLineLength: Int,
     usesTextFont: Boolean,
+    dictionaryFingerprints: List[SpellCheckDictionaryFingerprint],
     config: SpellCheckConfig
 )
 
@@ -113,6 +114,7 @@ object SpellCheckFingerprint:
       contentNewlineCount = buffer.content.newlineCount,
       contentLastLineLength = buffer.content.lastLineLength,
       usesTextFont = buffer.usesTextFont,
+      dictionaryFingerprints = config.dictionaryFingerprints,
       config = config.normalized
     )
 

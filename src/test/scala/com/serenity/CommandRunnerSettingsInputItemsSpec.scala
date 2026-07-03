@@ -14,7 +14,14 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withUiElementGap(3)
       .withCommandRunnerVisibleRows(Some(9))
-      .withSpellCheck(SpellCheckConfig(enabled = true, languages = List("EN", "fr"), additionalWords = List("Cats")))
+      .withSpellCheck(
+        SpellCheckConfig(
+          enabled = true,
+          languages = List("EN", "fr"),
+          dictionaryPaths = List("C:\\Dictionaries\\en_US.dic"),
+          additionalWords = List("Cats")
+        )
+      )
 
     val items = CommandRunnerSettingsInputItems.build(config)
 
@@ -28,6 +35,11 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
     inputById(items, "spellcheck-languages").currentValue shouldBe "en,fr"
     inputById(items, "spellcheck-languages").parse("fr,en") shouldBe
       Some(CommandIntent.SetSpellCheckLanguages(List("fr", "en")))
+    inputById(items, "spellcheck-dictionaries").currentValue shouldBe "C:\\Dictionaries\\en_US.dic"
+    inputById(items, "spellcheck-dictionaries").parse("C:\\Dictionaries\\en_US.dic,/usr/share/hunspell/fr.dic") shouldBe
+      Some(
+        CommandIntent.SetSpellCheckDictionaryPaths(List("C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic"))
+      )
     inputById(items, "spellcheck-words").currentValue shouldBe "cats"
   }
 

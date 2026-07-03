@@ -333,7 +333,12 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
             )
           )
         ),
-        spellCheck = SpellCheckConfig(enabled = true, languages = List("en", "fr"), additionalWords = List("serenity"))
+        spellCheck = SpellCheckConfig(
+          enabled = true,
+          languages = List("en", "fr"),
+          dictionaryPaths = List("C:\\Dictionaries\\en_US.dic"),
+          additionalWords = List("serenity")
+        )
       )
     )
 
@@ -372,10 +377,44 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.spellCheck shouldBe SpellCheckConfig(
       enabled = true,
       languages = List("en", "fr"),
+      dictionaryPaths = List("C:\\Dictionaries\\en_US.dic"),
       additionalWords = List("serenity")
     )
     decoded.config.characterAnimation.map(_.steps) shouldBe
       AnimationConfig.quick.map(_.steps)
+  }
+
+  it should "default spell-check dictionary paths when loading older JSON without the field" in {
+    val config = AppConfig.default.withSpellCheck(
+      SpellCheckConfig(enabled = true, languages = List("en"), additionalWords = List("serenity"))
+    )
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = config)).asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val spellCheckObject =
+      originalJson.hcursor
+        .downField("config")
+        .downField("spellCheck")
+        .focus
+        .flatMap(_.asObject)
+        .getOrElse(fail("Expected spellCheck object"))
+    val jsonWithoutDictionaryPaths =
+      originalJson.mapObject(
+        _.add(
+          "config",
+          _root_.io.circe.Json.fromJsonObject(
+            configObject.add(
+              "spellCheck",
+              _root_.io.circe.Json.fromJsonObject(spellCheckObject.remove("dictionaryPaths"))
+            )
+          )
+        )
+      )
+
+    val decoded = jsonWithoutDictionaryPaths.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.spellCheck.dictionaryPaths shouldBe Nil
   }
 
   it should "default backgroundStyle to Frosted when loading older JSON without the field" in {

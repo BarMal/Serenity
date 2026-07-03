@@ -563,8 +563,28 @@ given Decoder[LspServerOverride] = deriveDecoder
 given Encoder[LspUserConfig] = deriveEncoder
 given Decoder[LspUserConfig] = deriveDecoder
 
-given Encoder[SpellCheckConfig] = deriveEncoder
-given Decoder[SpellCheckConfig] = deriveDecoder
+given Encoder[SpellCheckConfig] = Encoder.instance { config =>
+  io.circe.Json.obj(
+    "enabled"         -> config.enabled.asJson,
+    "languages"       -> config.languages.asJson,
+    "dictionaryPaths" -> config.dictionaryPaths.asJson,
+    "additionalWords" -> config.additionalWords.asJson
+  )
+}
+
+given Decoder[SpellCheckConfig] = Decoder.instance { cursor =>
+  for
+    enabled         <- cursor.getOrElse[Boolean]("enabled")(false)
+    languages       <- cursor.getOrElse[List[String]]("languages")(List("en"))
+    dictionaryPaths <- cursor.getOrElse[List[String]]("dictionaryPaths")(Nil)
+    additionalWords <- cursor.getOrElse[List[String]]("additionalWords")(Nil)
+  yield SpellCheckConfig(
+    enabled = enabled,
+    languages = languages,
+    dictionaryPaths = dictionaryPaths,
+    additionalWords = additionalWords
+  ).normalized
+}
 
 given Encoder[InlineMark] = Encoder.encodeString.contramap(_.toString)
 

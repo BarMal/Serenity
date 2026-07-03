@@ -382,6 +382,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateSpellCheckConfig(_.copy(enabled = enabled))
       case CommandIntent.SetSpellCheckLanguages(languages) =>
         updateSpellCheckConfig(_.copy(languages = languages))
+      case CommandIntent.SetSpellCheckDictionaryPaths(paths) =>
+        updateSpellCheckConfig(_.copy(dictionaryPaths = paths))
       case CommandIntent.SetSpellCheckWords(words) =>
         updateSpellCheckConfig(_.copy(additionalWords = words))
       case CommandIntent.SetInterfaceDensity(density) =>

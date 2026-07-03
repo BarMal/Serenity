@@ -86,6 +86,8 @@ object ConfigKeySchema:
       "viewport.height.max",
       "spellcheck.enabled",
       "spellcheck.languages",
+      "spellcheck.dictionary_paths",
+      "spellcheck.dictionary.paths",
       "spellcheck.words"
     )
 
@@ -141,5 +143,6 @@ object ConfigKeySchema:
       "viewport_height_max"         -> "viewport.height.max",
       "spellcheck_enabled"          -> "spellcheck.enabled",
       "spellcheck_languages"        -> "spellcheck.languages",
+      "spellcheck_dictionary_paths" -> "spellcheck.dictionary_paths",
       "spellcheck_words"            -> "spellcheck.words"
     )

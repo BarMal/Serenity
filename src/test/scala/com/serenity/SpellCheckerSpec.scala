@@ -1,5 +1,9 @@
 package com.serenity
 
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.attribute.FileTime
+
 import scala.concurrent.duration.*
 
 import cats.effect.IO
@@ -66,6 +70,11 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     override def collect(): String =
       throw AssertionError("unchanged cached spell-check diagnostics should not materialise content")
 
+  private def writeDic(name: String, words: List[String]): java.nio.file.Path =
+    val path = Files.createTempFile(name, ".dic")
+    Files.writeString(path, (words.length.toString :: words).mkString("\n"), StandardCharsets.UTF_8)
+    path
+
   "SpellChecker" should "report unknown words with unicode-aware ranges" in {
     val config = SpellCheckConfig(
       enabled = true,
@@ -110,6 +119,46 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     val config = SpellCheckConfig(enabled = true)
 
     SpellChecker.check("id parse_json v2 ok", config) shouldBe Nil
+  }
+
+  it should "accept words loaded from configured Hunspell dictionaries" in {
+    val dictionary = writeDic("serenity-en", List("external", "serenity/AB", "calm"))
+    val config = SpellCheckConfig(
+      enabled = true,
+      dictionaryPaths = List(dictionary.toString),
+      additionalWords = List("drafting")
+    )
+
+    val diagnostics = SpellChecker.check("external serenity calm drafting wurld", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: wurld")
+  }
+
+  it should "combine multiple external dictionaries for multilingual spell checking" in {
+    val english = writeDic("serenity-en", List("external"))
+    val french  = writeDic("serenity-fr", List("bonjour", "café"))
+    val config = SpellCheckConfig(
+      enabled = true,
+      languages = List("en", "fr"),
+      dictionaryPaths = List(english.toString, french.toString)
+    )
+
+    val diagnostics = SpellChecker.check("external bonjour café wrld", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: wrld")
+  }
+
+  it should "report dictionary load failures without preventing fallback spell checks" in {
+    val missing = Files.createTempDirectory("serenity-missing-dictionaries").resolve("missing.dic")
+    val config = SpellCheckConfig(
+      enabled = true,
+      dictionaryPaths = List(missing.toString)
+    )
+
+    val diagnostics = SpellChecker.check("hello wurld", config)
+
+    diagnostics.map(_.code) should contain(Some("dictionary-load-failed"))
+    diagnostics.map(_.message) should contain("Possible spelling issue: wurld")
   }
 
   it should "reuse cached diagnostics for unchanged buffers without materialising content" in {
@@ -158,6 +207,27 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     refreshed.spellCheckCache.get(uri).map(_.fingerprint) shouldBe Some(
       SpellCheckFingerprint.from(updatedBuffer, config)
     )
+  }
+
+  it should "invalidate cached spell-check diagnostics when dictionary file content changes" in {
+    val dictionary = writeDic("serenity-cache", List("hello"))
+    val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val bufferId   = BufferId(0)
+    val buffer     = AppState.initial.buffers(bufferId).copy(content = Rope("hello added"))
+    val uri        = SpellChecker.diagnosticsUri(buffer)
+    val staleState = AppState.initial.copy(
+      config = AppConfig.default.withSpellCheck(config),
+      buffers = Map(bufferId -> buffer)
+    )
+    val staleDiagnostics = SpellChecker.refreshDiagnostics(staleState)
+    staleDiagnostics.diagnostics.getOrElse(uri, Nil).map(_.message) shouldBe
+      List("Possible spelling issue: added")
+
+    Files.writeString(dictionary, "2\nhello\nadded\n", StandardCharsets.UTF_8)
+    Files.setLastModifiedTime(dictionary, FileTime.fromMillis(System.currentTimeMillis() + 10_000L))
+    val refreshed = SpellChecker.refreshDiagnostics(staleDiagnostics)
+
+    refreshed.diagnostics.get(uri) shouldBe None
   }
 
   it should "drop stale spell-check analysis results when the buffer changes before publication" in {
