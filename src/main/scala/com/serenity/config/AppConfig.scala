@@ -214,9 +214,20 @@ case class SpellCheckConfig(
     config.dictionaryPaths.flatMap(path => SpellCheckConfig.expandDictionaryPath(path, config.languages)).distinct
 
   def dictionaryFingerprints: List[SpellCheckDictionaryFingerprint] =
-    dictionarySourcePaths.map(SpellCheckDictionaryFingerprint.fromPath)
+    SpellCheckConfig.dictionaryDependencyPaths(dictionarySourcePaths).map(SpellCheckDictionaryFingerprint.fromPath)
 
 object SpellCheckConfig:
+
+  def dictionaryDependencyPaths(dictionarySourcePaths: List[Path]): List[Path] =
+    dictionarySourcePaths.flatMap(path => path :: affixPathForDictionary(path).toList).distinct
+
+  def affixPathForDictionary(path: Path): Option[Path] =
+    val fileName = path.getFileName
+    Option(fileName).flatMap { name =>
+      val text = name.toString
+      if text.toLowerCase.endsWith(".dic") then Some(path.resolveSibling(text.dropRight(4) + ".aff"))
+      else None
+    }
 
   private def expandDictionaryPath(path: String, languages: List[String]): List[Path] =
     pathOption(path)
