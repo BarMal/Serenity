@@ -12,6 +12,7 @@ import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.theme.Theme
 
 class SwingWindow(
     initialPixelSize: Dimension,
@@ -20,17 +21,13 @@ class SwingWindow(
     initialChromeMetrics: CellMetrics
 ):
 
-  private val ColBar        = new Color(0x2b2b2b)
-  private val ColBarFg      = new Color(0xcccccc)
-  private val ColBtnHover   = new Color(0x3f3f3f)
-  private val ColCloseHover = new Color(0xc42b1c)
-
   private val initialChromeLayoutMetrics = SwingWindow.ChromeMetrics.fromCellMetrics(initialChromeMetrics)
   private val initialCanvasPixelSize =
     SwingWindow.canvasFallbackSize(initialPixelSize, chromeMode, initialChromeLayoutMetrics)
   private val pixelSize           = new AtomicReference(initialCanvasPixelSize)
   private val metricsRef          = new AtomicReference(initialMetrics)
   private val chromeMetricsRef    = new AtomicReference(initialChromeLayoutMetrics)
+  private val chromePaletteRef    = new AtomicReference(SwingWindow.ChromePalette.fromTheme(Theme.default))
   private val pendingResize       = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch          = new CountDownLatch(1)
   private val renderedImageRef    = new AtomicReference[Option[BufferedImage]](None)
@@ -38,6 +35,7 @@ class SwingWindow(
   private val maximizedRef        = new AtomicBoolean(false)
   private val maxBtnRef           = new AtomicReference[Option[JLabel]](None)
   private val controlButtonsRef   = new AtomicReference[scala.List[JLabel]](Nil)
+  private val controlPanelRef     = new AtomicReference[Option[JPanel]](None)
   private val titleBarRef         = new AtomicReference[Option[JPanel]](None)
   private val titleLabelRef       = new AtomicReference[Option[JLabel]](None)
   private val titleSpacerRef      = new AtomicReference[Option[JPanel]](None)
@@ -83,15 +81,18 @@ class SwingWindow(
   private def makeCtrlBtn(label: String, isClose: Boolean): JLabel =
     new JLabel(label, SwingConstants.CENTER):
       setOpaque(true)
-      setBackground(ColBar)
-      setForeground(ColBarFg)
+      applyChromeButtonRestingStyle(this)
       setFont(chromeControlFont)
       setPreferredSize(chromeButtonSize)
       addMouseListener(new MouseAdapter:
         override def mouseEntered(e: MouseEvent): Unit =
-          setBackground(if isClose then ColCloseHover else ColBtnHover)
+          val palette = chromePaletteRef.get()
+          setBackground(if isClose then palette.closeHoverBackground else palette.buttonHoverBackground)
+          setForeground(if isClose then palette.closeHoverForeground else palette.titleForeground)
         override def mouseExited(e: MouseEvent): Unit =
-          setBackground(ColBar)
+          e.getComponent match
+            case label: JLabel => applyChromeButtonRestingStyle(label)
+            case _             => ()
         override def mouseReleased(e: MouseEvent): Unit =
           if e.getX >= 0 && e.getX < getWidth && e.getY >= 0 && e.getY < getHeight then
             if isClose then closeLatch.countDown()
@@ -106,18 +107,19 @@ class SwingWindow(
     controlButtonsRef.set(scala.List(minBtn, maxBtn, closeBtn))
 
     val btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0)):
-      setBackground(ColBar)
+      setBackground(chromePaletteRef.get().titleBackground)
+    controlPanelRef.set(Some(btnPanel))
     btnPanel.add(minBtn)
     btnPanel.add(maxBtn)
     btnPanel.add(closeBtn)
 
     val spacer = new JPanel:
-      setBackground(ColBar)
+      setBackground(chromePaletteRef.get().titleBackground)
       setPreferredSize(chromeSpacerSize)
     titleSpacerRef.set(Some(spacer))
 
     val titleLabel = new JLabel("Serenity", SwingConstants.CENTER):
-      setForeground(ColBarFg)
+      setForeground(chromePaletteRef.get().titleForeground)
       setFont(chromeControlFont)
     titleLabelRef.set(Some(titleLabel))
 
@@ -141,7 +143,8 @@ class SwingWindow(
         if e.getClickCount == 2 then toggleMaximize()
 
     val bar = new JPanel(new BorderLayout):
-      setBackground(ColBar)
+      setBackground(chromePaletteRef.get().titleBackground)
+      setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, chromePaletteRef.get().border))
       setPreferredSize(chromeTitleBarSize)
     titleBarRef.set(Some(bar))
     bar.add(spacer, BorderLayout.WEST)
@@ -343,6 +346,14 @@ class SwingWindow(
     pendingResize.set(Some(newMetrics.viewportSize(d.width, d.height)))
     onResizeCallbackRef.get().foreach(_.apply())
 
+  def updateChromeTheme(theme: Theme): Unit =
+    if usesCustomChrome then
+      val palette = SwingWindow.ChromePalette.fromTheme(theme)
+      chromePaletteRef.set(palette)
+      val applyPalette: Runnable = () => applyChromePalette(palette)
+      if SwingUtilities.isEventDispatchThread then applyPalette.run()
+      else SwingUtilities.invokeLater(applyPalette)
+
   def detectedDeviceTextScale: Double =
     DisplayScale.forComponent(canvas).textScale
 
@@ -377,6 +388,22 @@ class SwingWindow(
       frame.revalidate()
     else frame.setMinimumSize(new Dimension(SwingWindow.BaseMinWidth, SwingWindow.BaseMinHeight))
 
+  private def applyChromePalette(palette: SwingWindow.ChromePalette): Unit =
+    controlButtonsRef.get().foreach(applyChromeButtonRestingStyle)
+    controlPanelRef.get().foreach(_.setBackground(palette.titleBackground))
+    titleSpacerRef.get().foreach(_.setBackground(palette.titleBackground))
+    titleLabelRef.get().foreach(_.setForeground(palette.titleForeground))
+    titleBarRef.get().foreach { titleBar =>
+      titleBar.setBackground(palette.titleBackground)
+      titleBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, palette.border))
+      titleBar.repaint()
+    }
+
+  private def applyChromeButtonRestingStyle(button: JLabel): Unit =
+    val palette = chromePaletteRef.get()
+    button.setBackground(palette.titleBackground)
+    button.setForeground(palette.titleForeground)
+
   private def publishCanvasResize(canvasSize: Dimension): Unit =
     publishCanvasResize(canvasSize, pixelSize.get())
 
@@ -405,6 +432,34 @@ object SwingWindow:
   )
 
   case class CanvasResizeSnapshot(pixelSize: Dimension, viewportSize: ViewportSize)
+
+  case class ChromePalette(
+      titleBackground: Color,
+      titleForeground: Color,
+      border: Color,
+      buttonHoverBackground: Color,
+      closeHoverBackground: Color,
+      closeHoverForeground: Color
+  )
+
+  object ChromePalette:
+
+    def fromTheme(theme: Theme): ChromePalette =
+      ChromePalette(
+        titleBackground = theme.panel.background,
+        titleForeground = theme.panel.foreground,
+        border = theme.border,
+        buttonHoverBackground = blend(theme.highlighted.background, theme.panel.background, 0.24),
+        closeHoverBackground = theme.error.foreground,
+        closeHoverForeground = theme.background
+      )
+
+    private def blend(foreground: Color, background: Color, foregroundWeight: Double): Color =
+      val clampedWeight    = foregroundWeight.max(0.0).min(1.0)
+      val backgroundWeight = 1.0 - clampedWeight
+      def channel(value: Color => Int): Int =
+        math.round(value(foreground) * clampedWeight + value(background) * backgroundWeight).toInt
+      new Color(channel(_.getRed), channel(_.getGreen), channel(_.getBlue))
 
   object ChromeMetrics:
     private val BaseTitleBarHeight = 32

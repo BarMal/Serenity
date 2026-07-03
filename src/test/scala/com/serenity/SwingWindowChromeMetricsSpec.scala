@@ -5,6 +5,7 @@ import java.awt.Dimension
 import com.serenity.config.WindowChromeMode
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.terminal.SwingWindow
+import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -62,6 +63,24 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     val fallback = SwingWindow.canvasFallbackSize(requestedWindow, WindowChromeMode.Native, chrome)
 
     fallback shouldBe requestedWindow
+  }
+
+  "SwingWindow.ChromePalette" should "derive custom chrome colours from the active theme" in {
+    val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
+
+    palette.titleBackground shouldBe Theme.light.panel.background
+    palette.titleForeground shouldBe Theme.light.panel.foreground
+    palette.border shouldBe Theme.light.border
+    palette.closeHoverBackground shouldBe Theme.light.error.foreground
+  }
+
+  it should "derive distinct custom chrome colours for dark and light themes" in {
+    val darkPalette  = SwingWindow.ChromePalette.fromTheme(Theme.dark)
+    val lightPalette = SwingWindow.ChromePalette.fromTheme(Theme.light)
+
+    darkPalette.titleBackground should not be lightPalette.titleBackground
+    darkPalette.titleForeground should not be lightPalette.titleForeground
+    darkPalette.buttonHoverBackground should not be lightPalette.buttonHoverBackground
   }
 
 end SwingWindowChromeMetricsSpec
