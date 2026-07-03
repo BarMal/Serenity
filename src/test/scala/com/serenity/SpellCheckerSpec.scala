@@ -1,6 +1,6 @@
 package com.serenity
 
-import java.nio.charset.StandardCharsets
+import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
 
@@ -78,13 +78,14 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   private def writeHunspellDictionary(
     name: String,
     words: List[String],
-    affixRules: List[String]
+    affixRules: List[String],
+    charset: Charset = StandardCharsets.UTF_8
   ): (java.nio.file.Path, java.nio.file.Path) =
     val directory = Files.createTempDirectory(name)
     val dic       = directory.resolve(s"$name.dic")
     val aff       = directory.resolve(s"$name.aff")
-    Files.writeString(dic, (words.length.toString :: words).mkString("\n"), StandardCharsets.UTF_8)
-    Files.writeString(aff, affixRules.mkString("\n"), StandardCharsets.UTF_8)
+    Files.writeString(dic, (words.length.toString :: words).mkString("\n"), charset)
+    Files.writeString(aff, affixRules.mkString("\n"), charset)
     dic -> aff
 
   "SpellChecker" should "report unknown words with unicode-aware ranges" in {
@@ -248,6 +249,34 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     val diagnostics = SpellChecker.check("kind kindness soft softly softless", config)
 
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: softless")
+  }
+
+  it should "load Hunspell dictionaries using the affix SET charset" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-latin1",
+      List("caf\u00e9"),
+      List("SET ISO-8859-1"),
+      StandardCharsets.ISO_8859_1
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("caf\u00e9 wurld", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: wurld")
+  }
+
+  it should "report invalid Hunspell SET charset declarations without crashing" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-invalid-charset",
+      List("hello"),
+      List("SET NOT_A_CHARSET")
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("hello wurld", config)
+
+    diagnostics.map(_.code) should contain(Some("dictionary-load-failed"))
+    diagnostics.map(_.message) should contain("Possible spelling issue: wurld")
   }
 
   it should "combine multiple external dictionaries for multilingual spell checking" in {

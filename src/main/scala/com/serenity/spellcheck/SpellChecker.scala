@@ -1,6 +1,6 @@
 package com.serenity.spellcheck
 
-import java.nio.charset.StandardCharsets
+import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Files, Path}
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -18,7 +18,8 @@ object SpellChecker:
 
   private val WordPattern = """[\p{L}\p{M}]+(?:['’-][\p{L}\p{M}]+)*""".r
 
-  private val DictionaryCache = ConcurrentHashMap[DictionaryCacheKey, DictionaryLoadResult]()
+  private val DictionaryCache                   = ConcurrentHashMap[DictionaryCacheKey, DictionaryLoadResult]()
+  private val DefaultDictionaryCharset: Charset = StandardCharsets.UTF_8
 
   private case class DictionaryCacheKey(fingerprints: List[SpellCheckDictionaryFingerprint])
   private case class DictionaryLoadResult(words: Set[String], failures: List[String])
@@ -191,8 +192,10 @@ object SpellChecker:
     else if Files.isDirectory(path) then DictionaryLoadResult(Set.empty, List(s"Dictionary path is a directory: $path"))
     else
       try
-        val affixRules = readAffixRules(path)
-        val lines      = Files.readAllLines(path, StandardCharsets.UTF_8)
+        val affixPath  = affixPathFor(path)
+        val charset    = affixPath.map(readDeclaredCharset).getOrElse(DefaultDictionaryCharset)
+        val affixRules = affixPath.map(parseAffixRules(_, charset)).getOrElse(HunspellAffixRules.empty)
+        val lines      = Files.readAllLines(path, charset)
         val entries = lines.toArray.toList
           .collect { case line: String => line.trim }
           .dropWhile(line => line.forall(_.isDigit))
@@ -209,17 +212,27 @@ object SpellChecker:
         case NonFatal(error) =>
           DictionaryLoadResult(Set.empty, List(s"Could not load dictionary $path: ${error.getMessage}"))
 
-  private def readAffixRules(dictionaryPath: Path): HunspellAffixRules =
+  private def affixPathFor(dictionaryPath: Path): Option[Path] =
     SpellCheckConfig
       .affixPathForDictionary(dictionaryPath)
       .filter(Files.exists(_))
       .filterNot(Files.isDirectory(_))
-      .map(parseAffixRules)
-      .getOrElse(HunspellAffixRules.empty)
 
-  private def parseAffixRules(path: Path): HunspellAffixRules =
+  private def readDeclaredCharset(path: Path): Charset =
     val lines =
-      Files.readAllLines(path, StandardCharsets.UTF_8).toArray.toList.collect { case line: String => line.trim }
+      Files.readAllLines(path, StandardCharsets.ISO_8859_1).toArray.toList.collect { case line: String => line.trim }
+    lines
+      .collectFirst {
+        case line if line.toUpperCase(Locale.ROOT).startsWith("SET ") =>
+          line.drop(4).trim
+      }
+      .filter(_.nonEmpty)
+      .map(Charset.forName)
+      .getOrElse(DefaultDictionaryCharset)
+
+  private def parseAffixRules(path: Path, charset: Charset): HunspellAffixRules =
+    val lines =
+      Files.readAllLines(path, charset).toArray.toList.collect { case line: String => line.trim }
     val flagMode    = parseFlagMode(lines)
     val prefixRules = parseAffixRules(lines, "PFX")
     val suffixRules = parseAffixRules(lines, "SFX")
