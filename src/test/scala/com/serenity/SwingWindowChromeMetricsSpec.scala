@@ -83,6 +83,14 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     darkPalette.buttonHoverBackground should not be lightPalette.buttonHoverBackground
   }
 
+  it should "derive pressed button colours from the active theme" in {
+    val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
+
+    palette.buttonPressedBackground should not be palette.titleBackground
+    palette.buttonPressedBackground should not be palette.buttonHoverBackground
+    palette.closePressedBackground should not be palette.closeHoverBackground
+  }
+
   "SwingWindow.ChromeIconGeometry" should "draw every control icon inside the same centered box" in {
     val icons = List(
       SwingWindow.ChromeControlKind.Minimize,
