@@ -93,33 +93,30 @@ class SwingWindow(
       getAccessibleContext.setAccessibleName(kind.accessibleName)
       repaint()
 
-    private def isClose: Boolean =
-      kindRef.get() == SwingWindow.ChromeControlKind.Close
-
     override def paintComponent(g: Graphics): Unit =
       val palette = chromePaletteRef.get()
-      val background =
-        if pressedRef.get() && isClose then palette.closePressedBackground
-        else if pressedRef.get() then palette.buttonPressedBackground
-        else if hoverRef.get() && isClose then palette.closeHoverBackground
-        else if hoverRef.get() then palette.buttonHoverBackground
-        else palette.titleBackground
-      val foreground =
-        if hoverRef.get() && isClose then palette.closeHoverForeground
-        else palette.titleForeground
-      val g2 = g.create().asInstanceOf[Graphics2D]
+      val state = SwingWindow.ChromeControlState(
+        hovered = hoverRef.get(),
+        pressed = pressedRef.get(),
+        focused = hasFocus
+      )
+      val kind       = kindRef.get()
+      val background = SwingWindow.ChromeControlPaint.background(kind, palette, state)
+      val foreground = SwingWindow.ChromeControlPaint.foreground(kind, palette, state)
+      val g2         = g.create().asInstanceOf[Graphics2D]
       try
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
         g2.setColor(background)
         g2.fillRect(0, 0, getWidth, getHeight)
         g2.setColor(foreground)
         g2.setStroke(new BasicStroke(SwingWindow.ChromeIconGeometry.strokeWidth(getHeight).toFloat))
-        SwingWindow.ChromeIconGeometry.lines(kindRef.get(), getWidth, getHeight).foreach { line =>
+        SwingWindow.ChromeIconGeometry.lines(kind, getWidth, getHeight).foreach { line =>
           g2.drawLine(line.x1, line.y1, line.x2, line.y2)
         }
-        if hasFocus then
-          g2.setColor(palette.border)
+        SwingWindow.ChromeControlPaint.focusBorder(palette, state).foreach { border =>
+          g2.setColor(border)
           g2.drawRect(1, 1, getWidth - 3, getHeight - 3)
+        }
       finally g2.dispose()
 
     addMouseListener(new MouseAdapter:
@@ -500,6 +497,28 @@ object SwingWindow:
 
   case class ChromeIconLine(x1: Int, y1: Int, x2: Int, y2: Int)
 
+  case class ChromeControlState(
+      hovered: Boolean = false,
+      pressed: Boolean = false,
+      focused: Boolean = false
+  )
+
+  object ChromeControlPaint:
+
+    def background(kind: ChromeControlKind, palette: ChromePalette, state: ChromeControlState): Color =
+      if state.pressed && kind == ChromeControlKind.Close then palette.closePressedBackground
+      else if state.pressed then palette.buttonPressedBackground
+      else if state.hovered && kind == ChromeControlKind.Close then palette.closeHoverBackground
+      else if state.hovered then palette.buttonHoverBackground
+      else palette.titleBackground
+
+    def foreground(kind: ChromeControlKind, palette: ChromePalette, state: ChromeControlState): Color =
+      if state.hovered && kind == ChromeControlKind.Close then palette.closeHoverForeground
+      else palette.titleForeground
+
+    def focusBorder(palette: ChromePalette, state: ChromeControlState): Option[Color] =
+      Option.when(state.focused)(palette.focusBorder)
+
   object ChromeIconGeometry:
 
     def lines(kind: ChromeControlKind, width: Int, height: Int): scala.List[ChromeIconLine] =
@@ -550,7 +569,8 @@ object SwingWindow:
       buttonPressedBackground: Color,
       closeHoverBackground: Color,
       closePressedBackground: Color,
-      closeHoverForeground: Color
+      closeHoverForeground: Color,
+      focusBorder: Color
   )
 
   object ChromePalette:
@@ -564,7 +584,8 @@ object SwingWindow:
         buttonPressedBackground = blend(theme.highlighted.background, theme.panel.background, 0.38),
         closeHoverBackground = theme.error.foreground,
         closePressedBackground = blend(theme.error.foreground, theme.background, 0.82),
-        closeHoverForeground = theme.background
+        closeHoverForeground = theme.background,
+        focusBorder = theme.highlighted.foreground
       )
 
     private def blend(foreground: Color, background: Color, foregroundWeight: Double): Color =
