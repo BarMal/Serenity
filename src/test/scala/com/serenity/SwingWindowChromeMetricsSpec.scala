@@ -91,6 +91,41 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     palette.closePressedBackground should not be palette.closeHoverBackground
   }
 
+  it should "derive focused button affordance colours from the active theme" in {
+    val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
+
+    palette.focusBorder shouldBe Theme.light.highlighted.foreground
+    palette.focusBorder should not be palette.border
+  }
+
+  "SwingWindow.ChromeControlPaint" should "resolve button colours by state and control kind" in {
+    val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
+
+    SwingWindow.ChromeControlPaint.background(
+      SwingWindow.ChromeControlKind.Minimize,
+      palette,
+      SwingWindow.ChromeControlState()
+    ) shouldBe palette.titleBackground
+    SwingWindow.ChromeControlPaint.background(
+      SwingWindow.ChromeControlKind.Minimize,
+      palette,
+      SwingWindow.ChromeControlState(hovered = true)
+    ) shouldBe palette.buttonHoverBackground
+    SwingWindow.ChromeControlPaint.background(
+      SwingWindow.ChromeControlKind.Minimize,
+      palette,
+      SwingWindow.ChromeControlState(pressed = true)
+    ) shouldBe palette.buttonPressedBackground
+    SwingWindow.ChromeControlPaint.background(
+      SwingWindow.ChromeControlKind.Close,
+      palette,
+      SwingWindow.ChromeControlState(hovered = true)
+    ) shouldBe palette.closeHoverBackground
+    SwingWindow.ChromeControlPaint.focusBorder(palette, SwingWindow.ChromeControlState()) shouldBe None
+    SwingWindow.ChromeControlPaint.focusBorder(palette, SwingWindow.ChromeControlState(focused = true)) shouldBe
+      Some(palette.focusBorder)
+  }
+
   "SwingWindow.ChromeIconGeometry" should "draw every control icon inside the same centered box" in {
     val icons = List(
       SwingWindow.ChromeControlKind.Minimize,
