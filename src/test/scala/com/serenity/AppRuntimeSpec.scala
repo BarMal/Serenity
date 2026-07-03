@@ -52,6 +52,22 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     override def debug(message: => String): IO[Unit]               = record("debug", message, None)
     override def trace(message: => String): IO[Unit]               = record("trace", message, None)
 
+  private def awaitLogEntry(
+    logs: Ref[IO, Vector[LogEntry]],
+    matches: LogEntry => Boolean,
+    attempts: Int = 40
+  ): IO[Option[LogEntry]] =
+    def loop(remaining: Int): IO[Option[LogEntry]] =
+      logs.get.flatMap { entries =>
+        entries.find(matches) match
+          case found @ Some(_) => IO.pure(found)
+          case None if remaining <= 0 =>
+            IO.pure(None)
+          case None =>
+            IO.sleep(25.millis) >> loop(remaining - 1)
+      }
+    loop(attempts)
+
   "AppRuntime" should "derive render frame intervals from the configured FPS target" in {
     AppRuntime.fastFrameInterval(RenderFpsTarget.Fps30).toNanos shouldBe 33333333L
     AppRuntime.fastFrameInterval(RenderFpsTarget.Fps60).toNanos shouldBe 16666666L
@@ -258,11 +274,12 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           IO.raiseError(new RuntimeException("resize signal failed")),
           dispatcher
         )
-        _       <- IO(callback())
-        _       <- IO.sleep(50.millis)
-        entries <- logs.get
+        _ <- IO(callback())
+        failure <- awaitLogEntry(
+          logs,
+          _.message.contains("[RUNTIME] resize callback failed")
+        )
       yield
-        val failure = entries.find(_.message.contains("[RUNTIME] resize callback failed"))
         failure.map(_.message) shouldBe defined
         failure.flatMap(_.error).map(_.getMessage) should contain("resize signal failed")
     }
