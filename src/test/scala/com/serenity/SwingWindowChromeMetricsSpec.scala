@@ -2,6 +2,7 @@ package com.serenity
 
 import java.awt.Dimension
 
+import com.serenity.config.WindowChromeMode
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.terminal.SwingWindow
 import org.scalatest.flatspec.AnyFlatSpec
@@ -42,6 +43,25 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     snapshot.pixelSize shouldBe new Dimension(1200, 900)
     snapshot.viewportSize.width shouldBe 120
     snapshot.viewportSize.height shouldBe 45
+  }
+
+  it should "subtract custom title chrome from fallback canvas height" in {
+    val requestedWindow = new Dimension(1200, 900)
+    val chrome = SwingWindow.ChromeMetrics.fromCellMetrics(CellMetrics(charWidth = 10, lineHeight = 20, ascent = 15))
+
+    val fallback = SwingWindow.canvasFallbackSize(requestedWindow, WindowChromeMode.Custom, chrome)
+
+    fallback.width shouldBe requestedWindow.width
+    fallback.height shouldBe requestedWindow.height - chrome.titleBarHeight
+  }
+
+  it should "use the full fallback canvas size for native chrome" in {
+    val requestedWindow = new Dimension(1200, 900)
+    val chrome = SwingWindow.ChromeMetrics.fromCellMetrics(CellMetrics(charWidth = 10, lineHeight = 20, ascent = 15))
+
+    val fallback = SwingWindow.canvasFallbackSize(requestedWindow, WindowChromeMode.Native, chrome)
+
+    fallback shouldBe requestedWindow
   }
 
 end SwingWindowChromeMetricsSpec
