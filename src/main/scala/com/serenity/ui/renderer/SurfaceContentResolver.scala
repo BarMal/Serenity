@@ -578,18 +578,16 @@ object SurfaceContentResolver:
       case _                                                            => None
 
   private def optionRow(option: CommandSurfaceItem.OptionItem, selected: Boolean): OverlayRow =
-    val optionSegments = option.options.zipWithIndex.map { (choice, index) =>
-      OverlaySegment(choice.label, selected = index == option.selectedIndex)
-    }
-    val selectedOptionHint = option.options.lift(option.selectedIndex).flatMap(_.hint)
-    val hintSegments       = selectedOptionHint.toList.map(hint => OverlaySegment(hint, tone = OverlayTone.Normal))
-    val choicesText        = option.options.map(_.label).mkString(" ")
-    val previewText        = selectedOptionHint.map(hint => s" - $hint").getOrElse("")
+    val selectedHint = option.selectedHint.getOrElse("")
 
     OverlayRow(
-      plainText = s"${option.label}: $choicesText$previewText",
+      plainText = s"${option.label}: $selectedHint ${option.selectedOption}".trim,
       selected = selected,
-      segments = OverlaySegment(option.label) :: optionSegments ++ hintSegments,
+      segments = List(
+        OverlaySegment(option.label),
+        OverlaySegment(selectedHint, tone = OverlayTone.Normal),
+        OverlaySegment(option.selectedOption, selected = true)
+      ),
       layout = OverlayRowLayout.Columns
     )
 

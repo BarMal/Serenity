@@ -178,7 +178,39 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     val firstRow  = surface.getRow(1)
     val secondRow = surface.getRow(2)
     firstRow.indexOf("Used") shouldBe secondRow.indexOf("Used")
-    firstRow.indexOf("Monaspace") shouldBe secondRow.indexOf("SansSerif")
+    firstRow.indexOf("Monaspace") + "Monaspace Neon".length shouldBe
+      secondRow.indexOf("SansSerif") + "SansSerif".length
+  }
+
+  it should "right-align selected command option values in the value column" in {
+    val surface = new MockRenderSurface(80, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 70, 6),
+      rows = List(
+        OverlayRow(
+          plainText = "Animation Style: None, subtle, or full Full",
+          selected = true,
+          segments = List(
+            OverlaySegment("Animation Style"),
+            OverlaySegment("None, subtle, or full"),
+            OverlaySegment("Full", selected = true)
+          ),
+          layout = OverlayRowLayout.Columns
+        )
+      )
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+
+    val contentWidth = overlay.rect.width - 2
+    val valueWidth   = math.min(18, math.max(8, contentWidth / 4))
+    val valueEnd     = overlay.rect.x + 1 + contentWidth
+    val valueStart   = valueEnd - valueWidth
+    val expectedX    = valueStart + valueWidth - "Full".length
+
+    surface.getRow(1).slice(expectedX, expectedX + "Full".length) shouldBe "Full"
   }
 
   it should "render close workflow action choices when the frame reserves enough content rows" in {
@@ -296,7 +328,8 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     val labelWidth   = math.min(22, math.max(8, contentWidth / 3))
     val valueWidth   = math.min(18, math.max(8, contentWidth / 4))
     val hintWidth    = math.max(0, contentWidth - labelWidth - valueWidth - 2)
-    val valueX       = overlay.rect.x + 1 + labelWidth + hintWidth + 2
+    val valueCellX   = overlay.rect.x + 1 + labelWidth + hintWidth + 2
+    val valueX       = valueCellX + valueWidth - value.length
 
     surface.getRow(1).slice(valueX, valueX + value.length) shouldBe value
     val caretXs = TextLayoutSnapshot.caretXsForText(value, font, surface.fontRenderContext.get)

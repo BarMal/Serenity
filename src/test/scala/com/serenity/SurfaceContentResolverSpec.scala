@@ -218,7 +218,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "render option rows as adjacent choices with the active choice marked" in {
+  it should "resolve option rows into label, hint, and selected value columns" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
@@ -242,8 +242,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected interface density option row"))
 
     row.layout shouldBe OverlayRowLayout.Columns
-    row.plainText shouldBe "Interface Density: Compact Comfortable Spacious"
-    row.segments.map(_.text) should contain allOf ("Compact", "Comfortable", "Spacious")
+    row.plainText shouldBe "Interface Density: Compact, comfortable, or spacious Comfortable"
+    row.segments.map(_.text) shouldBe List("Interface Density", "Compact, comfortable, or spacious", "Comfortable")
     row.segments.filter(_.selected).map(_.text) shouldBe List("Comfortable")
   }
 

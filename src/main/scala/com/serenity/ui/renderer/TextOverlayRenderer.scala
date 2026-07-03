@@ -199,7 +199,9 @@ object TextOverlayRenderer:
         val labelWidth = math.min(22, math.max(8, width / 3))
         val valueWidth = math.min(18, math.max(8, width / 4))
         val hintWidth  = math.max(0, width - labelWidth - valueWidth - 2)
-        Some(CursorPlacement(x + labelWidth + hintWidth + 2, fitCellText(value.text, valueWidth), useMeasured = true))
+        val valueText  = fitCellText(value.text, valueWidth)
+        val valueX     = x + labelWidth + hintWidth + 2 + math.max(0, valueWidth - valueText.length)
+        Some(CursorPlacement(valueX, valueText, useMeasured = true))
       case _ =>
         row.cursorColumn.map(cursorColumn =>
           CursorPlacement(x, row.plainText.take(cursorColumn.max(0).min(row.plainText.length)))
@@ -424,7 +426,8 @@ object TextOverlayRenderer:
           theme,
           defaultForeground,
           defaultBackground,
-          font
+          font,
+          alignRight = true
         )
       case label :: hint :: Nil =>
         val labelWidth = math.min(22, math.max(8, width / 3))
@@ -463,14 +466,16 @@ object TextOverlayRenderer:
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
-    font: Font
+    font: Font,
+    alignRight: Boolean = false
   ): Unit =
-    val text = fitCellText(segment.text, width)
+    val text    = fitCellText(segment.text, width)
+    val renderX = if alignRight then x + math.max(0, width - text.length) else x
     renderSegmentText(
       surface,
-      x,
+      renderX,
       y,
-      width,
+      text.length,
       text,
       segment,
       theme,
