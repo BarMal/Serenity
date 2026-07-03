@@ -79,8 +79,9 @@ class SwingWindow(
       frame.setExtendedState(Frame.MAXIMIZED_BOTH)
 
   private class ChromeControlButton(initialKind: SwingWindow.ChromeControlKind) extends JComponent:
-    private val kindRef  = new AtomicReference(initialKind)
-    private val hoverRef = new AtomicBoolean(false)
+    private val kindRef    = new AtomicReference(initialKind)
+    private val hoverRef   = new AtomicBoolean(false)
+    private val pressedRef = new AtomicBoolean(false)
 
     setOpaque(true)
     setFocusable(true)
@@ -98,7 +99,9 @@ class SwingWindow(
     override def paintComponent(g: Graphics): Unit =
       val palette = chromePaletteRef.get()
       val background =
-        if hoverRef.get() && isClose then palette.closeHoverBackground
+        if pressedRef.get() && isClose then palette.closePressedBackground
+        else if pressedRef.get() then palette.buttonPressedBackground
+        else if hoverRef.get() && isClose then palette.closeHoverBackground
         else if hoverRef.get() then palette.buttonHoverBackground
         else palette.titleBackground
       val foreground =
@@ -126,13 +129,25 @@ class SwingWindow(
       override def mouseExited(e: MouseEvent): Unit =
         hoverRef.set(false)
         repaint()
+      override def mousePressed(e: MouseEvent): Unit =
+        pressedRef.set(true)
+        repaint()
       override def mouseReleased(e: MouseEvent): Unit =
-        if e.getX >= 0 && e.getX < getWidth && e.getY >= 0 && e.getY < getHeight then activate())
+        val wasPressed = pressedRef.getAndSet(false)
+        repaint()
+        if wasPressed && e.getX >= 0 && e.getX < getWidth && e.getY >= 0 && e.getY < getHeight then activate())
 
     addKeyListener(
       new KeyAdapter:
+        override def keyPressed(e: KeyEvent): Unit =
+          if e.getKeyCode == KeyEvent.VK_ENTER || e.getKeyCode == KeyEvent.VK_SPACE then
+            pressedRef.set(true)
+            repaint()
         override def keyReleased(e: KeyEvent): Unit =
-          if e.getKeyCode == KeyEvent.VK_ENTER || e.getKeyCode == KeyEvent.VK_SPACE then activate()
+          if e.getKeyCode == KeyEvent.VK_ENTER || e.getKeyCode == KeyEvent.VK_SPACE then
+            val wasPressed = pressedRef.getAndSet(false)
+            repaint()
+            if wasPressed then activate()
     )
 
     private def activate(): Unit =
@@ -532,7 +547,9 @@ object SwingWindow:
       titleForeground: Color,
       border: Color,
       buttonHoverBackground: Color,
+      buttonPressedBackground: Color,
       closeHoverBackground: Color,
+      closePressedBackground: Color,
       closeHoverForeground: Color
   )
 
@@ -544,7 +561,9 @@ object SwingWindow:
         titleForeground = theme.panel.foreground,
         border = theme.border,
         buttonHoverBackground = blend(theme.highlighted.background, theme.panel.background, 0.24),
+        buttonPressedBackground = blend(theme.highlighted.background, theme.panel.background, 0.38),
         closeHoverBackground = theme.error.foreground,
+        closePressedBackground = blend(theme.error.foreground, theme.background, 0.82),
         closeHoverForeground = theme.background
       )
 
