@@ -51,6 +51,9 @@ object Main extends IOApp:
               if swingWin.metrics != metrics then swingWin.updateMetrics(metrics, displayState.uiMetrics)
             }
 
+          def syncChromeTheme(state: com.serenity.state.models.AppState): IO[Unit] =
+            IO.blocking(swingWin.updateChromeTheme(state.theme))
+
           initialScaleSync >> AppRuntime.run(
             initialViewportSize = swingWin.viewportSize,
             makeInputHandler = router =>
@@ -61,7 +64,7 @@ object Main extends IOApp:
               ),
             checkResize = IO(swingWin.doResizeIfNecessary()),
             renderFull = (state, vis, cc) =>
-              syncDisplayMetrics() >> IO.blocking(
+              syncDisplayMetrics() >> syncChromeTheme(state) >> IO.blocking(
                 Renderer.render(
                   state,
                   vis,
@@ -74,7 +77,7 @@ object Main extends IOApp:
                 )
               ),
             renderCursorOnly = (state, vis, cc) =>
-              syncDisplayMetrics() >> IO.blocking(
+              syncDisplayMetrics() >> syncChromeTheme(state) >> IO.blocking(
                 Renderer.render(
                   state,
                   vis,
