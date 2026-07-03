@@ -6,7 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.syntax.foldable.*
 import com.serenity.animation.*
-import com.serenity.command.{CommandRegistry, CommandRunner}
+import com.serenity.command.{CommandRegistry, CommandRunner, CommandSurfaceItem}
 import com.serenity.keystroke.events.*
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.components.*
@@ -1126,8 +1126,15 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         case SurfaceContent.ContextMenu(menu) => Some(menu)
         case _                                => None
       layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      rect  <- overlayRectForSurface(layout, surface.id)
-      index <- overlayItemIndex(event, rect, menu.items.length, menu.selectedIndex)
+      rect <- overlayRectForSurface(layout, surface.id)
+      index <- overlayItemIndex(
+        event,
+        rect,
+        menu.items.length,
+        menu.selectedIndex,
+        hasHeader = true,
+        hasFooter = menu.items.nonEmpty
+      )
     yield (surface, menu, index)
 
   private def editorContextMenu(targetFocus: Focus): Option[ContextMenu] =
@@ -1218,7 +1225,14 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     overlayRectForSurface(layout, surface.id).flatMap { rect =>
       surface.content match
         case SurfaceContent.CommandPalette(runner) =>
-          overlayItemIndex(event, rect, runner.visibleItems.length, runner.selectedIndex)
+          overlayItemIndex(
+            event,
+            rect,
+            runner.visibleItems.length,
+            runner.selectedIndex,
+            hasHeader = true,
+            hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty
+          )
             .map(RunnerSelectVisibleItem(_))
         case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
           val submenuState = runner.activeSubmenu.filter(_.groupId == groupId)
@@ -1226,7 +1240,17 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
             .map(_.filteredItems(runner.submenuItems(groupId)))
             .getOrElse(runner.submenuItems(groupId))
           val selectedIndex = submenuState.map(_.selectedIndex).getOrElse(0)
-          overlayItemIndex(event, rect, items.length, selectedIndex).map { index =>
+          val group         = runner.submenuGroup(groupId)
+          val detailRows    = commandRunnerSubmenuDetailRowCount(groupId, items.lift(selectedIndex))
+          overlayItemIndex(
+            event,
+            rect,
+            items.length,
+            selectedIndex,
+            hasHeader = group.nonEmpty,
+            hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
+            reservedContentRows = detailRows
+          ).map { index =>
             if previewOnly then RunnerSelectPreviewSubmenuItem(groupId, index)
             else RunnerSelectSubmenuItem(index)
           }
@@ -1238,20 +1262,42 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     event: MouseInputEvent,
     rect: LayoutRect,
     itemCount: Int,
-    selectedIndex: Int
+    selectedIndex: Int,
+    hasHeader: Boolean,
+    hasFooter: Boolean,
+    reservedContentRows: Int = 0
   ): Option[Int] =
-    val insideColumns = event.col > rect.x && event.col < rect.right - 1
-    val maxItemRows   = math.max(1, rect.height - 4)
-    val itemRow       = event.row - rect.y - 2
-    val windowSize    = math.min(itemCount, maxItemRows)
-    if !insideColumns || itemRow < 0 || itemRow >= windowSize then None
-    else
-      val offset =
-        if itemCount <= maxItemRows then 0
-        else
-          val half = maxItemRows / 2
-          math.max(0, math.min(selectedIndex - half, itemCount - maxItemRows))
-      Some(offset + itemRow)
+    val frameLayout   = SurfaceFrameLayout(rect)
+    val contentRect   = frameLayout.contentRect
+    val insideColumns = event.col >= contentRect.x && event.col < contentRect.right
+    Option
+      .when(insideColumns)(())
+      .flatMap(_ =>
+        frameLayout.itemIndexAt(
+          event.row,
+          itemCount,
+          selectedIndex,
+          hasHeader,
+          hasFooter,
+          reservedContentRows
+        )
+      )
+
+  private def commandRunnerSubmenuDetailRowCount(
+    groupId: String,
+    selectedItem: Option[CommandSurfaceItem]
+  ): Int =
+    selectedItem.count {
+      case group: CommandSurfaceItem.GroupItem
+          if groupId == "settings-ui-presets" &&
+            (group.id == "settings-preset-create" || group.id == "settings-preset-edit") =>
+        true
+      case option: CommandSurfaceItem.OptionItem
+          if groupId == "settings-preset-select" && option.id == "ui-preset-select" =>
+        true
+      case _ =>
+        false
+    }
 
   private def resolveMouseTarget(
     click: MouseInputEvent,

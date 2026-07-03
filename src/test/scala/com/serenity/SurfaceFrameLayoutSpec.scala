@@ -40,3 +40,84 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
       )
       .shouldBe(9)
   }
+
+  it should "derive a centered item window from the framed surface content contract" in {
+    val frame = SurfaceFrameLayout(LayoutRect(0, 0, 40, 8))
+
+    val window = frame.itemWindow(
+      itemCount = 12,
+      selectedIndex = 7,
+      hasHeader = true,
+      hasFooter = true
+    )
+
+    window.offset.shouldBe(5)
+    window.rowCount.shouldBe(4)
+    window.slice((0 until 12).toList).shouldBe(List(5, 6, 7, 8))
+    window.adjustedSelectedIndex(7).shouldBe(2)
+  }
+
+  it should "map frame rows to item indices and reject chrome rows" in {
+    val frame = SurfaceFrameLayout(LayoutRect(10, 4, 40, 8))
+
+    frame
+      .itemIndexAt(
+        row = 4,
+        itemCount = 12,
+        selectedIndex = 0,
+        hasHeader = true,
+        hasFooter = true
+      )
+      .shouldBe(None)
+    frame
+      .itemIndexAt(
+        row = 5,
+        itemCount = 12,
+        selectedIndex = 0,
+        hasHeader = true,
+        hasFooter = true
+      )
+      .shouldBe(None)
+    frame
+      .itemIndexAt(
+        row = 6,
+        itemCount = 12,
+        selectedIndex = 0,
+        hasHeader = true,
+        hasFooter = true
+      )
+      .shouldBe(Some(0))
+    frame
+      .itemIndexAt(
+        row = 9,
+        itemCount = 12,
+        selectedIndex = 0,
+        hasHeader = true,
+        hasFooter = true
+      )
+      .shouldBe(Some(3))
+    frame
+      .itemIndexAt(
+        row = 10,
+        itemCount = 12,
+        selectedIndex = 0,
+        hasHeader = true,
+        hasFooter = true
+      )
+      .shouldBe(None)
+  }
+
+  it should "exclude reserved detail rows from item hit testing" in {
+    val frame = SurfaceFrameLayout(LayoutRect(0, 0, 40, 8))
+
+    frame
+      .itemIndexAt(
+        row = 5,
+        itemCount = 12,
+        selectedIndex = 0,
+        hasHeader = true,
+        hasFooter = true,
+        reservedContentRows = 1
+      )
+      .shouldBe(None)
+  }
