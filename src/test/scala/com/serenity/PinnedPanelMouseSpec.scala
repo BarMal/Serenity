@@ -168,9 +168,34 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val rect = panelContentRect(sm.getCurrentState.unsafeRunSync(), surface.id)
-    sm.applyEvent(MouseClick(rect.x + 1, rect.y + 1)).unsafeRunSync()
+    sm.applyEvent(MouseClick(rect.x + 1, rect.y + 2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe Focus.EditorPane(PaneId(0))
     updated.buffers(bufferId).cursors shouldBe List(CursorPosition(2, 3))
+  }
+
+  it should "not navigate from blank rows in a horizontal bottom diagnostics panel" in {
+    val sm       = makeStateManager()
+    val bufferId = withActiveBuffer(sm, "first\nsecond\nthird")
+    val issues = List(
+      Diagnostic("unused import", DiagnosticSeverity.Warning, Location(0, 1)),
+      Diagnostic("type mismatch", DiagnosticSeverity.Error, Location(2, 3))
+    )
+    val surface = UiSurface(
+      id = SurfaceId("diagnostics"),
+      content = SurfaceContent.Diagnostics(issues),
+      presentation = SurfacePresentation.Pinned(PanelPosition.Bottom, 10)
+    )
+    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+
+    val rect = panelContentRect(sm.getCurrentState.unsafeRunSync(), surface.id)
+    SurfaceLayoutKind.classify(rect) shouldBe SurfaceLayoutKind.Horizontal
+
+    sm.applyEvent(MouseClick(rect.x + 1, rect.y + 1)).unsafeRunSync()
+
+    val updated = sm.getCurrentState.unsafeRunSync()
+    updated.focus shouldBe Focus.EditorPane(PaneId(0))
+    updated.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0))
   }
