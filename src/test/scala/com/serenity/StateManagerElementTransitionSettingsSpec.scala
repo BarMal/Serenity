@@ -72,6 +72,23 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     stateManager.getCurrentState.unsafeRunSync().config.commandRunnerAnimation shouldBe AnimationConfig.subtle
   }
 
+  it should "update the UI animation config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "ui-animation",
+          "Set UI animation",
+          CommandIntent.SetUiAnimation(AnimationConfig.subtle),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.uiAnimation shouldBe AnimationConfig.subtle
+  }
+
   it should "update the render FPS target config" in {
     val stateManager = createStateManager()
 

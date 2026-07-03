@@ -274,6 +274,7 @@ case class AppConfig(
     motionPreset: MotionPreset = MotionPreset.Reduced,
     elementTransitionSpeedScale: Double = 1.0,
     commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
+    uiAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     commandRunnerVisibleRows: Option[Int] = None,
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
@@ -299,7 +300,12 @@ case class AppConfig(
 
   /** Create a new config with character animation disabled */
   def withoutCharacterAnimation: AppConfig =
-    copy(characterAnimation = None, motionPreset = MotionPreset.Reduced, commandRunnerAnimation = None)
+    copy(
+      characterAnimation = None,
+      motionPreset = MotionPreset.Reduced,
+      commandRunnerAnimation = None,
+      uiAnimation = None
+    )
 
   /** Create a new config with syntax highlighting toggled */
   def withSyntaxHighlighting(enabled: Boolean): AppConfig =
@@ -392,7 +398,8 @@ case class AppConfig(
         copy(
           motionPreset = preset,
           characterAnimation = preset.animationConfig,
-          commandRunnerAnimation = preset.animationConfig
+          commandRunnerAnimation = preset.animationConfig,
+          uiAnimation = preset.animationConfig
         )
 
   /** Transition policy derived from the selected motion preset and global speed scale. */
@@ -411,6 +418,9 @@ case class AppConfig(
   def withCommandRunnerAnimation(animation: Option[AnimationConfig]): AppConfig =
     copy(commandRunnerAnimation = animation)
 
+  def withUiAnimation(animation: Option[AnimationConfig]): AppConfig =
+    copy(uiAnimation = animation)
+
   def withCommandRunnerVisibleRows(rows: Option[Int]): AppConfig =
     copy(commandRunnerVisibleRows = rows.map(AppConfig.clampCommandRunnerVisibleRows))
 
@@ -427,7 +437,7 @@ case class AppConfig(
 
   /** General UI animation after applying the global motion speed. */
   def scaledUiAnimation: Option[AnimationConfig] =
-    AppConfig.scaledAnimation(characterAnimation, elementTransitionSpeedScale)
+    AppConfig.scaledAnimation(uiAnimation, elementTransitionSpeedScale)
 
   def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
     copy(editorInsertionTransitionKind = kind)
@@ -519,6 +529,7 @@ object AppConfig:
   /** Default configuration with smooth animations and syntax highlighting disabled */
   val default: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.smooth,
+    uiAnimation = AnimationConfig.smooth,
     syntaxHighlightingEnabled = false,
     blurRadius = 0.3f,
     backgroundStyle = BackgroundStyle.Frosted,
@@ -528,6 +539,7 @@ object AppConfig:
   /** Test configuration with visible animations enabled */
   val withTestAnimations: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.quick,
+    uiAnimation = AnimationConfig.quick,
     syntaxHighlightingEnabled = false,
     motionPreset = MotionPreset.Expressive
   )
@@ -535,6 +547,7 @@ object AppConfig:
   /** Quick fade-in animation configuration */
   val withQuickAnimation: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.quick,
+    uiAnimation = AnimationConfig.quick,
     syntaxHighlightingEnabled = false,
     motionPreset = MotionPreset.Expressive
   )
@@ -542,6 +555,7 @@ object AppConfig:
   /** Smooth fade-in animation configuration */
   val withSmoothAnimation: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.smooth,
+    uiAnimation = AnimationConfig.smooth,
     syntaxHighlightingEnabled = false,
     motionPreset = MotionPreset.Smooth
   )
@@ -549,6 +563,7 @@ object AppConfig:
   /** Subtle fade-in animation configuration */
   val withSubtleAnimation: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.subtle,
+    uiAnimation = AnimationConfig.subtle,
     syntaxHighlightingEnabled = false,
     motionPreset = MotionPreset.Subtle
   )

@@ -532,6 +532,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
         |ui.motion.speed_scale = 1.75
         |ui.motion.editor_text = typed
         |ui.motion.command_runner = subtle
+        |ui.motion.ui = smooth
         |""".stripMargin
     )
 
@@ -544,12 +545,14 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     config.elementTransitionSpeedScale shouldBe 1.75
     config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
     config.commandRunnerAnimation shouldBe com.serenity.animation.AnimationConfig.subtle
+    config.uiAnimation shouldBe com.serenity.animation.AnimationConfig.smooth
     config.characterAnimation shouldBe None
     ConfigManager.configToString(config) should include("ui.material = crystal")
     ConfigManager.configToString(config) should include("ui.motion = reduced")
     ConfigManager.configToString(config) should include("ui.motion.speed_scale = 1.75")
     ConfigManager.configToString(config) should include("ui.motion.editor_text = typed")
     ConfigManager.configToString(config) should include("ui.motion.command_runner = subtle")
+    ConfigManager.configToString(config) should include("ui.motion.ui = smooth")
   }
 
   it should "load and write the default document mode" in {

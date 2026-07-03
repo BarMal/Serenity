@@ -62,6 +62,23 @@ object CommandRunnerSettingsItems:
       hint = Some("Palette fade in and out")
     )
 
+  private[command] def uiAnimationOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "ui-animation",
+      label = "UI Animation",
+      options = List(
+        CommandOption("Off", CommandIntent.SetUiAnimation(None)),
+        CommandOption("Subtle", CommandIntent.SetUiAnimation(AnimationConfig.subtle)),
+        CommandOption("Smooth", CommandIntent.SetUiAnimation(AnimationConfig.smooth)),
+        CommandOption("Expressive", CommandIntent.SetUiAnimation(AnimationConfig.quick))
+      ),
+      selectedIndex = optionSelections.getOrElse("ui-animation", 2),
+      category = CommandCategory.Settings,
+      hint = Some("Panels, overlays, and view transitions")
+    )
+
   private[command] def renderFpsOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =

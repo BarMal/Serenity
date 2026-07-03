@@ -213,6 +213,10 @@ object ConfigManager:
               parseAnimationPreset(value.trim)
                 .map(config.withCommandRunnerAnimation)
                 .getOrElse(config)
+            case "ui.motion.ui" | "ui.motion.ui_elements" | "ui.motion.ui.elements" | "ui_motion_ui" =>
+              parseAnimationPreset(value.trim)
+                .map(config.withUiAnimation)
+                .getOrElse(config)
             case "ui.motion.editor_text" | "ui.motion.editor.text" | "ui_motion_editor_text" =>
               parseEditorInsertionTransitionKind(value.trim)
                 .map(config.withEditorInsertionTransitionKind)
@@ -329,6 +333,12 @@ object ConfigManager:
       case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
       case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
       case Some(_)                                          => "custom"
+    val uiAnimationSetting = config.uiAnimation match
+      case None                                             => "none"
+      case Some(anim) if anim == AnimationConfig.quick.get  => "quick"
+      case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
+      case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
+      case Some(_)                                          => "custom"
     val lspSettings = lspConfigToString(config.lspUserConfig)
     def editorBinding(action: EditorKeyAction): String =
       config.focusedKeymapConfig.editor
@@ -379,6 +389,7 @@ object ConfigManager:
        |ui.motion = ${config.motionPreset.configKey}
        |ui.motion.speed_scale = ${config.elementTransitionSpeedScale}
        |ui.motion.command_runner = $commandRunnerAnimationSetting
+       |ui.motion.ui = $uiAnimationSetting
        |ui.motion.editor_text = ${editorInsertionTransitionConfigKey(config.editorInsertionTransitionKind)}
        |
        |# Default mode for new buffers: plain-text, markdown, rich-text
@@ -510,6 +521,8 @@ object ConfigManager:
         case "ui.motion.speed_scale" | "motion.speed_scale" | "ui_motion_speed_scale" | "motion_speed_scale" =>
           parseElementTransitionSpeedScale(value).isEmpty
         case "ui.motion.command_runner" | "ui.motion.command.runner" | "ui_motion_command_runner" =>
+          parseAnimationPreset(value).isEmpty
+        case "ui.motion.ui" | "ui.motion.ui_elements" | "ui.motion.ui.elements" | "ui_motion_ui" =>
           parseAnimationPreset(value).isEmpty
         case "ui.motion.editor_text" | "ui.motion.editor.text" | "ui_motion_editor_text" =>
           parseEditorInsertionTransitionKind(value).isEmpty
@@ -781,6 +794,8 @@ object ConfigManager:
                           |ui.material = frosted
                           |ui.motion = smooth
                           |ui.motion.speed_scale = 1.0
+                          |ui.motion.command_runner = smooth
+                          |ui.motion.ui = smooth
                           |ui.motion.editor_text = fade
                           |
                           |# Preferred desktop window size. Leave empty to use the default.
