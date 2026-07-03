@@ -380,18 +380,14 @@ object SurfaceContentResolver:
           )
 
       val allItems = runner.visibleItems
-      val maxItemRows = math.max(
-        1,
-        SurfaceFrameLayout(rect).visibleItemRows(hasHeader = true, hasFooter = true)
+      val itemWindow = SurfaceFrameLayout(rect).itemWindow(
+        itemCount = allItems.size,
+        selectedIndex = runner.selectedIndex,
+        hasHeader = true,
+        hasFooter = allItems.nonEmpty || runner.statusMessage.nonEmpty
       )
-      val offset =
-        if allItems.size <= maxItemRows then 0
-        else
-          val half = maxItemRows / 2
-          math.max(0, math.min(runner.selectedIndex - half, allItems.size - maxItemRows))
-
-      val windowItems           = allItems.slice(offset, offset + maxItemRows)
-      val adjustedSelectedIndex = runner.selectedIndex - offset
+      val windowItems           = itemWindow.slice(allItems)
+      val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(runner.selectedIndex)
 
       val rows = windowItems.zipWithIndex.map {
         case (CommandSurfaceItem.CommandItem(command), index) =>
@@ -440,21 +436,15 @@ object SurfaceContentResolver:
     val items         = submenuState.map(_.filteredItems(allItems)).getOrElse(allItems)
     val selectedIndex = submenuState.map(_.selectedIndex).getOrElse(0)
     val detailRows    = presetPreviewRow(runner, groupId, items.lift(selectedIndex))
-    val maxItemRows = math.max(
-      1,
-      SurfaceFrameLayout(rect).visibleItemRows(
-        hasHeader = group.nonEmpty,
-        hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-        reservedContentRows = detailRows.size
-      )
+    val itemWindow = SurfaceFrameLayout(rect).itemWindow(
+      itemCount = items.size,
+      selectedIndex = selectedIndex,
+      hasHeader = group.nonEmpty,
+      hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
+      reservedContentRows = detailRows.size
     )
-    val offset =
-      if items.size <= maxItemRows then 0
-      else
-        val half = maxItemRows / 2
-        math.max(0, math.min(selectedIndex - half, items.size - maxItemRows))
-    val windowItems           = items.slice(offset, offset + maxItemRows)
-    val adjustedSelectedIndex = selectedIndex - offset
+    val windowItems           = itemWindow.slice(items)
+    val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(selectedIndex)
     val rows = windowItems.zipWithIndex.map {
       case (option: CommandSurfaceItem.OptionItem, index) =>
         optionRow(option, !previewOnly && index == adjustedSelectedIndex)
@@ -779,18 +769,18 @@ object SurfaceContentResolver:
     rect: LayoutRect,
     mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
-    val maxRows = math.max(1, rect.height - 4)
-    val offset =
-      if menu.items.size <= maxRows then 0
-      else
-        val half = maxRows / 2
-        math.max(0, math.min(menu.selectedIndex - half, menu.items.size - maxRows))
-    val visibleItems = menu.items.slice(offset, offset + maxRows)
+    val itemWindow = SurfaceFrameLayout(rect).itemWindow(
+      itemCount = menu.items.size,
+      selectedIndex = menu.selectedIndex,
+      hasHeader = true,
+      hasFooter = menu.items.nonEmpty
+    )
+    val visibleItems = itemWindow.slice(menu.items)
     val rows = visibleItems.zipWithIndex.map {
       case (item, index) =>
         OverlayRow(
           plainText = item.label,
-          selected = index + offset == menu.selectedIndex
+          selected = index + itemWindow.offset == menu.selectedIndex
         )
     }
 
