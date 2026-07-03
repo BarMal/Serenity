@@ -1,0 +1,143 @@
+package com.serenity
+
+import com.serenity.command.{CommandRegistry, CommandRunner}
+import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
+import com.serenity.rope.Balance
+import com.serenity.state.models.*
+import com.serenity.ui.layout.*
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+class LayoutContractSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
+
+  private val viewport = ViewportSize(120, 36)
+
+  private def viewportRect: LayoutRect =
+    LayoutRect(0, 0, viewport.width, viewport.height)
+
+  private def contentAreaFor(layout: CalculatedLayout): LayoutRect =
+    layout.gutterRect match
+      case Some(gutter) => LayoutRect(0, 0, viewport.width, gutter.y)
+      case None         => viewportRect
+
+  private def assertInside(owner: LayoutRect, child: LayoutRect, clue: String): Unit =
+    withClue(clue) {
+      owner.containsRect(child) shouldBe true
+    }
+
+  "LayoutRect" should "define explicit containment semantics for cell-space rectangles" in {
+    val outer = LayoutRect(2, 3, 10, 5)
+
+    outer.contains(2, 3) shouldBe true
+    outer.contains(11, 7) shouldBe true
+    outer.contains(12, 7) shouldBe false
+    outer.contains(11, 8) shouldBe false
+    outer.containsRect(LayoutRect(4, 4, 2, 2)) shouldBe true
+    outer.containsRect(LayoutRect(4, 4, 9, 2)) shouldBe false
+  }
+
+  it should "keep editor, panel, line-number, and gutter rectangles within their owned viewport regions" in
+    List(InterfaceDensity.Compact, InterfaceDensity.Comfortable, InterfaceDensity.Spacious).foreach { density =>
+      val state = AppState.initial.copy(
+        config = AppConfig.default
+          .withInterfaceDensity(density)
+          .withLineNumbers(true)
+          .withGutter(true)
+          .copy(
+            uiElementGap = 2,
+            textAreaInsets = TextAreaInsets(left = 0.05, right = 0.10)
+          ),
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("left-panel"),
+            SurfaceContent.Outline(Nil),
+            SurfacePresentation.Pinned(PanelPosition.Left, 14)
+          ),
+          UiSurface(
+            SurfaceId("right-panel"),
+            SurfaceContent.Diagnostics(Nil),
+            SurfacePresentation.Pinned(PanelPosition.Right, 18)
+          ),
+          UiSurface(
+            SurfaceId("top-panel"),
+            SurfaceContent.Terminal("Build", 0),
+            SurfacePresentation.Pinned(PanelPosition.Top, 4)
+          ),
+          UiSurface(
+            SurfaceId("bottom-panel"),
+            SurfaceContent.Diagnostics(Nil),
+            SurfacePresentation.Pinned(PanelPosition.Bottom, 5)
+          )
+        )
+      )
+      val layout          = LayoutEngine.calculateLayout(state, viewport)
+      val workspaceLayout = LayoutEngine.calculateEditorWorkspaceLayout(state, layout)
+      val contentArea     = contentAreaFor(layout)
+
+      layout.gutterRect.foreach { gutter =>
+        withClue(s"density=$density gutter") {
+          gutter.x shouldBe 0
+          gutter.width shouldBe viewport.width
+          gutter.bottom shouldBe viewport.height
+        }
+      }
+
+      List(
+        "editor panel" -> layout.editorPanelRect,
+        "left spacer"  -> layout.leftSpacerRect,
+        "right spacer" -> layout.rightSpacerRect
+      ).foreach {
+        case (name, rect) =>
+          assertInside(contentArea, rect, s"density=$density $name")
+      }
+
+      layout.lineNumberRect.foreach(rect => assertInside(contentArea, rect, s"density=$density line numbers"))
+      layout.pinnedPanelRects.foreach {
+        case (position, rect) =>
+          assertInside(contentArea, rect, s"density=$density pinned panel $position")
+      }
+      layout.pinnedSurfaceRects.foreach {
+        case (surfaceId, rect) =>
+          assertInside(contentArea, rect, s"density=$density pinned surface $surfaceId")
+      }
+
+      val activePane = workspaceLayout.activePaneLayout(state).getOrElse(fail("expected active pane layout"))
+      assertInside(layout.editorPanelRect, activePane.paneRect, s"density=$density active pane")
+      assertInside(activePane.paneRect, activePane.contentRect, s"density=$density active content")
+      assertInside(contentArea, activePane.headerRect, s"density=$density active header")
+      activePane.headerRect.bottom shouldBe activePane.contentRect.y
+      layout.gutterRect.foreach(gutter => activePane.contentRect.bottom should be <= gutter.y)
+    }
+
+  it should "keep below-cursor overlays inside the active editor content rectangle" in {
+    val buffer = Buffer
+      .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
+      .copy(cursors = List(CursorPosition(1, 2)))
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val layout       = LayoutEngine.calculateLayout(state, viewport)
+    val contentRect  = LayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
+    val overlayRects = layout.belowCursorOverlayStack.map(_._2)
+
+    overlayRects should not be empty
+    overlayRects.foreach(rect => assertInside(contentRect, rect, s"overlay $rect"))
+  }
+end LayoutContractSpec

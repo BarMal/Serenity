@@ -11,6 +11,12 @@ case class LayoutRect(x: Int, y: Int, width: Int, height: Int):
   def centerX: Int = x + width / 2
   def centerY: Int = y + height / 2
 
+  def contains(cellX: Int, cellY: Int): Boolean =
+    cellX >= x && cellX < right && cellY >= y && cellY < bottom
+
+  def containsRect(rect: LayoutRect): Boolean =
+    rect.x >= x && rect.y >= y && rect.right <= right && rect.bottom <= bottom
+
 case class EditorPaneLayout(
     paneRect: LayoutRect,
     headerRect: LayoutRect,
