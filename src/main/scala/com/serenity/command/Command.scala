@@ -115,6 +115,8 @@ enum CommandIntent:
   case UnpinPanel(position: PanelPosition)
   case ExpandPanel(position: PanelPosition)
   case CollapseExpandedPanel
+  case MovePanelEarlier(kind: PanelKind)
+  case MovePanelLater(kind: PanelKind)
   case IncreaseFontSize
   case DecreaseFontSize
   case SetFontSize(size: Float)

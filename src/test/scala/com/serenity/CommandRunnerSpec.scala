@@ -254,8 +254,13 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
         .getOrElse(fail(s"missing nested group $id"))
 
     groupItems.head.label shouldBe "Panels & Workspace"
-    groupItems.head.children.map(_.id) shouldBe List("settings-panel-pins", "settings-panel-actions")
+    groupItems.head.children.map(_.id) shouldBe List(
+      "settings-panel-pins",
+      "settings-panel-order",
+      "settings-panel-actions"
+    )
     val panelPins    = groupById(groupItems.head.children, "settings-panel-pins")
+    val panelOrder   = groupById(groupItems.head.children, "settings-panel-order")
     val panelActions = groupById(groupItems.head.children, "settings-panel-actions")
     panelPins.label shouldBe "Panel Pins"
     panelPins.children.map(_.id) shouldBe List(
@@ -264,6 +269,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "panel-diagnostics-pin",
       "panel-markdown-preview-pin"
     )
+    panelOrder.label shouldBe "Panel Order"
+    panelOrder.children shouldBe empty
     panelActions.label shouldBe "Panel Actions"
     panelActions.children.map(_.id) should contain allOf (
       "focus-left-panel",
