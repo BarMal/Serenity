@@ -236,11 +236,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
   it should "animate the submenu preview when settings browsing opens a child panel" in {
     val sm = createStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    sm.applyEvent(TabKey).unsafeRunSync()
-    sm.applyEvent(TabKey).unsafeRunSync()
-    sm.applyEvent(TabKey).unsafeRunSync()
-    sm.applyEvent(TabKey).unsafeRunSync()
-    sm.applyEvent(TabKey).unsafeRunSync()
+    openSettingsCategory(sm)
 
     val state   = sm.getCurrentState.unsafeRunSync()
     val submenu = state.commandRunnerSubmenuSurface.getOrElse(fail("Expected submenu preview surface"))
@@ -249,14 +245,52 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     state.surfaceAnimations(submenu.id).phase shouldBe SurfacePhase.Visible
   }
 
+  it should "restart the submenu animation when the preview changes to another settings group" in {
+    val sm = createStateManager()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    openSettingsCategory(sm)
+
+    val firstState   = sm.getCurrentState.unsafeRunSync()
+    val firstSubmenu = firstState.commandRunnerSubmenuSurface.getOrElse(fail("Expected submenu preview surface"))
+    advanceSurfaceAnimations(sm)
+
+    sm.getCurrentState.unsafeRunSync().surfaceAnimations.get(firstSubmenu.id) shouldBe None
+
+    sm.applyEvent(MoveDown).unsafeRunSync()
+    val updatedState   = sm.getCurrentState.unsafeRunSync()
+    val updatedSubmenu = updatedState.commandRunnerSubmenuSurface.getOrElse(fail("Expected updated submenu preview"))
+
+    updatedSubmenu.id shouldBe firstSubmenu.id
+    updatedSubmenu.content should not be firstSubmenu.content
+    updatedState.surfaceAnimations.get(updatedSubmenu.id) shouldBe defined
+    updatedState.surfaceAnimations(updatedSubmenu.id).phase shouldBe SurfacePhase.Visible
+  }
+
+  it should "restart the submenu animation when a preview becomes the focused submenu" in {
+    val sm = createStateManager()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    openSettingsCategory(sm)
+
+    val previewState   = sm.getCurrentState.unsafeRunSync()
+    val previewSubmenu = previewState.commandRunnerSubmenuSurface.getOrElse(fail("Expected submenu preview surface"))
+    advanceSurfaceAnimations(sm)
+
+    sm.getCurrentState.unsafeRunSync().surfaceAnimations.get(previewSubmenu.id) shouldBe None
+
+    sm.applyEvent(Enter).unsafeRunSync()
+    val focusedState   = sm.getCurrentState.unsafeRunSync()
+    val focusedSubmenu = focusedState.commandRunnerSubmenuSurface.getOrElse(fail("Expected focused submenu surface"))
+
+    focusedSubmenu.id shouldBe previewSubmenu.id
+    focusedSubmenu.content should not be previewSubmenu.content
+    focusedState.surfaceAnimations.get(focusedSubmenu.id) shouldBe defined
+    focusedState.surfaceAnimations(focusedSubmenu.id).phase shouldBe SurfacePhase.Visible
+  }
+
   it should "add a ghost overlay when the submenu preview is dismissed" in {
     val sm = createStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    sm.applyEvent(TabKey).unsafeRunSync()
-    sm.applyEvent(TabKey).unsafeRunSync()
-    sm.applyEvent(TabKey).unsafeRunSync()
-    sm.applyEvent(TabKey).unsafeRunSync()
-    sm.applyEvent(TabKey).unsafeRunSync()
+    openSettingsCategory(sm)
     advanceToVisible(sm)
 
     sm.applyEvent(TabKey).unsafeRunSync()
@@ -274,6 +308,12 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val surfId  = state0.commandRunnerSurface.get.id
     val fadeLen = state0.surfaceAnimations.get(surfId).map(_.bufferFadeLength).getOrElse(0)
     (1 to (fadeLen + 1)).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
+
+  private def advanceSurfaceAnimations(sm: StateManager): Unit =
+    (1 to 60).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
+
+  private def openSettingsCategory(sm: StateManager): Unit =
+    (1 to 5).foreach(_ => sm.applyEvent(TabKey).unsafeRunSync())
 
   private def clearBufferAnimations(sm: StateManager): Unit =
     // Advance until all buffer animations are complete

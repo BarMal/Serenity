@@ -349,6 +349,12 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       val currentSurfaces = animatedCommandSurfaces(currentState)
       val openedSurfaces =
         currentSurfaces.filter(surface => !prevSurfaces.exists(_.id == surface.id))
+      val transitionedSurfaces =
+        currentSurfaces.filter(current =>
+          prevSurfaces
+            .find(_.id == current.id)
+            .exists(previous => commandSurfaceTransitionKey(previous) != commandSurfaceTransitionKey(current))
+        )
       val closedSurfaces =
         prevSurfaces.filter(surface => !currentSurfaces.exists(_.id == surface.id))
       val prevPanels    = animatedPanelSurfaces(prevState)
@@ -358,11 +364,27 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       val closedPanels =
         prevPanels.filter(surface => !currentPanels.exists(_.id == surface.id))
 
-      openedSurfaces.traverse_(surface => applyCommandRunnerOpenAnimation(surface, currentState)) >>
+      (openedSurfaces ++ transitionedSurfaces).distinct.traverse_(surface =>
+        applyCommandRunnerOpenAnimation(surface, currentState)
+      ) >>
         closedSurfaces.traverse_(surface => applyCommandRunnerCloseAnimation(surface, prevState)) >>
         openedPanels.traverse_(surface => applyPinnedPanelOpenAnimation(surface)) >>
         closedPanels.traverse_(surface => applyPinnedPanelCloseAnimation(surface, prevState))
     }
+
+  private def commandSurfaceTransitionKey(surface: UiSurface): Option[(String, Boolean, Option[String], List[String])] =
+    surface.content match
+      case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
+        Some(
+          (
+            groupId,
+            previewOnly,
+            runner.activeSubmenu.flatMap(_.parentGroupId),
+            runner.activeSubmenu.fold(Nil)(_.ancestorGroupIds)
+          )
+        )
+      case _ =>
+        None
 
   private def applyCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): cats.effect.IO[Unit] =
     state.config.scaledCommandRunnerAnimation match
