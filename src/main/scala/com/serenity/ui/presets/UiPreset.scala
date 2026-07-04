@@ -91,7 +91,9 @@ object UiPreset:
       uiTransitionSpeedScale = source.uiTransitionSpeedScale,
       commandRunnerAnimation = source.commandRunnerAnimation,
       uiAnimation = source.uiAnimation,
-      editorInsertionTransitionKind = source.editorInsertionTransitionKind
+      editorInsertionTransitionKind = source.editorInsertionTransitionKind,
+      panelOpenTransitionKind = source.panelOpenTransitionKind,
+      panelCloseTransitionKind = source.panelCloseTransitionKind
     )
 
   private def patchTextDisplayConfig(base: AppConfig, source: AppConfig): AppConfig =

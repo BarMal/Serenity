@@ -16,6 +16,8 @@ object CommandRunnerOptionSelections:
       "ui-animation"              -> animationPresetIndex(config.uiAnimation),
       "render-fps"                -> renderFpsTargetIndex(config.renderFpsTarget),
       "editor-text-transition"    -> editorTextTransitionIndex(config.editorInsertionTransitionKind),
+      "panel-open-transition"     -> panelTransitionIndex(config.effectivePanelOpenTransitionKind),
+      "panel-close-transition"    -> panelTransitionIndex(config.effectivePanelCloseTransitionKind),
       "cursor-mode"               -> cursorModeIndex(config.cursorMode),
       "cursor-info-bar"           -> cursorInfoBarModeIndex(config.cursorInfoBarMode),
       "cursor-info-bar-placement" -> cursorInfoBarPlacementIndex(config.cursorInfoBarPlacement),
@@ -115,6 +117,15 @@ object CommandRunnerOptionSelections:
       case TransitionKind.LineAndCharacterTandem => 3
       case TransitionKind.Disabled               => 4
       case TransitionKind.OutlineThenContent     => 0
+
+  private def panelTransitionIndex(kind: TransitionKind): Int =
+    kind match
+      case TransitionKind.Fade                   => 0
+      case TransitionKind.DirectionalSweep       => 1
+      case TransitionKind.LineAndCharacterTandem => 2
+      case TransitionKind.OutlineThenContent     => 3
+      case TransitionKind.Disabled               => 4
+      case TransitionKind.TypedText              => 1
 
   private def markdownViewModeIndex(mode: MarkdownViewMode): Int =
     mode match

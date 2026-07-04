@@ -233,8 +233,16 @@ object ConfigManager:
                 .map(config.withUiAnimation)
                 .getOrElse(config)
             case "ui.motion.editor_text" | "ui.motion.editor.text" | "ui_motion_editor_text" =>
-              parseEditorInsertionTransitionKind(value.trim)
+              parseTransitionKind(value.trim)
                 .map(config.withEditorInsertionTransitionKind)
+                .getOrElse(config)
+            case "ui.motion.panel_open" | "ui.motion.panel.open" | "ui_motion_panel_open" =>
+              parseTransitionKind(value.trim)
+                .map(kind => config.withPanelOpenTransitionKind(Some(kind)))
+                .getOrElse(config)
+            case "ui.motion.panel_close" | "ui.motion.panel.close" | "ui_motion_panel_close" =>
+              parseTransitionKind(value.trim)
+                .map(kind => config.withPanelCloseTransitionKind(Some(kind)))
                 .getOrElse(config)
             case "document.default_mode" | "document.default.mode" | "document_default_mode" =>
               parseDefaultDocumentMode(value.trim).map(config.withDefaultDocumentMode).getOrElse(config)
@@ -410,7 +418,9 @@ object ConfigManager:
        |ui.motion.ui.speed_scale = ${config.effectiveUiTransitionSpeedScale}
        |ui.motion.command_runner = $commandRunnerAnimationSetting
        |ui.motion.ui = $uiAnimationSetting
-       |ui.motion.editor_text = ${editorInsertionTransitionConfigKey(config.editorInsertionTransitionKind)}
+       |ui.motion.editor_text = ${transitionKindConfigKey(config.editorInsertionTransitionKind)}
+       |ui.motion.panel_open = ${transitionKindConfigKey(config.effectivePanelOpenTransitionKind)}
+       |ui.motion.panel_close = ${transitionKindConfigKey(config.effectivePanelCloseTransitionKind)}
        |
        |# Default mode for new buffers: plain-text, markdown, rich-text
        |document.default_mode = ${config.defaultDocumentMode.configKey}
@@ -552,7 +562,10 @@ object ConfigManager:
         case "ui.motion.ui" | "ui.motion.ui_elements" | "ui.motion.ui.elements" | "ui_motion_ui" =>
           parseAnimationPreset(value).isEmpty
         case "ui.motion.editor_text" | "ui.motion.editor.text" | "ui_motion_editor_text" =>
-          parseEditorInsertionTransitionKind(value).isEmpty
+          parseTransitionKind(value).isEmpty
+        case "ui.motion.panel_open" | "ui.motion.panel.open" | "ui_motion_panel_open" | "ui.motion.panel_close" |
+            "ui.motion.panel.close" | "ui_motion_panel_close" =>
+          parseTransitionKind(value).isEmpty
         case "window.chrome" | "window.chrome.mode" | "window_chrome" | "window_chrome_mode" =>
           parseWindowChromeMode(value).isEmpty
         case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
@@ -619,23 +632,25 @@ object ConfigManager:
       case "subtle"                              => Some(AnimationConfig.subtle)
       case _                                     => None
 
-  private def parseEditorInsertionTransitionKind(value: String): Option[TransitionKind] =
+  private def parseTransitionKind(value: String): Option[TransitionKind] =
     value.toLowerCase match
       case "fade"                                             => Some(TransitionKind.Fade)
       case "typed" | "typed-text" | "type"                    => Some(TransitionKind.TypedText)
       case "directional" | "directional-sweep" | "sweep"      => Some(TransitionKind.DirectionalSweep)
       case "tandem" | "line-and-character" | "line-character" => Some(TransitionKind.LineAndCharacterTandem)
-      case "off" | "none" | "disabled"                        => Some(TransitionKind.Disabled)
-      case _                                                  => None
+      case "outline" | "outline-then-content" | "frame-then-content" =>
+        Some(TransitionKind.OutlineThenContent)
+      case "off" | "none" | "disabled" => Some(TransitionKind.Disabled)
+      case _                           => None
 
-  private def editorInsertionTransitionConfigKey(kind: TransitionKind): String =
+  private def transitionKindConfigKey(kind: TransitionKind): String =
     kind match
       case TransitionKind.Fade                   => "fade"
       case TransitionKind.TypedText              => "typed"
       case TransitionKind.DirectionalSweep       => "directional"
       case TransitionKind.LineAndCharacterTandem => "tandem"
       case TransitionKind.Disabled               => "off"
-      case TransitionKind.OutlineThenContent     => "fade"
+      case TransitionKind.OutlineThenContent     => "outline"
 
   private def parseDefaultDocumentMode(value: String): Option[DefaultDocumentMode] =
     value.toLowerCase match
@@ -835,6 +850,8 @@ object ConfigManager:
                           |ui.motion.command_runner = smooth
                           |ui.motion.ui = smooth
                           |ui.motion.editor_text = fade
+                          |ui.motion.panel_open = outline
+                          |ui.motion.panel_close = fade
                           |
                           |# Preferred desktop window size. Leave empty to use the default.
                           |window.preferred.width =

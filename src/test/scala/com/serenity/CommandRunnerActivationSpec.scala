@@ -154,6 +154,8 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       .withEditorTextTransitionSpeedScale(Some(0.5))
       .withCommandRunnerTransitionSpeedScale(Some(2.25))
       .withUiTransitionSpeedScale(Some(1.25))
+      .withPanelOpenTransitionKind(Some(TransitionKind.DirectionalSweep))
+      .withPanelCloseTransitionKind(Some(TransitionKind.Disabled))
     val runner = CommandRunner.empty.activate(registry, config)
 
     val materialGroup = settingsGroup(runner, "settings-material-motion").getOrElse {
@@ -191,6 +193,14 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       case item: CommandSurfaceItem.OptionItem if item.id == "editor-text-transition" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Typed" -> List("Fade", "Typed", "Directional", "Tandem", "Off"))
+    materialGroup.children.collectFirst {
+      case item: CommandSurfaceItem.OptionItem if item.id == "panel-open-transition" =>
+        (item.selectedOption, item.options.map(_.label))
+    } shouldBe Some("Directional" -> List("Fade", "Directional", "Tandem", "Outline", "Off"))
+    materialGroup.children.collectFirst {
+      case item: CommandSurfaceItem.OptionItem if item.id == "panel-close-transition" =>
+        (item.selectedOption, item.options.map(_.label))
+    } shouldBe Some("Off" -> List("Fade", "Directional", "Tandem", "Outline", "Off"))
     materialGroup.children.collectFirst {
       case item: CommandSurfaceItem.OptionItem if item.id == "command-runner-fade" =>
         (item.selectedOption, item.options.map(_.label))

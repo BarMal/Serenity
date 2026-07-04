@@ -45,6 +45,50 @@ object CommandRunnerSettingsItems:
       hint = Some("Editor insertion reveal style")
     )
 
+  private[command] def panelOpenTransitionOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    panelTransitionOptionItem(
+      id = "panel-open-transition",
+      label = "Panel Open Reveal",
+      selectedIndex = optionSelections.getOrElse("panel-open-transition", 3),
+      setIntent = CommandIntent.SetPanelOpenTransitionKind.apply,
+      hint = "Pinned panel opening reveal style"
+    )
+
+  private[command] def panelCloseTransitionOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    panelTransitionOptionItem(
+      id = "panel-close-transition",
+      label = "Panel Close Reveal",
+      selectedIndex = optionSelections.getOrElse("panel-close-transition", 0),
+      setIntent = CommandIntent.SetPanelCloseTransitionKind.apply,
+      hint = "Pinned panel closing reveal style"
+    )
+
+  private def panelTransitionOptionItem(
+    id: String,
+    label: String,
+    selectedIndex: Int,
+    setIntent: TransitionKind => CommandIntent,
+    hint: String
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = id,
+      label = label,
+      options = List(
+        CommandOption("Fade", setIntent(TransitionKind.Fade)),
+        CommandOption("Directional", setIntent(TransitionKind.DirectionalSweep)),
+        CommandOption("Tandem", setIntent(TransitionKind.LineAndCharacterTandem)),
+        CommandOption("Outline", setIntent(TransitionKind.OutlineThenContent)),
+        CommandOption("Off", setIntent(TransitionKind.Disabled))
+      ),
+      selectedIndex = selectedIndex,
+      category = CommandCategory.Settings,
+      hint = Some(hint)
+    )
+
   private[command] def commandRunnerFadeOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =

@@ -90,6 +90,25 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
     plan.kind shouldBe TransitionKind.TypedText
   }
 
+  it should "derive panel open and close transition overrides from app config" in {
+    val config = AppConfig.default
+      .withMotionPreset(MotionPreset.Subtle)
+      .withPanelOpenTransitionKind(Some(TransitionKind.DirectionalSweep))
+      .withPanelCloseTransitionKind(Some(TransitionKind.Disabled))
+
+    val openPlan = ElementTransitionPlanner.plan(
+      ElementTransitionRequest(TransitionScope.PanelOpen, Some(PanelPosition.Left)),
+      config.elementTransitionSettings
+    )
+    val closePlan = ElementTransitionPlanner.plan(
+      ElementTransitionRequest(TransitionScope.PanelClose, Some(PanelPosition.Left)),
+      config.elementTransitionSettings
+    )
+
+    openPlan.kind shouldBe TransitionKind.DirectionalSweep
+    closePlan.kind shouldBe TransitionKind.Disabled
+  }
+
   it should "derive general UI animation from its own config rather than editor text animation" in {
     val config = AppConfig.default
       .withMotionPreset(MotionPreset.Smooth)

@@ -662,6 +662,8 @@ given Encoder[AppConfig] = Encoder.instance { config =>
     "commandRunnerVisibleRows"          -> config.commandRunnerVisibleRows.asJson,
     "renderFpsTarget"                   -> config.renderFpsTarget.asJson,
     "editorInsertionTransitionKind"     -> config.editorInsertionTransitionKind.asJson,
+    "panelOpenTransitionKind"           -> config.panelOpenTransitionKind.asJson,
+    "panelCloseTransitionKind"          -> config.panelCloseTransitionKind.asJson,
     "cursorMode"                        -> config.cursorMode.asJson,
     "cursorColors"                      -> config.cursorColors.asJson,
     "cursorInfoBarMode"                 -> config.cursorInfoBarMode.asJson,
@@ -723,9 +725,11 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     editorInsertionTransitionKind <- cursor.getOrElse[TransitionKind]("editorInsertionTransitionKind")(
       TransitionKind.Fade
     )
-    cursorMode        <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
-    cursorColors      <- cursor.getOrElse[CursorColorConfig]("cursorColors")(CursorColorConfig())
-    cursorInfoBarMode <- cursor.getOrElse[CursorInfoBarMode]("cursorInfoBarMode")(CursorInfoBarMode.Off)
+    panelOpenTransitionKind  <- cursor.getOrElse[Option[TransitionKind]]("panelOpenTransitionKind")(None)
+    panelCloseTransitionKind <- cursor.getOrElse[Option[TransitionKind]]("panelCloseTransitionKind")(None)
+    cursorMode               <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
+    cursorColors             <- cursor.getOrElse[CursorColorConfig]("cursorColors")(CursorColorConfig())
+    cursorInfoBarMode        <- cursor.getOrElse[CursorInfoBarMode]("cursorInfoBarMode")(CursorInfoBarMode.Off)
     cursorInfoBarPlacement <- cursor.getOrElse[CursorInfoBarPlacement]("cursorInfoBarPlacement")(
       CursorInfoBarPlacement.Floating
     )
@@ -762,6 +766,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     commandRunnerVisibleRows = commandRunnerVisibleRows,
     renderFpsTarget = renderFpsTarget,
     editorInsertionTransitionKind = editorInsertionTransitionKind,
+    panelOpenTransitionKind = panelOpenTransitionKind,
+    panelCloseTransitionKind = panelCloseTransitionKind,
     cursorMode = cursorMode,
     cursorColors = cursorColors,
     cursorInfoBarMode = cursorInfoBarMode,

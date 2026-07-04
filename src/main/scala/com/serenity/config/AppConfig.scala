@@ -364,6 +364,8 @@ case class AppConfig(
     commandRunnerVisibleRows: Option[Int] = None,
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
+    panelOpenTransitionKind: Option[TransitionKind] = None,
+    panelCloseTransitionKind: Option[TransitionKind] = None,
     cursorMode: CursorMode = CursorMode.Blink,
     cursorColors: CursorColorConfig = CursorColorConfig(),
     cursorInfoBarMode: CursorInfoBarMode = CursorInfoBarMode.Off,
@@ -499,9 +501,16 @@ case class AppConfig(
     val baseSettings = motionPreset.elementTransitionSettings
     if !baseSettings.enabled then baseSettings
     else
+      val transitionOverrides =
+        List(
+          Some(TransitionScope.EditorInsertion -> editorInsertionTransitionKind),
+          panelOpenTransitionKind.map(TransitionScope.PanelOpen -> _),
+          panelCloseTransitionKind.map(TransitionScope.PanelClose -> _)
+        ).flatten.toMap
+
       baseSettings.copy(
         speedScale = effectiveUiTransitionSpeedScale,
-        overrides = baseSettings.overrides + (TransitionScope.EditorInsertion -> editorInsertionTransitionKind)
+        overrides = baseSettings.overrides ++ transitionOverrides
       )
 
   def withElementTransitionSpeedScale(scale: Double): AppConfig =
@@ -551,6 +560,18 @@ case class AppConfig(
 
   def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
     copy(editorInsertionTransitionKind = kind)
+
+  def withPanelOpenTransitionKind(kind: Option[TransitionKind]): AppConfig =
+    copy(panelOpenTransitionKind = kind)
+
+  def withPanelCloseTransitionKind(kind: Option[TransitionKind]): AppConfig =
+    copy(panelCloseTransitionKind = kind)
+
+  def effectivePanelOpenTransitionKind: TransitionKind =
+    panelOpenTransitionKind.getOrElse(TransitionKind.OutlineThenContent)
+
+  def effectivePanelCloseTransitionKind: TransitionKind =
+    panelCloseTransitionKind.getOrElse(TransitionKind.Fade)
 
   def withCursorMode(mode: CursorMode): AppConfig =
     copy(cursorMode = mode)

@@ -4,7 +4,7 @@ import java.awt.Font
 import java.nio.file.Files
 
 import _root_.io.circe.syntax.*
-import com.serenity.animation.AnimationConfig
+import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
@@ -316,6 +316,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         editorTextTransitionSpeedScale = Some(0.5),
         commandRunnerTransitionSpeedScale = Some(2.25),
         uiTransitionSpeedScale = Some(1.25),
+        panelOpenTransitionKind = Some(TransitionKind.DirectionalSweep),
+        panelCloseTransitionKind = Some(TransitionKind.Disabled),
         uiAnimation = AnimationConfig.subtle,
         commandRunnerVisibleRows = Some(9),
         renderFpsTarget = RenderFpsTarget.Fps120,
@@ -355,6 +357,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.editorTextTransitionSpeedScale shouldBe Some(0.5)
     decoded.config.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
     decoded.config.uiTransitionSpeedScale shouldBe Some(1.25)
+    decoded.config.panelOpenTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
+    decoded.config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
     decoded.config.uiAnimation shouldBe AnimationConfig.subtle
     decoded.config.commandRunnerVisibleRows shouldBe Some(9)
     decoded.config.renderFpsTarget shouldBe RenderFpsTarget.Fps120
@@ -495,6 +499,29 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.editorTextTransitionSpeedScale shouldBe None
     decoded.toOption.get.config.commandRunnerTransitionSpeedScale shouldBe None
     decoded.toOption.get.config.uiTransitionSpeedScale shouldBe None
+  }
+
+  it should "default panel transition kind overrides when loading older JSON without the fields" in {
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val jsonWithoutPanelKinds =
+      originalJson.mapObject(
+        _.add(
+          "config",
+          _root_.io.circe.Json.fromJsonObject(
+            configObject
+              .remove("panelOpenTransitionKind")
+              .remove("panelCloseTransitionKind")
+          )
+        )
+      )
+
+    val decoded = jsonWithoutPanelKinds.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.panelOpenTransitionKind shouldBe None
+    decoded.toOption.get.config.panelCloseTransitionKind shouldBe None
   }
 
   it should "default command runner animation when loading older JSON without the field" in {
