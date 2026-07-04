@@ -329,7 +329,7 @@ object LayoutEngine:
     val gapRows         = floatingCursorGapRows(surface, densityGapRows)
 
     for
-      anchor <- surfaceAnchor(surface).orElse(state.activeCursorPosition)
+      anchor <- floatingAnchor(surface, state)
       screenPosition <- CursorLayout.calculateScreenPositionInContent(
         anchor,
         buffer.content,
@@ -372,7 +372,7 @@ object LayoutEngine:
       paneLayout <- paneLayouts.get(paneId)
       bufferId   <- pane.bufferId
       buffer     <- state.buffers.get(bufferId)
-      anchor     <- surfaceAnchor(surface).orElse(state.activeCursorPosition)
+      anchor     <- floatingAnchor(surface, state)
       screenPosition <- CursorLayout.calculateScreenPositionInContent(
         anchor,
         buffer.content,
@@ -538,6 +538,13 @@ object LayoutEngine:
     surface.presentation match
       case SurfacePresentation.Floating(anchor, _) => anchor
       case _                                       => None
+
+  private def floatingAnchor(surface: UiSurface, state: AppState): Option[CursorPosition] =
+    surface.content match
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
+        state.activeCursorPosition.orElse(surfaceAnchor(surface))
+      case _ =>
+        surfaceAnchor(surface).orElse(state.activeCursorPosition)
 
   def calculateViewportForCursor(
     cursor: CursorPosition,

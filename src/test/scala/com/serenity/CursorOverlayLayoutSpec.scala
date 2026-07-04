@@ -181,6 +181,35 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     rect.y shouldBe contentRect.y + 1
   }
 
+  it should "place command runner overlays from the live editor cursor rather than a stale surface anchor" in {
+    val cursor      = CursorPosition(0, 0)
+    val staleAnchor = CursorPosition(3, 0)
+    val state = baseState(cursor = cursor).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(
+            CommandRunner(
+              isActive = true,
+              searchTerm = "",
+              selectedIndex = 0,
+              filteredCommands = List.empty
+            )
+          ),
+          SurfacePresentation.Floating(Some(staleAnchor), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+
+    val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
+    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
+
+    rect.y shouldBe contentRect.y + 1
+  }
+
   it should "place command runner overlays below the visible wrapped cursor row" in {
     val longLine = "a" * 260
     val cursor   = CursorPosition(0, 215)
