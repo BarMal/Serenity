@@ -1,5 +1,7 @@
 package com.serenity.ui.layout
 
+import com.serenity.state.models.SurfaceContent
+
 case class SurfaceFrameLayout(
     frameRect: LayoutRect,
     borderCells: Int = SurfaceFrameLayout.DefaultBorderCells
@@ -98,7 +100,16 @@ enum SurfaceContentRowKind:
 case class SurfaceContentRowSlot(kind: SurfaceContentRowKind, y: Int)
 
 object SurfaceFrameLayout:
-  val DefaultBorderCells: Int = 1
+  val DefaultBorderCells: Int        = 1
+  val CommandSurfaceBorderCells: Int = 0
+
+  def borderCellsFor(content: SurfaceContent): Int =
+    content match
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) => CommandSurfaceBorderCells
+      case _                                                                                => DefaultBorderCells
+
+  def forContent(frameRect: LayoutRect, content: SurfaceContent): SurfaceFrameLayout =
+    SurfaceFrameLayout(frameRect, borderCellsFor(content))
 
   def contentChromeRows(
     hasHeader: Boolean,

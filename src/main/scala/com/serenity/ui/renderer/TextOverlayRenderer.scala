@@ -39,7 +39,7 @@ object TextOverlayRenderer:
       surface.setBackgroundColor(bg)
       surface.putString(rect.x, y, " " * rect.width)
 
-    applyGlassSheen(surface, rect, theme, config)
+    applyGlassSheen(surface, overlay, theme, config)
 
     drawBorder(surface, overlay, theme, config)
     drawContent(surface, overlay, theme, cursorVisible, rowColors, font, cellMetrics)
@@ -67,7 +67,7 @@ object TextOverlayRenderer:
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
-    val frameLayout = SurfaceFrameLayout(overlay.rect)
+    val frameLayout = SurfaceFrameLayout(overlay.rect, overlay.borderCells)
     val contentRect = frameLayout.contentRect
     val maxLineSize = contentRect.width
 
@@ -606,12 +606,12 @@ object TextOverlayRenderer:
 
   private def applyGlassSheen(
     surface: RenderSurface,
-    rect: com.serenity.ui.layout.LayoutRect,
+    overlay: TextOverlayView,
     theme: Theme,
     config: AppConfig
   ): Unit =
     SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
-      val contentRect = SurfaceFrameLayout(rect).contentRect
+      val contentRect = SurfaceFrameLayout(overlay.rect, overlay.borderCells).contentRect
       val sheenWidth  = contentRect.width
       val sheenHeight = math.min(2, contentRect.height)
       if sheenWidth > 0 && sheenHeight > 0 then

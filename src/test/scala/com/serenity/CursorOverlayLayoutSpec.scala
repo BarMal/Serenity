@@ -294,7 +294,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
-    layout.belowCursorOverlayRect.map(_.height) shouldBe Some(11)
+    layout.belowCursorOverlayRect.map(_.height) shouldBe Some(9)
   }
 
   it should "move a command runner stack above the cursor as one unit when it cannot fit below" in {

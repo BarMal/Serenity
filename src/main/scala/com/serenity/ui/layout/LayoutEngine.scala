@@ -70,7 +70,13 @@ object LayoutEngine:
   private[layout] val DefaultSpacerPercentage = 0.0
   private val MinimumVerticalPaneHeight       = 5
   private val EditorPaneHeaderHeight          = 1
-  private val CommandSurfaceChromeRows        = SurfaceFrameLayout.frameChromeRows(hasHeader = true, hasFooter = true)
+
+  private val CommandSurfaceChromeRows =
+    SurfaceFrameLayout.frameChromeRows(
+      hasHeader = true,
+      hasFooter = true,
+      borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells
+    )
 
   def calculateLayout(
     state: AppState,

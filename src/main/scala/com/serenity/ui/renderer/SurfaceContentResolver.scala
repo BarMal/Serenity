@@ -381,12 +381,14 @@ object SurfaceContentResolver:
           )
 
       val allItems = runner.visibleItems
-      val itemWindow = SurfaceFrameLayout(rect).itemWindow(
-        itemCount = allItems.size,
-        selectedIndex = runner.selectedIndex,
-        hasHeader = true,
-        hasFooter = allItems.nonEmpty || runner.statusMessage.nonEmpty
-      )
+      val itemWindow = SurfaceFrameLayout
+        .forContent(rect, SurfaceContent.CommandPalette(runner))
+        .itemWindow(
+          itemCount = allItems.size,
+          selectedIndex = runner.selectedIndex,
+          hasHeader = true,
+          hasFooter = allItems.nonEmpty || runner.statusMessage.nonEmpty
+        )
       val windowItems           = itemWindow.slice(allItems)
       val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(runner.selectedIndex)
 
@@ -437,13 +439,15 @@ object SurfaceContentResolver:
     val items         = submenuState.map(_.filteredItems(allItems)).getOrElse(allItems)
     val selectedIndex = submenuState.map(_.selectedIndex).getOrElse(0)
     val detailRows    = presetPreviewRow(runner, groupId, items.lift(selectedIndex))
-    val itemWindow = SurfaceFrameLayout(rect).itemWindow(
-      itemCount = items.size,
-      selectedIndex = selectedIndex,
-      hasHeader = group.nonEmpty,
-      hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-      reservedContentRows = detailRows.size
-    )
+    val itemWindow = SurfaceFrameLayout
+      .forContent(rect, SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly))
+      .itemWindow(
+        itemCount = items.size,
+        selectedIndex = selectedIndex,
+        hasHeader = group.nonEmpty,
+        hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
+        reservedContentRows = detailRows.size
+      )
     val windowItems           = itemWindow.slice(items)
     val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(selectedIndex)
     val rows = windowItems.zipWithIndex.map {
