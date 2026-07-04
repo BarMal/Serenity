@@ -519,9 +519,7 @@ object Renderer:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): Boolean =
-    if snapshot.usesMeasuredLayout then
-      visualLineTopPx(rect, screenLineIndex, context, snapshot) < contentBottomPx(rect, context)
-    else screenLineIndex < rect.height
+    textRowMetrics(rect, context, snapshot).lineFits(screenLineIndex)
 
   private def visualLineVisible(
     rect: LayoutRect,
@@ -529,14 +527,7 @@ object Renderer:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): Boolean =
-    if snapshot.usesMeasuredLayout then
-      val lineTopPx = visualLineTopPx(rect, screenLineIndex, context, snapshot)
-      lineTopPx >= contentTopPx(rect, context) &&
-      lineTopPx < contentBottomPx(rect, context) &&
-      lineTopPx < surfaceBottomPx(context)
-    else
-      val screenY = rect.y + screenLineIndex
-      screenY < context.surface.viewportHeight && screenY >= 0 && screenY < rect.bottom
+    textRowMetrics(rect, context, snapshot).lineVisible(screenLineIndex, context.surface.viewportHeight)
 
   private def visualLineTopPx(
     rect: LayoutRect,
@@ -544,17 +535,19 @@ object Renderer:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): Int =
-    if snapshot.usesMeasuredLayout then contentTopPx(rect, context) + screenLineIndex * snapshot.lineHeightPx
-    else context.cellMetrics.toPixelY(rect.y + screenLineIndex)
+    textRowMetrics(rect, context, snapshot).lineTopPx(screenLineIndex)
 
-  private def contentTopPx(rect: LayoutRect, context: RenderContext): Int =
-    context.cellMetrics.toPixelY(rect.y)
-
-  private def contentBottomPx(rect: LayoutRect, context: RenderContext): Int =
-    context.cellMetrics.toPixelY(rect.bottom)
-
-  private def surfaceBottomPx(context: RenderContext): Int =
-    context.cellMetrics.toPixelY(context.surface.viewportHeight)
+  private def textRowMetrics(
+    rect: LayoutRect,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
+  ): TextRowMetrics =
+    TextRowMetrics(
+      contentRect = rect,
+      gridMetrics = context.cellMetrics,
+      rowLineHeightPx = snapshot.lineHeightPx,
+      usesMeasuredLayout = snapshot.usesMeasuredLayout
+    )
 
   private def visualLineCellOffset(visualLine: TextVisualLine, context: RenderContext): Int =
     if visualLine.xOffsetPx <= 0.0f then 0
@@ -907,11 +900,12 @@ object Renderer:
                 val effectiveCursorColor = cursorColorFor(config, theme, context, isPrimaryCursor)
                 val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
                 val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
-                val screenYPx = cursorTopPx(
-                  context.cellMetrics.toPixelY(screenYCell),
-                  context.cellMetrics.toPixelY(rect.y + placement.top),
-                  context.cellMetrics.lineHeight
-                )
+                val screenYPx = TextRowMetrics(
+                  contentRect = rect.copy(y = rect.y + placement.top, height = placement.height),
+                  gridMetrics = context.cellMetrics,
+                  rowLineHeightPx = context.cellMetrics.lineHeight,
+                  usesMeasuredLayout = false
+                ).cursorTopPx(visualLine)
                 context.surface.fillPixelRect(
                   screenXPx,
                   screenYPx,
@@ -1128,20 +1122,13 @@ object Renderer:
         context.cursorVisible || (buffer.cursors.size > 1 && !isPrimaryCursor)
       calculateCursorVisualPosition(cursor, snapshot) match
         case Some((visualLine, xPx)) if shouldRenderCursor =>
-          val lineTopPx = visualLineTopPx(rect, visualLine, context, snapshot)
           if visualLineVisible(rect, visualLine, context, snapshot)
           then
             val effectiveCursorColor = cursorColorFor(config, theme, context, isPrimaryCursor)
             val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
             val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
             val screenYPx =
-              if snapshot.usesMeasuredLayout then lineTopPx
-              else
-                cursorTopPx(
-                  lineTopPx,
-                  contentTopPx(rect, context),
-                  snapshot.lineHeightPx
-                )
+              textRowMetrics(rect, context, snapshot).cursorTopPx(visualLine)
             context.surface.fillPixelRect(
               screenXPx,
               screenYPx,
@@ -1151,12 +1138,6 @@ object Renderer:
             )
         case _ => ()
     }
-
-  private def cursorTopPx(rowTopPx: Int, contentTopPx: Int, lineHeightPx: Int): Int =
-    math.max(contentTopPx, rowTopPx - cursorOpticalLiftPx(lineHeightPx))
-
-  private def cursorOpticalLiftPx(lineHeightPx: Int): Int =
-    math.max(2, math.round(lineHeightPx.toFloat * 0.125f))
 
   private def calculateCursorVisualPosition(
     cursor: CursorPosition,
