@@ -19,6 +19,7 @@ project/boot/
 *.iws
 .vscode/
 .history/
+.claude/worktrees/
 
 # Scala worksheets
 *.sc
