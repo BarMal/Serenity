@@ -139,8 +139,10 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     )
     val viewportSize = ViewportSize(100, 30)
     val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height)
-    val font = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val font   = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val uiFont = Font(Font.SANS_SERIF, Font.PLAIN, font.getSize).deriveFont(font.getSize2D)
     val cellMetrics = CellMetrics.fromFont(font)
+    val uiMetrics   = CellMetrics.fromFont(uiFont)
     val layout      = LayoutEngine.calculateLayout(state, viewportSize)
     val headerRect = List(
       Some(layout.leftSpacerRect),
@@ -160,7 +162,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
             widthPx = (headerRight - headerLeft) * cellMetrics.charWidth.toFloat,
             heightPx = cellMetrics.lineHeight
           ),
-          font,
+          uiFont,
           cellMetrics.lineHeight,
           cellMetrics.ascent,
           TextHorizontalAlignment.Center,
@@ -169,11 +171,23 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         )
         .xPx
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, font, font, cellMetrics, None)
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      font,
+      font,
+      uiFont,
+      cellMetrics,
+      uiMetrics,
+      None
+    )
 
     val titleDraw = surface.drawRunPxCalls.find(_.s == title).getOrElse(fail("Expected measured title draw call"))
+    titleDraw.font shouldBe Some(uiFont)
     titleDraw.xPx shouldBe expectedXPx +- 0.001f
-    firstNonSpaceColumn(surface, 0) shouldBe math.floor(expectedXPx / cellMetrics.charWidth.toDouble).toInt
+    firstNonSpaceColumn(surface, 0) shouldBe math.floor(expectedXPx / uiMetrics.charWidth.toDouble).toInt
   }
 
   it should "render a measured editor cursor using the full primary row height" in {
