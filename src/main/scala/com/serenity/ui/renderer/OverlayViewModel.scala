@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory
 
 case class TextOverlayView(
     rect: LayoutRect,
+    borderCells: Int = 1,
     animationState: AnimationState = AnimationState.empty,
     alphaMultiplier: Float = 1.0f,
     title: Option[String] = None,
@@ -49,6 +50,7 @@ object OverlayViewModel:
         contentView(originalContent, cachedRect).map { content =>
           TextOverlayView(
             rect = cachedRect,
+            borderCells = com.serenity.ui.layout.SurfaceFrameLayout.borderCellsFor(originalContent),
             animationState = animState,
             alphaMultiplier = 1.0f,
             title = content.title,
@@ -62,6 +64,7 @@ object OverlayViewModel:
           contentView(content, rect, collapsed).map { resolved =>
             TextOverlayView(
               rect = rect,
+              borderCells = com.serenity.ui.layout.SurfaceFrameLayout.borderCellsFor(content),
               animationState = animState,
               alphaMultiplier = alphaMultiplierFor(content),
               title = resolved.title,
