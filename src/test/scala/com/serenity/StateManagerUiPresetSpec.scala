@@ -58,6 +58,15 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
       .getOrElse(fail("command runner should be open"))
 
+  private def unsavedPresetCopyName(name: String): String =
+    s"$name (modified, unsaved)"
+
+  private def assertPresetMarkedUnsaved(sm: StateManager, sourceName: String = "Drafting"): Unit =
+    val runner = commandRunnerState(sm)
+
+    runner.editingPresetName shouldBe Some(unsavedPresetCopyName(sourceName))
+    runner.statusMessage shouldBe Some(s"Editing unsaved copy of $sourceName. Save the preset to preserve it.")
+
   "StateManager UI presets" should "save the current UI preset to the preset store" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-save").resolve("ui-presets.json")
     val store = UiPresetStore(path)
@@ -608,7 +617,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     submenu shouldBe Some("settings-preset-edit" -> false)
   }
 
-  it should "persist config changes to the preset currently being edited" in {
+  it should "mark config changes as an unsaved copy of the preset currently being edited" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-config").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
@@ -622,6 +631,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
+    val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     sm.executeCommand(
       Command.typed(
@@ -640,13 +650,16 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
+    val state = sm.getCurrentState.unsafeRunSync()
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
-    saved.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    saved.config.motionPreset shouldBe MotionPreset.Subtle
+    state.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
+    state.config.motionPreset shouldBe MotionPreset.Subtle
+    saved shouldBe savedBefore
+    assertPresetMarkedUnsaved(sm)
   }
 
-  it should "patch appearance edits without replacing preset panel snapshots" in {
+  it should "mark appearance edits as an unsaved copy without changing preset panel snapshots" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-appearance-patch").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
@@ -663,17 +676,15 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
-    store
-      .upsert(
-        UiPreset(
-          name = "Drafting",
-          config = AppConfig.default.withBackgroundStyle(BackgroundStyle.Solid),
-          themeName = Theme.dark.name,
-          pinnedPanels = List(existingPanel),
-          targetEditorPaneCount = Some(1)
-        )
-      )
-      .unsafeRunSync()
+    val originalPreset = UiPreset(
+      name = "Drafting",
+      config = AppConfig.default.withBackgroundStyle(BackgroundStyle.Solid),
+      themeName = Theme.dark.name,
+      pinnedPanels = List(existingPanel),
+      targetEditorPaneCount = Some(1)
+    )
+    store.upsert(originalPreset).unsafeRunSync()
+    val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     sm.executeCommand(
       Command.typed(
@@ -684,14 +695,15 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
+    val state = sm.getCurrentState.unsafeRunSync()
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
-    saved.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
-    saved.pinnedPanels shouldBe List(existingPanel)
-    saved.targetEditorPaneCount shouldBe Some(1)
+    state.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    saved shouldBe savedBefore
+    assertPresetMarkedUnsaved(sm)
   }
 
-  it should "patch motion edits without replacing preset panel snapshots" in {
+  it should "mark motion edits as an unsaved copy without changing preset panel snapshots" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-motion-patch").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
@@ -708,17 +720,15 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
-    store
-      .upsert(
-        UiPreset(
-          name = "Drafting",
-          config = AppConfig.default.withMotionPreset(MotionPreset.Reduced),
-          themeName = Theme.dark.name,
-          pinnedPanels = List(existingPanel),
-          targetEditorPaneCount = Some(1)
-        )
-      )
-      .unsafeRunSync()
+    val originalPreset = UiPreset(
+      name = "Drafting",
+      config = AppConfig.default.withMotionPreset(MotionPreset.Reduced),
+      themeName = Theme.dark.name,
+      pinnedPanels = List(existingPanel),
+      targetEditorPaneCount = Some(1)
+    )
+    store.upsert(originalPreset).unsafeRunSync()
+    val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     sm.executeCommand(
       Command.typed(
@@ -729,15 +739,16 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
+    val state = sm.getCurrentState.unsafeRunSync()
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
-    saved.config.motionPreset shouldBe MotionPreset.Subtle
-    saved.config.characterAnimation shouldBe MotionPreset.Subtle.animationConfig
-    saved.pinnedPanels shouldBe List(existingPanel)
-    saved.targetEditorPaneCount shouldBe Some(1)
+    state.config.motionPreset shouldBe MotionPreset.Subtle
+    state.config.characterAnimation shouldBe MotionPreset.Subtle.animationConfig
+    saved shouldBe savedBefore
+    assertPresetMarkedUnsaved(sm)
   }
 
-  it should "patch typography edits without replacing preset panel snapshots" in {
+  it should "mark typography edits as an unsaved copy without changing preset panel snapshots" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-typography-patch").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
@@ -754,17 +765,15 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
-    store
-      .upsert(
-        UiPreset(
-          name = "Drafting",
-          config = AppConfig.default.copy(fontConfig = AppConfig.default.fontConfig.copy(textFontSize = 12.0f)),
-          themeName = Theme.dark.name,
-          pinnedPanels = List(existingPanel),
-          targetEditorPaneCount = Some(1)
-        )
-      )
-      .unsafeRunSync()
+    val originalPreset = UiPreset(
+      name = "Drafting",
+      config = AppConfig.default.copy(fontConfig = AppConfig.default.fontConfig.copy(textFontSize = 12.0f)),
+      themeName = Theme.dark.name,
+      pinnedPanels = List(existingPanel),
+      targetEditorPaneCount = Some(1)
+    )
+    store.upsert(originalPreset).unsafeRunSync()
+    val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     sm.executeCommand(
       Command.typed(
@@ -775,14 +784,15 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
+    val state = sm.getCurrentState.unsafeRunSync()
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
-    saved.config.fontConfig.textFontSize shouldBe 18.0f
-    saved.pinnedPanels shouldBe List(existingPanel)
-    saved.targetEditorPaneCount shouldBe Some(1)
+    state.config.fontConfig.textFontSize shouldBe 18.0f
+    saved shouldBe savedBefore
+    assertPresetMarkedUnsaved(sm)
   }
 
-  it should "patch document default edits without replacing preset panel snapshots" in {
+  it should "mark document default edits as an unsaved copy without changing preset panel snapshots" in {
     val path =
       Files.createTempDirectory("state-manager-ui-preset-edit-document-default-patch").resolve("ui-presets.json")
     val store = UiPresetStore(path)
@@ -800,17 +810,15 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
-    store
-      .upsert(
-        UiPreset(
-          name = "Drafting",
-          config = AppConfig.default.withDefaultDocumentMode(DefaultDocumentMode.PlainText),
-          themeName = Theme.dark.name,
-          pinnedPanels = List(existingPanel),
-          targetEditorPaneCount = Some(1)
-        )
-      )
-      .unsafeRunSync()
+    val originalPreset = UiPreset(
+      name = "Drafting",
+      config = AppConfig.default.withDefaultDocumentMode(DefaultDocumentMode.PlainText),
+      themeName = Theme.dark.name,
+      pinnedPanels = List(existingPanel),
+      targetEditorPaneCount = Some(1)
+    )
+    store.upsert(originalPreset).unsafeRunSync()
+    val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     sm.executeCommand(
       Command.typed(
@@ -821,14 +829,15 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
+    val state = sm.getCurrentState.unsafeRunSync()
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
-    saved.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
-    saved.pinnedPanels shouldBe List(existingPanel)
-    saved.targetEditorPaneCount shouldBe Some(1)
+    state.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
+    saved shouldBe savedBefore
+    assertPresetMarkedUnsaved(sm)
   }
 
-  it should "patch text display edits without replacing preset panel snapshots" in {
+  it should "mark text display edits as an unsaved copy without changing preset panel snapshots" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-text-display-patch").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
@@ -845,21 +854,19 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
-    store
-      .upsert(
-        UiPreset(
-          name = "Drafting",
-          config = AppConfig.default
-            .withLineNumbers(true)
-            .withGutter(true)
-            .withWordWrap(true)
-            .withTextAreaInsets(TextAreaInsets.fromPercent(15.0, 15.0)),
-          themeName = Theme.dark.name,
-          pinnedPanels = List(existingPanel),
-          targetEditorPaneCount = Some(1)
-        )
-      )
-      .unsafeRunSync()
+    val originalPreset = UiPreset(
+      name = "Drafting",
+      config = AppConfig.default
+        .withLineNumbers(true)
+        .withGutter(true)
+        .withWordWrap(true)
+        .withTextAreaInsets(TextAreaInsets.fromPercent(15.0, 15.0)),
+      themeName = Theme.dark.name,
+      pinnedPanels = List(existingPanel),
+      targetEditorPaneCount = Some(1)
+    )
+    store.upsert(originalPreset).unsafeRunSync()
+    val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     sm.executeCommand(
       Command.typed(
@@ -878,15 +885,16 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
+    val state = sm.getCurrentState.unsafeRunSync()
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
-    saved.config.wordWrapEnabled shouldBe false
-    saved.config.textAreaInsets.left shouldBe 0.2
-    saved.pinnedPanels shouldBe List(existingPanel)
-    saved.targetEditorPaneCount shouldBe Some(1)
+    state.config.wordWrapEnabled shouldBe false
+    state.config.textAreaInsets.left shouldBe 0.2
+    saved shouldBe savedBefore
+    assertPresetMarkedUnsaved(sm)
   }
 
-  it should "patch language tool edits without replacing preset panel snapshots" in {
+  it should "mark language tool edits as an unsaved copy without changing preset panel snapshots" in {
     val path = Files.createTempDirectory("state-manager-ui-preset-edit-language-tools-patch").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
@@ -903,19 +911,17 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
-    store
-      .upsert(
-        UiPreset(
-          name = "Drafting",
-          config = AppConfig.default.withSpellCheck(
-            SpellCheckConfig(enabled = false, languages = List("en"), additionalWords = List("serenity"))
-          ),
-          themeName = Theme.dark.name,
-          pinnedPanels = List(existingPanel),
-          targetEditorPaneCount = Some(1)
-        )
-      )
-      .unsafeRunSync()
+    val originalPreset = UiPreset(
+      name = "Drafting",
+      config = AppConfig.default.withSpellCheck(
+        SpellCheckConfig(enabled = false, languages = List("en"), additionalWords = List("serenity"))
+      ),
+      themeName = Theme.dark.name,
+      pinnedPanels = List(existingPanel),
+      targetEditorPaneCount = Some(1)
+    )
+    store.upsert(originalPreset).unsafeRunSync()
+    val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     sm.executeCommand(
       Command.typed(
@@ -934,15 +940,16 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
+    val state = sm.getCurrentState.unsafeRunSync()
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
-    saved.config.spellCheck.enabled shouldBe true
-    saved.config.spellCheck.languages shouldBe List("en", "fr")
-    saved.pinnedPanels shouldBe List(existingPanel)
-    saved.targetEditorPaneCount shouldBe Some(1)
+    state.config.spellCheck.enabled shouldBe true
+    state.config.spellCheck.languages shouldBe List("en", "fr")
+    saved shouldBe savedBefore
+    assertPresetMarkedUnsaved(sm)
   }
 
-  it should "persist theme changes to the preset currently being edited" in {
+  it should "mark theme changes as an unsaved copy of the preset currently being edited" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-theme").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
@@ -957,6 +964,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
+    val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     sm.executeCommand(
       Command.typed(
@@ -967,12 +975,15 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
+    val state = sm.getCurrentState.unsafeRunSync()
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
-    saved.themeName shouldBe Theme.dark.name
+    state.theme.name shouldBe Theme.dark.name
+    saved shouldBe savedBefore
+    assertPresetMarkedUnsaved(sm)
   }
 
-  it should "persist markdown preview mode changes to the preset currently being edited" in {
+  it should "mark markdown preview mode changes as an unsaved copy of the preset currently being edited" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-markdown").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
@@ -986,6 +997,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
+    val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     sm.executeCommand(
       Command.typed(
@@ -996,12 +1008,15 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
+    val state = sm.getCurrentState.unsafeRunSync()
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
-    saved.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
+    state.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
+    saved shouldBe savedBefore
+    assertPresetMarkedUnsaved(sm)
   }
 
-  it should "persist pinned panel changes to the preset currently being edited" in {
+  it should "mark pinned panel changes as an unsaved copy of the preset currently being edited" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-panels").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
@@ -1015,6 +1030,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
+    val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     sm.executeCommand(
       Command.typed(
@@ -1033,12 +1049,17 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
+    val state = sm.getCurrentState.unsafeRunSync()
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
-    saved.pinnedPanels.map(panel => panel.position -> panel.content) should contain allOf (
-      PanelPosition.Right  -> UiPreset.PanelContentSnapshot.Outline(Nil),
-      PanelPosition.Bottom -> UiPreset.PanelContentSnapshot.Diagnostics(Nil)
+    state.pinnedSurfaces.collect {
+      case UiSurface(_, content, SurfacePresentation.Pinned(position, _), _) => position -> content
+    } should contain allOf (
+      PanelPosition.Right  -> SurfaceContent.Outline(Nil),
+      PanelPosition.Bottom -> SurfaceContent.Diagnostics(Nil)
     )
+    saved shouldBe savedBefore
+    assertPresetMarkedUnsaved(sm)
   }
 
   it should "expose panel reorder commands while editing a preset" in {
@@ -1090,7 +1111,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     commands should contain("Move Diagnostics Later" -> CommandIntent.MovePanelLater(PanelKind.Diagnostics))
   }
 
-  it should "persist reordered active panels to the preset currently being edited" in {
+  it should "mark reordered active panels as an unsaved copy of the preset currently being edited" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-panel-order").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
@@ -1104,6 +1125,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
+    val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
     sm.executeCommand(
       Command.typed(
         "pin-drafting-outline-right",
@@ -1129,15 +1151,20 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
+    val state = sm.getCurrentState.unsafeRunSync()
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
-    saved.pinnedPanels.filter(_.position == PanelPosition.Right).map(_.content) shouldBe List(
-      UiPreset.PanelContentSnapshot.Diagnostics(Nil),
-      UiPreset.PanelContentSnapshot.Outline(Nil)
+    state.pinnedSurfaces.collect {
+      case UiSurface(_, content, SurfacePresentation.Pinned(PanelPosition.Right, _), _) => content
+    } shouldBe List(
+      SurfaceContent.Diagnostics(Nil),
+      SurfaceContent.Outline(Nil)
     )
+    saved shouldBe savedBefore
+    assertPresetMarkedUnsaved(sm)
   }
 
-  it should "persist unpinned panel changes to the preset currently being edited" in {
+  it should "mark unpinned panel changes as an unsaved copy of the preset currently being edited" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-unpin").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
@@ -1151,6 +1178,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
+    val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
     sm.executeCommand(
       Command.typed(
         "pin-drafting-outline",
@@ -1168,9 +1196,57 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
+    val state = sm.getCurrentState.unsafeRunSync()
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
-    saved.pinnedPanels.map(_.position) should not contain PanelPosition.Right
+    state.pinnedSurfaces.collect {
+      case UiSurface(_, _, SurfacePresentation.Pinned(position, _), _) => position
+    } should not contain PanelPosition.Right
+    saved shouldBe savedBefore
+    assertPresetMarkedUnsaved(sm)
+  }
+
+  it should "persist an unsaved edited preset only when explicitly saved" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-save-unsaved-copy").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "ui-preset-create",
+        "Create preset",
+        CommandIntent.SaveUiPreset("Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
+
+    sm.executeCommand(
+      Command.typed(
+        "set-drafting-rich-text-default",
+        "Set drafting document default",
+        CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.RichText),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "save-drafting-copy",
+        "Save drafting copy",
+        CommandIntent.SaveUiPreset("Drafting Edited"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val original = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
+    val copy     = store.find("Drafting Edited").unsafeRunSync().getOrElse(fail("Drafting Edited preset should exist"))
+    val runner   = commandRunnerState(sm)
+
+    original shouldBe savedBefore
+    copy.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
+    runner.editingPresetName shouldBe Some("Drafting Edited")
+    runner.statusMessage shouldBe Some("Preset saved. Configure Drafting Edited.")
   }
 
   it should "reset a custom built-in preset override to the built-in defaults" in {
