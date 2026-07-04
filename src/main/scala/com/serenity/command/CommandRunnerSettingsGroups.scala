@@ -90,7 +90,14 @@ object CommandRunnerSettingsGroups:
       label = "Material & Motion",
       children =
         List(materialPresetItem, motionPresetItem, commandRunnerFade, uiAnimationItem, renderFpsItem, editorTextItem) ++
-          inputItems.filter(_.id == "element-transition-speed-scale"),
+          inputItems.filter(item =>
+            Set(
+              "element-transition-speed-scale",
+              "editor-text-speed-scale",
+              "command-runner-speed-scale",
+              "ui-speed-scale"
+            ).contains(item.id)
+          ),
       category = CommandCategory.Settings,
       hint = Some("Named UI material and animation timing")
     )

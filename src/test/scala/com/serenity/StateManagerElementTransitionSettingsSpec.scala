@@ -38,6 +38,57 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     stateManager.getCurrentState.unsafeRunSync().config.elementTransitionSpeedScale shouldBe 2.25
   }
 
+  it should "update the editor text transition speed scale config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "editor-text-speed-scale",
+          "Set editor text speed scale",
+          CommandIntent.SetEditorTextTransitionSpeedScale(0.5),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.editorTextTransitionSpeedScale shouldBe Some(0.5)
+  }
+
+  it should "update the command runner transition speed scale config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "command-runner-speed-scale",
+          "Set command runner speed scale",
+          CommandIntent.SetCommandRunnerTransitionSpeedScale(2.25),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
+  }
+
+  it should "update the UI transition speed scale config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "ui-speed-scale",
+          "Set UI speed scale",
+          CommandIntent.SetUiTransitionSpeedScale(1.25),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.uiTransitionSpeedScale shouldBe Some(1.25)
+  }
+
   it should "update the editor text transition kind config" in {
     val stateManager = createStateManager()
 

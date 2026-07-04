@@ -69,11 +69,12 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withMotionPreset(MotionPreset.Subtle)
       .withElementTransitionSpeedScale(1.5)
+      .withUiTransitionSpeedScale(Some(0.5))
 
     val plan =
       ElementTransitionPlanner.plan(ElementTransitionRequest(TransitionScope.Row), config.elementTransitionSettings)
 
-    plan.timing shouldBe TransitionTiming(durationMs = 240, staggerMs = 18, delayMs = 0, speedScale = 1.5)
+    plan.timing shouldBe TransitionTiming(durationMs = 80, staggerMs = 6, delayMs = 0, speedScale = 0.5)
   }
 
   it should "derive editor insertion transition overrides from app config" in {
@@ -97,6 +98,41 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
 
     config.scaledCharacterAnimation.map(_.steps) shouldBe AnimationConfig.quick.map(_.steps)
     config.scaledUiAnimation.map(_.steps) shouldBe AnimationConfig.subtle.map(_.steps)
+  }
+
+  it should "let per-family animation speed scales override the global fallback" in {
+    val config = AppConfig.default
+      .withMotionPreset(MotionPreset.Smooth)
+      .withCharacterAnimation(AnimationConfig.smooth.get)
+      .withCommandRunnerAnimation(AnimationConfig.smooth)
+      .withUiAnimation(AnimationConfig.smooth)
+      .withElementTransitionSpeedScale(2.0)
+      .withEditorTextTransitionSpeedScale(Some(0.5))
+      .withCommandRunnerTransitionSpeedScale(Some(1.5))
+      .withUiTransitionSpeedScale(Some(0.0))
+
+    config.effectiveEditorTextTransitionSpeedScale shouldBe 0.5
+    config.effectiveCommandRunnerTransitionSpeedScale shouldBe 1.5
+    config.effectiveUiTransitionSpeedScale shouldBe 0.0
+    config.scaledCharacterAnimation.map(_.steps) shouldBe Some(6)
+    config.scaledCommandRunnerAnimation.map(_.steps) shouldBe Some(18)
+    config.scaledUiAnimation shouldBe None
+  }
+
+  it should "use the global animation speed scale when family scales are unset" in {
+    val config = AppConfig.default
+      .withMotionPreset(MotionPreset.Smooth)
+      .withCharacterAnimation(AnimationConfig.smooth.get)
+      .withCommandRunnerAnimation(AnimationConfig.smooth)
+      .withUiAnimation(AnimationConfig.smooth)
+      .withElementTransitionSpeedScale(2.0)
+
+    config.effectiveEditorTextTransitionSpeedScale shouldBe 2.0
+    config.effectiveCommandRunnerTransitionSpeedScale shouldBe 2.0
+    config.effectiveUiTransitionSpeedScale shouldBe 2.0
+    config.scaledCharacterAnimation.map(_.steps) shouldBe Some(24)
+    config.scaledCommandRunnerAnimation.map(_.steps) shouldBe Some(24)
+    config.scaledUiAnimation.map(_.steps) shouldBe Some(24)
   }
 
   it should "keep reduced motion disabled even when app config has a custom speed scale" in {

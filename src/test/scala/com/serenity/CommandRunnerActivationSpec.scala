@@ -151,6 +151,9 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       .withMotionPreset(MotionPreset.Reduced)
       .withEditorInsertionTransitionKind(TransitionKind.TypedText)
       .withElementTransitionSpeedScale(1.5)
+      .withEditorTextTransitionSpeedScale(Some(0.5))
+      .withCommandRunnerTransitionSpeedScale(Some(2.25))
+      .withUiTransitionSpeedScale(Some(1.25))
     val runner = CommandRunner.empty.activate(registry, config)
 
     val materialGroup = settingsGroup(runner, "settings-material-motion").getOrElse {
@@ -168,6 +171,22 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       case item: CommandSurfaceItem.InputItem if item.id == "element-transition-speed-scale" =>
         (item.currentValue, item.hint, item.parse("2.25"))
     } shouldBe Some(("1.50", "Scale (0.0-4.0)", Some(CommandIntent.SetElementTransitionSpeedScale(2.25))))
+    materialGroup.children.collectFirst {
+      case item: CommandSurfaceItem.InputItem if item.id == "editor-text-speed-scale" =>
+        (item.currentValue, item.hint, item.parse("0.75"))
+    } shouldBe Some(
+      ("0.50", "Editor text scale (0.0-4.0)", Some(CommandIntent.SetEditorTextTransitionSpeedScale(0.75)))
+    )
+    materialGroup.children.collectFirst {
+      case item: CommandSurfaceItem.InputItem if item.id == "command-runner-speed-scale" =>
+        (item.currentValue, item.hint, item.parse("1.75"))
+    } shouldBe Some(
+      ("2.25", "Command runner scale (0.0-4.0)", Some(CommandIntent.SetCommandRunnerTransitionSpeedScale(1.75)))
+    )
+    materialGroup.children.collectFirst {
+      case item: CommandSurfaceItem.InputItem if item.id == "ui-speed-scale" =>
+        (item.currentValue, item.hint, item.parse("1.00"))
+    } shouldBe Some(("1.25", "Panel/UI scale (0.0-4.0)", Some(CommandIntent.SetUiTransitionSpeedScale(1.0))))
     materialGroup.children.collectFirst {
       case item: CommandSurfaceItem.OptionItem if item.id == "editor-text-transition" =>
         (item.selectedOption, item.options.map(_.label))

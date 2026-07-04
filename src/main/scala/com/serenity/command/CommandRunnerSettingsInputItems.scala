@@ -16,10 +16,15 @@ object CommandRunnerSettingsInputItems:
     val textAreaLeftValue  = f"${config.textAreaInsets.leftPercent}%.1f"
     val textAreaRightValue = f"${config.textAreaInsets.rightPercent}%.1f"
     val speedScaleValue    = f"${config.elementTransitionSpeedScale}%.2f"
-    val elementGapValue    = config.uiElementGap.toString
-    val cornerRadiusValue  = config.uiCornerRadiusPx.toString
-    val commandRowsValue   = config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
-    val spellCheck         = config.spellCheck.normalized
+    val editorTextSpeedScaleValue =
+      f"${config.effectiveEditorTextTransitionSpeedScale}%.2f"
+    val commandRunnerSpeedScaleValue =
+      f"${config.effectiveCommandRunnerTransitionSpeedScale}%.2f"
+    val uiSpeedScaleValue = f"${config.effectiveUiTransitionSpeedScale}%.2f"
+    val elementGapValue   = config.uiElementGap.toString
+    val cornerRadiusValue = config.uiCornerRadiusPx.toString
+    val commandRowsValue  = config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
+    val spellCheck        = config.spellCheck.normalized
 
     val commentItems = List(
       CommandSurfaceItem.InputItem(
@@ -240,6 +245,51 @@ object CommandRunnerSettingsInputItems:
                 value <= AppConfig.MaxElementTransitionSpeedScale
             )
             .map(CommandIntent.SetElementTransitionSpeedScale(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "editor-text-speed-scale",
+        label = "Editor Text Speed",
+        hint = "Editor text scale (0.0-4.0)",
+        currentValue = editorTextSpeedScaleValue,
+        isDecimal = true,
+        parse = text =>
+          text.toDoubleOption
+            .filter(value =>
+              value >= AppConfig.MinElementTransitionSpeedScale &&
+                value <= AppConfig.MaxElementTransitionSpeedScale
+            )
+            .map(CommandIntent.SetEditorTextTransitionSpeedScale(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "command-runner-speed-scale",
+        label = "Command Runner Speed",
+        hint = "Command runner scale (0.0-4.0)",
+        currentValue = commandRunnerSpeedScaleValue,
+        isDecimal = true,
+        parse = text =>
+          text.toDoubleOption
+            .filter(value =>
+              value >= AppConfig.MinElementTransitionSpeedScale &&
+                value <= AppConfig.MaxElementTransitionSpeedScale
+            )
+            .map(CommandIntent.SetCommandRunnerTransitionSpeedScale(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "ui-speed-scale",
+        label = "Panel/UI Speed",
+        hint = "Panel/UI scale (0.0-4.0)",
+        currentValue = uiSpeedScaleValue,
+        isDecimal = true,
+        parse = text =>
+          text.toDoubleOption
+            .filter(value =>
+              value >= AppConfig.MinElementTransitionSpeedScale &&
+                value <= AppConfig.MaxElementTransitionSpeedScale
+            )
+            .map(CommandIntent.SetUiTransitionSpeedScale(_)),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(

@@ -356,6 +356,9 @@ case class AppConfig(
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
     motionPreset: MotionPreset = MotionPreset.Reduced,
     elementTransitionSpeedScale: Double = 1.0,
+    editorTextTransitionSpeedScale: Option[Double] = None,
+    commandRunnerTransitionSpeedScale: Option[Double] = None,
+    uiTransitionSpeedScale: Option[Double] = None,
     commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     uiAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     commandRunnerVisibleRows: Option[Int] = None,
@@ -386,6 +389,9 @@ case class AppConfig(
     copy(
       characterAnimation = None,
       motionPreset = MotionPreset.Reduced,
+      editorTextTransitionSpeedScale = None,
+      commandRunnerTransitionSpeedScale = None,
+      uiTransitionSpeedScale = None,
       commandRunnerAnimation = None,
       uiAnimation = None
     )
@@ -482,21 +488,33 @@ case class AppConfig(
           motionPreset = preset,
           characterAnimation = preset.animationConfig,
           commandRunnerAnimation = preset.animationConfig,
-          uiAnimation = preset.animationConfig
+          uiAnimation = preset.animationConfig,
+          editorTextTransitionSpeedScale = None,
+          commandRunnerTransitionSpeedScale = None,
+          uiTransitionSpeedScale = None
         )
 
-  /** Transition policy derived from the selected motion preset and global speed scale. */
+  /** Transition policy derived from the selected motion preset and UI speed scale. */
   def elementTransitionSettings: ElementTransitionSettings =
     val baseSettings = motionPreset.elementTransitionSettings
     if !baseSettings.enabled then baseSettings
     else
       baseSettings.copy(
-        speedScale = elementTransitionSpeedScale,
+        speedScale = effectiveUiTransitionSpeedScale,
         overrides = baseSettings.overrides + (TransitionScope.EditorInsertion -> editorInsertionTransitionKind)
       )
 
   def withElementTransitionSpeedScale(scale: Double): AppConfig =
     copy(elementTransitionSpeedScale = AppConfig.clampElementTransitionSpeedScale(scale))
+
+  def withEditorTextTransitionSpeedScale(scale: Option[Double]): AppConfig =
+    copy(editorTextTransitionSpeedScale = scale.map(AppConfig.clampElementTransitionSpeedScale))
+
+  def withCommandRunnerTransitionSpeedScale(scale: Option[Double]): AppConfig =
+    copy(commandRunnerTransitionSpeedScale = scale.map(AppConfig.clampElementTransitionSpeedScale))
+
+  def withUiTransitionSpeedScale(scale: Option[Double]): AppConfig =
+    copy(uiTransitionSpeedScale = scale.map(AppConfig.clampElementTransitionSpeedScale))
 
   def withCommandRunnerAnimation(animation: Option[AnimationConfig]): AppConfig =
     copy(commandRunnerAnimation = animation)
@@ -510,17 +528,26 @@ case class AppConfig(
   def withRenderFpsTarget(target: RenderFpsTarget): AppConfig =
     copy(renderFpsTarget = target)
 
-  /** Character insertion animation after applying the global motion speed. */
+  def effectiveEditorTextTransitionSpeedScale: Double =
+    editorTextTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
+
+  def effectiveCommandRunnerTransitionSpeedScale: Double =
+    commandRunnerTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
+
+  def effectiveUiTransitionSpeedScale: Double =
+    uiTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
+
+  /** Character insertion animation after applying the effective editor text motion speed. */
   def scaledCharacterAnimation: Option[AnimationConfig] =
-    AppConfig.scaledAnimation(characterAnimation, elementTransitionSpeedScale)
+    AppConfig.scaledAnimation(characterAnimation, effectiveEditorTextTransitionSpeedScale)
 
-  /** Command runner animation after applying the global motion speed. */
+  /** Command runner animation after applying the effective command runner motion speed. */
   def scaledCommandRunnerAnimation: Option[AnimationConfig] =
-    AppConfig.scaledAnimation(commandRunnerAnimation, elementTransitionSpeedScale)
+    AppConfig.scaledAnimation(commandRunnerAnimation, effectiveCommandRunnerTransitionSpeedScale)
 
-  /** General UI animation after applying the global motion speed. */
+  /** General UI animation after applying the effective UI motion speed. */
   def scaledUiAnimation: Option[AnimationConfig] =
-    AppConfig.scaledAnimation(uiAnimation, elementTransitionSpeedScale)
+    AppConfig.scaledAnimation(uiAnimation, effectiveUiTransitionSpeedScale)
 
   def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
     copy(editorInsertionTransitionKind = kind)

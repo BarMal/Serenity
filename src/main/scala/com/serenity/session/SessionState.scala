@@ -640,39 +640,42 @@ given Decoder[RichTextDocument] = deriveDecoder
 
 given Encoder[AppConfig] = Encoder.instance { config =>
   io.circe.Json.obj(
-    "characterAnimation"            -> config.characterAnimation.asJson,
-    "syntaxHighlightingEnabled"     -> config.syntaxHighlightingEnabled.asJson,
-    "hotkeyConfig"                  -> config.hotkeyConfig.asJson,
-    "focusedKeymapConfig"           -> config.focusedKeymapConfig.asJson,
-    "fontConfig"                    -> config.fontConfig.asJson,
-    "minimumPaneWidth"              -> config.minimumPaneWidth.asJson,
-    "showLineNumbers"               -> config.showLineNumbers.asJson,
-    "showGutter"                    -> config.showGutter.asJson,
-    "wordWrapEnabled"               -> config.wordWrapEnabled.asJson,
-    "blurRadius"                    -> config.blurRadius.asJson,
-    "backgroundStyle"               -> config.backgroundStyle.asJson,
-    "materialPreset"                -> config.materialPreset.asJson,
-    "motionPreset"                  -> config.motionPreset.asJson,
-    "elementTransitionSpeedScale"   -> config.elementTransitionSpeedScale.asJson,
-    "commandRunnerAnimation"        -> config.commandRunnerAnimation.asJson,
-    "uiAnimation"                   -> config.uiAnimation.asJson,
-    "commandRunnerVisibleRows"      -> config.commandRunnerVisibleRows.asJson,
-    "renderFpsTarget"               -> config.renderFpsTarget.asJson,
-    "editorInsertionTransitionKind" -> config.editorInsertionTransitionKind.asJson,
-    "cursorMode"                    -> config.cursorMode.asJson,
-    "cursorColors"                  -> config.cursorColors.asJson,
-    "cursorInfoBarMode"             -> config.cursorInfoBarMode.asJson,
-    "cursorInfoBarPlacement"        -> config.cursorInfoBarPlacement.asJson,
-    "windowChromeMode"              -> config.windowChromeMode.asJson,
-    "markdownViewMode"              -> config.markdownViewMode.asJson,
-    "defaultDocumentMode"           -> config.defaultDocumentMode.asJson,
-    "interfaceDensity"              -> config.interfaceDensity.asJson,
-    "uiElementGap"                  -> config.uiElementGap.asJson,
-    "uiCornerRadiusPx"              -> config.uiCornerRadiusPx.asJson,
-    "textAreaInsets"                -> config.textAreaInsets.asJson,
-    "preferredWindowSize"           -> config.preferredWindowSize.asJson,
-    "lspUserConfig"                 -> config.lspUserConfig.asJson,
-    "spellCheck"                    -> config.spellCheck.asJson
+    "characterAnimation"                -> config.characterAnimation.asJson,
+    "syntaxHighlightingEnabled"         -> config.syntaxHighlightingEnabled.asJson,
+    "hotkeyConfig"                      -> config.hotkeyConfig.asJson,
+    "focusedKeymapConfig"               -> config.focusedKeymapConfig.asJson,
+    "fontConfig"                        -> config.fontConfig.asJson,
+    "minimumPaneWidth"                  -> config.minimumPaneWidth.asJson,
+    "showLineNumbers"                   -> config.showLineNumbers.asJson,
+    "showGutter"                        -> config.showGutter.asJson,
+    "wordWrapEnabled"                   -> config.wordWrapEnabled.asJson,
+    "blurRadius"                        -> config.blurRadius.asJson,
+    "backgroundStyle"                   -> config.backgroundStyle.asJson,
+    "materialPreset"                    -> config.materialPreset.asJson,
+    "motionPreset"                      -> config.motionPreset.asJson,
+    "elementTransitionSpeedScale"       -> config.elementTransitionSpeedScale.asJson,
+    "editorTextTransitionSpeedScale"    -> config.editorTextTransitionSpeedScale.asJson,
+    "commandRunnerTransitionSpeedScale" -> config.commandRunnerTransitionSpeedScale.asJson,
+    "uiTransitionSpeedScale"            -> config.uiTransitionSpeedScale.asJson,
+    "commandRunnerAnimation"            -> config.commandRunnerAnimation.asJson,
+    "uiAnimation"                       -> config.uiAnimation.asJson,
+    "commandRunnerVisibleRows"          -> config.commandRunnerVisibleRows.asJson,
+    "renderFpsTarget"                   -> config.renderFpsTarget.asJson,
+    "editorInsertionTransitionKind"     -> config.editorInsertionTransitionKind.asJson,
+    "cursorMode"                        -> config.cursorMode.asJson,
+    "cursorColors"                      -> config.cursorColors.asJson,
+    "cursorInfoBarMode"                 -> config.cursorInfoBarMode.asJson,
+    "cursorInfoBarPlacement"            -> config.cursorInfoBarPlacement.asJson,
+    "windowChromeMode"                  -> config.windowChromeMode.asJson,
+    "markdownViewMode"                  -> config.markdownViewMode.asJson,
+    "defaultDocumentMode"               -> config.defaultDocumentMode.asJson,
+    "interfaceDensity"                  -> config.interfaceDensity.asJson,
+    "uiElementGap"                      -> config.uiElementGap.asJson,
+    "uiCornerRadiusPx"                  -> config.uiCornerRadiusPx.asJson,
+    "textAreaInsets"                    -> config.textAreaInsets.asJson,
+    "preferredWindowSize"               -> config.preferredWindowSize.asJson,
+    "lspUserConfig"                     -> config.lspUserConfig.asJson,
+    "spellCheck"                        -> config.spellCheck.asJson
   )
 }
 
@@ -700,6 +703,15 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     elementTransitionSpeedScale <- cursor
       .getOrElse[Double]("elementTransitionSpeedScale")(1.0)
       .map(AppConfig.clampElementTransitionSpeedScale)
+    editorTextTransitionSpeedScale <- cursor
+      .getOrElse[Option[Double]]("editorTextTransitionSpeedScale")(None)
+      .map(_.map(AppConfig.clampElementTransitionSpeedScale))
+    commandRunnerTransitionSpeedScale <- cursor
+      .getOrElse[Option[Double]]("commandRunnerTransitionSpeedScale")(None)
+      .map(_.map(AppConfig.clampElementTransitionSpeedScale))
+    uiTransitionSpeedScale <- cursor
+      .getOrElse[Option[Double]]("uiTransitionSpeedScale")(None)
+      .map(_.map(AppConfig.clampElementTransitionSpeedScale))
     commandRunnerAnimation <- cursor.getOrElse[Option[AnimationConfig]]("commandRunnerAnimation")(
       AnimationConfig.smooth
     )
@@ -742,6 +754,9 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     materialPreset = materialPreset,
     motionPreset = motionPreset,
     elementTransitionSpeedScale = elementTransitionSpeedScale,
+    editorTextTransitionSpeedScale = editorTextTransitionSpeedScale,
+    commandRunnerTransitionSpeedScale = commandRunnerTransitionSpeedScale,
+    uiTransitionSpeedScale = uiTransitionSpeedScale,
     commandRunnerAnimation = commandRunnerAnimation,
     uiAnimation = uiAnimation,
     commandRunnerVisibleRows = commandRunnerVisibleRows,

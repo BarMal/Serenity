@@ -313,6 +313,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         materialPreset = MaterialPreset.Crystal,
         motionPreset = MotionPreset.Reduced,
         elementTransitionSpeedScale = 1.75,
+        editorTextTransitionSpeedScale = Some(0.5),
+        commandRunnerTransitionSpeedScale = Some(2.25),
+        uiTransitionSpeedScale = Some(1.25),
         uiAnimation = AnimationConfig.subtle,
         commandRunnerVisibleRows = Some(9),
         renderFpsTarget = RenderFpsTarget.Fps120,
@@ -349,6 +352,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.materialPreset shouldBe MaterialPreset.Crystal
     decoded.config.motionPreset shouldBe MotionPreset.Reduced
     decoded.config.elementTransitionSpeedScale shouldBe 1.75
+    decoded.config.editorTextTransitionSpeedScale shouldBe Some(0.5)
+    decoded.config.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
+    decoded.config.uiTransitionSpeedScale shouldBe Some(1.25)
     decoded.config.uiAnimation shouldBe AnimationConfig.subtle
     decoded.config.commandRunnerVisibleRows shouldBe Some(9)
     decoded.config.renderFpsTarget shouldBe RenderFpsTarget.Fps120
@@ -464,6 +470,31 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.elementTransitionSpeedScale shouldBe 1.0
+  }
+
+  it should "default per-family animation speed scales when loading older JSON without the fields" in {
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val jsonWithoutFamilyScales =
+      originalJson.mapObject(
+        _.add(
+          "config",
+          _root_.io.circe.Json.fromJsonObject(
+            configObject
+              .remove("editorTextTransitionSpeedScale")
+              .remove("commandRunnerTransitionSpeedScale")
+              .remove("uiTransitionSpeedScale")
+          )
+        )
+      )
+
+    val decoded = jsonWithoutFamilyScales.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.editorTextTransitionSpeedScale shouldBe None
+    decoded.toOption.get.config.commandRunnerTransitionSpeedScale shouldBe None
+    decoded.toOption.get.config.uiTransitionSpeedScale shouldBe None
   }
 
   it should "default command runner animation when loading older JSON without the field" in {
