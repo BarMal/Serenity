@@ -209,6 +209,21 @@ object ConfigManager:
               parseElementTransitionSpeedScale(value.trim)
                 .map(config.withElementTransitionSpeedScale)
                 .getOrElse(config)
+            case "ui.motion.editor_text.speed_scale" | "ui.motion.editor.text.speed_scale" |
+                "ui_motion_editor_text_speed_scale" =>
+              parseElementTransitionSpeedScale(value.trim)
+                .map(scale => config.withEditorTextTransitionSpeedScale(Some(scale)))
+                .getOrElse(config)
+            case "ui.motion.command_runner.speed_scale" | "ui.motion.command.runner.speed_scale" |
+                "ui_motion_command_runner_speed_scale" =>
+              parseElementTransitionSpeedScale(value.trim)
+                .map(scale => config.withCommandRunnerTransitionSpeedScale(Some(scale)))
+                .getOrElse(config)
+            case "ui.motion.ui.speed_scale" | "ui.motion.ui_elements.speed_scale" |
+                "ui.motion.ui.elements.speed_scale" | "ui_motion_ui_speed_scale" =>
+              parseElementTransitionSpeedScale(value.trim)
+                .map(scale => config.withUiTransitionSpeedScale(Some(scale)))
+                .getOrElse(config)
             case "ui.motion.command_runner" | "ui.motion.command.runner" | "ui_motion_command_runner" =>
               parseAnimationPreset(value.trim)
                 .map(config.withCommandRunnerAnimation)
@@ -390,6 +405,9 @@ object ConfigManager:
        |ui.material = ${config.materialPreset.configKey}
        |ui.motion = ${config.motionPreset.configKey}
        |ui.motion.speed_scale = ${config.elementTransitionSpeedScale}
+       |ui.motion.editor_text.speed_scale = ${config.effectiveEditorTextTransitionSpeedScale}
+       |ui.motion.command_runner.speed_scale = ${config.effectiveCommandRunnerTransitionSpeedScale}
+       |ui.motion.ui.speed_scale = ${config.effectiveUiTransitionSpeedScale}
        |ui.motion.command_runner = $commandRunnerAnimationSetting
        |ui.motion.ui = $uiAnimationSetting
        |ui.motion.editor_text = ${editorInsertionTransitionConfigKey(config.editorInsertionTransitionKind)}
@@ -522,6 +540,12 @@ object ConfigManager:
         case "ui.motion" | "ui_motion" | "motion.preset" | "motion_preset" =>
           parseMotionPreset(value).isEmpty
         case "ui.motion.speed_scale" | "motion.speed_scale" | "ui_motion_speed_scale" | "motion_speed_scale" =>
+          parseElementTransitionSpeedScale(value).isEmpty
+        case "ui.motion.editor_text.speed_scale" | "ui.motion.editor.text.speed_scale" |
+            "ui_motion_editor_text_speed_scale" | "ui.motion.command_runner.speed_scale" |
+            "ui.motion.command.runner.speed_scale" | "ui_motion_command_runner_speed_scale" |
+            "ui.motion.ui.speed_scale" | "ui.motion.ui_elements.speed_scale" | "ui.motion.ui.elements.speed_scale" |
+            "ui_motion_ui_speed_scale" =>
           parseElementTransitionSpeedScale(value).isEmpty
         case "ui.motion.command_runner" | "ui.motion.command.runner" | "ui_motion_command_runner" =>
           parseAnimationPreset(value).isEmpty
@@ -805,6 +829,9 @@ object ConfigManager:
                           |ui.material = frosted
                           |ui.motion = smooth
                           |ui.motion.speed_scale = 1.0
+                          |ui.motion.editor_text.speed_scale = 1.0
+                          |ui.motion.command_runner.speed_scale = 1.0
+                          |ui.motion.ui.speed_scale = 1.0
                           |ui.motion.command_runner = smooth
                           |ui.motion.ui = smooth
                           |ui.motion.editor_text = fade

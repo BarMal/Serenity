@@ -406,6 +406,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateMotionConfig(_.withMotionPreset(preset)).void
       case CommandIntent.SetElementTransitionSpeedScale(scale) =>
         updateMotionConfig(_.withElementTransitionSpeedScale(scale)).void
+      case CommandIntent.SetEditorTextTransitionSpeedScale(scale) =>
+        updateMotionConfig(_.withEditorTextTransitionSpeedScale(Some(scale))).void
+      case CommandIntent.SetCommandRunnerTransitionSpeedScale(scale) =>
+        updateMotionConfig(_.withCommandRunnerTransitionSpeedScale(Some(scale))).void
+      case CommandIntent.SetUiTransitionSpeedScale(scale) =>
+        updateMotionConfig(_.withUiTransitionSpeedScale(Some(scale))).void
       case CommandIntent.SetCommandRunnerAnimation(animation) =>
         updateMotionConfig(_.withCommandRunnerAnimation(animation)).void
       case CommandIntent.SetUiAnimation(animation) =>
