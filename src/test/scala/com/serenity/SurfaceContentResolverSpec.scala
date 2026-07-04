@@ -400,7 +400,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.rows.find(_.selected).map(_.plainText) shouldBe Some(
       "JavaScript - Use JavaScript mode for the current buffer."
     )
-    floating.footer.map(_.plainText) shouldBe Some("11/24")
+    floating.footer.map(_.plainText) shouldBe Some("11/23")
   }
 
   it should "derive command runner visible rows from the framed surface content contract" in {
@@ -479,7 +479,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       SurfaceRenderMode.Floating
     )
 
-    floating.header.map(_.plainText) shouldBe Some("Language search: java")
+    floating.header.map(_.plainText) shouldBe Some("Current Buffer Language search: java")
     floating.rows.map(_.plainText) shouldBe List(
       "Java - Use Java mode for the current buffer.",
       "JavaScript - Use JavaScript mode for the current buffer."

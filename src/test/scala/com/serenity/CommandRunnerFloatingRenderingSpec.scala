@@ -330,7 +330,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val codeFont       = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val uiFont         = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
     val defaultMetrics = CellMetrics.fromFont(codeFont)
-    val searchText     = "Language search: java"
+    val searchText     = "Current Buffer Language search: java"
     val submenuCursorXPx = defaultMetrics.toPixelX(submenuRect.x + 1) +
       math.round(TextLayoutSnapshot.caretXsForText(searchText, uiFont, visibleSurface.fontRenderContext.get).last)
     val submenuCursorYPx = defaultMetrics.toPixelY(submenuRect.y + 1)

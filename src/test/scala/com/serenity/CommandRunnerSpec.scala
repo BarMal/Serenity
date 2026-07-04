@@ -286,8 +286,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     )
     group("settings-document-writing").children.map(_.id) shouldBe List(
       "settings-navigation",
+      "settings-document-defaults",
       "settings-language",
-      "settings-markdown",
       "settings-rich-text",
       "settings-spellcheck"
     )
@@ -370,9 +370,14 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     )
     nestedGroup("settings-markdown").label shouldBe "Markdown"
     nestedGroup("settings-markdown").children.map(_.id) should contain("markdown-view")
-    nestedGroup("settings-language").label shouldBe "Language"
-    nestedGroup("settings-language").children.map(_.id) should contain allOf (
+    nestedGroup("settings-document-defaults").label shouldBe "Document Defaults"
+    nestedGroup("settings-document-defaults").children.map(_.id) should contain allOf (
       "default-document-mode",
+      "markdown-view",
+      "spellcheck-enabled"
+    )
+    nestedGroup("settings-language").label shouldBe "Current Buffer Language"
+    nestedGroup("settings-language").children.map(_.id) should contain(
       "lang-plain-text"
     )
   }
@@ -485,17 +490,17 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     runner.visibleItems shouldBe theSameInstanceAs(runner.visibleItems)
   }
 
-  it should "surface default document mode as a typed language setting" in {
+  it should "surface default document mode as a typed document defaults setting" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withDefaultDocumentMode(DefaultDocumentMode.RichText))
       .withActiveCategory(CommandCategory.Settings)
 
-    val languageGroup = groupByIdRecursive(runner.settingsGroups, "settings-language")
+    val documentDefaultsGroup = groupByIdRecursive(runner.settingsGroups, "settings-document-defaults")
 
     val documentMode =
-      languageGroup.children
+      documentDefaultsGroup.children
         .collectFirst {
           case item: CommandSurfaceItem.OptionItem if item.id == "default-document-mode" =>
             item

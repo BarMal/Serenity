@@ -152,12 +152,19 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Source, split preview, or inline lens")
     )
+    val documentDefaultsGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-document-defaults",
+      label = "Document Defaults",
+      children = List(defaultDocumentItem, markdownViewItem, spellCheckItem),
+      category = CommandCategory.Settings,
+      hint = Some("New document mode, previews, spelling")
+    )
     val languageGroup = CommandSurfaceItem.GroupItem(
       id = "settings-language",
-      label = "Language",
-      children = CommandRunnerSettingsItems.languageItems :+ defaultDocumentItem,
+      label = "Current Buffer Language",
+      children = CommandRunnerSettingsItems.languageItems,
       category = CommandCategory.Settings,
-      hint = Some("Set new document defaults and current buffer language")
+      hint = Some("Set syntax mode for the active buffer")
     )
     val spellCheckGroup = CommandSurfaceItem.GroupItem(
       id = "settings-spellcheck",
@@ -178,7 +185,7 @@ object CommandRunnerSettingsGroups:
     val documentWritingGroup = CommandSurfaceItem.GroupItem(
       id = "settings-document-writing",
       label = "Document Writing",
-      children = List(navigationGroup, languageGroup, markdownGroup, richTextGroup, spellCheckGroup),
+      children = List(navigationGroup, documentDefaultsGroup, languageGroup, richTextGroup, spellCheckGroup),
       category = CommandCategory.Settings,
       hint = Some("Comments, previews, styling, and spelling")
     )
