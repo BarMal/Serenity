@@ -86,11 +86,11 @@ class SwingWindow(
     setOpaque(true)
     setFocusable(true)
     setPreferredSize(chromeButtonSize)
-    getAccessibleContext.setAccessibleName(initialKind.accessibleName)
+    SwingWindow.setAccessibleNameIfAvailable(this, initialKind.accessibleName)
 
     def setKind(kind: SwingWindow.ChromeControlKind): Unit =
       kindRef.set(kind)
-      getAccessibleContext.setAccessibleName(kind.accessibleName)
+      SwingWindow.setAccessibleNameIfAvailable(this, kind.accessibleName)
       repaint()
 
     override def paintComponent(g: Graphics): Unit =
@@ -488,6 +488,9 @@ object SwingWindow:
   )
 
   case class CanvasResizeSnapshot(pixelSize: Dimension, viewportSize: ViewportSize)
+
+  private[serenity] def setAccessibleNameIfAvailable(component: JComponent, name: String): Unit =
+    Option(component.getAccessibleContext).foreach(_.setAccessibleName(name))
 
   enum ChromeControlKind(val accessibleName: String):
     case Minimize extends ChromeControlKind("Minimize")

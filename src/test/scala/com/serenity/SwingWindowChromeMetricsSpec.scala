@@ -1,6 +1,8 @@
 package com.serenity
 
 import java.awt.Dimension
+import javax.accessibility.AccessibleContext
+import javax.swing.JComponent
 
 import com.serenity.config.WindowChromeMode
 import com.serenity.ui.layout.CellMetrics
@@ -96,6 +98,16 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
 
     palette.focusBorder shouldBe Theme.light.highlighted.foreground
     palette.focusBorder should not be palette.border
+  }
+
+  it should "ignore missing accessibility contexts when naming custom chrome controls" in {
+    val component = new JComponent:
+      override def getAccessibleContext: AccessibleContext = null
+
+    noException should be thrownBy SwingWindow.setAccessibleNameIfAvailable(
+      component,
+      SwingWindow.ChromeControlKind.Close.accessibleName
+    )
   }
 
   "SwingWindow.ChromeControlPaint" should "resolve button colours by state and control kind" in {
