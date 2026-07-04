@@ -158,50 +158,53 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       .withPanelCloseTransitionKind(Some(TransitionKind.Disabled))
     val runner = CommandRunner.empty.activate(registry, config)
 
-    val materialGroup = settingsGroup(runner, "settings-material-motion").getOrElse {
-      fail("Expected material and motion settings group")
+    val surfaceGroup = settingsGroup(runner, "settings-surface-appearance").getOrElse {
+      fail("Expected surface appearance settings group")
     }
-    materialGroup.children.collectFirst {
+    val motionGroup = settingsGroup(runner, "settings-animation").getOrElse {
+      fail("Expected motion and animation settings group")
+    }
+    surfaceGroup.children.collectFirst {
       case item: CommandSurfaceItem.OptionItem if item.id == "material-preset" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Crystal" -> List("Solid", "Clear", "Frosted", "Crystal", "Custom"))
-    materialGroup.children.collectFirst {
+    motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.OptionItem if item.id == "motion-preset" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Reduced" -> List("Reduced", "Subtle", "Smooth", "Expressive", "Custom"))
-    materialGroup.children.collectFirst {
+    motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "element-transition-speed-scale" =>
         (item.currentValue, item.hint, item.parse("2.25"))
     } shouldBe Some(("1.50", "Scale (0.0-4.0)", Some(CommandIntent.SetElementTransitionSpeedScale(2.25))))
-    materialGroup.children.collectFirst {
+    motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "editor-text-speed-scale" =>
         (item.currentValue, item.hint, item.parse("0.75"))
     } shouldBe Some(
       ("0.50", "Editor text scale (0.0-4.0)", Some(CommandIntent.SetEditorTextTransitionSpeedScale(0.75)))
     )
-    materialGroup.children.collectFirst {
+    motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "command-runner-speed-scale" =>
         (item.currentValue, item.hint, item.parse("1.75"))
     } shouldBe Some(
       ("2.25", "Command runner scale (0.0-4.0)", Some(CommandIntent.SetCommandRunnerTransitionSpeedScale(1.75)))
     )
-    materialGroup.children.collectFirst {
+    motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "ui-speed-scale" =>
         (item.currentValue, item.hint, item.parse("1.00"))
     } shouldBe Some(("1.25", "Panel/UI scale (0.0-4.0)", Some(CommandIntent.SetUiTransitionSpeedScale(1.0))))
-    materialGroup.children.collectFirst {
+    motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.OptionItem if item.id == "editor-text-transition" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Typed" -> List("Fade", "Typed", "Directional", "Tandem", "Off"))
-    materialGroup.children.collectFirst {
+    motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.OptionItem if item.id == "panel-open-transition" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Directional" -> List("Fade", "Directional", "Tandem", "Outline", "Off"))
-    materialGroup.children.collectFirst {
+    motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.OptionItem if item.id == "panel-close-transition" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Off" -> List("Fade", "Directional", "Tandem", "Outline", "Off"))
-    materialGroup.children.collectFirst {
+    motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.OptionItem if item.id == "command-runner-fade" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Off" -> List("Off", "Subtle", "Smooth", "Expressive"))

@@ -201,7 +201,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     } shouldBe true
   }
 
-  it should "surface animation settings as an expandable group in settings browsing" in {
+  it should "surface motion settings as an expandable group in settings browsing" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
@@ -210,8 +210,23 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     val animationGroup = groupByIdRecursive(runner.settingsGroups, "settings-animation")
 
-    animationGroup.label shouldBe "Animation"
-    animationGroup.children.map(_.id) should contain allOf ("animation-mode", "animation-duration", "animation-steps")
+    animationGroup.label shouldBe "Motion & Animation"
+    animationGroup.children.map(_.id) shouldBe List(
+      "motion-preset",
+      "animation-mode",
+      "editor-text-transition",
+      "panel-open-transition",
+      "panel-close-transition",
+      "command-runner-fade",
+      "ui-animation",
+      "render-fps",
+      "animation-duration",
+      "animation-steps",
+      "element-transition-speed-scale",
+      "editor-text-speed-scale",
+      "command-runner-speed-scale",
+      "ui-speed-scale"
+    )
   }
 
   it should "surface visual appearance settings as an expandable group in settings browsing" in {
@@ -224,7 +239,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val appearanceGroup = groupByIdRecursive(runner.settingsGroups, "settings-surface-appearance")
 
     appearanceGroup.label shouldBe "Surface Appearance"
-    appearanceGroup.children.map(_.id) shouldBe List("background-style", "blur-radius")
+    appearanceGroup.children.map(_.id) shouldBe List("background-style", "material-preset", "blur-radius")
   }
 
   it should "group related settings into expandable submenu rows" in {
@@ -305,13 +320,16 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-cursor",
       "settings-surface-appearance",
       "settings-interface-layout",
-      "settings-material-motion",
       "settings-animation"
     )
     nestedGroup("settings-cursor").label shouldBe "Cursor"
     nestedGroup("settings-cursor").children.map(_.id) should contain allOf ("cursor-mode", "cursor-info-bar")
     nestedGroup("settings-surface-appearance").label shouldBe "Surface Appearance"
-    nestedGroup("settings-surface-appearance").children.map(_.id) shouldBe List("background-style", "blur-radius")
+    nestedGroup("settings-surface-appearance").children.map(_.id) shouldBe List(
+      "background-style",
+      "material-preset",
+      "blur-radius"
+    )
     nestedGroup("settings-interface-layout").label shouldBe "Interface Layout"
     nestedGroup("settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
@@ -319,7 +337,15 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "ui-corner-radius",
       "command-runner-visible-rows"
     )
-    nestedGroup("settings-material-motion").children.map(_.id) should contain allOf ("material-preset", "motion-preset")
+    nestedGroup("settings-animation").children.map(_.id) should contain allOf (
+      "motion-preset",
+      "editor-text-transition",
+      "panel-open-transition",
+      "panel-close-transition",
+      "command-runner-fade",
+      "ui-animation",
+      "render-fps"
+    )
     group("settings-ui-presets").label shouldBe "UI Presets"
     group("settings-ui-presets").children.map(_.id) shouldBe List(
       "settings-preset-select",
@@ -453,15 +479,15 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     input.parse("0") shouldBe None
   }
 
-  it should "surface render FPS target as a material and motion setting" in {
+  it should "surface render FPS target as a motion setting" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withRenderFpsTarget(RenderFpsTarget.Fps120))
       .withActiveCategory(CommandCategory.Settings)
 
-    val materialMotionGroup = groupByIdRecursive(runner.settingsGroups, "settings-material-motion")
-    val option = materialMotionGroup.children
+    val animationGroup = groupByIdRecursive(runner.settingsGroups, "settings-animation")
+    val option = animationGroup.children
       .collectFirst { case item: CommandSurfaceItem.OptionItem if item.id == "render-fps" => item }
       .getOrElse(fail("missing render FPS option"))
 
@@ -627,20 +653,20 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     createPreset.children.map(_.id) shouldBe List(
       "settings-preset-create-name",
       "settings-preset-active-panels",
+      "settings-preset-theme",
       "settings-preset-animations",
       "settings-preset-fonts",
-      "settings-preset-document-defaults",
-      "settings-preset-theme"
+      "settings-preset-document-defaults"
     )
     editPreset.label shouldBe "Edit Preset: Writing"
     editPreset.hint shouldBe Some("Editing Writing")
     editPreset.children.map(_.id) shouldBe List(
       "settings-preset-name",
       "settings-preset-active-panels",
+      "settings-preset-theme",
       "settings-preset-animations",
       "settings-preset-fonts",
-      "settings-preset-document-defaults",
-      "settings-preset-theme"
+      "settings-preset-document-defaults"
     )
     val createName = createPreset.children
       .collectFirst {
@@ -691,7 +717,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.CollapseExpandedPanel
     )
     val animations = groupByIdRecursive(List(editPreset), "settings-preset-animations")
-    animations.children.map(_.id) shouldBe List("settings-cursor", "settings-material-motion", "settings-animation")
+    animations.children.map(_.id) shouldBe List("settings-cursor", "settings-animation")
     val fonts = groupByIdRecursive(List(editPreset), "settings-preset-fonts")
     fonts.children.map(_.id) shouldBe List("settings-prose-font", "settings-code-font", "settings-ui-font")
     val documentDefaults = groupByIdRecursive(List(editPreset), "settings-preset-document-defaults")
@@ -709,6 +735,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     )
     descendants(documentDefaults).map(_.id) should not contain "lang-plain-text"
     val theme = groupByIdRecursive(List(editPreset), "settings-preset-theme")
+    theme.label shouldBe "Theme & Surface"
+    theme.children.map(_.id) should contain("settings-surface-appearance")
     theme.children.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } should contain allOf (
       CommandIntent.OpenThemeChooser,
       CommandIntent.ToggleTheme,

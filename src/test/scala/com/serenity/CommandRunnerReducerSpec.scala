@@ -201,28 +201,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   it should "adjust the selected animation option inside the submenu with left and right" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
-      .withSelectedItem("settings-animation")
-      .enterSelectedGroup
-      .copy(activeSubmenu = Some(com.serenity.command.CommandRunnerSubmenuState("settings-animation")))
-    val surface = UiSurface(
-      SurfaceId("command-runner"),
-      SurfaceContent.CommandPalette(runner),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val submenuSurface = UiSurface(
-      SurfaceId("command-runner-submenu"),
-      SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val state = AppState(
-      buffers = Map.empty,
-      layout = Layout.empty,
-      focus = Focus.Surface(submenuSurface.id),
-      uiSurfaces = List(surface, submenuSurface)
-    )
+    val state             = settingsStateOnItem("settings-animation", "animation-mode")
 
     val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
     val runnerAfterLeft = movedLeft.state.commandRunnerSurface
@@ -433,7 +412,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val reentered = CommandRunnerReducer.reduce(RunnerSubmit, exited.state, registry)
     val runner    = runnerFrom(reentered.state)
 
-    runner.activeSubmenu.map(_.selectedIndex) shouldBe Some(2)
+    runner.activeSubmenu.map(_.selectedIndex) shouldBe Some(9)
     runner.activeSubmenu.flatMap(_.selectedItem(runner.submenuItems("settings-animation")).map(_.id)) shouldBe
       Some("animation-steps")
   }
@@ -488,10 +467,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runner.focusedSubmenuItems.map(_.id) should contain allOf (
       "settings-preset-name",
       "settings-preset-active-panels",
+      "settings-preset-theme",
       "settings-preset-animations",
       "settings-preset-fonts",
-      "settings-preset-document-defaults",
-      "settings-preset-theme"
+      "settings-preset-document-defaults"
     )
   }
 
@@ -501,7 +480,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     val presetOptions = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
     val typographySelected = CommandRunnerReducer
-      .reduce(RunnerSelectSubmenuItem(3), presetOptions, registry)
+      .reduce(RunnerSelectSubmenuItem(4), presetOptions, registry)
       .state
     val typography = CommandRunnerReducer.reduce(RunnerSubmit, typographySelected, registry)
     val runner     = runnerFrom(typography.state)
@@ -543,7 +522,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val reentered      = CommandRunnerReducer.reduce(RunnerSubmit, exited.state, registry)
     val runner         = runnerFrom(reentered.state)
 
-    runner.activeSubmenu.map(_.selectedIndex) shouldBe Some(2)
+    runner.activeSubmenu.map(_.selectedIndex) shouldBe Some(9)
     runner.activeSubmenu.flatMap(_.editingItemId) shouldBe None
     runner.activeSubmenu.map(_.editingText) shouldBe Some("")
   }
