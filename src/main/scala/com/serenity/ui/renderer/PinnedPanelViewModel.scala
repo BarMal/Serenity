@@ -12,9 +12,11 @@ case class TextPanelRow(
 case class TextPanelView(
     rect: LayoutRect,
     title: String,
-    rows: List[TextPanelRow]
+    rows: List[TextPanelRow],
+    header: Option[TextPanelRow] = None,
+    footer: Option[TextPanelRow] = None
 ):
-  def lines: List[String] = rows.map(_.plainText)
+  def lines: List[String] = (header.toList ++ rows ++ footer.toList).map(_.plainText)
 
 object PinnedPanelViewModel:
 
@@ -65,12 +67,12 @@ object PinnedPanelViewModel:
           )
         case other =>
           SurfaceContentResolver.resolve(other, rect, SurfaceRenderMode.Pinned)
-    val rows =
-      resolved.header.toList.map(toPanelRow) ++ resolved.rows.map(toPanelRow) ++ resolved.footer.toList.map(toPanelRow)
     TextPanelView(
       rect = rect,
       title = resolved.title.getOrElse(""),
-      rows = rows
+      rows = resolved.rows.map(toPanelRow),
+      header = resolved.header.map(toPanelRow),
+      footer = resolved.footer.map(toPanelRow)
     )
 
   private def toPanelRow(row: OverlayRow): TextPanelRow =

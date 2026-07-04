@@ -136,6 +136,23 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     compact.rows.map(_.plainText) shouldBe List("3 lines", "cursor 7")
   }
 
+  it should "preserve resolved header and footer rows separately from item rows" in {
+    val modalPanel = UiSurface(
+      id = SurfaceId("find-panel"),
+      content = SurfaceContent.ModalWorkflow(
+        Modal.Find("needle", List(FindResult(2, 4)), 0)
+      ),
+      presentation = SurfacePresentation.Pinned(PanelPosition.Right, 24)
+    )
+
+    val view = PinnedPanelViewModel.resolve(modalPanel, LayoutRect(0, 0, 40, 8))
+
+    view.title shouldBe "find"
+    view.header.map(_.plainText) shouldBe Some("find")
+    view.rows.map(_.plainText) shouldBe List("Find needle", "1. 3:5")
+    view.footer.map(_.plainText) shouldBe Some("1 match, 1/1 at 3:5")
+  }
+
   it should "shape outline content differently for tall and wide geometry" in {
     val tall = PinnedPanelViewModel.resolve(outlinePanel, LayoutRect(0, 0, 18, 40))
     val wide = PinnedPanelViewModel.resolve(outlinePanel, LayoutRect(0, 0, 60, 10))
