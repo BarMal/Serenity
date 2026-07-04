@@ -319,7 +319,8 @@ object LayoutEngine:
     val preferredWidth  = calculateFloatingSurfaceWidth(contentRect.width)
     val preferredHeight = calculateFloatingSurfaceHeight(surface.content, contentRect.height, state)
     val finalHeight     = forcedHeight.getOrElse(preferredHeight)
-    val gapRows         = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows
+    val densityGapRows  = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows
+    val gapRows         = floatingCursorGapRows(surface, densityGapRows)
 
     for
       anchor <- surfaceAnchor(surface).orElse(state.activeCursorPosition)
@@ -424,9 +425,11 @@ object LayoutEngine:
           (mainRectOpt, submenuBaseRectOpt, anchorFrameOpt) match
             case (Some(mainRect), Some(submenuRect), Some(anchorFrame)) =>
               val collapsedHeight = 3
-              val gapRows         = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows
+              val densityGapRows  = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows
+              val gapRows         = floatingCursorGapRows(main, densityGapRows)
+              val stackGapRows    = densityGapRows
               val availableBottom = anchorFrame.contentRect.bottom
-              val totalHeight     = mainRect.height + gapRows + submenuRect.height
+              val totalHeight     = mainRect.height + stackGapRows + submenuRect.height
               val preferredBelowY = anchorFrame.screenPosition.y + 1 + gapRows
               val preferredAboveY = anchorFrame.screenPosition.y - gapRows - totalHeight
               val stackY =
@@ -440,10 +443,10 @@ object LayoutEngine:
               val shouldCollapse        = stackY + totalHeight > availableBottom
               val adjustedMainHeight    = if shouldCollapse then collapsedHeight else mainRect.height
               val adjustedMainRect      = mainRect.copy(y = stackY, height = adjustedMainHeight)
-              val remainingHeight       = math.max(3, availableBottom - adjustedMainRect.bottom - gapRows)
+              val remainingHeight       = math.max(3, availableBottom - adjustedMainRect.bottom - stackGapRows)
               val adjustedSubmenuHeight = math.min(submenuRect.height, remainingHeight)
               val adjustedSubmenuRect = submenuRect.copy(
-                y = adjustedMainRect.bottom + gapRows,
+                y = adjustedMainRect.bottom + stackGapRows,
                 height = adjustedSubmenuHeight
               )
               BelowOverlayLayout(
@@ -457,6 +460,11 @@ object LayoutEngine:
 
   private def calculateFloatingSurfaceWidth(maxWidth: Int): Int =
     maxWidth
+
+  private def floatingCursorGapRows(surface: UiSurface, densityGapRows: Int): Int =
+    surface.content match
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) => 0
+      case _                                                                                => densityGapRows
 
   private def calculateFloatingSurfaceHeight(content: SurfaceContent, maxHeight: Int, state: AppState): Int =
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)

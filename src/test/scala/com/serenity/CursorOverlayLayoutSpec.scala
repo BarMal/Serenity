@@ -118,7 +118,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    rect.y shouldBe contentRect.y + 8
+    rect.y shouldBe contentRect.y + 7
     rect.x shouldBe contentRect.x
     rect.width shouldBe contentRect.width
     rect.right shouldBe contentRect.right
@@ -151,6 +151,34 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     rect.y shouldBe contentRect.y + 7
+  }
+
+  it should "place command runner overlays immediately below a top-row cursor" in {
+    val cursor = CursorPosition(0, 0)
+    val state = baseState(cursor = cursor).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(
+            CommandRunner(
+              isActive = true,
+              searchTerm = "",
+              selectedIndex = 0,
+              filteredCommands = List.empty
+            )
+          ),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+
+    val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
+    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
+
+    rect.y shouldBe contentRect.y + 1
   }
 
   it should "place command runner overlays below the visible wrapped cursor row" in {
@@ -193,7 +221,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    rect.y shouldBe contentRect.y + 2
+    rect.y shouldBe contentRect.y + 1
   }
 
   it should "place command runner overlays below the visible unwrapped cursor row after scrolling past long lines" in {
@@ -242,7 +270,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    rect.y shouldBe contentRect.y + (cursor.line - buffer.viewport.topLine) + 2
+    rect.y shouldBe contentRect.y + (cursor.line - buffer.viewport.topLine) + 1
   }
 
   it should "size command runner overlays from configured visible rows" in {
