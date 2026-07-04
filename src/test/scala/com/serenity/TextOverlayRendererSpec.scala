@@ -241,6 +241,25 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     surface.getRow(3) should include("Close Anyway")
   }
 
+  it should "render overlay footers in the footer slot from the shared frame contract" in {
+    val surface = new MockRenderSurface(80, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 30, 7),
+      header = Some(OverlayRow("header")),
+      rows = List(OverlayRow("one item")),
+      footer = Some(OverlayRow("1/1"))
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.getRow(1) should include("header")
+    surface.getRow(2) should include("one item")
+    surface.getRow(5) should include("1/1")
+    surface.getRow(3) should not include "1/1"
+  }
+
   it should "truncate long selected column text from the end instead of dropping the leading characters" in {
     val surface = new MockRenderSurface(40, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)

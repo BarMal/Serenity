@@ -55,6 +55,31 @@ case class SurfaceFrameLayout(
     val itemRow     = row - itemRowBase
     window.absoluteIndexAt(itemRow)
 
+  def contentRowSlots(
+    itemCount: Int,
+    hasHeader: Boolean,
+    hasFooter: Boolean
+  ): List[SurfaceContentRowSlot] =
+    val content = contentRect
+    if content.height <= 0 then Nil
+    else
+      val headerRows = if hasHeader then 1 else 0
+      val footerRows = if hasFooter then 1 else 0
+      val itemRows   = math.max(0, content.height - headerRows - footerRows)
+      val itemSlots =
+        (0 until math.min(itemCount, itemRows)).toList.map { index =>
+          SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), content.y + headerRows + index)
+        }
+      val headerSlots =
+        if hasHeader then List(SurfaceContentRowSlot(SurfaceContentRowKind.Header, content.y))
+        else Nil
+      val footerSlots =
+        if hasFooter && content.height > headerRows then
+          List(SurfaceContentRowSlot(SurfaceContentRowKind.Footer, content.bottom - 1))
+        else Nil
+
+      headerSlots ++ itemSlots ++ footerSlots
+
 case class SurfaceItemWindow(offset: Int, rowCount: Int):
   def slice[A](items: List[A]): List[A] =
     items.slice(offset, offset + rowCount)
@@ -64,6 +89,13 @@ case class SurfaceItemWindow(offset: Int, rowCount: Int):
 
   def absoluteIndexAt(displayedRow: Int): Option[Int] =
     Option.when(displayedRow >= 0 && displayedRow < rowCount)(offset + displayedRow)
+
+enum SurfaceContentRowKind:
+  case Header
+  case Item(index: Int)
+  case Footer
+
+case class SurfaceContentRowSlot(kind: SurfaceContentRowKind, y: Int)
 
 object SurfaceFrameLayout:
   val DefaultBorderCells: Int = 1
