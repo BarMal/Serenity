@@ -196,6 +196,55 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     rect.y shouldBe contentRect.y + 2
   }
 
+  it should "place command runner overlays below the visible unwrapped cursor row after scrolling past long lines" in {
+    val longLine = "a" * 260
+    val cursor   = CursorPosition(31, 0)
+    val lines =
+      (0 until 60).map {
+        case 16 => longLine
+        case i  => s"line $i"
+      }
+    val buffer = Buffer
+      .fromString(bufferId, lines.mkString("\n"))
+      .copy(
+        cursors = List(cursor),
+        viewport = Viewport(topLine = 8, leftColumn = 0, visibleLines = 30, visibleColumns = 80)
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      config = AppState.initial.config.withWordWrap(false),
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(
+            CommandRunner(
+              isActive = true,
+              searchTerm = "",
+              selectedIndex = 0,
+              filteredCommands = List.empty
+            )
+          ),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
+
+    val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
+    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
+
+    rect.y shouldBe contentRect.y + (cursor.line - buffer.viewport.topLine) + 2
+  }
+
   it should "size command runner overlays from configured visible rows" in {
     val state = baseState().copy(
       config = AppState.initial.config.withCommandRunnerVisibleRows(Some(7)),
