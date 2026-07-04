@@ -77,6 +77,26 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getRow(contentRect.y).lift(contentRect.right).getOrElse(' ') should not be 'g'
   }
 
+  it should "render header, item, and footer rows through the shared content row slots" in {
+    val surface = new MockRenderSurface(30, 12)
+    val panel = TextPanelView(
+      rect = LayoutRect(2, 2, 16, 7),
+      title = "workflow",
+      rows = List(TextPanelRow("body")),
+      header = Some(TextPanelRow("head")),
+      footer = Some(TextPanelRow("foot"))
+    )
+    val frameLayout = SurfaceFrameLayout(panel.rect)
+    val contentRect = frameLayout.contentRect
+
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default)
+
+    surface.getRow(contentRect.y).slice(contentRect.x, contentRect.x + 4) shouldBe "head"
+    surface.getRow(contentRect.y + 1).slice(contentRect.x, contentRect.x + 4) shouldBe "body"
+    surface.getRow(contentRect.bottom - 1).slice(contentRect.x, contentRect.x + 4) shouldBe "foot"
+    surface.getRow(contentRect.y + 2).slice(contentRect.x, contentRect.x + 4) shouldBe "    "
+  }
+
   it should "apply active animation foreground colors to panel text" in {
     val surface            = new MockRenderSurface(40, 12)
     val animatedForeground = new Color(10, 20, 30, 96)

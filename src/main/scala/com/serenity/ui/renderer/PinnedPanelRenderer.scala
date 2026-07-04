@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import com.serenity.animation.AnimationState
 import com.serenity.config.AppConfig
-import com.serenity.ui.layout.SurfaceFrameLayout
+import com.serenity.ui.layout.{SurfaceContentRowKind, SurfaceFrameLayout}
 import com.serenity.ui.theme.Theme
 
 object PinnedPanelRenderer:
@@ -68,29 +68,39 @@ object PinnedPanelRenderer:
     val frameLayout = SurfaceFrameLayout(panel.rect)
     val contentRect = frameLayout.contentRect
     val maxLineSize = contentRect.width
-    val maxLines    = frameLayout.maxContentRows
+    frameLayout
+      .contentRowSlots(
+        itemCount = panel.rows.length,
+        hasHeader = panel.header.nonEmpty,
+        hasFooter = panel.footer.nonEmpty
+      )
+      .foreach { slot =>
+        val maybeRow = slot.kind match
+          case SurfaceContentRowKind.Header      => panel.header
+          case SurfaceContentRowKind.Item(index) => panel.rows.lift(index)
+          case SurfaceContentRowKind.Footer      => panel.footer
 
-    panel.rows.take(maxLines).zipWithIndex.foreach {
-      case (row, index) =>
-        val padded = row.plainText.take(maxLineSize).padTo(maxLineSize, ' ')
-        if row.selected then
-          surface.setForegroundColor(theme.highlighted.foreground)
-          surface.setBackgroundColor(theme.highlighted.background)
-        else
-          surface.setForegroundColor(theme.panel.foreground)
-          surface.setBackgroundColor(theme.panel.background)
-        val baseForeground =
-          if row.selected then theme.highlighted.foreground else theme.panel.foreground
-        renderAnimatedText(
-          surface,
-          contentRect.x,
-          contentRect.y + index,
-          padded,
-          index + 1,
-          baseForeground,
-          animationState
-        )
-    }
+        maybeRow.foreach { row =>
+          val padded = row.plainText.take(maxLineSize).padTo(maxLineSize, ' ')
+          if row.selected then
+            surface.setForegroundColor(theme.highlighted.foreground)
+            surface.setBackgroundColor(theme.highlighted.background)
+          else
+            surface.setForegroundColor(theme.panel.foreground)
+            surface.setBackgroundColor(theme.panel.background)
+          val baseForeground =
+            if row.selected then theme.highlighted.foreground else theme.panel.foreground
+          renderAnimatedText(
+            surface,
+            contentRect.x,
+            slot.y,
+            padded,
+            slot.y - panel.rect.y,
+            baseForeground,
+            animationState
+          )
+        }
+      }
 
   private def renderAnimatedText(
     surface: RenderSurface,
