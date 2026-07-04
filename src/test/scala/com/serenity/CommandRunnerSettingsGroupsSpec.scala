@@ -73,6 +73,22 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "ui-corner-radius",
       "command-runner-visible-rows"
     )
+    groupById(groups, "settings-surface-appearance").children.map(_.id) shouldBe List(
+      "background-style",
+      "material-preset",
+      "blur-radius"
+    )
+    groupById(groups, "settings-animation").children.map(_.id) should contain allOf (
+      "motion-preset",
+      "animation-mode",
+      "editor-text-transition",
+      "panel-open-transition",
+      "panel-close-transition",
+      "command-runner-fade",
+      "ui-animation",
+      "render-fps",
+      "element-transition-speed-scale"
+    )
     groupById(groups, "settings-cursor").children.map(_.id) shouldBe List(
       "cursor-mode",
       "cursor-info-bar",

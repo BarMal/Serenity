@@ -55,14 +55,29 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Line numbers, gutter, wrap")
     )
+    val motionInputIds = Set(
+      "animation-duration",
+      "animation-steps",
+      "element-transition-speed-scale",
+      "editor-text-speed-scale",
+      "command-runner-speed-scale",
+      "ui-speed-scale"
+    )
     val animationGroup = CommandSurfaceItem.GroupItem(
       id = "settings-animation",
-      label = "Animation",
-      children = List(animationItem) ++ inputItems.filter(item =>
-        item.id == "animation-duration" || item.id == "animation-steps"
-      ),
+      label = "Motion & Animation",
+      children = List(
+        motionPresetItem,
+        animationItem,
+        editorTextItem,
+        panelOpenItem,
+        panelCloseItem,
+        commandRunnerFade,
+        uiAnimationItem,
+        renderFpsItem
+      ) ++ inputItems.filter(item => motionInputIds.contains(item.id)),
       category = CommandCategory.Settings,
-      hint = Some("Style, duration, steps")
+      hint = Some("Reveal style, timing, and speed")
     )
     val cursorGroup = CommandSurfaceItem.GroupItem(
       id = "settings-cursor",
@@ -74,9 +89,9 @@ object CommandRunnerSettingsGroups:
     val surfaceAppearanceGroup = CommandSurfaceItem.GroupItem(
       id = "settings-surface-appearance",
       label = "Surface Appearance",
-      children = List(backgroundStyleItem) ++ inputItems.filter(_.id == "blur-radius"),
+      children = List(backgroundStyleItem, materialPresetItem) ++ inputItems.filter(_.id == "blur-radius"),
       category = CommandCategory.Settings,
-      hint = Some("Background material and blur")
+      hint = Some("Background, material, and blur")
     )
     val interfaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-interface-layout",
@@ -86,30 +101,6 @@ object CommandRunnerSettingsGroups:
       ),
       category = CommandCategory.Settings,
       hint = Some("Density, spacing, command rows")
-    )
-    val materialMotionGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-material-motion",
-      label = "Material & Motion",
-      children = List(
-        materialPresetItem,
-        motionPresetItem,
-        commandRunnerFade,
-        uiAnimationItem,
-        renderFpsItem,
-        editorTextItem,
-        panelOpenItem,
-        panelCloseItem
-      ) ++
-        inputItems.filter(item =>
-          Set(
-            "element-transition-speed-scale",
-            "editor-text-speed-scale",
-            "command-runner-speed-scale",
-            "ui-speed-scale"
-          ).contains(item.id)
-        ),
-      category = CommandCategory.Settings,
-      hint = Some("Named UI material and animation timing")
     )
     val textAreaGroup = CommandSurfaceItem.GroupItem(
       id = "settings-text-area",
@@ -223,7 +214,7 @@ object CommandRunnerSettingsGroups:
     val appearanceMotionGroup = CommandSurfaceItem.GroupItem(
       id = "settings-appearance-motion",
       label = "Appearance & Motion",
-      children = List(cursorGroup, surfaceAppearanceGroup, interfaceLayoutGroup, materialMotionGroup, animationGroup),
+      children = List(cursorGroup, surfaceAppearanceGroup, interfaceLayoutGroup, animationGroup),
       category = CommandCategory.Settings,
       hint = Some("Visual styling, spacing, and movement")
     )
@@ -256,7 +247,7 @@ object CommandRunnerSettingsGroups:
     val presetAnimationsGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-animations",
       label = "Animations",
-      children = List(cursorGroup, materialMotionGroup, animationGroup),
+      children = List(cursorGroup, animationGroup),
       category = CommandCategory.Settings,
       hint = Some("Cursor, text entry, and UI motion")
     )
@@ -276,13 +267,13 @@ object CommandRunnerSettingsGroups:
     )
     val presetThemeGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-theme",
-      label = "Theme",
-      children = CommandRunnerSettingsItems.themeItems,
+      label = "Theme & Surface",
+      children = List(surfaceAppearanceGroup) ++ CommandRunnerSettingsItems.themeItems,
       category = CommandCategory.Settings,
-      hint = Some("Choose, toggle, or reload themes")
+      hint = Some("Theme, material, and background")
     )
     val presetEditingSections =
-      List(activePanelsGroup, presetAnimationsGroup, presetFontsGroup, presetDocumentDefaultsGroup, presetThemeGroup)
+      List(activePanelsGroup, presetThemeGroup, presetAnimationsGroup, presetFontsGroup, presetDocumentDefaultsGroup)
     val selectPresetGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-select",
       label = "Select Preset",
