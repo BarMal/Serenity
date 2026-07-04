@@ -1315,7 +1315,7 @@ object Renderer:
     val heightPx           = contentHeightCells * context.cellMetrics.lineHeight
     val buffer             = state.buffers.get(bufferId)
     val content = buffer
-      .map(buffer => markdownPreviewWindow(buffer, markdownSourceLines(buffer), contentHeightCells).source)
+      .map(buffer => markdownSplitPreviewWindow(buffer, markdownSourceLines(buffer), contentHeightCells).source)
       .getOrElse("")
     val baseUri =
       buffer.flatMap(_.filePath).flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
@@ -1329,6 +1329,18 @@ object Renderer:
       baseUri = baseUri
     )
     context.surface.drawImage(image, contentRect.x, contentRect.y, contentWidthCells, contentHeightCells)
+
+  private def markdownSplitPreviewWindow(
+    buffer: Buffer,
+    lines: Vector[String],
+    visibleRows: Int
+  ): MarkdownDocumentPreview.PreviewWindow =
+    MarkdownDocumentPreview.splitPreviewWindow(
+      lines,
+      activeLine = buffer.cursors.headOption.map(_.line),
+      fallbackTopLine = buffer.viewport.topLine,
+      maxSourceLines = markdownPreviewSourceLineLimit(visibleRows)
+    )
 
   private def renderFloatingPanelPlaceholder(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
     context.surface.setBackgroundColor(theme.panel.background)

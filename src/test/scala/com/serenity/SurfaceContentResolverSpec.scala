@@ -783,7 +783,9 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     resolved.title shouldBe Some("Preview: notes.md")
-    resolved.rows shouldBe Nil
+    resolved.rows.map(_.plainText) should contain("Notes")
+    resolved.rows.exists(_.plainText.contains("Task")) shouldBe true
+    resolved.rows.exists(_.plainText.contains("Ship")) shouldBe true
   }
 
 end SurfaceContentResolverSpec
