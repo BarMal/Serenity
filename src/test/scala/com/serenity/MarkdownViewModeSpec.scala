@@ -141,7 +141,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       .fromState(updatedState, layout)
       .find(_.title == "Preview: Untitled")
 
-    rightPanel.map(_.lines) shouldBe Some(Nil)
+    rightPanel.map(_.lines.exists(_.contains("Notes"))) shouldBe Some(true)
+    rightPanel.map(_.lines.exists(_.contains("Updated live text"))) shouldBe Some(true)
   }
 
   it should "remove only markdown preview panels when leaving split preview mode" in {
@@ -233,21 +234,14 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     surfaceRows(surface).exists(_.contains("Task  Owner")) shouldBe false
   }
 
-  it should "update the split preview image when the source cursor moves to a later block" in {
-    val source =
-      """# Intro
-        |
-        |Opening text
-        |
-        |# Later
-        |
-        |Final notes""".stripMargin
+  it should "update the split preview image when the source cursor moves outside the current preview window" in {
+    val source = (1 to 200).map(i => s"# Heading $i").mkString("\n")
 
     val firstImage = renderSplitPreviewImage(
       markdownPreviewPanelState(source, CursorPosition(0, 0))
     )
     val laterImage = renderSplitPreviewImage(
-      markdownPreviewPanelState(source, CursorPosition(4, 0))
+      markdownPreviewPanelState(source, CursorPosition(180, 0))
     )
 
     laterImage should not be theSameInstanceAs(firstImage)

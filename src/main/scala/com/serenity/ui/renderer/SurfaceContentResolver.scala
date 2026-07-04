@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Color
 
 import com.serenity.command.{CommandCategory, CommandSurfaceItem}
+import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -797,6 +798,15 @@ object SurfaceContentResolver:
     rect: LayoutRect,
     mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
+    val contentRows = SurfaceFrameLayout(rect).contentRect.height.max(0)
+    val rows =
+      MarkdownDocumentPreview
+        .renderInlineLines(content.linesIterator.toVector)
+        .take(contentRows)
+        .filter(_.trim.nonEmpty)
+        .map(OverlayRow(_))
+        .toList
     ResolvedSurfaceContent(
-      title = titleFor(mode, s"Preview: $title")
+      title = titleFor(mode, s"Preview: $title"),
+      rows = rows
     )

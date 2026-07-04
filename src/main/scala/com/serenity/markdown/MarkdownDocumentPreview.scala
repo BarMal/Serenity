@@ -304,6 +304,32 @@ object MarkdownDocumentPreview:
         source = previewSource(sourceLines, firstSourceLine, maxSourceLines)
       )
 
+  def splitPreviewWindow(
+    sourceLines: Vector[String],
+    activeLine: Option[Int],
+    fallbackTopLine: Int,
+    maxSourceLines: Int = Int.MaxValue
+  ): PreviewWindow =
+    if sourceLines.isEmpty then PreviewWindow(0, 0, "")
+    else
+      val safeMax       = maxSourceLines.max(1)
+      val maxStart      = (sourceLines.length - safeMax).max(0)
+      val fallbackStart = fallbackTopLine.max(0).min(maxStart)
+      val anchorLine = activeLine
+        .filter(line => line >= 0 && line < sourceLines.length)
+        .getOrElse(fallbackTopLine.max(0).min(sourceLines.length - 1))
+      val endExclusive = fallbackStart + safeMax
+      val firstSourceLine =
+        if anchorLine < fallbackStart then anchorLine.min(maxStart)
+        else if anchorLine >= endExclusive then (anchorLine - safeMax / 2).max(0).min(maxStart)
+        else fallbackStart
+      val firstPreviewRow = previewRowForSourceLine(sourceLines, firstSourceLine).getOrElse(firstSourceLine)
+      PreviewWindow(
+        firstSourceLine = firstSourceLine,
+        firstPreviewRow = firstPreviewRow,
+        source = previewSource(sourceLines, firstSourceLine, safeMax)
+      )
+
   private def htmlRenderer(baseUri: Option[URI]): HtmlRenderer =
     baseUri match
       case None => defaultHtmlRenderer

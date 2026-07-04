@@ -180,6 +180,20 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     window.source shouldBe (5 to 9).map(i => s"# Heading $i").mkString("\n")
   }
 
+  it should "fill split preview source windows around the active line instead of rendering only the active block" in {
+    val lines = (1 to 20).map(i => s"# Heading $i").toVector
+
+    val window = MarkdownDocumentPreview.splitPreviewWindow(
+      lines,
+      activeLine = Some(19),
+      fallbackTopLine = 19,
+      maxSourceLines = 5
+    )
+
+    window.firstSourceLine shouldBe 15
+    window.source shouldBe (16 to 20).map(i => s"# Heading $i").mkString("\n")
+  }
+
   it should "include rendered table chrome in the synced preview row offset" in {
     val lines = Vector(
       "Before",
