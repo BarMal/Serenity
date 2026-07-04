@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.ui.layout.{LayoutRect, SurfaceFrameLayout}
+import com.serenity.ui.layout.{LayoutRect, SurfaceContentRowKind, SurfaceFrameLayout}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -120,4 +120,39 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
         reservedContentRows = 1
       )
       .shouldBe(None)
+  }
+
+  it should "derive header item and footer row slots from the framed content contract" in {
+    val frame = SurfaceFrameLayout(LayoutRect(10, 4, 40, 8))
+
+    val slots = frame.contentRowSlots(itemCount = 12, hasHeader = true, hasFooter = true)
+
+    slots
+      .map(slot => slot.kind -> slot.y)
+      .shouldBe(
+        List(
+          SurfaceContentRowKind.Header  -> 5,
+          SurfaceContentRowKind.Item(0) -> 6,
+          SurfaceContentRowKind.Item(1) -> 7,
+          SurfaceContentRowKind.Item(2) -> 8,
+          SurfaceContentRowKind.Item(3) -> 9,
+          SurfaceContentRowKind.Footer  -> 10
+        )
+      )
+  }
+
+  it should "pin footer row slots to the bottom of the content rect when there are few items" in {
+    val frame = SurfaceFrameLayout(LayoutRect(10, 4, 40, 8))
+
+    val slots = frame.contentRowSlots(itemCount = 1, hasHeader = true, hasFooter = true)
+
+    slots
+      .map(slot => slot.kind -> slot.y)
+      .shouldBe(
+        List(
+          SurfaceContentRowKind.Header  -> 5,
+          SurfaceContentRowKind.Item(0) -> 6,
+          SurfaceContentRowKind.Footer  -> 10
+        )
+      )
   }

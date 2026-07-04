@@ -4,7 +4,7 @@ import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, SurfaceFrameLayout, TextLayoutSnapshot}
+import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
 
 object TextOverlayRenderer:
@@ -70,28 +70,36 @@ object TextOverlayRenderer:
     val frameLayout = SurfaceFrameLayout(overlay.rect)
     val contentRect = frameLayout.contentRect
     val maxLineSize = contentRect.width
-    val maxLines    = frameLayout.maxContentRows
 
-    val contentRows = overlay.header.toList ++ overlay.rows ++ overlay.footer.toList
-
-    contentRows.take(maxLines).zipWithIndex.foreach {
-      case (row, index) =>
-        val rowOffset        = 1 + index
-        val (animFg, animBg) = rowColors(rowOffset)
-        renderRow(
-          surface,
-          contentRect.x,
-          contentRect.y + index,
-          maxLineSize,
-          row,
-          theme,
-          cursorVisible,
-          defaultForeground = Some(animFg),
-          defaultBackground = Some(animBg),
-          font = font,
-          cellMetrics = cellMetrics
-        )
-    }
+    frameLayout
+      .contentRowSlots(
+        itemCount = overlay.rows.length,
+        hasHeader = overlay.header.nonEmpty,
+        hasFooter = overlay.footer.nonEmpty
+      )
+      .foreach { slot =>
+        val row = slot.kind match
+          case SurfaceContentRowKind.Header      => overlay.header
+          case SurfaceContentRowKind.Item(index) => overlay.rows.lift(index)
+          case SurfaceContentRowKind.Footer      => overlay.footer
+        row.foreach { row =>
+          val rowOffset        = slot.y - overlay.rect.y
+          val (animFg, animBg) = rowColors(rowOffset)
+          renderRow(
+            surface,
+            contentRect.x,
+            slot.y,
+            maxLineSize,
+            row,
+            theme,
+            cursorVisible,
+            defaultForeground = Some(animFg),
+            defaultBackground = Some(animBg),
+            font = font,
+            cellMetrics = cellMetrics
+          )
+        }
+      }
 
   private def renderRow(
     surface: RenderSurface,
