@@ -327,7 +327,8 @@ object LayoutEngine:
         anchor,
         buffer.content,
         contentRect,
-        buffer.viewport
+        buffer.viewport,
+        state.config.wordWrapEnabled
       )
     yield
       val overlayX = math.max(
@@ -369,7 +370,8 @@ object LayoutEngine:
         anchor,
         buffer.content,
         paneLayout.contentRect,
-        buffer.viewport
+        buffer.viewport,
+        state.config.wordWrapEnabled
       )
     yield FloatingAnchorFrame(paneLayout.contentRect, screenPosition)
 

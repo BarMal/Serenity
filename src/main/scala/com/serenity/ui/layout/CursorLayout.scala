@@ -14,7 +14,8 @@ object CursorLayout:
     cursor: CursorPosition,
     rope: Rope,
     panelWidth: Int,
-    viewport: Viewport
+    viewport: Viewport,
+    wordWrapEnabled: Boolean = true
   ): Option[(Int, Int)] =
 
     def findCursorPosition(bufferLine: Int, currentVisualLine: Int): Option[(Int, Int)] =
@@ -30,26 +31,31 @@ object CursorLayout:
         findCursorPosition(bufferLine + 1, currentVisualLine + visualLinesInThisBuffer)
 
     if panelWidth <= 0 || cursor.line < viewport.topLine then None
-    else findCursorPosition(viewport.topLine, 0)
+    else if wordWrapEnabled then findCursorPosition(viewport.topLine, 0)
+    else if cursor.line >= rope.lineCount then None
+    else Some((cursor.line - viewport.topLine, cursor.column - viewport.leftColumn))
 
   def calculateScreenPosition(
     cursor: CursorPosition,
     rope: Rope,
     paneRect: LayoutRect,
-    viewport: Viewport
+    viewport: Viewport,
+    wordWrapEnabled: Boolean = true
   ): Option[ScreenPosition] =
-    calculateScreenPositionInContent(cursor, rope, contentRectForPane(paneRect), viewport)
+    calculateScreenPositionInContent(cursor, rope, contentRectForPane(paneRect), viewport, wordWrapEnabled)
 
   def calculateScreenPositionInContent(
     cursor: CursorPosition,
     rope: Rope,
     contentRect: LayoutRect,
-    viewport: Viewport
+    viewport: Viewport,
+    wordWrapEnabled: Boolean = true
   ): Option[ScreenPosition] =
-    calculateVisualPosition(cursor, rope, contentRect.width, viewport).map {
+    calculateVisualPosition(cursor, rope, contentRect.width, viewport, wordWrapEnabled).map {
       case (visualLine, visualColumn) =>
+        val viewportTopVisualLine = if wordWrapEnabled then viewport.topVisualLine else 0
         ScreenPosition(
           x = contentRect.x + visualColumn,
-          y = contentRect.y + (visualLine - viewport.topVisualLine)
+          y = contentRect.y + (visualLine - viewportTopVisualLine)
         )
     }
