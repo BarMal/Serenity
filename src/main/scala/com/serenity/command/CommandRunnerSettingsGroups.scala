@@ -24,6 +24,8 @@ object CommandRunnerSettingsGroups:
     val uiAnimationItem      = CommandRunnerSettingsItems.uiAnimationOptionItem(optionSelections)
     val renderFpsItem        = CommandRunnerSettingsItems.renderFpsOptionItem(optionSelections)
     val editorTextItem       = CommandRunnerSettingsItems.editorTextTransitionOptionItem(optionSelections)
+    val panelOpenItem        = CommandRunnerSettingsItems.panelOpenTransitionOptionItem(optionSelections)
+    val panelCloseItem       = CommandRunnerSettingsItems.panelCloseTransitionOptionItem(optionSelections)
     val markdownViewItem     = CommandRunnerSettingsItems.markdownViewOptionItem(optionSelections)
     val defaultDocumentItem  = CommandRunnerSettingsItems.defaultDocumentModeOptionItem(optionSelections)
     val spellCheckItem       = CommandRunnerSettingsItems.spellCheckOptionItem(optionSelections)
@@ -88,16 +90,24 @@ object CommandRunnerSettingsGroups:
     val materialMotionGroup = CommandSurfaceItem.GroupItem(
       id = "settings-material-motion",
       label = "Material & Motion",
-      children =
-        List(materialPresetItem, motionPresetItem, commandRunnerFade, uiAnimationItem, renderFpsItem, editorTextItem) ++
-          inputItems.filter(item =>
-            Set(
-              "element-transition-speed-scale",
-              "editor-text-speed-scale",
-              "command-runner-speed-scale",
-              "ui-speed-scale"
-            ).contains(item.id)
-          ),
+      children = List(
+        materialPresetItem,
+        motionPresetItem,
+        commandRunnerFade,
+        uiAnimationItem,
+        renderFpsItem,
+        editorTextItem,
+        panelOpenItem,
+        panelCloseItem
+      ) ++
+        inputItems.filter(item =>
+          Set(
+            "element-transition-speed-scale",
+            "editor-text-speed-scale",
+            "command-runner-speed-scale",
+            "ui-speed-scale"
+          ).contains(item.id)
+        ),
       category = CommandCategory.Settings,
       hint = Some("Named UI material and animation timing")
     )

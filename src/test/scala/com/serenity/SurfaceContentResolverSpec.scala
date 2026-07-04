@@ -87,7 +87,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       Command.typed("replace", "Find and replace text", CommandIntent.ReplaceInCurrentFile)
     )
     val registry = CommandRegistry(commands)
-    val runner   = CommandRunner.empty.activate(registry, AppConfig.default).updateSearchTerm("open")(using registry)
+    val runner = CommandRunner.empty.activate(registry, AppConfig.default).updateSearchTerm("open file")(using registry)
 
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),
@@ -96,8 +96,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     floating.title shouldBe None
-    floating.header.map(_.plainText) shouldBe Some("search: open")
-    floating.header.flatMap(_.cursorColumn) shouldBe Some("search: open".length)
+    floating.header.map(_.plainText) shouldBe Some("search: open file")
+    floating.header.flatMap(_.cursorColumn) shouldBe Some("search: open file".length)
     floating.rows.exists(_.selected) shouldBe true
     floating.rows.map(_.plainText).head should include("[Edit]")
     floating.rows should have size 1

@@ -534,6 +534,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
         |ui.motion.command_runner.speed_scale = 2.25
         |ui.motion.ui.speed_scale = 1.25
         |ui.motion.editor_text = typed
+        |ui.motion.panel_open = directional
+        |ui.motion.panel_close = off
         |ui.motion.command_runner = subtle
         |ui.motion.ui = smooth
         |""".stripMargin
@@ -550,6 +552,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     config.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
     config.uiTransitionSpeedScale shouldBe Some(1.25)
     config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
+    config.panelOpenTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
+    config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
     config.commandRunnerAnimation shouldBe com.serenity.animation.AnimationConfig.subtle
     config.uiAnimation shouldBe com.serenity.animation.AnimationConfig.smooth
     config.characterAnimation shouldBe None
@@ -560,6 +564,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("ui.motion.command_runner.speed_scale = 2.25")
     ConfigManager.configToString(config) should include("ui.motion.ui.speed_scale = 1.25")
     ConfigManager.configToString(config) should include("ui.motion.editor_text = typed")
+    ConfigManager.configToString(config) should include("ui.motion.panel_open = directional")
+    ConfigManager.configToString(config) should include("ui.motion.panel_close = off")
     ConfigManager.configToString(config) should include("ui.motion.command_runner = subtle")
     ConfigManager.configToString(config) should include("ui.motion.ui = smooth")
   }

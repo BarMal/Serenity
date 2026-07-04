@@ -106,6 +106,42 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     stateManager.getCurrentState.unsafeRunSync().config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
   }
 
+  it should "update the panel open transition kind config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "panel-open-transition",
+          "Set panel open transition",
+          CommandIntent.SetPanelOpenTransitionKind(TransitionKind.OutlineThenContent),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.panelOpenTransitionKind shouldBe Some(
+      TransitionKind.OutlineThenContent
+    )
+  }
+
+  it should "update the panel close transition kind config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "panel-close-transition",
+          "Set panel close transition",
+          CommandIntent.SetPanelCloseTransitionKind(TransitionKind.Disabled),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
+  }
+
   it should "update the command runner fade animation config" in {
     val stateManager = createStateManager()
 

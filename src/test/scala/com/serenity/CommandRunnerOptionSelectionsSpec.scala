@@ -21,6 +21,8 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
       commandRunnerAnimation = AnimationConfig.quick,
       uiAnimation = AnimationConfig.subtle,
       editorInsertionTransitionKind = TransitionKind.Disabled,
+      panelOpenTransitionKind = Some(TransitionKind.OutlineThenContent),
+      panelCloseTransitionKind = Some(TransitionKind.DirectionalSweep),
       cursorMode = CursorMode.Breathe,
       cursorInfoBarMode = CursorInfoBarMode.Detailed,
       cursorInfoBarPlacement = CursorInfoBarPlacement.PinnedBottom,
@@ -51,6 +53,8 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("command-runner-fade") shouldBe 3
     selections("ui-animation") shouldBe 1
     selections("editor-text-transition") shouldBe 4
+    selections("panel-open-transition") shouldBe 3
+    selections("panel-close-transition") shouldBe 1
     selections("cursor-mode") shouldBe 1
     selections("cursor-info-bar") shouldBe 2
     selections("cursor-info-bar-placement") shouldBe 1
