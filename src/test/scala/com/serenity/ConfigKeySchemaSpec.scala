@@ -12,12 +12,17 @@ class ConfigKeySchemaSpec extends AnyFlatSpec with Matchers:
     ConfigKeySchema.isKnownKey("lsp.scala.command") shouldBe true
     ConfigKeySchema.isKnownKey("hotkey.command_palette") shouldBe true
     ConfigKeySchema.isKnownKey("keymap.command_runner.submit") shouldBe true
+    ConfigKeySchema.isKnownKey("ui.motion.cursor.speed_scale") shouldBe true
+    ConfigKeySchema.isKnownKey("ui_motion_cursor_speed_scale") shouldBe true
     ConfigKeySchema.isKnownKey("unknown.setting") shouldBe false
   }
 
   it should "report deprecated key replacements from the central schema" in {
     ConfigKeySchema.deprecatedReplacement("font_size") shouldBe Some("font.code.size and font.text.size")
     ConfigKeySchema.deprecatedReplacement("cursor_info_bar") shouldBe Some("cursor.info_bar")
+    ConfigKeySchema.deprecatedReplacement("ui_motion_cursor_speed_scale") shouldBe Some(
+      "ui.motion.cursor.speed_scale"
+    )
     ConfigKeySchema.deprecatedReplacement("font.code.family") shouldBe None
   }
 

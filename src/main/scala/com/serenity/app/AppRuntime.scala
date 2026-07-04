@@ -23,10 +23,20 @@ import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 object AppRuntime:
 
-  private val NanosPerSecond: Long = 1_000_000_000L
+  private val NanosPerSecond: Long                      = 1_000_000_000L
+  private val DefaultCursorIdleInterval: FiniteDuration = 500.millis
 
   private[serenity] def fastFrameInterval(target: RenderFpsTarget): FiniteDuration =
     FiniteDuration(NanosPerSecond / target.framesPerSecond.toLong, NANOSECONDS)
+
+  private[serenity] def cursorIdleInterval(config: AppConfig): Option[FiniteDuration] =
+    val scale = AppConfig.clampElementTransitionSpeedScale(config.effectiveCursorTransitionSpeedScale)
+    Option.when(scale > 0.0)(
+      FiniteDuration(
+        math.max(1L, math.round(DefaultCursorIdleInterval.toNanos.toDouble * scale)),
+        NANOSECONDS
+      )
+    )
 
   final private[serenity] case class AnimationTickCadence(remainderNanos: Long):
 
@@ -136,22 +146,32 @@ object AppRuntime:
 
           def idlePhase: Stream[IO, Unit] =
             Stream
-              .fixedRate[IO](500.millis)
+              .repeatEval(
+                stateManager.getCurrentState
+                  .map(state => cursorIdleInterval(state.config).getOrElse(DefaultCursorIdleInterval))
+                  .flatMap(IO.sleep)
+              )
               .interruptWhen(fastMode.discrete)
               .evalMap { _ =>
                 for
                   _     <- withRuntimeDiagnostics("render loop", "idle.resize")(checkResizeAndHandle)
                   state <- withRuntimeDiagnostics("render loop", "idle.state")(stateManager.getCurrentState)
-                  (visible, cursor) <- withRuntimeDiagnostics(
-                    "render loop",
-                    "idle.cursor",
-                    IO.pure(Some(state))
-                  )(computeCursorForIdle(state))
-                  _ <- withRuntimeDiagnostics(
-                    "render loop",
-                    "idle.cursor-render",
-                    IO.pure(Some(state))
-                  )(renderCursorOnly(state, visible, cursor)).handleErrorWith(recoverIdleCursorRenderFailure)
+                  _ <- cursorIdleInterval(state.config) match
+                    case Some(_) =>
+                      for
+                        (visible, cursor) <- withRuntimeDiagnostics(
+                          "render loop",
+                          "idle.cursor",
+                          IO.pure(Some(state))
+                        )(computeCursorForIdle(state))
+                        _ <- withRuntimeDiagnostics(
+                          "render loop",
+                          "idle.cursor-render",
+                          IO.pure(Some(state))
+                        )(renderCursorOnly(state, visible, cursor)).handleErrorWith(recoverIdleCursorRenderFailure)
+                      yield ()
+                    case None =>
+                      IO.unit
                 yield ()
               }
 

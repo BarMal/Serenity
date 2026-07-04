@@ -359,6 +359,7 @@ case class AppConfig(
     editorTextTransitionSpeedScale: Option[Double] = None,
     commandRunnerTransitionSpeedScale: Option[Double] = None,
     uiTransitionSpeedScale: Option[Double] = None,
+    cursorTransitionSpeedScale: Option[Double] = None,
     commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     uiAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     commandRunnerVisibleRows: Option[Int] = None,
@@ -394,6 +395,7 @@ case class AppConfig(
       editorTextTransitionSpeedScale = None,
       commandRunnerTransitionSpeedScale = None,
       uiTransitionSpeedScale = None,
+      cursorTransitionSpeedScale = None,
       commandRunnerAnimation = None,
       uiAnimation = None
     )
@@ -490,10 +492,7 @@ case class AppConfig(
           motionPreset = preset,
           characterAnimation = preset.animationConfig,
           commandRunnerAnimation = preset.animationConfig,
-          uiAnimation = preset.animationConfig,
-          editorTextTransitionSpeedScale = None,
-          commandRunnerTransitionSpeedScale = None,
-          uiTransitionSpeedScale = None
+          uiAnimation = preset.animationConfig
         )
 
   /** Transition policy derived from the selected motion preset and UI speed scale. */
@@ -525,6 +524,9 @@ case class AppConfig(
   def withUiTransitionSpeedScale(scale: Option[Double]): AppConfig =
     copy(uiTransitionSpeedScale = scale.map(AppConfig.clampElementTransitionSpeedScale))
 
+  def withCursorTransitionSpeedScale(scale: Option[Double]): AppConfig =
+    copy(cursorTransitionSpeedScale = scale.map(AppConfig.clampElementTransitionSpeedScale))
+
   def withCommandRunnerAnimation(animation: Option[AnimationConfig]): AppConfig =
     copy(commandRunnerAnimation = animation)
 
@@ -545,6 +547,9 @@ case class AppConfig(
 
   def effectiveUiTransitionSpeedScale: Double =
     uiTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
+
+  def effectiveCursorTransitionSpeedScale: Double =
+    cursorTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
 
   /** Character insertion animation after applying the effective editor text motion speed. */
   def scaledCharacterAnimation: Option[AnimationConfig] =

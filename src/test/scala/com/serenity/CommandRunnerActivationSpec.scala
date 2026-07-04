@@ -128,7 +128,8 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       List(
         "cursor-mode",
         "cursor-info-bar",
-        "cursor-info-bar-placement"
+        "cursor-info-bar-placement",
+        "cursor-speed-scale"
       )
     )
   }
@@ -154,6 +155,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       .withEditorTextTransitionSpeedScale(Some(0.5))
       .withCommandRunnerTransitionSpeedScale(Some(2.25))
       .withUiTransitionSpeedScale(Some(1.25))
+      .withCursorTransitionSpeedScale(Some(0.75))
       .withPanelOpenTransitionKind(Some(TransitionKind.DirectionalSweep))
       .withPanelCloseTransitionKind(Some(TransitionKind.Disabled))
     val runner = CommandRunner.empty.activate(registry, config)
@@ -208,6 +210,13 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       case item: CommandSurfaceItem.OptionItem if item.id == "command-runner-fade" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Off" -> List("Off", "Subtle", "Smooth", "Expressive"))
+    val cursorGroup = settingsGroup(runner, "settings-cursor").getOrElse {
+      fail("Expected cursor settings group")
+    }
+    cursorGroup.children.collectFirst {
+      case item: CommandSurfaceItem.InputItem if item.id == "cursor-speed-scale" =>
+        (item.currentValue, item.hint, item.parse("0.25"))
+    } shouldBe Some(("0.75", "Cursor scale (0.0-4.0)", Some(CommandIntent.SetCursorTransitionSpeedScale(0.25))))
   }
 
   "ensureCommandRunnerSurface (via closePane)" should "use the current config, not defaults" in {

@@ -316,6 +316,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         editorTextTransitionSpeedScale = Some(0.5),
         commandRunnerTransitionSpeedScale = Some(2.25),
         uiTransitionSpeedScale = Some(1.25),
+        cursorTransitionSpeedScale = Some(0.75),
         panelOpenTransitionKind = Some(TransitionKind.DirectionalSweep),
         panelCloseTransitionKind = Some(TransitionKind.Disabled),
         uiAnimation = AnimationConfig.subtle,
@@ -357,6 +358,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.editorTextTransitionSpeedScale shouldBe Some(0.5)
     decoded.config.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
     decoded.config.uiTransitionSpeedScale shouldBe Some(1.25)
+    decoded.config.cursorTransitionSpeedScale shouldBe Some(0.75)
     decoded.config.panelOpenTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
     decoded.config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
     decoded.config.uiAnimation shouldBe AnimationConfig.subtle
@@ -489,6 +491,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
               .remove("editorTextTransitionSpeedScale")
               .remove("commandRunnerTransitionSpeedScale")
               .remove("uiTransitionSpeedScale")
+              .remove("cursorTransitionSpeedScale")
           )
         )
       )
@@ -499,6 +502,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.editorTextTransitionSpeedScale shouldBe None
     decoded.toOption.get.config.commandRunnerTransitionSpeedScale shouldBe None
     decoded.toOption.get.config.uiTransitionSpeedScale shouldBe None
+    decoded.toOption.get.config.cursorTransitionSpeedScale shouldBe None
   }
 
   it should "default panel transition kind overrides when loading older JSON without the fields" in {

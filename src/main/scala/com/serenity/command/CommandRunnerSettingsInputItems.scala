@@ -20,11 +20,12 @@ object CommandRunnerSettingsInputItems:
       f"${config.effectiveEditorTextTransitionSpeedScale}%.2f"
     val commandRunnerSpeedScaleValue =
       f"${config.effectiveCommandRunnerTransitionSpeedScale}%.2f"
-    val uiSpeedScaleValue = f"${config.effectiveUiTransitionSpeedScale}%.2f"
-    val elementGapValue   = config.uiElementGap.toString
-    val cornerRadiusValue = config.uiCornerRadiusPx.toString
-    val commandRowsValue  = config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
-    val spellCheck        = config.spellCheck.normalized
+    val uiSpeedScaleValue     = f"${config.effectiveUiTransitionSpeedScale}%.2f"
+    val cursorSpeedScaleValue = f"${config.effectiveCursorTransitionSpeedScale}%.2f"
+    val elementGapValue       = config.uiElementGap.toString
+    val cornerRadiusValue     = config.uiCornerRadiusPx.toString
+    val commandRowsValue      = config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
+    val spellCheck            = config.spellCheck.normalized
 
     val commentItems = List(
       CommandSurfaceItem.InputItem(
@@ -290,6 +291,21 @@ object CommandRunnerSettingsInputItems:
                 value <= AppConfig.MaxElementTransitionSpeedScale
             )
             .map(CommandIntent.SetUiTransitionSpeedScale(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "cursor-speed-scale",
+        label = "Cursor Speed",
+        hint = "Cursor scale (0.0-4.0)",
+        currentValue = cursorSpeedScaleValue,
+        isDecimal = true,
+        parse = text =>
+          text.toDoubleOption
+            .filter(value =>
+              value >= AppConfig.MinElementTransitionSpeedScale &&
+                value <= AppConfig.MaxElementTransitionSpeedScale
+            )
+            .map(CommandIntent.SetCursorTransitionSpeedScale(_)),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(

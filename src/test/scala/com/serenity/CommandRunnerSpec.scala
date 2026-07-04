@@ -323,7 +323,12 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-animation"
     )
     nestedGroup("settings-cursor").label shouldBe "Cursor"
-    nestedGroup("settings-cursor").children.map(_.id) should contain allOf ("cursor-mode", "cursor-info-bar")
+    nestedGroup("settings-cursor").children.map(_.id) should contain allOf (
+      "cursor-mode",
+      "cursor-info-bar",
+      "cursor-info-bar-placement",
+      "cursor-speed-scale"
+    )
     nestedGroup("settings-surface-appearance").label shouldBe "Surface Appearance"
     nestedGroup("settings-surface-appearance").children.map(_.id) shouldBe List(
       "background-style",

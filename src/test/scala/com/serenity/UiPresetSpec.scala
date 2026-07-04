@@ -209,6 +209,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val sourceConfig = AppConfig.default
       .withMotionPreset(MotionPreset.Subtle)
       .withElementTransitionSpeedScale(2.25)
+      .withCursorTransitionSpeedScale(Some(0.75))
       .withEditorInsertionTransitionKind(TransitionKind.TypedText)
       .withPanelOpenTransitionKind(Some(TransitionKind.OutlineThenContent))
       .withPanelCloseTransitionKind(Some(TransitionKind.Disabled))
@@ -218,6 +219,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     patched.config.motionPreset shouldBe MotionPreset.Subtle
     patched.config.characterAnimation shouldBe MotionPreset.Subtle.animationConfig
     patched.config.elementTransitionSpeedScale shouldBe 2.25
+    patched.config.cursorTransitionSpeedScale shouldBe Some(0.75)
     patched.config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
     patched.config.panelOpenTransitionKind shouldBe Some(TransitionKind.OutlineThenContent)
     patched.config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)

@@ -89,6 +89,7 @@ object UiPreset:
       editorTextTransitionSpeedScale = source.editorTextTransitionSpeedScale,
       commandRunnerTransitionSpeedScale = source.commandRunnerTransitionSpeedScale,
       uiTransitionSpeedScale = source.uiTransitionSpeedScale,
+      cursorTransitionSpeedScale = source.cursorTransitionSpeedScale,
       commandRunnerAnimation = source.commandRunnerAnimation,
       uiAnimation = source.uiAnimation,
       editorInsertionTransitionKind = source.editorInsertionTransitionKind,

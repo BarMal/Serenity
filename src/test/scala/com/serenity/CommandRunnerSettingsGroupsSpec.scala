@@ -92,7 +92,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     groupById(groups, "settings-cursor").children.map(_.id) shouldBe List(
       "cursor-mode",
       "cursor-info-bar",
-      "cursor-info-bar-placement"
+      "cursor-info-bar-placement",
+      "cursor-speed-scale"
     )
     groupById(groups, "settings-keymap").children.map(_.id) should contain allOf (
       "keymap-global-command_palette",
