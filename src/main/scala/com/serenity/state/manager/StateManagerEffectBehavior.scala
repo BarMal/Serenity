@@ -26,6 +26,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   this: StateManager =>
 
   private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
+  private val UnsavedPresetCopySuffix       = " (modified, unsaved)"
 
   protected def interpretEffect(effect: AppEffect): IO[Unit] =
     effect match
@@ -117,43 +118,43 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   protected def updateConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
-    updateConfigWithEditedPresetPersistence(update, _ => persistEditedUiPresetFromCommandRunner)
+    updateConfigWithEditedPresetDraft(update, markEditedUiPresetDraftFromCommandRunner)
 
   private def updateAppearanceConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
-    updateConfigWithEditedPresetPersistence(
+    updateConfigWithEditedPresetDraft(
       update,
-      config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.Appearance(config))
+      markEditedUiPresetDraftFromCommandRunner
     )
 
   private def updateDocumentDefaultsConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
-    updateConfigWithEditedPresetPersistence(
+    updateConfigWithEditedPresetDraft(
       update,
-      config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.DocumentDefaults(config))
+      markEditedUiPresetDraftFromCommandRunner
     )
 
   private def updateMotionConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
-    updateConfigWithEditedPresetPersistence(
+    updateConfigWithEditedPresetDraft(
       update,
-      config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.Motion(config))
+      markEditedUiPresetDraftFromCommandRunner
     )
 
   private def updateTextDisplayConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
-    updateConfigWithEditedPresetPersistence(
+    updateConfigWithEditedPresetDraft(
       update,
-      config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.TextDisplay(config))
+      markEditedUiPresetDraftFromCommandRunner
     )
 
-  private def updateConfigWithEditedPresetPersistence(
+  private def updateConfigWithEditedPresetDraft(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig,
-    persistEditedPreset: com.serenity.config.AppConfig => IO[Unit]
+    markEditedPreset: IO[Unit]
   ): IO[com.serenity.config.AppConfig] =
     stateRef
       .modify { state =>
@@ -171,42 +172,25 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           case None =>
             IO.unit
       )
-      .flatTap(persistEditedPreset)
+      .flatTap(_ => markEditedPreset)
       .flatTap(_ =>
         stateRef.get
           .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
           .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after config change failed"))
       )
 
-  private def persistEditedUiPresetFromCommandRunner: IO[Unit] =
-    stateRef.get.flatMap { state =>
+  private def markEditedUiPresetDraftFromCommandRunner: IO[Unit] =
+    stateRef.update { state =>
       editingUiPresetName(state) match
         case Some(presetName) =>
-          uiPresetStore
-            .upsert(UiPreset.capture(presetName, state, preferredWindowSize = None))
-            .flatTap(_ => refreshCommandRunnerUiPresetPreviews)
-            .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to persist edited UI preset $presetName"))
+          val sourceName = sourcePresetName(presetName)
+          updateCommandRunnerPresetContextInState(
+            state,
+            Some(unsavedPresetCopyName(sourceName)),
+            s"Editing unsaved copy of $sourceName. Save the preset to preserve it."
+          )
         case None =>
-          IO.unit
-    }
-
-  private def patchEditedUiPresetFromCommandRunner(patch: UiPreset.Patch): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      editingUiPresetName(state) match
-        case Some(presetName) =>
-          uiPresetStore
-            .find(presetName)
-            .map(_.orElse(UiPreset.builtIn(presetName)))
-            .flatMap {
-              case Some(preset) =>
-                uiPresetStore.upsert(patch.applyTo(preset))
-              case None =>
-                logger.warn(s"[PRESET] UI preset not found for patch: $presetName")
-            }
-            .flatTap(_ => refreshCommandRunnerUiPresetPreviews)
-            .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to patch edited UI preset $presetName"))
-        case None =>
-          IO.unit
+          state
     }
 
   private def editingUiPresetName(state: AppState): Option[String] =
@@ -218,21 +202,31 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           None
     }
 
+  private def unsavedPresetCopyName(name: String): String =
+    val trimmed = name.trim
+    if trimmed.endsWith(UnsavedPresetCopySuffix) then trimmed
+    else s"$trimmed$UnsavedPresetCopySuffix"
+
+  private def sourcePresetName(name: String): String =
+    val trimmed = name.trim
+    if trimmed.endsWith(UnsavedPresetCopySuffix) then trimmed.dropRight(UnsavedPresetCopySuffix.length).trim
+    else trimmed
+
   protected def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
   ): IO[Unit] =
-    updateConfigWithEditedPresetPersistence(
+    updateConfigWithEditedPresetDraft(
       config => config.withFontConfig(update(config.fontConfig)),
-      config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.Typography(config))
+      markEditedUiPresetDraftFromCommandRunner
     )
       .flatMap(config => onFontConfigChanged(config.fontConfig))
 
   protected def updateSpellCheckConfig(
     update: com.serenity.config.SpellCheckConfig => com.serenity.config.SpellCheckConfig
   ): IO[Unit] =
-    updateConfigWithEditedPresetPersistence(
+    updateConfigWithEditedPresetDraft(
       config => config.withSpellCheck(update(config.spellCheck)),
-      config => patchEditedUiPresetFromCommandRunner(UiPreset.Patch.LanguageTools(config))
+      markEditedUiPresetDraftFromCommandRunner
     ).void >>
       scheduleDocumentAnalysis()
 
@@ -391,7 +385,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.FocusPanel(position) =>
         switchToPinnedPanel(position)
       case CommandIntent.UnpinPanel(position) =>
-        unpinPanel(position) >> persistEditedUiPresetFromCommandRunner
+        unpinPanel(position) >> markEditedUiPresetDraftFromCommandRunner
       case CommandIntent.ExpandPanel(position) =>
         expandPinnedPanel(position)
       case CommandIntent.CollapseExpandedPanel =>
@@ -725,6 +719,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             .upsert(preset)
             .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to save UI preset $presetName"))
           _ <- refreshCommandRunnerUiPresetPreviews
+          _ <- updateCommandRunnerPresetContext(Some(presetName), s"Preset saved. Configure $presetName.")
         yield ()
 
   protected def applyUiPresetEffect(name: String): IO[Unit] =
@@ -895,31 +890,36 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         state
 
   private def updateCommandRunnerPresetContext(presetName: Option[String], statusMessage: String): IO[Unit] =
-    stateRef.update { state =>
-      state.commandRunnerSurface match
-        case Some(surface) =>
-          surface.content match
-            case SurfaceContent.CommandPalette(runner) =>
-              val updatedRunner = runner.copy(
-                editingPresetName = presetName,
-                editingItemId = None,
-                editingText = "",
-                statusMessage = Some(statusMessage)
-              )
-              val updatedSurfaces = state.uiSurfaces.map {
-                case current if current.id == surface.id =>
-                  current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-                case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
-                  current.copy(content = SurfaceContent.CommandPaletteSubmenu(updatedRunner, groupId, previewOnly))
-                case current =>
-                  current
-              }
-              state.copy(uiSurfaces = updatedSurfaces)
-            case _ =>
-              state
-        case None =>
-          state
-    }
+    stateRef.update(updateCommandRunnerPresetContextInState(_, presetName, statusMessage))
+
+  private def updateCommandRunnerPresetContextInState(
+    state: AppState,
+    presetName: Option[String],
+    statusMessage: String
+  ): AppState =
+    state.commandRunnerSurface match
+      case Some(surface) =>
+        surface.content match
+          case SurfaceContent.CommandPalette(runner) =>
+            val updatedRunner = runner.copy(
+              editingPresetName = presetName,
+              editingItemId = None,
+              editingText = "",
+              statusMessage = Some(statusMessage)
+            )
+            val updatedSurfaces = state.uiSurfaces.map {
+              case current if current.id == surface.id =>
+                current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+              case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
+                current.copy(content = SurfaceContent.CommandPaletteSubmenu(updatedRunner, groupId, previewOnly))
+              case current =>
+                current
+            }
+            state.copy(uiSurfaces = updatedSurfaces)
+          case _ =>
+            state
+      case None =>
+        state
 
   private def focusCreatedPresetOptions(name: String): IO[Unit] =
     stateRef.update { state =>
@@ -1123,10 +1123,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updatePanelState(removePanelKind(kind))
       case Some(targetPosition) =>
         pinPanelKind(kind, targetPosition)
-    updateEffect >> refreshCommandRunnerPanelSelections >> persistEditedUiPresetFromCommandRunner
+    updateEffect >> refreshCommandRunnerPanelSelections >> markEditedUiPresetDraftFromCommandRunner
 
   private def movePanelKind(kind: PanelKind, delta: Int): IO[Unit] =
-    updatePanelState(reorderPanelKind(kind, delta)) >> persistEditedUiPresetFromCommandRunner
+    updatePanelState(reorderPanelKind(kind, delta)) >> markEditedUiPresetDraftFromCommandRunner
 
   private def pinPanelKind(kind: PanelKind, position: PanelPosition): IO[Unit] =
     kind match
@@ -1617,7 +1617,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateConfigEffect >> openMarkdownPreview
       case MarkdownViewMode.Source | MarkdownViewMode.InlineLens =>
         updateConfigEffect >> unpinMarkdownPreviewPanel()
-    updateModeEffect >> persistEditedUiPresetFromCommandRunner
+    updateModeEffect >> markEditedUiPresetDraftFromCommandRunner
 
   private def unpinMarkdownPreviewPanel(): IO[Unit] =
     updateState { state =>
@@ -1800,7 +1800,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
             if state.theme == newTheme then None
             else state.config.scaledUiAnimation.map(config => ThemeTransition(state.theme, 0, config.steps))
           state.copy(theme = newTheme, themeTransition = transition)
-        } >> persistEditedUiPresetFromCommandRunner
+        } >> markEditedUiPresetDraftFromCommandRunner
       }
       .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to switch theme to $themeName"))
 
