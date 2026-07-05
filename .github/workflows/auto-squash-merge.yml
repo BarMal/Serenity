@@ -128,3 +128,10 @@ jobs:
             echo "::error::Timed out waiting for ${base_ref} to resolve to ${merge_commit}; current ${base_sha}."
             exit 1
           fi
+
+          if [ "${base_ref}" = "master" ]; then
+            echo "Dispatching Desktop Publish for ${base_ref} at ${merge_commit}."
+            gh workflow run desktop-publish.yml --repo "${REPO}" --ref "${base_ref}"
+          else
+            echo "Skipping Desktop Publish dispatch for non-master base ${base_ref}."
+          fi
