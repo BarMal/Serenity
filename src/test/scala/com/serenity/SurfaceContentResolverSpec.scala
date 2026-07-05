@@ -274,6 +274,39 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.header.map(_.plainText) shouldBe Some("UI Presets > Edit Preset: Writing > Fonts")
   }
 
+  it should "resolve preset font submenu as grouped typography rows" in {
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(
+        activeCategory = CommandCategory.Settings,
+        activeSubmenu = Some(
+          CommandRunnerSubmenuState(
+            "settings-preset-fonts",
+            parentGroupId = Some("settings-preset-edit"),
+            ancestorGroupIds = List("settings-ui-presets", "settings-preset-edit")
+          )
+        )
+      )
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPaletteSubmenu(
+        runner,
+        "settings-preset-fonts",
+        previewOnly = false
+      ),
+      LayoutRect(0, 0, 80, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.map(_.plainText) shouldBe List("Editor Typography", "Code Typography", "UI Typography")
+    resolved.rows.map(_.segments.map(_.text)) shouldBe List(
+      List("Editor Typography", "Prose editor family, size, and ligatures"),
+      List("Code Typography", "Code editor family, size, and ligatures"),
+      List("UI Typography", "Interface family, size, and ligatures")
+    )
+    resolved.footer.map(_.plainText) shouldBe Some("1/3")
+  }
+
   it should "append a selected UI preset detail row in the preset submenu" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry

@@ -161,3 +161,34 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "render-fps"
     )
   }
+
+  it should "group preset font controls by editor and interface surface" in {
+    val config = AppConfig.default
+    val groups = CommandRunnerSettingsGroups.build(
+      optionSelections = CommandRunnerOptionSelections.default(config),
+      inputItems = CommandRunnerSettingsInputItems.build(config),
+      uiPresetPreviews = Nil,
+      editingPresetName = None
+    )
+
+    groupById(groups, "settings-preset-fonts").children.map(_.id) shouldBe List(
+      "settings-preset-editor-typography",
+      "settings-preset-code-typography",
+      "settings-preset-ui-typography"
+    )
+    groupById(groups, "settings-preset-editor-typography").children.map(_.id) shouldBe List(
+      "text-font",
+      "text-ligatures",
+      "text-font-size"
+    )
+    groupById(groups, "settings-preset-code-typography").children.map(_.id) shouldBe List(
+      "code-font",
+      "code-ligatures",
+      "code-font-size"
+    )
+    groupById(groups, "settings-preset-ui-typography").children.map(_.id) shouldBe List(
+      "ui-font",
+      "ui-ligatures",
+      "ui-font-size"
+    )
+  }

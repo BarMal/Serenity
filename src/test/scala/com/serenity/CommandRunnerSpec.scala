@@ -735,7 +735,11 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-preset-ui-surface-motion"
     )
     val fonts = groupByIdRecursive(List(editPreset), "settings-preset-fonts")
-    fonts.children.map(_.id) shouldBe List("settings-prose-font", "settings-code-font", "settings-ui-font")
+    fonts.children.map(_.id) shouldBe List(
+      "settings-preset-editor-typography",
+      "settings-preset-code-typography",
+      "settings-preset-ui-typography"
+    )
     val documentDefaults = groupByIdRecursive(List(editPreset), "settings-preset-document-defaults")
     documentDefaults.children.map(_.id) shouldBe List(
       "default-document-mode",
