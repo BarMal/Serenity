@@ -729,7 +729,11 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.CollapseExpandedPanel
     )
     val animations = groupByIdRecursive(List(editPreset), "settings-preset-animations")
-    animations.children.map(_.id) shouldBe List("settings-cursor", "settings-animation")
+    animations.children.map(_.id) shouldBe List(
+      "settings-preset-cursor-motion",
+      "settings-preset-text-entry-motion",
+      "settings-preset-ui-surface-motion"
+    )
     val fonts = groupByIdRecursive(List(editPreset), "settings-preset-fonts")
     fonts.children.map(_.id) shouldBe List("settings-prose-font", "settings-code-font", "settings-ui-font")
     val documentDefaults = groupByIdRecursive(List(editPreset), "settings-preset-document-defaults")
