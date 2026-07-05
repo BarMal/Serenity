@@ -37,6 +37,18 @@ class RichTextToolbarLayoutSpec extends AnyFlatSpec with Matchers:
     moved.dismiss.shouldBe(RichTextToolbarState.Hidden)
   }
 
+  it should "move focus from the clamped item when toolbar actions change" in {
+    val items         = RichTextToolbar.defaultItems.take(3)
+    val staleHigh     = RichTextToolbarState.visible(ScreenPosition(40, 10)).copy(focusedIndex = 10)
+    val staleNegative = RichTextToolbarState.visible(ScreenPosition(40, 10)).copy(focusedIndex = -4)
+
+    staleHigh.focusedItem(items).map(_.commandName).shouldBe(Some("underline"))
+    staleHigh.focusNext(items).focusedItem(items).map(_.commandName).shouldBe(Some("bold"))
+
+    staleNegative.focusedItem(items).map(_.commandName).shouldBe(Some("bold"))
+    staleNegative.focusPrevious(items).focusedItem(items).map(_.commandName).shouldBe(Some("underline"))
+  }
+
   it should "place a visible toolbar above the cursor when there is room" in {
     val contentRect = LayoutRect(0, 1, 80, 20)
     val state       = RichTextToolbarState.Hidden.showAt(ScreenPosition(40, 10))
