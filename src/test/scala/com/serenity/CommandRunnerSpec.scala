@@ -365,7 +365,12 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "focused-text-body"
     )
     nestedGroup("settings-text-area").label shouldBe "Text Area"
-    nestedGroup("settings-text-area").children.map(_.id) should contain allOf ("text-area-left", "text-area-right")
+    nestedGroup("settings-text-area").children.map(_.id) shouldBe List(
+      "text-area-left",
+      "text-area-right",
+      "text-area-top",
+      "text-area-bottom"
+    )
     nestedGroup("settings-code-font").label shouldBe "Code Font"
     nestedGroup("settings-code-font").children.map(_.id) should contain allOf (
       "code-font",

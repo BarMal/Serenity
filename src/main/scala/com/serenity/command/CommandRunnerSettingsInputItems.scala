@@ -6,16 +6,18 @@ import com.serenity.ui.fonts.FontLoader
 object CommandRunnerSettingsInputItems:
 
   def build(config: AppConfig): List[CommandSurfaceItem.InputItem] =
-    val durationValue      = config.characterAnimation.map(_.durationMs.toString).getOrElse("0")
-    val stepsValue         = config.characterAnimation.map(_.steps.toString).getOrElse("0")
-    val blurValue          = config.blurRadius.toString
-    val codeFontSizeValue  = config.fontConfig.codeFontSize.toString
-    val textFontSizeValue  = config.fontConfig.textFontSize.toString
-    val uiFontSizeValue    = config.fontConfig.uiFontSize.toString
-    val textScaleValue     = f"${config.fontConfig.textScaleMultiplier}%.2f"
-    val textAreaLeftValue  = f"${config.textAreaInsets.leftPercent}%.1f"
-    val textAreaRightValue = f"${config.textAreaInsets.rightPercent}%.1f"
-    val speedScaleValue    = f"${config.elementTransitionSpeedScale}%.2f"
+    val durationValue       = config.characterAnimation.map(_.durationMs.toString).getOrElse("0")
+    val stepsValue          = config.characterAnimation.map(_.steps.toString).getOrElse("0")
+    val blurValue           = config.blurRadius.toString
+    val codeFontSizeValue   = config.fontConfig.codeFontSize.toString
+    val textFontSizeValue   = config.fontConfig.textFontSize.toString
+    val uiFontSizeValue     = config.fontConfig.uiFontSize.toString
+    val textScaleValue      = f"${config.fontConfig.textScaleMultiplier}%.2f"
+    val textAreaLeftValue   = f"${config.textAreaInsets.leftPercent}%.1f"
+    val textAreaRightValue  = f"${config.textAreaInsets.rightPercent}%.1f"
+    val textAreaTopValue    = f"${config.textAreaInsets.topPercent}%.1f"
+    val textAreaBottomValue = f"${config.textAreaInsets.bottomPercent}%.1f"
+    val speedScaleValue     = f"${config.elementTransitionSpeedScale}%.2f"
     val editorTextSpeedScaleValue =
       f"${config.effectiveEditorTextTransitionSpeedScale}%.2f"
     val commandRunnerSpeedScaleValue =
@@ -171,6 +173,30 @@ object CommandRunnerSettingsInputItems:
           text.toDoubleOption
             .filter(value => value >= 0.0 && value <= 45.0)
             .map(value => CommandIntent.SetTextAreaRightInset(value / 100.0)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "text-area-top",
+        label = "Top Text Margin",
+        hint = "Percent (0-45)",
+        currentValue = textAreaTopValue,
+        isDecimal = true,
+        parse = text =>
+          text.toDoubleOption
+            .filter(value => value >= 0.0 && value <= 45.0)
+            .map(value => CommandIntent.SetTextAreaTopInset(value / 100.0)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "text-area-bottom",
+        label = "Bottom Text Margin",
+        hint = "Percent (0-45)",
+        currentValue = textAreaBottomValue,
+        isDecimal = true,
+        parse = text =>
+          text.toDoubleOption
+            .filter(value => value >= 0.0 && value <= 45.0)
+            .map(value => CommandIntent.SetTextAreaBottomInset(value / 100.0)),
         category = CommandCategory.Settings
       )
     )

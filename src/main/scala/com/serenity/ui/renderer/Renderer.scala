@@ -358,6 +358,7 @@ object Renderer:
     val buffer = pane.bufferId.flatMap(state.buffers.get)
 
     renderBufferHeader(pane, buffer, paneLayout, state, context)
+    renderEditorPaneVerticalSpacers(paneLayout, state, context)
 
     val contentRect = paneLayout.contentRect
 
@@ -458,6 +459,18 @@ object Renderer:
 
     surface.setBackgroundColor(state.theme.background)
     surface.setForegroundColor(state.theme.foreground)
+
+  private def renderEditorPaneVerticalSpacers(
+    paneLayout: EditorPaneLayout,
+    state: AppState,
+    context: RenderContext
+  ): Unit =
+    context.surface.setBackgroundColor(state.theme.margin)
+    List(paneLayout.topSpacerRect, paneLayout.bottomSpacerRect)
+      .filter(rect => rect.width > 0 && rect.height > 0)
+      .foreach(rect => context.surface.fillRect(rect.x, rect.y, rect.width, rect.height, ' '))
+    context.surface.setBackgroundColor(state.theme.background)
+    context.surface.setForegroundColor(state.theme.foreground)
 
   private def renderBufferContent(
     buffer: Buffer,

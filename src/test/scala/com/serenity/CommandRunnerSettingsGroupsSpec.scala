@@ -95,6 +95,12 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "cursor-info-bar-placement",
       "cursor-speed-scale"
     )
+    groupById(groups, "settings-text-area").children.map(_.id) shouldBe List(
+      "text-area-left",
+      "text-area-right",
+      "text-area-top",
+      "text-area-bottom"
+    )
     groupById(groups, "settings-keymap").children.map(_.id) should contain allOf (
       "keymap-global-command_palette",
       "keymap-command-runner-submit"
