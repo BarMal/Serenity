@@ -246,10 +246,48 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Choose pinned panels and panel actions")
     )
+    val presetCursorMotionGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-cursor-motion",
+      label = "Cursor Motion",
+      children = List(cursorModeItem) ++
+        inputItems.filter(_.id == "cursor-speed-scale") ++
+        List(cursorInfoBarItem, cursorInfoPlacement),
+      category = CommandCategory.Settings,
+      hint = Some("Cursor style, speed, and info placement")
+    )
+    val presetTextEntryMotionGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-text-entry-motion",
+      label = "Text Entry Motion",
+      children = List(editorTextItem) ++ inputItems.filter(item =>
+        item.id == "editor-text-speed-scale" || item.id == "element-transition-speed-scale"
+      ),
+      category = CommandCategory.Settings,
+      hint = Some("Editor text reveal and typing speed")
+    )
+    val presetUiSurfaceMotionGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-ui-surface-motion",
+      label = "UI Surface Motion",
+      children = List(
+        motionPresetItem,
+        animationItem,
+        panelOpenItem,
+        panelCloseItem,
+        commandRunnerFade,
+        uiAnimationItem,
+        renderFpsItem
+      ) ++ inputItems.filter(item =>
+        item.id == "animation-duration" ||
+          item.id == "animation-steps" ||
+          item.id == "command-runner-speed-scale" ||
+          item.id == "ui-speed-scale"
+      ),
+      category = CommandCategory.Settings,
+      hint = Some("Panels, command runner, overlays, and render cadence")
+    )
     val presetAnimationsGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-animations",
       label = "Animations",
-      children = List(cursorGroup, animationGroup),
+      children = List(presetCursorMotionGroup, presetTextEntryMotionGroup, presetUiSurfaceMotionGroup),
       category = CommandCategory.Settings,
       hint = Some("Cursor, text entry, and UI motion")
     )
