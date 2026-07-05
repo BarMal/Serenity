@@ -1196,26 +1196,45 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
 
   private def handleTextAreaResizeDrag(drag: MouseDrag, state: AppState): cats.effect.IO[Boolean] =
     textAreaInsetFromDrag(drag, state) match
-      case Some(Left(value)) =>
+      case Some(TextAreaInsetDrag.Left(value)) =>
         updateConfig(_.withTextAreaLeftInset(value)).map(_ => true)
-      case Some(Right(value)) =>
+      case Some(TextAreaInsetDrag.Right(value)) =>
         updateConfig(_.withTextAreaRightInset(value)).map(_ => true)
+      case Some(TextAreaInsetDrag.Top(value)) =>
+        updateConfig(_.withTextAreaTopInset(value)).map(_ => true)
+      case Some(TextAreaInsetDrag.Bottom(value)) =>
+        updateConfig(_.withTextAreaBottomInset(value)).map(_ => true)
       case None =>
         cats.effect.IO.pure(false)
 
-  private def textAreaInsetFromDrag(drag: MouseDrag, state: AppState): Option[Either[Double, Double]] =
+  private enum TextAreaInsetDrag:
+    case Left(value: Double)
+    case Right(value: Double)
+    case Top(value: Double)
+    case Bottom(value: Double)
+
+  private def textAreaInsetFromDrag(drag: MouseDrag, state: AppState): Option[TextAreaInsetDrag] =
     state.viewportSize.flatMap { viewportSize =>
       val layout         = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       val workspaceX     = layout.leftSpacerRect.x
       val workspaceRight = layout.rightSpacerRect.right
       val workspaceWidth = (workspaceRight - workspaceX).max(1)
+      val contentTop     = layout.topSpacerRect.y
+      val contentBottom  = layout.editorPanelRect.bottom
+      val contentHeight  = (contentBottom - contentTop).max(1)
       val withinWorkspaceY =
         drag.row >= layout.leftSpacerRect.y && drag.row < layout.leftSpacerRect.bottom
+      val withinWorkspaceX =
+        drag.col >= layout.topSpacerRect.x && drag.col < layout.topSpacerRect.right
 
       if withinWorkspaceY && drag.col >= layout.leftSpacerRect.x && drag.col < layout.leftSpacerRect.right then
-        Some(Left((drag.col - workspaceX).toDouble / workspaceWidth.toDouble))
+        Some(TextAreaInsetDrag.Left((drag.col - workspaceX).toDouble / workspaceWidth.toDouble))
       else if withinWorkspaceY && drag.col >= layout.rightSpacerRect.x && drag.col < layout.rightSpacerRect.right then
-        Some(Right((workspaceRight - drag.col).toDouble / workspaceWidth.toDouble))
+        Some(TextAreaInsetDrag.Right((workspaceRight - drag.col).toDouble / workspaceWidth.toDouble))
+      else if withinWorkspaceX && drag.row >= layout.topSpacerRect.y && drag.row < layout.topSpacerRect.bottom then
+        Some(TextAreaInsetDrag.Top((drag.row - contentTop).toDouble / contentHeight.toDouble))
+      else if withinWorkspaceX && drag.row >= layout.bottomSpacerRect.y && drag.row < layout.bottomSpacerRect.bottom
+      then Some(TextAreaInsetDrag.Bottom((contentBottom - drag.row).toDouble / contentHeight.toDouble))
       else None
     }
 

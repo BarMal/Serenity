@@ -36,3 +36,55 @@ class TextAreaResizeSpec extends AnyFlatSpec with Matchers with StateManagerTest
     afterLayout.pinnedPanelRects(PanelPosition.Right).width shouldBe 20
     afterLayout.editorPanelRect.x should be < beforeLayout.editorPanelRect.x
   }
+
+  it should "update the top text area inset from mouse drags before release" in {
+    val stateManager = createStateManager("TextAreaResizeSpec")
+
+    stateManager
+      .updateState(state =>
+        state.copy(config = state.config.withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0, top = 0.20)))
+      )
+      .unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(80, 30))).unsafeRunSync()
+
+    val before        = stateManager.getCurrentState.unsafeRunSync()
+    val beforeLayout  = LayoutEngine.calculateLayout(before, ViewportSize(80, 30))
+    val dragRow       = beforeLayout.topSpacerRect.y + 3
+    val contentHeight = beforeLayout.editorPanelRect.bottom - beforeLayout.topSpacerRect.y
+
+    stateManager.applyEvent(MouseDrag(beforeLayout.topSpacerRect.x + 2, dragRow)).unsafeRunSync()
+
+    val after       = stateManager.getCurrentState.unsafeRunSync()
+    val afterLayout = LayoutEngine.calculateLayout(after, ViewportSize(80, 30))
+
+    after.config.textAreaInsets.top shouldBe (3.0 / contentHeight.toDouble) +- 0.0001
+    after.config.textAreaInsets.bottom shouldBe before.config.textAreaInsets.bottom
+    afterLayout.topSpacerRect.height should be < beforeLayout.topSpacerRect.height
+    afterLayout.editorPanelRect.y shouldBe beforeLayout.editorPanelRect.y
+  }
+
+  it should "update the bottom text area inset from mouse drags before release" in {
+    val stateManager = createStateManager("TextAreaResizeSpec")
+
+    stateManager
+      .updateState(state =>
+        state.copy(config = state.config.withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0, bottom = 0.20)))
+      )
+      .unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(80, 30))).unsafeRunSync()
+
+    val before        = stateManager.getCurrentState.unsafeRunSync()
+    val beforeLayout  = LayoutEngine.calculateLayout(before, ViewportSize(80, 30))
+    val dragRow       = beforeLayout.bottomSpacerRect.bottom - 3
+    val contentHeight = beforeLayout.editorPanelRect.bottom - beforeLayout.topSpacerRect.y
+
+    stateManager.applyEvent(MouseDrag(beforeLayout.bottomSpacerRect.x + 2, dragRow)).unsafeRunSync()
+
+    val after       = stateManager.getCurrentState.unsafeRunSync()
+    val afterLayout = LayoutEngine.calculateLayout(after, ViewportSize(80, 30))
+
+    after.config.textAreaInsets.top shouldBe before.config.textAreaInsets.top
+    after.config.textAreaInsets.bottom shouldBe (3.0 / contentHeight.toDouble) +- 0.0001
+    afterLayout.bottomSpacerRect.height should be < beforeLayout.bottomSpacerRect.height
+    afterLayout.editorPanelRect.y shouldBe beforeLayout.editorPanelRect.y
+  }
