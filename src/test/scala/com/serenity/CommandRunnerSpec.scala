@@ -358,7 +358,12 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-preset-edit"
     )
     nestedGroup("settings-text-display").label shouldBe "Text Display"
-    nestedGroup("settings-text-display").children.map(_.id) shouldBe List("line-numbers", "gutter", "line-wrap")
+    nestedGroup("settings-text-display").children.map(_.id) shouldBe List(
+      "line-numbers",
+      "gutter",
+      "line-wrap",
+      "focused-text-body"
+    )
     nestedGroup("settings-text-area").label shouldBe "Text Area"
     nestedGroup("settings-text-area").children.map(_.id) should contain allOf ("text-area-left", "text-area-right")
     nestedGroup("settings-code-font").label shouldBe "Code Font"
@@ -455,14 +460,16 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val options     = textDisplay.children.collect { case option: CommandSurfaceItem.OptionItem => option }
 
     options.map(option => option.id -> option.selectedOption) shouldBe List(
-      "line-numbers" -> "Off",
-      "gutter"       -> "Off",
-      "line-wrap"    -> "Off"
+      "line-numbers"      -> "Off",
+      "gutter"            -> "Off",
+      "line-wrap"         -> "Off",
+      "focused-text-body" -> "Off"
     )
     options.flatMap(_.selectedIntent) shouldBe List(
       CommandIntent.SetLineNumbers(false),
       CommandIntent.SetGutter(false),
-      CommandIntent.SetWordWrap(false)
+      CommandIntent.SetWordWrap(false),
+      CommandIntent.SetFocusedTextBody(false)
     )
   }
 

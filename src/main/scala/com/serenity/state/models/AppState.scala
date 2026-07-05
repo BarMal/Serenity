@@ -277,6 +277,12 @@ case class AppState(
       case _                             => false
     }
 
+  def themeCreatorSurface: Option[UiSurface] =
+    findSurface {
+      case SurfaceContent.ThemeCreator(_) => true
+      case _                              => false
+    }
+
   def fileSearchSurface: Option[UiSurface] =
     findSurface {
       case SurfaceContent.FileSearch(_) => true

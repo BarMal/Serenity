@@ -9,7 +9,7 @@ import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.theme.{RichTextStyling, StyledText, Theme}
+import com.serenity.ui.theme.*
 
 case class RenderContext(
     surface: RenderSurface,
@@ -84,6 +84,39 @@ object Renderer:
       uiMetrics,
       cursorColor
     )
+
+  def renderCursorOnly(
+    state: AppState,
+    cursorVisible: Boolean,
+    swingWin: com.serenity.ui.terminal.SwingWindow,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    uiMetrics: CellMetrics,
+    cursorColor: Option[java.awt.Color]
+  ): Boolean =
+    val state0       = withEffectiveTheme(state)
+    val viewportSize = swingWin.viewportSize
+    val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
+    swingWin.onCursorOverlayReady { image =>
+      val surface =
+        Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
+      val context =
+        RenderContext(
+          surface,
+          layout,
+          cursorVisible,
+          cursorColor,
+          codeFont,
+          textFont,
+          uiFont,
+          swingWin.metrics,
+          uiMetrics
+        )
+      val renderPlan = prepareEditorPaneRenderPlan(state0, context)
+      renderEditorCursors(state0, context, renderPlan)
+      surface.flush()
+    }
 
   def render(
     state: AppState,
@@ -186,7 +219,7 @@ object Renderer:
         val context =
           RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
         val editorRenderPlan = prepareEditorPaneRenderPlan(state, context)
-        renderSpacerColumns(context)
+        renderSpacerColumns(state, context)
         renderLineNumbers(state, context, editorRenderPlan)
         renderGutter(state, context, editorRenderPlan.workspaceLayout)
         renderPinnedPanels(state, context)
@@ -195,7 +228,12 @@ object Renderer:
 
     surface.flush()
 
-  private def renderSpacerColumns(context: RenderContext): Unit = ()
+  private def renderSpacerColumns(state: AppState, context: RenderContext): Unit =
+    val surface = context.surface
+    surface.setBackgroundColor(state.theme.margin)
+    List(context.layout.leftSpacerRect, context.layout.rightSpacerRect)
+      .filter(rect => rect.width > 0 && rect.height > 0)
+      .foreach(rect => surface.fillRect(rect.x, rect.y, rect.width, rect.height, ' '))
 
   private def prepareEditorPaneRenderPlan(state: AppState, context: RenderContext): EditorPaneRenderPlan =
     val workspaceLayout = LayoutEngine.calculateEditorWorkspaceLayout(state, context.layout)
@@ -292,6 +330,22 @@ object Renderer:
       renderPlan.paneLayouts.get(paneId) match
         case Some(paneLayout) => renderEditorPane(pane, paneLayout, state, context, renderPlan.snapshots.get(paneId))
         case None             => ()
+    }
+
+  private def renderEditorCursors(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
+    val activePaneId = state.layout.activeEditorPaneId
+    val orderedPanes =
+      activePaneId.toList.flatMap(id => state.layout.editorPanes.get(id).map(id -> _)) ++
+        state.layout.editorPanes.toList.filterNot((id, _) => activePaneId.contains(id)).sortBy(_._1.value)
+
+    orderedPanes.foreach {
+      case (paneId, pane) =>
+        for
+          paneLayout <- renderPlan.paneLayouts.get(paneId)
+          bufferId   <- pane.bufferId
+          buffer     <- state.buffers.get(bufferId)
+          snapshot   <- renderPlan.snapshots.get(paneId)
+        do renderCursors(buffer, paneLayout.contentRect, state.theme, state.config, context, snapshot)
     }
 
   private def renderEditorPane(
@@ -427,8 +481,9 @@ object Renderer:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): Unit =
-    val visualLines = snapshot.visualLines
-    val xOriginPx   = context.cellMetrics.toPixelX(rect.x).toFloat
+    val visualLines     = snapshot.visualLines
+    val xOriginPx       = context.cellMetrics.toPixelX(rect.x).toFloat
+    val activeBodyLines = focusedTextBodyLines(buffer, state)
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
@@ -446,7 +501,7 @@ object Renderer:
               screenX < rect.right
           then
             val lineTheme      = state.theme
-            val styledSegments = richTextStyledSegments(visualLine, lineTheme, snapshot)
+            val styledSegments = visualLineStyledSegments(visualLine, lineTheme, snapshot, activeBodyLines)
             if snapshot.usesMeasuredLayout then
               CharacterRenderer.renderMeasuredLineWithAnimation(
                 context.surface,
@@ -569,6 +624,45 @@ object Renderer:
         )
       }
       .filter(segments => segments.map(_.content).mkString == visualLine.text)
+
+  private def visualLineStyledSegments(
+    visualLine: TextVisualLine,
+    theme: Theme,
+    snapshot: TextLayoutSnapshot,
+    activeBodyLines: Set[Int]
+  ): Option[List[StyledText]] =
+    val richSegments = richTextStyledSegments(visualLine, theme, snapshot)
+    if activeBodyLines.nonEmpty && !activeBodyLines.contains(visualLine.bufferLine) then
+      val baseSegments =
+        richSegments.getOrElse(List(StyledText(visualLine.text, TextStyle.normal, theme.foreground, theme.background)))
+      Some(baseSegments.map(segment => segment.copy(foregroundColor = theme.muted, backgroundColor = theme.background)))
+    else richSegments
+
+  private def focusedTextBodyLines(buffer: Buffer, state: AppState): Set[Int] =
+    if !state.config.focusedTextBodyEnabled then Set.empty
+    else
+      val lines      = buffer.content.linesFrom(0, buffer.content.lineCount)
+      val activeLine = buffer.cursors.headOption.map(_.line)
+      if buffer.language.contains(LanguageId.Markdown) then MarkdownBlockLens.activeBlockLineSet(lines, activeLine)
+      else plainTextBodyLineSet(lines, activeLine)
+
+  private def plainTextBodyLineSet(lines: Vector[String], activeLine: Option[Int]): Set[Int] =
+    activeLine
+      .filter(line => line >= 0 && line < lines.length)
+      .map { line =>
+        if lines(line).trim.isEmpty then Set(line)
+        else
+          val start = Iterator
+            .iterate(line)(_ - 1)
+            .takeWhile(index => index >= 0 && lines(index).trim.nonEmpty)
+            .foldLeft(line)((_, index) => index)
+          val end = Iterator
+            .iterate(line)(_ + 1)
+            .takeWhile(index => index < lines.length && lines(index).trim.nonEmpty)
+            .foldLeft(line)((_, index) => index)
+          (start to end).toSet
+      }
+      .getOrElse(Set.empty)
 
   private def renderInlineMarkdownPreview(
     buffer: Buffer,
@@ -820,7 +914,7 @@ object Renderer:
           rect.width * context.cellMetrics.charWidth,
           placement.height * context.cellMetrics.lineHeight,
           arcPx = 0,
-          state.theme.border
+          state.theme.panelBorder
         )
         blockVisualLines.zipWithIndex.foreach {
           case (visualLine, index) =>

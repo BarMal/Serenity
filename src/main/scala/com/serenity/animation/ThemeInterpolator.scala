@@ -18,6 +18,8 @@ object ThemeInterpolator:
       error = blendThemeColor(from.error, to.error, t),
       warning = blendThemeColor(from.warning, to.warning, t),
       border = blendColor(from.border, to.border, t),
+      panelBorder = blendColor(from.panelBorder, to.panelBorder, t),
+      margin = blendColor(from.margin, to.margin, t),
       muted = blendColor(from.muted, to.muted, t),
       placeholder = blendColor(from.placeholder, to.placeholder, t),
       textStyle = to.textStyle,

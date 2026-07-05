@@ -335,6 +335,15 @@ object CommandRunnerSettingsItems:
       ),
       CommandSurfaceItem.CommandItem(
         Command.typed(
+          "theme-creator",
+          "Create and save a custom theme with live colour previews.",
+          CommandIntent.OpenThemeCreator,
+          CommandCategory.Settings,
+          label = "Theme Creator"
+        )
+      ),
+      CommandSurfaceItem.CommandItem(
+        Command.typed(
           "toggle-theme",
           "Switch between the light and dark themes.",
           CommandIntent.ToggleTheme,
@@ -538,6 +547,18 @@ object CommandRunnerSettingsItems:
       enabledIntent = CommandIntent.SetWordWrap(true),
       disabledIntent = CommandIntent.SetWordWrap(false),
       hint = "Wrap long logical lines to the editor width"
+    )
+
+  private[command] def focusedTextBodyOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    enabledOptionItem(
+      id = "focused-text-body",
+      label = "Text Body Focus",
+      selectedIndex = optionSelections.getOrElse("focused-text-body", 1),
+      enabledIntent = CommandIntent.SetFocusedTextBody(true),
+      disabledIntent = CommandIntent.SetFocusedTextBody(false),
+      hint = "Dim text outside the active body"
     )
 
   private[command] val navigationItems: List[CommandSurfaceItem.CommandItem] =

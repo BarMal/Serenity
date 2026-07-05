@@ -21,6 +21,7 @@ import com.serenity.state.reducers.*
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
+import com.serenity.ui.theme.config.{ThemeConfigWriter, ThemeCreatorState}
 
 private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBehavior:
   this: StateManager =>
@@ -54,11 +55,19 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     effect match
       case ThemeEffect.SwitchTheme(themeName) => applyThemeByName(themeName)
       case ThemeEffect.ReloadTheme(themeName) => reloadThemeByName(themeName)
+      case ThemeEffect.SaveThemeConfig(config) =>
+        ThemeConfigWriter
+          .writeUserTheme(config)
+          .flatTap(path => logger.info(s"[THEMES] Saved user theme '${config.name}' to $path"))
+          .flatMap(_ => themeManager.listAvailableThemes.flatMap(themeNamesRef.set))
+          .handleErrorWith(ex => logger.error(ex)(s"[THEMES] Failed to save user theme '${config.name}'"))
 
   private def interpretSurfaceEffect(effect: SurfaceEffect): IO[Unit] =
     effect match
       case SurfaceEffect.OpenThemePicker =>
         stateRef.get.flatMap(openThemePickerEffect)
+      case SurfaceEffect.OpenThemeCreator =>
+        stateRef.get.flatMap(openThemeCreatorEffect)
       case SurfaceEffect.OpenFileSearch =>
         stateRef.get.flatMap(openFileSearchEffect)
 
@@ -241,12 +250,16 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateTextDisplayConfig(config => config.withGutter(!config.showGutter)).void
       case CommandIntent.ToggleWordWrap =>
         updateTextDisplayConfig(config => config.withWordWrap(!config.wordWrapEnabled)).void
+      case CommandIntent.ToggleFocusedTextBody =>
+        updateTextDisplayConfig(config => config.withFocusedTextBody(!config.focusedTextBodyEnabled)).void
       case CommandIntent.SetLineNumbers(enabled) =>
         updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
       case CommandIntent.SetGutter(enabled) =>
         updateTextDisplayConfig(config => config.withGutter(enabled)).void
       case CommandIntent.SetWordWrap(enabled) =>
         updateTextDisplayConfig(config => config.withWordWrap(enabled)).void
+      case CommandIntent.SetFocusedTextBody(enabled) =>
+        updateTextDisplayConfig(config => config.withFocusedTextBody(enabled)).void
       case CommandIntent.SaveCurrentFile =>
         state.focusedBufferId match
           case Some(bufferId) => saveBufferEffect(bufferId)
@@ -350,6 +363,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         reloadThemeEffect(state)
       case CommandIntent.OpenThemeChooser =>
         openThemePickerEffect(state)
+      case CommandIntent.OpenThemeCreator =>
+        openThemeCreatorEffect(state)
       case CommandIntent.ReloadThemes =>
         themeManager.listAvailableThemes
           .flatMap(themeNamesRef.set)
@@ -1843,6 +1858,27 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           state
         )
     }
+
+  protected def openThemeCreatorEffect(state: AppState): IO[Unit] =
+    val creatorState             = ThemeCreatorState.fromTheme(state.theme)
+    val (stateWithId, surfaceId) = state.allocateSurfaceId
+    val surface = UiSurface(
+      id = surfaceId,
+      content = SurfaceContent.ThemeCreator(creatorState),
+      presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+    )
+    validateAndUpdateState(
+      stateWithId
+        .copy(
+          uiSurfaces = stateWithId.uiSurfaces.filterNot {
+            _.content match
+              case SurfaceContent.ThemeCreator(_) => true
+              case _                              => false
+          } :+ surface
+        )
+        .pushFocus(Focus.Surface(surfaceId)),
+      state
+    )
 
   protected def openFileSearchEffect(state: AppState): IO[Unit] =
     val (stateWithId, surfaceId) = state.allocateSurfaceId

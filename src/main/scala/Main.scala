@@ -64,21 +64,33 @@ object Main extends IOApp:
               ),
             checkResize = IO(swingWin.doResizeIfNecessary()),
             renderFull = (state, vis, cc) =>
-              syncDisplayMetrics() >> syncChromeTheme(state) >> IO.blocking(
+              syncDisplayMetrics() >> syncChromeTheme(state) >> IO.blocking {
                 Renderer.render(
                   state,
-                  vis,
+                  cursorVisible = false,
                   swingWin,
                   displayState.codeFont,
                   displayState.textFont,
                   displayState.uiFont,
                   displayState.uiMetrics,
-                  cc
+                  None
                 )
-              ),
+                if vis then
+                  val _ = Renderer.renderCursorOnly(
+                    state,
+                    vis,
+                    swingWin,
+                    displayState.codeFont,
+                    displayState.textFont,
+                    displayState.uiFont,
+                    displayState.uiMetrics,
+                    cc
+                  )
+                  ()
+              },
             renderCursorOnly = (state, vis, cc) =>
-              syncDisplayMetrics() >> syncChromeTheme(state) >> IO.blocking(
-                Renderer.render(
+              syncDisplayMetrics() >> syncChromeTheme(state) >> IO.blocking {
+                val rendered = Renderer.renderCursorOnly(
                   state,
                   vis,
                   swingWin,
@@ -88,7 +100,18 @@ object Main extends IOApp:
                   displayState.uiMetrics,
                   cc
                 )
-              ),
+                if !rendered then
+                  Renderer.render(
+                    state,
+                    vis,
+                    swingWin,
+                    displayState.codeFont,
+                    displayState.textFont,
+                    displayState.uiFont,
+                    displayState.uiMetrics,
+                    cc
+                  )
+              },
             appConfig = actualAppConfig,
             makeStateManager = Some(logger =>
               com.serenity.state.manager.StateManager.apply(

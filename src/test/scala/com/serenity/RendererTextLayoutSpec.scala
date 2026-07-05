@@ -497,6 +497,21 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     renderedText should include("target-token")
   }
 
+  it should "dim text outside the active markdown body when focus mode is enabled" in {
+    val font = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val surface = renderState(
+      "Alpha\nBeta\n\nGamma",
+      CursorPosition(0, 0),
+      font,
+      viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 6),
+      viewportSize = ViewportSize(100, 12),
+      config = AppConfig.default.withLineNumbers(false).withGutter(false).withFocusedTextBody(true)
+    )
+
+    surface.drawRunPxCalls.find(_.s == "Alpha").map(_.foreground) shouldBe Some(Theme.light.foreground)
+    surface.drawRunPxCalls.find(_.s == "Gamma").map(_.foreground) shouldBe Some(Theme.light.muted)
+  }
+
   it should "clamp stale horizontal scroll when the pane is wider than the stored viewport" in {
     val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val content =

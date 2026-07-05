@@ -500,6 +500,20 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("display.word_wrap = false")
   }
 
+  it should "load and write focused text body display mode" in {
+    val configFile = Files.createTempFile("serenity-focused-body-config", ".conf")
+    Files.writeString(
+      configFile,
+      """display.focused_text_body = true
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.focusedTextBodyEnabled shouldBe true
+    ConfigManager.configToString(config) should include("display.focused_text_body = true")
+  }
+
   it should "load and write viewport sizing policy" in {
     val configFile = Files.createTempFile("serenity-viewport-config", ".conf")
     Files.writeString(

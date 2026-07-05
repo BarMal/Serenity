@@ -1,5 +1,11 @@
 package com.serenity
 
+import java.awt.image.BufferedImage
+import java.awt.{Color, Dimension, Font}
+import javax.swing.JPanel
+
+import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.renderer.Java2DRenderSurface
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -35,4 +41,26 @@ class RenderSurfaceDrawRunPxSpec extends AnyFlatSpec with Matchers:
     calls(0).s shouldBe "a"
     calls(1).s shouldBe "b"
     calls(2).s shouldBe "c"
+  }
+
+  "Java2DRenderSurface.forImage" should "draw on an existing image without clearing the base frame" in {
+    val image = new BufferedImage(40, 30, BufferedImage.TYPE_INT_ARGB)
+    val g     = image.createGraphics()
+    try
+      g.setColor(Color.RED)
+      g.fillRect(0, 0, image.getWidth, image.getHeight)
+    finally g.dispose()
+
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 10)
+    val metrics = CellMetrics.fromFont(font)
+    val panel   = JPanel()
+    panel.setPreferredSize(Dimension(40, 30))
+    panel.setSize(Dimension(40, 30))
+
+    val surface = Java2DRenderSurface.forImage(image, metrics, font, panel, _ => ())
+    surface.fillPixelRect(0, 0, 2, 2, Color.BLUE)
+    surface.flush()
+
+    image.getRGB(0, 0) shouldBe Color.BLUE.getRGB
+    image.getRGB(30, 20) shouldBe Color.RED.getRGB
   }

@@ -115,6 +115,13 @@ object CommandRegistry:
       CommandIntent.ToggleWordWrap,
       CommandCategory.View,
       label = "Toggle Word Wrap"
+    ),
+    Command.typed(
+      "toggle-text-body-focus",
+      "Dim text outside the current paragraph or code block.",
+      CommandIntent.ToggleFocusedTextBody,
+      CommandCategory.View,
+      label = "Toggle Text Body Focus"
     )
   )
 
@@ -462,6 +469,13 @@ object CommandRegistry:
       CommandIntent.OpenThemeChooser,
       CommandCategory.Settings,
       label = "Open Theme Chooser"
+    ),
+    Command.typed(
+      "theme-creator",
+      "Create and save a custom theme with live colour previews.",
+      CommandIntent.OpenThemeCreator,
+      CommandCategory.Settings,
+      label = "Open Theme Creator"
     ),
     Command.typed(
       "reload-themes",

@@ -30,6 +30,7 @@ class SwingWindow(
   private val chromePaletteRef    = new AtomicReference(SwingWindow.ChromePalette.fromTheme(Theme.default))
   private val pendingResize       = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch          = new CountDownLatch(1)
+  private val baseImageRef        = new AtomicReference[Option[BufferedImage]](None)
   private val renderedImageRef    = new AtomicReference[Option[BufferedImage]](None)
   private val savedBoundsRef      = new AtomicReference[Option[Rectangle]](None)
   private val maximizedRef        = new AtomicBoolean(false)
@@ -60,8 +61,20 @@ class SwingWindow(
       renderedImageRef.get().foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
 
   def onImageReady(image: BufferedImage): Unit =
+    baseImageRef.set(Some(image))
     renderedImageRef.set(Some(image))
     SwingUtilities.invokeLater(() => canvas.repaint())
+
+  def onCursorOverlayReady(drawOverlay: BufferedImage => Unit): Boolean =
+    baseImageRef.get() match
+      case Some(baseImage) =>
+        val overlayImage = SwingWindow.copyImage(baseImage)
+        drawOverlay(overlayImage)
+        renderedImageRef.set(Some(overlayImage))
+        SwingUtilities.invokeLater(() => canvas.repaint())
+        true
+      case None =>
+        false
 
   private def updateShape(): Unit =
     if usesCustomChrome && !maximizedRef.get() then
@@ -488,6 +501,13 @@ object SwingWindow:
   )
 
   case class CanvasResizeSnapshot(pixelSize: Dimension, viewportSize: ViewportSize)
+
+  def copyImage(source: BufferedImage): BufferedImage =
+    val copy = new BufferedImage(source.getWidth, source.getHeight, source.getType)
+    val g    = copy.createGraphics()
+    try g.drawImage(source, 0, 0, null)
+    finally g.dispose()
+    copy
 
   private[serenity] def setAccessibleNameIfAvailable(component: JComponent, name: String): Unit =
     Option(component.getAccessibleContext).foreach(_.setAccessibleName(name))

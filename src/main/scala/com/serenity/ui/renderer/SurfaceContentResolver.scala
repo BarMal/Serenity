@@ -104,6 +104,8 @@ object SurfaceContentResolver:
         resolveDiagnostics(rect, mode, issues)
       case SurfaceContent.ThemePicker(state) =>
         resolveThemePicker(state, mode)
+      case SurfaceContent.ThemeCreator(state) =>
+        resolveThemeCreator(state, mode)
       case SurfaceContent.FileSearch(state) =>
         resolveFileSearch(state, rect, mode)
       case SurfaceContent.ContextMenu(menu) =>
@@ -746,6 +748,45 @@ object SurfaceContentResolver:
     val rows =
       state.themes.zipWithIndex.map((name, idx) => OverlayRow(plainText = name, selected = idx == state.selectedIndex))
     ResolvedSurfaceContent(titleFor(mode, "Theme"), rows = rows)
+
+  private def resolveThemeCreator(
+    state: com.serenity.ui.theme.config.ThemeCreatorState,
+    mode: SurfaceRenderMode
+  ): ResolvedSurfaceContent =
+    val rows = state.rows.zipWithIndex.map { (row, index) =>
+      val selected = index == state.selectedIndex
+      val valueTone =
+        if row.valid then OverlayTone.Normal
+        else OverlayTone.Error
+      val valueSegment = OverlaySegment(
+        row.value,
+        selected = selected,
+        tone = valueTone,
+        foregroundColor = row.previewColor.map(contrastColor),
+        backgroundColor = row.previewColor
+      )
+      OverlayRow(
+        plainText = s"${row.label}: ${row.value}",
+        selected = selected,
+        cursorColumn = Option.when(selected)(s"${row.label}: ${row.value}".length),
+        segments = List(
+          OverlaySegment(row.label),
+          OverlaySegment(row.path, tone = OverlayTone.Muted),
+          valueSegment
+        ),
+        layout = OverlayRowLayout.Columns
+      )
+    }
+    ResolvedSurfaceContent(
+      title = titleFor(mode, "Theme Creator"),
+      header = Some(OverlayRow("theme creator")),
+      rows = rows,
+      footer = state.statusMessage.map(OverlayRow(_, foregroundColor = Some(java.awt.Color.RED)))
+    )
+
+  private def contrastColor(color: java.awt.Color): java.awt.Color =
+    val luminance = (0.299 * color.getRed + 0.587 * color.getGreen + 0.114 * color.getBlue) / 255.0
+    if luminance > 0.55 then java.awt.Color.BLACK else java.awt.Color.WHITE
 
   private def resolveFileSearch(
     state: FileSearchState,

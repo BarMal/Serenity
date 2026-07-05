@@ -21,6 +21,8 @@ object ConfigurableThemeManager:
         case Some(w) => convertUiToken(w)
         case None    => Right(ThemeColor(new java.awt.Color(0xf0b429), new java.awt.Color(0x2b2000)))
       border       <- ColorParser.parseColor(config.ui.border)
+      panelBorder  <- parseOptionalColor(config.ui.panelBorder, border)
+      margin       <- parseOptionalColor(config.ui.margin, background)
       muted        <- ColorParser.parseColor(config.ui.muted)
       placeholder  <- ColorParser.parseColor(config.ui.placeholder)
       syntaxColors <- convertSyntaxColors(config.syntax, background)
@@ -35,11 +37,18 @@ object ConfigurableThemeManager:
       error = error,
       warning = warning,
       border = border,
+      panelBorder = panelBorder,
+      margin = margin,
       muted = muted,
       placeholder = placeholder,
       textStyle = TextStyle.normal,
       syntaxColors = syntaxColors
     )
+
+  private def parseOptionalColor(value: Option[String], default: Color): Either[String, Color] =
+    value match
+      case Some(colorStr) => ColorParser.parseColor(colorStr)
+      case None           => Right(default)
 
   private def convertUiToken(config: UiTokenConfig): Either[String, ThemeColor] =
     for

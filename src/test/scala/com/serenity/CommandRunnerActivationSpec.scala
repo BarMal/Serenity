@@ -119,6 +119,16 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       ) shouldBe Some(("6", "Pixels (0-32)", Some(CommandIntent.SetUiCornerRadiusPx(14)), None))
   }
 
+  it should "expose focused text body in the text display settings group" in {
+    val config = AppConfig.default.withFocusedTextBody(true)
+    val runner = CommandRunner.empty.activate(registry, config)
+
+    runner.optionSelections.get("focused-text-body") shouldBe Some(0)
+    settingsGroup(runner, "settings-text-display").map(_.children.map(_.id)) should contain(
+      List("line-numbers", "gutter", "line-wrap", "focused-text-body")
+    )
+  }
+
   it should "expose cursor info bar mode in the appearance settings group" in {
     val config = AppConfig.default.withCursorInfoBarMode(CursorInfoBarMode.Detailed)
     val runner = CommandRunner.empty.activate(registry, config)

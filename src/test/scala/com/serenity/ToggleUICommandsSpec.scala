@@ -203,6 +203,16 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     command.intent shouldBe CommandIntent.ToggleWordWrap
   }
 
+  it should "toggle text body focus from disabled to enabled" in {
+    val stateManager = createStateManager()
+
+    stateManager.getCurrentState.unsafeRunSync().config.focusedTextBodyEnabled shouldBe false
+
+    executeCommandThroughRunner(stateManager, "toggle-text-body-focus", "toggle-text-body-focus")
+
+    stateManager.getCurrentState.unsafeRunSync().config.focusedTextBodyEnabled shouldBe true
+  }
+
   it should "toggle word wrap from enabled to disabled" in {
     val stateManager = createStateManager()
 
@@ -236,11 +246,22 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed("word-wrap-off", "Set word wrap off", CommandIntent.SetWordWrap(false), CommandCategory.Settings)
       )
       .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "focused-body-on",
+          "Set focused text body on",
+          CommandIntent.SetFocusedTextBody(true),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
 
     val disabledState = stateManager.getCurrentState.unsafeRunSync()
     disabledState.config.showLineNumbers shouldBe false
     disabledState.config.showGutter shouldBe false
     disabledState.config.wordWrapEnabled shouldBe false
+    disabledState.config.focusedTextBodyEnabled shouldBe true
 
     stateManager
       .executeCommand(
@@ -258,9 +279,20 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed("word-wrap-on", "Set word wrap on", CommandIntent.SetWordWrap(true), CommandCategory.Settings)
       )
       .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "focused-body-off",
+          "Set focused text body off",
+          CommandIntent.SetFocusedTextBody(false),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
 
     val enabledState = stateManager.getCurrentState.unsafeRunSync()
     enabledState.config.showLineNumbers shouldBe true
     enabledState.config.showGutter shouldBe true
     enabledState.config.wordWrapEnabled shouldBe true
+    enabledState.config.focusedTextBodyEnabled shouldBe false
   }

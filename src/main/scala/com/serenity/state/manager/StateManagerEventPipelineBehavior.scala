@@ -266,6 +266,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
                     new CommandRunnerComponent(registry)
                   case SurfaceContent.ThemePicker(_) =>
                     new ThemePickerComponent()
+                  case SurfaceContent.ThemeCreator(_) =>
+                    new ThemeCreatorComponent()
                   case SurfaceContent.FileSearch(_) =>
                     new FileSearchComponent()
                   case SurfaceContent.CommentLens(_) =>
