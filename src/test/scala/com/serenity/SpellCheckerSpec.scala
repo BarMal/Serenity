@@ -273,6 +273,28 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: clearness")
   }
 
+  it should "include Hunspell REP replacement suggestions in unknown-word diagnostics" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-replacements",
+      List("the", "world"),
+      List(
+        "SET UTF-8",
+        "REP 2",
+        "REP teh the",
+        "REP wurld world"
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("teh wurld wrld", config)
+
+    diagnostics.map(_.message) shouldBe List(
+      "Possible spelling issue: teh (suggestion: the)",
+      "Possible spelling issue: wurld (suggestion: world)",
+      "Possible spelling issue: wrld"
+    )
+  }
+
   it should "load Hunspell dictionaries using the affix SET charset" in {
     val (dictionary, _) = writeHunspellDictionary(
       "serenity-latin1",
