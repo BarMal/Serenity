@@ -192,3 +192,29 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "ui-font-size"
     )
   }
+
+  it should "group preset theme controls by theme and surface material" in {
+    val config = AppConfig.default
+    val groups = CommandRunnerSettingsGroups.build(
+      optionSelections = CommandRunnerOptionSelections.default(config),
+      inputItems = CommandRunnerSettingsInputItems.build(config),
+      uiPresetPreviews = Nil,
+      editingPresetName = None
+    )
+
+    groupById(groups, "settings-preset-theme").children.map(_.id) shouldBe List(
+      "settings-preset-theme-selection",
+      "settings-preset-surface-material"
+    )
+    groupById(groups, "settings-preset-theme-selection").children.map(_.id) shouldBe List(
+      "theme-chooser",
+      "theme-creator",
+      "toggle-theme",
+      "reload-theme"
+    )
+    groupById(groups, "settings-preset-surface-material").children.map(_.id) shouldBe List(
+      "background-style",
+      "material-preset",
+      "blur-radius"
+    )
+  }

@@ -756,8 +756,9 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     descendants(documentDefaults).map(_.id) should not contain "lang-plain-text"
     val theme = groupByIdRecursive(List(editPreset), "settings-preset-theme")
     theme.label shouldBe "Theme & Surface"
-    theme.children.map(_.id) should contain("settings-surface-appearance")
-    theme.children.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } should contain allOf (
+    theme.children.map(_.id) shouldBe List("settings-preset-theme-selection", "settings-preset-surface-material")
+    descendants(theme).map(_.id) should contain allOf ("background-style", "material-preset", "blur-radius")
+    descendants(theme).collect { case CommandSurfaceItem.CommandItem(command) => command.intent } should contain allOf (
       CommandIntent.OpenThemeChooser,
       CommandIntent.ToggleTheme,
       CommandIntent.ReloadTheme
