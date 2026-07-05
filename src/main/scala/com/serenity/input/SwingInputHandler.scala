@@ -97,15 +97,19 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   )
 
   def keyStrokeInfoStream: Stream[F, KeyStrokeInfo] =
-    Stream
-      .repeatEval(Sync[F].blocking(infoQueue.take()))
-      .unNoneTerminate
+    queueStream(infoQueue)
 
   private def mouseStream: Stream[F, Event] =
-    Stream.repeatEval(Sync[F].blocking(mouseQueue.take())).unNoneTerminate
+    queueStream(mouseQueue)
 
   def eventStream: Stream[F, Event] =
     inputRouter.eventStream(keyStrokeInfoStream).merge(mouseStream)
+
+  private def queueStream[A](queue: LinkedBlockingQueue[Option[A]]): Stream[F, A] =
+    Stream.eval(Sync[F].delay(shutdownFlag.get())).flatMap {
+      case true  => Stream.empty
+      case false => Stream.repeatEval(Sync[F].blocking(queue.take())).unNoneTerminate
+    }
 
   private def mouseButton(e: MouseEvent): MouseButton =
     e.getButton match
@@ -124,8 +128,8 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   def shutdown: F[Unit] =
     Sync[F].blocking {
       if shutdownFlag.compareAndSet(false, true) then
-        infoQueue.offer(None)
-        mouseQueue.offer(None)
+        val _ = infoQueue.offer(None)
+        val _ = mouseQueue.offer(None)
     }
 
   private def mods(e: KeyEvent): Set[Modifier] =
