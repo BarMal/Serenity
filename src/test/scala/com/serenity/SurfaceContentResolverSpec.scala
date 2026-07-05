@@ -307,6 +307,38 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.footer.map(_.plainText) shouldBe Some("1/3")
   }
 
+  it should "resolve preset theme submenu as grouped theme and surface rows" in {
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(
+        activeCategory = CommandCategory.Settings,
+        activeSubmenu = Some(
+          CommandRunnerSubmenuState(
+            "settings-preset-theme",
+            parentGroupId = Some("settings-preset-edit"),
+            ancestorGroupIds = List("settings-ui-presets", "settings-preset-edit")
+          )
+        )
+      )
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPaletteSubmenu(
+        runner,
+        "settings-preset-theme",
+        previewOnly = false
+      ),
+      LayoutRect(0, 0, 80, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.map(_.plainText) shouldBe List("Theme Selection", "Surface Material")
+    resolved.rows.map(_.segments.map(_.text)) shouldBe List(
+      List("Theme Selection", "Choose, create, toggle, or reload themes"),
+      List("Surface Material", "Background, material, and blur")
+    )
+    resolved.footer.map(_.plainText) shouldBe Some("1/2")
+  }
+
   it should "append a selected UI preset detail row in the preset submenu" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry

@@ -326,10 +326,24 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Default mode, Markdown view, spelling")
     )
+    val presetThemeSelectionGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-theme-selection",
+      label = "Theme Selection",
+      children = CommandRunnerSettingsItems.themeItems,
+      category = CommandCategory.Settings,
+      hint = Some("Choose, create, toggle, or reload themes")
+    )
+    val presetSurfaceMaterialGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-surface-material",
+      label = "Surface Material",
+      children = surfaceAppearanceGroup.children,
+      category = CommandCategory.Settings,
+      hint = Some("Background, material, and blur")
+    )
     val presetThemeGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-theme",
       label = "Theme & Surface",
-      children = List(surfaceAppearanceGroup) ++ CommandRunnerSettingsItems.themeItems,
+      children = List(presetThemeSelectionGroup, presetSurfaceMaterialGroup),
       category = CommandCategory.Settings,
       hint = Some("Theme, material, and background")
     )
