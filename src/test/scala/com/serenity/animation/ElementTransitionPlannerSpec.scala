@@ -129,10 +129,12 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
       .withEditorTextTransitionSpeedScale(Some(0.5))
       .withCommandRunnerTransitionSpeedScale(Some(1.5))
       .withUiTransitionSpeedScale(Some(0.0))
+      .withCursorTransitionSpeedScale(Some(0.25))
 
     config.effectiveEditorTextTransitionSpeedScale shouldBe 0.5
     config.effectiveCommandRunnerTransitionSpeedScale shouldBe 1.5
     config.effectiveUiTransitionSpeedScale shouldBe 0.0
+    config.effectiveCursorTransitionSpeedScale shouldBe 0.25
     config.scaledCharacterAnimation.map(_.steps) shouldBe Some(6)
     config.scaledCommandRunnerAnimation.map(_.steps) shouldBe Some(18)
     config.scaledUiAnimation shouldBe None
@@ -149,9 +151,25 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
     config.effectiveEditorTextTransitionSpeedScale shouldBe 2.0
     config.effectiveCommandRunnerTransitionSpeedScale shouldBe 2.0
     config.effectiveUiTransitionSpeedScale shouldBe 2.0
+    config.effectiveCursorTransitionSpeedScale shouldBe 2.0
     config.scaledCharacterAnimation.map(_.steps) shouldBe Some(24)
     config.scaledCommandRunnerAnimation.map(_.steps) shouldBe Some(24)
     config.scaledUiAnimation.map(_.steps) shouldBe Some(24)
+  }
+
+  it should "preserve explicit family speed overrides when applying motion presets" in {
+    val config = AppConfig.default
+      .withElementTransitionSpeedScale(2.0)
+      .withEditorTextTransitionSpeedScale(Some(0.5))
+      .withCommandRunnerTransitionSpeedScale(Some(1.5))
+      .withUiTransitionSpeedScale(Some(0.75))
+      .withCursorTransitionSpeedScale(Some(0.25))
+      .withMotionPreset(MotionPreset.Reduced)
+
+    config.effectiveEditorTextTransitionSpeedScale shouldBe 0.5
+    config.effectiveCommandRunnerTransitionSpeedScale shouldBe 1.5
+    config.effectiveUiTransitionSpeedScale shouldBe 0.75
+    config.effectiveCursorTransitionSpeedScale shouldBe 0.25
   }
 
   it should "keep reduced motion disabled even when app config has a custom speed scale" in {

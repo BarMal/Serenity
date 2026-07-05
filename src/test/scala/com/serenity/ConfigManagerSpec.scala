@@ -533,6 +533,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
         |ui.motion.editor_text.speed_scale = 0.50
         |ui.motion.command_runner.speed_scale = 2.25
         |ui.motion.ui.speed_scale = 1.25
+        |ui.motion.cursor.speed_scale = 0.75
         |ui.motion.editor_text = typed
         |ui.motion.panel_open = directional
         |ui.motion.panel_close = off
@@ -551,6 +552,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     config.editorTextTransitionSpeedScale shouldBe Some(0.5)
     config.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
     config.uiTransitionSpeedScale shouldBe Some(1.25)
+    config.cursorTransitionSpeedScale shouldBe Some(0.75)
     config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
     config.panelOpenTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
     config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
@@ -563,6 +565,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("ui.motion.editor_text.speed_scale = 0.5")
     ConfigManager.configToString(config) should include("ui.motion.command_runner.speed_scale = 2.25")
     ConfigManager.configToString(config) should include("ui.motion.ui.speed_scale = 1.25")
+    ConfigManager.configToString(config) should include("ui.motion.cursor.speed_scale = 0.75")
     ConfigManager.configToString(config) should include("ui.motion.editor_text = typed")
     ConfigManager.configToString(config) should include("ui.motion.panel_open = directional")
     ConfigManager.configToString(config) should include("ui.motion.panel_close = off")

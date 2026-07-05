@@ -657,6 +657,7 @@ given Encoder[AppConfig] = Encoder.instance { config =>
     "editorTextTransitionSpeedScale"    -> config.editorTextTransitionSpeedScale.asJson,
     "commandRunnerTransitionSpeedScale" -> config.commandRunnerTransitionSpeedScale.asJson,
     "uiTransitionSpeedScale"            -> config.uiTransitionSpeedScale.asJson,
+    "cursorTransitionSpeedScale"        -> config.cursorTransitionSpeedScale.asJson,
     "commandRunnerAnimation"            -> config.commandRunnerAnimation.asJson,
     "uiAnimation"                       -> config.uiAnimation.asJson,
     "commandRunnerVisibleRows"          -> config.commandRunnerVisibleRows.asJson,
@@ -714,6 +715,9 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     uiTransitionSpeedScale <- cursor
       .getOrElse[Option[Double]]("uiTransitionSpeedScale")(None)
       .map(_.map(AppConfig.clampElementTransitionSpeedScale))
+    cursorTransitionSpeedScale <- cursor
+      .getOrElse[Option[Double]]("cursorTransitionSpeedScale")(None)
+      .map(_.map(AppConfig.clampElementTransitionSpeedScale))
     commandRunnerAnimation <- cursor.getOrElse[Option[AnimationConfig]]("commandRunnerAnimation")(
       AnimationConfig.smooth
     )
@@ -761,6 +765,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     editorTextTransitionSpeedScale = editorTextTransitionSpeedScale,
     commandRunnerTransitionSpeedScale = commandRunnerTransitionSpeedScale,
     uiTransitionSpeedScale = uiTransitionSpeedScale,
+    cursorTransitionSpeedScale = cursorTransitionSpeedScale,
     commandRunnerAnimation = commandRunnerAnimation,
     uiAnimation = uiAnimation,
     commandRunnerVisibleRows = commandRunnerVisibleRows,

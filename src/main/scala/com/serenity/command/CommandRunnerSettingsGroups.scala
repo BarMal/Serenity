@@ -82,7 +82,8 @@ object CommandRunnerSettingsGroups:
     val cursorGroup = CommandSurfaceItem.GroupItem(
       id = "settings-cursor",
       label = "Cursor",
-      children = List(cursorModeItem, cursorInfoBarItem, cursorInfoPlacement),
+      children = List(cursorModeItem, cursorInfoBarItem, cursorInfoPlacement) ++
+        inputItems.filter(_.id == "cursor-speed-scale"),
       category = CommandCategory.Settings,
       hint = Some("Cursor style, info bar, placement")
     )

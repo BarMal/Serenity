@@ -80,6 +80,7 @@ enum CommandIntent:
   case SetEditorTextTransitionSpeedScale(scale: Double)
   case SetCommandRunnerTransitionSpeedScale(scale: Double)
   case SetUiTransitionSpeedScale(scale: Double)
+  case SetCursorTransitionSpeedScale(scale: Double)
   case SetCommandRunnerAnimation(animation: Option[AnimationConfig])
   case SetUiAnimation(animation: Option[AnimationConfig])
   case SetCommandRunnerVisibleRows(rows: Option[Int])

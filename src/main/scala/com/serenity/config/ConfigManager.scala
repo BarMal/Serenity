@@ -224,6 +224,11 @@ object ConfigManager:
               parseElementTransitionSpeedScale(value.trim)
                 .map(scale => config.withUiTransitionSpeedScale(Some(scale)))
                 .getOrElse(config)
+            case "ui.motion.cursor.speed_scale" | "ui.motion.cursor_speed_scale" | "ui.motion.cursor.speed.scale" |
+                "ui_motion_cursor_speed_scale" =>
+              parseElementTransitionSpeedScale(value.trim)
+                .map(scale => config.withCursorTransitionSpeedScale(Some(scale)))
+                .getOrElse(config)
             case "ui.motion.command_runner" | "ui.motion.command.runner" | "ui_motion_command_runner" =>
               parseAnimationPreset(value.trim)
                 .map(config.withCommandRunnerAnimation)
@@ -416,6 +421,7 @@ object ConfigManager:
        |ui.motion.editor_text.speed_scale = ${config.effectiveEditorTextTransitionSpeedScale}
        |ui.motion.command_runner.speed_scale = ${config.effectiveCommandRunnerTransitionSpeedScale}
        |ui.motion.ui.speed_scale = ${config.effectiveUiTransitionSpeedScale}
+       |ui.motion.cursor.speed_scale = ${config.effectiveCursorTransitionSpeedScale}
        |ui.motion.command_runner = $commandRunnerAnimationSetting
        |ui.motion.ui = $uiAnimationSetting
        |ui.motion.editor_text = ${transitionKindConfigKey(config.editorInsertionTransitionKind)}

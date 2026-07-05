@@ -99,6 +99,17 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     ticks30 shouldBe 2
   }
 
+  it should "derive cursor idle cadence from the cursor motion speed scale" in {
+    AppRuntime.cursorIdleInterval(AppConfig.default) shouldBe Some(500.millis)
+    AppRuntime.cursorIdleInterval(AppConfig.default.withElementTransitionSpeedScale(2.0)) shouldBe Some(1000.millis)
+    AppRuntime.cursorIdleInterval(
+      AppConfig.default
+        .withElementTransitionSpeedScale(2.0)
+        .withCursorTransitionSpeedScale(Some(0.5))
+    ) shouldBe Some(250.millis)
+    AppRuntime.cursorIdleInterval(AppConfig.default.withCursorTransitionSpeedScale(Some(0.0))) shouldBe None
+  }
+
   it should "terminate the app loop when the external close signal fires" in {
     given org.typelevel.log4cats.Logger[IO] =
       LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeSpec"))

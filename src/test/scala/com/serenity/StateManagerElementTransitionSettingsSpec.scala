@@ -89,6 +89,23 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     stateManager.getCurrentState.unsafeRunSync().config.uiTransitionSpeedScale shouldBe Some(1.25)
   }
 
+  it should "update the cursor transition speed scale config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "cursor-speed-scale",
+          "Set cursor speed scale",
+          CommandIntent.SetCursorTransitionSpeedScale(0.75),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.cursorTransitionSpeedScale shouldBe Some(0.75)
+  }
+
   it should "update the editor text transition kind config" in {
     val stateManager = createStateManager()
 
