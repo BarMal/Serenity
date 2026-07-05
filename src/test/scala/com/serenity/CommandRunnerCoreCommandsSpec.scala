@@ -19,6 +19,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
+import com.serenity.ui.theme.config.ThemeConfigLoader
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -310,6 +311,27 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
     updatedState.theme.name shouldBe "light"
+  }
+
+  it should "export the current theme through the native save-file dialog" in {
+    val targetPath   = Files.createTempDirectory("serenity-theme-export").resolve("quiet-focus.conf")
+    val stateManager = createStateManager(fileDialog = TestFileDialog(saveSelection = Some(targetPath)))
+    val theme = Theme.light.copy(
+      name = "quiet-focus",
+      background = new java.awt.Color(0x112233),
+      panelBorder = new java.awt.Color(0x445566)
+    )
+    stateManager.updateState(_.copy(theme = theme)).unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "export-theme", "export-theme")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.commandRunnerSurface shouldBe None
+    Files.exists(targetPath) shouldBe true
+    val loaded = ThemeConfigLoader().loadThemeFromFile(targetPath).unsafeRunSync()
+    loaded.name shouldBe "quiet-focus"
+    loaded.ui.background shouldBe "#112233"
+    loaded.ui.panelBorder shouldBe Some("#445566")
   }
 
   it should "enable spell-checking from the command runner and refresh diagnostics asynchronously" in {

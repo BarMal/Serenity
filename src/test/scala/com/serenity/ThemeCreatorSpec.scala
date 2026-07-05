@@ -145,4 +145,8 @@ class ThemeCreatorSpec extends AnyFlatSpec with Matchers:
     CommandRegistry.default.findCommand("theme-creator").map(_.intent) shouldBe Some(CommandIntent.OpenThemeCreator)
   }
 
+  it should "expose a theme export command" in {
+    CommandRegistry.default.findCommand("export-theme").map(_.intent) shouldBe Some(CommandIntent.ExportCurrentTheme)
+  }
+
 end ThemeCreatorSpec

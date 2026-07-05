@@ -284,6 +284,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         clearSession()
       case CommandIntent.OpenFile =>
         requestOpenFileDialog
+      case CommandIntent.ExportCurrentTheme =>
+        exportCurrentThemeEffect(state)
       case CommandIntent.QuitApp =>
         beginCloseAction(CloseScope.Quit, state)
       case CommandIntent.CloseAll =>
@@ -1763,6 +1765,21 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           IO.unit
       }
       .handleErrorWith(ex => logger.error(ex)("[FILE] Native open-file dialog failed"))
+
+  protected def exportCurrentThemeEffect(state: AppState): IO[Unit] =
+    val config            = ThemeConfigWriter.themeToConfig(state.theme)
+    val suggestedFileName = s"${ThemeConfigWriter.fileNameFor(config.name)}.conf"
+    FileUtils.getCurrentDirectory
+      .flatMap(currentDirectory => fileDialog.chooseSaveFile(Some(currentDirectory), Some(suggestedFileName)))
+      .flatMap {
+        case Some(path) =>
+          ThemeConfigWriter
+            .write(config, path)
+            .flatTap(_ => logger.info(s"[THEMES] Exported current theme '${config.name}' to $path"))
+        case None =>
+          IO.unit
+      }
+      .handleErrorWith(ex => logger.error(ex)(s"[THEMES] Failed to export current theme '${config.name}'"))
 
   protected def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
     stateRef.get.flatMap { state =>
