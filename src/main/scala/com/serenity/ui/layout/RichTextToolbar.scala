@@ -34,7 +34,7 @@ case class RichTextToolbarState(
   private def moveFocus(delta: Int, items: List[RichTextToolbarItem]): RichTextToolbarState =
     if items.isEmpty then copy(focusedIndex = 0)
     else
-      val rawIndex = (focusedIndex + delta) % items.length
+      val rawIndex = (clampedFocusIndex(items) + delta) % items.length
       copy(focusedIndex = if rawIndex < 0 then rawIndex + items.length else rawIndex)
 
   private def clampedFocusIndex(items: List[RichTextToolbarItem]): Int =
