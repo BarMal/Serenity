@@ -218,3 +218,27 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "blur-radius"
     )
   }
+
+  it should "group preset document defaults by document, preview, and spelling" in {
+    val config = AppConfig.default
+    val groups = CommandRunnerSettingsGroups.build(
+      optionSelections = CommandRunnerOptionSelections.default(config),
+      inputItems = CommandRunnerSettingsInputItems.build(config),
+      uiPresetPreviews = Nil,
+      editingPresetName = None
+    )
+
+    groupById(groups, "settings-preset-document-defaults").children.map(_.id) shouldBe List(
+      "settings-preset-new-documents",
+      "settings-preset-markdown-preview",
+      "settings-preset-spelling"
+    )
+    groupById(groups, "settings-preset-new-documents").children.map(_.id) shouldBe List("default-document-mode")
+    groupById(groups, "settings-preset-markdown-preview").children.map(_.id) shouldBe List("markdown-view")
+    groupById(groups, "settings-preset-spelling").children.map(_.id) shouldBe List(
+      "spellcheck-enabled",
+      "spellcheck-languages",
+      "spellcheck-dictionaries",
+      "spellcheck-words"
+    )
+  }
