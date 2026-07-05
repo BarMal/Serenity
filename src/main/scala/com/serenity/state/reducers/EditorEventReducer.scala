@@ -1,5 +1,6 @@
 package com.serenity.state.reducers
 
+import com.serenity.animation.TransitionKind
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
@@ -1584,19 +1585,21 @@ object EditorEventReducer:
     cursorLine: Int,
     cursorColumn: Int
   ): Buffer =
-    state.config.scaledCharacterAnimation match
-      case Some(animConfig) =>
-        val updatedAnimations = buffer.animations.addCharacterAnimation(
-          char,
-          cursorColumn,
-          cursorLine,
-          state.theme.backgroundColor,
-          state.theme.foregroundColor,
-          animConfig.steps
-        )
-        buffer.copy(animations = updatedAnimations)
-      case None =>
-        buffer
+    if state.config.editorInsertionTransitionKind == TransitionKind.Disabled then buffer
+    else
+      state.config.scaledCharacterAnimation match
+        case Some(animConfig) =>
+          val updatedAnimations = buffer.animations.addCharacterAnimation(
+            char,
+            cursorColumn,
+            cursorLine,
+            state.theme.backgroundColor,
+            state.theme.foregroundColor,
+            animConfig.steps
+          )
+          buffer.copy(animations = updatedAnimations)
+        case None =>
+          buffer
 
   private def selectionFocusOrCursor(buffer: Buffer, cursor: CursorPosition): CursorPosition =
     buffer.primarySelection.map(_.focus).getOrElse(cursor)
