@@ -478,6 +478,13 @@ object CommandRegistry:
       label = "Open Theme Creator"
     ),
     Command.typed(
+      "export-theme",
+      "Export the current theme to a theme config file.",
+      CommandIntent.ExportCurrentTheme,
+      CommandCategory.Settings,
+      label = "Export Current Theme"
+    ),
+    Command.typed(
       "reload-themes",
       "Reload available themes from disk.",
       CommandIntent.ReloadThemes,

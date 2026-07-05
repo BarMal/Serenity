@@ -107,6 +107,7 @@ enum CommandIntent:
   case SetUiCornerRadiusPx(radius: Int)
   case OpenThemeChooser
   case OpenThemeCreator
+  case ExportCurrentTheme
   case ReloadThemes
   case PinExplorerPanel
   case PinOutlinePanel
