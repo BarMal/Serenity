@@ -32,13 +32,14 @@ object SpellChecker:
 
   private case class HunspellAffixRules(
       flagMode: HunspellFlagMode,
+      flagAliases: Map[String, Set[String]],
       prefixes: Map[String, List[HunspellAffixRule]],
       suffixes: Map[String, List[HunspellAffixRule]]
   )
 
   private object HunspellAffixRules:
     val empty: HunspellAffixRules =
-      HunspellAffixRules(HunspellFlagMode.Simple, Map.empty, Map.empty)
+      HunspellAffixRules(HunspellFlagMode.Simple, Map.empty, Map.empty, Map.empty)
 
   private case class HunspellAffixRule(strip: String, append: String, condition: String, combineable: Boolean)
   private case class HunspellEntry(word: String, flags: Set[String])
@@ -200,7 +201,7 @@ object SpellChecker:
           .collect { case line: String => line.trim }
           .dropWhile(line => line.forall(_.isDigit))
           .filter(line => line.nonEmpty && !line.startsWith("#"))
-          .flatMap(line => parseHunspellDictionaryEntry(line, affixRules.flagMode))
+          .flatMap(line => parseHunspellDictionaryEntry(line, affixRules))
 
         val words = entries
           .flatMap(entry => expandHunspellEntry(entry, affixRules))
@@ -234,9 +235,10 @@ object SpellChecker:
     val lines =
       Files.readAllLines(path, charset).toArray.toList.collect { case line: String => line.trim }
     val flagMode    = parseFlagMode(lines)
+    val flagAliases = parseFlagAliases(lines, flagMode)
     val prefixRules = parseAffixRules(lines, "PFX")
     val suffixRules = parseAffixRules(lines, "SFX")
-    HunspellAffixRules(flagMode, prefixRules, suffixRules)
+    HunspellAffixRules(flagMode, flagAliases, prefixRules, suffixRules)
 
   private def parseFlagMode(lines: List[String]): HunspellFlagMode =
     lines
@@ -275,25 +277,43 @@ object SpellChecker:
         case _ => combinability
     }
 
-  private def parseHunspellDictionaryEntry(line: String, flagMode: HunspellFlagMode): Option[HunspellEntry] =
+  private def parseFlagAliases(lines: List[String], flagMode: HunspellFlagMode): Map[String, Set[String]] =
+    val (aliases, _) =
+      lines.foldLeft((Map.empty[String, Set[String]], 0)) {
+        case ((aliases, aliasIndex), line) =>
+          line.split("\\s+").toList match
+            case "AF" :: count :: Nil if count.forall(_.isDigit) =>
+              aliases -> aliasIndex
+            case "AF" :: flags :: _ =>
+              val nextIndex = aliasIndex + 1
+              aliases.updated(nextIndex.toString, parseHunspellFlagList(flags, flagMode)) -> nextIndex
+            case _ =>
+              aliases -> aliasIndex
+      }
+    aliases
+
+  private def parseHunspellDictionaryEntry(line: String, affixRules: HunspellAffixRules): Option[HunspellEntry] =
     val withoutMorphology = line.takeWhile(char => !char.isWhitespace)
     val word              = withoutMorphology.takeWhile(_ != '/').trim
     Option(word)
       .filter(_.exists(_.isLetter))
-      .map(word => HunspellEntry(word, parseHunspellFlags(withoutMorphology, flagMode)))
+      .map(word => HunspellEntry(word, parseHunspellFlags(withoutMorphology, affixRules)))
 
-  private def parseHunspellFlags(entry: String, flagMode: HunspellFlagMode): Set[String] =
+  private def parseHunspellFlags(entry: String, affixRules: HunspellAffixRules): Set[String] =
     entry.dropWhile(_ != '/') match
       case "" => Set.empty
       case flagsWithSlash =>
         val flags = flagsWithSlash.drop(1)
-        flagMode match
-          case HunspellFlagMode.Simple =>
-            flags.toList.map(_.toString).toSet
-          case HunspellFlagMode.Long =>
-            flags.grouped(2).filter(_.length == 2).toSet
-          case HunspellFlagMode.Num =>
-            flags.split(",").map(_.trim).filter(_.nonEmpty).toSet
+        affixRules.flagAliases.getOrElse(flags, parseHunspellFlagList(flags, affixRules.flagMode))
+
+  private def parseHunspellFlagList(flags: String, flagMode: HunspellFlagMode): Set[String] =
+    flagMode match
+      case HunspellFlagMode.Simple =>
+        flags.toList.map(_.toString).toSet
+      case HunspellFlagMode.Long =>
+        flags.grouped(2).filter(_.length == 2).toSet
+      case HunspellFlagMode.Num =>
+        flags.split(",").map(_.trim).filter(_.nonEmpty).toSet
 
   private def expandHunspellEntry(entry: HunspellEntry, affixRules: HunspellAffixRules): Set[String] =
     val prefixRules = entry.flags.flatMap(flag => affixRules.prefixes.getOrElse(flag, Nil))

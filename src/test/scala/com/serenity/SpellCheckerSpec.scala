@@ -251,6 +251,28 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: softless")
   }
 
+  it should "expand Hunspell affix flag aliases from AF declarations" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-flag-aliases",
+      List("kind/2", "clear/1"),
+      List(
+        "SET UTF-8",
+        "AF 2",
+        "AF U",
+        "AF US",
+        "PFX U Y 1",
+        "PFX U 0 un .",
+        "SFX S Y 1",
+        "SFX S 0 ness ."
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("kind unkind kindness unkindness clear unclear clearness", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: clearness")
+  }
+
   it should "load Hunspell dictionaries using the affix SET charset" in {
     val (dictionary, _) = writeHunspellDictionary(
       "serenity-latin1",
