@@ -602,7 +602,7 @@ object SwingWindow:
       ChromePalette(
         titleBackground = theme.panel.background,
         titleForeground = theme.panel.foreground,
-        border = theme.border,
+        border = theme.panelBorder,
         buttonHoverBackground = blend(theme.highlighted.background, theme.panel.background, 0.24),
         buttonPressedBackground = blend(theme.highlighted.background, theme.panel.background, 0.38),
         closeHoverBackground = theme.error.foreground,
