@@ -91,3 +91,17 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("text-font") shouldBe 0
     selections("ui-font") shouldBe 0
   }
+
+  it should "show custom as the selected motion preset for manually edited motion settings" in {
+    val config = AppConfig.default.copy(
+      motionPreset = MotionPreset.Custom,
+      commandRunnerAnimation = None,
+      editorInsertionTransitionKind = TransitionKind.TypedText
+    )
+
+    val selections = CommandRunnerOptionSelections.default(config)
+
+    selections("motion-preset") shouldBe 4
+    selections("command-runner-fade") shouldBe 0
+    selections("editor-text-transition") shouldBe 1
+  }

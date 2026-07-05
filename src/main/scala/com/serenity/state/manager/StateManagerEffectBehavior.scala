@@ -153,6 +153,11 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       markEditedUiPresetDraftFromCommandRunner
     )
 
+  private def updateCustomMotionConfig(
+    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
+  ): IO[com.serenity.config.AppConfig] =
+    updateMotionConfig(config => update(config).copy(motionPreset = com.serenity.config.MotionPreset.Custom))
+
   private def updateTextDisplayConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
@@ -420,29 +425,29 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.SetMotionPreset(preset) =>
         updateMotionConfig(_.withMotionPreset(preset)).void
       case CommandIntent.SetElementTransitionSpeedScale(scale) =>
-        updateMotionConfig(_.withElementTransitionSpeedScale(scale)).void
+        updateCustomMotionConfig(_.withElementTransitionSpeedScale(scale)).void
       case CommandIntent.SetEditorTextTransitionSpeedScale(scale) =>
-        updateMotionConfig(_.withEditorTextTransitionSpeedScale(Some(scale))).void
+        updateCustomMotionConfig(_.withEditorTextTransitionSpeedScale(Some(scale))).void
       case CommandIntent.SetCommandRunnerTransitionSpeedScale(scale) =>
-        updateMotionConfig(_.withCommandRunnerTransitionSpeedScale(Some(scale))).void
+        updateCustomMotionConfig(_.withCommandRunnerTransitionSpeedScale(Some(scale))).void
       case CommandIntent.SetUiTransitionSpeedScale(scale) =>
-        updateMotionConfig(_.withUiTransitionSpeedScale(Some(scale))).void
+        updateCustomMotionConfig(_.withUiTransitionSpeedScale(Some(scale))).void
       case CommandIntent.SetCursorTransitionSpeedScale(scale) =>
-        updateMotionConfig(_.withCursorTransitionSpeedScale(Some(scale))).void
+        updateCustomMotionConfig(_.withCursorTransitionSpeedScale(Some(scale))).void
       case CommandIntent.SetCommandRunnerAnimation(animation) =>
-        updateMotionConfig(_.withCommandRunnerAnimation(animation)).void
+        updateCustomMotionConfig(_.withCommandRunnerAnimation(animation)).void
       case CommandIntent.SetUiAnimation(animation) =>
-        updateMotionConfig(_.withUiAnimation(animation)).void
+        updateCustomMotionConfig(_.withUiAnimation(animation)).void
       case CommandIntent.SetCommandRunnerVisibleRows(rows) =>
         updateAppearanceConfig(_.withCommandRunnerVisibleRows(rows)).void
       case CommandIntent.SetRenderFpsTarget(target) =>
         updateAppearanceConfig(_.withRenderFpsTarget(target)).void
       case CommandIntent.SetEditorInsertionTransitionKind(kind) =>
-        updateMotionConfig(_.withEditorInsertionTransitionKind(kind)).void
+        updateCustomMotionConfig(_.withEditorInsertionTransitionKind(kind)).void
       case CommandIntent.SetPanelOpenTransitionKind(kind) =>
-        updateMotionConfig(_.withPanelOpenTransitionKind(Some(kind))).void
+        updateCustomMotionConfig(_.withPanelOpenTransitionKind(Some(kind))).void
       case CommandIntent.SetPanelCloseTransitionKind(kind) =>
-        updateMotionConfig(_.withPanelCloseTransitionKind(Some(kind))).void
+        updateCustomMotionConfig(_.withPanelCloseTransitionKind(Some(kind))).void
       case CommandIntent.SetBackgroundStyle(style) =>
         updateAppearanceConfig(_.withBackgroundStyle(style)).void
       case CommandIntent.SetBlurRadius(r) =>
