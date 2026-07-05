@@ -1310,19 +1310,18 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       case Some(tSize) =>
         mouseTargetLayout(state, tSize).flatMap { cache =>
           cache.paneLayouts.find {
-            case (_, rect) =>
-              click.col >= rect.x && click.col < rect.x + rect.width &&
-              click.row > rect.y && click.row < rect.y + rect.height
+            case (_, paneLayout) =>
+              paneLayout.contentRect.contains(click.col, click.row)
           } match
-            case Some((paneId, paneRect)) =>
+            case Some((paneId, paneLayout)) =>
               state.layout.editorPanes.get(paneId).flatMap(pane => pane.bufferId.flatMap(state.buffers.get)) match
                 case Some(buffer) =>
+                  val contentRect  = paneLayout.contentRect
                   val vp           = buffer.viewport
-                  val contentY     = paneRect.y + 1
-                  val visualRow    = (click.row - contentY).max(0)
+                  val visualRow    = (click.row - contentRect.y).max(0)
                   val font         = previewFontForBuffer(buffer, state.config.fontConfig)
                   val metrics      = CellMetrics.fromFont(font)
-                  val panelWidthPx = paneRect.width * metrics.charWidth
+                  val panelWidthPx = contentRect.width * metrics.charWidth
                   mouseTargetSnapshot(
                     cache.layoutKey,
                     buffer,
@@ -1332,13 +1331,13 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
                     state.config.wordWrapEnabled
                   ).map { snapshot =>
                     val xPx = click.pixelX match
-                      case Some(pixelX) => (pixelX - (paneRect.x * metrics.charWidth)).toFloat
-                      case None         => ((click.col - paneRect.x).max(0) * metrics.charWidth).toFloat
+                      case Some(pixelX) => (pixelX - (contentRect.x * metrics.charWidth)).toFloat
+                      case None         => ((click.col - contentRect.x).max(0) * metrics.charWidth).toFloat
                     val clickedCursor = snapshot
                       .cursorForVisualRowAndXPx(visualRow, xPx.max(0.0f))
                       .orElse {
                         val bufferLine  = (vp.topLine + visualRow).max(0)
-                        val bufferCol   = (vp.leftColumn + (click.col - paneRect.x)).max(0)
+                        val bufferCol   = (vp.leftColumn + (click.col - contentRect.x)).max(0)
                         val clampedLine = bufferLine.min(math.max(0, buffer.content.lineCount - 1))
                         val lineLen     = buffer.content.getLine(clampedLine).getOrElse("").length
                         Some(CursorPosition(clampedLine, bufferCol.min(lineLen)))

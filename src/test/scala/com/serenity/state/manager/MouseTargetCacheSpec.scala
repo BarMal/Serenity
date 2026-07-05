@@ -1,11 +1,11 @@
 package com.serenity.state.manager
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{Layout, ViewportSize}
+import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -46,6 +46,17 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
 
     MouseTargetLayoutKey.from(state, ViewportSize(80, 24)) shouldBe
       MouseTargetLayoutKey.from(draggedState, ViewportSize(80, 24))
+  }
+
+  it should "cache full editor pane layouts for mouse hit testing" in {
+    val config = AppConfig.default.withTextAreaInsets(TextAreaInsets(0.15, 0.10))
+    val state  = stateWith(Buffer.fromString(bufferId, "alpha\nbeta"), config)
+    val size   = ViewportSize(80, 24)
+    val cache  = MouseTargetCache.fromState(state, size)
+    val layout = LayoutEngine.calculateLayoutWithUI(state, size)
+
+    cache.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, layout)
+    cache.paneLayouts(paneId).headerRect.bottom.shouldBe(cache.paneLayouts(paneId).contentRect.y)
   }
 
   it should "change when layout-affecting content changes with line numbers enabled" in {

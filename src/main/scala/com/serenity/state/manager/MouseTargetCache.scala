@@ -87,7 +87,7 @@ private[manager] object MouseTargetSnapshotKey:
 private[manager] case class MouseTargetCache(
     layoutKey: MouseTargetLayoutKey,
     layout: CalculatedLayout,
-    paneLayouts: Map[PaneId, LayoutRect],
+    paneLayouts: Map[PaneId, EditorPaneLayout],
     snapshots: Map[MouseTargetSnapshotKey, TextLayoutSnapshot] = Map.empty
 )
 
@@ -96,5 +96,5 @@ private[manager] object MouseTargetCache:
   def fromState(state: AppState, viewportSize: ViewportSize): MouseTargetCache =
     val layoutKey   = MouseTargetLayoutKey.from(state, viewportSize)
     val layout      = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-    val paneLayouts = LayoutEngine.calculatePaneLayouts(state, layout)
+    val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, layout)
     MouseTargetCache(layoutKey, layout, paneLayouts)
