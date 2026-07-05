@@ -34,6 +34,16 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunTimed(2.seconds).shouldBe(defined)
   }
 
+  it should "terminate event streams that subscribe after shutdown has already completed" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+
+    val program = handler.shutdown >> handler.eventStream.compile.drain
+
+    program.unsafeRunTimed(2.seconds).shouldBe(defined)
+  }
+
   it should "emit macOS printable typed characters without command modifiers" in {
     val component = new JPanel()
     val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
