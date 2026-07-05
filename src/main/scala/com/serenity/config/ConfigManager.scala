@@ -281,6 +281,14 @@ object ConfigManager:
               value.trim.toDoubleOption
                 .map(percent => config.withTextAreaRightInset(percent / 100.0))
                 .getOrElse(config)
+            case "text_area.top.percent" | "text.area.top.percent" | "text_area_top_percent" =>
+              value.trim.toDoubleOption
+                .map(percent => config.withTextAreaTopInset(percent / 100.0))
+                .getOrElse(config)
+            case "text_area.bottom.percent" | "text.area.bottom.percent" | "text_area_bottom_percent" =>
+              value.trim.toDoubleOption
+                .map(percent => config.withTextAreaBottomInset(percent / 100.0))
+                .getOrElse(config)
             case "viewport.width.percent" | "viewport_width_percent" =>
               parseViewportPercent(value.trim)
                 .map(percent => config.withViewportWidthSizing(config.viewportSizing.width.copy(percent = percent)))
@@ -438,10 +446,12 @@ object ConfigManager:
        |window.preferred.width = ${config.preferredWindowSize.map(_.width).fold("")(_.toString)}
        |window.preferred.height = ${config.preferredWindowSize.map(_.height).fold("")(_.toString)}
        |
-       |# Text area horizontal insets as percentages of the central workspace.
-       |text_area.left.percent = ${config.textAreaInsets.leftPercent}
-       |text_area.right.percent = ${config.textAreaInsets.rightPercent}
-       |viewport.width.percent = ${config.viewportSizing.width.percentValue}
+        |# Text area insets as percentages of the central workspace.
+        |text_area.left.percent = ${config.textAreaInsets.leftPercent}
+        |text_area.right.percent = ${config.textAreaInsets.rightPercent}
+        |text_area.top.percent = ${config.textAreaInsets.topPercent}
+        |text_area.bottom.percent = ${config.textAreaInsets.bottomPercent}
+        |viewport.width.percent = ${config.viewportSizing.width.percentValue}
        |viewport.width.max = ${config.viewportSizing.width.maxCells.fold("")(_.toString)}
        |viewport.height.percent = ${config.viewportSizing.height.percentValue}
        |viewport.height.max = ${config.viewportSizing.height.maxCells.fold("")(_.toString)}
@@ -590,7 +600,9 @@ object ConfigManager:
             "window_preferred_height" =>
           value.trim.nonEmpty && value.trim.toIntOption.isEmpty
         case "text_area.left.percent" | "text.area.left.percent" | "text_area_left_percent" |
-            "text_area.right.percent" | "text.area.right.percent" | "text_area_right_percent" =>
+            "text_area.right.percent" | "text.area.right.percent" | "text_area_right_percent" |
+            "text_area.top.percent" | "text.area.top.percent" | "text_area_top_percent" | "text_area.bottom.percent" |
+            "text.area.bottom.percent" | "text_area_bottom_percent" =>
           value.trim.toDoubleOption.isEmpty
         case "viewport.width.percent" | "viewport_width_percent" | "viewport.height.percent" |
             "viewport_height_percent" =>

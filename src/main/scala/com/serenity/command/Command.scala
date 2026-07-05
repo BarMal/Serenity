@@ -123,6 +123,8 @@ enum CommandIntent:
   case SetInterfaceDensity(density: InterfaceDensity)
   case SetTextAreaLeftInset(value: Double)
   case SetTextAreaRightInset(value: Double)
+  case SetTextAreaTopInset(value: Double)
+  case SetTextAreaBottomInset(value: Double)
   case FocusPanel(position: PanelPosition)
   case UnpinPanel(position: PanelPosition)
   case ExpandPanel(position: PanelPosition)

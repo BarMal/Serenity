@@ -127,7 +127,9 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer.fromString(BufferId(0), "one\ntwo\nthree")
     val state = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
-      config = AppConfig.default.copy(textAreaInsets = TextAreaInsets(left = 0.10, right = 0.20)),
+      config = AppConfig.default.copy(
+        textAreaInsets = TextAreaInsets(left = 0.10, right = 0.20, top = 0.10, bottom = 0.15)
+      ),
       uiSurfaces = List(
         UiSurface(
           SurfaceId("left-panel"),
@@ -149,8 +151,16 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     calculatedLayout.pinnedPanelRects(PanelPosition.Right).width shouldBe 20
     calculatedLayout.leftSpacerRect shouldBe LayoutRect(10, 0, 7, 29)
     calculatedLayout.rightSpacerRect shouldBe LayoutRect(66, 0, 14, 29)
-    calculatedLayout.lineNumberRect.map(_.width) shouldBe Some(3)
+    calculatedLayout.topSpacerRect shouldBe LayoutRect(17, 1, 49, 2)
+    calculatedLayout.bottomSpacerRect shouldBe LayoutRect(17, 25, 49, 4)
+    calculatedLayout.lineNumberRect shouldBe Some(LayoutRect(17, 3, 3, 22))
     calculatedLayout.editorPanelRect shouldBe LayoutRect(20, 0, 46, 29)
+    LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0)).headerRect shouldBe
+      LayoutRect(10, 0, 70, 1)
+    LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0)).topSpacerRect shouldBe
+      LayoutRect(20, 1, 46, 2)
+    LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0)).contentRect shouldBe
+      LayoutRect(20, 3, 46, 22)
     paneLayouts(PaneId(0)) shouldBe calculatedLayout.editorPanelRect
   }
 

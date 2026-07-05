@@ -809,7 +809,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "edit text area inset percentages and emit a layout update intent" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-text-area", "text-area-left")
+    val state    = settingsStateOnItem("settings-text-area", "text-area-top")
 
     val typed =
       "22.5".foldLeft(state)((s, char) => CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state)
@@ -817,6 +817,6 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
 
     result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
-      CommandIntent.SetTextAreaLeftInset(0.225)
+      CommandIntent.SetTextAreaTopInset(0.225)
     )
   }

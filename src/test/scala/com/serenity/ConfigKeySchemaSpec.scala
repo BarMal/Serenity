@@ -14,6 +14,8 @@ class ConfigKeySchemaSpec extends AnyFlatSpec with Matchers:
     ConfigKeySchema.isKnownKey("keymap.command_runner.submit") shouldBe true
     ConfigKeySchema.isKnownKey("ui.motion.cursor.speed_scale") shouldBe true
     ConfigKeySchema.isKnownKey("ui_motion_cursor_speed_scale") shouldBe true
+    ConfigKeySchema.isKnownKey("text_area.top.percent") shouldBe true
+    ConfigKeySchema.isKnownKey("text_area_bottom_percent") shouldBe true
     ConfigKeySchema.isKnownKey("unknown.setting") shouldBe false
   }
 

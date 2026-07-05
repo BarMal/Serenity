@@ -107,7 +107,12 @@ object CommandRunnerSettingsGroups:
     val textAreaGroup = CommandSurfaceItem.GroupItem(
       id = "settings-text-area",
       label = "Text Area",
-      children = inputItems.filter(item => item.id == "text-area-left" || item.id == "text-area-right"),
+      children = inputItems.filter(item =>
+        item.id == "text-area-left" ||
+          item.id == "text-area-right" ||
+          item.id == "text-area-top" ||
+          item.id == "text-area-bottom"
+      ),
       category = CommandCategory.Settings,
       hint = Some("Resize editor margins")
     )

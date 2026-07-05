@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.{CommandIntent, CommandRunnerSettingsInputItems, CommandSurfaceItem}
-import com.serenity.config.{AppConfig, SpellCheckConfig}
+import com.serenity.config.{AppConfig, SpellCheckConfig, TextAreaInsets}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -14,6 +14,7 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withUiElementGap(3)
       .withCommandRunnerVisibleRows(Some(9))
+      .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20, top = 0.15, bottom = 0.25))
       .withSpellCheck(
         SpellCheckConfig(
           enabled = true,
@@ -32,6 +33,10 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
     inputById(items, "command-runner-visible-rows").searchText.toLowerCase should include("visible commands")
     inputById(items, "command-runner-visible-rows").parse("auto") shouldBe
       Some(CommandIntent.SetCommandRunnerVisibleRows(None))
+    inputById(items, "text-area-top").currentValue shouldBe "15.0"
+    inputById(items, "text-area-top").parse("12.5") shouldBe Some(CommandIntent.SetTextAreaTopInset(0.125))
+    inputById(items, "text-area-bottom").currentValue shouldBe "25.0"
+    inputById(items, "text-area-bottom").parse("12.5") shouldBe Some(CommandIntent.SetTextAreaBottomInset(0.125))
     inputById(items, "spellcheck-languages").currentValue shouldBe "en,fr"
     inputById(items, "spellcheck-languages").parse("fr,en") shouldBe
       Some(CommandIntent.SetSpellCheckLanguages(List("fr", "en")))

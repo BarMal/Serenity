@@ -272,17 +272,30 @@ case class CursorColorConfig(
 
 case class TextAreaInsets(
     left: Double = TextAreaInsets.DefaultInset,
-    right: Double = TextAreaInsets.DefaultInset
+    right: Double = TextAreaInsets.DefaultInset,
+    top: Double = TextAreaInsets.DefaultInset,
+    bottom: Double = TextAreaInsets.DefaultInset
 ):
 
   def normalized: TextAreaInsets =
-    val normalizedLeft  = TextAreaInsets.clamp(left)
-    val normalizedRight = TextAreaInsets.clamp(right)
-    val total           = normalizedLeft + normalizedRight
-    if total <= TextAreaInsets.MaxCombinedInset then copy(left = normalizedLeft, right = normalizedRight)
-    else
-      val scale = TextAreaInsets.MaxCombinedInset / total
-      copy(left = normalizedLeft * scale, right = normalizedRight * scale)
+    val normalizedLeft   = TextAreaInsets.clamp(left)
+    val normalizedRight  = TextAreaInsets.clamp(right)
+    val normalizedTop    = TextAreaInsets.clamp(top)
+    val normalizedBottom = TextAreaInsets.clamp(bottom)
+    val horizontalTotal  = normalizedLeft + normalizedRight
+    val verticalTotal    = normalizedTop + normalizedBottom
+    val horizontalScale =
+      if horizontalTotal <= TextAreaInsets.MaxCombinedInset then 1.0
+      else TextAreaInsets.MaxCombinedInset / horizontalTotal
+    val verticalScale =
+      if verticalTotal <= TextAreaInsets.MaxCombinedInset then 1.0
+      else TextAreaInsets.MaxCombinedInset / verticalTotal
+    copy(
+      left = normalizedLeft * horizontalScale,
+      right = normalizedRight * horizontalScale,
+      top = normalizedTop * verticalScale,
+      bottom = normalizedBottom * verticalScale
+    )
 
   def leftPercent: Double =
     left * 100.0
@@ -290,14 +303,25 @@ case class TextAreaInsets(
   def rightPercent: Double =
     right * 100.0
 
+  def topPercent: Double =
+    top * 100.0
+
+  def bottomPercent: Double =
+    bottom * 100.0
+
 object TextAreaInsets:
   val DefaultInset: Double     = 0.0
   val MaxInset: Double         = 0.45
   val MaxCombinedInset: Double = 0.8
   val MinTextAreaWidth: Double = 1.0 - MaxCombinedInset
 
-  def fromPercent(left: Double, right: Double): TextAreaInsets =
-    TextAreaInsets(left / 100.0, right / 100.0).normalized
+  def fromPercent(
+    left: Double,
+    right: Double,
+    top: Double = DefaultInset,
+    bottom: Double = DefaultInset
+  ): TextAreaInsets =
+    TextAreaInsets(left / 100.0, right / 100.0, top / 100.0, bottom / 100.0).normalized
 
   def clamp(value: Double): Double =
     value.max(0.0).min(MaxInset)
@@ -621,6 +645,12 @@ case class AppConfig(
 
   def withTextAreaRightInset(value: Double): AppConfig =
     withTextAreaInsets(textAreaInsets.copy(right = value))
+
+  def withTextAreaTopInset(value: Double): AppConfig =
+    withTextAreaInsets(textAreaInsets.copy(top = value))
+
+  def withTextAreaBottomInset(value: Double): AppConfig =
+    withTextAreaInsets(textAreaInsets.copy(bottom = value))
 
   def withViewportSizing(sizing: ViewportSizing): AppConfig =
     copy(viewportSizing = sizing.normalized)

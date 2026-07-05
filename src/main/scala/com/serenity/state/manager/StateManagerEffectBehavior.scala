@@ -559,6 +559,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateTextDisplayConfig(_.withTextAreaLeftInset(value)).void
       case CommandIntent.SetTextAreaRightInset(value) =>
         updateTextDisplayConfig(_.withTextAreaRightInset(value)).void
+      case CommandIntent.SetTextAreaTopInset(value) =>
+        updateTextDisplayConfig(_.withTextAreaTopInset(value)).void
+      case CommandIntent.SetTextAreaBottomInset(value) =>
+        updateTextDisplayConfig(_.withTextAreaBottomInset(value)).void
       case CommandIntent.RunProjectTask(kind) =>
         runProjectTask(state, kind)
       case CommandIntent.ToggleLigatures =>

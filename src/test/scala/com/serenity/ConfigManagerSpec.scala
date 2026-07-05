@@ -447,6 +447,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
       configFile,
       """text_area.left.percent = 12.5
         |text_area.right.percent = 20
+        |text_area.top.percent = 7.5
+        |text_area.bottom.percent = 10
         |""".stripMargin
     )
 
@@ -454,8 +456,12 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     config.textAreaInsets.left shouldBe 0.125 +- 0.0001
     config.textAreaInsets.right shouldBe 0.20 +- 0.0001
+    config.textAreaInsets.top shouldBe 0.075 +- 0.0001
+    config.textAreaInsets.bottom shouldBe 0.10 +- 0.0001
     ConfigManager.configToString(config) should include("text_area.left.percent = 12.5")
     ConfigManager.configToString(config) should include("text_area.right.percent = 20.0")
+    ConfigManager.configToString(config) should include("text_area.top.percent = 7.5")
+    ConfigManager.configToString(config) should include("text_area.bottom.percent = 10.0")
   }
 
   it should "load and write UI element gaps" in {

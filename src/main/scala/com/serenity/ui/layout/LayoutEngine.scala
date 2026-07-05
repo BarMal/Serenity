@@ -21,7 +21,9 @@ case class EditorPaneLayout(
     paneRect: LayoutRect,
     headerRect: LayoutRect,
     titleRect: LayoutRect,
-    contentRect: LayoutRect
+    contentRect: LayoutRect,
+    topSpacerRect: LayoutRect = LayoutRect(0, 0, 0, 0),
+    bottomSpacerRect: LayoutRect = LayoutRect(0, 0, 0, 0)
 )
 
 case class EditorWorkspaceLayout(
@@ -43,6 +45,8 @@ case class CalculatedLayout(
     editorPanelRect: LayoutRect,
     leftSpacerRect: LayoutRect,
     rightSpacerRect: LayoutRect,
+    topSpacerRect: LayoutRect = LayoutRect(0, 0, 0, 0),
+    bottomSpacerRect: LayoutRect = LayoutRect(0, 0, 0, 0),
     pinnedPanelRects: Map[PanelPosition, LayoutRect] = Map.empty,
     pinnedSurfaceRects: Map[SurfaceId, LayoutRect] = Map.empty,
     floatingPanelRect: Option[LayoutRect] = None,
@@ -125,8 +129,11 @@ object LayoutEngine:
     val textAreaInsets =
       if spacerPercentage == DefaultSpacerPercentage then state.config.textAreaInsets.normalized
       else TextAreaInsets(spacerPercentage, spacerPercentage).normalized
-    val leftSpacerWidth  = (workspaceWidth * textAreaInsets.left).toInt
-    val rightSpacerWidth = (workspaceWidth * textAreaInsets.right).toInt
+    val leftSpacerWidth    = (workspaceWidth * textAreaInsets.left).toInt
+    val rightSpacerWidth   = (workspaceWidth * textAreaInsets.right).toInt
+    val contentAreaHeight  = math.max(1, workspaceHeight - EditorPaneHeaderHeight)
+    val topSpacerHeight    = (contentAreaHeight * textAreaInsets.top).toInt
+    val bottomSpacerHeight = (contentAreaHeight * textAreaInsets.bottom).toInt
 
     // Calculate space needed for UI elements
     val lineNumberWidth =
@@ -137,15 +144,31 @@ object LayoutEngine:
     val availableWidth  = math.max(1, workspaceWidth - leftSpacerWidth - rightSpacerWidth - lineNumberWidth)
     val availableHeight = workspaceHeight
 
-    val leftSpacerRect = LayoutRect(workspaceX, workspaceY, leftSpacerWidth, workspaceHeight)
+    val leftSpacerRect = LayoutRect(workspaceX, workspaceY, leftSpacerWidth, availableHeight)
     val lineNumberRect =
       if state.config.showLineNumbers then
-        val topInset = EditorPaneHeaderHeight.min(math.max(0, availableHeight - 1))
+        val lineNumberY      = workspaceY + EditorPaneHeaderHeight + topSpacerHeight
+        val lineNumberHeight = math.max(1, contentAreaHeight - topSpacerHeight - bottomSpacerHeight)
         Some(
-          LayoutRect(workspaceX + leftSpacerWidth, workspaceY + topInset, lineNumberWidth, availableHeight - topInset)
+          LayoutRect(workspaceX + leftSpacerWidth, lineNumberY, lineNumberWidth, lineNumberHeight)
         )
       else None
 
+    val topSpacerRect = LayoutRect(
+      workspaceX + leftSpacerWidth,
+      workspaceY + EditorPaneHeaderHeight,
+      lineNumberWidth + availableWidth,
+      topSpacerHeight
+    )
+    val bottomSpacerRect = LayoutRect(
+      workspaceX + leftSpacerWidth,
+      workspaceY + EditorPaneHeaderHeight + topSpacerHeight + math.max(
+        1,
+        contentAreaHeight - topSpacerHeight - bottomSpacerHeight
+      ),
+      lineNumberWidth + availableWidth,
+      bottomSpacerHeight
+    )
     val editorPanelRect = LayoutRect(
       x = workspaceX + leftSpacerWidth + lineNumberWidth,
       y = workspaceY,
@@ -157,7 +180,7 @@ object LayoutEngine:
         workspaceX + leftSpacerWidth + lineNumberWidth + availableWidth,
         workspaceY,
         rightSpacerWidth,
-        workspaceHeight
+        availableHeight
       )
 
     val gutterRect =
@@ -169,6 +192,8 @@ object LayoutEngine:
       editorPanelRect = editorPanelRect,
       leftSpacerRect = leftSpacerRect,
       rightSpacerRect = rightSpacerRect,
+      topSpacerRect = topSpacerRect,
+      bottomSpacerRect = bottomSpacerRect,
       pinnedPanelRects = pinnedPanelRects,
       pinnedSurfaceRects = pinnedPanelLayout.surfaceRects,
       expandedPanelRect = state.expandedPanelSurface.map(_ => editorPanelRect),
@@ -684,10 +709,41 @@ object LayoutEngine:
       paneRect = paneRect,
       headerRect = headerRect,
       titleRect = headerRect,
-      contentRect = contentRectForPane(paneRect)
+      contentRect = contentRectForPane(paneRect, state.config.textAreaInsets.normalized),
+      topSpacerRect = topSpacerRectForPane(paneRect, state.config.textAreaInsets.normalized),
+      bottomSpacerRect = bottomSpacerRectForPane(paneRect, state.config.textAreaInsets.normalized)
     )
 
   private[layout] def contentRectForPane(paneRect: LayoutRect): LayoutRect =
+    contentRectForPane(paneRect, TextAreaInsets())
+
+  private def contentRectForPane(paneRect: LayoutRect, insets: TextAreaInsets): LayoutRect =
+    val baseContent        = baseContentRectForPane(paneRect)
+    val topSpacerHeight    = (baseContent.height * insets.top).toInt
+    val bottomSpacerHeight = (baseContent.height * insets.bottom).toInt
+    LayoutRect(
+      baseContent.x,
+      baseContent.y + topSpacerHeight,
+      baseContent.width,
+      math.max(1, baseContent.height - topSpacerHeight - bottomSpacerHeight)
+    )
+
+  private def topSpacerRectForPane(paneRect: LayoutRect, insets: TextAreaInsets): LayoutRect =
+    val baseContent = baseContentRectForPane(paneRect)
+    baseContent.copy(height = (baseContent.height * insets.top).toInt)
+
+  private def bottomSpacerRectForPane(paneRect: LayoutRect, insets: TextAreaInsets): LayoutRect =
+    val baseContent        = baseContentRectForPane(paneRect)
+    val topSpacerHeight    = (baseContent.height * insets.top).toInt
+    val bottomSpacerHeight = (baseContent.height * insets.bottom).toInt
+    LayoutRect(
+      baseContent.x,
+      baseContent.y + topSpacerHeight + math.max(1, baseContent.height - topSpacerHeight - bottomSpacerHeight),
+      baseContent.width,
+      bottomSpacerHeight
+    )
+
+  private def baseContentRectForPane(paneRect: LayoutRect): LayoutRect =
     LayoutRect(
       paneRect.x,
       paneRect.y + EditorPaneHeaderHeight,
