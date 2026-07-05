@@ -1,6 +1,6 @@
 package com.serenity
 
-import java.awt.Dimension
+import java.awt.{Color, Dimension}
 import javax.accessibility.AccessibleContext
 import javax.swing.JComponent
 
@@ -68,12 +68,17 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
   }
 
   "SwingWindow.ChromePalette" should "derive custom chrome colours from the active theme" in {
-    val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
+    val theme = Theme.light.copy(
+      border = new Color(0x111111),
+      panelBorder = new Color(0x222222)
+    )
+    val palette = SwingWindow.ChromePalette.fromTheme(theme)
 
-    palette.titleBackground shouldBe Theme.light.panel.background
-    palette.titleForeground shouldBe Theme.light.panel.foreground
-    palette.border shouldBe Theme.light.border
-    palette.closeHoverBackground shouldBe Theme.light.error.foreground
+    palette.titleBackground shouldBe theme.panel.background
+    palette.titleForeground shouldBe theme.panel.foreground
+    palette.border shouldBe theme.panelBorder
+    palette.border should not be theme.border
+    palette.closeHoverBackground shouldBe theme.error.foreground
   }
 
   it should "derive distinct custom chrome colours for dark and light themes" in {
