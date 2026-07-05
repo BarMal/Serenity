@@ -110,6 +110,18 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     AppRuntime.cursorIdleInterval(AppConfig.default.withCursorTransitionSpeedScale(Some(0.0))) shouldBe None
   }
 
+  it should "reset the cursor activity phase to visible after user input" in {
+    val result = (for
+      cursorVisible <- Ref.of[IO, Boolean](false)
+      breathIndex   <- Ref.of[IO, Int](17)
+      _             <- AppRuntime.resetCursorActivity(cursorVisible, breathIndex)
+      visible       <- cursorVisible.get
+      breathe       <- breathIndex.get
+    yield (visible, breathe)).unsafeRunSync()
+
+    result shouldBe (true, 0)
+  }
+
   it should "terminate the app loop when the external close signal fires" in {
     given org.typelevel.log4cats.Logger[IO] =
       LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeSpec"))
