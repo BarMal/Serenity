@@ -404,8 +404,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "keymap-command-runner-submit",
       "keymap-modal-dismiss"
     )
-    nestedGroup("settings-markdown").label shouldBe "Markdown"
-    nestedGroup("settings-markdown").children.map(_.id) should contain("markdown-view")
+    nestedGroup("settings-preset-markdown-preview").label shouldBe "Markdown Preview"
+    nestedGroup("settings-preset-markdown-preview").children.map(_.id) should contain("markdown-view")
     nestedGroup("settings-document-defaults").label shouldBe "Document Defaults"
     nestedGroup("settings-document-defaults").children.map(_.id) should contain allOf (
       "default-document-mode",
@@ -742,11 +742,12 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     )
     val documentDefaults = groupByIdRecursive(List(editPreset), "settings-preset-document-defaults")
     documentDefaults.children.map(_.id) shouldBe List(
-      "default-document-mode",
-      "settings-markdown",
-      "settings-spellcheck"
+      "settings-preset-new-documents",
+      "settings-preset-markdown-preview",
+      "settings-preset-spelling"
     )
     descendants(documentDefaults).map(_.id) should contain allOf (
+      "default-document-mode",
       "markdown-view",
       "spellcheck-enabled",
       "spellcheck-languages",

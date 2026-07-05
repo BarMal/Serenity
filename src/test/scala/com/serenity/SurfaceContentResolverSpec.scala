@@ -339,6 +339,39 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.footer.map(_.plainText) shouldBe Some("1/2")
   }
 
+  it should "resolve preset document defaults submenu as grouped document, preview, and spelling rows" in {
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(
+        activeCategory = CommandCategory.Settings,
+        activeSubmenu = Some(
+          CommandRunnerSubmenuState(
+            "settings-preset-document-defaults",
+            parentGroupId = Some("settings-preset-edit"),
+            ancestorGroupIds = List("settings-ui-presets", "settings-preset-edit")
+          )
+        )
+      )
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPaletteSubmenu(
+        runner,
+        "settings-preset-document-defaults",
+        previewOnly = false
+      ),
+      LayoutRect(0, 0, 80, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.map(_.plainText) shouldBe List("New Documents", "Markdown Preview", "Spelling")
+    resolved.rows.map(_.segments.map(_.text)) shouldBe List(
+      List("New Documents", "Default mode for new buffers"),
+      List("Markdown Preview", "Source, split preview, or inline lens"),
+      List("Spelling", "Enable, languages, dictionaries, accepted words")
+    )
+    resolved.footer.map(_.plainText) shouldBe Some("1/3")
+  }
+
   it should "append a selected UI preset detail row in the preset submenu" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
@@ -412,7 +445,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     resolved.rows.lastOption.map(_.plainText) shouldBe Some(
-      "Preset Preview Research Notes - name, active panels, animations, fonts, theme"
+      "Preset Preview Research Notes - name, active panels, theme, animations, fonts, document defaults"
     )
   }
 

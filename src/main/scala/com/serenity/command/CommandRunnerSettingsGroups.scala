@@ -319,10 +319,31 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Editor, code, and interface typography")
     )
+    val presetNewDocumentsGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-new-documents",
+      label = "New Documents",
+      children = List(defaultDocumentItem),
+      category = CommandCategory.Settings,
+      hint = Some("Default mode for new buffers")
+    )
+    val presetMarkdownPreviewGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-markdown-preview",
+      label = "Markdown Preview",
+      children = markdownGroup.children,
+      category = CommandCategory.Settings,
+      hint = Some("Source, split preview, or inline lens")
+    )
+    val presetSpellingGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-spelling",
+      label = "Spelling",
+      children = spellCheckGroup.children,
+      category = CommandCategory.Settings,
+      hint = Some("Enable, languages, dictionaries, accepted words")
+    )
     val presetDocumentDefaultsGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-document-defaults",
       label = "Document Defaults",
-      children = List(defaultDocumentItem, markdownGroup, spellCheckGroup),
+      children = List(presetNewDocumentsGroup, presetMarkdownPreviewGroup, presetSpellingGroup),
       category = CommandCategory.Settings,
       hint = Some("Default mode, Markdown view, spelling")
     )
