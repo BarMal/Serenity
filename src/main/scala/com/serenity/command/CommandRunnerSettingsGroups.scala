@@ -291,12 +291,33 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Cursor, text entry, and UI motion")
     )
+    val presetEditorTypographyGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-editor-typography",
+      label = "Editor Typography",
+      children = proseFontGroup.children,
+      category = CommandCategory.Settings,
+      hint = Some("Prose editor family, size, and ligatures")
+    )
+    val presetCodeTypographyGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-code-typography",
+      label = "Code Typography",
+      children = codeFontGroup.children,
+      category = CommandCategory.Settings,
+      hint = Some("Code editor family, size, and ligatures")
+    )
+    val presetUiTypographyGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-ui-typography",
+      label = "UI Typography",
+      children = uiFontGroup.children,
+      category = CommandCategory.Settings,
+      hint = Some("Interface family, size, and ligatures")
+    )
     val presetFontsGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-fonts",
       label = "Fonts",
-      children = List(proseFontGroup, codeFontGroup, uiFontGroup),
+      children = List(presetEditorTypographyGroup, presetCodeTypographyGroup, presetUiTypographyGroup),
       category = CommandCategory.Settings,
-      hint = Some("Text entry, code, and UI fonts")
+      hint = Some("Editor, code, and interface typography")
     )
     val presetDocumentDefaultsGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-document-defaults",
