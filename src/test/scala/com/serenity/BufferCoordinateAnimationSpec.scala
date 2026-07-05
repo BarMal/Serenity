@@ -4,7 +4,7 @@ import java.awt.Color
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.{AnimationState, CharacterKey}
+import com.serenity.animation.{AnimationState, CharacterKey, TransitionKind}
 import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.keystroke.events.{InsertChar, ScrollDown}
 import com.serenity.rope.Balance
@@ -111,6 +111,31 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
         .characterAnimation
         .get
         .steps * 2
+
+    program.unsafeRunSync()
+  }
+
+  it should "skip typed character animation when editor insertion transitions are disabled" in {
+    val program = for
+      sm <- IO.pure(makeStateManager())
+      _ <- sm.updateState(state =>
+        state.copy(config =
+          AppConfig.default
+            .withMotionPreset(MotionPreset.Smooth)
+            .withEditorInsertionTransitionKind(TransitionKind.Disabled)
+        )
+      )
+      bufferId <- sm.createBuffer("Hello")
+      state    <- sm.getCurrentState
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      _        <- sm.setBufferForPane(paneId, bufferId)
+      _        <- sm.setCursorPosition(paneId, 0, 5)
+      _        <- sm.applyEvent(InsertChar('a'))
+      newState <- sm.getCurrentState
+    yield
+      val buffer = newState.buffers(bufferId)
+      buffer.content.collect() shouldBe "Helloa"
+      buffer.animations.animations shouldBe empty
 
     program.unsafeRunSync()
   }
