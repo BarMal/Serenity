@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
-import com.serenity.config.RenderFpsTarget
+import com.serenity.config.{MotionPreset, RenderFpsTarget}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -36,6 +36,26 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().config.elementTransitionSpeedScale shouldBe 2.25
+  }
+
+  it should "mark the motion preset custom when an explicit motion speed is edited" in {
+    val stateManager = createStateManager()
+    stateManager
+      .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Smooth)))
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "element-transition-speed-scale",
+          "Set element transition speed scale",
+          CommandIntent.SetElementTransitionSpeedScale(2.25),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.motionPreset shouldBe MotionPreset.Custom
   }
 
   it should "update the editor text transition speed scale config" in {
@@ -123,6 +143,26 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     stateManager.getCurrentState.unsafeRunSync().config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
   }
 
+  it should "mark the motion preset custom when an explicit transition kind is edited" in {
+    val stateManager = createStateManager()
+    stateManager
+      .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Smooth)))
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "editor-text-transition",
+          "Set editor text transition",
+          CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.TypedText),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.motionPreset shouldBe MotionPreset.Custom
+  }
+
   it should "update the panel open transition kind config" in {
     val stateManager = createStateManager()
 
@@ -174,6 +214,28 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().config.commandRunnerAnimation shouldBe AnimationConfig.subtle
+  }
+
+  it should "mark the motion preset custom when command runner fade is edited" in {
+    val stateManager = createStateManager()
+    stateManager
+      .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Smooth)))
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "command-runner-fade",
+          "Set command runner fade",
+          CommandIntent.SetCommandRunnerAnimation(None),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    val config = stateManager.getCurrentState.unsafeRunSync().config
+    config.commandRunnerAnimation shouldBe None
+    config.motionPreset shouldBe MotionPreset.Custom
   }
 
   it should "update the UI animation config" in {
