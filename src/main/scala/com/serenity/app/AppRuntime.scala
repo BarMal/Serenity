@@ -38,6 +38,9 @@ object AppRuntime:
       )
     )
 
+  private[serenity] def resetCursorActivity(cursorVisible: Ref[IO, Boolean], breathIndex: Ref[IO, Int]): IO[Unit] =
+    cursorVisible.set(true) >> breathIndex.set(0)
+
   final private[serenity] case class AnimationTickCadence(remainderNanos: Long):
 
     def advance(frameInterval: FiniteDuration): (AnimationTickCadence, Int) =
@@ -100,6 +103,7 @@ object AppRuntime:
               ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
               stateManager.getCurrentState
                 .flatMap(state => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))) >>
+              resetCursorActivity(cursorVisible, breathIndex) >>
               fastMode.set(true)
           ).drain
         _ <-
