@@ -123,3 +123,41 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     presetInputs("ui-preset-delete") shouldBe "Review"
     presetInputs("ui-preset-reset") shouldBe "Review"
   }
+
+  it should "group preset animation controls by element surface" in {
+    val config = AppConfig.default
+    val groups = CommandRunnerSettingsGroups.build(
+      optionSelections = CommandRunnerOptionSelections.default(config),
+      inputItems = CommandRunnerSettingsInputItems.build(config),
+      uiPresetPreviews = Nil,
+      editingPresetName = None
+    )
+
+    groupById(groups, "settings-preset-animations").children.map(_.id) shouldBe List(
+      "settings-preset-cursor-motion",
+      "settings-preset-text-entry-motion",
+      "settings-preset-ui-surface-motion"
+    )
+    groupById(groups, "settings-preset-cursor-motion").children.map(_.id) shouldBe List(
+      "cursor-mode",
+      "cursor-speed-scale",
+      "cursor-info-bar",
+      "cursor-info-bar-placement"
+    )
+    groupById(groups, "settings-preset-text-entry-motion").children.map(_.id) should contain allOf (
+      "editor-text-transition",
+      "editor-text-speed-scale",
+      "element-transition-speed-scale"
+    )
+    groupById(groups, "settings-preset-ui-surface-motion").children.map(_.id) should contain allOf (
+      "motion-preset",
+      "animation-mode",
+      "panel-open-transition",
+      "panel-close-transition",
+      "command-runner-fade",
+      "command-runner-speed-scale",
+      "ui-animation",
+      "ui-speed-scale",
+      "render-fps"
+    )
+  }
