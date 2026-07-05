@@ -22,8 +22,18 @@ object SpellChecker:
   private val DefaultDictionaryCharset: Charset = StandardCharsets.UTF_8
 
   private case class DictionaryCacheKey(fingerprints: List[SpellCheckDictionaryFingerprint])
-  private case class DictionaryLoadResult(words: Set[String], failures: List[String])
-  private case class DictionaryContext(words: Set[String], failures: List[String])
+
+  private case class DictionaryLoadResult(
+      words: Set[String],
+      replacements: Map[String, List[String]],
+      failures: List[String]
+  )
+
+  private case class DictionaryContext(
+      words: Set[String],
+      replacements: Map[String, List[String]],
+      failures: List[String]
+  )
 
   private enum HunspellFlagMode:
     case Simple
@@ -34,12 +44,13 @@ object SpellChecker:
       flagMode: HunspellFlagMode,
       flagAliases: Map[String, Set[String]],
       prefixes: Map[String, List[HunspellAffixRule]],
-      suffixes: Map[String, List[HunspellAffixRule]]
+      suffixes: Map[String, List[HunspellAffixRule]],
+      replacements: Map[String, List[String]]
   )
 
   private object HunspellAffixRules:
     val empty: HunspellAffixRules =
-      HunspellAffixRules(HunspellFlagMode.Simple, Map.empty, Map.empty, Map.empty)
+      HunspellAffixRules(HunspellFlagMode.Simple, Map.empty, Map.empty, Map.empty, Map.empty)
 
   private case class HunspellAffixRule(strip: String, append: String, condition: String, combineable: Boolean)
   private case class HunspellEntry(word: String, flags: Set[String])
@@ -104,14 +115,15 @@ object SpellChecker:
               .findAllMatchIn(line)
               .filterNot(match_ => isAccepted(match_.matched, dictionary.words))
               .map { match_ =>
-                val word = match_.matched
+                val word        = match_.matched
+                val suggestions = dictionary.replacements.getOrElse(normalizeWord(word), Nil)
                 Diagnostic(
                   range = LspRange(
                     LspPosition(lineIndex, match_.start),
                     LspPosition(lineIndex, match_.end)
                   ),
                   severity = Some(DiagnosticSeverity.Hint),
-                  message = s"Possible spelling issue: $word",
+                  message = diagnosticMessage(word, suggestions),
                   source = Some(Source),
                   code = Some("unknown-word")
                 )
@@ -173,13 +185,16 @@ object SpellChecker:
   private def dictionaryFor(config: SpellCheckConfig): DictionaryContext =
     val externalResults = config.dictionarySourcePaths.map(loadDictionary)
     val externalWords   = externalResults.flatMap(_.words).toSet
-    val failures        = externalResults.flatMap(_.failures)
+    val externalReplacements =
+      mergeReplacementMaps(externalResults.map(_.replacements))
+    val failures = externalResults.flatMap(_.failures)
     val fallbackWords =
       if config.dictionaryPaths.nonEmpty && externalWords.nonEmpty then Set.empty[String]
       else config.languages.flatMap(language => BuiltInDictionaries.getOrElse(language, Set.empty)).toSet
 
     DictionaryContext(
       words = (externalWords ++ fallbackWords ++ config.additionalWords).map(normalizeWord),
+      replacements = externalReplacements,
       failures = failures.distinct
     )
 
@@ -189,8 +204,10 @@ object SpellChecker:
     DictionaryCache.computeIfAbsent(cacheKey, _ => readDictionary(path))
 
   private def readDictionary(path: Path): DictionaryLoadResult =
-    if !Files.exists(path) then DictionaryLoadResult(Set.empty, List(s"Dictionary file does not exist: $path"))
-    else if Files.isDirectory(path) then DictionaryLoadResult(Set.empty, List(s"Dictionary path is a directory: $path"))
+    if !Files.exists(path) then
+      DictionaryLoadResult(Set.empty, Map.empty, List(s"Dictionary file does not exist: $path"))
+    else if Files.isDirectory(path) then
+      DictionaryLoadResult(Set.empty, Map.empty, List(s"Dictionary path is a directory: $path"))
     else
       try
         val affixPath  = affixPathFor(path)
@@ -208,10 +225,10 @@ object SpellChecker:
           .map(normalizeWord)
           .toSet
 
-        DictionaryLoadResult(words, Nil)
+        DictionaryLoadResult(words, affixRules.replacements, Nil)
       catch
         case NonFatal(error) =>
-          DictionaryLoadResult(Set.empty, List(s"Could not load dictionary $path: ${error.getMessage}"))
+          DictionaryLoadResult(Set.empty, Map.empty, List(s"Could not load dictionary $path: ${error.getMessage}"))
 
   private def affixPathFor(dictionaryPath: Path): Option[Path] =
     SpellCheckConfig
@@ -234,11 +251,12 @@ object SpellChecker:
   private def parseAffixRules(path: Path, charset: Charset): HunspellAffixRules =
     val lines =
       Files.readAllLines(path, charset).toArray.toList.collect { case line: String => line.trim }
-    val flagMode    = parseFlagMode(lines)
-    val flagAliases = parseFlagAliases(lines, flagMode)
-    val prefixRules = parseAffixRules(lines, "PFX")
-    val suffixRules = parseAffixRules(lines, "SFX")
-    HunspellAffixRules(flagMode, flagAliases, prefixRules, suffixRules)
+    val flagMode     = parseFlagMode(lines)
+    val flagAliases  = parseFlagAliases(lines, flagMode)
+    val prefixRules  = parseAffixRules(lines, "PFX")
+    val suffixRules  = parseAffixRules(lines, "SFX")
+    val replacements = parseReplacements(lines)
+    HunspellAffixRules(flagMode, flagAliases, prefixRules, suffixRules, replacements)
 
   private def parseFlagMode(lines: List[String]): HunspellFlagMode =
     lines
@@ -291,6 +309,17 @@ object SpellChecker:
               aliases -> aliasIndex
       }
     aliases
+
+  private def parseReplacements(lines: List[String]): Map[String, List[String]] =
+    lines.foldLeft(Map.empty[String, List[String]]) { (replacements, line) =>
+      line.split("\\s+").toList match
+        case "REP" :: source :: replacement :: _ if !source.forall(_.isDigit) =>
+          val key   = normalizeWord(source)
+          val value = normalizeWord(replacement)
+          replacements.updated(key, (replacements.getOrElse(key, Nil) :+ value).distinct)
+        case _ =>
+          replacements
+    }
 
   private def parseHunspellDictionaryEntry(line: String, affixRules: HunspellAffixRules): Option[HunspellEntry] =
     val withoutMorphology = line.takeWhile(char => !char.isWhitespace)
@@ -361,6 +390,24 @@ object SpellChecker:
         source = Some(Source),
         code = Some("dictionary-load-failed")
       )
+    }
+
+  private def diagnosticMessage(word: String, suggestions: List[String]): String =
+    val base = s"Possible spelling issue: $word"
+    suggestions.distinct match
+      case Nil =>
+        base
+      case suggestion :: Nil =>
+        s"$base (suggestion: $suggestion)"
+      case values =>
+        s"$base (suggestions: ${values.mkString(", ")})"
+
+  private def mergeReplacementMaps(maps: List[Map[String, List[String]]]): Map[String, List[String]] =
+    maps.foldLeft(Map.empty[String, List[String]]) { (merged, replacements) =>
+      replacements.foldLeft(merged) {
+        case (acc, (source, suggestions)) =>
+          acc.updated(source, (acc.getOrElse(source, Nil) ++ suggestions).distinct)
+      }
     }
 
   private def isAccepted(word: String, dictionary: Set[String]): Boolean =
