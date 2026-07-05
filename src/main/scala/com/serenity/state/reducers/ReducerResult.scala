@@ -6,6 +6,7 @@ import com.serenity.command.Command
 import com.serenity.lsp.LspEffect
 import com.serenity.state.models.{AppState, BufferId, SurfaceId}
 import com.serenity.ui.layout.PanelPosition
+import com.serenity.ui.theme.config.ThemeConfig
 
 enum LifecycleEffect:
   case CompleteQuit
@@ -16,9 +17,11 @@ enum CommandEffect:
 enum ThemeEffect:
   case SwitchTheme(themeName: String)
   case ReloadTheme(themeName: String)
+  case SaveThemeConfig(config: ThemeConfig)
 
 enum SurfaceEffect:
   case OpenThemePicker
+  case OpenThemeCreator
   case OpenFileSearch
 
 enum FileEffect:
@@ -88,6 +91,15 @@ object AppEffect:
         case AppEffect.Theme(ThemeEffect.ReloadTheme(themeName)) => Some(themeName)
         case _                                                   => None
 
+  object SaveThemeConfig:
+    def apply(config: ThemeConfig): AppEffect =
+      AppEffect.Theme(ThemeEffect.SaveThemeConfig(config))
+
+    def unapply(effect: AppEffect): Option[ThemeConfig] =
+      effect match
+        case AppEffect.Theme(ThemeEffect.SaveThemeConfig(config)) => Some(config)
+        case _                                                    => None
+
   object SaveBuffer:
     def apply(bufferId: BufferId): AppEffect =
       AppEffect.File(FileEffect.SaveBuffer(bufferId))
@@ -150,6 +162,15 @@ object AppEffect:
       effect match
         case AppEffect.Surface(SurfaceEffect.OpenThemePicker) => true
         case _                                                => false
+
+  object OpenThemeCreator:
+    def apply(): AppEffect =
+      AppEffect.Surface(SurfaceEffect.OpenThemeCreator)
+
+    def unapply(effect: AppEffect): Boolean =
+      effect match
+        case AppEffect.Surface(SurfaceEffect.OpenThemeCreator) => true
+        case _                                                 => false
 
   object OpenFileSearch:
     def apply(): AppEffect =

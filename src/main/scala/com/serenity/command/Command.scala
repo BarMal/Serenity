@@ -95,15 +95,18 @@ enum CommandIntent:
   case ToggleLineNumbers
   case ToggleGutter
   case ToggleWordWrap
+  case ToggleFocusedTextBody
   case SetLineNumbers(enabled: Boolean)
   case SetGutter(enabled: Boolean)
   case SetWordWrap(enabled: Boolean)
+  case SetFocusedTextBody(enabled: Boolean)
   case SetCursorMode(mode: CursorMode)
   case SetCursorInfoBarMode(mode: CursorInfoBarMode)
   case SetCursorInfoBarPlacement(placement: CursorInfoBarPlacement)
   case SetUiElementGap(gap: Int)
   case SetUiCornerRadiusPx(radius: Int)
   case OpenThemeChooser
+  case OpenThemeCreator
   case ReloadThemes
   case PinExplorerPanel
   case PinOutlinePanel

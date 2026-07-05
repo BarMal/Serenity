@@ -13,6 +13,8 @@ case class Theme(
     error: ThemeColor,
     warning: ThemeColor,
     border: Color,
+    panelBorder: Color,
+    margin: Color,
     muted: Color,
     placeholder: Color,
     textStyle: TextStyle,

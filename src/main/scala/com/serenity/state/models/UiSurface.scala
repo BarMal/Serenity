@@ -5,6 +5,7 @@ import java.nio.file.Path
 import com.serenity.command.{Command, CommandRunner}
 import com.serenity.document.RenderedComment
 import com.serenity.ui.layout.*
+import com.serenity.ui.theme.config.ThemeCreatorState
 
 case class SurfaceId(value: String)
 
@@ -81,6 +82,7 @@ enum SurfaceContent:
   case CommandPalette(runner: CommandRunner)
   case CommandPaletteSubmenu(runner: CommandRunner, groupId: String, previewOnly: Boolean)
   case ThemePicker(state: ThemePickerState)
+  case ThemeCreator(state: ThemeCreatorState)
   case FileSearch(state: FileSearchState)
   case ContextMenu(menu: com.serenity.state.models.ContextMenu)
   case CommentLens(state: CommentLensState)

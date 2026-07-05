@@ -33,6 +33,7 @@ object CommandRunnerSettingsGroups:
     val lineNumbersItem      = CommandRunnerSettingsItems.lineNumbersOptionItem(optionSelections)
     val gutterItem           = CommandRunnerSettingsItems.gutterOptionItem(optionSelections)
     val lineWrapItem         = CommandRunnerSettingsItems.lineWrapOptionItem(optionSelections)
+    val focusedTextBodyItem  = CommandRunnerSettingsItems.focusedTextBodyOptionItem(optionSelections)
     val keymapItems          = inputItems.filter(_.id.startsWith("keymap-"))
     val workspaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-workspace-layout",
@@ -51,9 +52,9 @@ object CommandRunnerSettingsGroups:
     val textDisplayGroup = CommandSurfaceItem.GroupItem(
       id = "settings-text-display",
       label = "Text Display",
-      children = List(lineNumbersItem, gutterItem, lineWrapItem),
+      children = List(lineNumbersItem, gutterItem, lineWrapItem, focusedTextBodyItem),
       category = CommandCategory.Settings,
-      hint = Some("Line numbers, gutter, wrap")
+      hint = Some("Line numbers, gutter, wrap, focus")
     )
     val motionInputIds = Set(
       "animation-duration",

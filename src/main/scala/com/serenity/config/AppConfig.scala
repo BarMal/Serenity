@@ -351,6 +351,7 @@ case class AppConfig(
     showLineNumbers: Boolean = true,
     showGutter: Boolean = true,
     wordWrapEnabled: Boolean = true,
+    focusedTextBodyEnabled: Boolean = false,
     blurRadius: Float = 0.0f,
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
@@ -465,6 +466,9 @@ case class AppConfig(
   /** Create a new config with word wrapping toggled */
   def withWordWrap(enabled: Boolean): AppConfig =
     copy(wordWrapEnabled = enabled)
+
+  def withFocusedTextBody(enabled: Boolean): AppConfig =
+    copy(focusedTextBodyEnabled = enabled)
 
   def withBlurRadius(r: Float): AppConfig =
     copy(blurRadius = r.max(0.0f).min(1.0f), materialPreset = MaterialPreset.Custom)

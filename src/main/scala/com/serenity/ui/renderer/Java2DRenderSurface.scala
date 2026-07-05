@@ -226,6 +226,27 @@ object Java2DRenderSurface:
       deviceScaleY = scale.y
     )
 
+  def forImage(
+    image: BufferedImage,
+    metrics: CellMetrics,
+    font: Font,
+    canvas: javax.swing.JPanel,
+    onFlush: BufferedImage => Unit
+  ): Java2DRenderSurface =
+    val logicalWidth  = logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
+    val logicalHeight = logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
+    val scale         = deviceScaleFor(canvas)
+    new Java2DRenderSurface(
+      image,
+      metrics,
+      font,
+      onFlush,
+      logicalWidthPx = logicalWidth,
+      logicalHeightPx = logicalHeight,
+      deviceScaleX = scale.x,
+      deviceScaleY = scale.y
+    )
+
   private[serenity] def deviceImageDimension(logicalDimensionPx: Int, deviceScale: Double): Int =
     math.ceil(logicalDimensionPx.max(1) * deviceScale.max(1.0)).toInt.max(1)
 

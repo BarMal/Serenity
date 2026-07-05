@@ -40,6 +40,7 @@ private[serenity] object CommandRunnerPanelSelections:
       case SurfaceContent.CommandPalette(_)              => None
       case SurfaceContent.CommandPaletteSubmenu(_, _, _) => None
       case SurfaceContent.ThemePicker(_)                 => None
+      case SurfaceContent.ThemeCreator(_)                => None
       case SurfaceContent.FileSearch(_)                  => None
       case SurfaceContent.ContextMenu(_)                 => None
       case SurfaceContent.CommentLens(_)                 => None

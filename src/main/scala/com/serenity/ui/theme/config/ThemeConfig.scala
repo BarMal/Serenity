@@ -21,6 +21,8 @@ case class UiColors(
     error: UiTokenConfig,
     warning: Option[UiTokenConfig] = None,
     border: String,
+    panelBorder: Option[String] = None,
+    margin: Option[String] = None,
     muted: String,
     placeholder: String
 ) derives ConfigReader
@@ -76,6 +78,8 @@ object ThemeConfig:
         error = UiTokenConfig(foreground = "#FF6B6B", background = "#2B1215"),
         warning = Some(UiTokenConfig(foreground = "#F0B429", background = "#2B2000")),
         border = "#2F3B4A",
+        panelBorder = Some("#2F3B4A"),
+        margin = Some("#0B0F14"),
         muted = "#7B8794",
         placeholder = "#52606D"
       ),
@@ -107,6 +111,8 @@ object ThemeConfig:
         error = UiTokenConfig(foreground = "#B00020", background = "#FDECEC"),
         warning = Some(UiTokenConfig(foreground = "#945802", background = "#FFFAEC")),
         border = "#BCCCDC",
+        panelBorder = Some("#BCCCDC"),
+        margin = Some("#FDFDFD"),
         muted = "#61758A",
         placeholder = "#829AB1"
       ),

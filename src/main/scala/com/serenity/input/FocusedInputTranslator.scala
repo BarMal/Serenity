@@ -28,6 +28,7 @@ object FocusedInputTranslator:
                   case SurfaceContent.CommandPaletteSubmenu(_, _, _) => commandRunnerTranslator
                   case SurfaceContent.ModalWorkflow(_)               => formTranslator
                   case SurfaceContent.ThemePicker(_)                 => formTranslator
+                  case SurfaceContent.ThemeCreator(_)                => formTranslator
                   case SurfaceContent.FileSearch(_)                  => formTranslator
                   case SurfaceContent.CommentLens(_)                 => formTranslator
                   case SurfaceContent.StartPage(_)                   => editorTranslator

@@ -25,6 +25,8 @@ class ThemeInterpolatorSpec extends AnyFlatSpec with Matchers:
       error = ThemeColor(fg, bg),
       warning = ThemeColor(fg, bg),
       border = fg,
+      panelBorder = fg,
+      margin = bg,
       muted = bg,
       placeholder = bg,
       textStyle = TextStyle.normal,

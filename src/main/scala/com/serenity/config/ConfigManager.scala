@@ -183,6 +183,8 @@ object ConfigManager:
               RenderFpsTarget.fromConfigKey(value.trim).map(config.withRenderFpsTarget).getOrElse(config)
             case "display.word_wrap" | "display.word.wrap" | "display_word_wrap" =>
               parseBoolean(value.trim).map(config.withWordWrap).getOrElse(config)
+            case "display.focused_text_body" | "display.focused.text.body" | "display_focused_text_body" =>
+              parseBoolean(value.trim).map(config.withFocusedTextBody).getOrElse(config)
             case "cursor.info_bar" | "cursor.info.bar" | "cursor_info_bar" =>
               value.trim.toLowerCase match
                 case "off" | "false" | "disabled" =>
@@ -413,6 +415,7 @@ object ConfigManager:
        |command_runner.visible_rows = ${config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")}
        |render.fps = ${config.renderFpsTarget.configKey}
        |display.word_wrap = ${config.wordWrapEnabled}
+       |display.focused_text_body = ${config.focusedTextBodyEnabled}
        |
        |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
        |ui.material = ${config.materialPreset.configKey}
@@ -534,7 +537,8 @@ object ConfigManager:
         case "syntax.highlighting" | "syntax_highlighting" | "font.code.ligatures" | "font_code_ligatures" |
             "font.text.ligatures" | "font.prose.ligatures" | "font_text_ligatures" | "font_prose_ligatures" |
             "font.ui.ligatures" | "font_ui_ligatures" | "font.ligatures" | "font_ligatures" | "spellcheck.enabled" |
-            "spellcheck_enabled" | "display.word_wrap" | "display.word.wrap" | "display_word_wrap" =>
+            "spellcheck_enabled" | "display.word_wrap" | "display.word.wrap" | "display_word_wrap" |
+            "display.focused_text_body" | "display.focused.text.body" | "display_focused_text_body" =>
           parseBoolean(value).isEmpty
         case "font.code.size" | "font_code_size" | "font.text.size" | "font.prose.size" | "font_text_size" |
             "font_prose_size" | "font.size" | "font_size" | "font.ui.size" | "font_ui_size" =>
