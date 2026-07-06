@@ -2,7 +2,9 @@ package com.serenity.richtext
 
 import java.awt.Color
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
+import java.util.regex.Matcher
 import javax.swing.text as SwingText
 import javax.swing.text.rtf.RTFEditorKit
 
@@ -10,6 +12,11 @@ import cats.effect.IO
 
 /** Reads and writes RTF documents through Serenity's native rich text model. */
 object RtfDocumentCodec:
+  private val InlineLineBreakMarker: Char       = 0xe000.toChar
+  private val EncodedInlineLineBreakMarker      = "\\" + "u57344 ?"
+  private val RtfInlineLineBreakControl: String = "\\" + "line "
+  private val RtfInlineLineBreakPattern         = """(?<!\\)\\line(?=[^A-Za-z]|$) ?""".r
+
   /** Read an RTF file into Serenity's native rich text model. */
   def read(path: Path): IO[RichTextDocument] =
     IO.blocking(readBytes(Files.readAllBytes(path)))
@@ -21,7 +28,7 @@ object RtfDocumentCodec:
   /** Decode RTF bytes into Serenity's native rich text model. */
   def readBytes(bytes: Array[Byte]): RichTextDocument =
     val styledDocument = SwingText.DefaultStyledDocument()
-    val input          = ByteArrayInputStream(bytes)
+    val input          = ByteArrayInputStream(markInlineLineBreaks(bytes))
     try RTFEditorKit().read(input, styledDocument, 0)
     finally input.close()
     fromStyledDocument(styledDocument)
@@ -31,7 +38,18 @@ object RtfDocumentCodec:
     val styledDocument = toStyledDocument(document.normalized)
     val output         = ByteArrayOutputStream()
     RTFEditorKit().write(output, styledDocument, 0, styledDocument.getLength)
-    output.toByteArray
+    unmarkInlineLineBreaks(output.toByteArray)
+
+  private def markInlineLineBreaks(bytes: Array[Byte]): Array[Byte] =
+    val rtf = String(bytes, StandardCharsets.ISO_8859_1)
+    RtfInlineLineBreakPattern
+      .replaceAllIn(rtf, Matcher.quoteReplacement(EncodedInlineLineBreakMarker))
+      .getBytes(StandardCharsets.ISO_8859_1)
+
+  private def unmarkInlineLineBreaks(bytes: Array[Byte]): Array[Byte] =
+    String(bytes, StandardCharsets.ISO_8859_1)
+      .replace(EncodedInlineLineBreakMarker, RtfInlineLineBreakControl)
+      .getBytes(StandardCharsets.ISO_8859_1)
 
   private def fromStyledDocument(document: SwingText.StyledDocument): RichTextDocument =
     val root = document.getDefaultRootElement
@@ -66,6 +84,7 @@ object RtfDocumentCodec:
             .getText(start, length)
             .replace("\r", "")
             .stripSuffix("\n")
+            .replace(InlineLineBreakMarker.toString, "\n")
           Option.when(text.nonEmpty)(RichTextRun(text, styleFromAttributes(element.getAttributes)))
         }
         .flatten
@@ -79,7 +98,7 @@ object RtfDocumentCodec:
       paragraph.runs.foreach { run =>
         styledDocument.insertString(
           styledDocument.getLength,
-          run.text,
+          run.text.replace('\n', InlineLineBreakMarker),
           attributesFromStyle(run.style)
         )
       }

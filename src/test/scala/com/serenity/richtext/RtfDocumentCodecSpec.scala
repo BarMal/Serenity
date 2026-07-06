@@ -70,6 +70,27 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
     decodedStyle.flatMap(_.color) shouldBe Some("#336699")
   }
 
+  it should "read native RTF tab and line controls as inline structural text" in {
+    val rtf =
+      """{\rtf1\ansi\pard alpha\tab beta\line gamma\par}"""
+
+    val decoded = RtfDocumentCodec.readBytes(rtf.getBytes(StandardCharsets.UTF_8))
+
+    singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
+  }
+
+  it should "write tabs and line breaks as native RTF controls" in {
+    val source = RichTextDocument.oneParagraph("alpha\tbeta\ngamma")
+
+    val bytes   = RtfDocumentCodec.writeBytes(source)
+    val rtfText = String(bytes, StandardCharsets.UTF_8)
+    val decoded = RtfDocumentCodec.readBytes(bytes)
+
+    rtfText should include("\\tab")
+    rtfText should include("\\line")
+    singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
+  }
+
   it should "read and write RTF files through IO" in {
     val path   = Files.createTempFile("serenity-rich-text", ".rtf")
     val source = RichTextDocument.oneParagraph("Saved text")
