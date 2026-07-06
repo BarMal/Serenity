@@ -207,6 +207,11 @@ case class CommandRunner(
       case _ =>
         submenuGroup(groupId).map(_.label).toList
 
+  def settingsGroupBreadcrumbLabels(groupId: String): List[String] =
+    val ancestorIds = preferredAncestorGroupIds(groupId)
+    val groupIds    = if ancestorIds.isEmpty then List(groupId) else ancestorIds :+ groupId
+    groupIds.flatMap(id => submenuGroup(id).map(_.label))
+
   def moveSubmenuSelection(delta: Int): CommandRunner =
     activeSubmenu match
       case Some(submenu) =>
