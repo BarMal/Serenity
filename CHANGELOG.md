@@ -11,3 +11,4 @@
 - Added release-cycle notes so the latest desktop release includes a human-readable changelog section alongside recent commits and downloadable assets.
 - Kept stacked command-runner submenus contained inside the active editor content area in tiny viewports.
 - Added a tested custom-chrome canvas fallback snapshot so editor layout receives post-title-bar viewport dimensions.
+- Hid command-runner panel order controls unless multiple pinned panels share the same edge.
