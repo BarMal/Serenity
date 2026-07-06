@@ -32,6 +32,13 @@ class TextEditingSpec extends AnyFlatSpec with Matchers:
     TextEditing.previousGraphemeBoundary(text, 3) shouldBe 1
   }
 
+  it should "step over emoji skin-tone modifier sequences as one grapheme" in {
+    val text = "a\uD83D\uDC4D\uD83C\uDFFDb"
+
+    TextEditing.nextGraphemeBoundary(text, 1) shouldBe 5
+    TextEditing.previousGraphemeBoundary(text, 5) shouldBe 1
+  }
+
   it should "step over combining-mark accents with their base character" in {
     val text = "cafe\u0301!"
 
