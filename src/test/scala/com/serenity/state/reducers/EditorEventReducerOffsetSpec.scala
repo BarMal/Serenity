@@ -43,6 +43,13 @@ class EditorEventReducerOffsetSpec extends AnyFlatSpec with Matchers:
     reduceTextEvent("a🙂b", CursorPosition(0, 1), MoveRight).cursors shouldBe List(CursorPosition(0, 3))
   }
 
+  it should "move left and right across emoji skin-tone modifier sequences as one grapheme" in {
+    val text = "a\uD83D\uDC4D\uD83C\uDFFDb"
+
+    reduceTextEvent(text, CursorPosition(0, 5), MoveLeft).cursors shouldBe List(CursorPosition(0, 1))
+    reduceTextEvent(text, CursorPosition(0, 1), MoveRight).cursors shouldBe List(CursorPosition(0, 5))
+  }
+
   it should "move left and right across combining-mark accents as one grapheme" in {
     reduceTextEvent("cafe\u0301!", CursorPosition(0, 5), MoveLeft).cursors shouldBe List(CursorPosition(0, 3))
     reduceTextEvent("cafe\u0301!", CursorPosition(0, 3), MoveRight).cursors shouldBe List(CursorPosition(0, 5))

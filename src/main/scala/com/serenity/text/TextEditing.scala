@@ -150,12 +150,18 @@ object TextEditing:
         consumeGraphemeEnd(source, nextCodePointEnd(source, nextCodePointEnd(source, idx)))
       else idx
 
-  private val ZeroWidthJoiner = 0x200d
+  private val ZeroWidthJoiner    = 0x200d
+  private val EmojiModifierStart = 0x1f3fb
+  private val EmojiModifierEnd   = 0x1f3ff
 
   private def isGraphemeExtender(codePoint: Int): Boolean =
-    Character.getType(codePoint) match
-      case Character.NON_SPACING_MARK | Character.COMBINING_SPACING_MARK | Character.ENCLOSING_MARK => true
-      case _                                                                                        => false
+    isEmojiModifier(codePoint) ||
+      (Character.getType(codePoint) match
+        case Character.NON_SPACING_MARK | Character.COMBINING_SPACING_MARK | Character.ENCLOSING_MARK => true
+        case _                                                                                        => false)
+
+  private def isEmojiModifier(codePoint: Int): Boolean =
+    codePoint >= EmojiModifierStart && codePoint <= EmojiModifierEnd
 
   @annotation.tailrec
   private def scanBackwardClassStart(source: CharacterSource, idx: Int, targetClass: CharacterClass): Int =
