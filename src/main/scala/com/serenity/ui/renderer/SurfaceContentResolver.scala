@@ -406,11 +406,14 @@ object SurfaceContentResolver:
           val editingText = if runner.editingItemId.contains(item.id) then Some(runner.editingText) else None
           inputRow(item, index == adjustedSelectedIndex, editingText)
         case (group: CommandSurfaceItem.GroupItem, index) =>
+          val groupLabel =
+            if runner.searchTerm.nonEmpty then runner.settingsGroupBreadcrumbLabels(group.id).mkString(" > ")
+            else group.label
           OverlayRow(
-            plainText = group.label,
+            plainText = groupLabel,
             selected = index == adjustedSelectedIndex,
             segments = List(
-              OverlaySegment(group.label),
+              OverlaySegment(groupLabel),
               OverlaySegment(group.hint.getOrElse(""), tone = OverlayTone.Normal)
             ).filterNot(_.text.isEmpty),
             layout = OverlayRowLayout.Columns

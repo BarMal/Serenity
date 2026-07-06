@@ -190,6 +190,29 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     optionRow.segments(1).tone shouldBe OverlayTone.Normal
   }
 
+  it should "render nested settings search result rows with parent breadcrumbs" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("new documents")
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 90, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    val row = floating.rows
+      .find(_.plainText.contains("New Documents"))
+      .getOrElse(fail("Expected nested preset new documents result"))
+
+    row.plainText should startWith("UI Presets > Edit Preset: Writing > Document Defaults > New Documents")
+    row.segments.headOption.map(_.text) shouldBe Some(
+      "UI Presets > Edit Preset: Writing > Document Defaults > New Documents"
+    )
+  }
+
   it should "resolve option rows with selected option preview hints" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
