@@ -495,6 +495,43 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "preserve preset submenu ancestry when entering a nested settings group from search results" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val searchedRunner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+      .updateSearchTerm("fonts")
+    val runner = searchedRunner.withSelectedItem("settings-preset-fonts")
+    val surface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val state = AppState(
+      buffers = Map.empty,
+      layout = Layout.empty,
+      focus = Focus.Surface(surface.id),
+      uiSurfaces = List(surface)
+    )
+
+    runner.selectedItem.map(_.id) shouldBe Some("settings-preset-fonts")
+
+    val entered       = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
+    val enteredRunner = runnerFrom(entered.state)
+
+    enteredRunner.activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-fonts")
+    enteredRunner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-preset-edit")
+    enteredRunner.activeSubmenu.map(_.ancestorGroupIds) shouldBe Some(
+      List("settings-ui-presets", "settings-preset-edit")
+    )
+    enteredRunner.submenuBreadcrumbLabels("settings-preset-fonts") shouldBe List(
+      "UI Presets",
+      "Edit Preset: Writing",
+      "Fonts"
+    )
+  }
+
   it should "clear submenu search with escape before leaving the submenu" in {
     val registry = CommandRegistry.default
     val searched = List('j', 'a').foldLeft(settingsStateOnItem("settings-language", "lang-plain-text")) { (s, char) =>
