@@ -353,6 +353,9 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
     config.windowChromeMode shouldBe WindowChromeMode.Native
+    ConfigManager.configToString(config) should include(
+      "# Window chrome: native preserves OS snap/window animations; custom is themed and applies after restart"
+    )
     ConfigManager.configToString(config) should include("window.chrome = native")
   }
 
