@@ -67,6 +67,18 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     fallback shouldBe requestedWindow
   }
 
+  it should "derive custom chrome fallback viewport from the post-title-bar canvas" in {
+    val metrics         = CellMetrics(charWidth = 10, lineHeight = 20, ascent = 15)
+    val requestedWindow = new Dimension(1200, 900)
+    val chrome          = SwingWindow.ChromeMetrics.fromCellMetrics(metrics)
+
+    val snapshot = SwingWindow.fallbackCanvasResizeSnapshot(metrics, requestedWindow, WindowChromeMode.Custom, chrome)
+
+    snapshot.pixelSize shouldBe new Dimension(1200, 900 - chrome.titleBarHeight)
+    snapshot.viewportSize.width shouldBe 120
+    snapshot.viewportSize.height shouldBe (900 - chrome.titleBarHeight) / metrics.lineHeight
+  }
+
   "SwingWindow.ChromePalette" should "derive custom chrome colours from the active theme" in {
     val theme = Theme.light.copy(
       border = new Color(0x111111),
