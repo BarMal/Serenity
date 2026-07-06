@@ -417,6 +417,7 @@ object ConfigManager:
        |
        |# Interface density: compact, comfortable, spacious
        |interface.density = ${config.interfaceDensity.configKey}
+       |# Window chrome: native preserves OS snap/window animations; custom is themed and applies after restart
        |window.chrome = ${windowChromeModeConfigKey(config.windowChromeMode)}
        |ui.element_gap = ${config.uiElementGap}
        |ui.corner_radius = ${config.uiCornerRadiusPx}

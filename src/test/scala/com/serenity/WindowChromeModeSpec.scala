@@ -6,8 +6,8 @@ import org.scalatest.matchers.should.Matchers
 
 class WindowChromeModeSpec extends AnyFlatSpec with Matchers:
 
-  "AppConfig" should "default window chrome mode to Custom" in {
-    AppConfig.default.windowChromeMode shouldBe WindowChromeMode.Custom
+  "AppConfig" should "default window chrome mode to Native" in {
+    AppConfig.default.windowChromeMode shouldBe WindowChromeMode.Native
   }
 
   it should "change window chrome mode without disturbing other config fields" in {

@@ -396,7 +396,7 @@ case class AppConfig(
     cursorColors: CursorColorConfig = CursorColorConfig(),
     cursorInfoBarMode: CursorInfoBarMode = CursorInfoBarMode.Off,
     cursorInfoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating,
-    windowChromeMode: WindowChromeMode = WindowChromeMode.Custom,
+    windowChromeMode: WindowChromeMode = WindowChromeMode.Native,
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     defaultDocumentMode: DefaultDocumentMode = DefaultDocumentMode.PlainText,
     interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
