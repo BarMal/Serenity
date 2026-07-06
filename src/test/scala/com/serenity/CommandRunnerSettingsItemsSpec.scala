@@ -48,6 +48,43 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     diagnostics.selectedIntent shouldBe Some(
       CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Left))
     )
+    workspaceItems.map(_.id) should not contain "settings-panel-order"
+  }
+
+  it should "hide panel order controls unless multiple panels share an edge" in {
+    val noPanels = CommandRunnerSettingsItems.workspaceLayoutItems(Map.empty)
+    val separateEdges = CommandRunnerSettingsItems.workspaceLayoutItems(
+      Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 3)
+    )
+    val sameEdge = CommandRunnerSettingsItems.workspaceLayoutItems(
+      Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 2)
+    )
+    val sameEdgeWithSeparatePanel = CommandRunnerSettingsItems.workspaceLayoutItems(
+      Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 2, "panel-explorer-pin" -> 3)
+    )
+
+    noPanels.map(_.id) should not contain "settings-panel-order"
+    separateEdges.map(_.id) should not contain "settings-panel-order"
+
+    val panelOrder = sameEdge
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-panel-order" => group }
+      .getOrElse(fail("missing panel order group"))
+    panelOrder.children.collect { case CommandSurfaceItem.CommandItem(command) => command.name } shouldBe List(
+      "move-outline-panel-earlier",
+      "move-outline-panel-later",
+      "move-diagnostics-panel-earlier",
+      "move-diagnostics-panel-later"
+    )
+
+    val separatePanelOrder = sameEdgeWithSeparatePanel
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-panel-order" => group }
+      .getOrElse(fail("missing panel order group"))
+    separatePanelOrder.children.collect { case CommandSurfaceItem.CommandItem(command) => command.name } shouldBe List(
+      "move-outline-panel-earlier",
+      "move-outline-panel-later",
+      "move-diagnostics-panel-earlier",
+      "move-diagnostics-panel-later"
+    )
   }
 
   it should "normalize preset previews for the combined preset picker" in {

@@ -363,40 +363,46 @@ object CommandRunnerSettingsItems:
     )
 
   private[command] def workspaceLayoutItems(optionSelections: Map[String, Int]): List[CommandSurfaceItem] =
-    val panelPinItems = List(
-      panelPinOptionItem("panel-explorer-pin", "Explorer", PanelKind.Explorer, optionSelections),
-      panelPinOptionItem("panel-outline-pin", "Outline", PanelKind.Outline, optionSelections),
-      panelPinOptionItem("panel-diagnostics-pin", "Diagnostics", PanelKind.Diagnostics, optionSelections),
-      panelPinOptionItem("panel-markdown-preview-pin", "Markdown Preview", PanelKind.MarkdownPreview, optionSelections)
+    val panelDefinitions = List(
+      ("Explorer", PanelKind.Explorer, "panel-explorer-pin"),
+      ("Outline", PanelKind.Outline, "panel-outline-pin"),
+      ("Diagnostics", PanelKind.Diagnostics, "panel-diagnostics-pin"),
+      ("Markdown Preview", PanelKind.MarkdownPreview, "panel-markdown-preview-pin")
     )
+    val panelPinItems = panelDefinitions.map {
+      case (label, kind, optionId) =>
+        panelPinOptionItem(optionId, label, kind, optionSelections)
+    }
+    val pinnedPanels = panelDefinitions.flatMap {
+      case (label, kind, optionId) =>
+        selectedPanelPosition(optionSelections, optionId).map(PinnedPanelRow(label, kind, _))
+    }
+    val reorderablePositions = pinnedPanels
+      .groupBy(_.position)
+      .collect { case (position, panels) if panels.size >= 2 => position }
+      .toSet
     val panelOrderItems =
-      List(
-        ("Explorer", PanelKind.Explorer, "panel-explorer-pin"),
-        ("Outline", PanelKind.Outline, "panel-outline-pin"),
-        ("Diagnostics", PanelKind.Diagnostics, "panel-diagnostics-pin"),
-        ("Markdown Preview", PanelKind.MarkdownPreview, "panel-markdown-preview-pin")
-      ).filter((_, _, optionId) => optionSelections.getOrElse(optionId, 0) > 0).flatMap {
-        case (label, kind, _) =>
-          List(
-            CommandSurfaceItem.CommandItem(
-              Command.typed(
-                s"move-${commandId(label)}-panel-earlier",
-                s"Move the $label panel earlier within its pinned edge.",
-                CommandIntent.MovePanelEarlier(kind),
-                CommandCategory.Settings,
-                label = s"Move $label Earlier"
-              )
-            ),
-            CommandSurfaceItem.CommandItem(
-              Command.typed(
-                s"move-${commandId(label)}-panel-later",
-                s"Move the $label panel later within its pinned edge.",
-                CommandIntent.MovePanelLater(kind),
-                CommandCategory.Settings,
-                label = s"Move $label Later"
-              )
+      pinnedPanels.filter(panel => reorderablePositions(panel.position)).flatMap { panel =>
+        List(
+          CommandSurfaceItem.CommandItem(
+            Command.typed(
+              s"move-${commandId(panel.label)}-panel-earlier",
+              s"Move the ${panel.label} panel earlier within its pinned edge.",
+              CommandIntent.MovePanelEarlier(panel.kind),
+              CommandCategory.Settings,
+              label = s"Move ${panel.label} Earlier"
+            )
+          ),
+          CommandSurfaceItem.CommandItem(
+            Command.typed(
+              s"move-${commandId(panel.label)}-panel-later",
+              s"Move the ${panel.label} panel later within its pinned edge.",
+              CommandIntent.MovePanelLater(panel.kind),
+              CommandCategory.Settings,
+              label = s"Move ${panel.label} Later"
             )
           )
+        )
       }
     val commandItems = List(
       Command.typed(
@@ -470,32 +476,41 @@ object CommandRunnerSettingsItems:
         label = "Collapse Expanded Panel"
       )
     ).map(CommandSurfaceItem.CommandItem(_))
-    List(
-      CommandSurfaceItem.GroupItem(
-        id = "settings-panel-pins",
-        label = "Panel Pins",
-        children = panelPinItems,
-        category = CommandCategory.Settings,
-        hint = Some("Choose panel edge placement")
-      ),
+    val panelPinsGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-panel-pins",
+      label = "Panel Pins",
+      children = panelPinItems,
+      category = CommandCategory.Settings,
+      hint = Some("Choose panel edge placement")
+    )
+    val panelOrderGroup = Option.when(panelOrderItems.nonEmpty)(
       CommandSurfaceItem.GroupItem(
         id = "settings-panel-order",
         label = "Panel Order",
         children = panelOrderItems,
         category = CommandCategory.Settings,
         hint = Some("Reorder panels on the same edge")
-      ),
-      CommandSurfaceItem.GroupItem(
-        id = "settings-panel-actions",
-        label = "Panel Actions",
-        children = commandItems,
-        category = CommandCategory.Settings,
-        hint = Some("Focus, expand, unpin, collapse")
       )
     )
+    val panelActionsGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-panel-actions",
+      label = "Panel Actions",
+      children = commandItems,
+      category = CommandCategory.Settings,
+      hint = Some("Focus, expand, unpin, collapse")
+    )
+
+    panelPinsGroup :: panelOrderGroup.toList ::: List(panelActionsGroup)
 
   private def commandId(label: String): String =
     label.toLowerCase.replaceAll("[^a-z0-9]+", "-").stripPrefix("-").stripSuffix("-")
+
+  private case class PinnedPanelRow(label: String, kind: PanelKind, position: PanelPosition)
+
+  private def selectedPanelPosition(optionSelections: Map[String, Int], optionId: String): Option[PanelPosition] =
+    List(None, Some(PanelPosition.Top), Some(PanelPosition.Right), Some(PanelPosition.Bottom), Some(PanelPosition.Left))
+      .lift(optionSelections.getOrElse(optionId, 0).max(0).min(4))
+      .flatten
 
   private[command] def panelPinOptionItem(
     id: String,
