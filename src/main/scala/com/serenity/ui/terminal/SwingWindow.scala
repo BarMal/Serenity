@@ -22,26 +22,27 @@ class SwingWindow(
 ):
 
   private val initialChromeLayoutMetrics = SwingWindow.ChromeMetrics.fromCellMetrics(initialChromeMetrics)
-  private val initialCanvasPixelSize =
-    SwingWindow.canvasFallbackSize(initialPixelSize, chromeMode, initialChromeLayoutMetrics)
-  private val pixelSize           = new AtomicReference(initialCanvasPixelSize)
-  private val metricsRef          = new AtomicReference(initialMetrics)
-  private val chromeMetricsRef    = new AtomicReference(initialChromeLayoutMetrics)
-  private val chromePaletteRef    = new AtomicReference(SwingWindow.ChromePalette.fromTheme(Theme.default))
-  private val pendingResize       = new AtomicReference[Option[ViewportSize]](None)
-  private val closeLatch          = new CountDownLatch(1)
-  private val baseImageRef        = new AtomicReference[Option[BufferedImage]](None)
-  private val renderedImageRef    = new AtomicReference[Option[BufferedImage]](None)
-  private val savedBoundsRef      = new AtomicReference[Option[Rectangle]](None)
-  private val maximizedRef        = new AtomicBoolean(false)
-  private val maxBtnRef           = new AtomicReference[Option[ChromeControlButton]](None)
-  private val controlButtonsRef   = new AtomicReference[scala.List[ChromeControlButton]](Nil)
-  private val controlPanelRef     = new AtomicReference[Option[JPanel]](None)
-  private val titleBarRef         = new AtomicReference[Option[JPanel]](None)
-  private val titleLabelRef       = new AtomicReference[Option[JLabel]](None)
-  private val titleSpacerRef      = new AtomicReference[Option[JPanel]](None)
-  private val onResizeCallbackRef = new AtomicReference[Option[() => Unit]](None)
-  private val usesCustomChrome    = chromeMode == WindowChromeMode.Custom
+  private val initialCanvasResizeSnapshot =
+    SwingWindow.fallbackCanvasResizeSnapshot(initialMetrics, initialPixelSize, chromeMode, initialChromeLayoutMetrics)
+  private val initialCanvasPixelSize = initialCanvasResizeSnapshot.pixelSize
+  private val pixelSize              = new AtomicReference(initialCanvasPixelSize)
+  private val metricsRef             = new AtomicReference(initialMetrics)
+  private val chromeMetricsRef       = new AtomicReference(initialChromeLayoutMetrics)
+  private val chromePaletteRef       = new AtomicReference(SwingWindow.ChromePalette.fromTheme(Theme.default))
+  private val pendingResize          = new AtomicReference[Option[ViewportSize]](None)
+  private val closeLatch             = new CountDownLatch(1)
+  private val baseImageRef           = new AtomicReference[Option[BufferedImage]](None)
+  private val renderedImageRef       = new AtomicReference[Option[BufferedImage]](None)
+  private val savedBoundsRef         = new AtomicReference[Option[Rectangle]](None)
+  private val maximizedRef           = new AtomicBoolean(false)
+  private val maxBtnRef              = new AtomicReference[Option[ChromeControlButton]](None)
+  private val controlButtonsRef      = new AtomicReference[scala.List[ChromeControlButton]](Nil)
+  private val controlPanelRef        = new AtomicReference[Option[JPanel]](None)
+  private val titleBarRef            = new AtomicReference[Option[JPanel]](None)
+  private val titleLabelRef          = new AtomicReference[Option[JLabel]](None)
+  private val titleSpacerRef         = new AtomicReference[Option[JPanel]](None)
+  private val onResizeCallbackRef    = new AtomicReference[Option[() => Unit]](None)
+  private val usesCustomChrome       = chromeMode == WindowChromeMode.Custom
 
   def setOnResize(cb: () => Unit): Unit = onResizeCallbackRef.set(Some(cb))
 
@@ -400,8 +401,9 @@ class SwingWindow(
   def resizeToPreferred(size: PreferredWindowSize): Unit =
     val normalized = size.normalized
     SwingUtilities.invokeLater { () =>
-      val dimension      = new Dimension(normalized.width, normalized.height)
-      val canvasFallback = SwingWindow.canvasFallbackSize(dimension, chromeMode, chromeMetricsRef.get())
+      val dimension = new Dimension(normalized.width, normalized.height)
+      val canvasFallback =
+        SwingWindow.fallbackCanvasResizeSnapshot(metrics, dimension, chromeMode, chromeMetricsRef.get()).pixelSize
       canvas.setPreferredSize(canvasFallback)
       frame.setSize(dimension)
       frame.validate()
@@ -660,6 +662,18 @@ object SwingWindow:
         case WindowChromeMode.Custom => chromeMetrics.titleBarHeight
         case WindowChromeMode.Native => 0
     new Dimension(windowSize.width.max(1), (windowSize.height - chromeHeight).max(1))
+
+  def fallbackCanvasResizeSnapshot(
+    metrics: CellMetrics,
+    windowSize: Dimension,
+    chromeMode: WindowChromeMode,
+    chromeMetrics: ChromeMetrics
+  ): CanvasResizeSnapshot =
+    canvasResizeSnapshot(
+      metrics,
+      new Dimension(0, 0),
+      canvasFallbackSize(windowSize, chromeMode, chromeMetrics)
+    )
 
   def resource(
     metrics: CellMetrics = DefaultMetrics,
