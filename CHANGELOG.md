@@ -6,4 +6,5 @@
 - Documented that remote storage is discoverable but not yet openable or saveable through the current local file IO.
 - Blocked remote URI open/save-as workflow submissions before filesystem path parsing, keeping the modal open with a clear unsupported-storage status.
 - Added parent breadcrumbs to nested settings search result rows in the command runner so preset settings are discoverable from search.
+- Hardened Swing input shutdown observation tests so loaded Windows release jobs do not fail before idle streams can terminate.
 - Added release-cycle notes so the latest desktop release includes a human-readable changelog section alongside recent commits and downloadable assets.
