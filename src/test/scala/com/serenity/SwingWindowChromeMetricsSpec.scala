@@ -138,6 +138,15 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
       palette,
       SwingWindow.ChromeControlState(hovered = true)
     ) shouldBe palette.closeHoverBackground
+    val contrastPalette = palette.copy(
+      titleForeground = new Color(0x010203),
+      closeHoverForeground = new Color(0xf0e0d0)
+    )
+    SwingWindow.ChromeControlPaint.foreground(
+      SwingWindow.ChromeControlKind.Close,
+      contrastPalette,
+      SwingWindow.ChromeControlState(pressed = true)
+    ) shouldBe contrastPalette.closeHoverForeground
     SwingWindow.ChromeControlPaint.focusBorder(palette, SwingWindow.ChromeControlState()) shouldBe None
     SwingWindow.ChromeControlPaint.focusBorder(palette, SwingWindow.ChromeControlState(focused = true)) shouldBe
       Some(palette.focusBorder)
