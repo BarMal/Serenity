@@ -141,6 +141,53 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     overlayRects.foreach(rect => assertInside(contentRect, rect, s"overlay $rect"))
   }
 
+  it should "keep stacked below-cursor command surfaces inside tiny active editor content rectangles" in {
+    val tinyViewport = ViewportSize(32, 6)
+    val cursor       = CursorPosition(1, 2)
+    val buffer = Buffer
+      .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
+      .copy(cursors = List(cursor))
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    val state = AppState.initial.copy(
+      config = AppConfig.default.copy(
+        showLineNumbers = false,
+        showGutter = false,
+        textAreaInsets = TextAreaInsets()
+      ),
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner-submenu")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner-submenu"),
+          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout      = LayoutEngine.calculateLayout(state, tinyViewport)
+    val contentRect = LayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
+    val stack       = layout.belowCursorOverlayStack
+
+    stack.map(_._1) shouldBe List(SurfaceId("command-runner"), SurfaceId("command-runner-submenu"))
+    stack.foreach { case (surfaceId, rect) => assertInside(contentRect, rect, s"$surfaceId") }
+    val stackById   = stack.toMap
+    val runnerRect  = stackById(SurfaceId("command-runner"))
+    val submenuRect = stackById(SurfaceId("command-runner-submenu"))
+    runnerRect.bottom should be <= submenuRect.y
+  }
+
   it should "reserve configured gaps before clamping oversized pinned side panels" in {
     val constrainedViewport = ViewportSize(20, 8)
     val gap                 = 2
