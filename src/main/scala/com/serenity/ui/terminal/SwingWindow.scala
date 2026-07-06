@@ -536,7 +536,7 @@ object SwingWindow:
       else palette.titleBackground
 
     def foreground(kind: ChromeControlKind, palette: ChromePalette, state: ChromeControlState): Color =
-      if state.hovered && kind == ChromeControlKind.Close then palette.closeHoverForeground
+      if (state.hovered || state.pressed) && kind == ChromeControlKind.Close then palette.closeHoverForeground
       else palette.titleForeground
 
     def focusBorder(palette: ChromePalette, state: ChromeControlState): Option[Color] =
