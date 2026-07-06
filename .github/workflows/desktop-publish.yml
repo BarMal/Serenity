@@ -216,6 +216,23 @@ jobs:
             echo "- Serenity-windows-x64.zip: Windows app image"
             echo "- Serenity-macos-arm64.zip: macOS Apple Silicon app image"
             echo
+            if [ -f CHANGELOG.md ]; then
+              echo "### Changelog"
+              awk '
+                /^## / {
+                  if (capturing) {
+                    exit
+                  }
+                  capturing = 1
+                  print "#### " substr($0, 4)
+                  next
+                }
+                capturing {
+                  print
+                }
+              ' CHANGELOG.md
+              echo
+            fi
             echo "### Recent changes"
             git log -10 --pretty=format:'- %s (%h)'
             echo

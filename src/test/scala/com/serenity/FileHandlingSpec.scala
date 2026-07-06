@@ -55,6 +55,38 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     DocumentFormat.fromPath(Path.of("draft.odt")) shouldBe DocumentFormat.RichTextDocument
   }
 
+  "StorageLocation" should "discover local paths as supported storage" in {
+    val path = Path.of("notes.md")
+
+    StorageLocation.parse(path.toString).shouldBe(Right(StorageLocation.Local(path)))
+    StorageLocation.fromPath(path).canOpenWithCurrentStorage.shouldBe(true)
+    StorageLocation.fromPath(path).canSaveWithCurrentStorage.shouldBe(true)
+  }
+
+  it should "treat file URIs as local storage" in {
+    val path = Files.createTempFile("serenity-storage-location", ".txt")
+
+    try StorageLocation.parse(path.toUri.toString).shouldBe(Right(StorageLocation.Local(path)))
+    finally Files.deleteIfExists(path)
+  }
+
+  it should "discover remote URI storage without marking it supported by current file IO" in {
+    val location = StorageLocation.parse("https://example.com/docs/notes.md")
+
+    location.map(_.isRemote).shouldBe(Right(true))
+    location.map(_.canOpenWithCurrentStorage).shouldBe(Right(false))
+    location.map(_.canSaveWithCurrentStorage).shouldBe(Right(false))
+  }
+
+  it should "keep Windows absolute paths local instead of treating drive letters as URI schemes" in
+    StorageLocation
+      .parse("C:\\Users\\barna\\notes.md")
+      .shouldBe(
+        Right(
+          StorageLocation.Local(Path.of("C:\\Users\\barna\\notes.md"))
+        )
+      )
+
   it should "report only implemented document operation capabilities" in {
     DocumentFormat.capabilities(DocumentFormat.PlainText) shouldBe DocumentFormatCapabilities(
       canOpen = true,
