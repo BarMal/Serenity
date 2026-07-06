@@ -97,10 +97,12 @@ object LayoutEngine:
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
     val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
     val contentHeight  = math.max(1, viewportSize.height - gutterHeight)
+    val uiElementGap   = math.max(0, state.config.uiElementGap)
     val pinnedPanelLayout = calculatePinnedPanelLayout(
       state.pinnedSurfaces,
       viewportSize.width,
-      contentHeight
+      contentHeight,
+      uiElementGap
     )
     val pinnedPanelRects = pinnedPanelLayout.panelRects
 
@@ -113,11 +115,10 @@ object LayoutEngine:
     val rightPinnedWidth =
       pinnedPanelRects.get(PanelPosition.Right).map(_.width).getOrElse(0)
 
-    val uiElementGap = state.config.uiElementGap
-    val leftGap      = if leftPinnedWidth > 0 then uiElementGap else 0
-    val rightGap     = if rightPinnedWidth > 0 then uiElementGap else 0
-    val topGap       = if topPinnedHeight > 0 then uiElementGap else 0
-    val bottomGap    = if bottomPinnedHeight > 0 then uiElementGap else 0
+    val leftGap   = if leftPinnedWidth > 0 then uiElementGap else 0
+    val rightGap  = if rightPinnedWidth > 0 then uiElementGap else 0
+    val topGap    = if topPinnedHeight > 0 then uiElementGap else 0
+    val bottomGap = if bottomPinnedHeight > 0 then uiElementGap else 0
 
     val workspaceX = leftPinnedWidth + leftGap
     val workspaceY = topPinnedHeight + topGap
@@ -231,10 +232,13 @@ object LayoutEngine:
       surfaceRects: Map[SurfaceId, LayoutRect]
   )
 
+  private case class PinnedAxisSizes(start: Int, end: Int)
+
   private def calculatePinnedPanelLayout(
     panels: List[UiSurface],
     terminalWidth: Int,
-    contentHeight: Int
+    contentHeight: Int,
+    uiElementGap: Int
   ): PinnedPanelLayout =
     val panelsByPosition = panels.foldLeft(Map.empty[PanelPosition, List[(UiSurface, Int)]]) {
       case (acc, surface) =>
@@ -244,18 +248,26 @@ object LayoutEngine:
           case _ =>
             acc
     }
-    val panelSizes        = panelsByPosition.view.mapValues(_.map(_._2).max).toMap
-    val topHeight         = panelSizes.get(PanelPosition.Top).map(size => math.min(size, contentHeight)).getOrElse(0)
-    val remainingAfterTop = math.max(1, contentHeight - topHeight)
-    val bottomHeight =
-      panelSizes.get(PanelPosition.Bottom).map(size => math.min(size, remainingAfterTop)).getOrElse(0)
+    val panelSizes = panelsByPosition.view.mapValues(_.map(_._2).max).toMap
+    val verticalSizes = calculatePinnedAxisSizes(
+      panelSizes.get(PanelPosition.Top),
+      panelSizes.get(PanelPosition.Bottom),
+      contentHeight,
+      uiElementGap
+    )
+    val topHeight          = verticalSizes.start
+    val bottomHeight       = verticalSizes.end
     val verticalZoneY      = topHeight
     val verticalZoneHeight = math.max(1, contentHeight - topHeight - bottomHeight)
 
-    val leftWidth          = panelSizes.get(PanelPosition.Left).map(size => math.min(size, terminalWidth)).getOrElse(0)
-    val remainingAfterLeft = math.max(1, terminalWidth - leftWidth)
-    val rightWidth =
-      panelSizes.get(PanelPosition.Right).map(size => math.min(size, remainingAfterLeft)).getOrElse(0)
+    val horizontalSizes = calculatePinnedAxisSizes(
+      panelSizes.get(PanelPosition.Left),
+      panelSizes.get(PanelPosition.Right),
+      terminalWidth,
+      uiElementGap
+    )
+    val leftWidth  = horizontalSizes.start
+    val rightWidth = horizontalSizes.end
 
     val rects = List.newBuilder[(PanelPosition, LayoutRect)]
 
@@ -275,6 +287,28 @@ object LayoutEngine:
     val surfaceRects = calculatePinnedSurfaceRects(panelsByPosition, panelRects)
 
     PinnedPanelLayout(panelRects, surfaceRects)
+
+  private def calculatePinnedAxisSizes(
+    startSize: Option[Int],
+    endSize: Option[Int],
+    total: Int,
+    uiElementGap: Int
+  ): PinnedAxisSizes =
+    val requestedStart = math.max(0, startSize.getOrElse(0))
+    val requestedEnd   = math.max(0, endSize.getOrElse(0))
+    val hasStart       = requestedStart > 0
+    val hasEnd         = requestedEnd > 0
+    val reservedGap =
+      (if hasStart then uiElementGap else 0) +
+        (if hasEnd then uiElementGap else 0)
+    val panelBudget = math.max(0, total - reservedGap - 1)
+    val endMinimum  = if hasEnd && panelBudget > 1 then 1 else 0
+    val startBudget = math.max(0, panelBudget - endMinimum)
+    val start       = if hasStart then math.min(requestedStart, startBudget) else 0
+    val endBudget   = math.max(0, panelBudget - start)
+    val end         = if hasEnd then math.min(requestedEnd, endBudget) else 0
+
+    PinnedAxisSizes(start, end)
 
   private def calculatePinnedSurfaceRects(
     panelsByPosition: Map[PanelPosition, List[(UiSurface, Int)]],
