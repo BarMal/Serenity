@@ -247,6 +247,28 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       Files.deleteIfExists(tempRoot)
   }
 
+  it should "avoid filesystem suggestions while editing a remote storage URI" in {
+    val stateManager = createStateManager()
+    stateManager
+      .showModal(
+        Modal.FileWorkflow(
+          FileWorkflowState(
+            mode = FileWorkflowMode.Open,
+            path = "https://example.com/docs/note",
+            activeField = FileWorkflowField.Path
+          )
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.applyEvent(InsertChar('s')).unsafeRunSync()
+
+    val workflow = currentWorkflow(stateManager)
+    workflow.path shouldBe "https://example.com/docs/notes"
+    workflow.suggestions shouldBe Nil
+    workflow.missingPathSegments shouldBe Nil
+  }
+
   it should "keep the modal open and surface a visible status when open target is missing" in {
     val tempRoot = Files.createTempDirectory("workflow-open-missing")
 
@@ -269,4 +291,55 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       val workflow = currentWorkflow(stateManager)
       workflow.statusMessage shouldBe Some(s"File not found: ${tempRoot.resolve("missing.scala")}")
     finally Files.deleteIfExists(tempRoot)
+  }
+
+  it should "keep the modal open and surface a visible status when open target is remote storage" in {
+    val stateManager = createStateManager()
+    stateManager
+      .showModal(
+        Modal.FileWorkflow(
+          FileWorkflowState(
+            mode = FileWorkflowMode.Open,
+            path = "https://example.com/docs/notes.md"
+          )
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val workflow = currentWorkflow(stateManager)
+    workflow.statusMessage shouldBe Some("Remote storage is not supported yet: https://example.com/docs/notes.md")
+    stateManager.getCurrentState.unsafeRunSync().recentFiles shouldBe Nil
+  }
+
+  it should "keep the modal open and surface a visible status when save-as target is remote storage" in {
+    val bufferId = BufferId(0)
+
+    val stateManager = createStateManager()
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(bufferId).copy(content = com.serenity.rope.Rope("remote draft"), isDirty = true)
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+    stateManager
+      .showModal(
+        Modal.FileWorkflow(
+          FileWorkflowState(
+            mode = FileWorkflowMode.SaveAs,
+            filename = "notes.md",
+            path = "s3://serenity-docs/drafts"
+          )
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val workflow = currentWorkflow(stateManager)
+    workflow.statusMessage shouldBe Some("Remote storage is not supported yet: s3://serenity-docs/drafts/notes.md")
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.buffers(bufferId).filePath shouldBe None
+    state.buffers(bufferId).isDirty shouldBe true
   }
