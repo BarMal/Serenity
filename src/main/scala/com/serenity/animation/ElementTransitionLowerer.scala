@@ -23,10 +23,18 @@ object ElementTransitionLowerer:
       case TransitionKind.OutlineThenContent =>
         lowerOutlineThenContent(plan, cells, tickRateMs)
       case TransitionKind.Fade =>
-        AnimationState(lowerCells(plan, cells.all, tickRateMs, staggerFrames = 0, delayFrames = 0))
+        AnimationState(
+          lowerCells(plan, cells.all, tickRateMs, staggerFrames = 0, delayFrames = delayFrames(plan, tickRateMs))
+        )
       case TransitionKind.TypedText | TransitionKind.DirectionalSweep | TransitionKind.LineAndCharacterTandem =>
         AnimationState(
-          lowerCells(plan, cells.all, tickRateMs, staggerFrames = staggerFrames(plan, tickRateMs), delayFrames = 0)
+          lowerCells(
+            plan,
+            cells.all,
+            tickRateMs,
+            staggerFrames = staggerFrames(plan, tickRateMs),
+            delayFrames = delayFrames(plan, tickRateMs)
+          )
         )
 
   private def lowerOutlineThenContent(
@@ -34,13 +42,15 @@ object ElementTransitionLowerer:
     cells: ElementTransitionCells,
     tickRateMs: Int
   ): AnimationState =
-    val frameAnimations = lowerCells(plan, cells.frame, tickRateMs, staggerFrames = 0, delayFrames = 0)
+    val plannedDelayFrames = delayFrames(plan, tickRateMs)
+    val frameAnimations =
+      lowerCells(plan, cells.frame, tickRateMs, staggerFrames = 0, delayFrames = plannedDelayFrames)
     val contentAnimations = lowerCells(
       plan,
       cells.content,
       tickRateMs,
       staggerFrames = staggerFrames(plan, tickRateMs),
-      delayFrames = durationFrames(plan, tickRateMs)
+      delayFrames = plannedDelayFrames + durationFrames(plan, tickRateMs)
     )
     AnimationState(frameAnimations ++ contentAnimations)
 
@@ -77,6 +87,9 @@ object ElementTransitionLowerer:
 
   private def staggerFrames(plan: ElementTransitionPlan, tickRateMs: Int): Int =
     frames(plan.timing.staggerMs, tickRateMs)
+
+  private def delayFrames(plan: ElementTransitionPlan, tickRateMs: Int): Int =
+    frames(plan.timing.delayMs, tickRateMs)
 
   private def frames(milliseconds: Int, tickRateMs: Int): Int =
     if milliseconds <= 0 || tickRateMs <= 0 then 0
