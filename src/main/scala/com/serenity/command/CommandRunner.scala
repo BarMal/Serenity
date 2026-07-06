@@ -101,6 +101,7 @@ case class CommandRunner(
     selectedItem match
       case Some(group: CommandSurfaceItem.GroupItem) =>
         val rememberedIndex = submenuSelections.getOrElse(group.id, 0)
+        val ancestorIds     = preferredAncestorGroupIds(group.id)
         val editContext =
           group.id match
             case "settings-preset-edit"   => presetEditContextName
@@ -108,7 +109,14 @@ case class CommandRunner(
             case _                        => editingPresetName
         copy(
           previewedGroupId = Some(group.id),
-          activeSubmenu = Some(CommandRunnerSubmenuState(group.id, selectedIndex = rememberedIndex)),
+          activeSubmenu = Some(
+            CommandRunnerSubmenuState(
+              group.id,
+              selectedIndex = rememberedIndex,
+              parentGroupId = ancestorIds.lastOption,
+              ancestorGroupIds = ancestorIds
+            )
+          ),
           editingPresetName = editContext
         )
       case _ => this
@@ -164,6 +172,30 @@ case class CommandRunner(
           .flatMap(group => findGroup(groupId, List(group)))
           .headOption
       )
+
+  private def preferredAncestorGroupIds(groupId: String): List[String] =
+    groupPaths(groupId, settingsGroups)
+      .sortBy(path =>
+        if path.contains("settings-preset-edit") then 0
+        else if path.contains("settings-preset-create") then 1
+        else 2
+      )
+      .headOption
+      .map(_.dropRight(1))
+      .getOrElse(Nil)
+
+  private def groupPaths(
+    groupId: String,
+    groups: List[CommandSurfaceItem.GroupItem]
+  ): List[List[String]] =
+    groups.flatMap { group =>
+      val current = Option.when(group.id == groupId)(List(group.id)).toList
+      val childGroups = group.children.collect {
+        case child: CommandSurfaceItem.GroupItem =>
+          child
+      }
+      current ++ groupPaths(groupId, childGroups).map(group.id :: _)
+    }
 
   def focusedSubmenuItems: List[CommandSurfaceItem] =
     activeSubmenu.toList.flatMap(submenu => submenu.filteredItems(submenuItems(submenu.groupId)))
