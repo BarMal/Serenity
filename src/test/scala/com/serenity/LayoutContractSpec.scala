@@ -140,4 +140,76 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     overlayRects should not be empty
     overlayRects.foreach(rect => assertInside(contentRect, rect, s"overlay $rect"))
   }
+
+  it should "reserve configured gaps before clamping oversized pinned side panels" in {
+    val constrainedViewport = ViewportSize(20, 8)
+    val gap                 = 2
+    val state = AppState.initial.copy(
+      config = AppConfig.default.copy(
+        showLineNumbers = false,
+        showGutter = false,
+        uiElementGap = gap,
+        textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0)
+      ),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("left-panel"),
+          SurfaceContent.Outline(Nil),
+          SurfacePresentation.Pinned(PanelPosition.Left, 15)
+        ),
+        UiSurface(
+          SurfaceId("right-panel"),
+          SurfaceContent.Diagnostics(Nil),
+          SurfacePresentation.Pinned(PanelPosition.Right, 10)
+        )
+      )
+    )
+
+    val layout       = LayoutEngine.calculateLayout(state, constrainedViewport)
+    val viewportRect = LayoutRect(0, 0, constrainedViewport.width, constrainedViewport.height)
+    val leftPanel    = layout.pinnedPanelRects(PanelPosition.Left)
+    val rightPanel   = layout.pinnedPanelRects(PanelPosition.Right)
+
+    assertInside(viewportRect, leftPanel, "left panel")
+    assertInside(viewportRect, rightPanel, "right panel")
+    assertInside(viewportRect, layout.editorPanelRect, "editor panel")
+    leftPanel.right + gap should be <= layout.editorPanelRect.x
+    layout.editorPanelRect.right + gap should be <= rightPanel.x
+  }
+
+  it should "reserve configured gaps before clamping oversized pinned top and bottom panels" in {
+    val constrainedViewport = ViewportSize(18, 9)
+    val gap                 = 2
+    val state = AppState.initial.copy(
+      config = AppConfig.default.copy(
+        showLineNumbers = false,
+        showGutter = false,
+        uiElementGap = gap,
+        textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0, top = 0.0, bottom = 0.0)
+      ),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("top-panel"),
+          SurfaceContent.Terminal("Build", 0),
+          SurfacePresentation.Pinned(PanelPosition.Top, 6)
+        ),
+        UiSurface(
+          SurfaceId("bottom-panel"),
+          SurfaceContent.Diagnostics(Nil),
+          SurfacePresentation.Pinned(PanelPosition.Bottom, 5)
+        )
+      )
+    )
+
+    val layout       = LayoutEngine.calculateLayout(state, constrainedViewport)
+    val viewportRect = LayoutRect(0, 0, constrainedViewport.width, constrainedViewport.height)
+    val topPanel     = layout.pinnedPanelRects(PanelPosition.Top)
+    val bottomPanel  = layout.pinnedPanelRects(PanelPosition.Bottom)
+
+    assertInside(viewportRect, topPanel, "top panel")
+    assertInside(viewportRect, bottomPanel, "bottom panel")
+    assertInside(viewportRect, layout.editorPanelRect, "editor panel")
+    topPanel.bottom + gap should be <= layout.editorPanelRect.y
+    layout.editorPanelRect.bottom + gap should be <= bottomPanel.y
+  }
 end LayoutContractSpec
