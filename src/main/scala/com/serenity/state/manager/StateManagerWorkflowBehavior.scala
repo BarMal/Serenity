@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.IO
-import com.serenity.io.FileUtils
+import com.serenity.io.{FileUtils, StorageLocation}
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
@@ -352,26 +352,37 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
             )
 
   protected def refreshWorkflowState(workflow: FileWorkflowState): IO[FileWorkflowState] =
-    for
-      directoryPath <- workflowDirectoryPath(workflow)
-      suggestions <- workflow match
-        case openWorkflow: OpenFileWorkflowState =>
-          openWorkflow.activeField match
-            case FileWorkflowField.Path     => pathSuggestions(openWorkflow.path)
-            case FileWorkflowField.Filename => filenameSuggestions(openWorkflow)
-        case saveAsWorkflow: SaveAsFileWorkflowState =>
-          saveAsWorkflow.activeField match
-            case FileWorkflowField.Path     => pathSuggestions(saveAsWorkflow.path)
-            case FileWorkflowField.Filename => IO.pure(Nil)
-      missingSegments <- missingDirectorySegments(directoryPath)
-    yield workflow.updated(
-      suggestions = suggestions,
-      selectedSuggestionIndex =
-        if suggestions.isEmpty then 0 else math.min(workflow.selectedSuggestionIndex, suggestions.length - 1),
-      missingPathSegments = missingSegments,
-      confirmCreateDirectories = false,
-      statusMessage = None
-    )
+    if remoteWorkflowTarget(workflow).isDefined then
+      IO.pure(
+        workflow.updated(
+          suggestions = Nil,
+          selectedSuggestionIndex = 0,
+          missingPathSegments = Nil,
+          confirmCreateDirectories = false,
+          statusMessage = None
+        )
+      )
+    else
+      for
+        directoryPath <- workflowDirectoryPath(workflow)
+        suggestions <- workflow match
+          case openWorkflow: OpenFileWorkflowState =>
+            openWorkflow.activeField match
+              case FileWorkflowField.Path     => pathSuggestions(openWorkflow.path)
+              case FileWorkflowField.Filename => filenameSuggestions(openWorkflow)
+          case saveAsWorkflow: SaveAsFileWorkflowState =>
+            saveAsWorkflow.activeField match
+              case FileWorkflowField.Path     => pathSuggestions(saveAsWorkflow.path)
+              case FileWorkflowField.Filename => IO.pure(Nil)
+        missingSegments <- missingDirectorySegments(directoryPath)
+      yield workflow.updated(
+        suggestions = suggestions,
+        selectedSuggestionIndex =
+          if suggestions.isEmpty then 0 else math.min(workflow.selectedSuggestionIndex, suggestions.length - 1),
+        missingPathSegments = missingSegments,
+        confirmCreateDirectories = false,
+        statusMessage = None
+      )
 
   protected def pathSuggestions(pathInput: String): IO[List[FileWorkflowSuggestion]] =
     for
@@ -436,42 +447,46 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
     }
 
   protected def completeOpenWorkflow(surfaceId: SurfaceId, workflow: OpenFileWorkflowState): IO[Unit] =
-    workflowTargetPath(workflow).flatMap { targetPath =>
-      IO.blocking(FileUtils.isReadableFile(targetPath)).flatMap {
-        case false =>
-          updateFileWorkflowSurface(
-            surfaceId,
-            workflow.updated(statusMessage = Some(s"File not found: $targetPath"))
-          ) >>
-            logger.debug(s"[FILE-WORKFLOW] Open target is not readable: $targetPath")
-        case true =>
-          stateRef
-            .modify { state =>
-              val bufferId = state.nextBufferId
-              (state.copy(nextBufferId = BufferId(bufferId.value + 1)), bufferId)
-            }
-            .flatMap(bufferId => fileManager.loadFile(targetPath, bufferId))
-            .flatMap { loadedBuffer =>
-              stateRef.modify { state =>
-                val newBufferId = loadedBuffer.id
-                val stateWithBuffer = state.copy(
-                  buffers = state.buffers + (newBufferId -> loadedBuffer),
-                  uiSurfaces = List.empty,
-                  recentFiles = trackRecentFile(state.recentFiles, targetPath)
-                )
-                val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
-                val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
-                val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
-                val resized =
-                  focused.viewportSize
-                    .map(viewportSize => LayoutEngine.syncViewportDimensions(focused, viewportSize))
-                    .getOrElse(focused)
-                (resized, ())
-              }
-            }
-            .handleErrorWith(ex => logger.error(ex)(s"[FILE-WORKFLOW] Failed to open $targetPath"))
-      }
-    }
+    remoteWorkflowTarget(workflow) match
+      case Some(remoteTarget) =>
+        updateFileWorkflowSurface(surfaceId, workflow.updated(statusMessage = Some(remoteStorageMessage(remoteTarget))))
+      case None =>
+        workflowTargetPath(workflow).flatMap { targetPath =>
+          IO.blocking(FileUtils.isReadableFile(targetPath)).flatMap {
+            case false =>
+              updateFileWorkflowSurface(
+                surfaceId,
+                workflow.updated(statusMessage = Some(s"File not found: $targetPath"))
+              ) >>
+                logger.debug(s"[FILE-WORKFLOW] Open target is not readable: $targetPath")
+            case true =>
+              stateRef
+                .modify { state =>
+                  val bufferId = state.nextBufferId
+                  (state.copy(nextBufferId = BufferId(bufferId.value + 1)), bufferId)
+                }
+                .flatMap(bufferId => fileManager.loadFile(targetPath, bufferId))
+                .flatMap { loadedBuffer =>
+                  stateRef.modify { state =>
+                    val newBufferId = loadedBuffer.id
+                    val stateWithBuffer = state.copy(
+                      buffers = state.buffers + (newBufferId -> loadedBuffer),
+                      uiSurfaces = List.empty,
+                      recentFiles = trackRecentFile(state.recentFiles, targetPath)
+                    )
+                    val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
+                    val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
+                    val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
+                    val resized =
+                      focused.viewportSize
+                        .map(viewportSize => LayoutEngine.syncViewportDimensions(focused, viewportSize))
+                        .getOrElse(focused)
+                    (resized, ())
+                  }
+                }
+                .handleErrorWith(ex => logger.error(ex)(s"[FILE-WORKFLOW] Failed to open $targetPath"))
+          }
+        }
 
   protected def completeSaveAsWorkflow(
     surfaceId: SurfaceId,
@@ -480,27 +495,54 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
   ): IO[Unit] =
     activeEditorBufferId(state) match
       case Some(bufferId) =>
-        if workflow.missingPathSegments.nonEmpty && !workflow.confirmCreateDirectories then
-          updateFileWorkflowSurface(surfaceId, workflow.updated(confirmCreateDirectories = true))
-        else
-          workflowTargetPath(workflow).flatMap { targetPath =>
-            saveBufferAsEffect(bufferId, targetPath) >>
-              stateRef.get.flatMap { savedState =>
-                savedState.actionStack.collectFirst {
-                  case AppAction.CloseWorkflow(closeWorkflow) => closeWorkflow
-                } match
-                  case Some(closeWorkflow) if closeWorkflow.currentBufferId == bufferId =>
-                    val dismissedState = dismissModalSurface(savedState)
-                    val nextState =
-                      if closeWorkflow.scope == CloseScope.Quit then dismissedState
-                      else closeBufferUsingExistingFlow(dismissedState, bufferId)
-                    stateRef.set(nextState) >> continueCloseWorkflow(closeWorkflow, nextState)
-                  case _ =>
-                    dismissSurfaceAndFocusEditor(surfaceId)
-              }
-          }
+        remoteWorkflowTarget(workflow) match
+          case Some(remoteTarget) =>
+            updateFileWorkflowSurface(
+              surfaceId,
+              workflow.updated(statusMessage = Some(remoteStorageMessage(remoteTarget)))
+            )
+          case None if workflow.missingPathSegments.nonEmpty && !workflow.confirmCreateDirectories =>
+            updateFileWorkflowSurface(surfaceId, workflow.updated(confirmCreateDirectories = true))
+          case None =>
+            workflowTargetPath(workflow).flatMap { targetPath =>
+              saveBufferAsEffect(bufferId, targetPath) >>
+                stateRef.get.flatMap { savedState =>
+                  savedState.actionStack.collectFirst {
+                    case AppAction.CloseWorkflow(closeWorkflow) => closeWorkflow
+                  } match
+                    case Some(closeWorkflow) if closeWorkflow.currentBufferId == bufferId =>
+                      val dismissedState = dismissModalSurface(savedState)
+                      val nextState =
+                        if closeWorkflow.scope == CloseScope.Quit then dismissedState
+                        else closeBufferUsingExistingFlow(dismissedState, bufferId)
+                      stateRef.set(nextState) >> continueCloseWorkflow(closeWorkflow, nextState)
+                    case _ =>
+                      dismissSurfaceAndFocusEditor(surfaceId)
+                }
+            }
       case None =>
         logger.debug("[FILE-WORKFLOW] No focused buffer available for save-as")
+
+  private def remoteWorkflowTarget(workflow: FileWorkflowState): Option[String] =
+    val filenameInput = workflow.filename.trim
+    val pathInput     = workflow.path.trim
+    if isRemoteStorageInput(filenameInput) then Some(filenameInput)
+    else if isRemoteStorageInput(pathInput) then
+      Some(
+        if filenameInput.isEmpty then pathInput
+        else appendRemoteFilename(pathInput, filenameInput)
+      )
+    else None
+
+  private def isRemoteStorageInput(value: String): Boolean =
+    StorageLocation.parse(value).exists(_.isRemote)
+
+  private def appendRemoteFilename(remoteBase: String, filename: String): String =
+    if remoteBase.endsWith("/") then s"$remoteBase$filename"
+    else s"$remoteBase/$filename"
+
+  private def remoteStorageMessage(remoteTarget: String): String =
+    s"Remote storage is not supported yet: $remoteTarget"
 
   protected def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
     bufferIdOverride.orElse(state.focusedBufferId) match
