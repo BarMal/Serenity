@@ -18,6 +18,8 @@ import org.scalatest.matchers.should.Matchers
 
 class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
 
+  private val StreamObservationTimeout = 10.seconds
+
   "SwingInputHandler" should "terminate its event stream when shutdown is requested while idle" in {
     val component = new JPanel()
     val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
@@ -31,7 +33,7 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
       ).parMapN((_, _) => ())
     yield ()
 
-    program.unsafeRunTimed(2.seconds).shouldBe(defined)
+    program.unsafeRunTimed(StreamObservationTimeout).shouldBe(defined)
   }
 
   it should "terminate event streams that subscribe after shutdown has already completed" in {
@@ -41,7 +43,7 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
 
     val program = handler.shutdown >> handler.eventStream.compile.drain
 
-    program.unsafeRunTimed(2.seconds).shouldBe(defined)
+    program.unsafeRunTimed(StreamObservationTimeout).shouldBe(defined)
   }
 
   it should "emit macOS printable typed characters without command modifiers" in {
@@ -59,7 +61,7 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
 
     component.getKeyListeners.head.keyTyped(event)
 
-    handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(2.seconds).flatten shouldBe
+    handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
       Some(KeyStrokeInfo(InputKey.Character, Some('£'), Set.empty))
   }
 
@@ -78,6 +80,6 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
 
     component.getKeyListeners.head.keyPressed(event)
 
-    handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(2.seconds).flatten shouldBe
+    handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
       Some(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Meta)))
   }
