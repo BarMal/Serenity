@@ -9,3 +9,4 @@
 - Hardened Swing input shutdown observation tests so loaded Windows release jobs do not fail before idle streams can terminate.
 - Changed the default window chrome to native OS chrome while keeping Serenity custom chrome available as an opt-in mode.
 - Added release-cycle notes so the latest desktop release includes a human-readable changelog section alongside recent commits and downloadable assets.
+- Kept stacked command-runner submenus contained inside the active editor content area in tiny viewports.

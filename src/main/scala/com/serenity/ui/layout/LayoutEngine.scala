@@ -505,13 +505,19 @@ object LayoutEngine:
                     anchorFrame.contentRect.y,
                     math.min(preferredBelowY, availableBottom - math.min(totalHeight, anchorFrame.contentRect.height))
                   )
-              val shouldCollapse        = stackY + totalHeight > availableBottom
-              val adjustedMainHeight    = if shouldCollapse then collapsedHeight else mainRect.height
-              val adjustedMainRect      = mainRect.copy(y = stackY, height = adjustedMainHeight)
-              val remainingHeight       = math.max(3, availableBottom - adjustedMainRect.bottom - stackGapRows)
-              val adjustedSubmenuHeight = math.min(submenuRect.height, remainingHeight)
+              val shouldCollapse    = stackY + totalHeight > availableBottom
+              val stackHeightBudget = math.max(0, availableBottom - stackY)
+              val adjustedMainHeight =
+                if shouldCollapse then math.min(collapsedHeight, stackHeightBudget) else mainRect.height
+              val adjustedMainRect    = mainRect.copy(y = stackY, height = adjustedMainHeight)
+              val submenuY            = adjustedMainRect.bottom + stackGapRows
+              val submenuHeightBudget = math.max(0, availableBottom - submenuY)
+              val adjustedSubmenuHeight =
+                math.min(submenuRect.height, submenuHeightBudget)
+              val adjustedSubmenuY =
+                if adjustedSubmenuHeight == 0 then availableBottom else submenuY
               val adjustedSubmenuRect = submenuRect.copy(
-                y = adjustedMainRect.bottom + stackGapRows,
+                y = adjustedSubmenuY,
                 height = adjustedSubmenuHeight
               )
               BelowOverlayLayout(
