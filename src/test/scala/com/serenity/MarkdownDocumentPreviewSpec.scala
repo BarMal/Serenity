@@ -272,6 +272,24 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     Color(image.getRGB(1, 1), true) shouldBe theme.background
   }
 
+  it should "fill the full split preview image with the panel background" in {
+    val theme = Theme.default.copy(
+      background = Color(10, 20, 30),
+      panel = Theme.default.panel.copy(background = Color(40, 50, 60))
+    )
+
+    val image = MarkdownDocumentPreview.renderImage(
+      source = "# Short",
+      title = "short.md",
+      widthPx = 180,
+      heightPx = 240,
+      theme = theme,
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+    )
+
+    Color(image.getRGB(image.getWidth - 2, image.getHeight - 2), true) shouldBe theme.panel.background
+  }
+
   it should "reuse rendered images for identical preview inputs" in {
     val font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
     val first = MarkdownDocumentPreview.renderImage(
