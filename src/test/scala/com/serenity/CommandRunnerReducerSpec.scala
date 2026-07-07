@@ -541,6 +541,38 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "carry root search into a matched settings submenu" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val searchedRunner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("UI Outline Thickness")
+    val surface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(searchedRunner),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val state = AppState(
+      buffers = Map.empty,
+      layout = Layout.empty,
+      focus = Focus.Surface(surface.id),
+      uiSurfaces = List(surface)
+    )
+
+    searchedRunner.selectedItem.map(_.id) shouldBe Some("settings-interface-layout")
+
+    val entered = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
+    val runner  = runnerFrom(entered.state)
+
+    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-interface-layout")
+    runner.activeSubmenu.map(_.searchTerm) shouldBe Some("UI Outline Thickness")
+    runner.focusedSubmenuItems.map(_.id) shouldBe List("ui-outline-thickness")
+    runner.activeSubmenu.flatMap(
+      _.selectedItemFromAll(runner.submenuItems("settings-interface-layout")).map(_.id)
+    ) shouldBe
+      Some("ui-outline-thickness")
+  }
+
   it should "clear submenu search with escape before leaving the submenu" in {
     val registry = CommandRegistry.default
     val searched = List('j', 'a').foldLeft(settingsStateOnItem("settings-language", "lang-plain-text")) { (s, char) =>
