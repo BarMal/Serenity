@@ -404,78 +404,24 @@ object CommandRunnerSettingsItems:
           )
         )
       }
-    val commandItems = List(
-      Command.typed(
-        "focus-left-panel",
-        "Focus the left pinned panel.",
-        CommandIntent.FocusPanel(PanelPosition.Left),
-        CommandCategory.View,
-        label = "Focus Left Panel"
-      ),
-      Command.typed(
-        "focus-right-panel",
-        "Focus the right pinned panel.",
-        CommandIntent.FocusPanel(PanelPosition.Right),
-        CommandCategory.View,
-        label = "Focus Right Panel"
-      ),
-      Command.typed(
-        "focus-bottom-panel",
-        "Focus the bottom pinned panel.",
-        CommandIntent.FocusPanel(PanelPosition.Bottom),
-        CommandCategory.View,
-        label = "Focus Bottom Panel"
-      ),
-      Command.typed(
-        "expand-left-panel",
-        "Expand the left pinned panel.",
-        CommandIntent.ExpandPanel(PanelPosition.Left),
-        CommandCategory.View,
-        label = "Expand Left Panel"
-      ),
-      Command.typed(
-        "expand-right-panel",
-        "Expand the right pinned panel.",
-        CommandIntent.ExpandPanel(PanelPosition.Right),
-        CommandCategory.View,
-        label = "Expand Right Panel"
-      ),
-      Command.typed(
-        "expand-bottom-panel",
-        "Expand the bottom pinned panel.",
-        CommandIntent.ExpandPanel(PanelPosition.Bottom),
-        CommandCategory.View,
-        label = "Expand Bottom Panel"
-      ),
-      Command.typed(
-        "unpin-left-panel",
-        "Unpin the left panel.",
-        CommandIntent.UnpinPanel(PanelPosition.Left),
-        CommandCategory.View,
-        label = "Unpin Left Panel"
-      ),
-      Command.typed(
-        "unpin-right-panel",
-        "Unpin the right panel.",
-        CommandIntent.UnpinPanel(PanelPosition.Right),
-        CommandCategory.View,
-        label = "Unpin Right Panel"
-      ),
-      Command.typed(
-        "unpin-bottom-panel",
-        "Unpin the bottom panel.",
-        CommandIntent.UnpinPanel(PanelPosition.Bottom),
-        CommandCategory.View,
-        label = "Unpin Bottom Panel"
-      ),
-      Command.typed(
-        "collapse-expanded-panel",
-        "Collapse the expanded panel back to its pinned position.",
-        CommandIntent.CollapseExpandedPanel,
-        CommandCategory.View,
-        label = "Collapse Expanded Panel"
-      )
-    ).map(CommandSurfaceItem.CommandItem(_))
+    val pinnedPositions = pinnedPanels.map(_.position).toSet
+    val edgeActionItems = List(PanelPosition.Left, PanelPosition.Right, PanelPosition.Bottom)
+      .filter(pinnedPositions)
+      .flatMap(panelActionItems)
+    val commandItems = edgeActionItems ++
+      Option
+        .when(edgeActionItems.nonEmpty)(
+          CommandSurfaceItem.CommandItem(
+            Command.typed(
+              "collapse-expanded-panel",
+              "Collapse the expanded panel back to its pinned position.",
+              CommandIntent.CollapseExpandedPanel,
+              CommandCategory.View,
+              label = "Collapse Expanded Panel"
+            )
+          )
+        )
+        .toList
     val panelPinsGroup = CommandSurfaceItem.GroupItem(
       id = "settings-panel-pins",
       label = "Panel Pins",
@@ -492,18 +438,57 @@ object CommandRunnerSettingsItems:
         hint = Some("Reorder panels on the same edge")
       )
     )
-    val panelActionsGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-panel-actions",
-      label = "Panel Actions",
-      children = commandItems,
-      category = CommandCategory.Settings,
-      hint = Some("Focus, expand, unpin, collapse")
+    val panelActionsGroup = Option.when(commandItems.nonEmpty)(
+      CommandSurfaceItem.GroupItem(
+        id = "settings-panel-actions",
+        label = "Panel Actions",
+        children = commandItems,
+        category = CommandCategory.Settings,
+        hint = Some("Focus, expand, unpin, collapse")
+      )
     )
 
-    panelPinsGroup :: panelOrderGroup.toList ::: List(panelActionsGroup)
+    panelPinsGroup :: panelOrderGroup.toList ::: panelActionsGroup.toList
 
   private def commandId(label: String): String =
     label.toLowerCase.replaceAll("[^a-z0-9]+", "-").stripPrefix("-").stripSuffix("-")
+
+  private def panelActionItems(position: PanelPosition): List[CommandSurfaceItem.CommandItem] =
+    val label = position match
+      case PanelPosition.Left   => "Left"
+      case PanelPosition.Right  => "Right"
+      case PanelPosition.Bottom => "Bottom"
+      case PanelPosition.Top    => "Top"
+    val id = label.toLowerCase
+    List(
+      CommandSurfaceItem.CommandItem(
+        Command.typed(
+          s"focus-$id-panel",
+          s"Focus the $id pinned panel.",
+          CommandIntent.FocusPanel(position),
+          CommandCategory.View,
+          label = s"Focus $label Panel"
+        )
+      ),
+      CommandSurfaceItem.CommandItem(
+        Command.typed(
+          s"expand-$id-panel",
+          s"Expand the $id pinned panel.",
+          CommandIntent.ExpandPanel(position),
+          CommandCategory.View,
+          label = s"Expand $label Panel"
+        )
+      ),
+      CommandSurfaceItem.CommandItem(
+        Command.typed(
+          s"unpin-$id-panel",
+          s"Unpin the $id panel.",
+          CommandIntent.UnpinPanel(position),
+          CommandCategory.View,
+          label = s"Unpin $label Panel"
+        )
+      )
+    )
 
   private case class PinnedPanelRow(label: String, kind: PanelKind, position: PanelPosition)
 
