@@ -20,3 +20,4 @@
 - Preserved custom character animation duration and step settings across config reloads.
 - Made quit-scope "Close anyway" discard the current dirty buffer before completing shutdown.
 - Kept fast rendering active when text input arrives during a previous render phase shutdown, reducing cursor flicker.
+- Restored maximized custom-chrome windows when title-bar dragging begins, allowing monitor-to-monitor drags to continue.

@@ -205,13 +205,25 @@ class SwingWindow(
         anchorRef.set(DragAnchor(e.getXOnScreen, e.getYOnScreen))
 
       override def mouseDragged(e: MouseEvent): Unit =
-        if !maximizedRef.get() then
-          val anchor = anchorRef.get()
-          val dx     = e.getXOnScreen - anchor.x
-          val dy     = e.getYOnScreen - anchor.y
-          val loc    = frame.getLocation
-          frame.setLocation(loc.x + dx, loc.y + dy)
+        val anchor = anchorRef.get()
+        val decision = SwingWindow.titleBarDragDecision(
+          maximized = maximizedRef.get(),
+          anchorX = anchor.x,
+          anchorY = anchor.y,
+          pointerX = e.getXOnScreen,
+          pointerY = e.getYOnScreen
+        )
+        if decision.restoreFirst then
+          frame.setExtendedState(frame.getExtendedState & ~Frame.MAXIMIZED_BOTH)
+          maximizedRef.set(false)
           anchorRef.set(DragAnchor(e.getXOnScreen, e.getYOnScreen))
+        else
+          decision.moveDelta.foreach {
+            case (dx, dy) =>
+              val loc = frame.getLocation
+              frame.setLocation(loc.x + dx, loc.y + dy)
+              anchorRef.set(DragAnchor(e.getXOnScreen, e.getYOnScreen))
+          }
 
       override def mouseClicked(e: MouseEvent): Unit =
         if e.getClickCount == 2 then toggleMaximize()
@@ -503,6 +515,18 @@ object SwingWindow:
   )
 
   case class CanvasResizeSnapshot(pixelSize: Dimension, viewportSize: ViewportSize)
+
+  case class TitleBarDragDecision(restoreFirst: Boolean, moveDelta: Option[(Int, Int)])
+
+  private[serenity] def titleBarDragDecision(
+    maximized: Boolean,
+    anchorX: Int,
+    anchorY: Int,
+    pointerX: Int,
+    pointerY: Int
+  ): TitleBarDragDecision =
+    if maximized then TitleBarDragDecision(restoreFirst = true, moveDelta = None)
+    else TitleBarDragDecision(restoreFirst = false, moveDelta = Some((pointerX - anchorX, pointerY - anchorY)))
 
   def copyImage(source: BufferedImage): BufferedImage =
     val copy = new BufferedImage(source.getWidth, source.getHeight, source.getType)

@@ -127,6 +127,28 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  "SwingWindow.TitleBarDrag" should "move by pointer delta while custom chrome is restored" in
+    SwingWindow
+      .titleBarDragDecision(
+        maximized = false,
+        anchorX = 100,
+        anchorY = 200,
+        pointerX = 140,
+        pointerY = 185
+      )
+      .shouldBe(SwingWindow.TitleBarDragDecision(restoreFirst = false, moveDelta = Some((40, -15))))
+
+  it should "restore before continuing a custom chrome drag from maximized state" in
+    SwingWindow
+      .titleBarDragDecision(
+        maximized = true,
+        anchorX = 100,
+        anchorY = 200,
+        pointerX = 140,
+        pointerY = 185
+      )
+      .shouldBe(SwingWindow.TitleBarDragDecision(restoreFirst = true, moveDelta = None))
+
   "SwingWindow.ChromeControlPaint" should "resolve button colours by state and control kind" in {
     val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
 
