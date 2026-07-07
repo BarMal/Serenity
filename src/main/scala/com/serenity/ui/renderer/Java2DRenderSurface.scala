@@ -189,8 +189,10 @@ class Java2DRenderSurface(
 
   def hideCursor(): Unit = ()
 
-  def viewportWidth: Int  = effectiveLogicalWidthPx / metrics.charWidth
-  def viewportHeight: Int = effectiveLogicalHeightPx / metrics.lineHeight
+  def viewportWidth: Int                 = effectiveLogicalWidthPx / metrics.charWidth
+  def viewportHeight: Int                = effectiveLogicalHeightPx / metrics.lineHeight
+  override def devicePixelScaleX: Double = deviceScaleX
+  override def devicePixelScaleY: Double = deviceScaleY
 
   def flush(): Unit =
     g.dispose()

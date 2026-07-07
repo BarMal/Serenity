@@ -686,10 +686,12 @@ object Renderer:
     context: RenderContext,
     previewWindow: MarkdownDocumentPreview.PreviewWindow
   ): Unit =
-    val widthPx  = math.max(1, rect.width * context.cellMetrics.charWidth)
-    val heightPx = math.max(1, rect.height * context.cellMetrics.lineHeight)
-    val baseUri  = buffer.filePath.flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
-    val title    = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
+    val widthPx =
+      scaledImagePixelDimension(rect.width * context.cellMetrics.charWidth, context.surface.devicePixelScaleX)
+    val heightPx =
+      scaledImagePixelDimension(rect.height * context.cellMetrics.lineHeight, context.surface.devicePixelScaleY)
+    val baseUri = buffer.filePath.flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
+    val title   = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
     val image = MarkdownDocumentPreview.renderImage(
       source = previewWindow.source,
       title = title,
@@ -701,6 +703,9 @@ object Renderer:
       panelChrome = false
     )
     context.surface.drawImage(image, rect.x, rect.y, rect.width, rect.height)
+
+  private def scaledImagePixelDimension(logicalPx: Int, scale: Double): Int =
+    math.ceil(logicalPx.max(1).toDouble * scale.max(1.0)).toInt.max(1)
 
   private def renderSelectionHighlights(
     surface: RenderSurface,
@@ -1401,9 +1406,11 @@ object Renderer:
     val contentRect        = SurfaceFrameLayout(rect).contentRect
     val contentWidthCells  = math.max(1, contentRect.width)
     val contentHeightCells = math.max(1, contentRect.height)
-    val widthPx            = contentWidthCells * context.cellMetrics.charWidth
-    val heightPx           = contentHeightCells * context.cellMetrics.lineHeight
-    val buffer             = state.buffers.get(bufferId)
+    val widthPx =
+      scaledImagePixelDimension(contentWidthCells * context.cellMetrics.charWidth, context.surface.devicePixelScaleX)
+    val heightPx =
+      scaledImagePixelDimension(contentHeightCells * context.cellMetrics.lineHeight, context.surface.devicePixelScaleY)
+    val buffer = state.buffers.get(bufferId)
     val content = buffer
       .map(buffer => markdownSplitPreviewWindow(buffer, markdownSourceLines(buffer), contentHeightCells).source)
       .getOrElse("")

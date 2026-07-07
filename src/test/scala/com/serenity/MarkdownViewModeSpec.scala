@@ -234,6 +234,28 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     surfaceRows(surface).exists(_.contains("Task  Owner")) shouldBe false
   }
 
+  it should "render split preview images at device scale on HiDPI surfaces" in {
+    val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val surface = new HiDpiMockRenderSurface(120, 32, scaleX = 2.0, scaleY = 2.0)
+
+    Renderer.render(
+      markdownPreviewPanelState("# Scaled", CursorPosition(0, 0)),
+      cursorVisible = true,
+      surface,
+      ViewportSize(120, 32),
+      codeFont = font,
+      textFont = font,
+      cellMetrics = metrics,
+      cursorColor = None
+    )
+
+    surface.drawImageCalls should have size 1
+    val drawn = surface.drawImageCalls.head
+    drawn.image.getWidth shouldBe drawn.width * metrics.charWidth * 2
+    drawn.image.getHeight shouldBe drawn.height * metrics.lineHeight * 2
+  }
+
   it should "update the split preview image when the source cursor moves outside the current preview window" in {
     val source = (1 to 200).map(i => s"# Heading $i").mkString("\n")
 
@@ -289,6 +311,28 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     rows.exists(_.contains("continued")) shouldBe false
   }
 
+  it should "render inline lens preview images at device scale on HiDPI surfaces" in {
+    val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val surface = new HiDpiMockRenderSurface(100, 20, scaleX = 2.0, scaleY = 2.0)
+
+    Renderer.render(
+      markdownEditorState(MarkdownViewMode.InlineLens),
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 20),
+      codeFont = font,
+      textFont = font,
+      cellMetrics = metrics,
+      cursorColor = None
+    )
+
+    surface.drawImageCalls should have size 1
+    val drawn = surface.drawImageCalls.head
+    drawn.image.getWidth shouldBe drawn.width * metrics.charWidth * 2
+    drawn.image.getHeight shouldBe drawn.height * metrics.lineHeight * 2
+  }
+
   it should "render inactive markdown tables through the markdown preview image in inline lens mode" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
@@ -342,6 +386,11 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
 
   private def surfaceRows(surface: MockRenderSurface): List[String] =
     (0 until surface.height).map(surface.getRow).map(_.trim).filter(_.nonEmpty).toList
+
+  private class HiDpiMockRenderSurface(width: Int, height: Int, scaleX: Double, scaleY: Double)
+      extends MockRenderSurface(width, height):
+    override def devicePixelScaleX: Double = scaleX
+    override def devicePixelScaleY: Double = scaleY
 
   private def markdownPreviewPanelState(source: String, cursor: CursorPosition): AppState =
     val bufferId = BufferId(1)
