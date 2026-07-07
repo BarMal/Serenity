@@ -133,6 +133,8 @@ object TextOverlayRenderer:
       rowView.row.foregroundColor
         .map(color => withAlpha(color, baseFg.getAlpha))
         .getOrElse(if rowView.row.selected then withAlpha(theme.highlighted.foreground, baseFg.getAlpha) else baseFg)
+    val rowLeftXPx  = cellMetrics.toPixelX(x)
+    val rowRightXPx = cellMetrics.toPixelX(x + width)
 
     surface.setForegroundColor(rowForeground)
     surface.setBackgroundColor(rowBackground)
@@ -143,7 +145,7 @@ object TextOverlayRenderer:
         if rowView.row.segments.nonEmpty then
           renderInlineSegments(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
         else if rowView.useMeasuredCursor && shouldUseMeasuredCursor(font, surface) then
-          renderMeasuredPlainRow(surface, x, y, width, rowView.row.plainText, font, cellMetrics)
+          renderMeasuredPlainRow(surface, x, y, width, rowView.row.plainText, font, cellMetrics, rowRightXPx)
         else CharacterRenderer.renderStringPlain(surface, x, y, rowView.row.plainText.take(width))
       case OverlayRowLayout.Distributed =>
         renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
@@ -157,7 +159,17 @@ object TextOverlayRenderer:
         .flatMap(cursorColumn => cursorPlacement(rowView.row, x, width, cursorColumn, rowView.useMeasuredCursor))
         .foreach { placement =>
           if placement.useMeasured && shouldUseMeasuredCursor(font, surface) then
-            renderMeasuredCursor(surface, placement.x, y, placement.textBeforeCursor, theme, font, cellMetrics)
+            renderMeasuredCursor(
+              surface,
+              placement.x,
+              y,
+              placement.textBeforeCursor,
+              theme,
+              font,
+              cellMetrics,
+              rowLeftXPx,
+              rowRightXPx
+            )
           else if placement.cellColumn >= 0 && placement.cellColumn < width then
             surface.setForegroundColor(theme.background)
             surface.setBackgroundColor(theme.cursor)
@@ -618,15 +630,17 @@ object TextOverlayRenderer:
     width: Int,
     text: String,
     font: java.awt.Font,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    maxRightXPx: Int
   ): Unit =
     val visibleText = text.take(width)
     if visibleText.nonEmpty then
-      val frc     = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
-      val caretXs = TextLayoutSnapshot.caretXsForText(visibleText, font, frc)
-      val textXPx = cellMetrics.toPixelX(x).toFloat
-      val textYPx = cellMetrics.toPixelY(y)
-      val widthPx = caretXs.lastOption.getOrElse(0.0f).max(1.0f)
+      val frc        = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+      val caretXs    = TextLayoutSnapshot.caretXsForText(visibleText, font, frc)
+      val textXPx    = cellMetrics.toPixelX(x).toFloat
+      val textYPx    = cellMetrics.toPixelY(y)
+      val maxWidthPx = math.max(1.0f, maxRightXPx.toFloat - textXPx)
+      val widthPx    = caretXs.lastOption.getOrElse(0.0f).max(1.0f).min(maxWidthPx)
       surface.drawRunPx(textXPx, textYPx, widthPx, cellMetrics.lineHeight, cellMetrics.ascent, visibleText)
 
   private def renderMeasuredCursor(
@@ -636,13 +650,17 @@ object TextOverlayRenderer:
     textBeforeCursor: String,
     theme: Theme,
     font: java.awt.Font,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    minXPx: Int,
+    maxRightXPx: Int
   ): Unit =
     val frc          = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
     val caretXs      = TextLayoutSnapshot.caretXsForText(textBeforeCursor, font, frc)
-    val xPx          = cellMetrics.toPixelX(x) + math.round(caretXs.lastOption.getOrElse(0.0f))
     val yPx          = cellMetrics.toPixelY(y)
-    val caretWidthPx = math.max(2, math.round(cellMetrics.charWidth * 0.12f))
+    val rawWidthPx   = math.max(2, math.round(cellMetrics.charWidth * 0.12f))
+    val caretWidthPx = math.min(rawWidthPx, math.max(1, maxRightXPx - minXPx))
+    val unclampedXPx = cellMetrics.toPixelX(x) + math.round(caretXs.lastOption.getOrElse(0.0f))
+    val xPx          = math.max(minXPx, math.min(unclampedXPx, maxRightXPx - caretWidthPx))
     surface.fillPixelRect(xPx, yPx, caretWidthPx, cellMetrics.lineHeight, theme.cursor)
 
   private def applyGlassSheen(
