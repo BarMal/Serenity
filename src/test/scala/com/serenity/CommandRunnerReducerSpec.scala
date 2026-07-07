@@ -108,6 +108,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runnerFrom(result.state).searchTerm shouldBe "alpha "
   }
 
+  it should "paste clipboard text into the command search when active" in {
+    val registry = CommandRegistry.default
+    val state    = activeState(registry).copy(clipboard = Some("UI Outline Thickness"))
+
+    val result = CommandRunnerReducer.reduce(Paste, state, registry)
+
+    runnerFrom(result.state).searchTerm shouldBe "UI Outline Thickness"
+  }
+
   it should "switch categories with tab and reverse-tab while search is empty" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
@@ -856,4 +865,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
       CommandIntent.SetTextAreaTopInset(0.225)
     )
+  }
+
+  it should "paste clipboard text into a selected submenu input item" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-interface-layout", "ui-outline-thickness").copy(clipboard = Some("4"))
+
+    val pasted = CommandRunnerReducer.reduce(Paste, state, registry)
+    val runner = runnerFrom(pasted.state)
+
+    runner.activeSubmenu.flatMap(_.editingItemId) shouldBe Some("ui-outline-thickness")
+    runner.activeSubmenu.map(_.editingText) shouldBe Some("4")
   }
