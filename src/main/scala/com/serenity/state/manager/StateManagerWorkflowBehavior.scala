@@ -98,9 +98,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
                 stateRef.update(clearCloseActions)
             case CloseWorkflowChoice.Discard =>
               val dismissedState = clearCloseActions(dismissModalSurface(state))
-              val nextState =
-                if workflow.scope == CloseScope.Quit then dismissedState
-                else closeBufferUsingExistingFlow(dismissedState, workflow.currentBufferId)
+              val nextState      = closeBufferUsingExistingFlow(dismissedState, workflow.currentBufferId)
               stateRef.set(nextState) >> continueCloseWorkflow(workflow, nextState)
             case CloseWorkflowChoice.Save =>
               state.buffers.get(workflow.currentBufferId) match
@@ -108,9 +106,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
                   saveBufferEffect(workflow.currentBufferId) >>
                     stateRef.get.flatMap { savedState =>
                       val dismissedState = clearCloseActions(dismissModalSurface(savedState))
-                      val nextState =
-                        if workflow.scope == CloseScope.Quit then dismissedState
-                        else closeBufferUsingExistingFlow(dismissedState, workflow.currentBufferId)
+                      val nextState      = closeBufferUsingExistingFlow(dismissedState, workflow.currentBufferId)
                       stateRef.set(nextState) >> continueCloseWorkflow(workflow, nextState)
                     }
                 case Some(_) =>
