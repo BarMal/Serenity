@@ -100,6 +100,14 @@ case class RichTextParagraph(
         else (style: RichTextStyle) => style.withoutMark(mark)
       copy(runs = mergeRuns(splitAndTransform(start, end, transform)))
 
+  /** Replace text inside this paragraph, preserving surrounding inline styles. */
+  def replaceRange(startOffset: Int, endOffset: Int, insertedText: String): RichTextParagraph =
+    val start = startOffset.max(0).min(plainText.length)
+    val end   = endOffset.max(start).min(plainText.length)
+    val insertedRun = Option
+      .when(insertedText.nonEmpty)(RichTextRun(insertedText, styleAtInsertion(start, end)))
+    copy(runs = mergeRuns(sliceRuns(0, start) ++ insertedRun.toList ++ sliceRuns(end, plainText.length)))
+
   /** Transform inline style across a paragraph range. */
   def updateStyle(startOffset: Int, endOffset: Int)(transform: RichTextStyle => RichTextStyle): RichTextParagraph =
     val start = startOffset.max(0).min(plainText.length)
@@ -141,6 +149,22 @@ case class RichTextParagraph(
       }
       ._2
 
+  private def sliceRuns(startOffset: Int, endOffset: Int): List[RichTextRun] =
+    runs
+      .foldLeft((0, List.empty[RichTextRun])) {
+        case ((currentOffset, acc), run) =>
+          val runStart   = currentOffset
+          val runEnd     = currentOffset + run.text.length
+          val nextOffset = runEnd
+          if runEnd <= startOffset || runStart >= endOffset then (nextOffset, acc)
+          else
+            val localStart = (startOffset - runStart).max(0).min(run.text.length)
+            val localEnd   = (endOffset - runStart).max(localStart).min(run.text.length)
+            val text       = run.text.slice(localStart, localEnd)
+            (nextOffset, acc ++ Option.when(text.nonEmpty)(RichTextRun(text, run.style)).toList)
+      }
+      ._2
+
   private def stylesInRange(startOffset: Int, endOffset: Int): List[RichTextStyle] =
     runs
       .foldLeft((0, List.empty[RichTextStyle])) {
@@ -152,6 +176,24 @@ case class RichTextParagraph(
           else (nextOffset, run.style :: acc)
       }
       ._2
+
+  private def styleAtInsertion(startOffset: Int, endOffset: Int): RichTextStyle =
+    if startOffset < endOffset then
+      stylesInRange(startOffset, endOffset).reverse.headOption.getOrElse(RichTextStyle.empty)
+    else
+      runs
+        .foldLeft((0, Option.empty[RichTextStyle])) {
+          case ((currentOffset, found), run) =>
+            val runStart   = currentOffset
+            val runEnd     = currentOffset + run.text.length
+            val nextOffset = runEnd
+            val containsOffset =
+              (runStart < startOffset && startOffset <= runEnd) ||
+                (startOffset == 0 && runStart == 0)
+            (nextOffset, found.orElse(Option.when(containsOffset)(run.style)))
+        }
+        ._2
+        .getOrElse(RichTextStyle.empty)
 
   private def mergeRuns(input: List[RichTextRun]): List[RichTextRun] =
     input.foldRight(List.empty[RichTextRun]) {
@@ -245,6 +287,17 @@ case class RichTextDocument(paragraphs: List[RichTextParagraph]):
   def setParagraphAlignment(range: RichTextRange, alignment: ParagraphAlignment): RichTextDocument =
     updateParagraphs(range)(_.copy(alignment = alignment))
 
+  /** Replace a document range while preserving inline styles for simple same-paragraph edits. */
+  def replaceRange(range: RichTextRange, insertedText: String): RichTextDocument =
+    val normalizedRange = range.normalized
+    if normalizedRange.start.paragraphIndex == normalizedRange.end.paragraphIndex && !insertedText.contains('\n') then
+      copy(paragraphs = paragraphs.zipWithIndex.map {
+        case (paragraph, index) if index == normalizedRange.start.paragraphIndex =>
+          paragraph.replaceRange(normalizedRange.start.offset, normalizedRange.end.offset, insertedText)
+        case (paragraph, _) => paragraph
+      }).normalized
+    else RichTextDocument.fromPlainText(replacePlainText(normalizedRange, insertedText))
+
   /** True when the rich document still represents the provided plain text exactly. */
   def matchesPlainText(text: String): Boolean =
     plainText == text
@@ -278,6 +331,20 @@ case class RichTextDocument(paragraphs: List[RichTextParagraph]):
           if index == normalizedRange.end.paragraphIndex then normalizedRange.end.offset else paragraph.plainText.length
         paragraph.updateStyle(startOffset, endOffset)(transform)
     })
+
+  private def replacePlainText(range: RichTextRange, insertedText: String): String =
+    val start = plainTextOffset(range.start)
+    val end   = plainTextOffset(range.end).max(start)
+    plainText.take(start) + insertedText + plainText.drop(end)
+
+  private def plainTextOffset(position: RichTextPosition): Int =
+    val beforeParagraphs = paragraphs.take(position.paragraphIndex.max(0))
+    val paragraphOffset =
+      paragraphs
+        .lift(position.paragraphIndex)
+        .map(paragraph => position.offset.max(0).min(paragraph.plainText.length))
+        .getOrElse(0)
+    beforeParagraphs.map(_.plainText.length).sum + beforeParagraphs.length + paragraphOffset
 
 object RichTextDocument:
   def oneParagraph(text: String): RichTextDocument =

@@ -5,7 +5,7 @@ import java.awt.{Color, Font}
 import com.serenity.config.AppConfig
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
-import com.serenity.state.models.{Buffer, BufferId}
+import com.serenity.state.models.{Buffer, BufferId, CursorPosition}
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.{RichTextStyling, TextStyle, Theme}
@@ -170,6 +170,24 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
 
     surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.bold))
     surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.underlined))
+  }
+
+  it should "render rich text marks after the cursor leaves the formatted word" in {
+    val document = RichTextDocument
+      .oneParagraph("alpha beta")
+      .applyMark(
+        RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 10)),
+        InlineMark.Italic
+      )
+    val buffer = Buffer
+      .fromString(BufferId(1), document.plainText)
+      .copy(richTextDocument = Some(document), cursors = List(CursorPosition(0, 0)), selection = None)
+    val state   = buildState(buffer)
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, textFont, monoMetrics, None)
+
+    surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.italic))
   }
 
   it should "ignore rich text marks when dirty buffer text no longer matches rich metadata" in {

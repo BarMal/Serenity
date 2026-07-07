@@ -230,3 +230,23 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
     )
     styled.plainText shouldBe document.plainText
   }
+
+  it should "preserve inline style when inserting inside a styled run" in {
+    val document = RichTextDocument
+      .oneParagraph("alpha beta")
+      .applyMark(
+        RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 10)),
+        InlineMark.Italic
+      )
+
+    val updated = document.replaceRange(
+      RichTextRange(RichTextPosition(0, 8), RichTextPosition(0, 8)),
+      "X"
+    )
+
+    updated.plainText shouldBe "alpha beXta"
+    updated.paragraphs.head.runs shouldBe List(
+      RichTextRun("alpha ", RichTextStyle.empty),
+      RichTextRun("beXta", RichTextStyle(marks = Set(InlineMark.Italic)))
+    )
+  }
