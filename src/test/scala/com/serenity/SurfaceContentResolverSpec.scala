@@ -471,7 +471,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     resolved.rows.lastOption.map(_.plainText) shouldBe Some(
-      "Preset Preview Research Notes - name, active panels, theme, animations, fonts, document defaults"
+      "Preset Preview Research Notes - name, preset actions, active panels, theme, animations, fonts, document defaults"
     )
   }
 

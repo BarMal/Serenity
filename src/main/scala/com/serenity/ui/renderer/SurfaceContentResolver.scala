@@ -528,7 +528,7 @@ object SurfaceContentResolver:
           if groupId == "settings-ui-presets" && group.id == "settings-preset-edit" =>
         presetPreviewDetail(
           runner.editingPresetName.getOrElse("Edit Preset"),
-          "name, active panels, theme, animations, fonts, document defaults"
+          "name, preset actions, active panels, theme, animations, fonts, document defaults"
         )
       case option: CommandSurfaceItem.OptionItem
           if groupId == "settings-preset-select" && option.id == "ui-preset-select" =>

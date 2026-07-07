@@ -116,6 +116,15 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
 
     val editGroup = groupById(groups, "settings-preset-edit")
+    editGroup.children.map(_.id).take(2) shouldBe List("settings-preset-name", "settings-preset-actions")
+    groupById(groups, "settings-preset-name").children.map(_.id) shouldBe List("ui-preset-rename")
+    groupById(groups, "settings-preset-actions").children.map(_.id) shouldBe List(
+      "ui-preset-save",
+      "ui-preset-apply",
+      "ui-preset-duplicate",
+      "ui-preset-delete",
+      "ui-preset-reset"
+    )
     val presetInputs = descendants(editGroup).collect {
       case item: CommandSurfaceItem.InputItem if item.id.startsWith("ui-preset-") => item.id -> item.currentValue
     }.toMap

@@ -661,6 +661,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     editPreset.hint shouldBe Some("Editing Writing")
     editPreset.children.map(_.id) shouldBe List(
       "settings-preset-name",
+      "settings-preset-actions",
       "settings-preset-active-panels",
       "settings-preset-theme",
       "settings-preset-animations",
@@ -680,11 +681,17 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       }
       .getOrElse(fail("missing preset name group"))
     presetName.label shouldBe "Name"
-    presetName.children.map(_.id) shouldBe List(
+    presetName.children.map(_.id) shouldBe List("ui-preset-rename")
+    val presetActions = editPreset.children
+      .collectFirst {
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-actions" => group
+      }
+      .getOrElse(fail("missing preset actions group"))
+    presetActions.label shouldBe "Preset Actions"
+    presetActions.children.map(_.id) shouldBe List(
       "ui-preset-save",
       "ui-preset-apply",
       "ui-preset-duplicate",
-      "ui-preset-rename",
       "ui-preset-delete",
       "ui-preset-reset"
     )
