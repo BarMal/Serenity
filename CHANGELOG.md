@@ -22,3 +22,4 @@
 - Kept fast rendering active when text input arrives during a previous render phase shutdown, reducing cursor flicker.
 - Restored maximized custom-chrome windows when title-bar dragging begins, allowing monitor-to-monitor drags to continue.
 - Published visible cursor full frames atomically so cursorless base frames do not flash between overlay updates.
+- Preserved rich-text inline formatting when editing inside formatted words.

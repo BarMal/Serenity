@@ -3,10 +3,11 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandIntent, CommandRegistry}
+import com.serenity.keystroke.events.InsertChar
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{BufferId, Selection}
+import com.serenity.state.models.{BufferId, CursorPosition, Selection}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -182,6 +183,36 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     betaStyle.flatMap(_.fontFamily) shouldBe Some("Serif")
     betaStyle.flatMap(_.fontSize) shouldBe Some(18.0f)
     betaStyle.flatMap(_.color) shouldBe Some("#336699")
+  }
+
+  it should "preserve italic formatting when editing inside the formatted word" in {
+    val (stateManager, bufferId) =
+      selectedStateManager(
+        "alpha beta",
+        Selection(CursorPosition(0, 6), CursorPosition(0, 10))
+      )
+    val italicCommand = CommandRegistry.withToggleUI.findCommand("italic").getOrElse(fail("missing italic"))
+
+    stateManager.executeCommand(italicCommand).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        state.copy(
+          buffers = state.buffers.updated(
+            bufferId,
+            state.buffers(bufferId).copy(selection = None, cursors = List(CursorPosition(0, 8)))
+          )
+        )
+      }
+      .unsafeRunSync()
+    stateManager.applyEvent(InsertChar('X')).unsafeRunSync()
+
+    val buffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.content.collect() shouldBe "alpha beXta"
+    buffer.richTextDocument.map(_.plainText) shouldBe Some("alpha beXta")
+    buffer.richTextDocument
+      .flatMap(_.paragraphs.headOption)
+      .flatMap(_.runs.find(_.text == "beXta"))
+      .map(_.style.marks) shouldBe Some(Set(InlineMark.Italic))
   }
 
   it should "make formatted rich text headings available to document navigation" in {

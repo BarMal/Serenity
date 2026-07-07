@@ -2,6 +2,7 @@ package com.serenity.state.reducers
 
 import com.serenity.animation.TransitionKind
 import com.serenity.keystroke.events.*
+import com.serenity.richtext.{RichTextDocument, RichTextPosition, RichTextRange}
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
 import com.serenity.text.TextEditing
@@ -184,7 +185,8 @@ object EditorEventReducer:
                         buffer.content,
                         newContent,
                         List(MultiCursorEdit(0, start, end, ""))
-                      )
+                      ),
+                      richTextDocument = richTextDocumentAfterEdit(buffer, start, end, "")
                     )
                     ReducerResult.noEffects(
                       currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
@@ -217,7 +219,8 @@ object EditorEventReducer:
                         buffer.content,
                         newContent,
                         List(MultiCursorEdit(0, start, end, ""))
-                      )
+                      ),
+                      richTextDocument = richTextDocumentAfterEdit(buffer, start, end, "")
                     )
                     ReducerResult.noEffects(
                       currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
@@ -1392,7 +1395,8 @@ object EditorEventReducer:
         buffer.content,
         newContent,
         List(MultiCursorEdit(0, startOffset, endOffset, ""))
-      )
+      ),
+      richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, "")
     )
     val updatedViewport = adjustViewportForCursor(baseBuffer, currentState, newCursor)
     baseBuffer.copy(viewport = updatedViewport)
@@ -1758,7 +1762,8 @@ object EditorEventReducer:
         buffer.content,
         newContent,
         List(MultiCursorEdit(0, startOffset, endOffset, insertedText))
-      )
+      ),
+      richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
     )
 
   private def deleteSelectedRange(
@@ -1784,7 +1789,8 @@ object EditorEventReducer:
         buffer.content,
         newContent,
         List(MultiCursorEdit(0, startOffset, endOffset, ""))
-      )
+      ),
+      richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, "")
     )
     val updatedViewport = adjustViewportForCursor(baseBuffer, currentState, newCursor)
 
@@ -1834,6 +1840,30 @@ object EditorEventReducer:
 
   private def selectionEndOffset(selection: Selection, content: Rope): Int =
     graphemeBoundaryAfterOrAt(content, lineColumnToOffset(content, selection.end.line, selection.end.column))
+
+  private def richTextDocumentAfterEdit(
+    buffer: Buffer,
+    startOffset: Int,
+    endOffset: Int,
+    insertedText: String
+  ): Option[RichTextDocument] =
+    buffer.richTextDocument.flatMap { document =>
+      Option.when(document.matchesPlainText(buffer.content.collect())) {
+        document
+          .replaceRange(
+            RichTextRange(
+              richTextPositionForOffset(buffer.content, startOffset),
+              richTextPositionForOffset(buffer.content, endOffset)
+            ),
+            insertedText
+          )
+          .normalized
+      }
+    }
+
+  private def richTextPositionForOffset(content: Rope, offset: Int): RichTextPosition =
+    val (line, column) = content.offsetToLineColumn(offset)
+    RichTextPosition(line, column)
 
   private def collapseSelectionsToFocus(buffer: Buffer, currentState: AppState): Buffer =
     val cursors = activeSelections(buffer)
