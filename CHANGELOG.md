@@ -15,3 +15,4 @@
 - Kept the selected theme-creator field inside the visible list window when editing near the end of the theme settings.
 - Added an in-app UI outline thickness setting for panel and command-runner surface borders.
 - Allowed pasted clipboard text to populate command-runner search and focused setting input rows.
+- Made root settings search open matched submenus filtered to the matching nested setting row.

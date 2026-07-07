@@ -282,13 +282,13 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     hiddenCursors.map(_.xPx) shouldBe visibleCursors.map(_.xPx)
   }
 
-  it should "blink only the submenu search cursor while keeping editor cursors steady" in {
+  it should "render carried submenu search while keeping editor cursors steady" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
-      .copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-language", searchTerm = "java")))
+      .updateSearchTerm("lang-markdown")
+      .enterSelectedGroup
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
@@ -327,22 +327,22 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val submenuRect = layout.belowCursorOverlayStack
       .collectFirst { case (SurfaceId("command-runner-submenu"), rect) => rect }
       .getOrElse(fail("Expected command-runner submenu overlay"))
-    val codeFont       = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val uiFont         = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
-    val defaultMetrics = CellMetrics.fromFont(codeFont)
-    val searchText     = "Current Buffer Language search: java"
-    val submenuCursorXPx = defaultMetrics.toPixelX(submenuRect.x) +
-      math.round(TextLayoutSnapshot.caretXsForText(searchText, uiFont, visibleSurface.fontRenderContext.get).last)
+    val codeFont         = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val defaultMetrics   = CellMetrics.fromFont(codeFont)
+    val searchText       = "Current Buffer Language search: lang-markdown"
+    val submenuText      = (submenuRect.y until submenuRect.bottom).map(visibleSurface.getRow).mkString("\n")
     val submenuCursorYPx = defaultMetrics.toPixelY(submenuRect.y)
 
     val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
     val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
 
-    visibleCursors should have size 4
+    visibleCursors should have size 5
     hiddenCursors should have size 3
     hiddenCursors.map(_.xPx) shouldBe visibleCursors.take(3).map(_.xPx)
-    visibleCursors.exists(call => call.xPx == submenuCursorXPx && call.yPx == submenuCursorYPx) shouldBe true
-    hiddenCursors.exists(call => call.xPx == submenuCursorXPx && call.yPx == submenuCursorYPx) shouldBe false
+    submenuText should include(searchText)
+    submenuText should include("Markdown")
+    visibleCursors.exists(_.yPx == submenuCursorYPx) shouldBe true
+    hiddenCursors.exists(_.yPx == submenuCursorYPx) shouldBe false
   }
 
   it should "fade the selected command highlight with the overlay row animation" in {

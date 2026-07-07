@@ -100,8 +100,9 @@ case class CommandRunner(
   def enterSelectedGroup: CommandRunner =
     selectedItem match
       case Some(group: CommandSurfaceItem.GroupItem) =>
-        val rememberedIndex = submenuSelections.getOrElse(group.id, 0)
-        val ancestorIds     = preferredAncestorGroupIds(group.id)
+        val carriedSearchTerm = submenuSearchTermFor(group)
+        val rememberedIndex   = if carriedSearchTerm.nonEmpty then 0 else submenuSelections.getOrElse(group.id, 0)
+        val ancestorIds       = preferredAncestorGroupIds(group.id)
         val editContext =
           group.id match
             case "settings-preset-edit"   => presetEditContextName
@@ -113,6 +114,7 @@ case class CommandRunner(
             CommandRunnerSubmenuState(
               group.id,
               selectedIndex = rememberedIndex,
+              searchTerm = carriedSearchTerm,
               parentGroupId = ancestorIds.lastOption,
               ancestorGroupIds = ancestorIds
             )
@@ -423,6 +425,14 @@ case class CommandRunner(
           group.children.exists(child => CommandRunner.directItemSearchText(child).contains(lowerTerm))
         )
       directMatches ++ directChildMatches ++ nestedMatches
+
+  private def submenuSearchTermFor(group: CommandSurfaceItem.GroupItem): String =
+    val lowerTerm = searchTerm.trim.toLowerCase
+    if lowerTerm.length < 3 then ""
+    else if CommandRunner.directGroupSearchText(group).contains(lowerTerm) then ""
+    else if group.children.exists(child => CommandRunner.directItemSearchText(child).contains(lowerTerm)) then
+      searchTerm
+    else ""
 
   private def allSettingsGroups: List[CommandSurfaceItem.GroupItem] =
     def loop(groups: List[CommandSurfaceItem.GroupItem]): List[CommandSurfaceItem.GroupItem] =
