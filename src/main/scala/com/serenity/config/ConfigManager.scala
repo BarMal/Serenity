@@ -73,8 +73,33 @@ object ConfigManager:
                   config.withCharacterAnimation(AnimationConfig.smooth.get)
                 case "subtle" =>
                   config.withCharacterAnimation(AnimationConfig.subtle.get)
+                case "custom" =>
+                  config.withCharacterAnimation(config.characterAnimation.getOrElse(AnimationConfig.smooth.get))
                 case _ =>
                   config // Unknown value, keep current config
+            case "character.animation.duration_ms" | "character.animation.duration.ms" |
+                "character_animation_duration_ms" =>
+              value.trim.toIntOption
+                .filter(_ > 0)
+                .map(ms =>
+                  config.withCharacterAnimation(
+                    config.characterAnimation
+                      .getOrElse(AnimationConfig.smooth.get)
+                      .copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
+                  )
+                )
+                .getOrElse(config)
+            case "character.animation.steps" | "character_animation_steps" =>
+              value.trim.toIntOption
+                .filter(_ > 0)
+                .map(steps =>
+                  config.withCharacterAnimation(
+                    config.characterAnimation
+                      .getOrElse(AnimationConfig.smooth.get)
+                      .copy(steps = steps)
+                  )
+                )
+                .getOrElse(config)
             case "syntax.highlighting" | "syntax_highlighting" =>
               value.trim.toLowerCase match
                 case "true" | "on" | "enabled" =>
@@ -369,6 +394,11 @@ object ConfigManager:
       case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
       case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
       case Some(_)                                          => "custom" // For custom configurations
+    val characterAnimationDetails =
+      if animationSetting == "custom" then config.characterAnimation.fold("")(anim => s"""
+             |character.animation.duration_ms = ${anim.durationMs}
+             |character.animation.steps = ${anim.steps}""".stripMargin)
+      else ""
     val commandRunnerAnimationSetting = config.commandRunnerAnimation match
       case None                                             => "none"
       case Some(anim) if anim == AnimationConfig.quick.get  => "quick"
@@ -392,8 +422,8 @@ object ConfigManager:
     s"""# Serenity Editor Configuration
        |config.version = ${ConfigVersion.Current.value}
        |
-       |# Character animation style: none, quick, smooth, subtle
-       |character.animation = $animationSetting
+       |# Character animation style: none, quick, smooth, subtle, custom
+       |character.animation = $animationSetting$characterAnimationDetails
        |
        |# Syntax highlighting: true, false
        |syntax.highlighting = ${config.syntaxHighlightingEnabled}
@@ -547,7 +577,10 @@ object ConfigManager:
     val invalid =
       key match
         case "character.animation" | "character_animation" =>
-          !Set("none", "false", "off", "disabled", "quick", "smooth", "subtle").contains(normalizedValue)
+          !Set("none", "false", "off", "disabled", "quick", "smooth", "subtle", "custom").contains(normalizedValue)
+        case "character.animation.duration_ms" | "character.animation.duration.ms" | "character_animation_duration_ms" |
+            "character.animation.steps" | "character_animation_steps" =>
+          value.trim.toIntOption.forall(_ <= 0)
         case "syntax.highlighting" | "syntax_highlighting" | "font.code.ligatures" | "font_code_ligatures" |
             "font.text.ligatures" | "font.prose.ligatures" | "font_text_ligatures" | "font_prose_ligatures" |
             "font.ui.ligatures" | "font_ui_ligatures" | "font.ligatures" | "font_ligatures" | "spellcheck.enabled" |

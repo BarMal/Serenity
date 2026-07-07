@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.TransitionKind
+import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
 import com.serenity.keystroke.{InputKey, Modifier}
 import com.serenity.lsp.config.{LanguageId, LspServerOverride}
@@ -608,6 +608,27 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("ui.motion.panel_close = off")
     ConfigManager.configToString(config) should include("ui.motion.command_runner = subtle")
     ConfigManager.configToString(config) should include("ui.motion.ui = smooth")
+  }
+
+  it should "round-trip custom character animation duration and steps" in {
+    val customAnimation = AnimationConfig(
+      steps = 7,
+      totalDuration = scala.concurrent.duration.Duration.fromNanos(320_000_000)
+    )
+    val written = ConfigManager.configToString(AppConfig.default.withCharacterAnimation(customAnimation))
+
+    written should include("character.animation = custom")
+    written should include("character.animation.duration_ms = 320")
+    written should include("character.animation.steps = 7")
+
+    val configFile = Files.createTempFile("serenity-custom-animation-config", ".conf")
+    Files.writeString(configFile, written)
+
+    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    loaded.motionPreset shouldBe MotionPreset.Custom
+    loaded.characterAnimation.value.durationMs shouldBe 320
+    loaded.characterAnimation.value.steps shouldBe 7
   }
 
   it should "load and write the default document mode" in {
