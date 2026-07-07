@@ -73,7 +73,8 @@ object Main extends IOApp:
                   displayState.textFont,
                   displayState.uiFont,
                   displayState.uiMetrics,
-                  None
+                  None,
+                  repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(vis)
                 )
                 if vis then
                   val _ = Renderer.renderCursorOnly(
@@ -109,7 +110,8 @@ object Main extends IOApp:
                     displayState.textFont,
                     displayState.uiFont,
                     displayState.uiMetrics,
-                    cc
+                    cc,
+                    repaintOnFlush = true
                   )
               },
             appConfig = actualAppConfig,

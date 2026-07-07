@@ -65,10 +65,12 @@ object Renderer:
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color]
+    cursorColor: Option[java.awt.Color],
+    repaintOnFlush: Boolean
   ): Unit =
     val state0       = withEffectiveTheme(state)
-    val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, codeFont, swingWin.canvas, swingWin.onImageReady)
+    val publishFrame = if repaintOnFlush then swingWin.onImageReady else swingWin.onBaseImageReady
+    val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, codeFont, swingWin.canvas, publishFrame)
     val viewportSize = swingWin.viewportSize
     val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
     renderFrame(

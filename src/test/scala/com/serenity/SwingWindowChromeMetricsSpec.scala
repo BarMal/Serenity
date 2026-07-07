@@ -1,6 +1,8 @@
 package com.serenity
 
+import java.awt.image.BufferedImage
 import java.awt.{Color, Dimension}
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import javax.accessibility.AccessibleContext
 import javax.swing.JComponent
 
@@ -148,6 +150,43 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
         pointerY = 185
       )
       .shouldBe(SwingWindow.TitleBarDragDecision(restoreFirst = true, moveDelta = None))
+
+  "SwingWindow.BaseFramePublish" should "defer repaint when a visible cursor overlay will be published next" in {
+    SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible = true).shouldBe(false)
+    SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible = false).shouldBe(true)
+  }
+
+  it should "keep the displayed image unchanged for a base-only publish" in {
+    val image        = new BufferedImage(2, 2, BufferedImage.TYPE_INT_ARGB)
+    val rendered     = AtomicReference[Option[BufferedImage]](None)
+    val repaintCount = AtomicInteger(0)
+
+    SwingWindow.publishRenderedBaseFrame(
+      image,
+      replaceRenderedImage = false,
+      setRenderedImage = rendered.set,
+      repaint = () => repaintCount.incrementAndGet()
+    )
+
+    rendered.get().shouldBe(None)
+    repaintCount.get().shouldBe(0)
+  }
+
+  it should "replace the displayed image and repaint for a visible base publish" in {
+    val image        = new BufferedImage(2, 2, BufferedImage.TYPE_INT_ARGB)
+    val rendered     = AtomicReference[Option[BufferedImage]](None)
+    val repaintCount = AtomicInteger(0)
+
+    SwingWindow.publishRenderedBaseFrame(
+      image,
+      replaceRenderedImage = true,
+      setRenderedImage = rendered.set,
+      repaint = () => repaintCount.incrementAndGet()
+    )
+
+    rendered.get().shouldBe(Some(image))
+    repaintCount.get().shouldBe(1)
+  }
 
   "SwingWindow.ChromeControlPaint" should "resolve button colours by state and control kind" in {
     val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
