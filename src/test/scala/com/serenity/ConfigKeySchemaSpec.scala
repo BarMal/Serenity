@@ -12,6 +12,8 @@ class ConfigKeySchemaSpec extends AnyFlatSpec with Matchers:
     ConfigKeySchema.isKnownKey("lsp.scala.command") shouldBe true
     ConfigKeySchema.isKnownKey("hotkey.command_palette") shouldBe true
     ConfigKeySchema.isKnownKey("keymap.command_runner.submit") shouldBe true
+    ConfigKeySchema.isKnownKey("character.animation.duration_ms") shouldBe true
+    ConfigKeySchema.isKnownKey("character.animation.steps") shouldBe true
     ConfigKeySchema.isKnownKey("ui.motion.cursor.speed_scale") shouldBe true
     ConfigKeySchema.isKnownKey("ui_motion_cursor_speed_scale") shouldBe true
     ConfigKeySchema.isKnownKey("text_area.top.percent") shouldBe true

@@ -17,3 +17,4 @@
 - Allowed pasted clipboard text to populate command-runner search and focused setting input rows.
 - Made root settings search open matched submenus filtered to the matching nested setting row.
 - Highlighted settings submenu breadcrumb ancestors and dimmed inactive command-runner panels while a child panel has focus.
+- Preserved custom character animation duration and step settings across config reloads.

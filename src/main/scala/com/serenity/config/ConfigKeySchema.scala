@@ -25,6 +25,9 @@ object ConfigKeySchema:
     Set(
       "config.version",
       "character.animation",
+      "character.animation.duration_ms",
+      "character.animation.duration.ms",
+      "character.animation.steps",
       "syntax.highlighting",
       "font.code.family",
       "font.text.family",
@@ -116,6 +119,8 @@ object ConfigKeySchema:
   val deprecatedKeys: Map[String, String] =
     Map(
       "character_animation"                  -> "character.animation",
+      "character_animation_duration_ms"      -> "character.animation.duration_ms",
+      "character_animation_steps"            -> "character.animation.steps",
       "syntax_highlighting"                  -> "syntax.highlighting",
       "font_code_family"                     -> "font.code.family",
       "font_text_family"                     -> "font.text.family",
