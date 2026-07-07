@@ -99,7 +99,10 @@ object CommandRunnerSettingsGroups:
       id = "settings-interface-layout",
       label = "Interface Layout",
       children = List(interfaceDensityItem) ++ inputItems.filter(item =>
-        item.id == "ui-element-gap" || item.id == "ui-corner-radius" || item.id == "command-runner-visible-rows"
+        item.id == "ui-element-gap" ||
+          item.id == "ui-corner-radius" ||
+          item.id == "ui-outline-thickness" ||
+          item.id == "command-runner-visible-rows"
       ),
       category = CommandCategory.Settings,
       hint = Some("Density, spacing, command rows")

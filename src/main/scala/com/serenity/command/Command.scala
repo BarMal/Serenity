@@ -105,6 +105,7 @@ enum CommandIntent:
   case SetCursorInfoBarPlacement(placement: CursorInfoBarPlacement)
   case SetUiElementGap(gap: Int)
   case SetUiCornerRadiusPx(radius: Int)
+  case SetUiOutlineThicknessPx(thickness: Int)
   case OpenThemeChooser
   case OpenThemeCreator
   case ExportCurrentTheme

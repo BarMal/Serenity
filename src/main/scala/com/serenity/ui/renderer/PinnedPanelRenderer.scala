@@ -45,7 +45,15 @@ object PinnedPanelRenderer:
     if rect.width >= 2 && rect.height >= 2 then
       val borderColor =
         animationForeground(animationState, BorderAnimationColumn, BorderAnimationRow).getOrElse(theme.border)
-      surface.strokeRoundRect(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx, borderColor)
+      surface.strokeRoundRect(
+        rect.x,
+        rect.y,
+        rect.width,
+        rect.height,
+        config.uiCornerRadiusPx,
+        borderColor,
+        config.uiOutlineThicknessPx.toFloat
+      )
 
   private def drawTitle(
     surface: RenderSurface,

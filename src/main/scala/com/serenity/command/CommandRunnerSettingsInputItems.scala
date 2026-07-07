@@ -26,6 +26,7 @@ object CommandRunnerSettingsInputItems:
     val cursorSpeedScaleValue = f"${config.effectiveCursorTransitionSpeedScale}%.2f"
     val elementGapValue       = config.uiElementGap.toString
     val cornerRadiusValue     = config.uiCornerRadiusPx.toString
+    val outlineThicknessValue = config.uiOutlineThicknessPx.toString
     val commandRowsValue      = config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
     val spellCheck            = config.spellCheck.normalized
 
@@ -368,6 +369,18 @@ object CommandRunnerSettingsInputItems:
           text.toIntOption
             .filter(value => value >= AppConfig.MinUiCornerRadiusPx && value <= AppConfig.MaxUiCornerRadiusPx)
             .map(CommandIntent.SetUiCornerRadiusPx(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "ui-outline-thickness",
+        label = "UI Outline Thickness",
+        hint = s"Pixels (${AppConfig.MinUiOutlineThicknessPx}-${AppConfig.MaxUiOutlineThicknessPx})",
+        currentValue = outlineThicknessValue,
+        isDecimal = false,
+        parse = text =>
+          text.toIntOption
+            .filter(value => value >= AppConfig.MinUiOutlineThicknessPx && value <= AppConfig.MaxUiOutlineThicknessPx)
+            .map(CommandIntent.SetUiOutlineThicknessPx(_)),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(

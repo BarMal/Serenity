@@ -72,7 +72,8 @@ object UiPreset:
       cursorInfoBarPlacement = source.cursorInfoBarPlacement,
       interfaceDensity = source.interfaceDensity,
       uiElementGap = source.uiElementGap,
-      uiCornerRadiusPx = source.uiCornerRadiusPx
+      uiCornerRadiusPx = source.uiCornerRadiusPx,
+      uiOutlineThicknessPx = source.uiOutlineThicknessPx
     )
 
   private def patchDocumentDefaultsConfig(base: AppConfig, source: AppConfig): AppConfig =

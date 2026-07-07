@@ -43,6 +43,19 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(14)
   }
 
+  it should "use the configured UI outline thickness for pinned panel borders" in {
+    val surface = new MockRenderSurface(40, 12)
+    val panel = TextPanelView(
+      rect = LayoutRect(2, 2, 20, 6),
+      title = "outline",
+      rows = List(TextPanelRow("Item 1"))
+    )
+
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default.withUiOutlineThicknessPx(4))
+
+    surface.strokeRoundRectCalls.headOption.map(_.strokeWidth) shouldBe Some(4.0f)
+  }
+
   it should "render selected rows using the theme highlight colors" in {
     val surface = new MockRenderSurface(40, 12)
     val panel = TextPanelView(

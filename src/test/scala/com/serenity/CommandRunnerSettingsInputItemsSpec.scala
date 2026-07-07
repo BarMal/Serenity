@@ -13,6 +13,7 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
   "CommandRunnerSettingsInputItems" should "build config-backed settings input rows independently of runner state" in {
     val config = AppConfig.default
       .withUiElementGap(3)
+      .withUiOutlineThicknessPx(4)
       .withCommandRunnerVisibleRows(Some(9))
       .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20, top = 0.15, bottom = 0.25))
       .withSpellCheck(
@@ -29,6 +30,9 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
     inputById(items, "ui-element-gap").currentValue shouldBe "3"
     inputById(items, "ui-element-gap").parse("4") shouldBe Some(CommandIntent.SetUiElementGap(4))
     inputById(items, "ui-element-gap").parse("9") shouldBe None
+    inputById(items, "ui-outline-thickness").currentValue shouldBe "4"
+    inputById(items, "ui-outline-thickness").parse("5") shouldBe Some(CommandIntent.SetUiOutlineThicknessPx(5))
+    inputById(items, "ui-outline-thickness").parse("9") shouldBe None
     inputById(items, "command-runner-visible-rows").currentValue shouldBe "9"
     inputById(items, "command-runner-visible-rows").searchText.toLowerCase should include("visible commands")
     inputById(items, "command-runner-visible-rows").parse("auto") shouldBe

@@ -424,6 +424,20 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
   }
 
+  it should "draw the floating border with the configured outline thickness" in {
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val state = stateWithRunner(Theme.light, "op", commands).copy(
+      config = AppConfig.default.withUiOutlineThicknessPx(4)
+    )
+
+    val surface = new MockRenderSurface(100, 30)
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+
+    surface.strokeRoundRectCalls should not be empty
+    surface.strokeRoundRectCalls.headOption.map(_.strokeWidth) shouldBe Some(4.0f)
+  }
+
   it should "request backdrop blur for the floating overlay using the configured blur radius" in {
     val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
     val state = stateWithRunner(Theme.light, "op", commands).copy(

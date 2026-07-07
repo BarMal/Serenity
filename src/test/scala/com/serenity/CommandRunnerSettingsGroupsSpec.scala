@@ -70,6 +70,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "interface-density",
       "ui-element-gap",
       "ui-corner-radius",
+      "ui-outline-thickness",
       "command-runner-visible-rows"
     )
     groupById(groups, "settings-surface-appearance").children.map(_.id) shouldBe List(

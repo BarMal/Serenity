@@ -336,6 +336,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "interface-density",
       "ui-element-gap",
       "ui-corner-radius",
+      "ui-outline-thickness",
       "command-runner-visible-rows"
     )
     nestedGroup("settings-animation").children.map(_.id) should contain allOf (
