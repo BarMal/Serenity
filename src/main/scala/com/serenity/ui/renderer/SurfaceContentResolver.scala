@@ -105,7 +105,7 @@ object SurfaceContentResolver:
       case SurfaceContent.ThemePicker(state) =>
         resolveThemePicker(state, mode)
       case SurfaceContent.ThemeCreator(state) =>
-        resolveThemeCreator(state, mode)
+        resolveThemeCreator(state, rect, mode)
       case SurfaceContent.FileSearch(state) =>
         resolveFileSearch(state, rect, mode)
       case SurfaceContent.ContextMenu(menu) =>
@@ -754,9 +754,10 @@ object SurfaceContentResolver:
 
   private def resolveThemeCreator(
     state: com.serenity.ui.theme.config.ThemeCreatorState,
+    rect: LayoutRect,
     mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
-    val rows = state.rows.zipWithIndex.map { (row, index) =>
+    val allRows = state.rows.zipWithIndex.map { (row, index) =>
       val selected = index == state.selectedIndex
       val valueTone =
         if row.valid then OverlayTone.Normal
@@ -780,10 +781,16 @@ object SurfaceContentResolver:
         layout = OverlayRowLayout.Columns
       )
     }
+    val itemWindow = SurfaceFrameLayout(rect).itemWindow(
+      itemCount = allRows.size,
+      selectedIndex = state.selectedIndex,
+      hasHeader = true,
+      hasFooter = state.statusMessage.nonEmpty
+    )
     ResolvedSurfaceContent(
       title = titleFor(mode, "Theme Creator"),
       header = Some(OverlayRow("theme creator")),
-      rows = rows,
+      rows = itemWindow.slice(allRows),
       footer = state.statusMessage.map(OverlayRow(_, foregroundColor = Some(java.awt.Color.RED)))
     )
 

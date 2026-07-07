@@ -87,6 +87,23 @@ class ThemeCreatorSpec extends AnyFlatSpec with Matchers:
     backgroundRow.segments.last.backgroundColor shouldBe defined
   }
 
+  it should "keep the selected theme creator row inside a short visible window" in {
+    val creator = ThemeCreatorState
+      .fromTheme(DefaultThemes.defaultDark)
+      .selectPath("syntax.normal.foreground")
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.ThemeCreator(creator),
+      LayoutRect(0, 0, 80, 8),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows should have size 5
+    resolved.rows.exists(_.plainText.contains("Normal Text")) shouldBe true
+    resolved.rows.exists(_.selected) shouldBe true
+    resolved.rows.head.plainText should not include "Theme Name"
+  }
+
   "ThemeCreatorComponent" should "edit the selected field and apply a live preview theme" in {
     val base = AppState.empty.copy(
       layout = Layout(
