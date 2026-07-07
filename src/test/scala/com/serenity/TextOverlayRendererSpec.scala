@@ -4,7 +4,7 @@ import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
-import com.serenity.ui.layout.{CellMetrics, LayoutRect, TextLayoutSnapshot}
+import com.serenity.ui.layout.{CellMetrics, LayoutRect}
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -68,8 +68,8 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
 
     surface.getRow(1).slice(1, 1 + rowText.length) shouldBe rowText
 
-    val valueX          = 1 + "Find ".length
-    val caretXs         = TextLayoutSnapshot.caretXsForText(query, font, surface.fontRenderContext.get)
+    val valueX  = 1 + "Find ".length
+    val caretXs = com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(query, font, surface.fontRenderContext.get)
     val expectedCursorX = metrics.toPixelX(valueX) + math.round(caretXs.last)
 
     surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorX
@@ -139,7 +139,7 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
 
     TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
-    val caretXs         = TextLayoutSnapshot.caretXsForText(rowText, font, surface.fontRenderContext.get)
+    val caretXs = com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(rowText, font, surface.fontRenderContext.get)
     val expectedCursorX = metrics.toPixelX(1) + math.round(caretXs.last)
 
     surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorX
@@ -168,6 +168,37 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     textRun.ascentPx shouldBe metrics.ascent
     surface.fillPixelRectCalls.last.yPx shouldBe textRun.yPx
     surface.fillPixelRectCalls.last.heightPx shouldBe textRun.lineHeightPx
+  }
+
+  it should "keep measured row text and caret pixel writes inside the content rect" in {
+    val surface = new MockRenderSurface(30, 8)
+    val font    = Font(Font.SANS_SERIF, Font.PLAIN, 18)
+    val metrics = CellMetrics.fromFont(font)
+    val rowText = "WWWWWWWWWWWW"
+    val overlay = TextOverlayView(
+      rect = LayoutRect(3, 1, 8, 5),
+      rows = List(
+        OverlayRow(
+          plainText = rowText,
+          cursorColumn = Some(rowText.length)
+        )
+      )
+    )
+    val contentRect = com.serenity.ui.layout.SurfaceFrameLayout(overlay.rect).contentRect
+    val leftPx      = metrics.toPixelX(contentRect.x)
+    val rightPx     = metrics.toPixelX(contentRect.right)
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+
+    val textRun = surface.drawRunPxCalls.find(_.s.nonEmpty).getOrElse(fail("expected measured row text"))
+    textRun.xPx should be >= leftPx.toFloat
+    textRun.xPx + textRun.bgWidthPx should be <= rightPx.toFloat
+
+    val cursor = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursor).last
+    cursor.xPx should be >= leftPx
+    cursor.xPx + cursor.widthPx should be <= rightPx
+    cursor.yPx should be >= metrics.toPixelY(contentRect.y)
+    cursor.yPx + cursor.heightPx should be <= metrics.toPixelY(contentRect.bottom)
   }
 
   it should "render command runner settings rows with stable label, hint, and value columns" in {
@@ -377,9 +408,12 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     val valueX       = valueCellX + valueWidth - value.length
 
     surface.getRow(1).slice(valueX, valueX + value.length) shouldBe value
-    val caretXs = TextLayoutSnapshot.caretXsForText(value, font, surface.fontRenderContext.get)
-    surface.fillPixelRectCalls.last.xPx shouldBe metrics.toPixelX(valueX) + math.round(caretXs.last)
-    surface.fillPixelRectCalls.last.xPx should not be metrics.toPixelX(valueX + value.length)
+    val caretXs = com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(value, font, surface.fontRenderContext.get)
+    val rawCaretXPx     = metrics.toPixelX(valueX) + math.round(caretXs.last)
+    val contentRightXPx = metrics.toPixelX(com.serenity.ui.layout.SurfaceFrameLayout(overlay.rect).contentRect.right)
+    val caret           = surface.fillPixelRectCalls.last
+    caret.xPx shouldBe math.min(rawCaretXPx, contentRightXPx - caret.widthPx)
+    caret.xPx + caret.widthPx should be <= contentRightXPx
   }
 
   it should "render font preview segments with the segment font family" in {

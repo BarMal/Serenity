@@ -89,6 +89,26 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     surface.viewportHeight shouldBe 5
   }
 
+  it should "clip measured text runs to their background width" in {
+    val image   = new BufferedImage(180, 70, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 10, lineHeight = 40, ascent = 32)
+    val font    = new Font(Font.SANS_SERIF, Font.BOLD, 40)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.setBackgroundColor(Color.WHITE)
+    surface.setForegroundColor(Color.BLACK)
+    surface.drawRunPx(xPx = 10.0f, yPx = 5, bgWidthPx = 24.0f, lineHeightPx = 40, ascentPx = 32, s = "WWWWWW")
+    surface.flush()
+
+    val pixelsBeyondRun =
+      for
+        y <- 5 until 45
+        x <- 35 until image.getWidth
+      yield (image.getRGB(x, y) >>> 24) & 0xff
+
+    pixelsBeyondRun.max shouldBe 0
+  }
+
   it should "use the canvas preferred size before Swing reports a non-zero runtime size" in {
     val canvas = new JPanel()
     canvas.setPreferredSize(new java.awt.Dimension(640, 480))

@@ -55,11 +55,18 @@ class Java2DRenderSurface(
   override def fontRenderContext: Option[FontRenderContext] = Some(renderContext)
 
   override def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit =
+    val clipX     = math.floor(xPx.toDouble).toInt
+    val clipRight = math.ceil((xPx + bgWidthPx).toDouble).toInt
+    val clipWidth = (clipRight - clipX).max(1)
     g.setColor(bgRef.get())
-    g.fillRect(xPx.toInt, yPx, bgWidthPx.toInt.max(1), lineHeightPx)
+    g.fillRect(clipX, yPx, clipWidth, lineHeightPx)
     if s.nonEmpty then
+      val savedClip = g.getClip
       g.setColor(fgRef.get())
-      g.drawString(s, xPx, (yPx + ascentPx).toFloat)
+      try
+        g.clipRect(clipX, yPx, clipWidth, lineHeightPx)
+        g.drawString(s, xPx, (yPx + ascentPx).toFloat)
+      finally g.setClip(savedClip)
 
   def setForegroundColor(color: Color): Unit = fgRef.set(color)
   def setBackgroundColor(color: Color): Unit = bgRef.set(color)

@@ -26,3 +26,4 @@
 - Matched custom-chrome window controls to platform placement and order on macOS versus Windows/Linux.
 - Rendered Markdown preview images at device scale on Hi-DPI displays to avoid blurry split and inline-lens previews.
 - Hid impossible panel action commands from settings when no panel is pinned on that edge.
+- Clipped measured overlay text and carets to the framed content rectangle.
