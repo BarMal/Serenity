@@ -2,6 +2,8 @@ package com.serenity
 
 import java.nio.file.Files
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.io.FileDialog
@@ -399,5 +401,26 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(Quit).unsafeRunSync()
 
     currentCloseWorkflow(stateManager).scope shouldBe CloseScope.Quit
+  }
+
+  it should "discard the current dirty buffer and complete quit when close anyway is selected" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(Quit).unsafeRunSync()
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.modalSurface shouldBe None
+    updatedState.buffers should not contain key(bufferId)
+    stateManager.awaitQuit.timeout(1.second).unsafeRunSync()
   }
 end CloseWorkflowStateManagerSpec

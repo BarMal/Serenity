@@ -18,3 +18,4 @@
 - Made root settings search open matched submenus filtered to the matching nested setting row.
 - Highlighted settings submenu breadcrumb ancestors and dimmed inactive command-runner panels while a child panel has focus.
 - Preserved custom character animation duration and step settings across config reloads.
+- Made quit-scope "Close anyway" discard the current dirty buffer before completing shutdown.
