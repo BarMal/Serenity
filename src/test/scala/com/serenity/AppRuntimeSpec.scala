@@ -122,6 +122,18 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     result shouldBe (true, 0)
   }
 
+  it should "keep fast rendering active when a newer render request arrives during finalization" in {
+    AppRuntime
+      .shouldClearFastMode(stillActive = false, phaseStartRenderRequest = 1L, currentRenderRequest = 1L)
+      .shouldBe(true)
+    AppRuntime
+      .shouldClearFastMode(stillActive = true, phaseStartRenderRequest = 1L, currentRenderRequest = 1L)
+      .shouldBe(false)
+    AppRuntime
+      .shouldClearFastMode(stillActive = false, phaseStartRenderRequest = 1L, currentRenderRequest = 2L)
+      .shouldBe(false)
+  }
+
   it should "terminate the app loop when the external close signal fires" in {
     given org.typelevel.log4cats.Logger[IO] =
       LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeSpec"))

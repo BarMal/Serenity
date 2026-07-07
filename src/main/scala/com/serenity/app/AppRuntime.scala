@@ -41,6 +41,13 @@ object AppRuntime:
   private[serenity] def resetCursorActivity(cursorVisible: Ref[IO, Boolean], breathIndex: Ref[IO, Int]): IO[Unit] =
     cursorVisible.set(true) >> breathIndex.set(0)
 
+  private[serenity] def shouldClearFastMode(
+    stillActive: Boolean,
+    phaseStartRenderRequest: Long,
+    currentRenderRequest: Long
+  ): Boolean =
+    !stillActive && currentRenderRequest == phaseStartRenderRequest
+
   final private[serenity] case class AnimationTickCadence(remainderNanos: Long):
 
     def advance(frameInterval: FiniteDuration): (AnimationTickCadence, Int) =
@@ -84,17 +91,19 @@ object AppRuntime:
         inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
         systemClipboard = SystemClipboard.awt[IO]
         inputHandler    = makeInputHandler(inputRouter)
-        _             <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
-        _             <- renderFull(initialState, true, None)
-        _             <- logger.info("Initial render completed, starting main loop")
-        fastMode      <- SignallingRef.of[IO, Boolean](false)
-        _             <- IO(registerResizeCallback(resizeCallbackBridge(fastMode.set(true), resizeCallbackDispatcher)))
+        _                      <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
+        _                      <- renderFull(initialState, true, None)
+        _                      <- logger.info("Initial render completed, starting main loop")
+        fastMode               <- SignallingRef.of[IO, Boolean](false)
+        fastRenderRequestEpoch <- Ref.of[IO, Long](0L)
+        requestFastRender = fastRenderRequestEpoch.update(_ + 1L) >> fastMode.set(true)
+        _             <- IO(registerResizeCallback(resizeCallbackBridge(requestFastRender, resizeCallbackDispatcher)))
         cursorVisible <- Ref.of[IO, Boolean](true)
         breathIndex   <- Ref.of[IO, Int](0)
         animationTickCadence <- Ref.of[IO, AnimationTickCadence](
           AnimationTickCadence.empty
         )
-        checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, fastMode.set(true)))
+        checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
         inputFunnel = (s: Stream[IO, Event]) =>
           s.evalMap(event =>
             checkResizeAndHandle >>
@@ -104,7 +113,7 @@ object AppRuntime:
               stateManager.getCurrentState
                 .flatMap(state => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))) >>
               resetCursorActivity(cursorVisible, breathIndex) >>
-              fastMode.set(true)
+              requestFastRender
           ).drain
         _ <-
           def withRuntimeDiagnostics[A](
@@ -146,7 +155,7 @@ object AppRuntime:
                 ("idle.cursor-render", "state=unavailable", other)
             logger.warn(cause)(
               s"[RUNTIME] idle cursor render failed phase=$phase; $diagnostics; requesting full render"
-            ) >> fastMode.set(true)
+            ) >> requestFastRender
 
           def idlePhase: Stream[IO, Unit] =
             Stream
@@ -180,35 +189,41 @@ object AppRuntime:
               }
 
           def fastPhase: Stream[IO, Unit] =
-            Stream
-              .repeatEval(
-                stateManager.getCurrentState.map(state => fastFrameInterval(state.config.renderFpsTarget))
-              )
-              .evalMap { interval =>
-                for
-                  _              <- IO.sleep(interval)
-                  _              <- withRuntimeDiagnostics("render loop", "fast.resize")(checkResizeAndHandle)
-                  animationTicks <- animationTickCadence.modify(_.advance(interval))
-                  active <- withRuntimeDiagnostics(
-                    "render loop",
-                    "fast.animation-tick"
-                  )(advanceAnimationsForCadence(animationTicks, stateManager))
-                  state <- withRuntimeDiagnostics("render loop", "fast.state")(stateManager.getCurrentState)
-                  _ <- withRuntimeDiagnostics(
-                    "render loop",
-                    "fast.full-render",
-                    IO.pure(Some(state))
-                  )(renderFull(state, true, None))
-                yield active
-              }
-              .takeWhile(identity)
-              .map(_ => ())
-              .onFinalize {
-                stateManager.getCurrentState.flatMap { state =>
-                  val stillActive = hasActiveAnimations(state)
-                  if stillActive then IO.unit else fastMode.set(false)
+            Stream.eval(fastRenderRequestEpoch.get).flatMap { phaseStartRenderRequest =>
+              Stream
+                .repeatEval(
+                  stateManager.getCurrentState.map(state => fastFrameInterval(state.config.renderFpsTarget))
+                )
+                .evalMap { interval =>
+                  for
+                    _              <- IO.sleep(interval)
+                    _              <- withRuntimeDiagnostics("render loop", "fast.resize")(checkResizeAndHandle)
+                    animationTicks <- animationTickCadence.modify(_.advance(interval))
+                    active <- withRuntimeDiagnostics(
+                      "render loop",
+                      "fast.animation-tick"
+                    )(advanceAnimationsForCadence(animationTicks, stateManager))
+                    state <- withRuntimeDiagnostics("render loop", "fast.state")(stateManager.getCurrentState)
+                    _ <- withRuntimeDiagnostics(
+                      "render loop",
+                      "fast.full-render",
+                      IO.pure(Some(state))
+                    )(renderFull(state, true, None))
+                  yield active
                 }
-              }
+                .takeWhile(identity)
+                .map(_ => ())
+                .onFinalize {
+                  stateManager.getCurrentState.flatMap { state =>
+                    val stillActive = hasActiveAnimations(state)
+                    fastRenderRequestEpoch.get.flatMap { currentRenderRequest =>
+                      if shouldClearFastMode(stillActive, phaseStartRenderRequest, currentRenderRequest) then
+                        fastMode.set(false)
+                      else IO.unit
+                    }
+                  }
+                }
+            }
 
           val renderLoop: Stream[IO, Unit] =
             Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
