@@ -96,6 +96,32 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     surface.fillPixelRectCalls.last.yPx shouldBe metrics.toPixelY(1)
   }
 
+  it should "highlight selected segments in plain breadcrumb rows" in {
+    val surface = new MockRenderSurface(80, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 50, 5),
+      header = Some(
+        OverlayRow(
+          plainText = "UI Presets > Edit Preset: Writing > Fonts",
+          segments = List(
+            OverlaySegment("UI Presets >", selected = true),
+            OverlaySegment("Edit Preset: Writing >", selected = true),
+            OverlaySegment("Fonts")
+          )
+        )
+      )
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.getRow(1) should include("UI Presets > Edit Preset: Writing > Fonts")
+    surface.getBg(1, 1) shouldBe Theme.light.highlighted.background
+    surface.getBg(14, 1) shouldBe Theme.light.highlighted.background
+    surface.getBg(38, 1) shouldBe Theme.light.panel.background
+  }
+
   it should "place a plain editable row caret at the measured text end for proportional fonts" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)

@@ -486,16 +486,33 @@ object SurfaceContentResolver:
       header = group.map { _ =>
         submenuState.filter(_.searchTerm.nonEmpty) match
           case Some(submenu) =>
-            val label = runner.submenuBreadcrumbLabels(groupId).mkString(" > ")
-            OverlayRow(
-              plainText = s"$label search: ${submenu.searchTerm}",
-              cursorColumn = Some(s"$label search: ${submenu.searchTerm}".length)
-            )
+            breadcrumbHeader(runner.submenuBreadcrumbLabels(groupId), Some(submenu.searchTerm))
           case None =>
-            OverlayRow(runner.submenuBreadcrumbLabels(groupId).mkString(" > "))
+            breadcrumbHeader(runner.submenuBreadcrumbLabels(groupId), None)
       },
       rows = rows ++ detailRows,
       footer = footer
+    )
+
+  private def breadcrumbHeader(labels: List[String], searchTerm: Option[String]): OverlayRow =
+    val safeLabels = labels.filter(_.nonEmpty) match
+      case Nil      => List("submenu")
+      case nonEmpty => nonEmpty
+    val lastIndex = safeLabels.length - 1
+    val breadcrumbSegments = safeLabels.zipWithIndex.map { (label, index) =>
+      val suffix =
+        if index < lastIndex then " >"
+        else searchTerm.filter(_.nonEmpty).fold("")(_ => " search:")
+      OverlaySegment(s"$label$suffix", selected = index < lastIndex)
+    }
+    val segments = searchTerm.filter(_.nonEmpty) match
+      case Some(term) => breadcrumbSegments :+ OverlaySegment(term, selected = true)
+      case None       => breadcrumbSegments
+    val plainText = segments.map(_.text).mkString(" ")
+    OverlayRow(
+      plainText = plainText,
+      cursorColumn = searchTerm.filter(_.nonEmpty).map(_ => plainText.length),
+      segments = segments
     )
 
   private def presetPreviewRow(
