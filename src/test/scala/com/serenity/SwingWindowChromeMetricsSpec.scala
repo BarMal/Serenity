@@ -188,6 +188,47 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     repaintCount.get().shouldBe(1)
   }
 
+  "SwingWindow.ChromeControlLayout" should "place macOS controls on the left in platform order" in
+    SwingWindow.ChromeControlLayout
+      .forOs("Mac OS X")
+      .shouldBe(
+        SwingWindow.ChromeControlLayout(
+          placement = SwingWindow.ChromeControlPlacement.Left,
+          controls = List(
+            SwingWindow.ChromeControlKind.Close,
+            SwingWindow.ChromeControlKind.Minimize,
+            SwingWindow.ChromeControlKind.Maximize
+          )
+        )
+      )
+
+  it should "place non-macOS controls on the right in Windows/Linux order" in {
+    SwingWindow.ChromeControlLayout
+      .forOs("Windows 11")
+      .shouldBe(
+        SwingWindow.ChromeControlLayout(
+          placement = SwingWindow.ChromeControlPlacement.Right,
+          controls = List(
+            SwingWindow.ChromeControlKind.Minimize,
+            SwingWindow.ChromeControlKind.Maximize,
+            SwingWindow.ChromeControlKind.Close
+          )
+        )
+      )
+    SwingWindow.ChromeControlLayout
+      .forOs("Linux")
+      .shouldBe(
+        SwingWindow.ChromeControlLayout(
+          placement = SwingWindow.ChromeControlPlacement.Right,
+          controls = List(
+            SwingWindow.ChromeControlKind.Minimize,
+            SwingWindow.ChromeControlKind.Maximize,
+            SwingWindow.ChromeControlKind.Close
+          )
+        )
+      )
+  }
+
   "SwingWindow.ChromeControlPaint" should "resolve button colours by state and control kind" in {
     val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
 

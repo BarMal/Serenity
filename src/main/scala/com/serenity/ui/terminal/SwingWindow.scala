@@ -187,18 +187,15 @@ class SwingWindow(
     new ChromeControlButton(kind)
 
   private val titleBar: JPanel =
-    val minBtn = makeCtrlBtn(SwingWindow.ChromeControlKind.Minimize)
-    val maxBtn = makeCtrlBtn(SwingWindow.ChromeControlKind.Maximize)
-    maxBtnRef.set(Some(maxBtn))
-    val closeBtn = makeCtrlBtn(SwingWindow.ChromeControlKind.Close)
-    controlButtonsRef.set(scala.List(minBtn, maxBtn, closeBtn))
+    val controlLayout = SwingWindow.ChromeControlLayout.current
+    val buttonPairs   = controlLayout.controls.map(kind => kind -> makeCtrlBtn(kind))
+    maxBtnRef.set(buttonPairs.collectFirst { case (SwingWindow.ChromeControlKind.Maximize, button) => button })
+    controlButtonsRef.set(buttonPairs.map(_._2))
 
-    val btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0)):
+    val btnPanel = new JPanel(new FlowLayout(controlLayout.flowAlignment, 0, 0)):
       setBackground(chromePaletteRef.get().titleBackground)
     controlPanelRef.set(Some(btnPanel))
-    btnPanel.add(minBtn)
-    btnPanel.add(maxBtn)
-    btnPanel.add(closeBtn)
+    buttonPairs.foreach((_, button) => btnPanel.add(button))
 
     val spacer = new JPanel:
       setBackground(chromePaletteRef.get().titleBackground)
@@ -246,9 +243,14 @@ class SwingWindow(
       setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, chromePaletteRef.get().border))
       setPreferredSize(chromeTitleBarSize)
     titleBarRef.set(Some(bar))
-    bar.add(spacer, BorderLayout.WEST)
+    controlLayout.placement match
+      case SwingWindow.ChromeControlPlacement.Left =>
+        bar.add(btnPanel, BorderLayout.WEST)
+        bar.add(spacer, BorderLayout.EAST)
+      case SwingWindow.ChromeControlPlacement.Right =>
+        bar.add(spacer, BorderLayout.WEST)
+        bar.add(btnPanel, BorderLayout.EAST)
     bar.add(titleLabel, BorderLayout.CENTER)
-    bar.add(btnPanel, BorderLayout.EAST)
     bar.addMouseListener(dragAdapter)
     bar.addMouseMotionListener(dragAdapter)
     titleLabel.addMouseListener(dragAdapter)
@@ -569,6 +571,31 @@ object SwingWindow:
     case Maximize extends ChromeControlKind("Maximize")
     case Restore  extends ChromeControlKind("Restore")
     case Close    extends ChromeControlKind("Close")
+
+  enum ChromeControlPlacement:
+    case Left
+    case Right
+
+  case class ChromeControlLayout(placement: ChromeControlPlacement, controls: scala.List[ChromeControlKind]):
+
+    def flowAlignment: Int =
+      placement match
+        case ChromeControlPlacement.Left  => FlowLayout.LEFT
+        case ChromeControlPlacement.Right => FlowLayout.RIGHT
+
+  object ChromeControlLayout:
+    val WindowsOrder: scala.List[ChromeControlKind] =
+      scala.List(ChromeControlKind.Minimize, ChromeControlKind.Maximize, ChromeControlKind.Close)
+    val MacOrder: scala.List[ChromeControlKind] =
+      scala.List(ChromeControlKind.Close, ChromeControlKind.Minimize, ChromeControlKind.Maximize)
+
+    def current: ChromeControlLayout =
+      forOs(System.getProperty("os.name", ""))
+
+    def forOs(osName: String): ChromeControlLayout =
+      if osName.toLowerCase(java.util.Locale.ROOT).contains("mac") then
+        ChromeControlLayout(ChromeControlPlacement.Left, MacOrder)
+      else ChromeControlLayout(ChromeControlPlacement.Right, WindowsOrder)
 
   case class ChromeIconLine(x1: Int, y1: Int, x2: Int, y2: Int)
 
