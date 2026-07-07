@@ -109,6 +109,20 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
     closePlan.kind shouldBe TransitionKind.Disabled
   }
 
+  it should "derive command runner transition overrides from app config" in {
+    val config = AppConfig.default
+      .withMotionPreset(MotionPreset.Subtle)
+      .withCommandRunnerTransitionKind(Some(TransitionKind.OutlineThenContent))
+
+    val plan = ElementTransitionPlanner.plan(
+      ElementTransitionRequest(TransitionScope.CommandRunner),
+      config.elementTransitionSettings
+    )
+
+    plan.kind shouldBe TransitionKind.OutlineThenContent
+    plan.direction shouldBe TransitionDirection.AnchorIn
+  }
+
   it should "derive general UI animation from its own config rather than editor text animation" in {
     val config = AppConfig.default
       .withMotionPreset(MotionPreset.Smooth)

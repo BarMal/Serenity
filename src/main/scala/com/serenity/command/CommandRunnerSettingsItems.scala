@@ -67,6 +67,17 @@ object CommandRunnerSettingsItems:
       hint = "Pinned panel closing reveal style"
     )
 
+  private[command] def commandRunnerTransitionOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    panelTransitionOptionItem(
+      id = "command-runner-transition",
+      label = "Command Runner Reveal",
+      selectedIndex = optionSelections.getOrElse("command-runner-transition", 0),
+      setIntent = CommandIntent.SetCommandRunnerTransitionKind.apply,
+      hint = "Palette opening reveal style"
+    )
+
   private def panelTransitionOptionItem(
     id: String,
     label: String,

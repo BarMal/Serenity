@@ -217,6 +217,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "editor-text-transition",
       "panel-open-transition",
       "panel-close-transition",
+      "command-runner-transition",
       "command-runner-fade",
       "ui-animation",
       "render-fps",
@@ -329,6 +330,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "editor-text-transition",
       "panel-open-transition",
       "panel-close-transition",
+      "command-runner-transition",
       "command-runner-fade",
       "ui-animation",
       "render-fps"

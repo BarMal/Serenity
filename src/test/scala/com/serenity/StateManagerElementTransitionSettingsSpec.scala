@@ -199,6 +199,47 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     stateManager.getCurrentState.unsafeRunSync().config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
   }
 
+  it should "update the command runner transition kind config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "command-runner-transition",
+          "Set command runner transition",
+          CommandIntent.SetCommandRunnerTransitionKind(TransitionKind.OutlineThenContent),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.commandRunnerTransitionKind shouldBe Some(
+      TransitionKind.OutlineThenContent
+    )
+  }
+
+  it should "mark the motion preset custom when command runner transition kind is edited" in {
+    val stateManager = createStateManager()
+    stateManager
+      .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Smooth)))
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "command-runner-transition",
+          "Set command runner transition",
+          CommandIntent.SetCommandRunnerTransitionKind(TransitionKind.DirectionalSweep),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    val config = stateManager.getCurrentState.unsafeRunSync().config
+    config.commandRunnerTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
+    config.motionPreset shouldBe MotionPreset.Custom
+  }
+
   it should "update the command runner fade animation config" in {
     val stateManager = createStateManager()
 

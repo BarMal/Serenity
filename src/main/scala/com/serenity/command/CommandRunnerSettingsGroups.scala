@@ -26,6 +26,7 @@ object CommandRunnerSettingsGroups:
     val editorTextItem       = CommandRunnerSettingsItems.editorTextTransitionOptionItem(optionSelections)
     val panelOpenItem        = CommandRunnerSettingsItems.panelOpenTransitionOptionItem(optionSelections)
     val panelCloseItem       = CommandRunnerSettingsItems.panelCloseTransitionOptionItem(optionSelections)
+    val commandRunnerReveal  = CommandRunnerSettingsItems.commandRunnerTransitionOptionItem(optionSelections)
     val markdownViewItem     = CommandRunnerSettingsItems.markdownViewOptionItem(optionSelections)
     val defaultDocumentItem  = CommandRunnerSettingsItems.defaultDocumentModeOptionItem(optionSelections)
     val spellCheckItem       = CommandRunnerSettingsItems.spellCheckOptionItem(optionSelections)
@@ -73,6 +74,7 @@ object CommandRunnerSettingsGroups:
         editorTextItem,
         panelOpenItem,
         panelCloseItem,
+        commandRunnerReveal,
         commandRunnerFade,
         uiAnimationItem,
         renderFpsItem
@@ -294,6 +296,7 @@ object CommandRunnerSettingsGroups:
         animationItem,
         panelOpenItem,
         panelCloseItem,
+        commandRunnerReveal,
         commandRunnerFade,
         uiAnimationItem,
         renderFpsItem

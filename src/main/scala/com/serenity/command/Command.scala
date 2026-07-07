@@ -86,6 +86,7 @@ enum CommandIntent:
   case SetCommandRunnerVisibleRows(rows: Option[Int])
   case SetRenderFpsTarget(target: RenderFpsTarget)
   case SetEditorInsertionTransitionKind(kind: TransitionKind)
+  case SetCommandRunnerTransitionKind(kind: TransitionKind)
   case SetPanelOpenTransitionKind(kind: TransitionKind)
   case SetPanelCloseTransitionKind(kind: TransitionKind)
   case SetBackgroundStyle(style: BackgroundStyle)

@@ -395,34 +395,73 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           val steps         = config.steps
           val tSize         = s.viewportSize.getOrElse(ViewportSize(80, 24))
           val layout        = LayoutEngine.calculateLayoutWithUI(s, tSize)
-          val overlayHeight = overlayRectForSurface(layout, surface.id).map(_.height).getOrElse(4)
-          val overlayFadeIn = (0 until overlayHeight).map { rowOffset =>
-            val delay    = rowOffset
-            val panelBg  = s.theme.panel.background
-            val panelFg  = s.theme.panel.foreground
-            val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
-            val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
-            val bgSteps = List.fill(delay)(transpBg) ++
-              RgbInterpolator.interpolateRgba(transpBg, panelBg, steps)
-            val fgSteps = List.fill(delay)(transpFg) ++
-              RgbInterpolator.interpolateRgba(transpFg, panelFg, steps)
-            CharacterKey(0, rowOffset) -> AnimatedCell(
-              content = None,
-              foregroundSteps = fgSteps,
-              backgroundSteps = bgSteps
-            )
-          }.toMap
-          val surfAnim = SurfaceAnimationState(
-            phase = SurfacePhase.Visible,
-            animationState = AnimationState(overlayFadeIn),
-            overlayHeight = overlayHeight,
-            bufferFadeLength = 0,
-            phaseTick = 0
-          )
-          s.copy(surfaceAnimations = s.surfaceAnimations + (surface.id -> surfAnim))
+          val overlayRect   = overlayRectForSurface(layout, surface.id)
+          val overlayHeight = overlayRect.map(_.height).getOrElse(4)
+          val revealKind    = s.config.effectiveCommandRunnerTransitionKind
+          val animationState =
+            if revealKind == TransitionKind.Fade then commandRunnerFadeInAnimation(overlayHeight, steps, s)
+            else
+              val plan = ElementTransitionPlanner.plan(
+                ElementTransitionRequest(TransitionScope.CommandRunner),
+                ElementTransitionSettings(
+                  enabled = true,
+                  baseTiming = TransitionTiming(durationMs = steps * 16, staggerMs = 16, delayMs = 0, speedScale = 1.0),
+                  speedScale = 1.0,
+                  overrides = Map(TransitionScope.CommandRunner -> revealKind)
+                )
+              )
+              ElementTransitionLowerer.lower(
+                plan,
+                commandRunnerOpenCells(overlayRect.map(_.width).getOrElse(56), overlayHeight, s),
+                tickRateMs = 16
+              )
+          val surfaceAnimations =
+            if animationState.hasActiveAnimations then
+              s.surfaceAnimations + (surface.id -> SurfaceAnimationState(
+                phase = SurfacePhase.Visible,
+                animationState = animationState,
+                overlayHeight = overlayHeight,
+                bufferFadeLength = 0,
+                phaseTick = 0
+              ))
+            else s.surfaceAnimations - surface.id
+          s.copy(surfaceAnimations = surfaceAnimations)
         }
       case _ =>
         stateRef.update(s => s.copy(surfaceAnimations = s.surfaceAnimations - surface.id))
+
+  private def commandRunnerFadeInAnimation(overlayHeight: Int, steps: Int, state: AppState): AnimationState =
+    val overlayFadeIn = (0 until overlayHeight).map { rowOffset =>
+      val delay    = rowOffset
+      val panelBg  = state.theme.panel.background
+      val panelFg  = state.theme.panel.foreground
+      val transpBg = transparent(panelBg)
+      val transpFg = transparent(panelFg)
+      val bgSteps = List.fill(delay)(transpBg) ++
+        RgbInterpolator.interpolateRgba(transpBg, panelBg, steps)
+      val fgSteps = List.fill(delay)(transpFg) ++
+        RgbInterpolator.interpolateRgba(transpFg, panelFg, steps)
+      CharacterKey(0, rowOffset) -> AnimatedCell(
+        content = None,
+        foregroundSteps = fgSteps,
+        backgroundSteps = bgSteps
+      )
+    }.toMap
+    AnimationState(overlayFadeIn)
+
+  private def commandRunnerOpenCells(width: Int, height: Int, state: AppState): ElementTransitionCells =
+    val transparentPanelForeground = transparent(state.theme.panel.foreground)
+    val transparentBorder          = transparent(state.theme.border)
+    val borderCell =
+      CharacterKey(-1, -1) -> CellAnimation(' ', transparentBorder, state.theme.border)
+    val contentCells =
+      (0 until math.max(0, height - 1)).flatMap { row =>
+        (0 until math.max(1, width - 2)).map { column =>
+          CharacterKey(column, row) ->
+            CellAnimation(' ', transparentPanelForeground, state.theme.panel.foreground)
+        }
+      }.toMap
+    ElementTransitionCells(frame = Map(borderCell), content = contentCells)
 
   private def applyCommandRunnerCloseAnimation(
     closedSurface: UiSurface,

@@ -8,6 +8,7 @@ enum TransitionScope:
   case SurfaceHeader
   case Row
   case Glyph
+  case CommandRunner
   case EditorInsertion
   case PanelOpen
   case PanelClose
@@ -114,7 +115,7 @@ object ElementTransitionPlanner:
         TransitionKind.Fade
       case TransitionScope.Row =>
         TransitionKind.DirectionalSweep
-      case TransitionScope.Glyph | TransitionScope.EditorInsertion =>
+      case TransitionScope.Glyph | TransitionScope.CommandRunner | TransitionScope.EditorInsertion =>
         TransitionKind.Fade
       case TransitionScope.SurfaceFrame | TransitionScope.SurfaceHeader =>
         TransitionKind.Fade

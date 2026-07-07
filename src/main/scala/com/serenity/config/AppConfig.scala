@@ -390,6 +390,7 @@ case class AppConfig(
     commandRunnerVisibleRows: Option[Int] = None,
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
+    commandRunnerTransitionKind: Option[TransitionKind] = None,
     panelOpenTransitionKind: Option[TransitionKind] = None,
     panelCloseTransitionKind: Option[TransitionKind] = None,
     cursorMode: CursorMode = CursorMode.Blink,
@@ -423,7 +424,8 @@ case class AppConfig(
       uiTransitionSpeedScale = None,
       cursorTransitionSpeedScale = None,
       commandRunnerAnimation = None,
-      uiAnimation = None
+      uiAnimation = None,
+      commandRunnerTransitionKind = None
     )
 
   /** Create a new config with syntax highlighting toggled */
@@ -532,6 +534,7 @@ case class AppConfig(
       val transitionOverrides =
         List(
           Some(TransitionScope.EditorInsertion -> editorInsertionTransitionKind),
+          commandRunnerTransitionKind.map(TransitionScope.CommandRunner -> _),
           panelOpenTransitionKind.map(TransitionScope.PanelOpen -> _),
           panelCloseTransitionKind.map(TransitionScope.PanelClose -> _)
         ).flatten.toMap
@@ -594,6 +597,12 @@ case class AppConfig(
 
   def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
     copy(editorInsertionTransitionKind = kind)
+
+  def withCommandRunnerTransitionKind(kind: Option[TransitionKind]): AppConfig =
+    copy(commandRunnerTransitionKind = kind)
+
+  def effectiveCommandRunnerTransitionKind: TransitionKind =
+    commandRunnerTransitionKind.getOrElse(TransitionKind.Fade)
 
   def withPanelOpenTransitionKind(kind: Option[TransitionKind]): AppConfig =
     copy(panelOpenTransitionKind = kind)
