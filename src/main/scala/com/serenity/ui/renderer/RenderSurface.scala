@@ -23,6 +23,8 @@ trait RenderSurface:
   def disableStyle(style: TextStyle): Unit
   def setAlpha(alpha: Float): Unit                                             = ()
   def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit = ()
+  def devicePixelScaleX: Double                                                = 1.0
+  def devicePixelScaleY: Double                                                = 1.0
 
   def strokeRoundRect(
     x: Int,
