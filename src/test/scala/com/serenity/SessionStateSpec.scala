@@ -326,6 +326,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         interfaceDensity = InterfaceDensity.Spacious,
         cursorInfoBarMode = CursorInfoBarMode.Detailed,
         cursorInfoBarPlacement = CursorInfoBarPlacement.PinnedBottom,
+        uiOutlineThicknessPx = 4,
         showLineNumbers = false,
         showGutter = false,
         lspUserConfig = LspUserConfig(
@@ -368,6 +369,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     decoded.config.cursorInfoBarMode shouldBe CursorInfoBarMode.Detailed
     decoded.config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.PinnedBottom
+    decoded.config.uiOutlineThicknessPx shouldBe 4
     decoded.config.fontConfig.codeFontFamily shouldBe "Monospaced"
     decoded.config.fontConfig.textFontFamily shouldBe "SansSerif"
     decoded.config.fontConfig.uiFontFamily shouldBe "Dialog"
@@ -631,6 +633,21 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.uiCornerRadiusPx shouldBe 8
+  }
+
+  it should "default UI outline thickness when loading older JSON without the field" in {
+    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val jsonWithoutUiOutlineThickness =
+      originalJson.mapObject(
+        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("uiOutlineThicknessPx")))
+      )
+
+    val decoded = jsonWithoutUiOutlineThickness.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.uiOutlineThicknessPx shouldBe 2
   }
 
   it should "default cursorInfoBarMode to Off when loading older JSON without the field" in {

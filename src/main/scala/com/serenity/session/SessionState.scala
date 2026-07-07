@@ -675,6 +675,7 @@ given Encoder[AppConfig] = Encoder.instance { config =>
     "interfaceDensity"                  -> config.interfaceDensity.asJson,
     "uiElementGap"                      -> config.uiElementGap.asJson,
     "uiCornerRadiusPx"                  -> config.uiCornerRadiusPx.asJson,
+    "uiOutlineThicknessPx"              -> config.uiOutlineThicknessPx.asJson,
     "textAreaInsets"                    -> config.textAreaInsets.asJson,
     "preferredWindowSize"               -> config.preferredWindowSize.asJson,
     "lspUserConfig"                     -> config.lspUserConfig.asJson,
@@ -737,16 +738,17 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     cursorInfoBarPlacement <- cursor.getOrElse[CursorInfoBarPlacement]("cursorInfoBarPlacement")(
       CursorInfoBarPlacement.Floating
     )
-    windowChromeMode    <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(defaultConfig.windowChromeMode)
-    markdownViewMode    <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
-    defaultDocumentMode <- cursor.getOrElse[DefaultDocumentMode]("defaultDocumentMode")(DefaultDocumentMode.PlainText)
-    interfaceDensity    <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(InterfaceDensity.Comfortable)
-    uiElementGap        <- cursor.getOrElse[Int]("uiElementGap")(0)
-    uiCornerRadiusPx    <- cursor.getOrElse[Int]("uiCornerRadiusPx")(8)
-    textAreaInsets      <- cursor.getOrElse[TextAreaInsets]("textAreaInsets")(TextAreaInsets())
-    preferredWindowSize <- cursor.getOrElse[Option[PreferredWindowSize]]("preferredWindowSize")(None)
-    lspUserConfig       <- cursor.getOrElse[LspUserConfig]("lspUserConfig")(LspUserConfig.empty)
-    spellCheck          <- cursor.getOrElse[SpellCheckConfig]("spellCheck")(SpellCheckConfig())
+    windowChromeMode     <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(defaultConfig.windowChromeMode)
+    markdownViewMode     <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
+    defaultDocumentMode  <- cursor.getOrElse[DefaultDocumentMode]("defaultDocumentMode")(DefaultDocumentMode.PlainText)
+    interfaceDensity     <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(InterfaceDensity.Comfortable)
+    uiElementGap         <- cursor.getOrElse[Int]("uiElementGap")(0)
+    uiCornerRadiusPx     <- cursor.getOrElse[Int]("uiCornerRadiusPx")(8)
+    uiOutlineThicknessPx <- cursor.getOrElse[Int]("uiOutlineThicknessPx")(defaultConfig.uiOutlineThicknessPx)
+    textAreaInsets       <- cursor.getOrElse[TextAreaInsets]("textAreaInsets")(TextAreaInsets())
+    preferredWindowSize  <- cursor.getOrElse[Option[PreferredWindowSize]]("preferredWindowSize")(None)
+    lspUserConfig        <- cursor.getOrElse[LspUserConfig]("lspUserConfig")(LspUserConfig.empty)
+    spellCheck           <- cursor.getOrElse[SpellCheckConfig]("spellCheck")(SpellCheckConfig())
   yield AppConfig(
     characterAnimation = characterAnimation,
     syntaxHighlightingEnabled = syntaxHighlightingEnabled,
@@ -783,6 +785,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     interfaceDensity = interfaceDensity,
     uiElementGap = AppConfig.clampUiElementGap(uiElementGap),
     uiCornerRadiusPx = AppConfig.clampUiCornerRadiusPx(uiCornerRadiusPx),
+    uiOutlineThicknessPx = AppConfig.clampUiOutlineThicknessPx(uiOutlineThicknessPx),
     textAreaInsets = textAreaInsets,
     preferredWindowSize = preferredWindowSize,
     lspUserConfig = lspUserConfig,

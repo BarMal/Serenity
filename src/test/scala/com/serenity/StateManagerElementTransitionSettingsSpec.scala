@@ -305,3 +305,20 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
 
     stateManager.getCurrentState.unsafeRunSync().config.uiCornerRadiusPx shouldBe 14
   }
+
+  it should "update the UI outline thickness config" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "ui-outline-thickness",
+          "Set UI outline thickness",
+          CommandIntent.SetUiOutlineThicknessPx(4),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.uiOutlineThicknessPx shouldBe 4
+  }

@@ -496,6 +496,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateAppearanceConfig(_.withUiElementGap(gap)).void
       case CommandIntent.SetUiCornerRadiusPx(radius) =>
         updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
+      case CommandIntent.SetUiOutlineThicknessPx(thickness) =>
+        updateAppearanceConfig(_.withUiOutlineThicknessPx(thickness)).void
       case CommandIntent.IncreaseFontSize =>
         updateFontConfig(config =>
           config.copy(

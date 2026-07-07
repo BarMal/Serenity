@@ -177,6 +177,8 @@ object ConfigManager:
               parseUiElementGap(value.trim).map(config.withUiElementGap).getOrElse(config)
             case "ui.corner_radius" | "ui.corner.radius" | "ui_corner_radius" =>
               parseUiCornerRadiusPx(value.trim).map(config.withUiCornerRadiusPx).getOrElse(config)
+            case "ui.outline_thickness" | "ui.outline.thickness" | "ui_outline_thickness" =>
+              parseUiOutlineThicknessPx(value.trim).map(config.withUiOutlineThicknessPx).getOrElse(config)
             case "command_runner.visible_rows" | "command.runner.visible.rows" | "command_runner_visible_rows" =>
               parseCommandRunnerVisibleRows(value.trim).map(config.withCommandRunnerVisibleRows).getOrElse(config)
             case "render.fps" | "render_fps" | "ui.render.fps" | "ui_render_fps" =>
@@ -421,6 +423,7 @@ object ConfigManager:
        |window.chrome = ${windowChromeModeConfigKey(config.windowChromeMode)}
        |ui.element_gap = ${config.uiElementGap}
        |ui.corner_radius = ${config.uiCornerRadiusPx}
+       |ui.outline_thickness = ${config.uiOutlineThicknessPx}
        |command_runner.visible_rows = ${config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")}
        |render.fps = ${config.renderFpsTarget.configKey}
        |display.word_wrap = ${config.wordWrapEnabled}
@@ -593,6 +596,8 @@ object ConfigManager:
           parseUiElementGap(value).isEmpty
         case "ui.corner_radius" | "ui.corner.radius" | "ui_corner_radius" =>
           parseUiCornerRadiusPx(value).isEmpty
+        case "ui.outline_thickness" | "ui.outline.thickness" | "ui_outline_thickness" =>
+          parseUiOutlineThicknessPx(value).isEmpty
         case "command_runner.visible_rows" | "command.runner.visible.rows" | "command_runner_visible_rows" =>
           parseCommandRunnerVisibleRows(value).isEmpty
         case "render.fps" | "render_fps" | "ui.render.fps" | "ui_render_fps" =>
@@ -706,6 +711,11 @@ object ConfigManager:
   private def parseUiCornerRadiusPx(value: String): Option[Int] =
     value.toIntOption.filter(radius =>
       radius >= AppConfig.MinUiCornerRadiusPx && radius <= AppConfig.MaxUiCornerRadiusPx
+    )
+
+  private def parseUiOutlineThicknessPx(value: String): Option[Int] =
+    value.toIntOption.filter(thickness =>
+      thickness >= AppConfig.MinUiOutlineThicknessPx && thickness <= AppConfig.MaxUiOutlineThicknessPx
     )
 
   private def parseCommandRunnerVisibleRows(value: String): Option[Option[Int]] =

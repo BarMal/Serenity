@@ -56,7 +56,15 @@ object TextOverlayRenderer:
   ): Unit =
     val rect = overlay.rect
     if rect.width >= 2 && rect.height >= 2 then
-      surface.strokeRoundRect(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx, theme.border)
+      surface.strokeRoundRect(
+        rect.x,
+        rect.y,
+        rect.width,
+        rect.height,
+        config.uiCornerRadiusPx,
+        theme.border,
+        config.uiOutlineThicknessPx.toFloat
+      )
 
   private def drawContent(
     surface: RenderSurface,

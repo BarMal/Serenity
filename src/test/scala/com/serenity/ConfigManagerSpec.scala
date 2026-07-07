@@ -495,6 +495,20 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("ui.corner_radius = 14")
   }
 
+  it should "load and write UI outline thickness" in {
+    val configFile = Files.createTempFile("serenity-ui-outline-thickness-config", ".conf")
+    Files.writeString(
+      configFile,
+      """ui.outline_thickness = 4
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.uiOutlineThicknessPx shouldBe 4
+    ConfigManager.configToString(config) should include("ui.outline_thickness = 4")
+  }
+
   it should "load and write word wrap display mode" in {
     val configFile = Files.createTempFile("serenity-word-wrap-config", ".conf")
     Files.writeString(

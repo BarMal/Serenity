@@ -402,6 +402,7 @@ case class AppConfig(
     interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
     uiElementGap: Int = 0,
     uiCornerRadiusPx: Int = 8,
+    uiOutlineThicknessPx: Int = 2,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     viewportSizing: ViewportSizing = ViewportSizing(),
     preferredWindowSize: Option[PreferredWindowSize] = None,
@@ -637,6 +638,9 @@ case class AppConfig(
   def withUiCornerRadiusPx(radius: Int): AppConfig =
     copy(uiCornerRadiusPx = AppConfig.clampUiCornerRadiusPx(radius))
 
+  def withUiOutlineThicknessPx(thickness: Int): AppConfig =
+    copy(uiOutlineThicknessPx = AppConfig.clampUiOutlineThicknessPx(thickness))
+
   def withTextAreaInsets(insets: TextAreaInsets): AppConfig =
     copy(textAreaInsets = insets.normalized)
 
@@ -678,6 +682,8 @@ object AppConfig:
   val MaxUiElementGap: Int                   = 8
   val MinUiCornerRadiusPx: Int               = 0
   val MaxUiCornerRadiusPx: Int               = 32
+  val MinUiOutlineThicknessPx: Int           = 1
+  val MaxUiOutlineThicknessPx: Int           = 8
   val MinCommandRunnerVisibleRows: Int       = 1
   val MaxCommandRunnerVisibleRows: Int       = 20
 
@@ -689,6 +695,9 @@ object AppConfig:
 
   def clampUiCornerRadiusPx(radius: Int): Int =
     radius.max(MinUiCornerRadiusPx).min(MaxUiCornerRadiusPx)
+
+  def clampUiOutlineThicknessPx(thickness: Int): Int =
+    thickness.max(MinUiOutlineThicknessPx).min(MaxUiOutlineThicknessPx)
 
   def clampCommandRunnerVisibleRows(rows: Int): Int =
     rows.max(MinCommandRunnerVisibleRows).min(MaxCommandRunnerVisibleRows)

@@ -92,6 +92,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       .withInterfaceDensity(InterfaceDensity.Compact)
       .withUiElementGap(2)
       .withUiCornerRadiusPx(6)
+      .withUiOutlineThicknessPx(3)
     val runner = CommandRunner.empty.activate(registry, config)
 
     runner.optionSelections.get("interface-density") shouldBe Some(0)
@@ -100,6 +101,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "interface-density",
         "ui-element-gap",
         "ui-corner-radius",
+        "ui-outline-thickness",
         "command-runner-visible-rows"
       )
     )
@@ -117,6 +119,13 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
             (item.currentValue, item.hint, item.parse("14"), item.parse("33"))
         }
       ) shouldBe Some(("6", "Pixels (0-32)", Some(CommandIntent.SetUiCornerRadiusPx(14)), None))
+    settingsGroup(runner, "settings-interface-layout")
+      .flatMap(
+        _.children.collectFirst {
+          case item: CommandSurfaceItem.InputItem if item.id == "ui-outline-thickness" =>
+            (item.currentValue, item.hint, item.parse("4"), item.parse("9"))
+        }
+      ) shouldBe Some(("3", "Pixels (1-8)", Some(CommandIntent.SetUiOutlineThicknessPx(4)), None))
   }
 
   it should "expose focused text body in the text display settings group" in {
