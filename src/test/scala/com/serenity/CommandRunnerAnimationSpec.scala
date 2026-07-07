@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.AnimationConfig
+import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
@@ -96,6 +96,23 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val surfaceId = state.commandRunnerSurface.get.id
     val firstCell = state.surfaceAnimations(surfaceId).animationState.getCell(0, 0).get
     firstCell.backgroundSteps.length shouldBe AnimationConfig.smooth.get.steps * 2
+  }
+
+  it should "use the command runner reveal kind for open choreography" in {
+    val sm = createStateManager()
+    sm.updateState { state =>
+      state.copy(config =
+        AppConfig.default
+          .withCommandRunnerTransitionKind(Some(TransitionKind.DirectionalSweep))
+      )
+    }.unsafeRunSync()
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val state       = sm.getCurrentState.unsafeRunSync()
+    val surfaceId   = state.commandRunnerSurface.get.id
+    val animatedCol = state.surfaceAnimations(surfaceId).animationState.animations.keys.map(_.column).max
+    animatedCol should be > 0
   }
 
   it should "transition to Visible after bufferFadeLength ticks" in {

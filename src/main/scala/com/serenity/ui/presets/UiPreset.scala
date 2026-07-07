@@ -94,6 +94,7 @@ object UiPreset:
       commandRunnerAnimation = source.commandRunnerAnimation,
       uiAnimation = source.uiAnimation,
       editorInsertionTransitionKind = source.editorInsertionTransitionKind,
+      commandRunnerTransitionKind = source.commandRunnerTransitionKind,
       panelOpenTransitionKind = source.panelOpenTransitionKind,
       panelCloseTransitionKind = source.panelCloseTransitionKind
     )

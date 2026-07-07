@@ -262,6 +262,11 @@ object ConfigManager:
               parseAnimationPreset(value.trim)
                 .map(config.withCommandRunnerAnimation)
                 .getOrElse(config)
+            case "ui.motion.command_runner_reveal" | "ui.motion.command.runner.reveal" |
+                "ui_motion_command_runner_reveal" =>
+              parseTransitionKind(value.trim)
+                .map(kind => config.withCommandRunnerTransitionKind(Some(kind)))
+                .getOrElse(config)
             case "ui.motion.ui" | "ui.motion.ui_elements" | "ui.motion.ui.elements" | "ui_motion_ui" =>
               parseAnimationPreset(value.trim)
                 .map(config.withUiAnimation)
@@ -464,11 +469,12 @@ object ConfigManager:
        |ui.motion = ${config.motionPreset.configKey}
        |ui.motion.speed_scale = ${config.elementTransitionSpeedScale}
        |ui.motion.editor_text.speed_scale = ${config.effectiveEditorTextTransitionSpeedScale}
-       |ui.motion.command_runner.speed_scale = ${config.effectiveCommandRunnerTransitionSpeedScale}
+        |ui.motion.command_runner.speed_scale = ${config.effectiveCommandRunnerTransitionSpeedScale}
        |ui.motion.ui.speed_scale = ${config.effectiveUiTransitionSpeedScale}
        |ui.motion.cursor.speed_scale = ${config.effectiveCursorTransitionSpeedScale}
-       |ui.motion.command_runner = $commandRunnerAnimationSetting
-       |ui.motion.ui = $uiAnimationSetting
+        |ui.motion.command_runner = $commandRunnerAnimationSetting
+        |ui.motion.command_runner_reveal = ${transitionKindConfigKey(config.effectiveCommandRunnerTransitionKind)}
+        |ui.motion.ui = $uiAnimationSetting
        |ui.motion.editor_text = ${transitionKindConfigKey(config.editorInsertionTransitionKind)}
        |ui.motion.panel_open = ${transitionKindConfigKey(config.effectivePanelOpenTransitionKind)}
        |ui.motion.panel_close = ${transitionKindConfigKey(config.effectivePanelCloseTransitionKind)}
@@ -616,6 +622,9 @@ object ConfigManager:
           parseElementTransitionSpeedScale(value).isEmpty
         case "ui.motion.command_runner" | "ui.motion.command.runner" | "ui_motion_command_runner" =>
           parseAnimationPreset(value).isEmpty
+        case "ui.motion.command_runner_reveal" | "ui.motion.command.runner.reveal" |
+            "ui_motion_command_runner_reveal" =>
+          parseTransitionKind(value).isEmpty
         case "ui.motion.ui" | "ui.motion.ui_elements" | "ui.motion.ui.elements" | "ui_motion_ui" =>
           parseAnimationPreset(value).isEmpty
         case "ui.motion.editor_text" | "ui.motion.editor.text" | "ui_motion_editor_text" =>

@@ -446,6 +446,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateAppearanceConfig(_.withRenderFpsTarget(target)).void
       case CommandIntent.SetEditorInsertionTransitionKind(kind) =>
         updateCustomMotionConfig(_.withEditorInsertionTransitionKind(kind)).void
+      case CommandIntent.SetCommandRunnerTransitionKind(kind) =>
+        updateCustomMotionConfig(_.withCommandRunnerTransitionKind(Some(kind))).void
       case CommandIntent.SetPanelOpenTransitionKind(kind) =>
         updateCustomMotionConfig(_.withPanelOpenTransitionKind(Some(kind))).void
       case CommandIntent.SetPanelCloseTransitionKind(kind) =>

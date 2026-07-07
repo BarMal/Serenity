@@ -177,6 +177,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       .withCursorTransitionSpeedScale(Some(0.75))
       .withPanelOpenTransitionKind(Some(TransitionKind.DirectionalSweep))
       .withPanelCloseTransitionKind(Some(TransitionKind.Disabled))
+      .withCommandRunnerTransitionKind(Some(TransitionKind.OutlineThenContent))
     val runner = CommandRunner.empty.activate(registry, config)
 
     val surfaceGroup = settingsGroup(runner, "settings-surface-appearance").getOrElse {
@@ -225,6 +226,10 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       case item: CommandSurfaceItem.OptionItem if item.id == "panel-close-transition" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Off" -> List("Fade", "Directional", "Tandem", "Outline", "Off"))
+    motionGroup.children.collectFirst {
+      case item: CommandSurfaceItem.OptionItem if item.id == "command-runner-transition" =>
+        (item.selectedOption, item.options.map(_.label))
+    } shouldBe Some("Outline" -> List("Fade", "Directional", "Tandem", "Outline", "Off"))
     motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.OptionItem if item.id == "command-runner-fade" =>
         (item.selectedOption, item.options.map(_.label))

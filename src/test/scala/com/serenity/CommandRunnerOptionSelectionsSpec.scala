@@ -21,6 +21,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
       commandRunnerAnimation = AnimationConfig.quick,
       uiAnimation = AnimationConfig.subtle,
       editorInsertionTransitionKind = TransitionKind.Disabled,
+      commandRunnerTransitionKind = Some(TransitionKind.OutlineThenContent),
       panelOpenTransitionKind = Some(TransitionKind.OutlineThenContent),
       panelCloseTransitionKind = Some(TransitionKind.DirectionalSweep),
       cursorMode = CursorMode.Breathe,
@@ -53,6 +54,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("command-runner-fade") shouldBe 3
     selections("ui-animation") shouldBe 1
     selections("editor-text-transition") shouldBe 4
+    selections("command-runner-transition") shouldBe 3
     selections("panel-open-transition") shouldBe 3
     selections("panel-close-transition") shouldBe 1
     selections("cursor-mode") shouldBe 1
@@ -96,6 +98,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default.copy(
       motionPreset = MotionPreset.Custom,
       commandRunnerAnimation = None,
+      commandRunnerTransitionKind = Some(TransitionKind.TypedText),
       editorInsertionTransitionKind = TransitionKind.TypedText
     )
 
@@ -103,5 +106,6 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
 
     selections("motion-preset") shouldBe 4
     selections("command-runner-fade") shouldBe 0
+    selections("command-runner-transition") shouldBe 1
     selections("editor-text-transition") shouldBe 1
   }

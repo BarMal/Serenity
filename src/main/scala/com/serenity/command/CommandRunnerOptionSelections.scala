@@ -16,6 +16,7 @@ object CommandRunnerOptionSelections:
       "ui-animation"              -> animationPresetIndex(config.uiAnimation),
       "render-fps"                -> renderFpsTargetIndex(config.renderFpsTarget),
       "editor-text-transition"    -> editorTextTransitionIndex(config.editorInsertionTransitionKind),
+      "command-runner-transition" -> panelTransitionIndex(config.effectiveCommandRunnerTransitionKind),
       "panel-open-transition"     -> panelTransitionIndex(config.effectivePanelOpenTransitionKind),
       "panel-close-transition"    -> panelTransitionIndex(config.effectivePanelCloseTransitionKind),
       "cursor-mode"               -> cursorModeIndex(config.cursorMode),

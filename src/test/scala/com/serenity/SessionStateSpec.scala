@@ -317,6 +317,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         commandRunnerTransitionSpeedScale = Some(2.25),
         uiTransitionSpeedScale = Some(1.25),
         cursorTransitionSpeedScale = Some(0.75),
+        commandRunnerTransitionKind = Some(TransitionKind.OutlineThenContent),
         panelOpenTransitionKind = Some(TransitionKind.DirectionalSweep),
         panelCloseTransitionKind = Some(TransitionKind.Disabled),
         uiAnimation = AnimationConfig.subtle,
@@ -360,6 +361,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
     decoded.config.uiTransitionSpeedScale shouldBe Some(1.25)
     decoded.config.cursorTransitionSpeedScale shouldBe Some(0.75)
+    decoded.config.commandRunnerTransitionKind shouldBe Some(TransitionKind.OutlineThenContent)
     decoded.config.panelOpenTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
     decoded.config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
     decoded.config.uiAnimation shouldBe AnimationConfig.subtle
@@ -507,7 +509,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.cursorTransitionSpeedScale shouldBe None
   }
 
-  it should "default panel transition kind overrides when loading older JSON without the fields" in {
+  it should "default command and panel transition kind overrides when loading older JSON without the fields" in {
     val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
@@ -519,6 +521,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
             configObject
               .remove("panelOpenTransitionKind")
               .remove("panelCloseTransitionKind")
+              .remove("commandRunnerTransitionKind")
           )
         )
       )
@@ -528,6 +531,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.isRight shouldBe true
     decoded.toOption.get.config.panelOpenTransitionKind shouldBe None
     decoded.toOption.get.config.panelCloseTransitionKind shouldBe None
+    decoded.toOption.get.config.commandRunnerTransitionKind shouldBe None
   }
 
   it should "default command runner animation when loading older JSON without the field" in {
