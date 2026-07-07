@@ -284,6 +284,14 @@ object CommandRunnerReducer:
                 )
               else ReducerResult.noEffects(state)
 
+      case RunnerPaste =>
+        state.clipboard
+          .getOrElse("")
+          .filter(char => char != '\r' && char != '\n')
+          .foldLeft(ReducerResult.noEffects(state))((result, char) =>
+            reduceActive(RunnerInsertChar(char), result.state, registry)
+          )
+
       case RunnerNavigate(Direction.Up) =>
         if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.moveSubmenuSelection(-1)))
         else

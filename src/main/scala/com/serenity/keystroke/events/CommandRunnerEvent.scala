@@ -7,6 +7,7 @@ case object RunnerDeleteBackward                                       extends C
 case object RunnerDeleteForward                                        extends CommandRunnerEvent
 case object RunnerDeleteWordBackward                                   extends CommandRunnerEvent
 case object RunnerDeleteWordForward                                    extends CommandRunnerEvent
+case object RunnerPaste                                                extends CommandRunnerEvent
 case class RunnerNavigate(direction: Direction)                        extends CommandRunnerEvent
 case class RunnerSelectVisibleItem(index: Int)                         extends CommandRunnerEvent
 case class RunnerSelectSubmenuItem(index: Int)                         extends CommandRunnerEvent
@@ -25,6 +26,7 @@ object CommandRunnerEvent:
       case DeleteForward                   => Some(RunnerDeleteForward)
       case DeleteWordBackward              => Some(RunnerDeleteWordBackward)
       case DeleteWordForward               => Some(RunnerDeleteWordForward)
+      case Paste                           => Some(RunnerPaste)
       case MoveUp                          => Some(RunnerNavigate(Direction.Up))
       case MoveDown                        => Some(RunnerNavigate(Direction.Down))
       case MoveLeft                        => Some(RunnerNavigate(Direction.Left))
