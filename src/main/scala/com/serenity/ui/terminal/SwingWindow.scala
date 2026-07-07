@@ -63,8 +63,21 @@ class SwingWindow(
 
   def onImageReady(image: BufferedImage): Unit =
     baseImageRef.set(Some(image))
-    renderedImageRef.set(Some(image))
-    SwingUtilities.invokeLater(() => canvas.repaint())
+    SwingWindow.publishRenderedBaseFrame(
+      image,
+      replaceRenderedImage = true,
+      setRenderedImage = renderedImageRef.set,
+      repaint = () => SwingUtilities.invokeLater(() => canvas.repaint())
+    )
+
+  def onBaseImageReady(image: BufferedImage): Unit =
+    baseImageRef.set(Some(image))
+    SwingWindow.publishRenderedBaseFrame(
+      image,
+      replaceRenderedImage = false,
+      setRenderedImage = renderedImageRef.set,
+      repaint = () => SwingUtilities.invokeLater(() => canvas.repaint())
+    )
 
   def onCursorOverlayReady(drawOverlay: BufferedImage => Unit): Boolean =
     baseImageRef.get() match
@@ -527,6 +540,19 @@ object SwingWindow:
   ): TitleBarDragDecision =
     if maximized then TitleBarDragDecision(restoreFirst = true, moveDelta = None)
     else TitleBarDragDecision(restoreFirst = false, moveDelta = Some((pointerX - anchorX, pointerY - anchorY)))
+
+  def shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible: Boolean): Boolean =
+    !cursorVisible
+
+  private[serenity] def publishRenderedBaseFrame(
+    image: BufferedImage,
+    replaceRenderedImage: Boolean,
+    setRenderedImage: Option[BufferedImage] => Unit,
+    repaint: () => Unit
+  ): Unit =
+    if replaceRenderedImage then
+      setRenderedImage(Some(image))
+      repaint()
 
   def copyImage(source: BufferedImage): BufferedImage =
     val copy = new BufferedImage(source.getWidth, source.getHeight, source.getType)
