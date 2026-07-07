@@ -270,30 +270,15 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     groupItems.head.label shouldBe "Panels & Workspace"
     groupItems.head.children.map(_.id) shouldBe List(
-      "settings-panel-pins",
-      "settings-panel-actions"
+      "settings-panel-pins"
     )
-    val panelPins    = groupById(groupItems.head.children, "settings-panel-pins")
-    val panelActions = groupById(groupItems.head.children, "settings-panel-actions")
+    val panelPins = groupById(groupItems.head.children, "settings-panel-pins")
     panelPins.label shouldBe "Panel Pins"
     panelPins.children.map(_.id) shouldBe List(
       "panel-explorer-pin",
       "panel-outline-pin",
       "panel-diagnostics-pin",
       "panel-markdown-preview-pin"
-    )
-    panelActions.label shouldBe "Panel Actions"
-    panelActions.children.map(_.id) should contain allOf (
-      "focus-left-panel",
-      "focus-right-panel",
-      "focus-bottom-panel",
-      "expand-left-panel",
-      "expand-right-panel",
-      "expand-bottom-panel",
-      "unpin-left-panel",
-      "unpin-right-panel",
-      "unpin-bottom-panel",
-      "collapse-expanded-panel"
     )
     group("settings-document-writing").children.map(_.id) shouldBe List(
       "settings-navigation",
@@ -718,18 +703,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.SetPanelPin(PanelKind.Explorer, Some(PanelPosition.Left)),
       CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))
     )
-    workspaceItems.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } should contain allOf (
-      CommandIntent.FocusPanel(PanelPosition.Left),
-      CommandIntent.FocusPanel(PanelPosition.Right),
-      CommandIntent.FocusPanel(PanelPosition.Bottom),
-      CommandIntent.ExpandPanel(PanelPosition.Left),
-      CommandIntent.ExpandPanel(PanelPosition.Right),
-      CommandIntent.ExpandPanel(PanelPosition.Bottom),
-      CommandIntent.UnpinPanel(PanelPosition.Left),
-      CommandIntent.UnpinPanel(PanelPosition.Right),
-      CommandIntent.UnpinPanel(PanelPosition.Bottom),
-      CommandIntent.CollapseExpandedPanel
-    )
+    workspaceItems.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } shouldBe Nil
     val animations = groupByIdRecursive(List(editPreset), "settings-preset-animations")
     animations.children.map(_.id) shouldBe List(
       "settings-preset-cursor-motion",

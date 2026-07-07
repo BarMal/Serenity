@@ -43,8 +43,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "settings-keymap"
     )
     groupById(groups, "settings-workspace-layout").children.map(_.id) shouldBe List(
-      "settings-panel-pins",
-      "settings-panel-actions"
+      "settings-panel-pins"
     )
     groupById(groups, "settings-document-writing").children.map(_.id) shouldBe List(
       "settings-navigation",

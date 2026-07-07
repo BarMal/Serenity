@@ -87,6 +87,30 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "hide panel actions for edges without pinned panels" in {
+    val noPanels = CommandRunnerSettingsItems.workspaceLayoutItems(Map.empty)
+    noPanels.map(_.id) should not contain "settings-panel-actions"
+    val topOnlyPanel = CommandRunnerSettingsItems.workspaceLayoutItems(Map("panel-outline-pin" -> 1))
+    topOnlyPanel.map(_.id) should not contain "settings-panel-actions"
+
+    val leftAndRightPanels = CommandRunnerSettingsItems.workspaceLayoutItems(
+      Map("panel-outline-pin" -> 4, "panel-diagnostics-pin" -> 2)
+    )
+    val panelActions = leftAndRightPanels
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-panel-actions" => group }
+      .getOrElse(fail("missing panel actions group"))
+
+    panelActions.children.collect { case CommandSurfaceItem.CommandItem(command) => command.name } shouldBe List(
+      "focus-left-panel",
+      "expand-left-panel",
+      "unpin-left-panel",
+      "focus-right-panel",
+      "expand-right-panel",
+      "unpin-right-panel",
+      "collapse-expanded-panel"
+    )
+  }
+
   it should "normalize preset previews for the combined preset picker" in {
     val picker = CommandRunnerSettingsItems.uiPresetSelectOptionItem(
       previews = List(

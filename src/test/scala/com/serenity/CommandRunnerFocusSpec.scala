@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.command.CommandCategory
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -40,11 +41,26 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     val moves = (target - submenu.selectedIndex + items.length) % items.length
     (1 to moves).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
 
+  private def moveRootSelectionTo(stateManager: StateManager, itemId: String): Unit =
+    val runner = currentRunner(stateManager)
+    val items  = runner.visibleItems
+    val target = items.indexWhere(_.id == itemId)
+    if target < 0 then fail(s"Expected root item $itemId")
+    val moves = (target - runner.selectedIndex + items.length) % items.length
+    (1 to moves).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
+
+  private def moveToCategory(stateManager: StateManager, category: CommandCategory): Unit =
+    (1 to CommandCategory.values.length).foreach { _ =>
+      if currentRunner(stateManager).activeCategory != category then stateManager.applyEvent(TabKey).unsafeRunSync()
+    }
+    currentRunner(stateManager).activeCategory shouldBe category
+
   "Command runner focus ownership" should "keep submenu navigation inside the command-runner domain" in {
     val stateManager = createStateManager()
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    (1 to 5).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())
+    moveToCategory(stateManager, CommandCategory.Settings)
+    moveRootSelectionTo(stateManager, "settings-appearance-motion")
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
