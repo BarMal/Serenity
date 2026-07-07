@@ -294,7 +294,10 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       SurfaceRenderMode.Floating
     )
 
-    resolved.header.map(_.plainText) shouldBe Some("UI Presets > Edit Preset: Writing > Fonts")
+    val header = resolved.header.getOrElse(fail("Expected breadcrumb header"))
+    header.plainText shouldBe "UI Presets > Edit Preset: Writing > Fonts"
+    header.segments.map(_.text) shouldBe List("UI Presets >", "Edit Preset: Writing >", "Fonts")
+    header.segments.map(_.selected) shouldBe List(true, true, false)
   }
 
   it should "resolve preset font submenu as grouped typography rows" in {

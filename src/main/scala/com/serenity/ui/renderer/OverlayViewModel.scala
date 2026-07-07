@@ -24,6 +24,7 @@ case class OverlayViews(
 
 object OverlayViewModel:
   private val logger = LoggerFactory.getLogger("com.serenity.ui.renderer.OverlayViewModel")
+  private val InactiveFloatingPanelAlphaMultiplier = 0.68f
 
   def fromState(state: AppState, layout: CalculatedLayout): OverlayViews =
     val aboveCursor = preferredFloatingSurface(state, SurfacePlacement.AboveCursor)
@@ -66,7 +67,7 @@ object OverlayViewModel:
               rect = rect,
               borderCells = com.serenity.ui.layout.SurfaceFrameLayout.borderCellsFor(content),
               animationState = animState,
-              alphaMultiplier = alphaMultiplierFor(content),
+              alphaMultiplier = alphaMultiplierFor(surface, state),
               title = resolved.title,
               header = resolved.header,
               rows = resolved.rows,
@@ -139,7 +140,19 @@ object OverlayViewModel:
       case other =>
         SurfaceContentResolver.resolve(other, LayoutRect(0, 0, 80, 3), SurfaceRenderMode.Floating)
 
-  private def alphaMultiplierFor(content: com.serenity.state.models.SurfaceContent): Float =
-    content match
+  private def alphaMultiplierFor(surface: com.serenity.state.models.UiSurface, state: AppState): Float =
+    val focusMultiplier =
+      state.focus match
+        case Focus.Surface(focusedId) if focusedId != surface.id && isCommandRunnerSurface(surface.content) =>
+          InactiveFloatingPanelAlphaMultiplier
+        case _ => 1.0f
+    surface.content match
       case SurfaceContent.CommandPaletteSubmenu(_, _, previewOnly) if previewOnly => 0.55f
-      case _                                                                      => 1.0f
+      case _                                                                      => focusMultiplier
+
+  private def isCommandRunnerSurface(content: com.serenity.state.models.SurfaceContent): Boolean =
+    content match
+      case SurfaceContent.CommandPalette(_)                => true
+      case SurfaceContent.CommandPaletteSubmenu(_, _, _)   => true
+      case SurfaceContent.GhostOverlay(originalContent, _) => isCommandRunnerSurface(originalContent)
+      case _                                               => false

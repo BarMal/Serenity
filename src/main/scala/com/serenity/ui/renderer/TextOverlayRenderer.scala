@@ -140,7 +140,9 @@ object TextOverlayRenderer:
 
     rowView.row.layout match
       case OverlayRowLayout.Plain =>
-        if rowView.useMeasuredCursor && shouldUseMeasuredCursor(font, surface) then
+        if rowView.row.segments.nonEmpty then
+          renderInlineSegments(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+        else if rowView.useMeasuredCursor && shouldUseMeasuredCursor(font, surface) then
           renderMeasuredPlainRow(surface, x, y, width, rowView.row.plainText, font, cellMetrics)
         else CharacterRenderer.renderStringPlain(surface, x, y, rowView.row.plainText.take(width))
       case OverlayRowLayout.Distributed =>
@@ -393,6 +395,37 @@ object TextOverlayRenderer:
         font
       )
       cursorX + text.length + 1
+    }
+
+  private def renderInlineSegments(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    width: Int,
+    row: OverlayRow,
+    theme: Theme,
+    defaultForeground: Color,
+    defaultBackground: Color,
+    font: Font
+  ): Unit =
+    val rightEdge = x + width
+    val _ = row.segments.foldLeft(x) { (cursorX, segment) =>
+      val remainingWidth = math.max(0, rightEdge - cursorX)
+      val text           = segment.text.take(remainingWidth)
+      renderSegmentText(
+        surface,
+        cursorX,
+        y,
+        text.length,
+        text,
+        segment,
+        theme,
+        defaultForeground,
+        defaultBackground,
+        font
+      )
+      val nextX = cursorX + text.length
+      if nextX < rightEdge then nextX + 1 else nextX
     }
 
   private def renderColumnRow(

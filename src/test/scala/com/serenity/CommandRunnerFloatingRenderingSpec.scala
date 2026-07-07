@@ -282,6 +282,46 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     hiddenCursors.map(_.xPx) shouldBe visibleCursors.map(_.xPx)
   }
 
+  it should "dim the inactive root command runner while a submenu has focus" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+      .enterSelectedGroup
+    val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma").copy(cursors = List(CursorPosition(1, 2)))
+    val pane   = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner-submenu")),
+      theme = Theme.light,
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner-submenu"),
+          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val surface = new MockRenderSurface(100, 30)
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+
+    val baseAlpha = SurfaceMaterials.panelAlpha(state.config, state.theme)
+    surface.alphaCalls should contain(baseAlpha)
+    surface.alphaCalls.filter(_ < baseAlpha) should not be empty
+  }
+
   it should "render carried submenu search while keeping editor cursors steady" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
