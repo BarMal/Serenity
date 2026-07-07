@@ -12,3 +12,4 @@
 - Kept stacked command-runner submenus contained inside the active editor content area in tiny viewports.
 - Added a tested custom-chrome canvas fallback snapshot so editor layout receives post-title-bar viewport dimensions.
 - Hid command-runner panel order controls unless multiple pinned panels share the same edge.
+- Kept the selected theme-creator field inside the visible list window when editing near the end of the theme settings.
