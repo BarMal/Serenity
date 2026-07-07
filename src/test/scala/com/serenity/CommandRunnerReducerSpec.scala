@@ -475,6 +475,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-presets")
     runner.focusedSubmenuItems.map(_.id) should contain allOf (
       "settings-preset-name",
+      "settings-preset-actions",
       "settings-preset-active-panels",
       "settings-preset-theme",
       "settings-preset-animations",
@@ -489,7 +490,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     val presetOptions = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
     val typographySelected = CommandRunnerReducer
-      .reduce(RunnerSelectSubmenuItem(4), presetOptions, registry)
+      .reduce(RunnerSelectSubmenuItem(5), presetOptions, registry)
       .state
     val typography = CommandRunnerReducer.reduce(RunnerSubmit, typographySelected, registry)
     val runner     = runnerFrom(typography.state)

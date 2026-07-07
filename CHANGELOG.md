@@ -28,3 +28,4 @@
 - Hid impossible panel action commands from settings when no panel is pinned on that edge.
 - Clipped measured overlay text and carets to the framed content rectangle.
 - Filled the full Markdown preview raster with the selected preview background for short documents.
+- Split preset rename controls from preset actions in the command runner settings flow.

@@ -231,14 +231,28 @@ object CommandRunnerSettingsGroups:
     val editingPreset = presetEditContextName(optionSelections, uiPresetPreviews, editingPresetName)
     val presetInputItems =
       inputItems.filter(_.id.startsWith("ui-preset-")).map(withPresetInputContext(_, editingPreset))
-    val createPresetItems    = presetInputItems.filter(_.id == "ui-preset-create")
-    val remainingPresetItems = presetInputItems.filterNot(_.id == "ui-preset-create")
+    val createPresetItems = presetInputItems.filter(_.id == "ui-preset-create")
+    val renamePresetItems = presetInputItems.filter(_.id == "ui-preset-rename")
+    val presetActionItems = presetInputItems.filter(item =>
+      item.id == "ui-preset-save" ||
+        item.id == "ui-preset-apply" ||
+        item.id == "ui-preset-duplicate" ||
+        item.id == "ui-preset-delete" ||
+        item.id == "ui-preset-reset"
+    )
     val presetNameGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-name",
       label = "Name",
-      children = remainingPresetItems,
+      children = renamePresetItems,
       category = CommandCategory.Settings,
-      hint = Some("Save, apply, duplicate, rename, delete, reset")
+      hint = Some("Rename this preset")
+    )
+    val presetActionsGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-preset-actions",
+      label = "Preset Actions",
+      children = presetActionItems,
+      category = CommandCategory.Settings,
+      hint = Some("Save, apply, duplicate, delete, or reset")
     )
     val createPresetNameGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-create-name",
@@ -395,7 +409,7 @@ object CommandRunnerSettingsGroups:
     val editPresetGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-edit",
       label = editingPreset.fold("Edit Preset")(name => s"Edit Preset: $name"),
-      children = presetNameGroup :: presetEditingSections,
+      children = List(presetNameGroup, presetActionsGroup) ++ presetEditingSections,
       category = CommandCategory.Settings,
       hint = Some(editingPreset.fold("Document, layout, typography, motion")(name => s"Editing $name"))
     )
