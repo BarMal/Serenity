@@ -4,6 +4,7 @@ import java.awt.Font
 
 import com.serenity.config.MarkdownViewMode
 import com.serenity.lsp.config.LanguageId
+import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -398,9 +399,58 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "keep visible preview context above the active lens" in {
+    val (state, surface, metrics) = renderMarkdownLens(
+      "# Intro\n\nOpening paragraph\n\nActive paragraph\ncontinued",
+      CursorPosition(4, 0),
+      topLine = Some(0)
+    )
+    val paneRect =
+      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
+        PaneId(1)
+      )
+
+    val renderedRows = rows(surface)
+    surface.strokeRoundRectCalls should not be empty
+    val border = surface.strokeRoundRectCalls.head
+    renderedRows.exists(_.contains("Active paragraph")) shouldBe true
+    renderedRows.exists(_.contains("continued")) shouldBe true
+    border.y should be > (paneRect.y + 1) * metrics.lineHeight
+    border.h shouldBe 2 * metrics.lineHeight
+  }
+
+  it should "align the active lens after expanded preview context" in {
+    val source =
+      "| Task | Owner |\n| ---- | ----- |\n| Ship | Codex |\n\nActive paragraph\ncontinued"
+    val cursor                    = CursorPosition(4, 0)
+    val (state, surface, metrics) = renderMarkdownLens(source, cursor, topLine = Some(0))
+    val paneRect =
+      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
+        PaneId(1)
+      )
+
+    val lines = source.linesIterator.toVector
+    val previewWindow = MarkdownDocumentPreview.PreviewWindow(
+      firstSourceLine = 0,
+      firstPreviewRow = MarkdownDocumentPreview.previewRowForSourceLine(lines, 0).getOrElse(0),
+      source = source
+    )
+    val expectedTopRows =
+      MarkdownDocumentPreview
+        .previewRowsForSourceRange(lines, cursor.line to (cursor.line + 1))
+        .map(_.start - previewWindow.firstPreviewRow)
+        .getOrElse(cursor.line - previewWindow.firstSourceLine)
+
+    surface.strokeRoundRectCalls should not be empty
+    val border = surface.strokeRoundRectCalls.head
+    border.y shouldBe (paneRect.y + 1 + expectedTopRows) * metrics.lineHeight
+    border.h shouldBe 2 * metrics.lineHeight
+  }
+
   private def renderMarkdownLens(
     source: String,
-    cursor: CursorPosition
+    cursor: CursorPosition,
+    topLine: Option[Int] = None
   ): (AppState, MockRenderSurface, CellMetrics) =
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
@@ -409,7 +459,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       .copy(
         language = Some(LanguageId.Markdown),
         cursors = List(cursor),
-        viewport = Viewport.default.copy(topLine = cursor.line.max(0), visibleLines = 10)
+        viewport = Viewport.default.copy(topLine = topLine.getOrElse(cursor.line).max(0), visibleLines = 10)
       )
     val state = AppState.empty.copy(
       buffers = Map(bufferId -> buffer),
