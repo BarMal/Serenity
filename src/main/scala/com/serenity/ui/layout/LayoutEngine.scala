@@ -572,9 +572,7 @@ object LayoutEngine:
       case SurfaceContent.ContextualToolbar(toolbarState) =>
         val borderCells  = SurfaceFrameLayout.borderCellsFor(content)
         val contentWidth = (maxWidth - (borderCells * 2)).max(1)
-        val rowCount =
-          ContextualToolbar.rowGroups(ContextualToolbar.itemsFor(state), contentWidth, toolbarState.displayMode).length
-        val toolbarRows = rowCount.max(1)
+        val toolbarRows  = ContextualToolbar.rowCount(toolbarState, state, contentWidth)
         SurfaceFrameLayout.frameHeightForItemRows(
           toolbarRows,
           hasHeader = false,

@@ -848,30 +848,68 @@ object SurfaceContentResolver:
     val borderCells = SurfaceFrameLayout.borderCellsFor(SurfaceContent.ContextualToolbar(toolbarState))
     val contentRect = SurfaceFrameLayout(rect, borderCells).contentRect
     val items       = ContextualToolbar.itemsFor(state)
-    val rowGroups   = ContextualToolbar.rowGroups(items, contentRect.width.max(1), toolbarState.displayMode)
-    val focused     = toolbarState.normalized(items).focusedIndex
-    val rows =
-      rowGroups
-        .foldLeft((0, List.empty[OverlayRow])) {
-          case ((offset, acc), rowItems) =>
-            val segments = rowItems.zipWithIndex.map {
-              case (item, index) =>
-                OverlaySegment(
-                  ContextualToolbar.displayText(item, toolbarState.displayMode),
-                  selected = item.selected || offset + index == focused
-                )
-            }
-            (
-              offset + rowItems.length,
-              acc :+ OverlayRow(
-                plainText = segments.map(_.text).mkString(" "),
-                segments = segments,
-                layout = OverlayRowLayout.Distributed
+    val normalized  = toolbarState.normalized(items)
+    val rowGroups   = ContextualToolbar.rowGroups(items, contentRect.width.max(1), normalized.displayMode)
+    val focused     = normalized.focusedIndex
+    val topRows = rowGroups
+      .foldLeft((0, List.empty[OverlayRow])) {
+        case ((offset, acc), rowItems) =>
+          val segments = rowItems.zipWithIndex.map {
+            case (item, index) =>
+              OverlaySegment(
+                ContextualToolbar.displayText(item, normalized.displayMode),
+                selected = isSelected(item) || offset + index == focused
               )
+          }
+          (
+            offset + rowItems.length,
+            acc :+ OverlayRow(
+              plainText = segments.map(_.text).mkString(" "),
+              segments = segments,
+              layout = OverlayRowLayout.Distributed
             )
+          )
+      }
+      ._2
+
+    val dropdownDetailRows = ContextualToolbar.detailRowGroups(normalized, items, contentRect.width.max(1))
+    val detailRows =
+      if dropdownDetailRows.nonEmpty then
+        val selectedIndex = normalized.detailState.collect {
+          case ContextualToolbarDetailState.Dropdown(_, index) => index
         }
-        ._2
-    ResolvedSurfaceContent(rows = rows)
+        dropdownDetailRows
+          .foldLeft((0, List.empty[OverlayRow])) {
+            case ((offset, acc), rowOptions) =>
+              val segments = rowOptions.zipWithIndex.map {
+                case (option, index) =>
+                  OverlaySegment(option.label, selected = selectedIndex.contains(offset + index))
+              }
+              (
+                offset + rowOptions.length,
+                acc :+ OverlayRow(
+                  plainText = segments.map(_.text).mkString(" "),
+                  segments = segments,
+                  layout = OverlayRowLayout.Distributed
+                )
+              )
+          }
+          ._2
+      else
+        ContextualToolbar
+          .detailInputItem(normalized, items)
+          .map {
+            case (item, text) =>
+              inputRow(item.inputItem, selected = true, editingText = Some(text))
+          }
+          .toList
+
+    ResolvedSurfaceContent(rows = topRows ++ detailRows)
+
+  private def isSelected(item: ContextualToolbarItem): Boolean =
+    item match
+      case ContextualToolbarItem.Button(_, _, _, _, selected) => selected
+      case _                                                  => false
 
   private def resolveContextMenu(
     menu: ContextMenu,
