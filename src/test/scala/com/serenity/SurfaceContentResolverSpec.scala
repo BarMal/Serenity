@@ -785,20 +785,29 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
   it should "wrap contextual toolbar items across multiple rows and mark active rich-text formatting" in {
     val bufferId = BufferId(0)
+    val family   = FontLoader.availableTextFamilies.headOption.getOrElse("Serif")
     val selection = Selection(
       anchor = CursorPosition(0, 6),
       focus = CursorPosition(0, 10)
     )
-    val richDocument = RichTextDocument
-      .oneParagraph("alpha beta")
-      .applyMark(
-        RichTextRange(
-          RichTextPosition(0, 6),
-          RichTextPosition(0, 10)
-        ),
-        InlineMark.Bold
+    val richDocument = RichTextDocument(
+      List(
+        RichTextParagraph(
+          runs = List(
+            RichTextRun(
+              "alpha beta",
+              RichTextStyle(
+                marks = Set(InlineMark.Bold),
+                fontFamily = Some(family),
+                fontSize = Some(18.0f)
+              )
+            )
+          ),
+          alignment = ParagraphAlignment.Center,
+          role = ParagraphRole.Heading(1)
+        )
       )
-      .normalized
+    ).normalized
     val paneId = PaneId(0)
     val state = AppState.initial.copy(
       buffers = Map(
@@ -827,11 +836,12 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
     resolved.rows.length should be > 1
     resolved.rows.foreach(_.layout shouldBe OverlayRowLayout.Distributed)
-    resolved.rows
-      .flatMap(_.segments)
-      .find(_.text.contains("Bold"))
-      .map(_.selected)
-      .shouldBe(Some(true))
+    val segments = resolved.rows.flatMap(_.segments)
+    segments.find(_.text.contains("Bold")).map(_.selected).shouldBe(Some(true))
+    segments.exists(_.text.startsWith("Font ")).shouldBe(true)
+    segments.exists(_.text.startsWith("Size ")).shouldBe(true)
+    segments.exists(_.text.startsWith("Role ")).shouldBe(true)
+    segments.exists(_.text.contains("Center")).shouldBe(true)
   }
 
   it should "render find result position when the modal carries match results" in {

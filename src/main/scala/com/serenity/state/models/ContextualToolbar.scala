@@ -1,42 +1,137 @@
 package com.serenity.state.models
 
-import com.serenity.command.{Command, CommandRegistry}
+import com.serenity.command.*
 import com.serenity.config.MarkdownViewMode
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
+import com.serenity.ui.fonts.FontLoader
 
 enum ToolbarDisplayMode:
   case IconOnly
   case TextOnly
   case IconAndText
 
-case class ContextualToolbarItem(
-    id: String,
-    label: String,
-    commandName: String,
-    icon: String,
-    selected: Boolean = false
-)
+enum ContextualToolbarItem:
+  def id: String
+  def label: String
+  def icon: String
+
+  case Button(
+      id: String,
+      label: String,
+      commandName: String,
+      icon: String,
+      selected: Boolean = false
+  )
+
+  case Dropdown(
+      id: String,
+      label: String,
+      icon: String,
+      optionItem: CommandSurfaceItem.OptionItem
+  )
+
+  case Input(
+      id: String,
+      label: String,
+      icon: String,
+      inputItem: CommandSurfaceItem.InputItem
+  )
+
+enum ContextualToolbarDetailState:
+  case Dropdown(itemId: String, selectedIndex: Int)
+  case Input(itemId: String, text: String = "")
+
+enum ContextualToolbarHit:
+  case TopLevelItem(index: Int)
+  case DropdownOption(itemId: String, optionIndex: Int)
+  case InputDetail(itemId: String)
 
 case class ContextualToolbarState(
     focusedIndex: Int = 0,
-    displayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText
+    displayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
+    detailState: Option[ContextualToolbarDetailState] = None
 ):
 
   def focusedItem(items: List[ContextualToolbarItem]): Option[ContextualToolbarItem] =
     items.lift(normalizedFocusedIndex(items))
 
   def moveFocus(delta: Int, items: List[ContextualToolbarItem]): ContextualToolbarState =
-    if items.isEmpty then copy(focusedIndex = 0)
+    if items.isEmpty then copy(focusedIndex = 0, detailState = None)
     else
       val raw = (normalizedFocusedIndex(items) + delta) % items.length
-      copy(focusedIndex = if raw < 0 then raw + items.length else raw)
+      copy(
+        focusedIndex = if raw < 0 then raw + items.length else raw,
+        detailState = None
+      )
 
   def withFocusedIndex(index: Int, items: List[ContextualToolbarItem]): ContextualToolbarState =
     copy(focusedIndex = clampIndex(index, items))
 
+  def openFocusedDetail(items: List[ContextualToolbarItem]): ContextualToolbarState =
+    focusedItem(items) match
+      case Some(item: ContextualToolbarItem.Dropdown) =>
+        copy(detailState = Some(ContextualToolbarDetailState.Dropdown(item.id, item.optionItem.selectedIndex)))
+      case Some(item: ContextualToolbarItem.Input) =>
+        copy(detailState = Some(ContextualToolbarDetailState.Input(item.id)))
+      case _ =>
+        this
+
+  def closeDetail: ContextualToolbarState =
+    copy(detailState = None)
+
+  def moveDetailSelection(delta: Int, items: List[ContextualToolbarItem]): ContextualToolbarState =
+    normalized(items).detailState match
+      case Some(ContextualToolbarDetailState.Dropdown(itemId, selectedIndex)) =>
+        ContextualToolbar.dropdownItem(itemId, items) match
+          case Some(dropdown) if dropdown.optionItem.options.nonEmpty =>
+            val raw = (selectedIndex + delta) % dropdown.optionItem.options.length
+            copy(
+              detailState = Some(
+                ContextualToolbarDetailState.Dropdown(
+                  itemId,
+                  if raw < 0 then raw + dropdown.optionItem.options.length else raw
+                )
+              )
+            )
+          case _ =>
+            this
+      case _ =>
+        this
+
+  def insertDetailChar(char: Char, items: List[ContextualToolbarItem]): ContextualToolbarState =
+    normalized(items).detailState match
+      case Some(ContextualToolbarDetailState.Input(itemId, text)) =>
+        ContextualToolbar.inputItem(itemId, items) match
+          case Some(input) if input.inputItem.accepts(text, char) =>
+            copy(detailState = Some(ContextualToolbarDetailState.Input(itemId, text + char)))
+          case _ =>
+            this
+      case _ =>
+        this
+
+  def deleteDetailBackward(items: List[ContextualToolbarItem]): ContextualToolbarState =
+    normalized(items).detailState match
+      case Some(ContextualToolbarDetailState.Input(itemId, text)) =>
+        copy(detailState = Some(ContextualToolbarDetailState.Input(itemId, text.dropRight(1))))
+      case _ =>
+        this
+
   def normalized(items: List[ContextualToolbarItem]): ContextualToolbarState =
-    copy(focusedIndex = clampIndex(focusedIndex, items))
+    copy(
+      focusedIndex = clampIndex(focusedIndex, items),
+      detailState = detailState.flatMap {
+        case ContextualToolbarDetailState.Dropdown(itemId, selectedIndex) =>
+          ContextualToolbar.dropdownItem(itemId, items).map { item =>
+            ContextualToolbarDetailState.Dropdown(
+              itemId,
+              selectedIndex.max(0).min((item.optionItem.options.length - 1).max(0))
+            )
+          }
+        case ContextualToolbarDetailState.Input(itemId, text) =>
+          ContextualToolbar.inputItem(itemId, items).map(_ => ContextualToolbarDetailState.Input(itemId, text))
+      }
+    )
 
   private def normalizedFocusedIndex(items: List[ContextualToolbarItem]): Int =
     clampIndex(focusedIndex, items)
@@ -46,32 +141,18 @@ case class ContextualToolbarState(
 
 object ContextualToolbar:
 
-  val proseItems: List[ContextualToolbarItem] = List(
-    ContextualToolbarItem("bold", "Bold", "bold", "B"),
-    ContextualToolbarItem("italic", "Italic", "italic", "I"),
-    ContextualToolbarItem("underline", "Underline", "underline", "U"),
-    ContextualToolbarItem("paragraph-body", "Body", "paragraph-body", "P"),
-    ContextualToolbarItem("heading-1", "H1", "heading-1", "1"),
-    ContextualToolbarItem("heading-2", "H2", "heading-2", "2"),
-    ContextualToolbarItem("heading-3", "H3", "heading-3", "3"),
-    ContextualToolbarItem("align-left", "Left", "align-left", "L"),
-    ContextualToolbarItem("align-center", "Center", "align-center", "C"),
-    ContextualToolbarItem("align-right", "Right", "align-right", "R"),
-    ContextualToolbarItem("align-justify", "Justify", "align-justify", "J")
-  )
-
   val markdownItems: List[ContextualToolbarItem] = List(
-    ContextualToolbarItem("markdown-preview", "Preview", "markdown-preview", "P"),
-    ContextualToolbarItem("markdown-view-source", "Source", "markdown-view-source", "S"),
-    ContextualToolbarItem("markdown-view-split", "Split", "markdown-view-split", "V"),
-    ContextualToolbarItem("markdown-view-inline-lens", "Lens", "markdown-view-inline-lens", "L")
+    ContextualToolbarItem.Button("markdown-preview", "Preview", "markdown-preview", "P"),
+    ContextualToolbarItem.Button("markdown-view-source", "Source", "markdown-view-source", "S"),
+    ContextualToolbarItem.Button("markdown-view-split", "Split", "markdown-view-split", "V"),
+    ContextualToolbarItem.Button("markdown-view-inline-lens", "Lens", "markdown-view-inline-lens", "L")
   )
 
   val codeItems: List[ContextualToolbarItem] = List(
-    ContextualToolbarItem("project-build", "Build", "project-build", "B"),
-    ContextualToolbarItem("project-test", "Test", "project-test", "T"),
-    ContextualToolbarItem("project-run", "Run", "project-run", "R"),
-    ContextualToolbarItem("project-debug", "Debug", "project-debug", "D")
+    ContextualToolbarItem.Button("project-build", "Build", "project-build", "B"),
+    ContextualToolbarItem.Button("project-test", "Test", "project-test", "T"),
+    ContextualToolbarItem.Button("project-run", "Run", "project-run", "R"),
+    ContextualToolbarItem.Button("project-debug", "Debug", "project-debug", "D")
   )
 
   def itemsFor(state: AppState): List[ContextualToolbarItem] =
@@ -85,7 +166,7 @@ object ContextualToolbar:
         case buffer if buffer.typographyRole == TypographyRole.Code =>
           codeItems
         case buffer =>
-          applyRichTextSelections(proseItems, buffer)
+          proseItems(state, buffer)
       }
       .getOrElse(Nil)
 
@@ -97,13 +178,41 @@ object ContextualToolbar:
     toolbarState
       .normalized(itemsFor(state))
       .focusedItem(itemsFor(state))
+      .collect { case item: ContextualToolbarItem.Button => item }
       .flatMap(item => registry.findCommand(item.commandName))
 
+  def detailCommand(toolbarState: ContextualToolbarState, state: AppState): Option[Command] =
+    val items = itemsFor(state)
+    toolbarState.normalized(items).detailState.flatMap {
+      case ContextualToolbarDetailState.Dropdown(itemId, selectedIndex) =>
+        dropdownItem(itemId, items)
+          .flatMap(_.optionItem.options.lift(selectedIndex))
+          .map(option =>
+            Command.typed(
+              s"$itemId-$selectedIndex",
+              option.label,
+              option.intent,
+              CommandCategory.Edit,
+              label = option.label
+            )
+          )
+      case ContextualToolbarDetailState.Input(itemId, text) =>
+        inputItem(itemId, items)
+          .flatMap(_.inputItem.parse(text))
+          .map(intent => Command.typed(itemId, itemId, intent, CommandCategory.Edit, label = itemId))
+    }
+
   def displayText(item: ContextualToolbarItem, mode: ToolbarDisplayMode): String =
-    mode match
-      case ToolbarDisplayMode.IconOnly    => item.icon
-      case ToolbarDisplayMode.TextOnly    => item.label
-      case ToolbarDisplayMode.IconAndText => s"${item.icon} ${item.label}"
+    item match
+      case ContextualToolbarItem.Button(_, label, _, icon, _) =>
+        mode match
+          case ToolbarDisplayMode.IconOnly    => icon
+          case ToolbarDisplayMode.TextOnly    => label
+          case ToolbarDisplayMode.IconAndText => s"$icon $label"
+      case ContextualToolbarItem.Dropdown(_, label, _, optionItem) =>
+        s"$label ${optionItem.selectedOption}".trim
+      case ContextualToolbarItem.Input(_, label, _, inputItem) =>
+        s"$label ${inputItem.currentValue}".trim
 
   def rowGroups(
     items: List[ContextualToolbarItem],
@@ -121,47 +230,252 @@ object ContextualToolbar:
         }
       rows :+ currentRow
 
+  def rowCount(
+    toolbarState: ContextualToolbarState,
+    state: AppState,
+    contentWidth: Int
+  ): Int =
+    val items    = itemsFor(state)
+    val topLevel = rowGroups(items, contentWidth, toolbarState.displayMode).length
+    val detailCount =
+      toolbarState.normalized(items).detailState match
+        case Some(_: ContextualToolbarDetailState.Dropdown) =>
+          detailRowGroups(toolbarState, items, contentWidth).length
+        case Some(_: ContextualToolbarDetailState.Input) =>
+          1
+        case None =>
+          0
+    (topLevel + detailCount).max(1)
+
+  def detailRowGroups(
+    toolbarState: ContextualToolbarState,
+    items: List[ContextualToolbarItem],
+    contentWidth: Int
+  ): List[List[CommandOption]] =
+    toolbarState.normalized(items).detailState match
+      case Some(ContextualToolbarDetailState.Dropdown(itemId, _)) =>
+        dropdownItem(itemId, items)
+          .map(_.optionItem.options)
+          .map(options => optionRowGroups(options, contentWidth))
+          .getOrElse(Nil)
+      case _ =>
+        Nil
+
+  def detailInputItem(
+    toolbarState: ContextualToolbarState,
+    items: List[ContextualToolbarItem]
+  ): Option[(ContextualToolbarItem.Input, String)] =
+    toolbarState.normalized(items).detailState match
+      case Some(ContextualToolbarDetailState.Input(itemId, text)) =>
+        inputItem(itemId, items).map(_ -> text)
+      case _ =>
+        None
+
+  def hitAt(
+    rowIndex: Int,
+    columnOffset: Int,
+    contentWidth: Int,
+    toolbarState: ContextualToolbarState,
+    state: AppState
+  ): Option[ContextualToolbarHit] =
+    val items        = itemsFor(state)
+    val topLevelRows = rowGroups(items, contentWidth, toolbarState.displayMode)
+    topLevelRows.lift(rowIndex) match
+      case Some(rowItems) =>
+        Option.when(rowItems.nonEmpty) {
+          val offset = topLevelRows.take(rowIndex).map(_.length).sum
+          val localIndex =
+            ((columnOffset.max(0) * rowItems.length) / contentWidth.max(1))
+              .max(0)
+              .min(rowItems.length - 1)
+          ContextualToolbarHit.TopLevelItem(offset + localIndex)
+        }
+      case None =>
+        val detailRowIndex = rowIndex - topLevelRows.length
+        toolbarState.normalized(items).detailState match
+          case Some(ContextualToolbarDetailState.Dropdown(itemId, _)) =>
+            val optionGroups = detailRowGroups(toolbarState, items, contentWidth)
+            optionGroups.lift(detailRowIndex).flatMap { rowOptions =>
+              Option.when(rowOptions.nonEmpty) {
+                val offset = optionGroups.take(detailRowIndex).map(_.length).sum
+                val localIndex =
+                  ((columnOffset.max(0) * rowOptions.length) / contentWidth.max(1))
+                    .max(0)
+                    .min(rowOptions.length - 1)
+                ContextualToolbarHit.DropdownOption(itemId, offset + localIndex)
+              }
+            }
+          case Some(ContextualToolbarDetailState.Input(itemId, _)) if detailRowIndex == 0 =>
+            Some(ContextualToolbarHit.InputDetail(itemId))
+          case _ =>
+            None
+
+  def dropdownItem(itemId: String, items: List[ContextualToolbarItem]): Option[ContextualToolbarItem.Dropdown] =
+    items.collectFirst { case item: ContextualToolbarItem.Dropdown if item.id == itemId => item }
+
+  def inputItem(itemId: String, items: List[ContextualToolbarItem]): Option[ContextualToolbarItem.Input] =
+    items.collectFirst { case item: ContextualToolbarItem.Input if item.id == itemId => item }
+
   private def estimatedRowWidth(items: List[ContextualToolbarItem], mode: ToolbarDisplayMode): Int =
     items.map(item => displayText(item, mode).length + 2).sum + items.drop(1).length
+
+  private def optionRowGroups(options: List[CommandOption], contentWidth: Int): List[List[CommandOption]] =
+    if options.isEmpty || contentWidth <= 0 then Nil
+    else
+      val (currentRow, rows) =
+        options.foldLeft((List.empty[CommandOption], List.empty[List[CommandOption]])) {
+          case ((currentRow, acc), option) =>
+            val nextWidth = currentRow.map(_.label.length + 2).sum + option.label.length + 2 + currentRow.length
+            if currentRow.nonEmpty && nextWidth > contentWidth then (List(option), acc :+ currentRow)
+            else (currentRow :+ option, acc)
+        }
+      rows :+ currentRow
 
   private def applyMarkdownSelections(
     items: List[ContextualToolbarItem],
     mode: MarkdownViewMode
   ): List[ContextualToolbarItem] =
-    items.map { item =>
-      val selected =
-        item.commandName match
-          case "markdown-view-source"      => mode == MarkdownViewMode.Source
-          case "markdown-view-split"       => mode == MarkdownViewMode.SplitPreview
-          case "markdown-view-inline-lens" => mode == MarkdownViewMode.InlineLens
-          case _                           => false
-      item.copy(selected = selected)
+    items.map {
+      case item: ContextualToolbarItem.Button =>
+        val selected =
+          item.commandName match
+            case "markdown-view-source"      => mode == MarkdownViewMode.Source
+            case "markdown-view-split"       => mode == MarkdownViewMode.SplitPreview
+            case "markdown-view-inline-lens" => mode == MarkdownViewMode.InlineLens
+            case _                           => false
+        item.copy(selected = selected)
+      case item =>
+        item
     }
 
-  private def applyRichTextSelections(
-    items: List[ContextualToolbarItem],
-    buffer: Buffer
-  ): List[ContextualToolbarItem] =
-    val document  = richTextDocumentFor(buffer)
-    val style     = activeStyle(buffer, document)
-    val paragraph = activeParagraph(buffer, document)
-    items.map { item =>
-      val selected =
-        item.commandName match
-          case "bold"           => style.marks.contains(InlineMark.Bold)
-          case "italic"         => style.marks.contains(InlineMark.Italic)
-          case "underline"      => style.marks.contains(InlineMark.Underline)
-          case "paragraph-body" => paragraph.exists(_.role == ParagraphRole.Body)
-          case "heading-1"      => paragraph.exists(_.role == ParagraphRole.Heading(1))
-          case "heading-2"      => paragraph.exists(_.role == ParagraphRole.Heading(2))
-          case "heading-3"      => paragraph.exists(_.role == ParagraphRole.Heading(3))
-          case "align-left"     => paragraph.exists(_.alignment == ParagraphAlignment.Left)
-          case "align-center"   => paragraph.exists(_.alignment == ParagraphAlignment.Center)
-          case "align-right"    => paragraph.exists(_.alignment == ParagraphAlignment.Right)
-          case "align-justify"  => paragraph.exists(_.alignment == ParagraphAlignment.Justify)
-          case _                => false
-      item.copy(selected = selected)
-    }
+  private def proseItems(state: AppState, buffer: Buffer): List[ContextualToolbarItem] =
+    val document        = richTextDocumentFor(buffer)
+    val style           = activeStyle(buffer, document)
+    val paragraph       = activeParagraph(buffer, document)
+    val currentFamily   = style.fontFamily.orElse(Some(state.config.fontConfig.textFontFamily)).getOrElse("")
+    val currentFontSize = style.fontSize.getOrElse(state.config.fontConfig.textFontSize)
+    val familyOptions = normalizedFontFamilies(currentFamily).map(family =>
+      CommandOption(family, CommandIntent.SetRichTextFontFamily(family))
+    )
+    val familyIndex = familyOptions.indexWhere(_.label.equalsIgnoreCase(currentFamily)) match
+      case -1    => 0
+      case index => index
+    val paragraphRole = paragraph.map(_.role).getOrElse(ParagraphRole.Body)
+    val paragraphRoleOptions = List(
+      CommandOption("Body", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Body)),
+      CommandOption("H1", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(1))),
+      CommandOption("H2", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(2))),
+      CommandOption("H3", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(3)))
+    )
+    val paragraphRoleIndex = paragraphRole match
+      case ParagraphRole.Body       => 0
+      case ParagraphRole.Heading(1) => 1
+      case ParagraphRole.Heading(2) => 2
+      case ParagraphRole.Heading(3) => 3
+      case ParagraphRole.Heading(_) => 1
+
+    List(
+      ContextualToolbarItem.Button(
+        "bold",
+        "Bold",
+        "bold",
+        "B",
+        selected = style.marks.contains(InlineMark.Bold)
+      ),
+      ContextualToolbarItem.Button(
+        "italic",
+        "Italic",
+        "italic",
+        "I",
+        selected = style.marks.contains(InlineMark.Italic)
+      ),
+      ContextualToolbarItem.Button(
+        "underline",
+        "Underline",
+        "underline",
+        "U",
+        selected = style.marks.contains(InlineMark.Underline)
+      ),
+      ContextualToolbarItem.Dropdown(
+        id = "font-family",
+        label = "Font",
+        icon = "A",
+        optionItem = CommandSurfaceItem.OptionItem(
+          id = "font-family",
+          label = "Font",
+          options = familyOptions,
+          selectedIndex = familyIndex,
+          category = CommandCategory.Edit
+        )
+      ),
+      ContextualToolbarItem.Input(
+        id = "font-size",
+        label = "Size",
+        icon = "#",
+        inputItem = CommandSurfaceItem.InputItem(
+          id = "font-size",
+          label = "Size",
+          hint = "Points (1.0-144.0)",
+          currentValue = formatFontSize(currentFontSize),
+          isDecimal = true,
+          parse = text =>
+            text.toFloatOption
+              .filter(size => size >= 1.0f && size <= 144.0f)
+              .map(CommandIntent.SetRichTextFontSize(_)),
+          category = CommandCategory.Edit
+        )
+      ),
+      ContextualToolbarItem.Dropdown(
+        id = "paragraph-role",
+        label = "Role",
+        icon = "P",
+        optionItem = CommandSurfaceItem.OptionItem(
+          id = "paragraph-role",
+          label = "Role",
+          options = paragraphRoleOptions,
+          selectedIndex = paragraphRoleIndex,
+          category = CommandCategory.Edit
+        )
+      ),
+      ContextualToolbarItem.Button(
+        "align-left",
+        "Left",
+        "align-left",
+        "L",
+        selected = paragraph.exists(_.alignment == ParagraphAlignment.Left)
+      ),
+      ContextualToolbarItem.Button(
+        "align-center",
+        "Center",
+        "align-center",
+        "C",
+        selected = paragraph.exists(_.alignment == ParagraphAlignment.Center)
+      ),
+      ContextualToolbarItem.Button(
+        "align-right",
+        "Right",
+        "align-right",
+        "R",
+        selected = paragraph.exists(_.alignment == ParagraphAlignment.Right)
+      ),
+      ContextualToolbarItem.Button(
+        "align-justify",
+        "Justify",
+        "align-justify",
+        "J",
+        selected = paragraph.exists(_.alignment == ParagraphAlignment.Justify)
+      )
+    )
+
+  private def normalizedFontFamilies(currentFamily: String): List[String] =
+    val trimmedCurrent = currentFamily.trim
+    val available      = FontLoader.availableTextFamilies
+    if trimmedCurrent.nonEmpty && !available.exists(_.equalsIgnoreCase(trimmedCurrent)) then trimmedCurrent :: available
+    else available
+
+  private def formatFontSize(size: Float): String =
+    val rounded = size.round.toFloat
+    if rounded == size then rounded.toInt.toString else f"$size%.1f"
 
   private def richTextDocumentFor(buffer: Buffer): RichTextDocument =
     val text = buffer.content.collect()

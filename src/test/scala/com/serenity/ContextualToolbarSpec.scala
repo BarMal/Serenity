@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
-import com.serenity.richtext.InlineMark
+import com.serenity.richtext.{InlineMark, ParagraphRole}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, SurfaceFrameLayout, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -82,6 +82,65 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     state.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
+  it should "open a focused font size field, accept typed input, and apply it on Enter" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-font-size")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
+        val selection = Selection(CursorPosition(0, 6), CursorPosition(0, 10))
+        val nextBuffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha beta"),
+            selection = Some(selection),
+            cursors = List(selection.focus)
+          )
+        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    moveToolbarFocusTo(stateManager, "font-size")
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('1')).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('8')).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val bufferId = activeBufferId(state)
+    val buffer   = state.buffers(bufferId)
+    buffer.richTextDocument
+      .flatMap(_.paragraphs.headOption)
+      .flatMap(_.runs.find(_.text == "beta"))
+      .flatMap(_.style.fontSize)
+      .shouldBe(Some(18.0f))
+  }
+
+  it should "close an open toolbar control on Escape before dismissing the toolbar" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-escape-detail")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    moveToolbarFocusTo(stateManager, "paragraph-role")
+
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    stateManager.applyEvent(Escape).unsafeRunSync()
+
+    val afterFirstEscape = stateManager.getCurrentState.unsafeRunSync()
+    afterFirstEscape.contextualToolbarSurface should not be empty
+    afterFirstEscape.focus shouldBe Focus.Surface(
+      afterFirstEscape.contextualToolbarSurface.getOrElse(fail("Expected toolbar surface")).id
+    )
+
+    stateManager.applyEvent(Escape).unsafeRunSync()
+
+    val afterSecondEscape = stateManager.getCurrentState.unsafeRunSync()
+    afterSecondEscape.contextualToolbarSurface shouldBe None
+    afterSecondEscape.focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
   it should "highlight and execute toolbar items with the mouse" in {
     val stateManager = createStateManager("ContextualToolbarSpec-mouse")
 
@@ -104,7 +163,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
 
     val before = stateManager.getCurrentState.unsafeRunSync()
-    val point  = toolbarItemPoint(before, itemIndex = 1)
+    val point  = toolbarItemPoint(before, itemId = "italic")
 
     stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
 
@@ -123,15 +182,87 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .shouldBe(Some(Set(InlineMark.Italic)))
   }
 
+  it should "open a paragraph role dropdown and apply the clicked option" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-role-dropdown")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
+        val selection = Selection(CursorPosition(0, 0), CursorPosition(0, 5))
+        val nextBuffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha beta"),
+            selection = Some(selection),
+            cursors = List(selection.focus)
+          )
+        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val triggerPoint = toolbarItemPoint(stateManager.getCurrentState.unsafeRunSync(), "paragraph-role")
+    stateManager.applyEvent(MouseClick(triggerPoint.x, triggerPoint.y)).unsafeRunSync()
+
+    val optionPoint = toolbarDetailPoint(stateManager.getCurrentState.unsafeRunSync(), optionIndex = 1)
+    stateManager.applyEvent(MouseClick(optionPoint.x, optionPoint.y)).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val bufferId = activeBufferId(state)
+    state
+      .buffers(bufferId)
+      .richTextDocument
+      .flatMap(_.paragraphs.headOption)
+      .map(_.role)
+      .shouldBe(Some(ParagraphRole.Heading(1)))
+  }
+
   private case class Point(x: Int, y: Int)
 
-  private def toolbarItemPoint(state: AppState, itemIndex: Int): Point =
-    val rect        = toolbarRect(state)
-    val contentRect = SurfaceFrameLayout(rect).contentRect
-    val slotWidth   = math.max(1, contentRect.width / ContextualToolbar.proseItems.length)
+  private def toolbarItemPoint(state: AppState, itemId: String): Point =
+    val itemIndex    = toolbarItemIndex(state, itemId)
+    val rect         = toolbarRect(state)
+    val toolbarState = toolbarStateFrom(state)
+    val contentRect  = SurfaceFrameLayout.forContent(rect, SurfaceContent.ContextualToolbar(toolbarState)).contentRect
+    val rowGroups =
+      ContextualToolbar.rowGroups(ContextualToolbar.itemsFor(state), contentRect.width.max(1), toolbarState.displayMode)
+    val (rowIndex, localIndex) = rowGroups.zipWithIndex
+      .collectFirst {
+        case (row, currentRowIndex) if itemIndex < row.length + rowGroups.take(currentRowIndex).map(_.length).sum =>
+          val offset = rowGroups.take(currentRowIndex).map(_.length).sum
+          (currentRowIndex, itemIndex - offset)
+      }
+      .getOrElse(fail(s"Expected toolbar item index $itemIndex"))
+    val rowItems  = rowGroups.lift(rowIndex).getOrElse(fail(s"Expected toolbar row $rowIndex"))
+    val slotWidth = math.max(1, contentRect.width / rowItems.length)
     Point(
-      x = contentRect.x + (slotWidth * itemIndex) + math.max(0, slotWidth / 2),
-      y = contentRect.y
+      x = contentRect.x + (slotWidth * localIndex) + math.max(0, slotWidth / 2),
+      y = contentRect.y + rowIndex
+    )
+
+  private def toolbarDetailPoint(state: AppState, optionIndex: Int): Point =
+    val rect         = toolbarRect(state)
+    val toolbarState = toolbarStateFrom(state)
+    val contentRect  = SurfaceFrameLayout.forContent(rect, SurfaceContent.ContextualToolbar(toolbarState)).contentRect
+    val rowGroups =
+      ContextualToolbar.rowGroups(ContextualToolbar.itemsFor(state), contentRect.width.max(1), toolbarState.displayMode)
+    val detailRows =
+      ContextualToolbar.detailRowGroups(toolbarState, ContextualToolbar.itemsFor(state), contentRect.width.max(1))
+    val (rowIndex, localIndex) = detailRows.zipWithIndex
+      .collectFirst {
+        case (rowOptions, currentRowIndex)
+            if optionIndex < rowOptions.length + detailRows.take(currentRowIndex).map(_.length).sum =>
+          val offset = detailRows.take(currentRowIndex).map(_.length).sum
+          (currentRowIndex, optionIndex - offset)
+      }
+      .getOrElse(fail(s"Expected toolbar detail option $optionIndex"))
+    val rowOptions = detailRows.lift(rowIndex).getOrElse(fail(s"Expected toolbar detail row $rowIndex"))
+    val slotWidth  = math.max(1, contentRect.width / rowOptions.length)
+    Point(
+      x = contentRect.x + (slotWidth * localIndex) + math.max(0, slotWidth / 2),
+      y = contentRect.y + rowGroups.length + rowIndex
     )
 
   private def toolbarRect(state: AppState) =
@@ -151,6 +282,19 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
           case _                                              => None
       }
       .getOrElse(fail("Expected contextual toolbar state"))
+
+  private def moveToolbarFocusTo(stateManager: com.serenity.state.manager.StateManager, itemId: String): Unit =
+    val state     = stateManager.getCurrentState.unsafeRunSync()
+    val target    = toolbarItemIndex(state, itemId)
+    val toolbar   = toolbarStateFrom(state)
+    val itemCount = ContextualToolbar.itemsFor(state).length
+    val delta     = (target - toolbar.focusedIndex + itemCount) % itemCount
+    (0 until delta).foreach(_ => stateManager.applyEvent(MoveRight).unsafeRunSync())
+
+  private def toolbarItemIndex(state: AppState, itemId: String): Int =
+    ContextualToolbar.itemsFor(state).indexWhere(_.id == itemId) match
+      case -1    => fail(s"Expected toolbar item $itemId")
+      case index => index
 
   private def activeBufferId(state: AppState): BufferId =
     state.layout.activeEditorPaneId

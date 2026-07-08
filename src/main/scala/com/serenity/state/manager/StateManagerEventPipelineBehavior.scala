@@ -1214,48 +1214,77 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
 
   private def handleContextualToolbarMouseHover(event: MouseInputEvent, state: AppState): cats.effect.IO[Boolean] =
     contextualToolbarSelectionAt(event, state) match
-      case Some((surface, toolbarState, index)) =>
+      case Some((surface, toolbarState, ContextualToolbarHit.TopLevelItem(index))) =>
         stateRef
           .update { current =>
             val items        = ContextualToolbar.itemsFor(current)
-            val updatedState = toolbarState.withFocusedIndex(index, items)
-            current.copy(uiSurfaces = current.uiSurfaces.map {
-              case existing if existing.id == surface.id =>
-                existing.copy(content = SurfaceContent.ContextualToolbar(updatedState))
-              case existing => existing
-            })
+            val updatedState = toolbarState.withFocusedIndex(index, items).closeDetail
+            replaceContextualToolbar(current, surface, updatedState)
+          }
+          .as(true)
+      case Some((surface, toolbarState, ContextualToolbarHit.DropdownOption(itemId, optionIndex))) =>
+        stateRef
+          .update { current =>
+            val updatedState = toolbarState.copy(
+              detailState = Some(ContextualToolbarDetailState.Dropdown(itemId, optionIndex))
+            )
+            replaceContextualToolbar(current, surface, updatedState)
           }
           .as(true)
       case None =>
         cats.effect.IO.pure(false)
+      case _ =>
+        cats.effect.IO.pure(false)
 
   private def handleContextualToolbarMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =
     contextualToolbarSelectionAt(click, state) match
-      case Some((surface, toolbarState, index)) =>
+      case Some((surface, toolbarState, ContextualToolbarHit.TopLevelItem(index))) =>
         val registry     = CommandRegistry.withToggleUI
-        val focusedState = toolbarState.withFocusedIndex(index, ContextualToolbar.itemsFor(state))
+        val items        = ContextualToolbar.itemsFor(state)
+        val focusedState = toolbarState.withFocusedIndex(index, items)
+        val focusedItem  = focusedState.normalized(items).focusedItem(items)
         stateRef.update { current =>
-          current.copy(
-            uiSurfaces = current.uiSurfaces.map {
-              case existing if existing.id == surface.id =>
-                existing.copy(content = SurfaceContent.ContextualToolbar(focusedState))
-              case existing => existing
-            },
-            focus = Focus.Surface(surface.id)
-          )
+          val nextState =
+            focusedItem match
+              case Some(_: ContextualToolbarItem.Button)   => focusedState.closeDetail
+              case Some(_: ContextualToolbarItem.Dropdown) => focusedState.openFocusedDetail(items)
+              case Some(_: ContextualToolbarItem.Input)    => focusedState.openFocusedDetail(items)
+              case None                                    => focusedState
+          replaceContextualToolbar(current, surface, nextState).copy(focus = Focus.Surface(surface.id))
         } >>
           stateRef.get.flatMap { current =>
-            ContextualToolbar.focusedCommand(focusedState, current, registry) match
+            focusedItem match
+              case Some(_: ContextualToolbarItem.Button) =>
+                ContextualToolbar.focusedCommand(focusedState, current, registry) match
+                  case Some(command) => executeCommand(command).as(true)
+                  case None          => cats.effect.IO.pure(false)
+              case Some(_: ContextualToolbarItem.Dropdown) | Some(_: ContextualToolbarItem.Input) =>
+                cats.effect.IO.pure(true)
+              case None =>
+                cats.effect.IO.pure(false)
+          }
+      case Some((surface, toolbarState, ContextualToolbarHit.DropdownOption(itemId, optionIndex))) =>
+        val detailState =
+          toolbarState.copy(detailState = Some(ContextualToolbarDetailState.Dropdown(itemId, optionIndex)))
+        stateRef.update(current => replaceContextualToolbar(current, surface, detailState.closeDetail)) >>
+          stateRef.get.flatMap { current =>
+            ContextualToolbar.detailCommand(detailState, current) match
               case Some(command) => executeCommand(command).as(true)
               case None          => cats.effect.IO.pure(false)
           }
+      case Some((surface, toolbarState, ContextualToolbarHit.InputDetail(_))) =>
+        stateRef
+          .update(current =>
+            replaceContextualToolbar(current, surface, toolbarState).copy(focus = Focus.Surface(surface.id))
+          )
+          .as(true)
       case None =>
         cats.effect.IO.pure(false)
 
   private def contextualToolbarSelectionAt(
     event: MouseInputEvent,
     state: AppState
-  ): Option[(UiSurface, ContextualToolbarState, Int)] =
+  ): Option[(UiSurface, ContextualToolbarState, ContextualToolbarHit)] =
     for
       viewportSize <- state.viewportSize
       surface      <- state.contextualToolbarSurface
@@ -1263,34 +1292,40 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         case SurfaceContent.ContextualToolbar(toolbarState) => Some(toolbarState)
         case _                                              => None
       layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      rect  <- overlayRectForSurface(layout, surface.id)
-      index <- contextualToolbarItemIndex(event, rect, state, toolbarState)
-    yield (surface, toolbarState, index)
+      rect <- overlayRectForSurface(layout, surface.id)
+      hit  <- contextualToolbarItemHit(event, rect, state, toolbarState)
+    yield (surface, toolbarState, hit)
 
-  private def contextualToolbarItemIndex(
+  private def contextualToolbarItemHit(
     event: MouseInputEvent,
     rect: LayoutRect,
     state: AppState,
     toolbarState: ContextualToolbarState
-  ): Option[Int] =
+  ): Option[ContextualToolbarHit] =
     val contentRect   = SurfaceFrameLayout.forContent(rect, SurfaceContent.ContextualToolbar(toolbarState)).contentRect
     val withinColumns = event.col >= contentRect.x && event.col < contentRect.right
     val withinRows    = event.row >= contentRect.y && event.row < contentRect.bottom
     Option.when(withinColumns && withinRows)(()).flatMap { _ =>
-      val items     = ContextualToolbar.itemsFor(state)
-      val rowGroups = ContextualToolbar.rowGroups(items, contentRect.width.max(1), toolbarState.displayMode)
-      val rowIndex  = event.row - contentRect.y
-      rowGroups.lift(rowIndex).flatMap { rowItems =>
-        Option.when(rowItems.nonEmpty) {
-          val offset = rowGroups.take(rowIndex).map(_.length).sum
-          val localIndex =
-            (((event.col - contentRect.x) * rowItems.length) / contentRect.width.max(1))
-              .max(0)
-              .min(rowItems.length - 1)
-          offset + localIndex
-        }
-      }
+      ContextualToolbar.hitAt(
+        rowIndex = event.row - contentRect.y,
+        columnOffset = event.col - contentRect.x,
+        contentWidth = contentRect.width.max(1),
+        toolbarState = toolbarState,
+        state = state
+      )
     }
+
+  private def replaceContextualToolbar(
+    state: AppState,
+    surface: UiSurface,
+    toolbarState: ContextualToolbarState
+  ): AppState =
+    state.copy(uiSurfaces = state.uiSurfaces.map {
+      case existing if existing.id == surface.id =>
+        existing.copy(content = SurfaceContent.ContextualToolbar(toolbarState))
+      case existing =>
+        existing
+    })
 
   private def handleCommandRunnerMouseHover(event: MouseInputEvent, state: AppState): cats.effect.IO[Boolean] =
     commandRunnerSelectionAt(event, state) match
