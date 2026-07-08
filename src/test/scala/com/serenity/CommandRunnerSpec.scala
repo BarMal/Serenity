@@ -347,7 +347,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "gutter",
       "line-wrap",
       "focused-text-body",
-      "contextual-toolbar"
+      "contextual-toolbar",
+      "contextual-toolbar-display"
     )
     nestedGroup("settings-text-area").label shouldBe "Text Area"
     nestedGroup("settings-text-area").children.map(_.id) shouldBe List(
@@ -441,7 +442,13 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val config = AppConfig.default
-      .copy(showLineNumbers = false, showGutter = false, wordWrapEnabled = false, contextualToolbarEnabled = false)
+      .copy(
+        showLineNumbers = false,
+        showGutter = false,
+        wordWrapEnabled = false,
+        contextualToolbarEnabled = false,
+        contextualToolbarDisplayMode = ToolbarDisplayMode.TextOnly
+      )
     val runner = CommandRunner.empty
       .activate(registry, config)
       .withActiveCategory(CommandCategory.Settings)
@@ -450,18 +457,20 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val options     = textDisplay.children.collect { case option: CommandSurfaceItem.OptionItem => option }
 
     options.map(option => option.id -> option.selectedOption) shouldBe List(
-      "line-numbers"       -> "Off",
-      "gutter"             -> "Off",
-      "line-wrap"          -> "Off",
-      "focused-text-body"  -> "Off",
-      "contextual-toolbar" -> "Off"
+      "line-numbers"               -> "Off",
+      "gutter"                     -> "Off",
+      "line-wrap"                  -> "Off",
+      "focused-text-body"          -> "Off",
+      "contextual-toolbar"         -> "Off",
+      "contextual-toolbar-display" -> "Text Only"
     )
     options.flatMap(_.selectedIntent) shouldBe List(
       CommandIntent.SetLineNumbers(false),
       CommandIntent.SetGutter(false),
       CommandIntent.SetWordWrap(false),
       CommandIntent.SetFocusedTextBody(false),
-      CommandIntent.SetContextualToolbarEnabled(false)
+      CommandIntent.SetContextualToolbarEnabled(false),
+      CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly)
     )
   }
 

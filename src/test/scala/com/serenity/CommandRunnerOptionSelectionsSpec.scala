@@ -31,6 +31,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
       interfaceDensity = InterfaceDensity.Compact,
       markdownViewMode = MarkdownViewMode.InlineLens,
       defaultDocumentMode = DefaultDocumentMode.RichText,
+      contextualToolbarDisplayMode = ToolbarDisplayMode.TextOnly,
       spellCheck = SpellCheckConfig(enabled = true),
       showLineNumbers = false,
       showGutter = false,
@@ -65,6 +66,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("interface-density") shouldBe 0
     selections("markdown-view") shouldBe 2
     selections("default-document-mode") shouldBe 2
+    selections("contextual-toolbar-display") shouldBe 1
     selections("spellcheck-enabled") shouldBe 1
     selections("line-numbers") shouldBe 1
     selections("gutter") shouldBe 1

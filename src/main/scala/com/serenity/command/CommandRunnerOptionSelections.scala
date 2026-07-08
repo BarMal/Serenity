@@ -9,37 +9,38 @@ object CommandRunnerOptionSelections:
 
   def default(config: AppConfig): Map[String, Int] =
     Map(
-      "animation-mode"            -> animationModeIndex(config),
-      "material-preset"           -> materialPresetIndex(config.materialPreset),
-      "motion-preset"             -> motionPresetIndex(config.motionPreset),
-      "command-runner-fade"       -> commandRunnerFadeIndex(config.commandRunnerAnimation),
-      "ui-animation"              -> animationPresetIndex(config.uiAnimation),
-      "render-fps"                -> renderFpsTargetIndex(config.renderFpsTarget),
-      "editor-text-transition"    -> editorTextTransitionIndex(config.editorInsertionTransitionKind),
-      "command-runner-transition" -> panelTransitionIndex(config.effectiveCommandRunnerTransitionKind),
-      "panel-open-transition"     -> panelTransitionIndex(config.effectivePanelOpenTransitionKind),
-      "panel-close-transition"    -> panelTransitionIndex(config.effectivePanelCloseTransitionKind),
-      "cursor-mode"               -> cursorModeIndex(config.cursorMode),
-      "cursor-info-bar"           -> cursorInfoBarModeIndex(config.cursorInfoBarMode),
-      "cursor-info-bar-placement" -> cursorInfoBarPlacementIndex(config.cursorInfoBarPlacement),
-      "background-style"          -> backgroundStyleIndex(config.backgroundStyle),
-      "interface-density"         -> interfaceDensityIndex(config.interfaceDensity),
-      "markdown-view"             -> markdownViewModeIndex(config.markdownViewMode),
-      "default-document-mode"     -> defaultDocumentModeIndex(config.defaultDocumentMode),
-      "spellcheck-enabled"        -> spellCheckEnabledIndex(config.spellCheck.enabled),
-      "line-numbers"              -> enabledIndex(config.showLineNumbers),
-      "gutter"                    -> enabledIndex(config.showGutter),
-      "line-wrap"                 -> enabledIndex(config.wordWrapEnabled),
-      "word-wrap"                 -> enabledIndex(config.wordWrapEnabled),
-      "focused-text-body"         -> enabledIndex(config.focusedTextBodyEnabled),
-      "contextual-toolbar"        -> enabledIndex(config.contextualToolbarEnabled),
-      "code-font"                 -> codeFontIndex(config.fontConfig.codeFontFamily),
-      "text-font"                 -> textFontIndex(config.fontConfig.textFontFamily),
-      "ui-font"                   -> uiFontIndex(config.fontConfig.uiFontFamily),
-      "text-scale-mode"           -> textScaleModeIndex(config.fontConfig.textScaleMode),
-      "code-ligatures"            -> ligaturesIndex(config.fontConfig.codeLigatures),
-      "text-ligatures"            -> ligaturesIndex(config.fontConfig.textLigatures),
-      "ui-ligatures"              -> ligaturesIndex(config.fontConfig.uiLigatures)
+      "animation-mode"             -> animationModeIndex(config),
+      "material-preset"            -> materialPresetIndex(config.materialPreset),
+      "motion-preset"              -> motionPresetIndex(config.motionPreset),
+      "command-runner-fade"        -> commandRunnerFadeIndex(config.commandRunnerAnimation),
+      "ui-animation"               -> animationPresetIndex(config.uiAnimation),
+      "render-fps"                 -> renderFpsTargetIndex(config.renderFpsTarget),
+      "editor-text-transition"     -> editorTextTransitionIndex(config.editorInsertionTransitionKind),
+      "command-runner-transition"  -> panelTransitionIndex(config.effectiveCommandRunnerTransitionKind),
+      "panel-open-transition"      -> panelTransitionIndex(config.effectivePanelOpenTransitionKind),
+      "panel-close-transition"     -> panelTransitionIndex(config.effectivePanelCloseTransitionKind),
+      "cursor-mode"                -> cursorModeIndex(config.cursorMode),
+      "cursor-info-bar"            -> cursorInfoBarModeIndex(config.cursorInfoBarMode),
+      "cursor-info-bar-placement"  -> cursorInfoBarPlacementIndex(config.cursorInfoBarPlacement),
+      "background-style"           -> backgroundStyleIndex(config.backgroundStyle),
+      "interface-density"          -> interfaceDensityIndex(config.interfaceDensity),
+      "markdown-view"              -> markdownViewModeIndex(config.markdownViewMode),
+      "default-document-mode"      -> defaultDocumentModeIndex(config.defaultDocumentMode),
+      "spellcheck-enabled"         -> spellCheckEnabledIndex(config.spellCheck.enabled),
+      "line-numbers"               -> enabledIndex(config.showLineNumbers),
+      "gutter"                     -> enabledIndex(config.showGutter),
+      "line-wrap"                  -> enabledIndex(config.wordWrapEnabled),
+      "word-wrap"                  -> enabledIndex(config.wordWrapEnabled),
+      "focused-text-body"          -> enabledIndex(config.focusedTextBodyEnabled),
+      "contextual-toolbar"         -> enabledIndex(config.contextualToolbarEnabled),
+      "contextual-toolbar-display" -> contextualToolbarDisplayModeIndex(config.contextualToolbarDisplayMode),
+      "code-font"                  -> codeFontIndex(config.fontConfig.codeFontFamily),
+      "text-font"                  -> textFontIndex(config.fontConfig.textFontFamily),
+      "ui-font"                    -> uiFontIndex(config.fontConfig.uiFontFamily),
+      "text-scale-mode"            -> textScaleModeIndex(config.fontConfig.textScaleMode),
+      "code-ligatures"             -> ligaturesIndex(config.fontConfig.codeLigatures),
+      "text-ligatures"             -> ligaturesIndex(config.fontConfig.textLigatures),
+      "ui-ligatures"               -> ligaturesIndex(config.fontConfig.uiLigatures)
     )
 
   private def animationModeIndex(config: AppConfig): Int =
@@ -147,6 +148,12 @@ object CommandRunnerOptionSelections:
 
   private def enabledIndex(enabled: Boolean): Int =
     if enabled then 0 else 1
+
+  private def contextualToolbarDisplayModeIndex(mode: ToolbarDisplayMode): Int =
+    mode match
+      case ToolbarDisplayMode.IconOnly    => 0
+      case ToolbarDisplayMode.TextOnly    => 1
+      case ToolbarDisplayMode.IconAndText => 2
 
   private def codeFontIndex(family: String): Int =
     FontLoader.availableMonospaceFamilies.indexOf(family) match

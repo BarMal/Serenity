@@ -36,7 +36,9 @@ object CommandRunnerSettingsGroups:
     val lineWrapItem          = CommandRunnerSettingsItems.lineWrapOptionItem(optionSelections)
     val focusedTextBodyItem   = CommandRunnerSettingsItems.focusedTextBodyOptionItem(optionSelections)
     val contextualToolbarItem = CommandRunnerSettingsItems.contextualToolbarOptionItem(optionSelections)
-    val keymapItems           = inputItems.filter(_.id.startsWith("keymap-"))
+    val contextualToolbarDisplayItem =
+      CommandRunnerSettingsItems.contextualToolbarDisplayModeOptionItem(optionSelections)
+    val keymapItems = inputItems.filter(_.id.startsWith("keymap-"))
     val workspaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-workspace-layout",
       label = "Panels & Workspace",
@@ -54,7 +56,14 @@ object CommandRunnerSettingsGroups:
     val textDisplayGroup = CommandSurfaceItem.GroupItem(
       id = "settings-text-display",
       label = "Text Display",
-      children = List(lineNumbersItem, gutterItem, lineWrapItem, focusedTextBodyItem, contextualToolbarItem),
+      children = List(
+        lineNumbersItem,
+        gutterItem,
+        lineWrapItem,
+        focusedTextBodyItem,
+        contextualToolbarItem,
+        contextualToolbarDisplayItem
+      ),
       category = CommandCategory.Settings,
       hint = Some("Line numbers, gutter, wrap, focus, toolbar")
     )

@@ -106,6 +106,30 @@ enum MarkdownViewMode:
   case SplitPreview
   case InlineLens
 
+enum ToolbarDisplayMode:
+  case IconOnly
+  case TextOnly
+  case IconAndText
+
+  def configKey: String =
+    this match
+      case IconOnly    => "icon-only"
+      case TextOnly    => "text-only"
+      case IconAndText => "icon-and-text"
+
+object ToolbarDisplayMode:
+
+  def fromConfigKey(value: String): Option[ToolbarDisplayMode] =
+    value.trim.toLowerCase match
+      case "icon" | "icon-only" | "icons-only" =>
+        Some(IconOnly)
+      case "text" | "text-only" =>
+        Some(TextOnly)
+      case "icon-and-text" | "icons-and-text" | "both" =>
+        Some(IconAndText)
+      case _ =>
+        None
+
 /** Default document mode for newly-created empty buffers. */
 enum DefaultDocumentMode(val configKey: String):
   case PlainText extends DefaultDocumentMode("plain-text")
@@ -377,6 +401,7 @@ case class AppConfig(
     wordWrapEnabled: Boolean = true,
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
+    contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
     blurRadius: Float = 0.0f,
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
@@ -500,6 +525,9 @@ case class AppConfig(
 
   def withContextualToolbarEnabled(enabled: Boolean): AppConfig =
     copy(contextualToolbarEnabled = enabled)
+
+  def withContextualToolbarDisplayMode(mode: ToolbarDisplayMode): AppConfig =
+    copy(contextualToolbarDisplayMode = mode)
 
   def withBlurRadius(r: Float): AppConfig =
     copy(blurRadius = r.max(0.0f).min(1.0f), materialPreset = MaterialPreset.Custom)
