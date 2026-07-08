@@ -1403,7 +1403,7 @@ object Renderer:
     val shell = TextPanelView(rect, s"Preview: $title", Nil)
     PinnedPanelRenderer.render(context.surface, shell, state.theme, state.config, animationState)
 
-    val contentRect        = SurfaceFrameLayout(rect).contentRect
+    val contentRect        = markdownPreviewImageRect(rect, context)
     val contentWidthCells  = math.max(1, contentRect.width)
     val contentHeightCells = math.max(1, contentRect.height)
     val widthPx =
@@ -1426,6 +1426,22 @@ object Renderer:
       baseUri = baseUri
     )
     context.surface.drawImage(image, contentRect.x, contentRect.y, contentWidthCells, contentHeightCells)
+
+  private def markdownPreviewImageRect(rect: LayoutRect, context: RenderContext): LayoutRect =
+    val contentRect = SurfaceFrameLayout(rect).contentRect
+    val x =
+      if rect.x <= 0 then rect.x
+      else contentRect.x
+    val right =
+      if rect.right >= context.surface.viewportWidth then rect.right
+      else contentRect.right
+
+    LayoutRect(
+      x = x,
+      y = contentRect.y,
+      width = math.max(1, right - x),
+      height = math.max(1, contentRect.height)
+    )
 
   private def markdownSplitPreviewWindow(
     buffer: Buffer,

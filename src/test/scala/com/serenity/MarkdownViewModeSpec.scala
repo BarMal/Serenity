@@ -234,6 +234,26 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     surfaceRows(surface).exists(_.contains("Task  Owner")) shouldBe false
   }
 
+  it should "draw right pinned split preview images flush to the viewport edge" in {
+    val surface = new MockRenderSurface(120, 32)
+    val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+
+    Renderer.render(
+      markdownPreviewPanelState("# Edge", CursorPosition(0, 0)),
+      cursorVisible = true,
+      surface,
+      ViewportSize(120, 32),
+      codeFont = font,
+      textFont = font,
+      cellMetrics = CellMetrics.fromFont(font),
+      cursorColor = None
+    )
+
+    surface.drawImageCalls should have size 1
+    val drawn = surface.drawImageCalls.head
+    drawn.x + drawn.width shouldBe surface.width
+  }
+
   it should "render split preview images at device scale on HiDPI surfaces" in {
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)
