@@ -883,12 +883,32 @@ object Renderer:
     lines: Vector[String],
     visibleRows: Int
   ): MarkdownDocumentPreview.PreviewWindow =
-    MarkdownDocumentPreview.previewWindow(
-      lines,
-      activeLine = buffer.cursors.headOption.map(_.line),
-      fallbackTopLine = buffer.viewport.topLine,
-      maxSourceLines = markdownPreviewSourceLineLimit(visibleRows)
-    )
+    if lines.isEmpty then MarkdownDocumentPreview.PreviewWindow(0, 0, "")
+    else
+      val activeBlock = buffer.cursors.headOption
+        .map(_.line)
+        .filter(line => line >= 0 && line < lines.length)
+        .map(line => MarkdownBlockLens.currentBlock(lines, line))
+      val baseSourceLineLimit = markdownPreviewSourceLineLimit(visibleRows)
+      val maxSourceLines = activeBlock
+        .map(blockRange => math.max(baseSourceLineLimit, blockRange.end - blockRange.start + 1))
+        .getOrElse(baseSourceLineLimit)
+      val viewportTopLine = buffer.viewport.topLine.max(0).min(lines.length - 1)
+      val preferredTopLine = activeBlock
+        .map(blockRange => blockRange.start.min(viewportTopLine))
+        .getOrElse(viewportTopLine)
+      val firstSourceLine = activeBlock
+        .map { blockRange =>
+          if blockRange.end >= preferredTopLine + maxSourceLines then (blockRange.end - maxSourceLines + 1).max(0)
+          else preferredTopLine
+        }
+        .getOrElse(preferredTopLine)
+      MarkdownDocumentPreview.PreviewWindow(
+        firstSourceLine = firstSourceLine,
+        firstPreviewRow =
+          MarkdownDocumentPreview.previewRowForSourceLine(lines, firstSourceLine).getOrElse(firstSourceLine),
+        source = lines.slice(firstSourceLine, (firstSourceLine + maxSourceLines).min(lines.length)).mkString("\n")
+      )
 
   private def markdownPreviewSourceLineLimit(visibleRows: Int): Int =
     math.max(MinMarkdownPreviewSourceLines, visibleRows.max(1) * MarkdownPreviewOverscanFactor)
@@ -919,9 +939,7 @@ object Renderer:
           markdownLensPlacement(
             blockRange,
             blockVisualLines,
-            cursorForBlock(buffer.cursors, blockRange),
             rect.height,
-            snapshot,
             lines,
             previewWindow
           )
@@ -990,9 +1008,7 @@ object Renderer:
           markdownLensPlacement(
             blockRange,
             blockVisualLines,
-            cursorForBlock(buffer.cursors, blockRange),
             rect.height,
-            snapshot,
             lines,
             previewWindow
           )
@@ -1034,9 +1050,7 @@ object Renderer:
   private def markdownLensPlacement(
     blockRange: Range.Inclusive,
     blockVisualLines: Vector[TextVisualLine],
-    primaryCursor: Option[CursorPosition],
     visibleHeight: Int,
-    snapshot: TextLayoutSnapshot,
     markdownLines: Vector[String],
     previewWindow: MarkdownDocumentPreview.PreviewWindow
   ): MarkdownLensPlacement =
@@ -1045,25 +1059,12 @@ object Renderer:
       blockVisualLines.length,
       previewRange.map(range => range.end - range.start + 1).getOrElse(0)
     )
-    val cursorVisualRow = primaryCursor.flatMap { cursor =>
-      MarkdownDocumentPreview
-        .previewRowForSourceLine(markdownLines, cursor.line)
-        .map(_ - previewWindow.firstPreviewRow)
-        .orElse(calculateCursorVisualPosition(cursor, snapshot).map(_._1))
-    }
-    val desiredTop =
-      previewRange
-        .map(_.start - previewWindow.firstPreviewRow)
-        .orElse(cursorVisualRow.map(row => row - lensHeight / 2))
-        .getOrElse(blockVisualLines.headOption.fold(0)(_.bufferLine))
+    val desiredTop        = blockRange.start - previewWindow.firstSourceLine
     val visibleLensHeight = lensHeight.max(1).min(visibleHeight.max(1))
     MarkdownLensPlacement(
       top = desiredTop.max(0).min(math.max(0, visibleHeight - visibleLensHeight)),
       height = visibleLensHeight
     )
-
-  private def cursorForBlock(cursors: List[CursorPosition], blockRange: Range.Inclusive): Option[CursorPosition] =
-    cursors.find(cursor => blockRange.contains(cursor.line)).orElse(cursors.headOption)
 
   private def renderEmptyPane(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
     context.surface.setFont(context.textFont)
