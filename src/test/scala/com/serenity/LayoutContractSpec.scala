@@ -141,6 +141,34 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     overlayRects.foreach(rect => assertInside(contentRect, rect, s"overlay $rect"))
   }
 
+  it should "keep above-cursor overlays inside the active editor content rectangle" in {
+    val buffer = Buffer
+      .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
+      .copy(cursors = List(CursorPosition(1, 2)))
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.Surface(SurfaceId("quick-info")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("quick-info"),
+          SurfaceContent.QuickInfo("List.map(f)"),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.AboveCursor)
+        )
+      )
+    )
+    val layout      = LayoutEngine.calculateLayout(state, viewport)
+    val contentRect = LayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
+    val overlayRect = layout.aboveCursorOverlayRect.getOrElse(fail("expected above-cursor overlay"))
+
+    assertInside(contentRect, overlayRect, s"above-cursor overlay $overlayRect")
+  }
+
   it should "keep stacked below-cursor command surfaces inside tiny active editor content rectangles" in {
     val tinyViewport = ViewportSize(32, 6)
     val cursor       = CursorPosition(1, 2)
