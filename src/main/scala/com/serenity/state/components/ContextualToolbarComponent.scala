@@ -3,6 +3,7 @@ package com.serenity.state.components
 import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
+import com.serenity.ui.layout.{LayoutEngine, SurfaceFrameLayout}
 
 class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocusedComponent[ModalInputEvent]:
 
@@ -17,18 +18,36 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
           case SurfaceContent.ContextualToolbar(toolbarState) =>
             val items = ContextualToolbar.itemsFor(currentState)
             event match
-              case ModalNavigate(Direction.Left) | ModalNavigate(Direction.Up) =>
+              case ModalNavigate(Direction.Left) =>
                 toolbarState.normalized(items).detailState match
                   case Some(_: ContextualToolbarDetailState.Dropdown) =>
                     updateToolbarState(surface, toolbarState.moveDetailSelection(-1, items))
                   case _ =>
                     updateToolbarState(surface, toolbarState.moveFocus(-1, items))
-              case ModalNavigate(Direction.Right) | ModalNavigate(Direction.Down) =>
+              case ModalNavigate(Direction.Right) =>
                 toolbarState.normalized(items).detailState match
                   case Some(_: ContextualToolbarDetailState.Dropdown) =>
                     updateToolbarState(surface, toolbarState.moveDetailSelection(1, items))
                   case _ =>
                     updateToolbarState(surface, toolbarState.moveFocus(1, items))
+              case ModalNavigate(Direction.Up) =>
+                toolbarState.normalized(items).detailState match
+                  case Some(_: ContextualToolbarDetailState.Dropdown) =>
+                    updateToolbarState(
+                      surface,
+                      moveDropdownVertical(currentState, surface, toolbarState, items, deltaRows = -1)
+                    )
+                  case _ =>
+                    updateToolbarState(surface, moveTopLevelVertical(currentState, surface, toolbarState, items, -1))
+              case ModalNavigate(Direction.Down) =>
+                toolbarState.normalized(items).detailState match
+                  case Some(_: ContextualToolbarDetailState.Dropdown) =>
+                    updateToolbarState(
+                      surface,
+                      moveDropdownVertical(currentState, surface, toolbarState, items, deltaRows = 1)
+                    )
+                  case _ =>
+                    updateToolbarState(surface, moveTopLevelVertical(currentState, surface, toolbarState, items, 1))
               case ModalInsertChar(char) =>
                 toolbarState.normalized(items).detailState match
                   case Some(_: ContextualToolbarDetailState.Input) =>
@@ -92,6 +111,45 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
       val updatedSurface = surface.copy(content = SurfaceContent.ContextualToolbar(normalized))
       current.copy(uiSurfaces = current.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
     }
+
+  private def moveTopLevelVertical(
+    state: AppState,
+    surface: UiSurface,
+    toolbarState: ContextualToolbarState,
+    items: List[ContextualToolbarItem],
+    deltaRows: Int
+  ): ContextualToolbarState =
+    toolbarContentWidth(state, surface, toolbarState)
+      .map(width => toolbarState.moveFocusVertical(deltaRows, items, width))
+      .getOrElse(toolbarState.moveFocus(deltaRows, items))
+
+  private def moveDropdownVertical(
+    state: AppState,
+    surface: UiSurface,
+    toolbarState: ContextualToolbarState,
+    items: List[ContextualToolbarItem],
+    deltaRows: Int
+  ): ContextualToolbarState =
+    toolbarContentWidth(state, surface, toolbarState)
+      .map(width => toolbarState.moveDetailSelectionVertical(deltaRows, items, width))
+      .getOrElse(toolbarState.moveDetailSelection(deltaRows, items))
+
+  private def toolbarContentWidth(
+    state: AppState,
+    surface: UiSurface,
+    toolbarState: ContextualToolbarState
+  ): Option[Int] =
+    for
+      viewport <- state.viewportSize
+      rect <- LayoutEngine
+        .calculateLayoutWithUI(state, viewport)
+        .belowCursorOverlayStack
+        .collectFirst { case (`surface`.id, rect) => rect }
+    yield SurfaceFrameLayout
+      .forContent(rect, SurfaceContent.ContextualToolbar(toolbarState))
+      .contentRect
+      .width
+      .max(1)
 
   private def dismissToolbar(state: AppState): AppState =
     state.contextualToolbarSurface match

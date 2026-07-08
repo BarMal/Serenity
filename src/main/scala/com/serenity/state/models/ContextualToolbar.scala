@@ -60,6 +60,21 @@ case class ContextualToolbarState(
         detailState = None
       )
 
+  def moveFocusVertical(
+    deltaRows: Int,
+    items: List[ContextualToolbarItem],
+    contentWidth: Int
+  ): ContextualToolbarState =
+    if items.isEmpty || contentWidth <= 0 then this
+    else
+      val nextIndex =
+        ContextualToolbar.moveVerticalIndex(
+          rowGroups = ContextualToolbar.rowGroups(items, contentWidth, displayMode),
+          currentIndex = normalizedFocusedIndex(items),
+          deltaRows = deltaRows
+        )
+      copy(focusedIndex = nextIndex, detailState = None)
+
   def withFocusedIndex(index: Int, items: List[ContextualToolbarItem]): ContextualToolbarState =
     copy(focusedIndex = clampIndex(index, items))
 
@@ -91,6 +106,25 @@ case class ContextualToolbarState(
             )
           case _ =>
             this
+      case _ =>
+        this
+
+  def moveDetailSelectionVertical(
+    deltaRows: Int,
+    items: List[ContextualToolbarItem],
+    contentWidth: Int
+  ): ContextualToolbarState =
+    normalized(items).detailState match
+      case Some(ContextualToolbarDetailState.Dropdown(itemId, selectedIndex)) if contentWidth > 0 =>
+        val rowGroups = ContextualToolbar.detailRowGroups(this, items, contentWidth)
+        copy(
+          detailState = Some(
+            ContextualToolbarDetailState.Dropdown(
+              itemId,
+              ContextualToolbar.moveVerticalIndex(rowGroups, selectedIndex, deltaRows)
+            )
+          )
+        )
       case _ =>
         this
 
@@ -330,6 +364,54 @@ object ContextualToolbar:
             else (currentRow :+ option, acc)
         }
       rows :+ currentRow
+
+  private[models] def moveVerticalIndex[A](
+    rowGroups: List[List[A]],
+    currentIndex: Int,
+    deltaRows: Int
+  ): Int =
+    if rowGroups.isEmpty || deltaRows == 0 then currentIndex
+    else
+      val rowLengths = rowGroups.map(_.length)
+      val totalItems = rowLengths.sum
+      if totalItems == 0 then currentIndex
+      else
+        val step = deltaRows.sign
+        Iterator
+          .fill(deltaRows.abs)(step)
+          .foldLeft(currentIndex.max(0).min(totalItems - 1)) { (index, rowDelta) =>
+            val (rowIndex, localIndex) = rowAndLocalIndex(rowLengths, index)
+            val targetRowIndex         = (rowIndex + rowDelta).max(0).min(rowLengths.length - 1)
+            if targetRowIndex == rowIndex then index
+            else
+              val targetLength = rowLengths(targetRowIndex)
+              rowLengths.take(targetRowIndex).sum +
+                proportionalIndex(localIndex, rowLengths(rowIndex), targetLength)
+          }
+
+  private def rowAndLocalIndex(rowLengths: List[Int], globalIndex: Int): (Int, Int) =
+    rowLengths
+      .foldLeft((0, 0, Option.empty[(Int, Int)])) {
+        case ((offset, rowIndex, found), rowLength) =>
+          found match
+            case some @ Some(_) =>
+              (offset + rowLength, rowIndex + 1, some)
+            case None if globalIndex < offset + rowLength =>
+              (offset + rowLength, rowIndex + 1, Some((rowIndex, globalIndex - offset)))
+            case None =>
+              (offset + rowLength, rowIndex + 1, None)
+      }
+      ._3
+      .getOrElse {
+        val lastRowIndex  = (rowLengths.length - 1).max(0)
+        val lastRowLength = rowLengths.lift(lastRowIndex).getOrElse(1).max(1)
+        (lastRowIndex, lastRowLength - 1)
+      }
+
+  private def proportionalIndex(currentIndex: Int, currentRowLength: Int, targetRowLength: Int): Int =
+    (((currentIndex + 0.5d) * targetRowLength) / currentRowLength.max(1)).toInt
+      .max(0)
+      .min(targetRowLength - 1)
 
   private def applyMarkdownSelections(
     items: List[ContextualToolbarItem],
