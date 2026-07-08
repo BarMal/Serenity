@@ -376,6 +376,7 @@ case class AppConfig(
     showGutter: Boolean = true,
     wordWrapEnabled: Boolean = true,
     focusedTextBodyEnabled: Boolean = false,
+    contextualToolbarEnabled: Boolean = true,
     blurRadius: Float = 0.0f,
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
@@ -496,6 +497,9 @@ case class AppConfig(
 
   def withFocusedTextBody(enabled: Boolean): AppConfig =
     copy(focusedTextBodyEnabled = enabled)
+
+  def withContextualToolbarEnabled(enabled: Boolean): AppConfig =
+    copy(contextualToolbarEnabled = enabled)
 
   def withBlurRadius(r: Float): AppConfig =
     copy(blurRadius = r.max(0.0f).min(1.0f), materialPreset = MaterialPreset.Custom)

@@ -46,6 +46,19 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     closed.effects shouldBe Nil
   }
 
+  it should "not open the contextual toolbar when the setting is disabled" in {
+    val initialState = AppState.initial.copy(
+      config = AppState.initial.config.withContextualToolbarEnabled(false),
+      focus = Focus.EditorPane(PaneId(0))
+    )
+
+    val result = AppEventReducer.reduce(ToggleContextualToolbar, initialState, registry)
+
+    result.state.contextualToolbarSurface shouldBe None
+    result.state.focus shouldBe Focus.EditorPane(PaneId(0))
+    result.effects shouldBe Nil
+  }
+
   it should "restore editor focus when runner replaces a modal that held focus" in {
     val base = AppState.initial.copy(focus = Focus.EditorPane(PaneId(0)))
 
