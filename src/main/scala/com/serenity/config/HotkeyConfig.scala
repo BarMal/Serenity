@@ -16,6 +16,7 @@ enum HotkeyAction:
   case ToggleSyntaxHighlighting
   case OpenFile
   case ToggleCommandRunner
+  case ToggleContextualToolbar
   case NewTab
   case CloseTab
   case FileSearch
@@ -35,6 +36,7 @@ enum HotkeyAction:
       case ToggleSyntaxHighlighting => "toggle_syntax_highlighting"
       case OpenFile                 => "open_file"
       case ToggleCommandRunner      => "command_palette"
+      case ToggleContextualToolbar  => "contextual_toolbar"
       case NewTab                   => "new_tab"
       case CloseTab                 => "close_tab"
       case FileSearch               => "file_search"
@@ -206,6 +208,9 @@ object HotkeyConfig:
     HotkeyAction.OpenFile -> List(HotkeyTrigger(InputKey.Character, Some('o'), Set(Modifier.Ctrl))),
     HotkeyAction.ToggleCommandRunner -> List(
       HotkeyTrigger(InputKey.Character, Some('p'), Set(Modifier.Ctrl))
+    ),
+    HotkeyAction.ToggleContextualToolbar -> List(
+      HotkeyTrigger(InputKey.Character, Some('t'), Set(Modifier.Ctrl, Modifier.Shift))
     ),
     HotkeyAction.NewTab   -> List(HotkeyTrigger(InputKey.Character, Some('t'), Set(Modifier.Ctrl))),
     HotkeyAction.CloseTab -> List(HotkeyTrigger(InputKey.Character, Some('w'), Set(Modifier.Ctrl))),

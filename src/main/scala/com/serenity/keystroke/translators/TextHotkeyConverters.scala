@@ -18,6 +18,7 @@ object TextHotkeyConverters:
     HotkeyAction.ToggleSyntaxHighlighting -> ToggleSyntaxHighlighting,
     HotkeyAction.OpenFile                 -> OpenFile,
     HotkeyAction.ToggleCommandRunner      -> ToggleCommandRunner,
+    HotkeyAction.ToggleContextualToolbar  -> ToggleContextualToolbar,
     HotkeyAction.NewTab                   -> NewTab,
     HotkeyAction.CloseTab                 -> CloseTab,
     HotkeyAction.FileSearch               -> FileSearch,

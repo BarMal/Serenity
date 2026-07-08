@@ -382,7 +382,7 @@ object LayoutEngine:
     forcedHeight: Option[Int]
   ): Option[LayoutRect] =
     val preferredWidth  = calculateFloatingSurfaceWidth(contentRect.width)
-    val preferredHeight = calculateFloatingSurfaceHeight(surface.content, contentRect.height, state)
+    val preferredHeight = calculateFloatingSurfaceHeight(surface.content, contentRect.width, contentRect.height, state)
     val finalHeight     = forcedHeight.getOrElse(preferredHeight)
     val densityGapRows  = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows
     val gapRows         = floatingCursorGapRows(surface, densityGapRows)
@@ -447,9 +447,11 @@ object LayoutEngine:
   )
 
   private def orderedBelowCursorSurfaces(state: AppState): List[UiSurface] =
+    val maybeToolbar = state.contextualToolbarSurface.toList
     val maybeRunner  = state.commandRunnerSurface.toList
     val maybeSubmenu = state.commandRunnerSubmenuSurface.toList
-    if maybeRunner.nonEmpty && maybeSubmenu.nonEmpty then maybeRunner ++ maybeSubmenu
+    if maybeRunner.nonEmpty && maybeSubmenu.nonEmpty then maybeToolbar ++ maybeRunner ++ maybeSubmenu
+    else if maybeToolbar.nonEmpty && maybeRunner.nonEmpty then maybeToolbar ++ maybeRunner
     else
       val belowSurfaces = state.floatingSurfaces.filter {
         _.presentation match
@@ -483,7 +485,7 @@ object LayoutEngine:
       )
     else
       surfaces match
-        case main :: submenu :: _ =>
+        case main :: submenu :: Nil if isCommandRunnerStackPair(main, submenu) =>
           val mainRectOpt        = calculateFloatingSurfaceRect(main, state, paneLayouts)
           val submenuBaseRectOpt = calculateFloatingSurfaceRect(submenu, state, paneLayouts)
           val anchorFrameOpt     = calculateFloatingAnchorFrame(main, state, paneLayouts)
@@ -527,7 +529,7 @@ object LayoutEngine:
             case _ =>
               BelowOverlayLayout(Nil, Set.empty)
         case _ =>
-          BelowOverlayLayout(Nil, Set.empty)
+          stackBelowCursorSurfaces(surfaces, state, paneLayouts)
 
   private def calculateFloatingSurfaceWidth(maxWidth: Int): Int =
     maxWidth
@@ -537,7 +539,12 @@ object LayoutEngine:
       case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) => 0
       case _                                                                                => densityGapRows
 
-  private def calculateFloatingSurfaceHeight(content: SurfaceContent, maxHeight: Int, state: AppState): Int =
+  private def calculateFloatingSurfaceHeight(
+    content: SurfaceContent,
+    maxWidth: Int,
+    maxHeight: Int,
+    state: AppState
+  ): Int =
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
     val commandMaxHeight =
       state.config.commandRunnerVisibleRows
@@ -561,6 +568,18 @@ object LayoutEngine:
         math.min(
           densityMetrics.commandSurfaceMaxHeight,
           math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1)
+        )
+      case SurfaceContent.ContextualToolbar(toolbarState) =>
+        val borderCells  = SurfaceFrameLayout.borderCellsFor(content)
+        val contentWidth = (maxWidth - (borderCells * 2)).max(1)
+        val rowCount =
+          ContextualToolbar.rowGroups(ContextualToolbar.itemsFor(state), contentWidth, toolbarState.displayMode).length
+        val toolbarRows = rowCount.max(1)
+        SurfaceFrameLayout.frameHeightForItemRows(
+          toolbarRows,
+          hasHeader = false,
+          hasFooter = false,
+          borderCells = borderCells
         )
       case SurfaceContent.ContextMenu(menu) =>
         math.min(
@@ -610,6 +629,53 @@ object LayoutEngine:
         state.activeCursorPosition.orElse(surfaceAnchor(surface))
       case _ =>
         surfaceAnchor(surface).orElse(state.activeCursorPosition)
+
+  private def isCommandRunnerStackPair(main: UiSurface, submenu: UiSurface): Boolean =
+    (main.content, submenu.content) match
+      case (SurfaceContent.CommandPalette(_), SurfaceContent.CommandPaletteSubmenu(_, _, _)) => true
+      case _                                                                                 => false
+
+  private def stackBelowCursorSurfaces(
+    surfaces: List[UiSurface],
+    state: AppState,
+    paneLayouts: Map[PaneId, EditorPaneLayout]
+  ): BelowOverlayLayout =
+    val baseRects =
+      surfaces.flatMap(surface => calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface -> _))
+    val anchorFrameOpt =
+      surfaces.headOption.flatMap(surface => calculateFloatingAnchorFrame(surface, state, paneLayouts))
+    anchorFrameOpt match
+      case None =>
+        BelowOverlayLayout(Nil, Set.empty)
+      case Some(_) if baseRects.isEmpty =>
+        BelowOverlayLayout(Nil, Set.empty)
+      case Some(anchorFrame) =>
+        val densityGapRows  = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows
+        val gapRows         = floatingCursorGapRows(surfaces.head, densityGapRows)
+        val stackGapRows    = densityGapRows
+        val availableBottom = anchorFrame.contentRect.bottom
+        val totalHeight     = baseRects.map(_._2.height).sum + (stackGapRows * (baseRects.length - 1).max(0))
+        val preferredBelowY = anchorFrame.screenPosition.y + 1 + gapRows
+        val preferredAboveY = anchorFrame.screenPosition.y - gapRows - totalHeight
+        val stackY =
+          if preferredBelowY + totalHeight <= availableBottom then preferredBelowY
+          else if preferredAboveY >= anchorFrame.contentRect.y then preferredAboveY
+          else
+            math.max(
+              anchorFrame.contentRect.y,
+              math.min(preferredBelowY, availableBottom - math.min(totalHeight, anchorFrame.contentRect.height))
+            )
+        val (_, stacked) = baseRects.foldLeft((stackY, List.empty[(SurfaceId, LayoutRect)])) {
+          case ((currentY, acc), (surface, rect)) =>
+            val heightBudget   = math.max(0, availableBottom - currentY)
+            val adjustedHeight = math.min(rect.height, heightBudget)
+            val adjustedY      = if adjustedHeight == 0 then availableBottom else currentY
+            (
+              adjustedY + adjustedHeight + stackGapRows,
+              acc :+ (surface.id -> rect.copy(y = adjustedY, height = adjustedHeight))
+            )
+        }
+        BelowOverlayLayout(stacked.filter(_._2.height > 0), Set.empty)
 
   def calculateViewportForCursor(
     cursor: CursorPosition,

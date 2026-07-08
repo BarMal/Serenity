@@ -20,6 +20,10 @@ object AppEventReducer:
         if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
         else ReducerResult.noEffects(toggleCommandRunner(state, registry))
 
+      case ToggleContextualToolbar =>
+        if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
+        else ReducerResult.noEffects(toggleContextualToolbar(state))
+
       case NewTab =>
         ReducerResult.noEffects(EditorState.openNewTab(state))
 
@@ -68,6 +72,26 @@ object AppEventReducer:
             uiSurfaces = upsertSurface(clearedSurfaces, surface)
           )
           .pushFocus(Focus.Surface(surfaceId))
+
+  private def toggleContextualToolbar(state: AppState): AppState =
+    state.contextualToolbarSurface match
+      case Some(surface) =>
+        state
+          .copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id))
+          .popFocus
+      case None =>
+        val items = ContextualToolbar.itemsFor(state)
+        if items.isEmpty then state
+        else
+          val (stateWithId, surfaceId) = state.allocateSurfaceId
+          val surface = UiSurface(
+            id = surfaceId,
+            content = SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+            presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+          )
+          stateWithId
+            .copy(uiSurfaces = upsertSurface(stateWithId.uiSurfaces, surface))
+            .pushFocus(Focus.Surface(surfaceId))
 
   private def closeTabState(state: AppState, registry: CommandRegistry)(using com.serenity.rope.Balance): AppState =
     val closedState = EditorState.closeFocusedTab(state)

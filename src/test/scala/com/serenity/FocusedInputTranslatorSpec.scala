@@ -97,6 +97,24 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     translator.translate(KeyStrokeInfo(InputKey.Delete, None, Set(Modifier.Ctrl))) shouldBe ModalDeleteWordForward
   }
 
+  it should "treat focused contextual toolbar input as modal-style submit, dismiss, and directional navigation" in {
+    val toolbarState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("contextual-toolbar")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("contextual-toolbar"),
+          SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val translator = FocusedInputTranslator.forState(toolbarState)
+
+    translator.translate(KeyStrokeInfo(InputKey.Enter, None, Set.empty)) shouldBe ModalSubmit
+    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)) shouldBe ModalDismiss
+    translator.translate(KeyStrokeInfo(InputKey.ArrowRight, None, Set.empty)) shouldBe ModalNavigate(Direction.Right)
+  }
+
   it should "treat pinned panel focus as panel-local navigation and focus-return input" in {
     val pinnedState = editorState.copy(
       focus = Focus.Surface(SurfaceId("left-panel")),
@@ -356,4 +374,22 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
         com.serenity.keystroke.events.UnhandledEvent[?]
       ] shouldBe true
     translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set(Modifier.Ctrl))) shouldBe PeekInputEvent.Dismiss
+  }
+
+  it should "route the contextual toolbar hotkey regardless of local surface focus" in {
+    val toolbarState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("contextual-toolbar")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("contextual-toolbar"),
+          SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val translator = FocusedInputTranslator.forState(toolbarState)
+
+    translator
+      .translate(KeyStrokeInfo(InputKey.Character, Some('t'), Set(Modifier.Ctrl, Modifier.Shift)))
+      .shouldBe(ToggleContextualToolbar)
   }
