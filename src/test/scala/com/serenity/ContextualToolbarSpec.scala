@@ -1,10 +1,10 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.command.*
 import com.serenity.config.ToolbarDisplayMode
 import com.serenity.keystroke.events.*
-import com.serenity.richtext.{InlineMark, ParagraphRole}
+import com.serenity.richtext.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, SurfaceFrameLayout, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -296,7 +296,86 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     toolbarStateFrom(state).displayMode shouldBe ToolbarDisplayMode.IconOnly
   }
 
+  it should "move focus vertically between wrapped toolbar rows" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-vertical-top-level")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(26, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val before       = stateManager.getCurrentState.unsafeRunSync()
+    val toolbarState = toolbarStateFrom(before)
+    val contentWidth = toolbarContentWidth(before)
+    val rowGroups =
+      ContextualToolbar.rowGroups(ContextualToolbar.itemsFor(before), contentWidth, toolbarState.displayMode)
+    rowGroups.length should be > 1
+
+    val (startItemId, expectedDownItemId) = verticalTopLevelPair(rowGroups)
+    moveToolbarFocusTo(stateManager, startItemId)
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    focusedToolbarItemId(stateManager.getCurrentState.unsafeRunSync()) shouldBe expectedDownItemId
+
+    stateManager.applyEvent(MoveUp).unsafeRunSync()
+    focusedToolbarItemId(stateManager.getCurrentState.unsafeRunSync()) shouldBe startItemId
+  }
+
+  it should "move dropdown selection vertically between wrapped option rows" in {
+    val items = List(
+      ContextualToolbarItem.Dropdown(
+        id = "paragraph-role",
+        label = "Role",
+        icon = "P",
+        optionItem = CommandSurfaceItem.OptionItem(
+          id = "paragraph-role",
+          label = "Role",
+          options = List(
+            com.serenity.command.CommandOption("Body", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Body)),
+            com.serenity.command.CommandOption("H1", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(1))),
+            com.serenity.command.CommandOption("H2", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(2))),
+            com.serenity.command.CommandOption("H3", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(3)))
+          ),
+          selectedIndex = 1,
+          category = CommandCategory.Edit
+        )
+      )
+    )
+    val toolbarState =
+      ContextualToolbarState(detailState = Some(ContextualToolbarDetailState.Dropdown("paragraph-role", 1)))
+
+    val movedDown = toolbarState.moveDetailSelectionVertical(1, items, contentWidth = 12)
+    movedDown.detailState shouldBe Some(ContextualToolbarDetailState.Dropdown("paragraph-role", 3))
+
+    val movedUp = movedDown.moveDetailSelectionVertical(-1, items, contentWidth = 12)
+    movedUp.detailState shouldBe Some(ContextualToolbarDetailState.Dropdown("paragraph-role", 1))
+  }
+
   private case class Point(x: Int, y: Int)
+
+  private def seedToolbarDocument(stateManager: com.serenity.state.manager.StateManager): Unit =
+    stateManager
+      .updateState { state =>
+        val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
+        val selection = Selection(CursorPosition(0, 6), CursorPosition(0, 10))
+        val range     = RichTextRange(RichTextPosition(0, 0), RichTextPosition(0, 10))
+        val document = RichTextDocument
+          .fromPlainText("alpha beta")
+          .applyMark(range, InlineMark.Bold)
+          .setFontFamily(range, "A")
+          .setFontSize(range, 18.0f)
+          .setParagraphRole(range, ParagraphRole.Body)
+          .setParagraphAlignment(range, ParagraphAlignment.Left)
+          .normalized
+        val nextBuffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha beta"),
+            selection = Some(selection),
+            cursors = List(selection.focus),
+            richTextDocument = Some(document)
+          )
+        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+      }
+      .unsafeRunSync()
 
   private def toolbarItemPoint(state: AppState, itemId: String): Point =
     val itemIndex    = toolbarItemIndex(state, itemId)
@@ -356,6 +435,14 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .collectFirst { case (`surface`.id, rect) => rect }
       .getOrElse(fail("Expected toolbar overlay rect"))
 
+  private def toolbarContentWidth(state: AppState): Int =
+    val toolbarState = toolbarStateFrom(state)
+    SurfaceFrameLayout
+      .forContent(toolbarRect(state), SurfaceContent.ContextualToolbar(toolbarState))
+      .contentRect
+      .width
+      .max(1)
+
   private def toolbarStateFrom(state: AppState): ContextualToolbarState =
     state.contextualToolbarSurface
       .flatMap {
@@ -364,6 +451,32 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
           case _                                              => None
       }
       .getOrElse(fail("Expected contextual toolbar state"))
+
+  private def focusedToolbarItemId(state: AppState): String =
+    val items = ContextualToolbar.itemsFor(state)
+    toolbarStateFrom(state)
+      .normalized(items)
+      .focusedItem(items)
+      .map(_.id)
+      .getOrElse(fail("Expected focused toolbar item"))
+
+  private def verticalTopLevelPair(rowGroups: List[List[ContextualToolbarItem]]): (String, String) =
+    rowGroups.zipWithIndex
+      .collectFirst {
+        case (rowItems, rowIndex)
+            if rowIndex < rowGroups.length - 1 && rowItems.length > 1 && rowGroups(rowIndex + 1).length > 1 =>
+          val localIndex = rowItems.length - 1
+          (
+            rowItems(localIndex).id,
+            rowGroups(rowIndex + 1)(verticalTargetIndex(localIndex, rowItems.length, rowGroups(rowIndex + 1).length)).id
+          )
+      }
+      .getOrElse(fail("Expected wrapped toolbar rows with multiple items"))
+
+  private def verticalTargetIndex(currentIndex: Int, currentRowLength: Int, targetRowLength: Int): Int =
+    (((currentIndex + 0.5d) * targetRowLength) / currentRowLength).toInt
+      .max(0)
+      .min(targetRowLength - 1)
 
   private def moveToolbarFocusTo(stateManager: com.serenity.state.manager.StateManager, itemId: String): Unit =
     val state     = stateManager.getCurrentState.unsafeRunSync()
