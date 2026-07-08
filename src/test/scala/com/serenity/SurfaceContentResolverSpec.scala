@@ -5,6 +5,8 @@ import java.nio.file.Paths
 import com.serenity.command.*
 import com.serenity.config.AppConfig
 import com.serenity.document.RenderedComment
+import com.serenity.richtext.*
+import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
@@ -13,6 +15,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
 
   private val root = Paths.get("/repo")
 
@@ -777,6 +781,57 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     queryRow.segments.map(_.text) shouldBe List("Find", "needle")
     queryRow.segments.last.selected shouldBe true
     floating.footer.map(_.plainText) shouldBe Some("0 matches")
+  }
+
+  it should "wrap contextual toolbar items across multiple rows and mark active rich-text formatting" in {
+    val bufferId = BufferId(0)
+    val selection = Selection(
+      anchor = CursorPosition(0, 6),
+      focus = CursorPosition(0, 10)
+    )
+    val richDocument = RichTextDocument
+      .oneParagraph("alpha beta")
+      .applyMark(
+        RichTextRange(
+          RichTextPosition(0, 6),
+          RichTextPosition(0, 10)
+        ),
+        InlineMark.Bold
+      )
+      .normalized
+    val paneId = PaneId(0)
+    val state = AppState.initial.copy(
+      buffers = Map(
+        bufferId -> Buffer
+          .fromString(bufferId, "alpha beta")
+          .copy(
+            selection = Some(selection),
+            cursors = List(selection.focus),
+            richTextDocument = Some(richDocument)
+          )
+      ),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.EditorPane(paneId)
+    )
+
+    val resolved = SurfaceContentResolver.resolveContextualToolbar(
+      ContextualToolbarState(),
+      state,
+      LayoutRect(0, 0, 24, 8),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.length should be > 1
+    resolved.rows.foreach(_.layout shouldBe OverlayRowLayout.Distributed)
+    resolved.rows
+      .flatMap(_.segments)
+      .find(_.text.contains("Bold"))
+      .map(_.selected)
+      .shouldBe(Some(true))
   }
 
   it should "render find result position when the modal carries match results" in {

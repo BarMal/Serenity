@@ -13,6 +13,7 @@ case object ToggleSyntaxHighlighting extends HotkeyEvent
 case object OpenFile                 extends HotkeyEvent with FileEvent
 case object SaveFile                 extends HotkeyEvent with FileEvent
 case object ToggleCommandRunner      extends HotkeyEvent with GlobalAppEvent
+case object ToggleContextualToolbar  extends HotkeyEvent with GlobalAppEvent
 case object NewTab                   extends HotkeyEvent with GlobalAppEvent // Ctrl+T
 case object CloseTab                 extends HotkeyEvent with GlobalAppEvent // Ctrl+W
 case object NextTab                  extends HotkeyEvent with GlobalAppEvent // Ctrl+Tab

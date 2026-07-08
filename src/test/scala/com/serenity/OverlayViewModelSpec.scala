@@ -335,3 +335,49 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     stack should have size 2
     stack.head.rows should have size 1
   }
+
+  it should "stack the contextual toolbar above the command runner beneath the cursor" in {
+    val commands = List(
+      Command.typed("open", "Open file", CommandIntent.OpenFile)
+    )
+    val registry = CommandRegistry(commands)
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("op")(using registry)
+    val buffer = Buffer
+      .fromString(bufferId, "one\ntwo\nthree")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("contextual-toolbar"),
+          SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
+
+    val overlays = OverlayViewModel.fromState(state, layout)
+    val stack    = overlays.belowCursorStack
+
+    stack should have size 2
+    stack.head.rows.flatMap(_.segments).exists(_.text.contains("Bold")) shouldBe true
+    stack(1).header.map(_.plainText) shouldBe Some("search: op")
+    stack.head.rect.y should be < stack(1).rect.y
+  }

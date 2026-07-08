@@ -48,7 +48,7 @@ object OverlayViewModel:
     val animState = state.surfaceAnimations.get(surface.id).map(_.animationState).getOrElse(AnimationState.empty)
     surface.content match
       case com.serenity.state.models.SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
-        contentView(originalContent, cachedRect).map { content =>
+        contentView(originalContent, state, cachedRect).map { content =>
           TextOverlayView(
             rect = cachedRect,
             borderCells = com.serenity.ui.layout.SurfaceFrameLayout.borderCellsFor(originalContent),
@@ -62,7 +62,7 @@ object OverlayViewModel:
         }
       case content =>
         layoutRect.flatMap { rect =>
-          contentView(content, rect, collapsed).map { resolved =>
+          contentView(content, state, rect, collapsed).map { resolved =>
             TextOverlayView(
               rect = rect,
               borderCells = com.serenity.ui.layout.SurfaceFrameLayout.borderCellsFor(content),
@@ -121,12 +121,18 @@ object OverlayViewModel:
 
   private def contentView(
     content: com.serenity.state.models.SurfaceContent,
+    state: AppState,
     rect: LayoutRect,
     collapsed: Boolean = false
   ): Option[ResolvedSurfaceContent] =
     val resolved =
       if collapsed then collapsedContentView(content)
-      else SurfaceContentResolver.resolve(content, rect, SurfaceRenderMode.Floating)
+      else
+        content match
+          case SurfaceContent.ContextualToolbar(toolbarState) =>
+            SurfaceContentResolver.resolveContextualToolbar(toolbarState, state, rect, SurfaceRenderMode.Floating)
+          case _ =>
+            SurfaceContentResolver.resolve(content, rect, SurfaceRenderMode.Floating)
     Option.when(resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty)(resolved)
 
   private def collapsedContentView(content: com.serenity.state.models.SurfaceContent): ResolvedSurfaceContent =

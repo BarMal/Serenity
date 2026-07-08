@@ -633,7 +633,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     state: AppState,
     mark: com.serenity.richtext.InlineMark
   ): AppState =
-    state.focusedBufferId.flatMap(state.buffers.get) match
+    activeEditorContentBuffer(state) match
       case Some(buffer) =>
         val selections = buffer.allSelections.filter(selection => selection.start != selection.end)
         if selections.isEmpty then state
@@ -676,7 +676,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   private def updateRichTextInlineStyles(
     state: AppState
   )(update: (RichTextDocument, RichTextRange) => RichTextDocument): AppState =
-    state.focusedBufferId.flatMap(state.buffers.get) match
+    activeEditorContentBuffer(state) match
       case Some(buffer) =>
         val ranges = buffer.allSelections.filter(selection => selection.start != selection.end).map(richTextRange)
         if ranges.isEmpty then state
@@ -704,7 +704,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   private def updateRichTextParagraphs(
     state: AppState
   )(update: (RichTextDocument, RichTextRange) => RichTextDocument): AppState =
-    state.focusedBufferId.flatMap(state.buffers.get) match
+    activeEditorContentBuffer(state) match
       case Some(buffer) =>
         val ranges = richTextParagraphRanges(buffer)
         if ranges.isEmpty then state
@@ -739,6 +739,12 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           end = com.serenity.richtext.RichTextPosition(cursor.line, cursor.column)
         )
       }
+
+  private def activeEditorContentBuffer(state: AppState): Option[Buffer] =
+    state.layout.activeEditorPaneId
+      .flatMap(state.layout.editorPanes.get)
+      .flatMap(_.bufferId)
+      .flatMap(state.buffers.get)
 
   private def richTextRange(selection: Selection): com.serenity.richtext.RichTextRange =
     com.serenity.richtext.RichTextRange(

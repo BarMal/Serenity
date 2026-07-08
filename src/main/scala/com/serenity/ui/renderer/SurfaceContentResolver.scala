@@ -108,6 +108,8 @@ object SurfaceContentResolver:
         resolveThemeCreator(state, rect, mode)
       case SurfaceContent.FileSearch(state) =>
         resolveFileSearch(state, rect, mode)
+      case SurfaceContent.ContextualToolbar(_) =>
+        ResolvedSurfaceContent()
       case SurfaceContent.ContextMenu(menu) =>
         resolveContextMenu(menu, rect, mode)
       case SurfaceContent.CommentLens(lens) =>
@@ -836,6 +838,40 @@ object SurfaceContentResolver:
       rows = resultRows,
       footer = Option.when(state.hasMoreResults)(OverlayRow(s"${state.results.length} loaded, more available"))
     )
+
+  def resolveContextualToolbar(
+    toolbarState: ContextualToolbarState,
+    state: AppState,
+    rect: LayoutRect,
+    mode: SurfaceRenderMode
+  ): ResolvedSurfaceContent =
+    val borderCells = SurfaceFrameLayout.borderCellsFor(SurfaceContent.ContextualToolbar(toolbarState))
+    val contentRect = SurfaceFrameLayout(rect, borderCells).contentRect
+    val items       = ContextualToolbar.itemsFor(state)
+    val rowGroups   = ContextualToolbar.rowGroups(items, contentRect.width.max(1), toolbarState.displayMode)
+    val focused     = toolbarState.normalized(items).focusedIndex
+    val rows =
+      rowGroups
+        .foldLeft((0, List.empty[OverlayRow])) {
+          case ((offset, acc), rowItems) =>
+            val segments = rowItems.zipWithIndex.map {
+              case (item, index) =>
+                OverlaySegment(
+                  ContextualToolbar.displayText(item, toolbarState.displayMode),
+                  selected = item.selected || offset + index == focused
+                )
+            }
+            (
+              offset + rowItems.length,
+              acc :+ OverlayRow(
+                plainText = segments.map(_.text).mkString(" "),
+                segments = segments,
+                layout = OverlayRowLayout.Distributed
+              )
+            )
+        }
+        ._2
+    ResolvedSurfaceContent(rows = rows)
 
   private def resolveContextMenu(
     menu: ContextMenu,

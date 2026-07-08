@@ -30,6 +30,7 @@ object FocusedInputTranslator:
                   case SurfaceContent.ThemePicker(_)                 => formTranslator
                   case SurfaceContent.ThemeCreator(_)                => formTranslator
                   case SurfaceContent.FileSearch(_)                  => formTranslator
+                  case SurfaceContent.ContextualToolbar(_)           => formTranslator
                   case SurfaceContent.CommentLens(_)                 => formTranslator
                   case SurfaceContent.StartPage(_)                   => editorTranslator
                   case _                                             => peekOverlayTranslator

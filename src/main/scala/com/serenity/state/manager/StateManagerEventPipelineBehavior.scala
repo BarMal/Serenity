@@ -270,6 +270,9 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
                     new ThemeCreatorComponent()
                   case SurfaceContent.FileSearch(_) =>
                     new FileSearchComponent()
+                  case SurfaceContent.ContextualToolbar(_) =>
+                    val registry = CommandRegistry.withToggleUI
+                    new ContextualToolbarComponent(registry)
                   case SurfaceContent.CommentLens(_) =>
                     new CommentLensComponent()
                   case SurfaceContent.StartPage(_) =>
@@ -803,46 +806,50 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         handleContextMenuMouseClick(click, state).flatMap {
           case true => cats.effect.IO.unit
           case false =>
-            handleCommandRunnerMouseClick(click, state).flatMap {
+            handleContextualToolbarMouseClick(click, state).flatMap {
               case true => cats.effect.IO.unit
               case false =>
-                handlePinnedPanelMouseClick(click, state).flatMap {
+                handleCommandRunnerMouseClick(click, state).flatMap {
                   case true => cats.effect.IO.unit
                   case false =>
-                    handlePinnedPanelLocationClick(click, state).flatMap {
+                    handlePinnedPanelMouseClick(click, state).flatMap {
                       case true => cats.effect.IO.unit
                       case false =>
-                        resolveMouseTarget(click, state).flatMap {
-                          _.fold(dismissContextMenuIfOpen(state)) { (paneId, buffer, clickedCursor) =>
-                            stateRef.update { s =>
-                              s.buffers.get(buffer.id) match
-                                case Some(current) =>
-                                  val selection =
-                                    if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
-                                    else if click.clickCount >= 3 then lineSelectionAtCursor(current, clickedCursor)
-                                    else if click.clickCount >= 2 then wordSelectionAtCursor(current, clickedCursor)
-                                    else None
-                                  val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
-                                  dismissContextMenu(
-                                    s.copy(
-                                      buffers = s.buffers.updated(
-                                        buffer.id,
-                                        current.copy(
-                                          cursors = List(focusCursor),
-                                          selection = selection,
-                                          selections = Nil,
-                                          preferredColumn = Some(focusCursor.column),
-                                          preferredXPx = None,
-                                          multiCursorVerticalStates = Nil
+                        handlePinnedPanelLocationClick(click, state).flatMap {
+                          case true => cats.effect.IO.unit
+                          case false =>
+                            resolveMouseTarget(click, state).flatMap {
+                              _.fold(dismissContextMenuIfOpen(state)) { (paneId, buffer, clickedCursor) =>
+                                stateRef.update { s =>
+                                  s.buffers.get(buffer.id) match
+                                    case Some(current) =>
+                                      val selection =
+                                        if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
+                                        else if click.clickCount >= 3 then lineSelectionAtCursor(current, clickedCursor)
+                                        else if click.clickCount >= 2 then wordSelectionAtCursor(current, clickedCursor)
+                                        else None
+                                      val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
+                                      dismissContextMenu(
+                                        s.copy(
+                                          buffers = s.buffers.updated(
+                                            buffer.id,
+                                            current.copy(
+                                              cursors = List(focusCursor),
+                                              selection = selection,
+                                              selections = Nil,
+                                              preferredColumn = Some(focusCursor.column),
+                                              preferredXPx = None,
+                                              multiCursorVerticalStates = Nil
+                                            )
+                                          ),
+                                          focus = Focus.EditorPane(paneId),
+                                          layout = s.layout.copy(activeEditorPaneId = Some(paneId))
                                         )
-                                      ),
-                                      focus = Focus.EditorPane(paneId),
-                                      layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-                                    )
-                                  )
-                                case None => dismissContextMenu(s)
+                                      )
+                                    case None => dismissContextMenu(s)
+                                }
+                              }
                             }
-                          }
                         }
                     }
                 }
@@ -854,38 +861,42 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
   private def handleMousePress(press: MousePress, state: AppState): cats.effect.IO[Unit] =
     if press.button != MouseButton.Primary then cats.effect.IO.unit
     else
-      handleCommandRunnerMouseHover(press, state).flatMap {
+      handleContextualToolbarMouseHover(press, state).flatMap {
         case true => cats.effect.IO.unit
         case false =>
-          handlePinnedPanelMouseSelect(press, state, focusPanel = true).flatMap {
+          handleCommandRunnerMouseHover(press, state).flatMap {
             case true => cats.effect.IO.unit
             case false =>
-              resolveMouseTarget(press, state).flatMap {
-                _.fold(cats.effect.IO.unit) { (paneId, buffer, pressedCursor) =>
-                  stateRef.update { s =>
-                    s.buffers.get(buffer.id) match
-                      case Some(current) =>
-                        val selection =
-                          Option.when(press.shiftDown)(rangeSelectionFromAnchor(current, pressedCursor)).flatten
-                        val focusCursor = selection.map(_.focus).getOrElse(pressedCursor)
-                        s.copy(
-                          buffers = s.buffers.updated(
-                            buffer.id,
-                            current.copy(
-                              cursors = List(focusCursor),
-                              selection = selection,
-                              selections = Nil,
-                              preferredColumn = Some(focusCursor.column),
-                              preferredXPx = None,
-                              multiCursorVerticalStates = Nil
+              handlePinnedPanelMouseSelect(press, state, focusPanel = true).flatMap {
+                case true => cats.effect.IO.unit
+                case false =>
+                  resolveMouseTarget(press, state).flatMap {
+                    _.fold(cats.effect.IO.unit) { (paneId, buffer, pressedCursor) =>
+                      stateRef.update { s =>
+                        s.buffers.get(buffer.id) match
+                          case Some(current) =>
+                            val selection =
+                              Option.when(press.shiftDown)(rangeSelectionFromAnchor(current, pressedCursor)).flatten
+                            val focusCursor = selection.map(_.focus).getOrElse(pressedCursor)
+                            s.copy(
+                              buffers = s.buffers.updated(
+                                buffer.id,
+                                current.copy(
+                                  cursors = List(focusCursor),
+                                  selection = selection,
+                                  selections = Nil,
+                                  preferredColumn = Some(focusCursor.column),
+                                  preferredXPx = None,
+                                  multiCursorVerticalStates = Nil
+                                )
+                              ),
+                              focus = Focus.EditorPane(paneId),
+                              layout = s.layout.copy(activeEditorPaneId = Some(paneId))
                             )
-                          ),
-                          focus = Focus.EditorPane(paneId),
-                          layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-                        )
-                      case None => s
+                          case None => s
+                      }
+                    }
                   }
-                }
               }
           }
       }
@@ -930,12 +941,16 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     handleContextMenuMouseHover(move, state).flatMap {
       case true => clearEditorHoverTarget
       case false =>
-        handleCommandRunnerMouseHover(move, state).flatMap {
+        handleContextualToolbarMouseHover(move, state).flatMap {
           case true => clearEditorHoverTarget
           case false =>
-            handlePinnedPanelMouseSelect(move, state, focusPanel = false).flatMap {
-              case true  => clearEditorHoverTarget
-              case false => updateEditorHoverTarget(move, state)
+            handleCommandRunnerMouseHover(move, state).flatMap {
+              case true => clearEditorHoverTarget
+              case false =>
+                handlePinnedPanelMouseSelect(move, state, focusPanel = false).flatMap {
+                  case true  => clearEditorHoverTarget
+                  case false => updateEditorHoverTarget(move, state)
+                }
             }
         }
     }
@@ -1196,6 +1211,86 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     surface.content match
       case SurfaceContent.ContextMenu(_) => true
       case _                             => false
+
+  private def handleContextualToolbarMouseHover(event: MouseInputEvent, state: AppState): cats.effect.IO[Boolean] =
+    contextualToolbarSelectionAt(event, state) match
+      case Some((surface, toolbarState, index)) =>
+        stateRef
+          .update { current =>
+            val items        = ContextualToolbar.itemsFor(current)
+            val updatedState = toolbarState.withFocusedIndex(index, items)
+            current.copy(uiSurfaces = current.uiSurfaces.map {
+              case existing if existing.id == surface.id =>
+                existing.copy(content = SurfaceContent.ContextualToolbar(updatedState))
+              case existing => existing
+            })
+          }
+          .as(true)
+      case None =>
+        cats.effect.IO.pure(false)
+
+  private def handleContextualToolbarMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =
+    contextualToolbarSelectionAt(click, state) match
+      case Some((surface, toolbarState, index)) =>
+        val registry     = CommandRegistry.withToggleUI
+        val focusedState = toolbarState.withFocusedIndex(index, ContextualToolbar.itemsFor(state))
+        stateRef.update { current =>
+          current.copy(
+            uiSurfaces = current.uiSurfaces.map {
+              case existing if existing.id == surface.id =>
+                existing.copy(content = SurfaceContent.ContextualToolbar(focusedState))
+              case existing => existing
+            },
+            focus = Focus.Surface(surface.id)
+          )
+        } >>
+          stateRef.get.flatMap { current =>
+            ContextualToolbar.focusedCommand(focusedState, current, registry) match
+              case Some(command) => executeCommand(command).as(true)
+              case None          => cats.effect.IO.pure(false)
+          }
+      case None =>
+        cats.effect.IO.pure(false)
+
+  private def contextualToolbarSelectionAt(
+    event: MouseInputEvent,
+    state: AppState
+  ): Option[(UiSurface, ContextualToolbarState, Int)] =
+    for
+      viewportSize <- state.viewportSize
+      surface      <- state.contextualToolbarSurface
+      toolbarState <- surface.content match
+        case SurfaceContent.ContextualToolbar(toolbarState) => Some(toolbarState)
+        case _                                              => None
+      layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      rect  <- overlayRectForSurface(layout, surface.id)
+      index <- contextualToolbarItemIndex(event, rect, state, toolbarState)
+    yield (surface, toolbarState, index)
+
+  private def contextualToolbarItemIndex(
+    event: MouseInputEvent,
+    rect: LayoutRect,
+    state: AppState,
+    toolbarState: ContextualToolbarState
+  ): Option[Int] =
+    val contentRect   = SurfaceFrameLayout.forContent(rect, SurfaceContent.ContextualToolbar(toolbarState)).contentRect
+    val withinColumns = event.col >= contentRect.x && event.col < contentRect.right
+    val withinRows    = event.row >= contentRect.y && event.row < contentRect.bottom
+    Option.when(withinColumns && withinRows)(()).flatMap { _ =>
+      val items     = ContextualToolbar.itemsFor(state)
+      val rowGroups = ContextualToolbar.rowGroups(items, contentRect.width.max(1), toolbarState.displayMode)
+      val rowIndex  = event.row - contentRect.y
+      rowGroups.lift(rowIndex).flatMap { rowItems =>
+        Option.when(rowItems.nonEmpty) {
+          val offset = rowGroups.take(rowIndex).map(_.length).sum
+          val localIndex =
+            (((event.col - contentRect.x) * rowItems.length) / contentRect.width.max(1))
+              .max(0)
+              .min(rowItems.length - 1)
+          offset + localIndex
+        }
+      }
+    }
 
   private def handleCommandRunnerMouseHover(event: MouseInputEvent, state: AppState): cats.effect.IO[Boolean] =
     commandRunnerSelectionAt(event, state) match
