@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
+import com.serenity.config.ToolbarDisplayMode
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.SurfaceContent
@@ -276,6 +277,16 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "contextual-toolbar-text-only",
+          "Set contextual toolbar display to text only",
+          CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
 
     val disabledState = stateManager.getCurrentState.unsafeRunSync()
     disabledState.config.showLineNumbers shouldBe false
@@ -283,6 +294,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     disabledState.config.wordWrapEnabled shouldBe false
     disabledState.config.focusedTextBodyEnabled shouldBe true
     disabledState.config.contextualToolbarEnabled shouldBe false
+    disabledState.config.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.TextOnly
 
     stateManager
       .executeCommand(
@@ -320,6 +332,16 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "contextual-toolbar-icon-text",
+          "Set contextual toolbar display to icon and text",
+          CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
 
     val enabledState = stateManager.getCurrentState.unsafeRunSync()
     enabledState.config.showLineNumbers shouldBe true
@@ -327,4 +349,5 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     enabledState.config.wordWrapEnabled shouldBe true
     enabledState.config.focusedTextBodyEnabled shouldBe false
     enabledState.config.contextualToolbarEnabled shouldBe true
+    enabledState.config.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.IconAndText
   }

@@ -584,6 +584,22 @@ object CommandRunnerSettingsItems:
       hint = "Show the floating rich-text toolbar above the cursor"
     )
 
+  private[command] def contextualToolbarDisplayModeOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "contextual-toolbar-display",
+      label = "Contextual Toolbar",
+      options = List(
+        CommandOption("Icon Only", CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)),
+        CommandOption("Text Only", CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly)),
+        CommandOption("Icon + Text", CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText))
+      ),
+      selectedIndex = optionSelections.getOrElse("contextual-toolbar-display", 2),
+      category = CommandCategory.Settings,
+      hint = Some("Toolbar labels as icons, text, or both")
+    )
+
   private[command] val navigationItems: List[CommandSurfaceItem.CommandItem] =
     List(
       Command.typed(

@@ -65,6 +65,14 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "spellcheck-languages",
       "spellcheck-dictionaries"
     )
+    groupById(groups, "settings-text-display").children.map(_.id) shouldBe List(
+      "line-numbers",
+      "gutter",
+      "line-wrap",
+      "focused-text-body",
+      "contextual-toolbar",
+      "contextual-toolbar-display"
+    )
     groupById(groups, "settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
       "ui-element-gap",

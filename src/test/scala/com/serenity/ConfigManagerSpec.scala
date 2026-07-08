@@ -538,17 +538,17 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
   }
 
   it should "load and write contextual toolbar display mode" in {
-    val configFile = Files.createTempFile("serenity-contextual-toolbar-config", ".conf")
+    val configFile = Files.createTempFile("serenity-contextual-toolbar-display-config", ".conf")
     Files.writeString(
       configFile,
-      """display.contextual_toolbar = false
+      """display.contextual_toolbar_mode = text-only
         |""".stripMargin
     )
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.contextualToolbarEnabled shouldBe false
-    ConfigManager.configToString(config) should include("display.contextual_toolbar = false")
+    config.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.TextOnly
+    ConfigManager.configToString(config) should include("display.contextual_toolbar_mode = text-only")
   }
 
   it should "load and write viewport sizing policy" in {

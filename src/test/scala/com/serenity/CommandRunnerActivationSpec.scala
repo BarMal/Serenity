@@ -137,8 +137,29 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     runner.optionSelections.get("focused-text-body") shouldBe Some(0)
     runner.optionSelections.get("contextual-toolbar") shouldBe Some(1)
     settingsGroup(runner, "settings-text-display").map(_.children.map(_.id)) should contain(
-      List("line-numbers", "gutter", "line-wrap", "focused-text-body", "contextual-toolbar")
+      List(
+        "line-numbers",
+        "gutter",
+        "line-wrap",
+        "focused-text-body",
+        "contextual-toolbar",
+        "contextual-toolbar-display"
+      )
     )
+  }
+
+  it should "expose contextual toolbar display mode in the text display settings group" in {
+    val config = AppConfig.default.withContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly)
+    val runner = CommandRunner.empty.activate(registry, config)
+
+    runner.optionSelections.get("contextual-toolbar-display") shouldBe Some(1)
+    settingsGroup(runner, "settings-text-display")
+      .flatMap(
+        _.children.collectFirst {
+          case item: CommandSurfaceItem.OptionItem if item.id == "contextual-toolbar-display" =>
+            item.selectedOption -> item.options.map(_.label)
+        }
+      ) shouldBe Some("Text Only" -> List("Icon Only", "Text Only", "Icon + Text"))
   }
 
   it should "expose cursor info bar mode in the appearance settings group" in {

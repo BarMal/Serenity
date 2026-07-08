@@ -103,6 +103,7 @@ enum CommandIntent:
   case SetWordWrap(enabled: Boolean)
   case SetFocusedTextBody(enabled: Boolean)
   case SetContextualToolbarEnabled(enabled: Boolean)
+  case SetContextualToolbarDisplayMode(mode: ToolbarDisplayMode)
   case SetCursorMode(mode: CursorMode)
   case SetCursorInfoBarMode(mode: CursorInfoBarMode)
   case SetCursorInfoBarPlacement(placement: CursorInfoBarPlacement)

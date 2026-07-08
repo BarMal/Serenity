@@ -105,24 +105,35 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         lspQueue.offer(effect)
 
   protected def withUpdatedRunnerConfig(state: AppState, config: com.serenity.config.AppConfig): AppState =
-    state.commandRunnerSurface match
-      case Some(surface) =>
+    val commandRunnerSurfaceId = state.commandRunnerSurface.map(_.id)
+    val updatedRunner =
+      state.commandRunnerSurface.flatMap { surface =>
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
             val configRunner = runner.updateInputItems(config)
-            val updatedRunner = configRunner.copy(
-              optionSelections = configRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
+            Some(
+              configRunner.copy(optionSelections =
+                configRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
+              )
             )
-            val updatedSurfaces = state.uiSurfaces.map {
-              case current if current.id == surface.id =>
-                current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-              case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
-                current.copy(content = SurfaceContent.CommandPaletteSubmenu(updatedRunner, groupId, previewOnly))
-              case other => other
-            }
-            state.copy(uiSurfaces = updatedSurfaces)
-          case _ => state
-      case None => state
+          case _ =>
+            None
+      }
+    val updatedSurfaces = state.uiSurfaces.map {
+      case current if updatedRunner.isDefined && commandRunnerSurfaceId.contains(current.id) =>
+        current.copy(content = SurfaceContent.CommandPalette(updatedRunner.get))
+      case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _)
+          if updatedRunner.isDefined =>
+        current.copy(content = SurfaceContent.CommandPaletteSubmenu(updatedRunner.get, groupId, previewOnly))
+      case current @ UiSurface(_, SurfaceContent.ContextualToolbar(toolbarState), _, _) =>
+        current.copy(
+          content =
+            SurfaceContent.ContextualToolbar(toolbarState.copy(displayMode = config.contextualToolbarDisplayMode))
+        )
+      case other =>
+        other
+    }
+    state.copy(uiSurfaces = updatedSurfaces)
 
   protected def updateConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
@@ -269,6 +280,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateTextDisplayConfig(config => config.withFocusedTextBody(enabled)).void
       case CommandIntent.SetContextualToolbarEnabled(enabled) =>
         updateTextDisplayConfig(config => config.withContextualToolbarEnabled(enabled)).void
+      case CommandIntent.SetContextualToolbarDisplayMode(mode) =>
+        updateTextDisplayConfig(config => config.withContextualToolbarDisplayMode(mode)).void
       case CommandIntent.SaveCurrentFile =>
         state.focusedBufferId match
           case Some(bufferId) => saveBufferEffect(bufferId)

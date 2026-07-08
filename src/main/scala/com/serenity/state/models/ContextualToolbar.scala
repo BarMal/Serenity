@@ -1,15 +1,10 @@
 package com.serenity.state.models
 
 import com.serenity.command.*
-import com.serenity.config.MarkdownViewMode
+import com.serenity.config.{MarkdownViewMode, ToolbarDisplayMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.ui.fonts.FontLoader
-
-enum ToolbarDisplayMode:
-  case IconOnly
-  case TextOnly
-  case IconAndText
 
 enum ContextualToolbarItem:
   def id: String

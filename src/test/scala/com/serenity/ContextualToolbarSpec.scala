@@ -1,6 +1,8 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.config.ToolbarDisplayMode
 import com.serenity.keystroke.events.*
 import com.serenity.richtext.{InlineMark, ParagraphRole}
 import com.serenity.state.models.*
@@ -263,6 +265,35 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .flatMap(_.runs.find(_.text == "beta"))
       .flatMap(_.style.color)
       .shouldBe(Some("#336699"))
+  }
+
+  it should "open with the configured display mode and refresh when the preference changes" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-display-mode")
+
+    stateManager
+      .updateState(state =>
+        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly))
+      )
+      .unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    toolbarStateFrom(stateManager.getCurrentState.unsafeRunSync()).displayMode shouldBe ToolbarDisplayMode.TextOnly
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "contextual-toolbar-icon-only",
+          "Set contextual toolbar display to icon only",
+          CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.config.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.IconOnly
+    toolbarStateFrom(state).displayMode shouldBe ToolbarDisplayMode.IconOnly
   }
 
   private case class Point(x: Int, y: Int)

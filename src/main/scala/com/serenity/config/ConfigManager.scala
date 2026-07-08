@@ -214,6 +214,12 @@ object ConfigManager:
               parseBoolean(value.trim).map(config.withFocusedTextBody).getOrElse(config)
             case "display.contextual_toolbar" | "display.contextual.toolbar" | "display_contextual_toolbar" =>
               parseBoolean(value.trim).map(config.withContextualToolbarEnabled).getOrElse(config)
+            case "display.contextual_toolbar_mode" | "display.contextual.toolbar.mode" |
+                "display_contextual_toolbar_mode" =>
+              ToolbarDisplayMode
+                .fromConfigKey(value.trim)
+                .map(config.withContextualToolbarDisplayMode)
+                .getOrElse(config)
             case "cursor.info_bar" | "cursor.info.bar" | "cursor_info_bar" =>
               value.trim.toLowerCase match
                 case "off" | "false" | "disabled" =>
@@ -466,6 +472,7 @@ object ConfigManager:
        |display.word_wrap = ${config.wordWrapEnabled}
        |display.focused_text_body = ${config.focusedTextBodyEnabled}
        |display.contextual_toolbar = ${config.contextualToolbarEnabled}
+       |display.contextual_toolbar_mode = ${config.contextualToolbarDisplayMode.configKey}
        |
        |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
        |ui.material = ${config.materialPreset.configKey}

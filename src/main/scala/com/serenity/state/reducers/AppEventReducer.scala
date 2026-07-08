@@ -88,7 +88,9 @@ object AppEventReducer:
             val (stateWithId, surfaceId) = state.allocateSurfaceId
             val surface = UiSurface(
               id = surfaceId,
-              content = SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+              content = SurfaceContent.ContextualToolbar(
+                ContextualToolbarState(displayMode = state.config.contextualToolbarDisplayMode)
+              ),
               presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
             )
             stateWithId
