@@ -259,4 +259,29 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     topPanel.bottom + gap should be <= layout.editorPanelRect.y
     layout.editorPanelRect.bottom + gap should be <= bottomPanel.y
   }
+
+  it should "apply horizontal spacer overrides consistently to workspace and active pane bounds" in {
+    val state = AppState.initial.copy(
+      config = AppConfig.default.copy(
+        showLineNumbers = false,
+        showGutter = false,
+        textAreaInsets = TextAreaInsets()
+      )
+    )
+
+    val spacerPercentage = 0.25
+    val layout           = LayoutEngine.calculateLayout(state, viewport, spacerPercentage)
+    val paneLayout = LayoutEngine
+      .calculateEditorWorkspaceLayout(state, layout)
+      .activePaneLayout(state)
+      .getOrElse(fail("expected active pane layout"))
+
+    layout.leftSpacerRect.width shouldBe (viewport.width * spacerPercentage).toInt
+    layout.rightSpacerRect.width shouldBe (viewport.width * spacerPercentage).toInt
+    paneLayout.paneRect shouldBe layout.editorPanelRect
+    paneLayout.headerRect.x shouldBe layout.leftSpacerRect.x
+    paneLayout.headerRect.right shouldBe layout.rightSpacerRect.right
+    paneLayout.contentRect.x shouldBe layout.editorPanelRect.x
+    paneLayout.contentRect.width shouldBe layout.editorPanelRect.width
+  }
 end LayoutContractSpec
