@@ -84,30 +84,23 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     state.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
-  it should "open a focused font size field, accept typed input, and apply it on Enter" in {
+  it should "open a focused font size field with the current value prefilled, accept edits, and apply them on Enter" in {
     val stateManager = createStateManager("ContextualToolbarSpec-font-size")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
-    stateManager
-      .updateState { state =>
-        val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
-        val selection = Selection(CursorPosition(0, 6), CursorPosition(0, 10))
-        val nextBuffer = state
-          .buffers(bufferId)
-          .copy(
-            content = com.serenity.rope.Rope("alpha beta"),
-            selection = Some(selection),
-            cursors = List(selection.focus)
-          )
-        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
-      }
-      .unsafeRunSync()
+    seedToolbarDocument(stateManager)
 
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
     moveToolbarFocusTo(stateManager, "font-size")
     stateManager.applyEvent(Enter).unsafeRunSync()
-    stateManager.applyEvent(InsertChar('1')).unsafeRunSync()
-    stateManager.applyEvent(InsertChar('8')).unsafeRunSync()
+
+    toolbarStateFrom(stateManager.getCurrentState.unsafeRunSync()).detailState shouldBe
+      Some(ContextualToolbarDetailState.Input("font-size", "18"))
+
+    stateManager.applyEvent(DeleteBackward).unsafeRunSync()
+    stateManager.applyEvent(DeleteBackward).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('2')).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('0')).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -117,7 +110,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .flatMap(_.paragraphs.headOption)
       .flatMap(_.runs.find(_.text == "beta"))
       .flatMap(_.style.fontSize)
-      .shouldBe(Some(18.0f))
+      .shouldBe(Some(20.0f))
   }
 
   it should "close an open toolbar control on Escape before dismissing the toolbar" in {
