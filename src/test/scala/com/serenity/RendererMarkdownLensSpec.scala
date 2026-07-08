@@ -4,6 +4,7 @@ import java.awt.Font
 
 import com.serenity.config.MarkdownViewMode
 import com.serenity.lsp.config.LanguageId
+import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -415,6 +416,34 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     renderedRows.exists(_.contains("Active paragraph")) shouldBe true
     renderedRows.exists(_.contains("continued")) shouldBe true
     border.y should be > (paneRect.y + 1) * metrics.lineHeight
+    border.h shouldBe 2 * metrics.lineHeight
+  }
+
+  it should "align the active lens after expanded preview context" in {
+    val source =
+      "| Task | Owner |\n| ---- | ----- |\n| Ship | Codex |\n\nActive paragraph\ncontinued"
+    val cursor                    = CursorPosition(4, 0)
+    val (state, surface, metrics) = renderMarkdownLens(source, cursor, topLine = Some(0))
+    val paneRect =
+      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
+        PaneId(1)
+      )
+
+    val lines = source.linesIterator.toVector
+    val previewWindow = MarkdownDocumentPreview.PreviewWindow(
+      firstSourceLine = 0,
+      firstPreviewRow = MarkdownDocumentPreview.previewRowForSourceLine(lines, 0).getOrElse(0),
+      source = source
+    )
+    val expectedTopRows =
+      MarkdownDocumentPreview
+        .previewRowsForSourceRange(lines, cursor.line to (cursor.line + 1))
+        .map(_.start - previewWindow.firstPreviewRow)
+        .getOrElse(cursor.line - previewWindow.firstSourceLine)
+
+    surface.strokeRoundRectCalls should not be empty
+    val border = surface.strokeRoundRectCalls.head
+    border.y shouldBe (paneRect.y + 1 + expectedTopRows) * metrics.lineHeight
     border.h shouldBe 2 * metrics.lineHeight
   }
 

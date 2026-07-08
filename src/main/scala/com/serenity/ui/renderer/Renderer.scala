@@ -1059,7 +1059,9 @@ object Renderer:
       blockVisualLines.length,
       previewRange.map(range => range.end - range.start + 1).getOrElse(0)
     )
-    val desiredTop        = blockRange.start - previewWindow.firstSourceLine
+    val desiredTop = previewRange
+      .map(_.start - previewWindow.firstPreviewRow)
+      .getOrElse(blockRange.start - previewWindow.firstSourceLine)
     val visibleLensHeight = lensHeight.max(1).min(visibleHeight.max(1))
     MarkdownLensPlacement(
       top = desiredTop.max(0).min(math.max(0, visibleHeight - visibleLensHeight)),
