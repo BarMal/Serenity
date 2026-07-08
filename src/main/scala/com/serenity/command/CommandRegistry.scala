@@ -122,6 +122,13 @@ object CommandRegistry:
       CommandIntent.ToggleFocusedTextBody,
       CommandCategory.View,
       label = "Toggle Text Body Focus"
+    ),
+    Command.typed(
+      "toggle-contextual-toolbar",
+      "Show or hide the floating rich-text formatting toolbar above the cursor.",
+      CommandIntent.ToggleContextualToolbar,
+      CommandCategory.View,
+      label = "Toggle Contextual Toolbar"
     )
   )
 

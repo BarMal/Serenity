@@ -257,6 +257,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateTextDisplayConfig(config => config.withWordWrap(!config.wordWrapEnabled)).void
       case CommandIntent.ToggleFocusedTextBody =>
         updateTextDisplayConfig(config => config.withFocusedTextBody(!config.focusedTextBodyEnabled)).void
+      case CommandIntent.ToggleContextualToolbar =>
+        updateTextDisplayConfig(config => config.withContextualToolbarEnabled(!config.contextualToolbarEnabled)).void
       case CommandIntent.SetLineNumbers(enabled) =>
         updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
       case CommandIntent.SetGutter(enabled) =>
@@ -265,6 +267,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateTextDisplayConfig(config => config.withWordWrap(enabled)).void
       case CommandIntent.SetFocusedTextBody(enabled) =>
         updateTextDisplayConfig(config => config.withFocusedTextBody(enabled)).void
+      case CommandIntent.SetContextualToolbarEnabled(enabled) =>
+        updateTextDisplayConfig(config => config.withContextualToolbarEnabled(enabled)).void
       case CommandIntent.SaveCurrentFile =>
         state.focusedBufferId match
           case Some(bufferId) => saveBufferEffect(bufferId)
