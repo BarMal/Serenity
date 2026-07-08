@@ -32,6 +32,7 @@ object CommandRunnerOptionSelections:
       "line-wrap"                 -> enabledIndex(config.wordWrapEnabled),
       "word-wrap"                 -> enabledIndex(config.wordWrapEnabled),
       "focused-text-body"         -> enabledIndex(config.focusedTextBodyEnabled),
+      "contextual-toolbar"        -> enabledIndex(config.contextualToolbarEnabled),
       "code-font"                 -> codeFontIndex(config.fontConfig.codeFontFamily),
       "text-font"                 -> textFontIndex(config.fontConfig.textFontFamily),
       "ui-font"                   -> uiFontIndex(config.fontConfig.uiFontFamily),

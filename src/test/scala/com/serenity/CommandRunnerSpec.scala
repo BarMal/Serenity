@@ -346,7 +346,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "line-numbers",
       "gutter",
       "line-wrap",
-      "focused-text-body"
+      "focused-text-body",
+      "contextual-toolbar"
     )
     nestedGroup("settings-text-area").label shouldBe "Text Area"
     nestedGroup("settings-text-area").children.map(_.id) shouldBe List(
@@ -440,7 +441,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val config = AppConfig.default
-      .copy(showLineNumbers = false, showGutter = false, wordWrapEnabled = false)
+      .copy(showLineNumbers = false, showGutter = false, wordWrapEnabled = false, contextualToolbarEnabled = false)
     val runner = CommandRunner.empty
       .activate(registry, config)
       .withActiveCategory(CommandCategory.Settings)
@@ -449,16 +450,18 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val options     = textDisplay.children.collect { case option: CommandSurfaceItem.OptionItem => option }
 
     options.map(option => option.id -> option.selectedOption) shouldBe List(
-      "line-numbers"      -> "Off",
-      "gutter"            -> "Off",
-      "line-wrap"         -> "Off",
-      "focused-text-body" -> "Off"
+      "line-numbers"       -> "Off",
+      "gutter"             -> "Off",
+      "line-wrap"          -> "Off",
+      "focused-text-body"  -> "Off",
+      "contextual-toolbar" -> "Off"
     )
     options.flatMap(_.selectedIntent) shouldBe List(
       CommandIntent.SetLineNumbers(false),
       CommandIntent.SetGutter(false),
       CommandIntent.SetWordWrap(false),
-      CommandIntent.SetFocusedTextBody(false)
+      CommandIntent.SetFocusedTextBody(false),
+      CommandIntent.SetContextualToolbarEnabled(false)
     )
   }
 

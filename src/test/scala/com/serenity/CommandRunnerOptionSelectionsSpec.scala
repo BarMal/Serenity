@@ -35,6 +35,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
       showLineNumbers = false,
       showGutter = false,
       wordWrapEnabled = false,
+      contextualToolbarEnabled = false,
       fontConfig = AppConfig.default.fontConfig.copy(
         codeFontFamily = codeFont,
         textFontFamily = textFont,
@@ -69,6 +70,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("gutter") shouldBe 1
     selections("line-wrap") shouldBe 1
     selections("word-wrap") shouldBe 1
+    selections("contextual-toolbar") shouldBe 1
     selections("code-font") shouldBe FontLoader.availableMonospaceFamilies.indexOf(codeFont)
     selections("text-font") shouldBe FontLoader.availableTextFamilies.indexOf(textFont)
     selections("ui-font") shouldBe FontLoader.availableUiFamilies.indexOf(uiFont)

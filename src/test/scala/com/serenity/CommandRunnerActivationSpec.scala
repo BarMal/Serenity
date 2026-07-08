@@ -128,13 +128,16 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       ) shouldBe Some(("3", "Pixels (1-8)", Some(CommandIntent.SetUiOutlineThicknessPx(4)), None))
   }
 
-  it should "expose focused text body in the text display settings group" in {
-    val config = AppConfig.default.withFocusedTextBody(true)
+  it should "expose focused text body and contextual toolbar in the text display settings group" in {
+    val config = AppConfig.default
+      .withFocusedTextBody(true)
+      .withContextualToolbarEnabled(false)
     val runner = CommandRunner.empty.activate(registry, config)
 
     runner.optionSelections.get("focused-text-body") shouldBe Some(0)
+    runner.optionSelections.get("contextual-toolbar") shouldBe Some(1)
     settingsGroup(runner, "settings-text-display").map(_.children.map(_.id)) should contain(
-      List("line-numbers", "gutter", "line-wrap", "focused-text-body")
+      List("line-numbers", "gutter", "line-wrap", "focused-text-body", "contextual-toolbar")
     )
   }
 

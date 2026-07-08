@@ -213,6 +213,16 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().config.focusedTextBodyEnabled shouldBe true
   }
 
+  it should "toggle contextual toolbar from enabled to disabled" in {
+    val stateManager = createStateManager()
+
+    stateManager.getCurrentState.unsafeRunSync().config.contextualToolbarEnabled shouldBe true
+
+    executeCommandThroughRunner(stateManager, "toggle-contextual-toolbar", "toggle-contextual-toolbar")
+
+    stateManager.getCurrentState.unsafeRunSync().config.contextualToolbarEnabled shouldBe false
+  }
+
   it should "toggle word wrap from enabled to disabled" in {
     val stateManager = createStateManager()
 
@@ -256,12 +266,23 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "contextual-toolbar-off",
+          "Set contextual toolbar off",
+          CommandIntent.SetContextualToolbarEnabled(false),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
 
     val disabledState = stateManager.getCurrentState.unsafeRunSync()
     disabledState.config.showLineNumbers shouldBe false
     disabledState.config.showGutter shouldBe false
     disabledState.config.wordWrapEnabled shouldBe false
     disabledState.config.focusedTextBodyEnabled shouldBe true
+    disabledState.config.contextualToolbarEnabled shouldBe false
 
     stateManager
       .executeCommand(
@@ -289,10 +310,21 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "contextual-toolbar-on",
+          "Set contextual toolbar on",
+          CommandIntent.SetContextualToolbarEnabled(true),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
 
     val enabledState = stateManager.getCurrentState.unsafeRunSync()
     enabledState.config.showLineNumbers shouldBe true
     enabledState.config.showGutter shouldBe true
     enabledState.config.wordWrapEnabled shouldBe true
     enabledState.config.focusedTextBodyEnabled shouldBe false
+    enabledState.config.contextualToolbarEnabled shouldBe true
   }

@@ -12,30 +12,31 @@ object CommandRunnerSettingsGroups:
     uiPresetPreviews: List[UiPreset.Preview],
     editingPresetName: Option[String]
   ): List[CommandSurfaceItem.GroupItem] =
-    val animationItem        = CommandRunnerSettingsItems.animationOptionItem(optionSelections)
-    val cursorModeItem       = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
-    val cursorInfoBarItem    = CommandRunnerSettingsItems.cursorInfoBarOptionItem(optionSelections)
-    val cursorInfoPlacement  = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
-    val backgroundStyleItem  = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
-    val interfaceDensityItem = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
-    val materialPresetItem   = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
-    val motionPresetItem     = CommandRunnerSettingsItems.motionPresetOptionItem(optionSelections)
-    val commandRunnerFade    = CommandRunnerSettingsItems.commandRunnerFadeOptionItem(optionSelections)
-    val uiAnimationItem      = CommandRunnerSettingsItems.uiAnimationOptionItem(optionSelections)
-    val renderFpsItem        = CommandRunnerSettingsItems.renderFpsOptionItem(optionSelections)
-    val editorTextItem       = CommandRunnerSettingsItems.editorTextTransitionOptionItem(optionSelections)
-    val panelOpenItem        = CommandRunnerSettingsItems.panelOpenTransitionOptionItem(optionSelections)
-    val panelCloseItem       = CommandRunnerSettingsItems.panelCloseTransitionOptionItem(optionSelections)
-    val commandRunnerReveal  = CommandRunnerSettingsItems.commandRunnerTransitionOptionItem(optionSelections)
-    val markdownViewItem     = CommandRunnerSettingsItems.markdownViewOptionItem(optionSelections)
-    val defaultDocumentItem  = CommandRunnerSettingsItems.defaultDocumentModeOptionItem(optionSelections)
-    val spellCheckItem       = CommandRunnerSettingsItems.spellCheckOptionItem(optionSelections)
-    val textScaleModeItem    = CommandRunnerSettingsItems.textScaleModeOptionItem(optionSelections)
-    val lineNumbersItem      = CommandRunnerSettingsItems.lineNumbersOptionItem(optionSelections)
-    val gutterItem           = CommandRunnerSettingsItems.gutterOptionItem(optionSelections)
-    val lineWrapItem         = CommandRunnerSettingsItems.lineWrapOptionItem(optionSelections)
-    val focusedTextBodyItem  = CommandRunnerSettingsItems.focusedTextBodyOptionItem(optionSelections)
-    val keymapItems          = inputItems.filter(_.id.startsWith("keymap-"))
+    val animationItem         = CommandRunnerSettingsItems.animationOptionItem(optionSelections)
+    val cursorModeItem        = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
+    val cursorInfoBarItem     = CommandRunnerSettingsItems.cursorInfoBarOptionItem(optionSelections)
+    val cursorInfoPlacement   = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
+    val backgroundStyleItem   = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
+    val interfaceDensityItem  = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
+    val materialPresetItem    = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
+    val motionPresetItem      = CommandRunnerSettingsItems.motionPresetOptionItem(optionSelections)
+    val commandRunnerFade     = CommandRunnerSettingsItems.commandRunnerFadeOptionItem(optionSelections)
+    val uiAnimationItem       = CommandRunnerSettingsItems.uiAnimationOptionItem(optionSelections)
+    val renderFpsItem         = CommandRunnerSettingsItems.renderFpsOptionItem(optionSelections)
+    val editorTextItem        = CommandRunnerSettingsItems.editorTextTransitionOptionItem(optionSelections)
+    val panelOpenItem         = CommandRunnerSettingsItems.panelOpenTransitionOptionItem(optionSelections)
+    val panelCloseItem        = CommandRunnerSettingsItems.panelCloseTransitionOptionItem(optionSelections)
+    val commandRunnerReveal   = CommandRunnerSettingsItems.commandRunnerTransitionOptionItem(optionSelections)
+    val markdownViewItem      = CommandRunnerSettingsItems.markdownViewOptionItem(optionSelections)
+    val defaultDocumentItem   = CommandRunnerSettingsItems.defaultDocumentModeOptionItem(optionSelections)
+    val spellCheckItem        = CommandRunnerSettingsItems.spellCheckOptionItem(optionSelections)
+    val textScaleModeItem     = CommandRunnerSettingsItems.textScaleModeOptionItem(optionSelections)
+    val lineNumbersItem       = CommandRunnerSettingsItems.lineNumbersOptionItem(optionSelections)
+    val gutterItem            = CommandRunnerSettingsItems.gutterOptionItem(optionSelections)
+    val lineWrapItem          = CommandRunnerSettingsItems.lineWrapOptionItem(optionSelections)
+    val focusedTextBodyItem   = CommandRunnerSettingsItems.focusedTextBodyOptionItem(optionSelections)
+    val contextualToolbarItem = CommandRunnerSettingsItems.contextualToolbarOptionItem(optionSelections)
+    val keymapItems           = inputItems.filter(_.id.startsWith("keymap-"))
     val workspaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-workspace-layout",
       label = "Panels & Workspace",
@@ -53,9 +54,9 @@ object CommandRunnerSettingsGroups:
     val textDisplayGroup = CommandSurfaceItem.GroupItem(
       id = "settings-text-display",
       label = "Text Display",
-      children = List(lineNumbersItem, gutterItem, lineWrapItem, focusedTextBodyItem),
+      children = List(lineNumbersItem, gutterItem, lineWrapItem, focusedTextBodyItem, contextualToolbarItem),
       category = CommandCategory.Settings,
-      hint = Some("Line numbers, gutter, wrap, focus")
+      hint = Some("Line numbers, gutter, wrap, focus, toolbar")
     )
     val motionInputIds = Set(
       "animation-duration",

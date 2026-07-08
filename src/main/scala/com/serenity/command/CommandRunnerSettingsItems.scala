@@ -572,6 +572,18 @@ object CommandRunnerSettingsItems:
       hint = "Dim text outside the active body"
     )
 
+  private[command] def contextualToolbarOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    enabledOptionItem(
+      id = "contextual-toolbar",
+      label = "Contextual Toolbar",
+      selectedIndex = optionSelections.getOrElse("contextual-toolbar", 0),
+      enabledIntent = CommandIntent.SetContextualToolbarEnabled(true),
+      disabledIntent = CommandIntent.SetContextualToolbarEnabled(false),
+      hint = "Show the floating rich-text toolbar above the cursor"
+    )
+
   private[command] val navigationItems: List[CommandSurfaceItem.CommandItem] =
     List(
       Command.typed(
