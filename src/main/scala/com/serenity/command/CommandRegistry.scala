@@ -289,6 +289,48 @@ object CommandRegistry:
       label = "Underline"
     ),
     Command.typed(
+      "rich-text-font-serif",
+      "Apply the Serif font family to the active selection.",
+      CommandIntent.SetRichTextFontFamily("Serif"),
+      CommandCategory.Edit,
+      label = "Serif Font"
+    ),
+    Command.typed(
+      "rich-text-font-sans",
+      "Apply the SansSerif font family to the active selection.",
+      CommandIntent.SetRichTextFontFamily("SansSerif"),
+      CommandCategory.Edit,
+      label = "Sans Font"
+    ),
+    Command.typed(
+      "rich-text-size-14",
+      "Apply 14pt text to the active selection.",
+      CommandIntent.SetRichTextFontSize(14.0f),
+      CommandCategory.Edit,
+      label = "14 pt"
+    ),
+    Command.typed(
+      "rich-text-size-18",
+      "Apply 18pt text to the active selection.",
+      CommandIntent.SetRichTextFontSize(18.0f),
+      CommandCategory.Edit,
+      label = "18 pt"
+    ),
+    Command.typed(
+      "rich-text-color-ink",
+      "Apply the ink text colour to the active selection.",
+      CommandIntent.SetRichTextColor("#202020"),
+      CommandCategory.Edit,
+      label = "Ink"
+    ),
+    Command.typed(
+      "rich-text-color-blue",
+      "Apply the blue text colour to the active selection.",
+      CommandIntent.SetRichTextColor("#336699"),
+      CommandCategory.Edit,
+      label = "Blue"
+    ),
+    Command.typed(
       "paragraph-body",
       "Set the active paragraph to body text.",
       CommandIntent.SetRichTextParagraphRole(ParagraphRole.Body),

@@ -57,6 +57,18 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     registry.findCommand("align-center").map(_.intent) shouldBe Some(
       CommandIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Center)
     )
+    registry.findCommand("rich-text-font-serif").map(_.intent) shouldBe Some(
+      CommandIntent.SetRichTextFontFamily("Serif")
+    )
+    registry.findCommand("rich-text-font-sans").map(_.intent) shouldBe Some(
+      CommandIntent.SetRichTextFontFamily("SansSerif")
+    )
+    registry.findCommand("rich-text-size-18").map(_.intent) shouldBe Some(
+      CommandIntent.SetRichTextFontSize(18.0f)
+    )
+    registry.findCommand("rich-text-color-blue").map(_.intent) shouldBe Some(
+      CommandIntent.SetRichTextColor("#336699")
+    )
   }
 
   it should "apply bold to the active selection" in {
@@ -143,33 +155,16 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
         "alpha beta",
         Selection(com.serenity.state.models.CursorPosition(0, 6), com.serenity.state.models.CursorPosition(0, 10))
       )
+    val registry = CommandRegistry.withToggleUI
 
     stateManager
-      .executeCommand(
-        com.serenity.command.Command.typed(
-          "rich-text-font-family",
-          "Set selection font family.",
-          CommandIntent.SetRichTextFontFamily("Serif")
-        )
-      )
+      .executeCommand(registry.findCommand("rich-text-font-serif").getOrElse(fail("missing rich-text-font-serif")))
       .unsafeRunSync()
     stateManager
-      .executeCommand(
-        com.serenity.command.Command.typed(
-          "rich-text-font-size",
-          "Set selection font size.",
-          CommandIntent.SetRichTextFontSize(18.0f)
-        )
-      )
+      .executeCommand(registry.findCommand("rich-text-size-18").getOrElse(fail("missing rich-text-size-18")))
       .unsafeRunSync()
     stateManager
-      .executeCommand(
-        com.serenity.command.Command.typed(
-          "rich-text-color",
-          "Set selection colour.",
-          CommandIntent.SetRichTextColor("#336699")
-        )
-      )
+      .executeCommand(registry.findCommand("rich-text-color-blue").getOrElse(fail("missing rich-text-color-blue")))
       .unsafeRunSync()
 
     val betaStyle = stateManager.getCurrentState

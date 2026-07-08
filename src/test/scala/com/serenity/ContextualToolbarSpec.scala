@@ -123,6 +123,45 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .shouldBe(Some(Set(InlineMark.Italic)))
   }
 
+  it should "apply a rich text font preset from the toolbar" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-font-preset")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(220, 40))).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
+        val selection = Selection(CursorPosition(0, 6), CursorPosition(0, 10))
+        val nextBuffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha beta"),
+            selection = Some(selection),
+            cursors = List(selection.focus)
+          )
+        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val point = toolbarItemPoint(
+      stateManager.getCurrentState.unsafeRunSync(),
+      commandName = "rich-text-size-18"
+    )
+
+    stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
+
+    val after    = stateManager.getCurrentState.unsafeRunSync()
+    val bufferId = activeBufferId(after)
+    after
+      .buffers(bufferId)
+      .richTextDocument
+      .flatMap(_.paragraphs.headOption)
+      .flatMap(_.runs.find(_.text == "beta"))
+      .flatMap(_.style.fontSize)
+      .shouldBe(Some(18.0f))
+  }
+
   private case class Point(x: Int, y: Int)
 
   private def toolbarItemPoint(state: AppState, itemIndex: Int): Point =
@@ -133,6 +172,11 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       x = contentRect.x + (slotWidth * itemIndex) + math.max(0, slotWidth / 2),
       y = contentRect.y
     )
+
+  private def toolbarItemPoint(state: AppState, commandName: String): Point =
+    val itemIndex = ContextualToolbar.proseItems.indexWhere(_.commandName == commandName)
+    if itemIndex < 0 then fail(s"Expected toolbar item for $commandName")
+    else toolbarItemPoint(state, itemIndex)
 
   private def toolbarRect(state: AppState) =
     val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))

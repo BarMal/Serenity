@@ -50,6 +50,12 @@ object ContextualToolbar:
     ContextualToolbarItem("bold", "Bold", "bold", "B"),
     ContextualToolbarItem("italic", "Italic", "italic", "I"),
     ContextualToolbarItem("underline", "Underline", "underline", "U"),
+    ContextualToolbarItem("rich-text-font-serif", "Serif", "rich-text-font-serif", "Sf"),
+    ContextualToolbarItem("rich-text-font-sans", "Sans", "rich-text-font-sans", "Sa"),
+    ContextualToolbarItem("rich-text-size-14", "14pt", "rich-text-size-14", "14"),
+    ContextualToolbarItem("rich-text-size-18", "18pt", "rich-text-size-18", "18"),
+    ContextualToolbarItem("rich-text-color-ink", "Ink", "rich-text-color-ink", "K"),
+    ContextualToolbarItem("rich-text-color-blue", "Blue", "rich-text-color-blue", "B"),
     ContextualToolbarItem("paragraph-body", "Body", "paragraph-body", "P"),
     ContextualToolbarItem("heading-1", "H1", "heading-1", "1"),
     ContextualToolbarItem("heading-2", "H2", "heading-2", "2"),
@@ -148,20 +154,29 @@ object ContextualToolbar:
     items.map { item =>
       val selected =
         item.commandName match
-          case "bold"           => style.marks.contains(InlineMark.Bold)
-          case "italic"         => style.marks.contains(InlineMark.Italic)
-          case "underline"      => style.marks.contains(InlineMark.Underline)
-          case "paragraph-body" => paragraph.exists(_.role == ParagraphRole.Body)
-          case "heading-1"      => paragraph.exists(_.role == ParagraphRole.Heading(1))
-          case "heading-2"      => paragraph.exists(_.role == ParagraphRole.Heading(2))
-          case "heading-3"      => paragraph.exists(_.role == ParagraphRole.Heading(3))
-          case "align-left"     => paragraph.exists(_.alignment == ParagraphAlignment.Left)
-          case "align-center"   => paragraph.exists(_.alignment == ParagraphAlignment.Center)
-          case "align-right"    => paragraph.exists(_.alignment == ParagraphAlignment.Right)
-          case "align-justify"  => paragraph.exists(_.alignment == ParagraphAlignment.Justify)
-          case _                => false
+          case "bold"                 => style.marks.contains(InlineMark.Bold)
+          case "italic"               => style.marks.contains(InlineMark.Italic)
+          case "underline"            => style.marks.contains(InlineMark.Underline)
+          case "rich-text-font-serif" => style.fontFamily.contains("Serif")
+          case "rich-text-font-sans"  => style.fontFamily.contains("SansSerif")
+          case "rich-text-size-14"    => style.fontSize.contains(14.0f)
+          case "rich-text-size-18"    => style.fontSize.contains(18.0f)
+          case "rich-text-color-ink"  => normalizedColor(style.color).contains("#202020")
+          case "rich-text-color-blue" => normalizedColor(style.color).contains("#336699")
+          case "paragraph-body"       => paragraph.exists(_.role == ParagraphRole.Body)
+          case "heading-1"            => paragraph.exists(_.role == ParagraphRole.Heading(1))
+          case "heading-2"            => paragraph.exists(_.role == ParagraphRole.Heading(2))
+          case "heading-3"            => paragraph.exists(_.role == ParagraphRole.Heading(3))
+          case "align-left"           => paragraph.exists(_.alignment == ParagraphAlignment.Left)
+          case "align-center"         => paragraph.exists(_.alignment == ParagraphAlignment.Center)
+          case "align-right"          => paragraph.exists(_.alignment == ParagraphAlignment.Right)
+          case "align-justify"        => paragraph.exists(_.alignment == ParagraphAlignment.Justify)
+          case _                      => false
       item.copy(selected = selected)
     }
+
+  private def normalizedColor(color: Option[String]): Option[String] =
+    color.map(_.trim.toLowerCase)
 
   private def richTextDocumentFor(buffer: Buffer): RichTextDocument =
     val text = buffer.content.collect()
@@ -195,14 +210,7 @@ object ContextualToolbar:
     val range = richTextRange(selection)
     document.paragraphs
       .lift(range.start.paragraphIndex)
-      .flatMap(paragraph =>
-        paragraph.runs.find { run =>
-          val startOffset = range.start.offset.min(paragraph.plainText.length)
-          val endOffset   = range.end.offset.max(startOffset)
-          run.text.nonEmpty && endOffset > startOffset
-        }
-      )
-      .map(_.style)
+      .flatMap(paragraph => styleAtParagraphOffset(paragraph, range.start.offset))
       .getOrElse(styleAtCursor(selection.focus, document).getOrElse(RichTextStyle.empty))
 
   private def styleAtCursor(
@@ -210,20 +218,24 @@ object ContextualToolbar:
     document: RichTextDocument
   ): Option[RichTextStyle] =
     val paragraphIndex = cursor.line.max(0).min(document.paragraphs.length - 1)
-    document.paragraphs.lift(paragraphIndex).flatMap { paragraph =>
-      val clampedOffset = cursor.column.max(0).min(paragraph.plainText.length)
-      val targetOffset =
-        if clampedOffset == paragraph.plainText.length && clampedOffset > 0 then clampedOffset - 1
-        else clampedOffset
-      paragraph.runs
-        .foldLeft((0, Option.empty[RichTextStyle])) {
-          case ((currentOffset, found), run) =>
-            val nextOffset     = currentOffset + run.text.length
-            val containsOffset = targetOffset >= currentOffset && targetOffset < nextOffset
-            (nextOffset, found.orElse(Option.when(containsOffset)(run.style)))
-        }
-        ._2
-    }
+    document.paragraphs.lift(paragraphIndex).flatMap(paragraph => styleAtParagraphOffset(paragraph, cursor.column))
+
+  private def styleAtParagraphOffset(
+    paragraph: com.serenity.richtext.RichTextParagraph,
+    offset: Int
+  ): Option[RichTextStyle] =
+    val clampedOffset = offset.max(0).min(paragraph.plainText.length)
+    val targetOffset =
+      if clampedOffset == paragraph.plainText.length && clampedOffset > 0 then clampedOffset - 1
+      else clampedOffset
+    paragraph.runs
+      .foldLeft((0, Option.empty[RichTextStyle])) {
+        case ((currentOffset, found), run) =>
+          val nextOffset     = currentOffset + run.text.length
+          val containsOffset = targetOffset >= currentOffset && targetOffset < nextOffset
+          (nextOffset, found.orElse(Option.when(containsOffset)(run.style)))
+      }
+      ._2
 
   private def currentRange(
     buffer: Buffer,

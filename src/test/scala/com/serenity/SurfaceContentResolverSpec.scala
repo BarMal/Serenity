@@ -798,6 +798,27 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
         ),
         InlineMark.Bold
       )
+      .setFontFamily(
+        RichTextRange(
+          RichTextPosition(0, 6),
+          RichTextPosition(0, 10)
+        ),
+        "Serif"
+      )
+      .setFontSize(
+        RichTextRange(
+          RichTextPosition(0, 6),
+          RichTextPosition(0, 10)
+        ),
+        18.0f
+      )
+      .setColor(
+        RichTextRange(
+          RichTextPosition(0, 6),
+          RichTextPosition(0, 10)
+        ),
+        "#336699"
+      )
       .normalized
     val paneId = PaneId(0)
     val state = AppState.initial.copy(
@@ -830,6 +851,21 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.rows
       .flatMap(_.segments)
       .find(_.text.contains("Bold"))
+      .map(_.selected)
+      .shouldBe(Some(true))
+    resolved.rows
+      .flatMap(_.segments)
+      .find(_.text.contains("Serif"))
+      .map(_.selected)
+      .shouldBe(Some(true))
+    resolved.rows
+      .flatMap(_.segments)
+      .find(_.text.contains("18pt"))
+      .map(_.selected)
+      .shouldBe(Some(true))
+    resolved.rows
+      .flatMap(_.segments)
+      .find(_.text.contains("Blue"))
       .map(_.selected)
       .shouldBe(Some(true))
   }
