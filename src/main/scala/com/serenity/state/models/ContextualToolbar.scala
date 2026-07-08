@@ -243,10 +243,18 @@ object ContextualToolbar:
           case ToolbarDisplayMode.IconOnly    => icon
           case ToolbarDisplayMode.TextOnly    => label
           case ToolbarDisplayMode.IconAndText => s"$icon $label"
-      case ContextualToolbarItem.Dropdown(_, label, _, optionItem) =>
-        s"$label ${optionItem.selectedOption}".trim
-      case ContextualToolbarItem.Input(_, label, _, inputItem) =>
-        s"$label ${inputItem.currentValue}".trim
+      case ContextualToolbarItem.Dropdown(_, label, icon, optionItem) =>
+        val text = s"$label ${optionItem.selectedOption}".trim
+        mode match
+          case ToolbarDisplayMode.IconOnly    => icon
+          case ToolbarDisplayMode.TextOnly    => text
+          case ToolbarDisplayMode.IconAndText => s"$icon $text"
+      case ContextualToolbarItem.Input(_, label, icon, inputItem) =>
+        val text = s"$label ${inputItem.currentValue}".trim
+        mode match
+          case ToolbarDisplayMode.IconOnly    => icon
+          case ToolbarDisplayMode.TextOnly    => text
+          case ToolbarDisplayMode.IconAndText => s"$icon $text"
 
   def rowGroups(
     items: List[ContextualToolbarItem],
