@@ -113,6 +113,33 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .shouldBe(Some(20.0f))
   }
 
+  it should "open a focused color field with the current value prefilled, accept hex edits, and apply them on Enter" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-color-input")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    moveToolbarFocusTo(stateManager, "color-hex")
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    toolbarStateFrom(stateManager.getCurrentState.unsafeRunSync()).detailState shouldBe
+      Some(ContextualToolbarDetailState.Input("color-hex", "#336699"))
+
+    (0 until 7).foreach(_ => stateManager.applyEvent(DeleteBackward).unsafeRunSync())
+    "ff6600".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val bufferId = activeBufferId(state)
+    val buffer   = state.buffers(bufferId)
+    buffer.richTextDocument
+      .flatMap(_.paragraphs.headOption)
+      .flatMap(_.runs.find(_.text == "beta"))
+      .flatMap(_.style.color)
+      .shouldBe(Some("#ff6600"))
+  }
+
   it should "close an open toolbar control on Escape before dismissing the toolbar" in {
     val stateManager = createStateManager("ContextualToolbarSpec-escape-detail")
 
@@ -392,6 +419,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
           .applyMark(range, InlineMark.Bold)
           .setFontFamily(range, "A")
           .setFontSize(range, 18.0f)
+          .setColor(range, "#336699")
           .setParagraphRole(range, ParagraphRole.Body)
           .setParagraphAlignment(range, ParagraphAlignment.Left)
           .normalized
@@ -421,10 +449,9 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
           (currentRowIndex, itemIndex - offset)
       }
       .getOrElse(fail(s"Expected toolbar item index $itemIndex"))
-    val rowItems  = rowGroups.lift(rowIndex).getOrElse(fail(s"Expected toolbar row $rowIndex"))
-    val slotWidth = math.max(1, contentRect.width / rowItems.length)
+    val rowItems = rowGroups.lift(rowIndex).getOrElse(fail(s"Expected toolbar row $rowIndex"))
     Point(
-      x = contentRect.x + (slotWidth * localIndex) + math.max(0, slotWidth / 2),
+      x = contentRect.x + hitColumnCenter(localIndex, rowItems.length, contentRect.width),
       y = contentRect.y + rowIndex
     )
 
@@ -450,9 +477,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       }
       .getOrElse(fail(s"Expected toolbar detail option $optionIndex"))
     val rowOptions = detailRows.lift(rowIndex).getOrElse(fail(s"Expected toolbar detail row $rowIndex"))
-    val slotWidth  = math.max(1, contentRect.width / rowOptions.length)
     Point(
-      x = contentRect.x + (slotWidth * localIndex) + math.max(0, slotWidth / 2),
+      x = contentRect.x + hitColumnCenter(localIndex, rowOptions.length, contentRect.width),
       y = contentRect.y + rowGroups.length + rowIndex
     )
 
@@ -507,6 +533,11 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     (((currentIndex + 0.5d) * targetRowLength) / currentRowLength).toInt
       .max(0)
       .min(targetRowLength - 1)
+
+  private def hitColumnCenter(localIndex: Int, itemCount: Int, contentWidth: Int): Int =
+    val start = ((localIndex * contentWidth) + itemCount - 1) / itemCount
+    val end   = ((((localIndex + 1) * contentWidth) + itemCount - 1) / itemCount) - 1
+    start + math.max(0, (end - start) / 2)
 
   private def moveToolbarFocusTo(stateManager: com.serenity.state.manager.StateManager, itemId: String): Unit =
     val state     = stateManager.getCurrentState.unsafeRunSync()
