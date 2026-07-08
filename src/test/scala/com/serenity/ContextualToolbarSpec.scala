@@ -289,6 +289,43 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     toolbarStateFrom(state).displayMode shouldBe ToolbarDisplayMode.IconOnly
   }
 
+  it should "render dropdowns and inputs according to the toolbar display mode" in {
+    val dropdown = ContextualToolbarItem.Dropdown(
+      id = "font-family",
+      label = "Font",
+      icon = "A",
+      optionItem = CommandSurfaceItem.OptionItem(
+        id = "font-family",
+        label = "Font",
+        options = List(com.serenity.command.CommandOption("Serif", CommandIntent.SetRichTextFontFamily("Serif"))),
+        selectedIndex = 0,
+        category = CommandCategory.Edit
+      )
+    )
+    val input = ContextualToolbarItem.Input(
+      id = "font-size",
+      label = "Size",
+      icon = "#",
+      inputItem = CommandSurfaceItem.InputItem(
+        id = "font-size",
+        label = "Size",
+        hint = "Points",
+        currentValue = "18",
+        isDecimal = true,
+        parse = _.toFloatOption.map(CommandIntent.SetRichTextFontSize(_)),
+        category = CommandCategory.Edit
+      )
+    )
+
+    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly) shouldBe "A"
+    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.TextOnly) shouldBe "Font Serif"
+    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconAndText) shouldBe "A Font Serif"
+
+    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "#"
+    ContextualToolbar.displayText(input, ToolbarDisplayMode.TextOnly) shouldBe "Size 18"
+    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconAndText) shouldBe "# Size 18"
+  }
+
   it should "move focus vertically between wrapped toolbar rows" in {
     val stateManager = createStateManager("ContextualToolbarSpec-vertical-top-level")
 

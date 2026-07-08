@@ -839,10 +839,10 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.rows.foreach(_.layout shouldBe OverlayRowLayout.Distributed)
     val segments = resolved.rows.flatMap(_.segments)
     segments.find(_.text.contains("Bold")).map(_.selected).shouldBe(Some(true))
-    segments.exists(_.text == "Font Serif").shouldBe(true)
-    segments.exists(_.text == "Size 18").shouldBe(true)
-    segments.exists(_.text == "Color Blue").shouldBe(true)
-    segments.exists(_.text == "Role H1").shouldBe(true)
+    segments.exists(_.text == "A Font Serif").shouldBe(true)
+    segments.exists(_.text == "# Size 18").shouldBe(true)
+    segments.exists(_.text == "C Color Blue").shouldBe(true)
+    segments.exists(_.text == "P Role H1").shouldBe(true)
     segments.exists(_.text.contains("Center")).shouldBe(true)
   }
 
