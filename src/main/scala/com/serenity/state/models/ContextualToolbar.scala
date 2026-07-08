@@ -83,7 +83,7 @@ case class ContextualToolbarState(
       case Some(item: ContextualToolbarItem.Dropdown) =>
         copy(detailState = Some(ContextualToolbarDetailState.Dropdown(item.id, item.optionItem.selectedIndex)))
       case Some(item: ContextualToolbarItem.Input) =>
-        copy(detailState = Some(ContextualToolbarDetailState.Input(item.id)))
+        copy(detailState = Some(ContextualToolbarDetailState.Input(item.id, item.inputItem.currentValue)))
       case _ =>
         this
 
