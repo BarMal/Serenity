@@ -604,6 +604,9 @@ object ConfigManager:
             "display.focused_text_body" | "display.focused.text.body" | "display_focused_text_body" |
             "display.contextual_toolbar" | "display.contextual.toolbar" | "display_contextual_toolbar" =>
           parseBoolean(value).isEmpty
+        case "display.contextual_toolbar_mode" | "display.contextual.toolbar.mode" |
+            "display_contextual_toolbar_mode" =>
+          ToolbarDisplayMode.fromConfigKey(value).isEmpty
         case "font.code.size" | "font_code_size" | "font.text.size" | "font.prose.size" | "font_text_size" |
             "font_prose_size" | "font.size" | "font_size" | "font.ui.size" | "font_ui_size" =>
           value.trim.toFloatOption.isEmpty
