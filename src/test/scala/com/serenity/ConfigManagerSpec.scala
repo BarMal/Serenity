@@ -537,6 +537,20 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("display.focused_text_body = true")
   }
 
+  it should "load and write contextual toolbar display mode" in {
+    val configFile = Files.createTempFile("serenity-contextual-toolbar-config", ".conf")
+    Files.writeString(
+      configFile,
+      """display.contextual_toolbar = false
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.contextualToolbarEnabled shouldBe false
+    ConfigManager.configToString(config) should include("display.contextual_toolbar = false")
+  }
+
   it should "load and write viewport sizing policy" in {
     val configFile = Files.createTempFile("serenity-viewport-config", ".conf")
     Files.writeString(
