@@ -206,7 +206,11 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val triggerPoint = toolbarItemPoint(stateManager.getCurrentState.unsafeRunSync(), "paragraph-role")
     stateManager.applyEvent(MouseClick(triggerPoint.x, triggerPoint.y)).unsafeRunSync()
 
-    val optionPoint = toolbarDetailPoint(stateManager.getCurrentState.unsafeRunSync(), optionIndex = 1)
+    val optionPoint = toolbarDetailPoint(
+      stateManager.getCurrentState.unsafeRunSync(),
+      itemId = "paragraph-role",
+      optionLabel = "H1"
+    )
     stateManager.applyEvent(MouseClick(optionPoint.x, optionPoint.y)).unsafeRunSync()
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -217,6 +221,48 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .flatMap(_.paragraphs.headOption)
       .map(_.role)
       .shouldBe(Some(ParagraphRole.Heading(1)))
+  }
+
+  it should "open a color dropdown and apply the clicked preset" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-color-dropdown")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
+        val selection = Selection(CursorPosition(0, 6), CursorPosition(0, 10))
+        val nextBuffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha beta"),
+            selection = Some(selection),
+            cursors = List(selection.focus)
+          )
+        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val triggerPoint = toolbarItemPoint(stateManager.getCurrentState.unsafeRunSync(), "color")
+    stateManager.applyEvent(MouseClick(triggerPoint.x, triggerPoint.y)).unsafeRunSync()
+
+    val optionPoint = toolbarDetailPoint(
+      stateManager.getCurrentState.unsafeRunSync(),
+      itemId = "color",
+      optionLabel = "Blue"
+    )
+    stateManager.applyEvent(MouseClick(optionPoint.x, optionPoint.y)).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val bufferId = activeBufferId(state)
+    state
+      .buffers(bufferId)
+      .richTextDocument
+      .flatMap(_.paragraphs.headOption)
+      .flatMap(_.runs.find(_.text == "beta"))
+      .flatMap(_.style.color)
+      .shouldBe(Some("#336699"))
   }
 
   private case class Point(x: Int, y: Int)
@@ -242,7 +288,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       y = contentRect.y + rowIndex
     )
 
-  private def toolbarDetailPoint(state: AppState, optionIndex: Int): Point =
+  private def toolbarDetailPoint(state: AppState, itemId: String, optionLabel: String): Point =
     val rect         = toolbarRect(state)
     val toolbarState = toolbarStateFrom(state)
     val contentRect  = SurfaceFrameLayout.forContent(rect, SurfaceContent.ContextualToolbar(toolbarState)).contentRect
@@ -250,6 +296,11 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       ContextualToolbar.rowGroups(ContextualToolbar.itemsFor(state), contentRect.width.max(1), toolbarState.displayMode)
     val detailRows =
       ContextualToolbar.detailRowGroups(toolbarState, ContextualToolbar.itemsFor(state), contentRect.width.max(1))
+    val optionIndex = ContextualToolbar
+      .dropdownItem(itemId, ContextualToolbar.itemsFor(state))
+      .map(_.optionItem.options.indexWhere(_.label == optionLabel))
+      .filter(_ >= 0)
+      .getOrElse(fail(s"Expected toolbar detail option $optionLabel for $itemId"))
     val (rowIndex, localIndex) = detailRows.zipWithIndex
       .collectFirst {
         case (rowOptions, currentRowIndex)

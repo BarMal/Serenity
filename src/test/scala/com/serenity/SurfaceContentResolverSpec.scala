@@ -785,7 +785,6 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
   it should "wrap contextual toolbar items across multiple rows and mark active rich-text formatting" in {
     val bufferId = BufferId(0)
-    val family   = FontLoader.availableTextFamilies.headOption.getOrElse("Serif")
     val selection = Selection(
       anchor = CursorPosition(0, 6),
       focus = CursorPosition(0, 10)
@@ -794,12 +793,14 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       List(
         RichTextParagraph(
           runs = List(
+            RichTextRun("alpha "),
             RichTextRun(
-              "alpha beta",
+              "beta",
               RichTextStyle(
                 marks = Set(InlineMark.Bold),
-                fontFamily = Some(family),
-                fontSize = Some(18.0f)
+                fontFamily = Some("Serif"),
+                fontSize = Some(18.0f),
+                color = Some("#336699")
               )
             )
           ),
@@ -838,9 +839,10 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.rows.foreach(_.layout shouldBe OverlayRowLayout.Distributed)
     val segments = resolved.rows.flatMap(_.segments)
     segments.find(_.text.contains("Bold")).map(_.selected).shouldBe(Some(true))
-    segments.exists(_.text.startsWith("Font ")).shouldBe(true)
-    segments.exists(_.text.startsWith("Size ")).shouldBe(true)
-    segments.exists(_.text.startsWith("Role ")).shouldBe(true)
+    segments.exists(_.text == "Font Serif").shouldBe(true)
+    segments.exists(_.text == "Size 18").shouldBe(true)
+    segments.exists(_.text == "Color Blue").shouldBe(true)
+    segments.exists(_.text == "Role H1").shouldBe(true)
     segments.exists(_.text.contains("Center")).shouldBe(true)
   }
 

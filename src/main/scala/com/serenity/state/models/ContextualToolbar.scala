@@ -141,6 +141,11 @@ case class ContextualToolbarState(
 
 object ContextualToolbar:
 
+  private val colorPresets = List(
+    "Ink"  -> "#202020",
+    "Blue" -> "#336699"
+  )
+
   val markdownItems: List[ContextualToolbarItem] = List(
     ContextualToolbarItem.Button("markdown-preview", "Preview", "markdown-preview", "P"),
     ContextualToolbarItem.Button("markdown-view-source", "Source", "markdown-view-source", "S"),
@@ -354,12 +359,21 @@ object ContextualToolbar:
     val paragraph       = activeParagraph(buffer, document)
     val currentFamily   = style.fontFamily.orElse(Some(state.config.fontConfig.textFontFamily)).getOrElse("")
     val currentFontSize = style.fontSize.getOrElse(state.config.fontConfig.textFontSize)
+    val currentColor    = normalizedColor(style.color)
     val familyOptions = normalizedFontFamilies(currentFamily).map(family =>
       CommandOption(family, CommandIntent.SetRichTextFontFamily(family))
     )
     val familyIndex = familyOptions.indexWhere(_.label.equalsIgnoreCase(currentFamily)) match
       case -1    => 0
       case index => index
+    val colorOptions = normalizedColorOptions(currentColor).map {
+      case (label, color) =>
+        CommandOption(label, CommandIntent.SetRichTextColor(color))
+    }
+    val colorIndex =
+      colorOptions.indexWhere(_.intent == CommandIntent.SetRichTextColor(currentColor.getOrElse("#202020"))) match
+        case -1    => 0
+        case index => index
     val paragraphRole = paragraph.map(_.role).getOrElse(ParagraphRole.Body)
     val paragraphRoleOptions = List(
       CommandOption("Body", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Body)),
@@ -426,6 +440,18 @@ object ContextualToolbar:
         )
       ),
       ContextualToolbarItem.Dropdown(
+        id = "color",
+        label = "Color",
+        icon = "C",
+        optionItem = CommandSurfaceItem.OptionItem(
+          id = "color",
+          label = "Color",
+          options = colorOptions,
+          selectedIndex = colorIndex,
+          category = CommandCategory.Edit
+        )
+      ),
+      ContextualToolbarItem.Dropdown(
         id = "paragraph-role",
         label = "Role",
         icon = "P",
@@ -473,6 +499,14 @@ object ContextualToolbar:
     if trimmedCurrent.nonEmpty && !available.exists(_.equalsIgnoreCase(trimmedCurrent)) then trimmedCurrent :: available
     else available
 
+  private def normalizedColorOptions(currentColor: Option[String]): List[(String, String)] =
+    currentColor match
+      case Some(color) if !colorPresets.exists(_._2 == color) => (color, color) :: colorPresets
+      case _                                                  => colorPresets
+
+  private def normalizedColor(color: Option[String]): Option[String] =
+    color.map(_.trim.toLowerCase)
+
   private def formatFontSize(size: Float): String =
     val rounded = size.round.toFloat
     if rounded == size then rounded.toInt.toString else f"$size%.1f"
@@ -509,14 +543,7 @@ object ContextualToolbar:
     val range = richTextRange(selection)
     document.paragraphs
       .lift(range.start.paragraphIndex)
-      .flatMap(paragraph =>
-        paragraph.runs.find { run =>
-          val startOffset = range.start.offset.min(paragraph.plainText.length)
-          val endOffset   = range.end.offset.max(startOffset)
-          run.text.nonEmpty && endOffset > startOffset
-        }
-      )
-      .map(_.style)
+      .flatMap(paragraph => styleAtParagraphOffset(paragraph, range.start.offset))
       .getOrElse(styleAtCursor(selection.focus, document).getOrElse(RichTextStyle.empty))
 
   private def styleAtCursor(
@@ -524,20 +551,24 @@ object ContextualToolbar:
     document: RichTextDocument
   ): Option[RichTextStyle] =
     val paragraphIndex = cursor.line.max(0).min(document.paragraphs.length - 1)
-    document.paragraphs.lift(paragraphIndex).flatMap { paragraph =>
-      val clampedOffset = cursor.column.max(0).min(paragraph.plainText.length)
-      val targetOffset =
-        if clampedOffset == paragraph.plainText.length && clampedOffset > 0 then clampedOffset - 1
-        else clampedOffset
-      paragraph.runs
-        .foldLeft((0, Option.empty[RichTextStyle])) {
-          case ((currentOffset, found), run) =>
-            val nextOffset     = currentOffset + run.text.length
-            val containsOffset = targetOffset >= currentOffset && targetOffset < nextOffset
-            (nextOffset, found.orElse(Option.when(containsOffset)(run.style)))
-        }
-        ._2
-    }
+    document.paragraphs.lift(paragraphIndex).flatMap(paragraph => styleAtParagraphOffset(paragraph, cursor.column))
+
+  private def styleAtParagraphOffset(
+    paragraph: com.serenity.richtext.RichTextParagraph,
+    offset: Int
+  ): Option[RichTextStyle] =
+    val clampedOffset = offset.max(0).min(paragraph.plainText.length)
+    val targetOffset =
+      if clampedOffset == paragraph.plainText.length && clampedOffset > 0 then clampedOffset - 1
+      else clampedOffset
+    paragraph.runs
+      .foldLeft((0, Option.empty[RichTextStyle])) {
+        case ((currentOffset, found), run) =>
+          val nextOffset     = currentOffset + run.text.length
+          val containsOffset = targetOffset >= currentOffset && targetOffset < nextOffset
+          (nextOffset, found.orElse(Option.when(containsOffset)(run.style)))
+      }
+      ._2
 
   private def currentRange(
     buffer: Buffer,
