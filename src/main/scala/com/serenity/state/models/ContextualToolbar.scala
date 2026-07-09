@@ -509,6 +509,21 @@ object ContextualToolbar:
         )
       ),
       ContextualToolbarItem.Input(
+        id = "font-family-text",
+        label = "Family",
+        icon = "F",
+        inputItem = CommandSurfaceItem.InputItem(
+          id = "font-family-text",
+          label = "Family",
+          hint = "Family name",
+          currentValue = currentFamily,
+          isDecimal = false,
+          parse = CommandRunnerSettingsInputItems.parseRichTextFontFamily,
+          category = CommandCategory.Edit,
+          acceptsFreeText = true
+        )
+      ),
+      ContextualToolbarItem.Input(
         id = "font-size",
         label = "Size",
         icon = "#",

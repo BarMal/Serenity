@@ -5,6 +5,9 @@ import com.serenity.ui.fonts.FontLoader
 
 object CommandRunnerSettingsInputItems:
 
+  def parseRichTextFontFamily(text: String): Option[CommandIntent] =
+    nonEmptyText(text).map(CommandIntent.SetRichTextFontFamily(_))
+
   def parseRichTextColor(text: String): Option[CommandIntent] =
     normalizeHexColor(text).map(CommandIntent.SetRichTextColor(_))
 
@@ -53,7 +56,7 @@ object CommandRunnerSettingsInputItems:
         hint = "Family name",
         currentValue = "",
         isDecimal = false,
-        parse = text => nonEmptyText(text).map(CommandIntent.SetRichTextFontFamily(_)),
+        parse = parseRichTextFontFamily,
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),

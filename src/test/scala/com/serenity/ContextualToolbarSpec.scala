@@ -113,6 +113,33 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .shouldBe(Some(20.0f))
   }
 
+  it should "open a focused font family field with the current value prefilled, accept edits, and apply them on Enter" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-font-family-input")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    moveToolbarFocusTo(stateManager, "font-family-text")
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    toolbarStateFrom(stateManager.getCurrentState.unsafeRunSync()).detailState shouldBe
+      Some(ContextualToolbarDetailState.Input("font-family-text", "A"))
+
+    stateManager.applyEvent(DeleteBackward).unsafeRunSync()
+    "Serif".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val bufferId = activeBufferId(state)
+    val buffer   = state.buffers(bufferId)
+    buffer.richTextDocument
+      .flatMap(_.paragraphs.headOption)
+      .flatMap(_.runs.find(_.text == "beta"))
+      .flatMap(_.style.fontFamily)
+      .shouldBe(Some("Serif"))
+  }
+
   it should "open a focused color field with the current value prefilled, accept hex edits, and apply them on Enter" in {
     val stateManager = createStateManager("ContextualToolbarSpec-color-input")
 
