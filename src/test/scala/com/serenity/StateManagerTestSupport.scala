@@ -22,6 +22,7 @@ trait StateManagerTestSupport:
   protected def createStateManagerIO(
     loggerName: String,
     onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
+    deviceTextScaleProvider: IO[Double] = IO.pure(1.0),
     fileDialog: FileDialog = FileDialog.unavailable
   ): IO[StateManager] =
     IO.blocking(Files.createTempDirectory(s"${loggerName.toLowerCase}-state-manager"))
@@ -29,6 +30,7 @@ trait StateManagerTestSupport:
         StateManager.apply(
           testLogger(loggerName),
           onFontConfigChanged = onFontConfigChanged,
+          deviceTextScaleProvider = deviceTextScaleProvider,
           sessionRootOverride = Some(root),
           fileDialog = fileDialog
         )
@@ -37,6 +39,7 @@ trait StateManagerTestSupport:
   protected def createStateManager(
     loggerName: String,
     onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
+    deviceTextScaleProvider: IO[Double] = IO.pure(1.0),
     fileDialog: FileDialog = FileDialog.unavailable
   ): StateManager =
-    createStateManagerIO(loggerName, onFontConfigChanged, fileDialog).unsafeRunSync()
+    createStateManagerIO(loggerName, onFontConfigChanged, deviceTextScaleProvider, fileDialog).unsafeRunSync()

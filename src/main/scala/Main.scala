@@ -121,6 +121,7 @@ object Main extends IOApp:
                 onFontConfigChanged = config =>
                   displayState.update(config) >>
                     IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics, displayState.uiMetrics)),
+                deviceTextScaleProvider = IO.blocking(swingWin.detectedDeviceTextScale),
                 configPersistencePath = Some(ConfigManager.defaultConfigPath),
                 windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
                 onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),

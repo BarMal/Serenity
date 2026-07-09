@@ -49,6 +49,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
+        deviceTextScaleProvider = IO.pure(1.0),
         configPersistencePath = None,
         uiPresetStore = UiPresetStore.default,
         windowSizeProvider = IO.pure(Some(PreferredWindowSize(1000, 700))),

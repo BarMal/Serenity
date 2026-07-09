@@ -33,6 +33,7 @@ private[manager] trait StateManagerRuntimeSupport:
   protected def documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]] =
     runtime.documentAnalysisFiberRef
   protected def onFontConfigChanged: FontConfig => IO[Unit]                   = runtime.onFontConfigChanged
+  protected def deviceTextScaleProvider: IO[Double]                           = runtime.deviceTextScaleProvider
   protected def configPersistencePath: Option[Path]                           = runtime.configPersistencePath
   protected def uiPresetStore: UiPresetStore                                  = runtime.uiPresetStore
   protected def windowSizeProvider: IO[Option[PreferredWindowSize]]           = runtime.windowSizeProvider

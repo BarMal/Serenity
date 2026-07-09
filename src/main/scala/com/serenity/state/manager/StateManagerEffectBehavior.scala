@@ -240,11 +240,13 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   protected def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
   ): IO[Unit] =
-    updateConfigWithEditedPresetDraft(
-      config => config.withFontConfig(update(config.fontConfig)),
-      markEditedUiPresetDraftFromCommandRunner
-    )
-      .flatMap(config => onFontConfigChanged(config.fontConfig))
+    deviceTextScaleProvider.flatMap { deviceTextScale =>
+      updateConfigWithEditedPresetDraft(
+        config => config.withFontConfig(update(config.fontConfig).resolveAutoTextScale(deviceTextScale)),
+        markEditedUiPresetDraftFromCommandRunner
+      )
+        .flatMap(config => onFontConfigChanged(config.fontConfig))
+    }
 
   protected def updateSpellCheckConfig(
     update: com.serenity.config.SpellCheckConfig => com.serenity.config.SpellCheckConfig
@@ -540,7 +542,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.SetUiFontSize(size) =>
         updateFontConfig(_.copy(uiFontSize = clampFontSize(size)))
       case CommandIntent.SetTextScaleMode(mode) =>
-        updateFontConfig(config => config.copy(textScaleMode = mode).resolveAutoTextScale(config.textScaleMultiplier))
+        updateFontConfig(_.copy(textScaleMode = mode))
       case CommandIntent.SetTextScaleMultiplier(scale) =>
         updateFontConfig(config =>
           config.copy(
