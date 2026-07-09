@@ -74,6 +74,7 @@ object LayoutEngine:
   private[layout] val DefaultSpacerPercentage = 0.0
   private val MinimumVerticalPaneHeight       = 5
   private val EditorPaneHeaderHeight          = 1
+  private val PinnedPanelDragWorkspaceReach   = 1
 
   private val CommandSurfaceChromeRows =
     SurfaceFrameLayout.frameChromeRows(
@@ -234,6 +235,37 @@ object LayoutEngine:
 
   private case class PinnedAxisSizes(start: Int, end: Int)
 
+  final case class PinnedPanelDragResize(position: PanelPosition, size: Int)
+
+  def pinnedPanelResizeFromDrag(
+    state: AppState,
+    viewportSize: ViewportSize,
+    cellX: Int,
+    cellY: Int
+  ): Option[PinnedPanelDragResize] =
+    val layout         = calculateLayoutWithUI(state, viewportSize)
+    val contentHeight  = calculateContentHeight(state, viewportSize)
+    val uiElementGap   = math.max(0, state.config.uiElementGap)
+    val pinnedSurfaces = state.pinnedSurfaces
+    val panelSizes = pinnedSurfaces.foldLeft(Map.empty[PanelPosition, Int]) {
+      case (acc, UiSurface(_, _, SurfacePresentation.Pinned(position, size), _)) =>
+        acc.updated(position, acc.get(position).fold(size)(_.max(size)))
+      case (acc, _) =>
+        acc
+    }
+
+    resizeFromDragRegion(layout, cellX, cellY).flatMap { position =>
+      val requestedSize =
+        position match
+          case PanelPosition.Left   => cellX + 1
+          case PanelPosition.Right  => viewportSize.width - cellX
+          case PanelPosition.Top    => cellY + 1
+          case PanelPosition.Bottom => contentHeight - cellY
+
+      clampedPinnedPanelSize(position, requestedSize, panelSizes, viewportSize.width, contentHeight, uiElementGap)
+        .map(PinnedPanelDragResize(position, _))
+    }
+
   private def calculatePinnedPanelLayout(
     panels: List[UiSurface],
     terminalWidth: Int,
@@ -287,6 +319,97 @@ object LayoutEngine:
     val surfaceRects = calculatePinnedSurfaceRects(panelsByPosition, panelRects)
 
     PinnedPanelLayout(panelRects, surfaceRects)
+
+  private def resizeFromDragRegion(
+    layout: CalculatedLayout,
+    cellX: Int,
+    cellY: Int
+  ): Option[PanelPosition] =
+    layout.pinnedPanelRects.collectFirst {
+      case (PanelPosition.Left, rect)
+          if LayoutRect(
+            rect.x,
+            rect.y,
+            (layout.leftSpacerRect.x - rect.x + PinnedPanelDragWorkspaceReach).max(rect.width),
+            rect.height
+          ).contains(cellX, cellY) =>
+        PanelPosition.Left
+      case (PanelPosition.Right, rect)
+          if LayoutRect(
+            (layout.rightSpacerRect.right - PinnedPanelDragWorkspaceReach).min(rect.x),
+            rect.y,
+            (rect.right - (layout.rightSpacerRect.right - PinnedPanelDragWorkspaceReach)).max(rect.width),
+            rect.height
+          ).contains(cellX, cellY) =>
+        PanelPosition.Right
+      case (PanelPosition.Top, rect)
+          if LayoutRect(
+            rect.x,
+            rect.y,
+            rect.width,
+            (layout.editorPanelRect.y - rect.y + PinnedPanelDragWorkspaceReach).max(rect.height)
+          ).contains(cellX, cellY) =>
+        PanelPosition.Top
+      case (PanelPosition.Bottom, rect)
+          if LayoutRect(
+            rect.x,
+            (layout.editorPanelRect.bottom - PinnedPanelDragWorkspaceReach).min(rect.y),
+            rect.width,
+            (rect.bottom - (layout.editorPanelRect.bottom - PinnedPanelDragWorkspaceReach)).max(rect.height)
+          ).contains(cellX, cellY) =>
+        PanelPosition.Bottom
+    }
+
+  private def clampedPinnedPanelSize(
+    position: PanelPosition,
+    requestedSize: Int,
+    panelSizes: Map[PanelPosition, Int],
+    terminalWidth: Int,
+    contentHeight: Int,
+    uiElementGap: Int
+  ): Option[Int] =
+    position match
+      case PanelPosition.Left =>
+        panelSizes.get(PanelPosition.Left).map { _ =>
+          calculatePinnedAxisSizes(
+            Some(requestedSize),
+            panelSizes.get(PanelPosition.Right),
+            terminalWidth,
+            uiElementGap
+          ).start
+        }
+      case PanelPosition.Right =>
+        panelSizes.get(PanelPosition.Right).map { _ =>
+          calculatePinnedAxisSizes(
+            panelSizes.get(PanelPosition.Left),
+            Some(requestedSize),
+            terminalWidth,
+            uiElementGap
+          ).end
+        }
+      case PanelPosition.Top =>
+        panelSizes.get(PanelPosition.Top).map { _ =>
+          calculatePinnedAxisSizes(
+            Some(requestedSize),
+            panelSizes.get(PanelPosition.Bottom),
+            contentHeight,
+            uiElementGap
+          ).start
+        }
+      case PanelPosition.Bottom =>
+        panelSizes.get(PanelPosition.Bottom).map { _ =>
+          calculatePinnedAxisSizes(
+            panelSizes.get(PanelPosition.Top),
+            Some(requestedSize),
+            contentHeight,
+            uiElementGap
+          ).end
+        }
+
+  private def calculateContentHeight(state: AppState, viewportSize: ViewportSize): Int =
+    val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
+    val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
+    math.max(1, viewportSize.height - gutterHeight)
 
   private def calculatePinnedAxisSizes(
     startSize: Option[Int],

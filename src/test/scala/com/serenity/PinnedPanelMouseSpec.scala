@@ -4,7 +4,7 @@ import java.nio.file.Paths
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{MouseClick, MouseMove, ResizeEvent}
+import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -198,4 +198,38 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe Focus.EditorPane(PaneId(0))
     updated.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0))
+  }
+
+  it should "update a pinned panel size from mouse drag before release" in {
+    val root = Paths.get("/repo")
+    val src  = root.resolve("src")
+    val tree = DirectoryTreeData(
+      root,
+      entries = Map(root -> List(DirEntry(src, "src", isDirectory = true)))
+    )
+    val surface = explorerSurface(tree, selectedPath = Some(root))
+    val sm      = makeStateManager()
+    sm.updateState(_.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+
+    val before       = sm.getCurrentState.unsafeRunSync()
+    val beforeLayout = LayoutEngine.calculateLayoutWithUI(before, viewport)
+    val beforeRect   = beforeLayout.pinnedPanelRects(PanelPosition.Left)
+    val dragColumn   = beforeRect.right - 6
+
+    sm.applyEvent(MouseDrag(dragColumn, beforeRect.y + 2)).unsafeRunSync()
+
+    val updated = sm.getCurrentState.unsafeRunSync()
+    val resizedSurface = updated
+      .surfaceById(surface.id)
+      .getOrElse(fail("Expected resized pinned panel"))
+    val updatedSize =
+      resizedSurface.presentation match
+        case SurfacePresentation.Pinned(PanelPosition.Left, size) => size
+        case other                                                => fail(s"Expected left pinned surface, got $other")
+    val afterLayout = LayoutEngine.calculateLayoutWithUI(updated, viewport)
+
+    updatedSize shouldBe dragColumn + 1
+    afterLayout.pinnedPanelRects(PanelPosition.Left).width shouldBe updatedSize
+    afterLayout.editorPanelRect.x should be < beforeLayout.editorPanelRect.x
   }

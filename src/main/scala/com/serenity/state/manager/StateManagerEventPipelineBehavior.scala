@@ -907,33 +907,40 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       handleTextAreaResizeDrag(drag, state).flatMap {
         case true => cats.effect.IO.unit
         case false =>
-          resolveMouseTarget(drag, state).flatMap {
-            _.fold(cats.effect.IO.unit) { (paneId, buffer, draggedCursor) =>
-              stateRef.update { s =>
-                s.buffers.get(buffer.id) match
-                  case Some(current) =>
-                    val anchor =
-                      current.primarySelection.map(_.anchor).orElse(current.cursors.headOption).getOrElse(draggedCursor)
-                    val selection =
-                      Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
-                    s.copy(
-                      buffers = s.buffers.updated(
-                        buffer.id,
-                        current.copy(
-                          cursors = List(draggedCursor),
-                          selection = selection,
-                          selections = Nil,
-                          preferredColumn = Some(draggedCursor.column),
-                          preferredXPx = None,
-                          multiCursorVerticalStates = Nil
+          handlePinnedPanelResizeDrag(drag, state).flatMap {
+            case true => cats.effect.IO.unit
+            case false =>
+              resolveMouseTarget(drag, state).flatMap {
+                _.fold(cats.effect.IO.unit) { (paneId, buffer, draggedCursor) =>
+                  stateRef.update { s =>
+                    s.buffers.get(buffer.id) match
+                      case Some(current) =>
+                        val anchor =
+                          current.primarySelection
+                            .map(_.anchor)
+                            .orElse(current.cursors.headOption)
+                            .getOrElse(draggedCursor)
+                        val selection =
+                          Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
+                        s.copy(
+                          buffers = s.buffers.updated(
+                            buffer.id,
+                            current.copy(
+                              cursors = List(draggedCursor),
+                              selection = selection,
+                              selections = Nil,
+                              preferredColumn = Some(draggedCursor.column),
+                              preferredXPx = None,
+                              multiCursorVerticalStates = Nil
+                            )
+                          ),
+                          focus = Focus.EditorPane(paneId),
+                          layout = s.layout.copy(activeEditorPaneId = Some(paneId))
                         )
-                      ),
-                      focus = Focus.EditorPane(paneId),
-                      layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-                    )
-                  case None => s
+                      case None => s
+                  }
+                }
               }
-            }
           }
       }
 
@@ -1373,6 +1380,15 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         updateConfig(_.withTextAreaTopInset(value)).map(_ => true)
       case Some(TextAreaInsetDrag.Bottom(value)) =>
         updateConfig(_.withTextAreaBottomInset(value)).map(_ => true)
+      case None =>
+        cats.effect.IO.pure(false)
+
+  private def handlePinnedPanelResizeDrag(drag: MouseDrag, state: AppState): cats.effect.IO[Boolean] =
+    state.viewportSize.flatMap(viewportSize =>
+      LayoutEngine.pinnedPanelResizeFromDrag(state, viewportSize, drag.col, drag.row)
+    ) match
+      case Some(LayoutEngine.PinnedPanelDragResize(position, size)) =>
+        resizePinnedPanel(position, size).as(true)
       case None =>
         cats.effect.IO.pure(false)
 
