@@ -141,9 +141,10 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
   ): Option[Int] =
     for
       viewport <- state.viewportSize
-      rect <- LayoutEngine
-        .calculateLayoutWithUI(state, viewport)
-        .belowCursorOverlayStack
+      rect <- {
+        val layout = LayoutEngine.calculateLayoutWithUI(state, viewport)
+        layout.aboveCursorOverlayStack ++ layout.belowCursorOverlayStack
+      }
         .collectFirst { case (`surface`.id, rect) => rect }
     yield SurfaceFrameLayout
       .forContent(rect, SurfaceContent.ContextualToolbar(toolbarState))

@@ -59,6 +59,20 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     result.effects shouldBe Nil
   }
 
+  it should "open the contextual toolbar above the cursor and focus it" in {
+    val initialState = AppState.initial.copy(focus = Focus.EditorPane(PaneId(0)))
+
+    val result  = AppEventReducer.reduce(ToggleContextualToolbar, initialState, registry)
+    val surface = result.state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar"))
+
+    surface.presentation shouldBe SurfacePresentation.Floating(
+      initialState.activeCursorPosition,
+      SurfacePlacement.AboveCursor
+    )
+    result.state.focus shouldBe Focus.Surface(surface.id)
+    result.effects shouldBe Nil
+  }
+
   it should "restore editor focus when runner replaces a modal that held focus" in {
     val base = AppState.initial.copy(focus = Focus.EditorPane(PaneId(0)))
 

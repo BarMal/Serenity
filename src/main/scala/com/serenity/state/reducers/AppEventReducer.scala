@@ -91,7 +91,7 @@ object AppEventReducer:
               content = SurfaceContent.ContextualToolbar(
                 ContextualToolbarState(displayMode = state.config.contextualToolbarDisplayMode)
               ),
-              presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+              presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.AboveCursor)
             )
             stateWithId
               .copy(uiSurfaces = upsertSurface(stateWithId.uiSurfaces, surface))
