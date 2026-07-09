@@ -5,6 +5,12 @@ import com.serenity.ui.fonts.FontLoader
 
 object CommandRunnerSettingsInputItems:
 
+  def parseRichTextFontFamily(text: String): Option[CommandIntent] =
+    nonEmptyText(text).map(CommandIntent.SetRichTextFontFamily(_))
+
+  def parseRichTextColor(text: String): Option[CommandIntent] =
+    normalizeHexColor(text).map(CommandIntent.SetRichTextColor(_))
+
   def build(config: AppConfig): List[CommandSurfaceItem.InputItem] =
     val durationValue       = config.characterAnimation.map(_.durationMs.toString).getOrElse("0")
     val stepsValue          = config.characterAnimation.map(_.steps.toString).getOrElse("0")
@@ -50,7 +56,7 @@ object CommandRunnerSettingsInputItems:
         hint = "Family name",
         currentValue = "",
         isDecimal = false,
-        parse = text => nonEmptyText(text).map(CommandIntent.SetRichTextFontFamily(_)),
+        parse = parseRichTextFontFamily,
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),
@@ -72,7 +78,7 @@ object CommandRunnerSettingsInputItems:
         hint = "#RRGGBB",
         currentValue = "",
         isDecimal = false,
-        parse = text => normalizeHexColor(text).map(CommandIntent.SetRichTextColor(_)),
+        parse = parseRichTextColor,
         category = CommandCategory.Settings,
         acceptsFreeText = true
       )

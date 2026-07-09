@@ -214,14 +214,17 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().config.focusedTextBodyEnabled shouldBe true
   }
 
-  it should "toggle contextual toolbar from enabled to disabled" in {
+  it should "open the contextual toolbar without toggling the setting" in {
     val stateManager = createStateManager()
 
     stateManager.getCurrentState.unsafeRunSync().config.contextualToolbarEnabled shouldBe true
 
     executeCommandThroughRunner(stateManager, "toggle-contextual-toolbar", "toggle-contextual-toolbar")
 
-    stateManager.getCurrentState.unsafeRunSync().config.contextualToolbarEnabled shouldBe false
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.config.contextualToolbarEnabled shouldBe true
+    finalState.contextualToolbarSurface shouldBe defined
+    finalState.commandRunnerSurface shouldBe None
   }
 
   it should "toggle word wrap from enabled to disabled" in {

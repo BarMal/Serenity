@@ -439,12 +439,13 @@ object ContextualToolbar:
     }
 
   private def proseItems(state: AppState, buffer: Buffer): List[ContextualToolbarItem] =
-    val document        = richTextDocumentFor(buffer)
-    val style           = activeStyle(buffer, document)
-    val paragraph       = activeParagraph(buffer, document)
-    val currentFamily   = style.fontFamily.orElse(Some(state.config.fontConfig.textFontFamily)).getOrElse("")
-    val currentFontSize = style.fontSize.getOrElse(state.config.fontConfig.textFontSize)
-    val currentColor    = normalizedColor(style.color)
+    val document         = richTextDocumentFor(buffer)
+    val style            = activeStyle(buffer, document)
+    val paragraph        = activeParagraph(buffer, document)
+    val currentFamily    = style.fontFamily.orElse(Some(state.config.fontConfig.textFontFamily)).getOrElse("")
+    val currentFontSize  = style.fontSize.getOrElse(state.config.fontConfig.textFontSize)
+    val currentColor     = normalizedColor(style.color)
+    val currentColorText = currentColor.getOrElse("#202020")
     val familyOptions = normalizedFontFamilies(currentFamily).map(family =>
       CommandOption(family, CommandIntent.SetRichTextFontFamily(family))
     )
@@ -456,7 +457,7 @@ object ContextualToolbar:
         CommandOption(label, CommandIntent.SetRichTextColor(color))
     }
     val colorIndex =
-      colorOptions.indexWhere(_.intent == CommandIntent.SetRichTextColor(currentColor.getOrElse("#202020"))) match
+      colorOptions.indexWhere(_.intent == CommandIntent.SetRichTextColor(currentColorText)) match
         case -1    => 0
         case index => index
     val paragraphRole = paragraph.map(_.role).getOrElse(ParagraphRole.Body)
@@ -508,6 +509,21 @@ object ContextualToolbar:
         )
       ),
       ContextualToolbarItem.Input(
+        id = "font-family-text",
+        label = "Family",
+        icon = "F",
+        inputItem = CommandSurfaceItem.InputItem(
+          id = "font-family-text",
+          label = "Family",
+          hint = "Family name",
+          currentValue = currentFamily,
+          isDecimal = false,
+          parse = CommandRunnerSettingsInputItems.parseRichTextFontFamily,
+          category = CommandCategory.Edit,
+          acceptsFreeText = true
+        )
+      ),
+      ContextualToolbarItem.Input(
         id = "font-size",
         label = "Size",
         icon = "#",
@@ -534,6 +550,21 @@ object ContextualToolbar:
           options = colorOptions,
           selectedIndex = colorIndex,
           category = CommandCategory.Edit
+        )
+      ),
+      ContextualToolbarItem.Input(
+        id = "color-hex",
+        label = "Hex",
+        icon = "H",
+        inputItem = CommandSurfaceItem.InputItem(
+          id = "color-hex",
+          label = "Hex",
+          hint = "#RRGGBB",
+          currentValue = currentColorText,
+          isDecimal = false,
+          parse = CommandRunnerSettingsInputItems.parseRichTextColor,
+          category = CommandCategory.Edit,
+          acceptsFreeText = true
         )
       ),
       ContextualToolbarItem.Dropdown(

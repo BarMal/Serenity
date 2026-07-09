@@ -269,7 +269,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       case CommandIntent.ToggleFocusedTextBody =>
         updateTextDisplayConfig(config => config.withFocusedTextBody(!config.focusedTextBodyEnabled)).void
       case CommandIntent.ToggleContextualToolbar =>
-        updateTextDisplayConfig(config => config.withContextualToolbarEnabled(!config.contextualToolbarEnabled)).void
+        applyEvent(com.serenity.keystroke.events.ToggleContextualToolbar)
       case CommandIntent.SetLineNumbers(enabled) =>
         updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
       case CommandIntent.SetGutter(enabled) =>
