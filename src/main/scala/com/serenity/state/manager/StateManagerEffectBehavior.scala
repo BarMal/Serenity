@@ -1847,7 +1847,13 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
 
   private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
     if query.isEmpty then Nil
-    else buffer.content.searchAll(query).map(offset => cursorPositionForOffset(buffer.content, offset))
+    else
+      buffer.content
+        .searchAll(query)
+        .filter(offset =>
+          TextEditing.isWholeGraphemeRange(RopeCharacterSource(buffer.content), offset, offset + query.length)
+        )
+        .map(offset => cursorPositionForOffset(buffer.content, offset))
 
   private def toFindResult(cursor: CursorPosition): FindResult =
     FindResult(cursor.line, cursor.column)

@@ -383,11 +383,12 @@ object ModalEventReducer:
     range: Option[(Int, Int)]
   ): List[Int] =
     buffer.content.searchAll(findText).filter { offset =>
-      range match
+      val insideScope = range match
         case Some((startOffset, endOffset)) =>
           offset >= startOffset && (offset + findText.length) <= endOffset
         case None =>
           true
+      insideScope && isWholeGraphemeMatch(buffer.content, offset, findText.length)
     }
 
   private def updateFindQuery(state: AppState, surface: UiSurface, query: String): AppState =
@@ -413,8 +414,23 @@ object ModalEventReducer:
     if query.isEmpty then Nil
     else
       activeBuffer(state)
-        .map(buffer => buffer.content.searchAll(query).map(offset => cursorPositionForOffset(buffer.content, offset)))
+        .map(buffer =>
+          buffer.content
+            .searchAll(query)
+            .filter(offset => isWholeGraphemeMatch(buffer.content, offset, query.length))
+            .map(offset => cursorPositionForOffset(buffer.content, offset))
+        )
         .getOrElse(Nil)
+
+  private def isWholeGraphemeMatch(content: Rope, offset: Int, length: Int): Boolean =
+    TextEditing.isWholeGraphemeRange(RopeCharacterSource(content), offset, offset + length)
+
+  final private case class RopeCharacterSource(content: Rope) extends TextEditing.CharacterSource:
+    override def length: Int =
+      content.weight
+
+    override def charAt(index: Int): Char =
+      content.index(index).getOrElse('\u0000')
 
   private def applyFindMatch(
     state: AppState,

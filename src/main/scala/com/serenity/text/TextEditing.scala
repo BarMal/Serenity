@@ -87,6 +87,16 @@ object TextEditing:
       if previousGraphemeBoundary(source, next) == idx then idx
       else next
 
+  def isWholeGraphemeRange(text: String, start: Int, end: Int): Boolean =
+    isWholeGraphemeRange(StringCharacterSource(text), start, end)
+
+  def isWholeGraphemeRange(source: CharacterSource, start: Int, end: Int): Boolean =
+    val normalizedStart = clamp(start, source.length)
+    val normalizedEnd   = clamp(end, source.length)
+    normalizedStart <= normalizedEnd &&
+    graphemeBoundaryAfterOrAt(source, normalizedStart) == normalizedStart &&
+    graphemeBoundaryBeforeOrAt(source, normalizedEnd) == normalizedEnd
+
   private def clamp(cursor: Int, length: Int): Int =
     math.max(0, math.min(cursor, length))
 

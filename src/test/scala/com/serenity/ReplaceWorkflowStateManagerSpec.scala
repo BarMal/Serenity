@@ -528,6 +528,48 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "not replace matches that split a grapheme cluster" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+    val original     = "cafe\u0301 one\ncafe\u0301 two"
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope(original),
+            isDirty = false
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "replace-all", "replace-all")
+
+    stateManager.applyEvent(InsertChar('\u0301')).unsafeRunSync()
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('!')).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.buffers(bufferId).content.collect() shouldBe original
+    updatedState.buffers(bufferId).isDirty shouldBe false
+    updatedState.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(
+        Modal.ReplaceWorkflow(
+          ReplaceWorkflowState(
+            findText = "\u0301",
+            replacementText = "!",
+            activeField = com.serenity.state.models.ReplaceWorkflowField.ReplaceWith,
+            selectedAction = com.serenity.state.models.ReplaceWorkflowAction.ReplaceAll,
+            statusMessage = Some("No matches found")
+          )
+        )
+      )
+    )
+  }
+
   it should "keep the replace modal open with a status message when selection scope is chosen without a selection" in {
     val stateManager = createStateManager()
 
