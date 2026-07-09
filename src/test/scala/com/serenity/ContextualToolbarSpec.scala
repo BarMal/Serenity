@@ -272,6 +272,47 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .shouldBe(Some(ParagraphRole.Heading(1)))
   }
 
+  it should "open a paragraph role dropdown and apply heading level 4" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-role-dropdown-h4")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
+        val selection = Selection(CursorPosition(0, 0), CursorPosition(0, 5))
+        val nextBuffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha beta"),
+            selection = Some(selection),
+            cursors = List(selection.focus)
+          )
+        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val triggerPoint = toolbarItemPoint(stateManager.getCurrentState.unsafeRunSync(), "paragraph-role")
+    stateManager.applyEvent(MouseClick(triggerPoint.x, triggerPoint.y)).unsafeRunSync()
+
+    val optionPoint = toolbarDetailPoint(
+      stateManager.getCurrentState.unsafeRunSync(),
+      itemId = "paragraph-role",
+      optionLabel = "H4"
+    )
+    stateManager.applyEvent(MouseClick(optionPoint.x, optionPoint.y)).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val bufferId = activeBufferId(state)
+    state
+      .buffers(bufferId)
+      .richTextDocument
+      .flatMap(_.paragraphs.headOption)
+      .map(_.role)
+      .shouldBe(Some(ParagraphRole.Heading(4)))
+  }
+
   it should "open a color dropdown and apply the clicked preset" in {
     val stateManager = createStateManager("ContextualToolbarSpec-color-dropdown")
 

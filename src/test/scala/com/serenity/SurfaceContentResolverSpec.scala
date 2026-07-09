@@ -848,6 +848,55 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     segments.exists(_.text.contains("Center")).shouldBe(true)
   }
 
+  it should "show heading level 4 in the contextual toolbar role control" in {
+    val bufferId = BufferId(0)
+    val selection = Selection(
+      anchor = CursorPosition(0, 6),
+      focus = CursorPosition(0, 10)
+    )
+    val richDocument = RichTextDocument(
+      List(
+        RichTextParagraph(
+          runs = List(
+            RichTextRun("alpha "),
+            RichTextRun(
+              "beta",
+              RichTextStyle(fontFamily = Some("Serif"), fontSize = Some(18.0f), color = Some("#336699"))
+            )
+          ),
+          role = ParagraphRole.Heading(4)
+        )
+      )
+    ).normalized
+    val paneId = PaneId(0)
+    val state = AppState.initial.copy(
+      buffers = Map(
+        bufferId -> Buffer
+          .fromString(bufferId, "alpha beta")
+          .copy(
+            selection = Some(selection),
+            cursors = List(selection.focus),
+            richTextDocument = Some(richDocument)
+          )
+      ),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.EditorPane(paneId)
+    )
+
+    val resolved = SurfaceContentResolver.resolveContextualToolbar(
+      ContextualToolbarState(),
+      state,
+      LayoutRect(0, 0, 24, 8),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.flatMap(_.segments).exists(_.text == "P Role H4").shouldBe(true)
+  }
+
   it should "render find result position when the modal carries match results" in {
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.ModalWorkflow(
