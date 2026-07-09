@@ -8,6 +8,7 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
+import com.serenity.text.TextEditing
 import com.serenity.ui.layout.LayoutEngine
 
 private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeSupport:
@@ -645,11 +646,12 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
     range: Option[(Int, Int)]
   ): List[Int] =
     buffer.content.searchAll(findText).filter { offset =>
-      range match
+      val insideScope = range match
         case Some((startOffset, endOffset)) =>
           offset >= startOffset && (offset + findText.length) <= endOffset
         case None =>
           true
+      insideScope && isWholeGraphemeMatch(buffer.content, offset, findText.length)
     }
 
   private def refreshedFindState(
@@ -751,6 +753,16 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
   private def cursorPositionForOffset(content: com.serenity.rope.Rope, offset: Int): CursorPosition =
     val (line, column) = content.offsetToLineColumn(offset)
     CursorPosition(line, column)
+
+  private def isWholeGraphemeMatch(content: com.serenity.rope.Rope, offset: Int, length: Int): Boolean =
+    TextEditing.isWholeGraphemeRange(RopeCharacterSource(content), offset, offset + length)
+
+  final private case class RopeCharacterSource(content: com.serenity.rope.Rope) extends TextEditing.CharacterSource:
+    override def length: Int =
+      content.weight
+
+    override def charAt(index: Int): Char =
+      content.index(index).getOrElse('\u0000')
 
   protected def replaceWorkflowSurface(
     state: AppState,

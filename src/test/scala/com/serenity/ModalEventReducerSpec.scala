@@ -196,6 +196,17 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     withNeedle.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 6)
   }
 
+  it should "ignore find queries that would split a grapheme cluster" in {
+    val bufferId     = BufferId(0)
+    val initialState = stateWithFindModal("", "cafe\u0301 needle", CursorPosition(0, 0))
+
+    val withAccent = ModalEventReducer.reduce(ModalType.Find, InsertChar('\u0301'), initialState).state
+
+    activeFindModal(withAccent) shouldBe Some(Modal.Find("\u0301", Nil, 0))
+    withAccent.buffers(bufferId).findState shouldBe None
+    withAccent.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 0)
+  }
+
   it should "navigate find results forward and backward while the overlay remains open" in {
     val bufferId     = BufferId(0)
     val initialState = stateWithFindModal("needle", "needle one\nmiddle\nneedle two\nneedle three")
