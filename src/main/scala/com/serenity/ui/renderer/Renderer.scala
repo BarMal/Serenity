@@ -1122,16 +1122,17 @@ object Renderer:
     if y >= 0 && y < surface.viewportHeight then
       surface.fontRenderContext match
         case Some(frc) =>
+          val lineHeightPx = math.max(cellMetrics.lineHeight, textMetrics.lineHeight)
           val placement = TextAlignment.placeLine(
             text = line,
             area = TextAreaPx(
               xPx = cellMetrics.toPixelX(rect.x).toFloat,
               yPx = cellMetrics.toPixelY(y),
               widthPx = rect.width * cellMetrics.charWidth,
-              heightPx = cellMetrics.lineHeight
+              heightPx = lineHeightPx
             ),
             font = font,
-            lineHeightPx = cellMetrics.lineHeight,
+            lineHeightPx = lineHeightPx,
             ascentPx = textMetrics.ascent,
             horizontal = TextHorizontalAlignment.Center,
             vertical = TextVerticalAlignment.Top,
@@ -1197,16 +1198,17 @@ object Renderer:
   ): Unit =
     surface.fontRenderContext match
       case Some(frc) =>
+        val lineHeightPx = math.max(cellMetrics.lineHeight, uiMetrics.lineHeight)
         val placement = TextAlignment.placeLine(
           text = line,
           area = TextAreaPx(
             xPx = 0.0f,
             yPx = cellMetrics.toPixelY(y),
             widthPx = viewportSize.width * cellMetrics.charWidth,
-            heightPx = cellMetrics.lineHeight
+            heightPx = lineHeightPx
           ),
           font = uiFont,
-          lineHeightPx = cellMetrics.lineHeight,
+          lineHeightPx = lineHeightPx,
           ascentPx = uiMetrics.ascent,
           horizontal = TextHorizontalAlignment.Center,
           vertical = TextVerticalAlignment.Top,
