@@ -461,18 +461,14 @@ object ContextualToolbar:
         case -1    => 0
         case index => index
     val paragraphRole = paragraph.map(_.role).getOrElse(ParagraphRole.Body)
-    val paragraphRoleOptions = List(
-      CommandOption("Body", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Body)),
-      CommandOption("H1", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(1))),
-      CommandOption("H2", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(2))),
-      CommandOption("H3", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(3)))
-    )
+    val paragraphRoleOptions =
+      CommandOption("Body", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Body)) ::
+        (1 to 6).toList.map(level =>
+          CommandOption(s"H$level", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(level)))
+        )
     val paragraphRoleIndex = paragraphRole match
-      case ParagraphRole.Body       => 0
-      case ParagraphRole.Heading(1) => 1
-      case ParagraphRole.Heading(2) => 2
-      case ParagraphRole.Heading(3) => 3
-      case ParagraphRole.Heading(_) => 1
+      case ParagraphRole.Body           => 0
+      case ParagraphRole.Heading(level) => level.max(1).min(paragraphRoleOptions.length - 1)
 
     List(
       ContextualToolbarItem.Button(
