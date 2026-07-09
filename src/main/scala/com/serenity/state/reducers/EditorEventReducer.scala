@@ -1456,7 +1456,14 @@ object EditorEventReducer:
 
   private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
     if query.isEmpty then Nil
-    else buffer.content.searchAll(query).map(offset => offsetToCursorPosition(buffer.content, offset))
+    else
+      buffer.content
+        .searchAll(query)
+        .filter(offset => isWholeGraphemeMatch(buffer.content, offset, query.length))
+        .map(offset => offsetToCursorPosition(buffer.content, offset))
+
+  private def isWholeGraphemeMatch(content: Rope, offset: Int, length: Int): Boolean =
+    TextEditing.isWholeGraphemeRange(RopeCharacterSource(content), offset, offset + length)
 
   private def toFindResult(cursor: CursorPosition): FindResult =
     FindResult(cursor.line, cursor.column)
