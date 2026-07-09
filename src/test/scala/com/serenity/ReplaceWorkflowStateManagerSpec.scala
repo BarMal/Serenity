@@ -179,6 +179,36 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "drop split-grapheme find results after replace next" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("e cafe\u0301"),
+            cursors = List(CursorPosition(0, 0)),
+            findState = Some(FindState("e", List(FindResult(0, 0)), 0))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "replace", "replace")
+
+    stateManager.applyEvent(InsertChar('e')).unsafeRunSync()
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('x')).unsafeRunSync()
+    stateManager.applyEvent(MoveLeft).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.buffers(bufferId).content.collect() shouldBe "x cafe\u0301"
+    updatedState.buffers(bufferId).findState shouldBe None
+  }
+
   it should "keep the modal open with a status message when find text is empty" in {
     val stateManager = createStateManager()
 

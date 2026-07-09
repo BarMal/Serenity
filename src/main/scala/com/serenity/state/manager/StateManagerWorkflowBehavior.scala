@@ -661,6 +661,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
   ): Option[FindState] =
     val results = content
       .searchAll(findText)
+      .filter(offset => isWholeGraphemeMatch(content, offset, findText.length))
       .map(offset => cursorPositionForOffset(content, offset))
       .map(cursor => FindResult(cursor.line, cursor.column))
     val resultSet = FindResultSet.normalized(findText, results, requestedIndex)
@@ -671,7 +672,8 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
     findText: String,
     offset: Int
   ): Option[FindState] =
-    val matchOffsets = content.searchAll(findText)
+    val matchOffsets =
+      content.searchAll(findText).filter(found => isWholeGraphemeMatch(content, found, findText.length))
     val requestedIndex = matchOffsets.indexWhere(_ >= offset) match
       case -1    => 0
       case index => index
