@@ -91,6 +91,42 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
+  it should "use the UI font line height for centered start page text" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, ViewportSize(100, 30))
+    yield
+      val surface     = new MockRenderSurface(100, 30)
+      val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+      val uiFont      = Font(Font.SANS_SERIF, Font.BOLD, 20)
+      val codeMetrics = CellMetrics.fromFont(codeFont)
+      val uiMetrics   = CellMetrics.fromFont(uiFont)
+
+      Renderer.render(
+        state,
+        cursorVisible = true,
+        surface,
+        ViewportSize(100, 30),
+        codeFont,
+        codeFont,
+        uiFont,
+        codeMetrics,
+        uiMetrics,
+        None
+      )
+
+      val title    = state.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page.title
+      val titleRun = surface.drawRunPxCalls.find(_.s == title).getOrElse(fail("expected measured title draw call"))
+
+      titleRun.lineHeightPx shouldBe uiMetrics.lineHeight
+      titleRun.ascentPx shouldBe uiMetrics.ascent
+
+    program.unsafeRunSync()
+  }
+
   it should "center blank buffer text by measured text font width" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
@@ -149,6 +185,45 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
     val call = surface.drawRunPxCalls.find(_.s == "~ Empty ~").getOrElse(fail("expected empty text draw call"))
     call.xPx shouldBe expected.xPx +- 0.001f
+  }
+
+  it should "use the text font line height for blank buffer placeholder text" in {
+    val bufferId = BufferId(1)
+    val paneId   = PaneId(1)
+    val buffer = Buffer
+      .fromString(bufferId, "")
+      .copy(isNewEmpty = false, viewport = Viewport.default.copy(visibleLines = 10))
+    val state = AppState.empty.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId),
+        paneOrder = List(paneId)
+      ),
+      focus = Focus.EditorPane(paneId),
+      config = AppState.empty.config.withLineNumbers(false).withGutter(false)
+    )
+    val surface     = new MockRenderSurface(80, 24)
+    val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val textFont    = Font(Font.SANS_SERIF, Font.PLAIN, 20)
+    val codeMetrics = CellMetrics.fromFont(codeFont)
+    val textMetrics = CellMetrics.fromFont(textFont)
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(80, 24),
+      codeFont = codeFont,
+      textFont = textFont,
+      cellMetrics = codeMetrics,
+      cursorColor = None
+    )
+
+    val call = surface.drawRunPxCalls.find(_.s == "~ Empty ~").getOrElse(fail("expected empty text draw call"))
+    call.lineHeightPx shouldBe textMetrics.lineHeight
+    call.ascentPx shouldBe textMetrics.ascent
   }
 
   it should "have buffer content available immediately after setup" in {
