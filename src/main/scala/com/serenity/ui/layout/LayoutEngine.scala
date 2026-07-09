@@ -570,9 +570,9 @@ object LayoutEngine:
   )
 
   private def orderedBelowCursorSurfaces(state: AppState): List[UiSurface] =
-    val maybeToolbar = state.contextualToolbarSurface.toList
-    val maybeRunner  = state.commandRunnerSurface.toList
-    val maybeSubmenu = state.commandRunnerSubmenuSurface.toList
+    val maybeToolbar = state.contextualToolbarSurface.filter(isBelowCursorSurface).toList
+    val maybeRunner  = state.commandRunnerSurface.filter(isBelowCursorSurface).toList
+    val maybeSubmenu = state.commandRunnerSubmenuSurface.filter(isBelowCursorSurface).toList
     if maybeRunner.nonEmpty && maybeSubmenu.nonEmpty then maybeToolbar ++ maybeRunner ++ maybeSubmenu
     else if maybeToolbar.nonEmpty && maybeRunner.nonEmpty then maybeToolbar ++ maybeRunner
     else
@@ -594,6 +594,11 @@ object LayoutEngine:
                 case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
                 case _                                                             => false
             }.toList
+
+  private def isBelowCursorSurface(surface: UiSurface): Boolean =
+    surface.presentation match
+      case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
+      case _                                                             => false
 
   private def calculateBelowCursorOverlayStack(
     surfaces: List[UiSurface],

@@ -12,7 +12,7 @@ import org.scalatest.matchers.should.Matchers
 
 class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
-  "Contextual toolbar" should "toggle on, keep command runner stacked beneath it, and restore toolbar focus when the runner closes" in {
+  "Contextual toolbar" should "toggle on above the cursor, keep the command runner below it, and restore toolbar focus when the runner closes" in {
     val stateManager = createStateManager("ContextualToolbarSpec-stack")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
@@ -21,16 +21,18 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val opened         = stateManager.getCurrentState.unsafeRunSync()
     val toolbarSurface = opened.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar"))
     opened.focus shouldBe Focus.Surface(toolbarSurface.id)
+    toolbarSurface.presentation shouldBe SurfacePresentation.Floating(
+      opened.activeCursorPosition,
+      SurfacePlacement.AboveCursor
+    )
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     val withRunner = stateManager.getCurrentState.unsafeRunSync()
-    val stackIds = LayoutEngine
+    val layout = LayoutEngine
       .calculateLayoutWithUI(withRunner, withRunner.viewportSize.getOrElse(fail("Expected viewport size")))
-      .belowCursorOverlayStack
-      .map(_._1)
-    stackIds.take(2) shouldBe List(
-      toolbarSurface.id,
+    layout.aboveCursorOverlayStack.map(_._1) should contain(toolbarSurface.id)
+    layout.belowCursorOverlayStack.map(_._1) shouldBe List(
       withRunner.commandRunnerSurface.getOrElse(fail("Expected command runner")).id
     )
 
@@ -553,9 +555,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
   private def toolbarRect(state: AppState) =
     val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
     val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar surface"))
-    LayoutEngine
-      .calculateLayoutWithUI(state, viewport)
-      .belowCursorOverlayStack
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    (layout.aboveCursorOverlayStack ++ layout.belowCursorOverlayStack)
       .collectFirst { case (`surface`.id, rect) => rect }
       .getOrElse(fail("Expected toolbar overlay rect"))
 
