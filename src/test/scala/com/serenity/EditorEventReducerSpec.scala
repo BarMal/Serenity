@@ -1480,6 +1480,29 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "drop find-next matches that split a grapheme cluster" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("cafe\u0301!"),
+            cursors = List(CursorPosition(0, 0)),
+            findState = Some(FindState("\u0301", List(FindResult(0, 4)), 0))
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(FindNext, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.findState shouldBe None
+    buffer.cursors shouldBe List(CursorPosition(0, 0))
+  }
+
   it should "scroll wrapped text to the selected find-next visual row" in {
     val paneId       = PaneId(0)
     val bufferId     = BufferId(0)
