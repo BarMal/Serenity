@@ -5,11 +5,12 @@ import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.ConfigManager
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.fonts.FontLoader.{FontConfig, TextScaleMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -86,6 +87,41 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
 
     observed.get() should not be empty
     observed.get().last.uiFontFamily shouldBe FontLoader.availableUiFamilies.head
+  }
+
+  it should "resolve auto text scale from the live device scale when switching modes at runtime" in {
+    val observed    = AtomicReference[List[FontConfig]](Nil)
+    val sessionRoot = Files.createTempDirectory("font-scale-auto-runtime")
+    val initialConfig = com.serenity.config.AppConfig.default.withFontConfig(
+      FontConfig(textScaleMode = TextScaleMode.Manual, textScaleMultiplier = 1.0)
+    )
+    val stateManager =
+      StateManager
+        .apply(
+          testLogger("StateManagerFontConfigSpec"),
+          onFontConfigChanged = config => IO(observed.updateAndGet(_ :+ config)),
+          deviceTextScaleProvider = IO.pure(2.0),
+          sessionRootOverride = Some(sessionRoot),
+          initialConfig = initialConfig
+        )
+        .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "text-scale-auto",
+          "Set text scale to auto",
+          CommandIntent.SetTextScaleMode(TextScaleMode.Auto),
+          CommandCategory.View
+        )
+      )
+      .unsafeRunSync()
+
+    val fontConfig = stateManager.getCurrentState.unsafeRunSync().config.fontConfig
+    fontConfig.textScaleMode shouldBe TextScaleMode.Auto
+    fontConfig.textScaleMultiplier shouldBe 2.0
+    observed.get() should not be empty
+    observed.get().last.textScaleMultiplier shouldBe 2.0
   }
 
   it should "persist font family changes made through UI font settings" in {
