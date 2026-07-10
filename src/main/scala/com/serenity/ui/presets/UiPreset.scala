@@ -63,18 +63,17 @@ object UiPreset:
           preset.copy(config = patchTypographyConfig(preset.config, config))
 
   private def patchAppearanceConfig(base: AppConfig, source: AppConfig): AppConfig =
-    base.copy(
-      blurRadius = source.blurRadius,
-      backgroundStyle = source.backgroundStyle,
-      materialPreset = source.materialPreset,
-      cursorMode = source.cursorMode,
-      cursorInfoBarMode = source.cursorInfoBarMode,
-      cursorInfoBarPlacement = source.cursorInfoBarPlacement,
-      interfaceDensity = source.interfaceDensity,
-      uiElementGap = source.uiElementGap,
-      uiCornerRadiusPx = source.uiCornerRadiusPx,
-      uiOutlineThicknessPx = source.uiOutlineThicknessPx
-    )
+    base
+      .copy(
+        blurRadius = source.blurRadius,
+        backgroundStyle = source.backgroundStyle,
+        materialPreset = source.materialPreset,
+        interfaceDensity = source.interfaceDensity,
+        uiElementGap = source.uiElementGap,
+        uiCornerRadiusPx = source.uiCornerRadiusPx,
+        uiOutlineThicknessPx = source.uiOutlineThicknessPx
+      )
+      .withCursorConfig(source.cursorConfig)
 
   private def patchDocumentDefaultsConfig(base: AppConfig, source: AppConfig): AppConfig =
     base.copy(defaultDocumentMode = source.defaultDocumentMode)
@@ -205,9 +204,9 @@ object UiPreset:
             textFontFamily = Font.SERIF,
             textFontSize = 18.0f,
             uiFontSize = 13.0f
-          ),
-          cursorInfoBarMode = CursorInfoBarMode.Position
-        ),
+          )
+        )
+        .withCursorInfoBarMode(CursorInfoBarMode.Position),
       themeName = Theme.dark.name,
       pinnedPanels = List(PinnedPanel(PanelPosition.Left, 28, PanelContentSnapshot.Outline(Nil))),
       targetEditorPaneCount = Some(1)
@@ -264,7 +263,7 @@ object UiPreset:
         .withMotionPreset(MotionPreset.Reduced)
         .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Comfortable)
-        .copy(cursorInfoBarMode = CursorInfoBarMode.Detailed),
+        .withCursorInfoBarMode(CursorInfoBarMode.Detailed),
       themeName = Theme.dark.name,
       pinnedPanels = List(
         PinnedPanel(PanelPosition.Left, 30, PanelContentSnapshot.Outline(Nil)),
@@ -367,7 +366,9 @@ object UiPreset:
     val normalizedName = name.trim
     UiPreset(
       name = normalizedName,
-      config = state.config.copy(preferredWindowSize = preferredWindowSize.orElse(state.config.preferredWindowSize)),
+      config = state.config.withWindowConfig(
+        state.config.windowConfig.copy(preferredSize = preferredWindowSize.orElse(state.config.preferredWindowSize))
+      ),
       themeName = state.theme.name,
       pinnedPanels = state.pinnedSurfaces.flatMap(PinnedPanel.fromSurface),
       targetEditorPaneCount = Option(state.layout.editorPanes.size).filter(_ > 0)

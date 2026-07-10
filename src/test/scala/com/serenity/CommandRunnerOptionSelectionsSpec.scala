@@ -24,9 +24,11 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
       commandRunnerTransitionKind = Some(TransitionKind.OutlineThenContent),
       panelOpenTransitionKind = Some(TransitionKind.OutlineThenContent),
       panelCloseTransitionKind = Some(TransitionKind.DirectionalSweep),
-      cursorMode = CursorMode.Breathe,
-      cursorInfoBarMode = CursorInfoBarMode.Detailed,
-      cursorInfoBarPlacement = CursorInfoBarPlacement.PinnedBottom,
+      cursorConfig = CursorConfig(
+        mode = CursorMode.Breathe,
+        infoBarMode = CursorInfoBarMode.Detailed,
+        infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
+      ),
       backgroundStyle = BackgroundStyle.GlassLike,
       interfaceDensity = InterfaceDensity.Compact,
       markdownViewMode = MarkdownViewMode.InlineLens,

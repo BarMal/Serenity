@@ -43,12 +43,6 @@ object ConfigKeySchema:
       "font.text.ligatures",
       "font.prose.ligatures",
       "font.ui.ligatures",
-      "cursor.active.color",
-      "cursor.inactive.color",
-      "cursor.info_bar",
-      "cursor.info.bar",
-      "cursor.info_bar.placement",
-      "cursor.info.bar.placement",
       "interface.density",
       "ui.material",
       "material.preset",
@@ -99,10 +93,6 @@ object ConfigKeySchema:
       "display.contextual.toolbar.mode",
       "document.default_mode",
       "document.default.mode",
-      "window.chrome",
-      "window.chrome.mode",
-      "window.preferred.width",
-      "window.preferred.height",
       "text_area.left.percent",
       "text.area.left.percent",
       "text_area.right.percent",
@@ -120,7 +110,7 @@ object ConfigKeySchema:
       "spellcheck.dictionary_paths",
       "spellcheck.dictionary.paths",
       "spellcheck.words"
-    )
+    ) ++ CursorConfig.Schema.currentKeys ++ WindowConfig.Schema.currentKeys
 
   val deprecatedKeys: Map[String, String] =
     Map(
@@ -143,10 +133,6 @@ object ConfigKeySchema:
       "font_prose_ligatures"                 -> "font.text.ligatures",
       "font_ligatures"                       -> "font.code.ligatures and font.text.ligatures",
       "font_ui_ligatures"                    -> "font.ui.ligatures",
-      "cursor_active_color"                  -> "cursor.active.color",
-      "cursor_inactive_color"                -> "cursor.inactive.color",
-      "cursor_info_bar"                      -> "cursor.info_bar",
-      "cursor_info_bar_placement"            -> "cursor.info_bar.placement",
       "interface_density"                    -> "interface.density",
       "ui_material"                          -> "ui.material",
       "material_preset"                      -> "material.preset",
@@ -175,10 +161,6 @@ object ConfigKeySchema:
       "display_contextual_toolbar"           -> "display.contextual_toolbar",
       "display_contextual_toolbar_mode"      -> "display.contextual_toolbar_mode",
       "document_default_mode"                -> "document.default_mode",
-      "window_chrome"                        -> "window.chrome",
-      "window_chrome_mode"                   -> "window.chrome",
-      "window_preferred_width"               -> "window.preferred.width",
-      "window_preferred_height"              -> "window.preferred.height",
       "text_area_left_percent"               -> "text_area.left.percent",
       "text_area_right_percent"              -> "text_area.right.percent",
       "text_area_top_percent"                -> "text_area.top.percent",
@@ -191,4 +173,4 @@ object ConfigKeySchema:
       "spellcheck_languages"                 -> "spellcheck.languages",
       "spellcheck_dictionary_paths"          -> "spellcheck.dictionary_paths",
       "spellcheck_words"                     -> "spellcheck.words"
-    )
+    ) ++ CursorConfig.Schema.deprecatedKeys ++ WindowConfig.Schema.deprecatedKeys

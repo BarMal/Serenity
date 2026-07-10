@@ -284,6 +284,40 @@ case class PreferredWindowSize(width: Int, height: Int):
   def normalized: PreferredWindowSize =
     PreferredWindowSize(width.max(400), height.max(300))
 
+case class WindowConfig(
+    chromeMode: WindowChromeMode = WindowChromeMode.Native,
+    preferredSize: Option[PreferredWindowSize] = None
+):
+
+  def normalized: WindowConfig =
+    copy(preferredSize = preferredSize.map(_.normalized))
+
+object WindowConfig:
+
+  object Schema:
+
+    val currentKeys: Set[String] = Set(
+      "window.chrome",
+      "window.chrome.mode",
+      "window.preferred.width",
+      "window.preferred.height"
+    )
+
+    val deprecatedKeys: Map[String, String] = Map(
+      "window_chrome"           -> "window.chrome",
+      "window_chrome_mode"      -> "window.chrome",
+      "window_preferred_width"  -> "window.preferred.width",
+      "window_preferred_height" -> "window.preferred.height"
+    )
+
+    val chromeKeys: Set[String] = Set("window.chrome", "window.chrome.mode") ++ deprecatedKeys.keySet.filter(
+      _.startsWith("window_chrome")
+    )
+
+    val preferredWidthKeys: Set[String] = Set("window.preferred.width", "window_preferred_width")
+
+    val preferredHeightKeys: Set[String] = Set("window.preferred.height", "window_preferred_height")
+
 case class CursorColorConfig(
     active: Option[Color] = None,
     inactive: Option[Color] = None
@@ -293,6 +327,42 @@ case class CursorColorConfig(
 
   def inactiveOr(activeColor: Color): Color =
     inactive.getOrElse(activeColor)
+
+case class CursorConfig(
+    mode: CursorMode = CursorMode.Blink,
+    colors: CursorColorConfig = CursorColorConfig(),
+    infoBarMode: CursorInfoBarMode = CursorInfoBarMode.Off,
+    infoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating
+)
+
+object CursorConfig:
+
+  object Schema:
+
+    val currentKeys: Set[String] = Set(
+      "cursor.active.color",
+      "cursor.inactive.color",
+      "cursor.info_bar",
+      "cursor.info.bar",
+      "cursor.info_bar.placement",
+      "cursor.info.bar.placement"
+    )
+
+    val deprecatedKeys: Map[String, String] = Map(
+      "cursor_active_color"       -> "cursor.active.color",
+      "cursor_inactive_color"     -> "cursor.inactive.color",
+      "cursor_info_bar"           -> "cursor.info_bar",
+      "cursor_info_bar_placement" -> "cursor.info_bar.placement"
+    )
+
+    val activeColorKeys: Set[String] = Set("cursor.active.color", "cursor_active_color")
+
+    val inactiveColorKeys: Set[String] = Set("cursor.inactive.color", "cursor_inactive_color")
+
+    val infoBarModeKeys: Set[String] = Set("cursor.info_bar", "cursor.info.bar", "cursor_info_bar")
+
+    val infoBarPlacementKeys: Set[String] =
+      Set("cursor.info_bar.placement", "cursor.info.bar.placement", "cursor_info_bar_placement")
 
 case class TextAreaInsets(
     left: Double = TextAreaInsets.DefaultInset,
@@ -419,11 +489,8 @@ case class AppConfig(
     commandRunnerTransitionKind: Option[TransitionKind] = None,
     panelOpenTransitionKind: Option[TransitionKind] = None,
     panelCloseTransitionKind: Option[TransitionKind] = None,
-    cursorMode: CursorMode = CursorMode.Blink,
-    cursorColors: CursorColorConfig = CursorColorConfig(),
-    cursorInfoBarMode: CursorInfoBarMode = CursorInfoBarMode.Off,
-    cursorInfoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating,
-    windowChromeMode: WindowChromeMode = WindowChromeMode.Native,
+    cursorConfig: CursorConfig = CursorConfig(),
+    windowConfig: WindowConfig = WindowConfig(),
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     defaultDocumentMode: DefaultDocumentMode = DefaultDocumentMode.PlainText,
     interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
@@ -432,10 +499,15 @@ case class AppConfig(
     uiOutlineThicknessPx: Int = 2,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     viewportSizing: ViewportSizing = ViewportSizing(),
-    preferredWindowSize: Option[PreferredWindowSize] = None,
     lspUserConfig: LspUserConfig = LspUserConfig.empty,
     spellCheck: SpellCheckConfig = SpellCheckConfig()
 ):
+  def windowChromeMode: WindowChromeMode =
+    windowConfig.chromeMode
+
+  def preferredWindowSize: Option[PreferredWindowSize] =
+    windowConfig.preferredSize
+
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
     copy(characterAnimation = Some(config), motionPreset = MotionPreset.Custom)
@@ -648,20 +720,38 @@ case class AppConfig(
   def effectivePanelCloseTransitionKind: TransitionKind =
     panelCloseTransitionKind.getOrElse(TransitionKind.Fade)
 
+  def cursorMode: CursorMode =
+    cursorConfig.mode
+
+  def cursorColors: CursorColorConfig =
+    cursorConfig.colors
+
+  def cursorInfoBarMode: CursorInfoBarMode =
+    cursorConfig.infoBarMode
+
+  def cursorInfoBarPlacement: CursorInfoBarPlacement =
+    cursorConfig.infoBarPlacement
+
+  def withCursorConfig(config: CursorConfig): AppConfig =
+    copy(cursorConfig = config)
+
   def withCursorMode(mode: CursorMode): AppConfig =
-    copy(cursorMode = mode)
+    withCursorConfig(cursorConfig.copy(mode = mode))
 
   def withCursorColors(colors: CursorColorConfig): AppConfig =
-    copy(cursorColors = colors)
+    withCursorConfig(cursorConfig.copy(colors = colors))
 
   def withCursorInfoBarMode(mode: CursorInfoBarMode): AppConfig =
-    copy(cursorInfoBarMode = mode)
+    withCursorConfig(cursorConfig.copy(infoBarMode = mode))
 
   def withCursorInfoBarPlacement(placement: CursorInfoBarPlacement): AppConfig =
-    copy(cursorInfoBarPlacement = placement)
+    withCursorConfig(cursorConfig.copy(infoBarPlacement = placement))
+
+  def withWindowConfig(config: WindowConfig): AppConfig =
+    copy(windowConfig = config.normalized)
 
   def withWindowChromeMode(mode: WindowChromeMode): AppConfig =
-    copy(windowChromeMode = mode)
+    withWindowConfig(windowConfig.copy(chromeMode = mode))
 
   def withMarkdownViewMode(mode: MarkdownViewMode): AppConfig =
     copy(markdownViewMode = mode)
@@ -707,7 +797,7 @@ case class AppConfig(
     withViewportSizing(viewportSizing.copy(height = sizing))
 
   def withPreferredWindowSize(size: PreferredWindowSize): AppConfig =
-    copy(preferredWindowSize = Some(size.normalized))
+    withWindowConfig(windowConfig.copy(preferredSize = Some(size.normalized)))
 
   def withLspUserConfig(config: LspUserConfig): AppConfig =
     copy(lspUserConfig = config)

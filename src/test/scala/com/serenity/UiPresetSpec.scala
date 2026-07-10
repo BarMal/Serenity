@@ -64,10 +64,9 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     )
     val preset = UiPreset(
       name = "Review",
-      config = AppConfig.default.copy(
-        fontConfig = FontConfig(textFontFamily = "Serif", textFontSize = 17.0f),
-        preferredWindowSize = Some(PreferredWindowSize(1280, 800))
-      ),
+      config = AppConfig.default
+        .copy(fontConfig = FontConfig(textFontFamily = "Serif", textFontSize = 17.0f))
+        .withPreferredWindowSize(PreferredWindowSize(1280, 800)),
       themeName = Theme.dark.name,
       pinnedPanels = List(
         UiPreset.PinnedPanel
@@ -438,11 +437,11 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val first = UiPreset(
       name = "Focus",
-      config = AppConfig.default.copy(preferredWindowSize = Some(PreferredWindowSize(1000, 700))),
+      config = AppConfig.default.withPreferredWindowSize(PreferredWindowSize(1000, 700)),
       themeName = "dark",
       pinnedPanels = Nil
     )
-    val second = first.copy(config = AppConfig.default.copy(preferredWindowSize = Some(PreferredWindowSize(1200, 900))))
+    val second = first.copy(config = AppConfig.default.withPreferredWindowSize(PreferredWindowSize(1200, 900)))
 
     (for
       _       <- store.upsert(first)
@@ -460,7 +459,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val store = UiPresetStore(path)
     val focus = UiPreset(
       name = "Focus",
-      config = AppConfig.default.copy(preferredWindowSize = Some(PreferredWindowSize(1000, 700))),
+      config = AppConfig.default.withPreferredWindowSize(PreferredWindowSize(1000, 700)),
       themeName = "dark",
       pinnedPanels = Nil
     )

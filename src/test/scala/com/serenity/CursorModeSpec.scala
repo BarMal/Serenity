@@ -50,6 +50,23 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     AppConfig.default.withCursorMode(CursorMode.Breathe).cursorMode shouldBe CursorMode.Breathe
   }
 
+  it should "store cursor settings inside the cursor sub-config" in {
+    val active   = new Color(0x22, 0x44, 0x88)
+    val inactive = new Color(0x88, 0x44, 0x22, 0x99)
+    val config = AppConfig.default
+      .withCursorMode(CursorMode.Breathe)
+      .withCursorColors(CursorColorConfig(Some(active), Some(inactive)))
+      .withCursorInfoBarMode(CursorInfoBarMode.Detailed)
+      .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+
+    config.cursorConfig shouldBe CursorConfig(
+      mode = CursorMode.Breathe,
+      colors = CursorColorConfig(Some(active), Some(inactive)),
+      infoBarMode = CursorInfoBarMode.Detailed,
+      infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
+    )
+  }
+
   it should "leave other fields unchanged when changing cursorMode" in {
     val config = AppConfig(
       characterAnimation = AnimationConfig.quick,
