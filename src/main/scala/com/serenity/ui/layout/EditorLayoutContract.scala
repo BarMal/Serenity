@@ -16,6 +16,8 @@ case class LayoutContractViolation(
 case class EditorLayoutContract(
     viewportRect: LayoutRect,
     contentAreaRect: LayoutRect,
+    leftSpacerRect: LayoutRect,
+    rightSpacerRect: LayoutRect,
     workspace: EditorWorkspaceLayout,
     activePaneId: Option[PaneId],
     minimumFloatingOverlayGapRows: Int,
@@ -327,6 +329,8 @@ object EditorLayoutContract:
     EditorLayoutContract(
       viewportRect = viewportRect,
       contentAreaRect = contentAreaRect,
+      leftSpacerRect = calculatedLayout.leftSpacerRect,
+      rightSpacerRect = calculatedLayout.rightSpacerRect,
       workspace = workspace,
       activePaneId = state.layout.activeEditorPaneId,
       minimumFloatingOverlayGapRows = minimumFloatingOverlayGapRows,

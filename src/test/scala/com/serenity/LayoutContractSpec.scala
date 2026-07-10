@@ -589,6 +589,23 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     contract.paneTitleRect(PaneId(99)) shouldBe None
   }
 
+  it should "provide shared spacer lookups" in {
+    val state = AppState.initial.copy(
+      config = AppConfig.default.copy(
+        showLineNumbers = false,
+        showGutter = false,
+        textAreaInsets = TextAreaInsets(left = 0.10, right = 0.15)
+      )
+    )
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
+    val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+
+    contract.leftSpacerRect shouldBe calculatedLayout.leftSpacerRect
+    contract.rightSpacerRect shouldBe calculatedLayout.rightSpacerRect
+    contract.workspace.editorPanelRect shouldBe calculatedLayout.editorPanelRect
+  }
+
   it should "provide shared line-number lookups" in {
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma")
