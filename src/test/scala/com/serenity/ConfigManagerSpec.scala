@@ -665,6 +665,23 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     result.report.invalidEntries.map(_.key) should contain("display.contextual_toolbar_mode")
   }
 
+  it should "report invalid surface layout config values through the surface schema" in {
+    val configFile = Files.createTempFile("serenity-surface-layout-invalid-config", ".conf")
+    Files.writeString(
+      configFile,
+      """text_area.left.percent = 60
+        |viewport.width.percent = 0
+        |viewport.height.max = 0
+        |""".stripMargin
+    )
+
+    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+
+    result.report.invalidEntries.map(_.key) should contain("text_area.left.percent")
+    result.report.invalidEntries.map(_.key) should contain("viewport.width.percent")
+    result.report.invalidEntries.map(_.key) should contain("viewport.height.max")
+  }
+
   it should "load and write viewport sizing policy" in {
     val configFile = Files.createTempFile("serenity-viewport-config", ".conf")
     Files.writeString(
