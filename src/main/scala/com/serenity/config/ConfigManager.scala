@@ -283,24 +283,8 @@ object ConfigManager:
               MarkdownViewMode.fromConfigKey(value).map(config.withMarkdownViewMode).getOrElse(config)
             case key if DocumentConfig.Schema.defaultModeKeys.contains(key) =>
               DefaultDocumentMode.fromConfigKey(value).map(config.withDefaultDocumentMode).getOrElse(config)
-            case key if WindowConfig.Schema.chromeKeys.contains(key) =>
-              WindowChromeMode.fromConfigKey(value).map(config.withWindowChromeMode).getOrElse(config)
-            case key if WindowConfig.Schema.preferredWidthKeys.contains(key) =>
-              value.trim.toIntOption
-                .map(width =>
-                  config.withPreferredWindowSize(
-                    config.preferredWindowSize.getOrElse(PreferredWindowSize(width, 768)).copy(width = width)
-                  )
-                )
-                .getOrElse(config)
-            case key if WindowConfig.Schema.preferredHeightKeys.contains(key) =>
-              value.trim.toIntOption
-                .map(height =>
-                  config.withPreferredWindowSize(
-                    config.preferredWindowSize.getOrElse(PreferredWindowSize(1024, height)).copy(height = height)
-                  )
-                )
-                .getOrElse(config)
+            case key if WindowConfig.Schema.handles(key) =>
+              WindowConfig.Schema.parse(config, key, value).getOrElse(config)
             case lspKey if lspKey.startsWith("lsp.") =>
               parseLspConfigEntry(config, lspKey, value.trim)
             case "text_area.left.percent" | "text.area.left.percent" | "text_area_left_percent" =>
@@ -646,8 +630,8 @@ object ConfigManager:
           parseTransitionKind(value).isEmpty
         case key if DocumentConfig.Schema.markdownViewKeys.contains(key) =>
           MarkdownViewMode.fromConfigKey(value).isEmpty
-        case key if WindowConfig.Schema.chromeKeys.contains(key) =>
-          WindowChromeMode.fromConfigKey(value).isEmpty
+        case key if WindowConfig.Schema.handles(key) =>
+          WindowConfig.Schema.invalidValue(key, value)
         case key if InterfaceConfig.Schema.elementGapKeys.contains(key) =>
           parseUiElementGap(value).isEmpty
         case key if InterfaceConfig.Schema.cornerRadiusKeys.contains(key) =>
@@ -658,10 +642,6 @@ object ConfigManager:
           parseCommandRunnerVisibleRows(value).isEmpty
         case "render.fps" | "render_fps" | "ui.render.fps" | "ui_render_fps" =>
           RenderFpsTarget.fromConfigKey(value).isEmpty
-        case key
-            if WindowConfig.Schema.preferredWidthKeys.contains(key) ||
-              WindowConfig.Schema.preferredHeightKeys.contains(key) =>
-          value.trim.nonEmpty && value.trim.toIntOption.isEmpty
         case "text_area.left.percent" | "text.area.left.percent" | "text_area_left_percent" |
             "text_area.right.percent" | "text.area.right.percent" | "text_area_right_percent" |
             "text_area.top.percent" | "text.area.top.percent" | "text_area_top_percent" | "text_area.bottom.percent" |

@@ -32,6 +32,31 @@ class WindowChromeModeSpec extends AnyFlatSpec with Matchers:
     WindowChromeMode.fromConfigKey("unknown").shouldBe(None)
   }
 
+  it should "parse window config entries centrally" in {
+    val chromeConfig =
+      WindowConfig.Schema.parse(AppConfig.default, "window_chrome_mode", "serenity").getOrElse(fail("chrome parse"))
+    val widthConfig =
+      WindowConfig.Schema
+        .parse(AppConfig.default, "window.preferred.width", "320")
+        .getOrElse(fail("width parse"))
+    val heightConfig =
+      WindowConfig.Schema
+        .parse(AppConfig.default, "window_preferred_height", "200")
+        .getOrElse(fail("height parse"))
+
+    chromeConfig.windowConfig.shouldBe(WindowConfig(chromeMode = WindowChromeMode.Custom))
+    widthConfig.preferredWindowSize.shouldBe(Some(PreferredWindowSize(400, 768)))
+    heightConfig.preferredWindowSize.shouldBe(Some(PreferredWindowSize(1024, 300)))
+    WindowConfig.Schema.parse(AppConfig.default, "window.chrome", "unknown").shouldBe(None)
+  }
+
+  it should "validate window config entries centrally" in {
+    WindowConfig.Schema.invalidValue("window.chrome", "native").shouldBe(false)
+    WindowConfig.Schema.invalidValue("window.chrome", "unknown").shouldBe(true)
+    WindowConfig.Schema.invalidValue("window.preferred.width", "wide").shouldBe(true)
+    WindowConfig.Schema.invalidValue("window.preferred.height", "").shouldBe(false)
+  }
+
   "AppConfig" should "default window chrome mode to Native" in {
     AppConfig.default.windowChromeMode shouldBe WindowChromeMode.Native
   }
