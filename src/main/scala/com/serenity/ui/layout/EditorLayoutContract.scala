@@ -256,46 +256,45 @@ object EditorLayoutContract:
       math.max(0, state.config.uiElementGap)
     )
     val panelViews = PinnedPanelViewModel.fromState(state, calculatedLayout)
-    val pinnedSurfaceContentRects = calculatedLayout.pinnedSurfaceRects.toList.flatMap {
-      case (surfaceId, frameRect) =>
-        state
-          .surfaceById(surfaceId)
-          .map(surface => surfaceId -> SurfaceFrameLayout.forContent(frameRect, surface.content).contentRect)
-    }.toMap
-    val pinnedSurfaceTitleRects = panelViews
-      .filter(view => view.surfaceId.exists(calculatedLayout.pinnedSurfaceRects.contains))
-      .flatMap(view => view.surfaceId.map(_ -> view.titleRect))
+    val panelViewsById = panelViews
+      .flatMap(view => view.surfaceId.map(_ -> view))
       .toMap
-    val pinnedSurfaceRowSlots = panelViews
-      .filter(view => view.surfaceId.exists(calculatedLayout.pinnedSurfaceRects.contains))
-      .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
+    val pinnedSurfaceIds = calculatedLayout.pinnedSurfaceRects.keySet
+    val pinnedSurfaceTitleRects = pinnedSurfaceIds.toList
+      .flatMap(surfaceId => panelViewsById.get(surfaceId).map(view => surfaceId -> view.titleRect))
+      .toMap
+    val pinnedSurfaceContentRects = pinnedSurfaceIds.toList
+      .flatMap(surfaceId => panelViewsById.get(surfaceId).map(view => surfaceId -> view.resolvedContentRect))
+      .toMap
+    val pinnedSurfaceRowSlots = pinnedSurfaceIds.toList
+      .flatMap(surfaceId => panelViewsById.get(surfaceId).map(view => surfaceId -> view.contentRowSlots))
       .toMap
     val expandedSurfaceRects = state.expandedPanelSurface.toList.flatMap { surface =>
       calculatedLayout.expandedPanelRect.map(rect => surface.id -> rect)
     }.toMap
-    val expandedSurfaceTitleRects = panelViews
-      .filter(view => view.surfaceId.exists(expandedSurfaceRects.contains))
-      .flatMap(view => view.surfaceId.map(_ -> view.titleRect))
+    val expandedSurfaceIds = expandedSurfaceRects.keySet.toList
+    val expandedSurfaceTitleRects = expandedSurfaceIds
+      .flatMap(surfaceId => panelViewsById.get(surfaceId).map(view => surfaceId -> view.titleRect))
       .toMap
-    val expandedSurfaceContentRects = panelViews
-      .filter(view => view.surfaceId.exists(expandedSurfaceRects.contains))
-      .flatMap(view => view.surfaceId.map(_ -> view.resolvedContentRect))
+    val expandedSurfaceContentRects = expandedSurfaceIds
+      .flatMap(surfaceId => panelViewsById.get(surfaceId).map(view => surfaceId -> view.resolvedContentRect))
       .toMap
-    val expandedSurfaceRowSlots = panelViews
-      .filter(view => view.surfaceId.exists(expandedSurfaceRects.contains))
-      .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
+    val expandedSurfaceRowSlots = expandedSurfaceIds
+      .flatMap(surfaceId => panelViewsById.get(surfaceId).map(view => surfaceId -> view.contentRowSlots))
+      .toMap
+    val overlayViews         = OverlayViewModel.fromState(state, calculatedLayout)
+    val floatingOverlayViews = overlayViews.aboveCursor.toList ++ overlayViews.belowCursorStack
+    val overlayViewsById = floatingOverlayViews
+      .flatMap(view => view.surfaceId.map(_ -> view))
       .toMap
     val aboveCursorOverlayRects = calculatedLayout.aboveCursorOverlayStack
     val belowCursorOverlayRects = calculatedLayout.belowCursorOverlayStack
     val floatingOverlayRects    = aboveCursorOverlayRects ++ belowCursorOverlayRects
     val floatingOverlayContentRects = floatingOverlayRects.flatMap {
-      case (surfaceId, frameRect) =>
-        state
-          .surfaceById(surfaceId)
-          .map(surface => surfaceId -> SurfaceFrameLayout.forContent(frameRect, surface.content).contentRect)
+      case (surfaceId, _) =>
+        overlayViewsById.get(surfaceId).map(view => surfaceId -> view.resolvedContentRect)
     }
-    val floatingOverlayRowSlots = (OverlayViewModel.fromState(state, calculatedLayout).aboveCursor.toList ++
-      OverlayViewModel.fromState(state, calculatedLayout).belowCursorStack)
+    val floatingOverlayRowSlots = floatingOverlayViews
       .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
       .toMap
     EditorLayoutContract(
