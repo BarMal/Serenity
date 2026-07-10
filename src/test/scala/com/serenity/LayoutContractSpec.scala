@@ -556,6 +556,39 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     contract.overlayRowSlots(SurfaceId("missing")) shouldBe Nil
   }
 
+  it should "provide shared pane header, title, and gutter lookups" in {
+    val buffer = Buffer.fromString(BufferId(1), "alpha\nbeta")
+    val paneId = PaneId(0)
+    val state = AppState.initial.copy(
+      config = AppConfig.default.withLineNumbers(true).withGutter(true),
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+        activeEditorPaneId = Some(paneId),
+        paneOrder = List(paneId)
+      )
+    )
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
+    val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+    val activePane = contract.workspace
+      .activePaneLayout(state)
+      .getOrElse(fail("expected active pane layout"))
+
+    contract.paneLayout(paneId) shouldBe Some(activePane)
+    contract.paneHeaderRect(paneId) shouldBe Some(activePane.headerRect)
+    contract.paneTitleRect(paneId) shouldBe Some(activePane.titleRect)
+    contract.activePaneLayout shouldBe Some(activePane)
+    contract.activePaneHeaderRect shouldBe Some(activePane.headerRect)
+    contract.activePaneTitleRect shouldBe Some(activePane.titleRect)
+    contract.gutterRect shouldBe calculatedLayout.gutterRect
+
+    contract.paneLayout(PaneId(99)) shouldBe None
+    contract.paneHeaderRect(PaneId(99)) shouldBe None
+    contract.paneTitleRect(PaneId(99)) shouldBe None
+  }
+
   it should "expose pinned and floating row slots from the shared frame contract" in {
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
