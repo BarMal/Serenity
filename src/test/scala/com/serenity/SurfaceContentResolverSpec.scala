@@ -965,6 +965,22 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.title shouldBe Some("Theme")
   }
 
+  it should "window ThemePicker rows so the selected theme stays visible inside the framed content rect" in {
+    val picker = ThemePickerState(
+      List("dark", "light", "mocha", "forest", "paper"),
+      selectedIndex = 4,
+      originalTheme = "dark"
+    )
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.ThemePicker(picker),
+      LayoutRect(0, 0, 30, 5),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.map(_.plainText) shouldBe List("mocha", "forest", "paper")
+    resolved.rows.map(_.selected) shouldBe List(false, false, true)
+  }
+
   // ── FileSearch resolver ───────────────────────────────────────────────────
 
   it should "resolve FileSearch with query as header and result rows" in {
