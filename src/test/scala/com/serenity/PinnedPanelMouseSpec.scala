@@ -40,8 +40,28 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     panelContentRect(state, SurfaceId("explorer"))
 
   private def panelContentRect(state: AppState, surfaceId: SurfaceId): LayoutRect =
-    val layout = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    SurfaceFrameLayout(layout.pinnedSurfaceRects(surfaceId)).contentRect
+    panelContract(state).pinnedSurfaceContentRects(surfaceId)
+
+  private def panelContract(
+    state: AppState,
+    viewportSize: ViewportSize = viewport
+  ): EditorLayoutContract =
+    val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+    EditorLayoutContract.from(state, viewportSize, layout)
+
+  private def panelItemPoint(
+    state: AppState,
+    surfaceId: SurfaceId,
+    displayedItemRow: Int,
+    viewportSize: ViewportSize = viewport
+  ): (Int, Int) =
+    val contract    = panelContract(state, viewportSize)
+    val contentRect = contract.pinnedSurfaceContentRects(surfaceId)
+    val rowY = contract.pinnedSurfaceRowSlots
+      .getOrElse(surfaceId, Nil)
+      .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(`displayedItemRow`), y) => y }
+      .getOrElse(fail(s"Expected pinned panel row $displayedItemRow for ${surfaceId.value}"))
+    (contentRect.x + 1, rowY)
 
   private def panelFrameRect(state: AppState, surfaceId: SurfaceId, viewportSize: ViewportSize = viewport): LayoutRect =
     val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
@@ -82,8 +102,8 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.updateState(_.copy(uiSurfaces = List(surface))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
-    val rect = leftPanelContentRect(sm.getCurrentState.unsafeRunSync())
-    sm.applyEvent(MouseClick(rect.x + 1, rect.y + 2)).unsafeRunSync()
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 2)
+    sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe Focus.Surface(surface.id)
@@ -103,8 +123,8 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before = sm.getCurrentState.unsafeRunSync()
-    val rect   = leftPanelContentRect(before)
-    sm.applyEvent(MouseMove(rect.x + 1, rect.y + 1)).unsafeRunSync()
+    val point  = panelItemPoint(before, surface.id, displayedItemRow = 1)
+    sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe before.focus
@@ -126,8 +146,8 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.updateState(_.copy(uiSurfaces = List(surface))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
-    val rect = leftPanelContentRect(sm.getCurrentState.unsafeRunSync())
-    sm.applyEvent(MouseClick(rect.x + 1, rect.y + 1, clickCount = 2)).unsafeRunSync()
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 1)
+    sm.applyEvent(MouseClick(point._1, point._2, clickCount = 2)).unsafeRunSync()
 
     val expandedTree = tree.copy(expandedPaths = Set(src))
     val updated      = sm.getCurrentState.unsafeRunSync()
@@ -150,8 +170,8 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
-    val rect = panelContentRect(sm.getCurrentState.unsafeRunSync(), surface.id)
-    sm.applyEvent(MouseClick(rect.x + 1, rect.y + 1)).unsafeRunSync()
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 1)
+    sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe Focus.EditorPane(PaneId(0))
@@ -174,8 +194,8 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before = sm.getCurrentState.unsafeRunSync()
-    val rect   = panelContentRect(before, surface.id)
-    sm.applyEvent(MouseMove(rect.x + 1, rect.y + 1)).unsafeRunSync()
+    val point  = panelItemPoint(before, surface.id, displayedItemRow = 1)
+    sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe before.focus
@@ -197,8 +217,8 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
-    val rect = panelContentRect(sm.getCurrentState.unsafeRunSync(), surface.id)
-    sm.applyEvent(MouseClick(rect.x + 1, rect.y + 2)).unsafeRunSync()
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 2)
+    sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe Focus.EditorPane(PaneId(0))
@@ -221,8 +241,8 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before = sm.getCurrentState.unsafeRunSync()
-    val rect   = panelContentRect(before, surface.id)
-    sm.applyEvent(MouseMove(rect.x + 1, rect.y + 2)).unsafeRunSync()
+    val point  = panelItemPoint(before, surface.id, displayedItemRow = 2)
+    sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe before.focus
@@ -253,12 +273,13 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
     val state       = sm.getCurrentState.unsafeRunSync()
     val frameRect   = panelFrameRect(state, surface.id, compactSquareViewport)
-    val contentRect = SurfaceFrameLayout(frameRect).contentRect
+    val contentRect = panelContract(state, compactSquareViewport).pinnedSurfaceContentRects(surface.id)
 
     SurfaceLayoutKind.classify(frameRect) shouldBe SurfaceLayoutKind.Square
     SurfaceLayoutKind.classify(contentRect) shouldBe SurfaceLayoutKind.Compact
 
-    sm.applyEvent(MouseClick(contentRect.x + 1, contentRect.y + 1)).unsafeRunSync()
+    val point = panelItemPoint(state, surface.id, displayedItemRow = 1, viewportSize = compactSquareViewport)
+    sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe Focus.EditorPane(PaneId(0))
