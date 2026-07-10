@@ -273,10 +273,8 @@ object ConfigManager:
               parseTransitionKind(value.trim)
                 .map(kind => config.withPanelCloseTransitionKind(Some(kind)))
                 .getOrElse(config)
-            case key if DocumentConfig.Schema.markdownViewKeys.contains(key) =>
-              MarkdownViewMode.fromConfigKey(value).map(config.withMarkdownViewMode).getOrElse(config)
-            case key if DocumentConfig.Schema.defaultModeKeys.contains(key) =>
-              DefaultDocumentMode.fromConfigKey(value).map(config.withDefaultDocumentMode).getOrElse(config)
+            case key if DocumentConfig.Schema.handles(key) =>
+              DocumentConfig.Schema.parse(config, key, value).getOrElse(config)
             case key if WindowConfig.Schema.handles(key) =>
               WindowConfig.Schema.parse(config, key, value).getOrElse(config)
             case lspKey if lspKey.startsWith("lsp.") =>
@@ -620,8 +618,8 @@ object ConfigManager:
         case "ui.motion.panel_open" | "ui.motion.panel.open" | "ui_motion_panel_open" | "ui.motion.panel_close" |
             "ui.motion.panel.close" | "ui_motion_panel_close" =>
           parseTransitionKind(value).isEmpty
-        case key if DocumentConfig.Schema.markdownViewKeys.contains(key) =>
-          MarkdownViewMode.fromConfigKey(value).isEmpty
+        case key if DocumentConfig.Schema.handles(key) =>
+          DocumentConfig.Schema.invalidValue(key, value)
         case key if WindowConfig.Schema.handles(key) =>
           WindowConfig.Schema.invalidValue(key, value)
         case key if InterfaceConfig.Schema.handles(key) =>

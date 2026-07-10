@@ -580,6 +580,21 @@ object DocumentConfig:
 
     val defaultModeKeys: Set[String] = currentKeys ++ deprecatedKeys.keySet
 
+    private val handledKeys: Set[String] = markdownViewKeys ++ defaultModeKeys
+
+    def handles(key: String): Boolean =
+      handledKeys.contains(key)
+
+    def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
+      val trimmed = value.trim
+      if markdownViewKeys.contains(key) then MarkdownViewMode.fromConfigKey(trimmed).map(config.withMarkdownViewMode)
+      else if defaultModeKeys.contains(key) then
+        DefaultDocumentMode.fromConfigKey(trimmed).map(config.withDefaultDocumentMode)
+      else None
+
+    def invalidValue(key: String, value: String): Boolean =
+      parse(AppConfig.default, key, value).isEmpty
+
 case class InterfaceConfig(
     density: InterfaceDensity = InterfaceDensity.Comfortable,
     elementGap: Int = 0,
