@@ -6,6 +6,26 @@ import org.scalatest.matchers.should.Matchers
 
 class WindowChromeModeSpec extends AnyFlatSpec with Matchers:
 
+  "WindowConfig" should "own window chrome and preferred-size schema metadata" in {
+    WindowConfig.Schema.currentKeys.should(
+      contain allOf (
+        "window.chrome",
+        "window.chrome.mode",
+        "window.preferred.width",
+        "window.preferred.height"
+      )
+    )
+
+    WindowConfig.Schema.deprecatedKeys.should(
+      contain allOf (
+        "window_chrome"           -> "window.chrome",
+        "window_chrome_mode"      -> "window.chrome",
+        "window_preferred_width"  -> "window.preferred.width",
+        "window_preferred_height" -> "window.preferred.height"
+      )
+    )
+  }
+
   "AppConfig" should "default window chrome mode to Native" in {
     AppConfig.default.windowChromeMode shouldBe WindowChromeMode.Native
   }
