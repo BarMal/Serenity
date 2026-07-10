@@ -127,6 +127,21 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     result.report.hasWarnings shouldBe true
   }
 
+  it should "report invalid language-tool config values through the language-tools schema" in {
+    val configFile = Files.createTempFile("serenity-language-tools-invalid-config", ".conf")
+    Files.writeString(
+      configFile,
+      """syntax.highlighting = maybe
+        |spellcheck.enabled = perhaps
+        |""".stripMargin
+    )
+
+    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+
+    result.report.invalidEntries.map(_.key) should contain("syntax.highlighting")
+    result.report.invalidEntries.map(_.key) should contain("spellcheck.enabled")
+  }
+
   it should "return default config result with an empty report when the config file is missing" in {
     val missingConfig = Files.createTempDirectory("serenity-missing-config-result").resolve("missing.conf")
 
