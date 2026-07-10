@@ -258,6 +258,78 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     described should include("cursor=2:4")
   }
 
+  it should "wrap runtime loop failures with current state diagnostics" in {
+    val state = AppState.initial.copy(viewportSize = Some(ViewportSize(120, 40)))
+
+    val result = AppRuntime
+      .withRuntimeDiagnostics(
+        loopName = "render loop",
+        phase = "fast.full-render",
+        stateForDiagnostics = IO.pure(Some(state))
+      )(IO.raiseError(RuntimeException("render failed")))
+      .attempt
+      .unsafeRunSync()
+
+    val failure = result.swap.toOption.getOrElse(fail("Expected runtime failure"))
+    val runtimeFailure = failure match
+      case wrapped: AppRuntime.RuntimeFailure => wrapped
+      case other                              => fail(s"Expected RuntimeFailure, got $other")
+
+    runtimeFailure.loopName shouldBe "render loop"
+    runtimeFailure.phase shouldBe "fast.full-render"
+    runtimeFailure.diagnostics should include("viewport=120x40")
+    runtimeFailure.diagnostics should include("buffers=1")
+    runtimeFailure.cause.getMessage shouldBe "render failed"
+  }
+
+  it should "preserve existing runtime failures without rewrapping them" in {
+    val existing = AppRuntime.RuntimeFailure(
+      loopName = "render loop",
+      phase = "idle.state",
+      diagnostics = "viewport=120x40",
+      cause = RuntimeException("already wrapped")
+    )
+
+    val result = AppRuntime
+      .withRuntimeDiagnostics(
+        loopName = "render loop",
+        phase = "ignored",
+        stateForDiagnostics = IO.pure(Some(AppState.initial))
+      )(IO.raiseError(existing))
+      .attempt
+      .unsafeRunSync()
+
+    result.shouldBe(Left(existing))
+  }
+
+  it should "log and force a safe shutdown when a supervised runtime loop fails" in {
+    val program = for
+      logs      <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
+      forceQuit <- Ref.of[IO, Boolean](false)
+      given Logger[IO] = new RecordingLogger(logs)
+      _ <- AppRuntime.superviseLoop("render loop", forceQuit.set(true))(
+        IO.raiseError(
+          AppRuntime.RuntimeFailure(
+            loopName = "render loop",
+            phase = "idle.cursor-render",
+            diagnostics = "viewport=120x40",
+            cause = RuntimeException("boom")
+          )
+        )
+      )
+      entries <- logs.get
+      forced  <- forceQuit.get
+    yield
+      forced shouldBe true
+      val failure = entries.find(_.message.contains("[RUNTIME] render loop failed"))
+      failure.map(_.message) shouldBe defined
+      failure.get.message should include("phase=idle.cursor-render")
+      failure.get.message should include("viewport=120x40")
+      failure.flatMap(_.error).map(_.getMessage) should contain("boom")
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
   it should "recover idle cursor render failures with phase and state diagnostics" in {
     val program = for
       logs <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
