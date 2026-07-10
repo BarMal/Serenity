@@ -121,7 +121,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
 
     PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default)
 
-    surface.getRow(panel.rect.y).slice(4, 7) shouldBe "tit"
+    surface.getRow(panel.titleRect.y).slice(panel.titleRect.x, panel.titleRect.right) shouldBe "tit"
     surface.getRow(3).slice(4, 7) shouldBe "abc"
     surface.getRow(2).slice(4, 7) shouldBe "   "
   }

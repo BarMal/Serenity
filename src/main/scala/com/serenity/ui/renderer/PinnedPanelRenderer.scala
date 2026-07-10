@@ -61,10 +61,10 @@ object PinnedPanelRenderer:
     theme: Theme,
     animationState: AnimationState
   ): Unit =
-    val contentRect = panel.resolvedContentRect
-    val title       = panel.title.take(contentRect.width).padTo(contentRect.width, ' ')
-    if contentRect.width > 0 then
-      renderAnimatedText(surface, contentRect.x, panel.rect.y, title, 0, theme.panel.foreground, animationState)
+    val titleRect = panel.titleRect
+    val title     = panel.title.take(titleRect.width).padTo(titleRect.width, ' ')
+    if titleRect.width > 0 then
+      renderAnimatedText(surface, titleRect.x, titleRect.y, title, 0, theme.panel.foreground, animationState)
 
   private def drawLines(
     surface: RenderSurface,

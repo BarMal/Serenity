@@ -23,6 +23,10 @@ case class TextPanelView(
   def resolvedContentRect: LayoutRect =
     contentRect.getOrElse(SurfaceFrameLayout(rect).contentRect)
 
+  def titleRect: LayoutRect =
+    val content = resolvedContentRect
+    LayoutRect(content.x, rect.y, content.width, 1)
+
   def contentRowSlots: List[SurfaceContentRowSlot] =
     SurfaceFrameLayout.contentRowSlotsFor(
       resolvedContentRect,
