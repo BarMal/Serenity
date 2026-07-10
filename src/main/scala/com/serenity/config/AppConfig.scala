@@ -280,6 +280,38 @@ object SpellCheckConfig:
     try Some(Paths.get(path))
     catch case NonFatal(_) => None
 
+case class LanguageToolsConfig(
+    syntaxHighlightingEnabled: Boolean = false,
+    lspUserConfig: LspUserConfig = LspUserConfig.empty,
+    spellCheck: SpellCheckConfig = SpellCheckConfig()
+):
+
+  def normalized: LanguageToolsConfig =
+    copy(spellCheck = spellCheck.normalized)
+
+object LanguageToolsConfig:
+
+  object Schema:
+
+    val currentKeys: Set[String] = Set(
+      "syntax.highlighting",
+      "spellcheck.enabled",
+      "spellcheck.languages",
+      "spellcheck.dictionary_paths",
+      "spellcheck.dictionary.paths",
+      "spellcheck.words"
+    )
+
+    val deprecatedKeys: Map[String, String] = Map(
+      "syntax_highlighting"         -> "syntax.highlighting",
+      "spellcheck_enabled"          -> "spellcheck.enabled",
+      "spellcheck_languages"        -> "spellcheck.languages",
+      "spellcheck_dictionary_paths" -> "spellcheck.dictionary_paths",
+      "spellcheck_words"            -> "spellcheck.words"
+    )
+
+    val dynamicPrefixes: List[String] = List("lsp.")
+
 case class PreferredWindowSize(width: Int, height: Int):
   def normalized: PreferredWindowSize =
     PreferredWindowSize(width.max(400), height.max(300))
@@ -737,6 +769,21 @@ case class AppConfig(
     spellCheck: SpellCheckConfig = SpellCheckConfig()
 ):
 
+  def languageToolsConfig: LanguageToolsConfig =
+    LanguageToolsConfig(
+      syntaxHighlightingEnabled = syntaxHighlightingEnabled,
+      lspUserConfig = lspUserConfig,
+      spellCheck = spellCheck
+    )
+
+  def withLanguageToolsConfig(config: LanguageToolsConfig): AppConfig =
+    val normalized = config.normalized
+    copy(
+      syntaxHighlightingEnabled = normalized.syntaxHighlightingEnabled,
+      lspUserConfig = normalized.lspUserConfig,
+      spellCheck = normalized.spellCheck
+    )
+
   def surfaceConfig: SurfaceConfig =
     SurfaceConfig(
       showLineNumbers = showLineNumbers,
@@ -841,7 +888,7 @@ case class AppConfig(
 
   /** Create a new config with syntax highlighting toggled */
   def withSyntaxHighlighting(enabled: Boolean): AppConfig =
-    copy(syntaxHighlightingEnabled = enabled)
+    withLanguageToolsConfig(languageToolsConfig.copy(syntaxHighlightingEnabled = enabled))
 
   def withHotkeyConfig(config: HotkeyConfig): AppConfig =
     copy(hotkeyConfig = config)
@@ -1108,10 +1155,10 @@ case class AppConfig(
     withWindowConfig(windowConfig.copy(preferredSize = Some(size.normalized)))
 
   def withLspUserConfig(config: LspUserConfig): AppConfig =
-    copy(lspUserConfig = config)
+    withLanguageToolsConfig(languageToolsConfig.copy(lspUserConfig = config))
 
   def withSpellCheck(config: SpellCheckConfig): AppConfig =
-    copy(spellCheck = config.normalized)
+    withLanguageToolsConfig(languageToolsConfig.copy(spellCheck = config))
 
 object AppConfig:
 

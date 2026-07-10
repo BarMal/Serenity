@@ -78,7 +78,7 @@ object UiPreset:
     base.withDocumentConfig(base.documentConfig.copy(defaultMode = source.defaultDocumentMode))
 
   private def patchLanguageToolsConfig(base: AppConfig, source: AppConfig): AppConfig =
-    base.copy(spellCheck = source.spellCheck)
+    base.withLanguageToolsConfig(source.languageToolsConfig)
 
   private def patchMotionConfig(base: AppConfig, source: AppConfig): AppConfig =
     base
@@ -247,7 +247,8 @@ object UiPreset:
         .withMotionPreset(MotionPreset.Reduced)
         .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Compact)
-        .copy(syntaxHighlightingEnabled = true, fontConfig = FontConfig()),
+        .withSyntaxHighlighting(true)
+        .copy(fontConfig = FontConfig()),
       themeName = Theme.dark.name,
       pinnedPanels = List(
         PinnedPanel(

@@ -4,14 +4,13 @@ package com.serenity.config
 object ConfigKeySchema:
 
   val dynamicPrefixes: List[String] = List(
-    "lsp.",
     "hotkey.",
     "keymap.editor.",
     "keymap.command_runner.",
     "keymap.modal.",
     "keymap.panel.",
     "keymap.peek."
-  )
+  ) ++ LanguageToolsConfig.Schema.dynamicPrefixes
 
   def deprecatedReplacement(key: String): Option[String] =
     deprecatedKeys.get(key)
@@ -102,6 +101,7 @@ object ConfigKeySchema:
       "spellcheck.dictionary.paths",
       "spellcheck.words"
     ) ++
+      LanguageToolsConfig.Schema.currentKeys ++
       SurfaceConfig.Schema.currentKeys ++
       CursorConfig.Schema.currentKeys ++
       DocumentConfig.Schema.currentKeys ++
@@ -165,6 +165,7 @@ object ConfigKeySchema:
       "spellcheck_dictionary_paths"          -> "spellcheck.dictionary_paths",
       "spellcheck_words"                     -> "spellcheck.words"
     ) ++
+      LanguageToolsConfig.Schema.deprecatedKeys ++
       SurfaceConfig.Schema.deprecatedKeys ++
       CursorConfig.Schema.deprecatedKeys ++
       DocumentConfig.Schema.deprecatedKeys ++
