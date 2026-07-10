@@ -1593,7 +1593,7 @@ object Renderer:
       val gutterContent = buildGutterContent(state)
       val displayContent =
         if gutterContent.length > gutterRect.width then gutterContent.take(gutterRect.width - 3) + "..."
-        else gutterContent.padTo(gutterRect.width, ' ')
+        else gutterContent
 
       drawUiTextInCellRect(surface, context, gutterRect, displayContent)
     }
@@ -1604,18 +1604,31 @@ object Renderer:
     rect: LayoutRect,
     text: String
   ): Unit =
-    val rowHeightPx     = math.max(1, rect.height * context.cellMetrics.lineHeight)
-    val verticalInsetPx = if rowHeightPx > 2 then 1 else 0
-    val textHeightPx    = math.max(1, rowHeightPx - (verticalInsetPx * 2))
-    val extraTopPx      = math.max(0, textHeightPx - context.uiMetrics.lineHeight) / 2
-    val ascentPx        = math.max(1, math.min(textHeightPx, context.uiMetrics.ascent + extraTopPx))
+    val rowHeightPx  = math.max(1, rect.height * context.cellMetrics.lineHeight)
+    val lineHeightPx = math.max(1, math.min(context.uiMetrics.lineHeight, rowHeightPx - 2))
+    val ascentPx     = math.max(1, math.min(context.uiMetrics.ascent, lineHeightPx))
+    val placement = TextAlignment.placeLine(
+      text = text,
+      area = TextAreaPx(
+        xPx = context.cellMetrics.toPixelX(rect.x).toFloat,
+        yPx = context.cellMetrics.toPixelY(rect.y),
+        widthPx = rect.width * context.cellMetrics.charWidth.toFloat,
+        heightPx = rowHeightPx
+      ),
+      font = context.uiFont,
+      lineHeightPx = lineHeightPx,
+      ascentPx = ascentPx,
+      horizontal = TextHorizontalAlignment.Left,
+      vertical = TextVerticalAlignment.Middle,
+      fontRenderContext = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+    )
 
     surface.drawRunPx(
-      xPx = context.cellMetrics.toPixelX(rect.x).toFloat,
-      yPx = context.cellMetrics.toPixelY(rect.y) + verticalInsetPx,
-      bgWidthPx = (rect.width * context.cellMetrics.charWidth).toFloat,
-      lineHeightPx = textHeightPx,
-      ascentPx = ascentPx,
+      xPx = placement.xPx,
+      yPx = placement.yPx,
+      bgWidthPx = placement.widthPx,
+      lineHeightPx = placement.lineHeightPx,
+      ascentPx = placement.ascentPx,
       s = text
     )
 
