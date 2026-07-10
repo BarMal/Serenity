@@ -82,7 +82,7 @@ object UiPreset:
 
   private def patchMotionConfig(base: AppConfig, source: AppConfig): AppConfig =
     base
-      .copy(characterAnimation = source.characterAnimation)
+      .withEditorConfig(base.editorConfig.copy(characterAnimation = source.editorConfig.characterAnimation))
       .withSurfaceConfig(
         base.surfaceConfig.copy(
           motionPreset = source.surfaceConfig.motionPreset,
@@ -112,7 +112,7 @@ object UiPreset:
     )
 
   private def patchTypographyConfig(base: AppConfig, source: AppConfig): AppConfig =
-    base.copy(fontConfig = source.fontConfig)
+    base.withEditorConfig(base.editorConfig.copy(fontConfig = source.editorConfig.fontConfig))
 
   case class Preview(name: String, hint: String)
 

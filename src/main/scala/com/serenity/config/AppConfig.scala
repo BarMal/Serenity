@@ -396,6 +396,61 @@ object CursorConfig:
     val infoBarPlacementKeys: Set[String] =
       Set("cursor.info_bar.placement", "cursor.info.bar.placement", "cursor_info_bar_placement")
 
+case class EditorConfig(
+    characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
+    fontConfig: FontConfig = FontConfig(),
+    minimumPaneWidth: Int = 50
+):
+
+  def normalized: EditorConfig =
+    copy(minimumPaneWidth = math.max(1, minimumPaneWidth))
+
+object EditorConfig:
+
+  object Schema:
+
+    val currentKeys: Set[String] = Set(
+      "character.animation",
+      "character.animation.duration_ms",
+      "character.animation.duration.ms",
+      "character.animation.steps",
+      "font.code.family",
+      "font.text.family",
+      "font.ui.family",
+      "font.code.size",
+      "font.text.size",
+      "font.prose.size",
+      "font.ui.size",
+      "font.scale.mode",
+      "font.text_scale",
+      "font.text.scale",
+      "font.code.ligatures",
+      "font.text.ligatures",
+      "font.prose.ligatures",
+      "font.ui.ligatures"
+    )
+
+    val deprecatedKeys: Map[String, String] = Map(
+      "character_animation"             -> "character.animation",
+      "character_animation_duration_ms" -> "character.animation.duration_ms",
+      "character_animation_steps"       -> "character.animation.steps",
+      "font_code_family"                -> "font.code.family",
+      "font_text_family"                -> "font.text.family",
+      "font_ui_family"                  -> "font.ui.family",
+      "font_code_size"                  -> "font.code.size",
+      "font_text_size"                  -> "font.text.size",
+      "font_prose_size"                 -> "font.text.size",
+      "font_size"                       -> "font.code.size and font.text.size",
+      "font_ui_size"                    -> "font.ui.size",
+      "font_scale_mode"                 -> "font.scale.mode",
+      "font_text_scale"                 -> "font.text_scale",
+      "font_code_ligatures"             -> "font.code.ligatures",
+      "font_text_ligatures"             -> "font.text.ligatures",
+      "font_prose_ligatures"            -> "font.text.ligatures",
+      "font_ligatures"                  -> "font.code.ligatures and font.text.ligatures",
+      "font_ui_ligatures"               -> "font.ui.ligatures"
+    )
+
 case class DocumentConfig(
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     defaultMode: DefaultDocumentMode = DefaultDocumentMode.PlainText
@@ -787,6 +842,21 @@ case class AppConfig(
     spellCheck: SpellCheckConfig = SpellCheckConfig()
 ):
 
+  def editorConfig: EditorConfig =
+    EditorConfig(
+      characterAnimation = characterAnimation,
+      fontConfig = fontConfig,
+      minimumPaneWidth = minimumPaneWidth
+    )
+
+  def withEditorConfig(config: EditorConfig): AppConfig =
+    val normalized = config.normalized
+    copy(
+      characterAnimation = normalized.characterAnimation,
+      fontConfig = normalized.fontConfig,
+      minimumPaneWidth = normalized.minimumPaneWidth
+    )
+
   def languageToolsConfig: LanguageToolsConfig =
     LanguageToolsConfig(
       syntaxHighlightingEnabled = syntaxHighlightingEnabled,
@@ -899,11 +969,12 @@ case class AppConfig(
 
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
-    copy(characterAnimation = Some(config)).withSurfaceConfig(surfaceConfig.copy(motionPreset = MotionPreset.Custom))
+    withEditorConfig(editorConfig.copy(characterAnimation = Some(config)))
+      .withSurfaceConfig(surfaceConfig.copy(motionPreset = MotionPreset.Custom))
 
   /** Create a new config with character animation disabled */
   def withoutCharacterAnimation: AppConfig =
-    copy(characterAnimation = None).withSurfaceConfig(
+    withEditorConfig(editorConfig.copy(characterAnimation = None)).withSurfaceConfig(
       surfaceConfig.copy(
         motionPreset = MotionPreset.Reduced,
         editorTextTransitionSpeedScale = None,
@@ -966,11 +1037,11 @@ case class AppConfig(
 
   /** Create a new config with font configuration */
   def withFontConfig(config: FontConfig): AppConfig =
-    copy(fontConfig = config)
+    withEditorConfig(editorConfig.copy(fontConfig = config))
 
   /** Create a new config with minimum pane width setting */
   def withMinimumPaneWidth(width: Int): AppConfig =
-    copy(minimumPaneWidth = math.max(1, width))
+    withEditorConfig(editorConfig.copy(minimumPaneWidth = width))
 
   /** Create a new config with line numbers toggled */
   def withLineNumbers(enabled: Boolean): AppConfig =
