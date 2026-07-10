@@ -401,11 +401,14 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       .fromState(state, calculatedLayout)
       .find(_.surfaceId.contains(pinnedPanel.id))
       .getOrElse(fail("expected pinned panel view"))
+    val overlayViews = OverlayViewModel.fromState(state, calculatedLayout)
+    val overlaysById = (overlayViews.aboveCursor.toList ++ overlayViews.belowCursorStack)
+      .flatMap(view => view.surfaceId.map(_ -> view))
+      .toMap
 
     val pinnedFrame = contract.pinnedSurfaceRects(pinnedPanel.id)
     contract.pinnedSurfaceTitleRects(pinnedPanel.id) shouldBe pinnedView.titleRect
-    contract.pinnedSurfaceContentRects(pinnedPanel.id) shouldBe
-      SurfaceFrameLayout.forContent(pinnedFrame, pinnedPanel.content).contentRect
+    contract.pinnedSurfaceContentRects(pinnedPanel.id) shouldBe pinnedView.resolvedContentRect
 
     val overlayFrames   = contract.floatingOverlayRects.toMap
     val overlayContents = contract.floatingOverlayContentRects.toMap
@@ -413,10 +416,8 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     contract.aboveCursorOverlayRects.map(_._1) shouldBe List(quickInfo.id)
     contract.belowCursorOverlayRects.map(_._1) shouldBe List(commandRunner.id)
 
-    overlayContents(quickInfo.id) shouldBe
-      SurfaceFrameLayout.forContent(overlayFrames(quickInfo.id), quickInfo.content).contentRect
-    overlayContents(commandRunner.id) shouldBe
-      SurfaceFrameLayout.forContent(overlayFrames(commandRunner.id), commandRunner.content).contentRect
+    overlayContents(quickInfo.id) shouldBe overlaysById(quickInfo.id).resolvedContentRect
+    overlayContents(commandRunner.id) shouldBe overlaysById(commandRunner.id).resolvedContentRect
 
     val activeContent = contract.workspace.activeContentRect(state).getOrElse(fail("expected active content rect"))
     assertInside(activeContent, overlayContents(quickInfo.id), "quick info overlay content")
