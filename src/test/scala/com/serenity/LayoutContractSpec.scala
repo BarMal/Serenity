@@ -356,6 +356,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     contract.workspace.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
     contract.pinnedSurfaceContentRects.keySet shouldBe contract.pinnedSurfaceRects.keySet
     contract.floatingOverlayContentRects.map(_._1) shouldBe contract.floatingOverlayRects.map(_._1)
+    contract.belowCursorOverlayRects.map(_._1) shouldBe List(SurfaceId("command-runner"))
     contract.violations shouldBe Nil
   }
 
@@ -402,6 +403,9 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val overlayFrames   = contract.floatingOverlayRects.toMap
     val overlayContents = contract.floatingOverlayContentRects.toMap
 
+    contract.aboveCursorOverlayRects.map(_._1) shouldBe List(quickInfo.id)
+    contract.belowCursorOverlayRects.map(_._1) shouldBe List(commandRunner.id)
+
     overlayContents(quickInfo.id) shouldBe
       SurfaceFrameLayout.forContent(overlayFrames(quickInfo.id), quickInfo.content).contentRect
     overlayContents(commandRunner.id) shouldBe
@@ -411,6 +415,50 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     assertInside(activeContent, overlayContents(quickInfo.id), "quick info overlay content")
     assertInside(activeContent, overlayContents(commandRunner.id), "command runner overlay content")
     assertInside(contract.contentAreaRect, contract.pinnedSurfaceContentRects(pinnedPanel.id), "pinned panel content")
+  }
+
+  it should "enforce configured minimum gaps between stacked below-cursor overlays" in {
+    val commands =
+      List(com.serenity.command.Command.typed("open", "Open file", com.serenity.command.CommandIntent.OpenFile))
+    val registry = CommandRegistry(commands)
+    val cursor   = CursorPosition(1, 2)
+    val buffer = Buffer
+      .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
+      .copy(cursors = List(cursor))
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("op")(using registry)
+    val toolbar = UiSurface(
+      SurfaceId("contextual-toolbar"),
+      SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    )
+    val commandRunner = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    )
+    val state = AppState.initial.copy(
+      config = AppConfig.default.withUiElementGap(2),
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.Surface(commandRunner.id),
+      uiSurfaces = List(toolbar, commandRunner)
+    )
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
+    val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+    val stack            = contract.belowCursorOverlayRects
+
+    contract.minimumFloatingOverlayGapRows shouldBe 2
+    stack.map(_._1) shouldBe List(toolbar.id, commandRunner.id)
+    stack(1)._2.y should be >= stack.head._2.bottom + contract.minimumFloatingOverlayGapRows
+    contract.violations shouldBe Nil
   }
 
   it should "report contract violations with the owning rectangle names" in {
@@ -426,6 +474,54 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     violations.map(violation => violation.ownerName -> violation.childName) should contain allOf (
       "content area" -> "editor panel",
       "viewport"     -> "gutter"
+    )
+  }
+
+  it should "report stacked below-cursor overlay gap violations with overlay names" in {
+    val cursor = CursorPosition(1, 2)
+    val buffer = Buffer
+      .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
+      .copy(cursors = List(cursor))
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    val toolbar = UiSurface(
+      SurfaceId("contextual-toolbar"),
+      SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    )
+    val commandRunner = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    )
+    val state = AppState.initial.copy(
+      config = AppConfig.default.withUiElementGap(2),
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.Surface(commandRunner.id),
+      uiSurfaces = List(toolbar, commandRunner)
+    )
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
+    val toolbarRect      = calculatedLayout.belowCursorOverlayStack.head._2
+    val overlappingRunnerRect = calculatedLayout
+      .belowCursorOverlayStack(1)
+      ._2
+      .copy(
+        y = toolbarRect.bottom + 1
+      )
+    val badLayout = calculatedLayout.copy(
+      belowCursorOverlayRect = Some(toolbarRect),
+      belowCursorOverlayStack = List(toolbar.id -> toolbarRect, commandRunner.id -> overlappingRunnerRect)
+    )
+
+    val violations = EditorLayoutContract.from(state, viewport, badLayout).violations
+
+    violations.map(violation => violation.ownerName -> violation.childName) should contain(
+      "floating overlay gap after contextual-toolbar" -> "floating overlay command-runner frame"
     )
   }
 end LayoutContractSpec

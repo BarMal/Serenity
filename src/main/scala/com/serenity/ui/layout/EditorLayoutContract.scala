@@ -1,5 +1,6 @@
 package com.serenity.ui.layout
 
+import com.serenity.config.InterfaceDensityMetrics
 import com.serenity.state.models.{AppState, PaneId, SurfaceId}
 
 /** Named layout ownership violation for editor and surface rectangles. */
@@ -16,9 +17,12 @@ case class EditorLayoutContract(
     contentAreaRect: LayoutRect,
     workspace: EditorWorkspaceLayout,
     activePaneId: Option[PaneId],
+    minimumFloatingOverlayGapRows: Int,
     pinnedPanelRects: Map[PanelPosition, LayoutRect],
     pinnedSurfaceRects: Map[SurfaceId, LayoutRect],
     pinnedSurfaceContentRects: Map[SurfaceId, LayoutRect],
+    aboveCursorOverlayRects: List[(SurfaceId, LayoutRect)],
+    belowCursorOverlayRects: List[(SurfaceId, LayoutRect)],
     floatingOverlayRects: List[(SurfaceId, LayoutRect)],
     floatingOverlayContentRects: List[(SurfaceId, LayoutRect)]
 ):
@@ -30,6 +34,7 @@ case class EditorLayoutContract(
       pinnedPanelViolations ++
       pinnedSurfaceViolations ++
       floatingOverlayViolations ++
+      floatingOverlayStackViolations ++
       gutterViolations
 
   private def workspaceViolations: List[LayoutContractViolation] =
@@ -97,6 +102,31 @@ case class EditorLayoutContract(
         )
       }
 
+  private def floatingOverlayStackViolations: List[LayoutContractViolation] =
+    belowCursorOverlayRects.sliding(2).toList.flatMap {
+      case List((firstId, firstRect), (secondId, secondRect)) =>
+        if secondRect.y < firstRect.bottom then
+          List(
+            LayoutContractViolation(
+              s"floating overlay ${firstId.value} frame",
+              s"floating overlay ${secondId.value} frame",
+              firstRect,
+              secondRect
+            )
+          )
+        else if secondRect.y < firstRect.bottom + minimumFloatingOverlayGapRows then
+          List(
+            LayoutContractViolation(
+              s"floating overlay gap after ${firstId.value}",
+              s"floating overlay ${secondId.value} frame",
+              LayoutRect(firstRect.x, firstRect.bottom, firstRect.width, minimumFloatingOverlayGapRows),
+              secondRect
+            )
+          )
+        else Nil
+      case _ => Nil
+    }
+
   private def gutterViolations: List[LayoutContractViolation] =
     workspace.gutterRect.toList
       .filterNot { gutter =>
@@ -130,13 +160,19 @@ object EditorLayoutContract:
       case Some(gutter) => LayoutRect(0, 0, viewportSize.width, gutter.y)
       case None         => viewportRect
     val workspace = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
+    val minimumFloatingOverlayGapRows = math.max(
+      InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows,
+      math.max(0, state.config.uiElementGap)
+    )
     val pinnedSurfaceContentRects = calculatedLayout.pinnedSurfaceRects.toList.flatMap {
       case (surfaceId, frameRect) =>
         state
           .surfaceById(surfaceId)
           .map(surface => surfaceId -> SurfaceFrameLayout.forContent(frameRect, surface.content).contentRect)
     }.toMap
-    val floatingOverlayRects = calculatedLayout.aboveCursorOverlayStack ++ calculatedLayout.belowCursorOverlayStack
+    val aboveCursorOverlayRects = calculatedLayout.aboveCursorOverlayStack
+    val belowCursorOverlayRects = calculatedLayout.belowCursorOverlayStack
+    val floatingOverlayRects    = aboveCursorOverlayRects ++ belowCursorOverlayRects
     val floatingOverlayContentRects = floatingOverlayRects.flatMap {
       case (surfaceId, frameRect) =>
         state
@@ -148,9 +184,12 @@ object EditorLayoutContract:
       contentAreaRect = contentAreaRect,
       workspace = workspace,
       activePaneId = state.layout.activeEditorPaneId,
+      minimumFloatingOverlayGapRows = minimumFloatingOverlayGapRows,
       pinnedPanelRects = calculatedLayout.pinnedPanelRects,
       pinnedSurfaceRects = calculatedLayout.pinnedSurfaceRects,
       pinnedSurfaceContentRects = pinnedSurfaceContentRects,
+      aboveCursorOverlayRects = aboveCursorOverlayRects,
+      belowCursorOverlayRects = belowCursorOverlayRects,
       floatingOverlayRects = floatingOverlayRects,
       floatingOverlayContentRects = floatingOverlayContentRects
     )
