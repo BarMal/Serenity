@@ -1518,30 +1518,32 @@ object Renderer:
                   yield snapshotForBuffer(buf, paneLayout.contentRect, state, context)
                 }
             snapshot.foreach { snapshot =>
-              snapshot.visualLines.zipWithIndex.foreach {
-                case (visualLine, index) if visualLineFits(lineRect, index, context, snapshot) =>
-                  val screenY   = lineRect.y + index
-                  val lineTopPx = visualLineTopPx(lineRect, index, context, snapshot)
-                  if shouldRenderLineNumberForVisualLine(visualLine, state.config.wordWrapEnabled) then
-                    val numberWidth = math.max(1, lineRect.width - 1)
-                    val lineNumberText =
-                      (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
-                    val measuredLineNumberFont = buffer.filter(useMeasuredLineNumberFont(_, context))
-                    if snapshot.usesMeasuredLayout && measuredLineNumberFont.nonEmpty then
-                      measuredLineNumberFont.foreach(buf => surface.setFont(context.fontForBuffer(buf)))
-                      surface.drawRunPx(
-                        context.cellMetrics.toPixelX(lineRect.x).toFloat,
-                        lineTopPx,
-                        lineRect.width * context.cellMetrics.charWidth.toFloat,
-                        snapshot.lineHeightPx,
-                        snapshot.ascentPx,
-                        lineNumberText
+              renderPlan.workspaceLayout.lineNumberRowSlots(snapshot.visualLines.length).foreach {
+                case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), rowY)
+                    if visualLineFits(lineRect, index, context, snapshot) =>
+                  snapshot.visualLines.lift(index).foreach { visualLine =>
+                    val lineTopPx = visualLineTopPx(lineRect, index, context, snapshot)
+                    if shouldRenderLineNumberForVisualLine(visualLine, state.config.wordWrapEnabled) then
+                      val numberWidth = math.max(1, lineRect.width - 1)
+                      val lineNumberText =
+                        (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
+                      val measuredLineNumberFont = buffer.filter(useMeasuredLineNumberFont(_, context))
+                      if snapshot.usesMeasuredLayout && measuredLineNumberFont.nonEmpty then
+                        measuredLineNumberFont.foreach(buf => surface.setFont(context.fontForBuffer(buf)))
+                        surface.drawRunPx(
+                          context.cellMetrics.toPixelX(lineRect.x).toFloat,
+                          lineTopPx,
+                          lineRect.width * context.cellMetrics.charWidth.toFloat,
+                          snapshot.lineHeightPx,
+                          snapshot.ascentPx,
+                          lineNumberText
+                        )
+                        surface.setFont(context.uiFont)
+                      else surface.putString(lineRect.x, rowY, lineNumberText)
+                      buffer.foreach(
+                        renderDiagnosticIndicator(surface, lineRect, rowY, visualLine.bufferLine, _, state)
                       )
-                      surface.setFont(context.uiFont)
-                    else surface.putString(lineRect.x, screenY, lineNumberText)
-                    buffer.foreach(
-                      renderDiagnosticIndicator(surface, lineRect, screenY, visualLine.bufferLine, _, state)
-                    )
+                  }
                 case _ => ()
               }
             }

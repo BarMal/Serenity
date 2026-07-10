@@ -93,6 +93,34 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     gutter.bottom shouldBe viewportSize.height
   }
 
+  it should "derive reusable line-number row slots from the shared workspace contract" in {
+    val buffer = Buffer.fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      config = AppConfig.default.withLineNumbers(true)
+    )
+    val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val workspaceLayout  = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
+
+    workspaceLayout
+      .lineNumberRowSlots(itemCount = 4)
+      .map(slot => slot.kind -> slot.y)
+      .shouldBe(
+        List(
+          SurfaceContentRowKind.Item(0) -> 1,
+          SurfaceContentRowKind.Item(1) -> 2,
+          SurfaceContentRowKind.Item(2) -> 3,
+          SurfaceContentRowKind.Item(3) -> 4
+        )
+      )
+  }
+
   it should "place cursors using the pane content rectangle owned by editor pane layout" in {
     val buffer = Buffer.fromString(BufferId(0), "abc\ndef").copy(cursors = List(CursorPosition(1, 2)))
     val state = AppState.initial.copy(
