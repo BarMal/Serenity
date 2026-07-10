@@ -101,7 +101,9 @@ object ConfigKeySchema:
       "spellcheck.dictionary_paths",
       "spellcheck.dictionary.paths",
       "spellcheck.words"
-    ) ++ CursorConfig.Schema.currentKeys ++
+    ) ++
+      SurfaceConfig.Schema.currentKeys ++
+      CursorConfig.Schema.currentKeys ++
       DocumentConfig.Schema.currentKeys ++
       InterfaceConfig.Schema.currentKeys ++
       WindowConfig.Schema.currentKeys
@@ -162,7 +164,9 @@ object ConfigKeySchema:
       "spellcheck_languages"                 -> "spellcheck.languages",
       "spellcheck_dictionary_paths"          -> "spellcheck.dictionary_paths",
       "spellcheck_words"                     -> "spellcheck.words"
-    ) ++ CursorConfig.Schema.deprecatedKeys ++
+    ) ++
+      SurfaceConfig.Schema.deprecatedKeys ++
+      CursorConfig.Schema.deprecatedKeys ++
       DocumentConfig.Schema.deprecatedKeys ++
       InterfaceConfig.Schema.deprecatedKeys ++
       WindowConfig.Schema.deprecatedKeys
