@@ -460,6 +460,24 @@ object InterfaceConfig:
     val outlineThicknessKeys: Set[String] =
       Set("ui.outline_thickness", "ui.outline.thickness", "ui_outline_thickness")
 
+case class InputConfig(
+    hotkeyConfig: HotkeyConfig = HotkeyConfig(),
+    focusedKeymapConfig: FocusedKeymapConfig = FocusedKeymapConfig()
+)
+
+object InputConfig:
+
+  object Schema:
+
+    val dynamicPrefixes: List[String] = List(
+      "hotkey.",
+      "keymap.editor.",
+      "keymap.command_runner.",
+      "keymap.modal.",
+      "keymap.panel.",
+      "keymap.peek."
+    )
+
 case class TextAreaInsets(
     left: Double = TextAreaInsets.DefaultInset,
     right: Double = TextAreaInsets.DefaultInset,
@@ -784,6 +802,18 @@ case class AppConfig(
       spellCheck = normalized.spellCheck
     )
 
+  def inputConfig: InputConfig =
+    InputConfig(
+      hotkeyConfig = hotkeyConfig,
+      focusedKeymapConfig = focusedKeymapConfig
+    )
+
+  def withInputConfig(config: InputConfig): AppConfig =
+    copy(
+      hotkeyConfig = config.hotkeyConfig,
+      focusedKeymapConfig = config.focusedKeymapConfig
+    )
+
   def surfaceConfig: SurfaceConfig =
     SurfaceConfig(
       showLineNumbers = showLineNumbers,
@@ -891,46 +921,48 @@ case class AppConfig(
     withLanguageToolsConfig(languageToolsConfig.copy(syntaxHighlightingEnabled = enabled))
 
   def withHotkeyConfig(config: HotkeyConfig): AppConfig =
-    copy(hotkeyConfig = config)
+    withInputConfig(inputConfig.copy(hotkeyConfig = config))
 
   def withHotkeyOverride(action: HotkeyAction, binding: String): AppConfig =
-    copy(hotkeyConfig = hotkeyConfig.withBinding(action, binding))
+    withInputConfig(inputConfig.copy(hotkeyConfig = hotkeyConfig.withBinding(action, binding)))
 
   def resetHotkeyOverride(action: HotkeyAction): AppConfig =
-    copy(hotkeyConfig = hotkeyConfig.resetBinding(action))
+    withInputConfig(inputConfig.copy(hotkeyConfig = hotkeyConfig.resetBinding(action)))
 
   def withFocusedKeymapConfig(config: FocusedKeymapConfig): AppConfig =
-    copy(focusedKeymapConfig = config)
+    withInputConfig(inputConfig.copy(focusedKeymapConfig = config))
 
   def withEditorKeyOverride(action: EditorKeyAction, binding: String): AppConfig =
-    copy(focusedKeymapConfig = focusedKeymapConfig.withEditorBinding(action, binding))
+    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withEditorBinding(action, binding)))
 
   def resetEditorKeyOverride(action: EditorKeyAction): AppConfig =
-    copy(focusedKeymapConfig = focusedKeymapConfig.resetEditorBinding(action))
+    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetEditorBinding(action)))
 
   def withCommandRunnerKeyOverride(action: CommandRunnerKeyAction, binding: String): AppConfig =
-    copy(focusedKeymapConfig = focusedKeymapConfig.withCommandRunnerBinding(action, binding))
+    withInputConfig(
+      inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withCommandRunnerBinding(action, binding))
+    )
 
   def resetCommandRunnerKeyOverride(action: CommandRunnerKeyAction): AppConfig =
-    copy(focusedKeymapConfig = focusedKeymapConfig.resetCommandRunnerBinding(action))
+    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetCommandRunnerBinding(action)))
 
   def withModalKeyOverride(action: ModalKeyAction, binding: String): AppConfig =
-    copy(focusedKeymapConfig = focusedKeymapConfig.withModalBinding(action, binding))
+    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withModalBinding(action, binding)))
 
   def resetModalKeyOverride(action: ModalKeyAction): AppConfig =
-    copy(focusedKeymapConfig = focusedKeymapConfig.resetModalBinding(action))
+    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetModalBinding(action)))
 
   def withPanelKeyOverride(action: PanelKeyAction, binding: String): AppConfig =
-    copy(focusedKeymapConfig = focusedKeymapConfig.withPanelBinding(action, binding))
+    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withPanelBinding(action, binding)))
 
   def resetPanelKeyOverride(action: PanelKeyAction): AppConfig =
-    copy(focusedKeymapConfig = focusedKeymapConfig.resetPanelBinding(action))
+    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetPanelBinding(action)))
 
   def withPeekKeyOverride(action: PeekKeyAction, binding: String): AppConfig =
-    copy(focusedKeymapConfig = focusedKeymapConfig.withPeekBinding(action, binding))
+    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withPeekBinding(action, binding)))
 
   def resetPeekKeyOverride(action: PeekKeyAction): AppConfig =
-    copy(focusedKeymapConfig = focusedKeymapConfig.resetPeekBinding(action))
+    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetPeekBinding(action)))
 
   /** Create a new config with font configuration */
   def withFontConfig(config: FontConfig): AppConfig =
