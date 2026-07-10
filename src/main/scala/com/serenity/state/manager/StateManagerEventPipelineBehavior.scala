@@ -954,7 +954,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
             handleCommandRunnerMouseHover(move, state).flatMap {
               case true => clearEditorHoverTarget
               case false =>
-                handlePinnedPanelMouseSelect(move, state, focusPanel = false).flatMap {
+                handlePinnedPanelMouseHover(move, state).flatMap {
                   case true  => clearEditorHoverTarget
                   case false => updateEditorHoverTarget(move, state)
                 }
@@ -1001,6 +1001,20 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       case None =>
         cats.effect.IO.pure(false)
 
+  private def handlePinnedPanelMouseHover(
+    event: MouseInputEvent,
+    state: AppState
+  ): cats.effect.IO[Boolean] =
+    handlePinnedPanelMouseSelect(event, state, focusPanel = false).flatMap {
+      case true => cats.effect.IO.pure(true)
+      case false =>
+        pinnedOutlineMouseHitAt(event, state) match
+          case Some((surface, symbols, location)) =>
+            stateRef.update(selectPinnedOutlineLocation(_, surface, symbols, location)).as(true)
+          case None =>
+            cats.effect.IO.pure(false)
+    }
+
   private def handlePinnedPanelLocationClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =
     if click.button != MouseButton.Primary then cats.effect.IO.pure(false)
     else
@@ -1023,6 +1037,19 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     val nextFocus = if focusPanel then Focus.Surface(hit.surface.id) else state.focus
     state.copy(uiSurfaces = updatedSurfaces, focus = nextFocus)
 
+  private def selectPinnedOutlineLocation(
+    state: AppState,
+    surface: UiSurface,
+    symbols: List[Symbol],
+    location: Location
+  ): AppState =
+    state.copy(uiSurfaces = state.uiSurfaces.map {
+      case existing if existing.id == surface.id =>
+        existing.copy(content = SurfaceContent.Outline(symbols, Some(location)))
+      case existing =>
+        existing
+    })
+
   private def pinnedDirectoryMouseHitAt(
     event: MouseInputEvent,
     state: AppState
@@ -1037,6 +1064,23 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         case _ =>
           None
     yield directoryHit
+
+  private def pinnedOutlineMouseHitAt(
+    event: MouseInputEvent,
+    state: AppState
+  ): Option[(UiSurface, List[Symbol], Location)] =
+    for
+      hit <- pinnedPanelRowHitAt(event, state)
+      locationHit <- hit.surface.content match
+        case SurfaceContent.Outline(symbols, _) =>
+          hit.layoutKind match
+            case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square =>
+              symbols.lift(hit.rowIndex).map(symbol => (hit.surface, symbols, symbol.location))
+            case SurfaceLayoutKind.Horizontal | SurfaceLayoutKind.Compact =>
+              None
+        case _ =>
+          None
+    yield locationHit
 
   private def pinnedLocationMouseHitAt(
     event: MouseInputEvent,

@@ -234,6 +234,26 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "prefer an explicit outline active location when state is available" in {
+    val initialState = AppState.initial
+    val state = initialState.copy(
+      buffers = initialState.buffers.updated(
+        BufferId(0),
+        initialState.buffers(BufferId(0)).copy(cursors = List(CursorPosition(12, 1)))
+      )
+    )
+    val hoveredPanel = outlinePanel.copy(content = SurfaceContent.Outline(outlineSymbols, Some(Location(30, 0))))
+
+    val view = PinnedPanelViewModel.resolve(hoveredPanel, LayoutRect(0, 0, 18, 40), state)
+
+    view.rows.map(_.plainText) shouldBe List(
+      "Class Serenity",
+      "Method render",
+      "Variable state",
+      "> Heading Chapter 1"
+    )
+  }
+
   it should "shape diagnostics content differently for wide and compact geometry" in {
     val wide    = PinnedPanelViewModel.resolve(diagnosticsPanel, LayoutRect(0, 0, 60, 10))
     val compact = PinnedPanelViewModel.resolve(diagnosticsPanel, LayoutRect(0, 0, 14, 4))
