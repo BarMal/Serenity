@@ -952,6 +952,15 @@ case class SurfaceConfig(
         overrides = baseSettings.overrides ++ transitionOverrides
       )
 
+  def editorInsertionTransitionSettings: ElementTransitionSettings =
+    val baseSettings = motionPreset.elementTransitionSettings
+    if !baseSettings.enabled then baseSettings
+    else
+      baseSettings.copy(
+        speedScale = effectiveEditorTextTransitionSpeedScale,
+        overrides = baseSettings.overrides ++ Map(TransitionScope.EditorInsertion -> editorInsertionTransitionKind)
+      )
+
 object SurfaceConfig:
 
   object Schema:
@@ -1602,6 +1611,10 @@ case class AppConfig(
   /** Transition policy derived from the selected motion preset and UI speed scale. */
   def elementTransitionSettings: ElementTransitionSettings =
     surfaceConfig.elementTransitionSettings
+
+  /** Transition policy derived from the selected motion preset and editor text speed scale. */
+  def editorInsertionTransitionSettings: ElementTransitionSettings =
+    surfaceConfig.editorInsertionTransitionSettings
 
   def withElementTransitionSpeedScale(scale: Double): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(elementTransitionSpeedScale = scale))

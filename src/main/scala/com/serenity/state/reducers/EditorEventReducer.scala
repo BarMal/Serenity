@@ -1,6 +1,15 @@
 package com.serenity.state.reducers
 
-import com.serenity.animation.TransitionKind
+import com.serenity.animation.{
+  CellAnimation,
+  CharacterKey,
+  ElementTransitionCells,
+  ElementTransitionLowerer,
+  ElementTransitionPlanner,
+  ElementTransitionRequest,
+  TransitionKind,
+  TransitionScope
+}
 import com.serenity.keystroke.events.*
 import com.serenity.richtext.{RichTextDocument, RichTextPosition, RichTextRange}
 import com.serenity.rope.Rope
@@ -130,25 +139,29 @@ object EditorEventReducer:
       case Some(cursor) =>
         event match
           case InsertChar(char) =>
-            val replacedBuffer  = replaceSelectionOrInsert(buffer, cursor, char.toString)
-            val newCursor       = replacedBuffer.cursors.headOption.getOrElse(cursor)
-            val updatedViewport = adjustViewportForCursor(replacedBuffer, currentState, newCursor)
-            val updatedBuffer = addCharacterAnimationToBuffer(
+            val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, cursor, char.toString)
+            val newCursor                         = replacedBuffer.cursors.headOption.getOrElse(cursor)
+            val updatedViewport                   = adjustViewportForCursor(replacedBuffer, currentState, newCursor)
+            val updatedBuffer = addInsertionAnimations(
               replacedBuffer.copy(viewport = updatedViewport),
               currentState,
-              char,
-              cursor.line,
-              cursor.column
+              List(replacementEdit)
             )
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case TabKey =>
-            val replacedBuffer  = replaceSelectionOrInsert(buffer, cursor, TabInsertion)
-            val newCursor       = replacedBuffer.cursors.headOption.getOrElse(cursor)
-            val updatedViewport = adjustViewportForCursor(replacedBuffer, currentState, newCursor)
+            val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, cursor, TabInsertion)
+            val newCursor                         = replacedBuffer.cursors.headOption.getOrElse(cursor)
+            val updatedViewport                   = adjustViewportForCursor(replacedBuffer, currentState, newCursor)
             ReducerResult.noEffects(
               currentState.copy(buffers =
-                currentState.buffers + (buffer.id -> replacedBuffer.copy(viewport = updatedViewport))
+                currentState.buffers + (
+                  buffer.id -> addInsertionAnimations(
+                    replacedBuffer.copy(viewport = updatedViewport),
+                    currentState,
+                    List(replacementEdit)
+                  )
+                )
               )
             )
 
@@ -427,10 +440,14 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case NewLine | Enter =>
-            val updatedBuffer             = replaceSelectionOrInsert(buffer, cursor, "\n")
-            val newCursor                 = updatedBuffer.cursors.headOption.getOrElse(cursor)
-            val updatedViewport           = adjustViewportForCursor(updatedBuffer, currentState, newCursor)
-            val updatedBufferWithViewport = updatedBuffer.copy(viewport = updatedViewport)
+            val (updatedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, cursor, "\n")
+            val newCursor                        = updatedBuffer.cursors.headOption.getOrElse(cursor)
+            val updatedViewport                  = adjustViewportForCursor(updatedBuffer, currentState, newCursor)
+            val updatedBufferWithViewport = addInsertionAnimations(
+              updatedBuffer.copy(viewport = updatedViewport),
+              currentState,
+              List(replacementEdit)
+            )
             ReducerResult.noEffects(
               currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBufferWithViewport))
             )
@@ -629,17 +646,21 @@ object EditorEventReducer:
               case None                       => ReducerResult.noEffects(currentState)
               case Some(text) if text.isEmpty => ReducerResult.noEffects(currentState)
               case Some(text) =>
-                val replacedBuffer = replaceSelectionOrInsert(buffer, cursor, text)
-                val newCursor      = replacedBuffer.cursors.headOption.getOrElse(cursor)
-                val updatedBuffer = buffer.copy(
-                  content = replacedBuffer.content,
-                  isDirty = replacedBuffer.isDirty,
-                  isNewEmpty = replacedBuffer.isNewEmpty,
-                  cursors = replacedBuffer.cursors,
-                  selection = replacedBuffer.selection,
-                  preferredColumn = Some(newCursor.column),
-                  preferredXPx = None,
-                  viewport = adjustViewportForCursor(buffer, currentState, newCursor)
+                val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, cursor, text)
+                val newCursor                         = replacedBuffer.cursors.headOption.getOrElse(cursor)
+                val updatedBuffer = addInsertionAnimations(
+                  buffer.copy(
+                    content = replacedBuffer.content,
+                    isDirty = replacedBuffer.isDirty,
+                    isNewEmpty = replacedBuffer.isNewEmpty,
+                    cursors = replacedBuffer.cursors,
+                    selection = replacedBuffer.selection,
+                    preferredColumn = Some(newCursor.column),
+                    preferredXPx = None,
+                    viewport = adjustViewportForCursor(buffer, currentState, newCursor)
+                  ),
+                  currentState,
+                  List(replacementEdit)
                 )
                 ReducerResult.noEffects(
                   currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
@@ -848,12 +869,10 @@ object EditorEventReducer:
         val buffer      = Buffer.fromString(bufferId, char.toString).copy(isDirty = true, isNewEmpty = false)
         val newCursor   = CursorPosition(0, 1)
         val updatedPane = pane.copy(bufferId = Some(bufferId), cursors = List(newCursor))
-        val bufferWithAnimation = addCharacterAnimationToBuffer(
+        val bufferWithAnimation = addInsertionAnimations(
           buffer,
           currentState,
-          char,
-          0,
-          0
+          List(MultiCursorEdit(0, 0, 0, char.toString))
         )
         ReducerResult.noEffects(
           currentState.copy(
@@ -980,7 +999,11 @@ object EditorEventReducer:
         multiCursorVerticalStates = Nil,
         documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits)
       )
-      baseBuffer.copy(viewport = adjustViewportForCursor(baseBuffer, currentState, primaryCursor))
+      addInsertionAnimations(
+        baseBuffer.copy(viewport = adjustViewportForCursor(baseBuffer, currentState, primaryCursor)),
+        currentState,
+        edits
+      )
 
   private def applyLineUnindent(
     buffer: Buffer,
@@ -1211,12 +1234,12 @@ object EditorEventReducer:
       }
 
   private def remapCommentStart(offset: Int, edits: List[MultiCursorEdit]): Int =
-    remapCommentBoundary(offset, edits, insertionAtBoundaryMoves = true)
+    remapEditBoundary(offset, edits, insertionAtBoundaryMoves = true)
 
   private def remapCommentEnd(offset: Int, edits: List[MultiCursorEdit]): Int =
-    remapCommentBoundary(offset, edits, insertionAtBoundaryMoves = false)
+    remapEditBoundary(offset, edits, insertionAtBoundaryMoves = false)
 
-  private def remapCommentBoundary(
+  private def remapEditBoundary(
     offset: Int,
     edits: List[MultiCursorEdit],
     insertionAtBoundaryMoves: Boolean
@@ -1589,28 +1612,85 @@ object EditorEventReducer:
       val nextLineLength = rope.getLine(cursor.line + 1).map(_.length).getOrElse(0)
       cursor.copy(line = cursor.line + 1, column = math.min(preferredColumn, nextLineLength))
 
-  private def addCharacterAnimationToBuffer(
+  private def addInsertionAnimations(
     buffer: Buffer,
     state: AppState,
-    char: Char,
-    cursorLine: Int,
-    cursorColumn: Int
+    edits: List[MultiCursorEdit]
   ): Buffer =
-    if state.config.editorInsertionTransitionKind == TransitionKind.Disabled then buffer
+    val sortedEdits = edits
+      .filter(_.insertedText.nonEmpty)
+      .sortBy(edit => (edit.start, edit.end))
+
+    if sortedEdits.isEmpty then buffer
     else
-      state.config.scaledCharacterAnimation match
-        case Some(animConfig) =>
-          val updatedAnimations = buffer.animations.addCharacterAnimation(
-            char,
-            cursorColumn,
-            cursorLine,
-            state.theme.backgroundColor,
-            state.theme.foregroundColor,
-            animConfig.steps
+      val insertedCells = insertedTransitionCells(buffer.content, sortedEdits, state)
+      if insertedCells.isEmpty then buffer
+      else
+        val plan = ElementTransitionPlanner.plan(
+          ElementTransitionRequest(TransitionScope.EditorInsertion),
+          state.config.editorInsertionTransitionSettings
+        )
+        if plan.kind == TransitionKind.Disabled then buffer
+        else if plan.kind == TransitionKind.Fade then
+          state.config.scaledCharacterAnimation match
+            case Some(animConfig) =>
+              val updatedAnimations = insertedCells.foldLeft(buffer.animations) {
+                case (animations, (key, cell)) =>
+                  animations.addCharacterAnimation(
+                    cell.char,
+                    key.column,
+                    key.line,
+                    cell.startColor,
+                    cell.endColor,
+                    animConfig.steps
+                  )
+              }
+              buffer.copy(animations = updatedAnimations)
+            case None =>
+              buffer
+        else
+          val animationState = ElementTransitionLowerer.lower(
+            plan,
+            ElementTransitionCells(content = insertedCells),
+            tickRateMs = 16
           )
-          buffer.copy(animations = updatedAnimations)
-        case None =>
-          buffer
+          buffer.copy(animations = buffer.animations.mergeAnimations(animationState.animations))
+
+  private def insertedTransitionCells(
+    content: Rope,
+    edits: List[MultiCursorEdit],
+    state: AppState
+  ): Map[CharacterKey, CellAnimation] =
+    edits.foldLeft(Map.empty[CharacterKey, CellAnimation]) { (cells, edit) =>
+      val finalStartOffset = remapEditBoundary(edit.start, edits, insertionAtBoundaryMoves = false)
+      cells ++ insertedCellsFromText(
+        content,
+        finalStartOffset,
+        edit.insertedText,
+        state.theme.backgroundColor,
+        state.theme.foregroundColor
+      )
+    }
+
+  private def insertedCellsFromText(
+    content: Rope,
+    startOffset: Int,
+    insertedText: String,
+    startColor: java.awt.Color,
+    endColor: java.awt.Color
+  ): Map[CharacterKey, CellAnimation] =
+    insertedText
+      .foldLeft((Map.empty[CharacterKey, CellAnimation], startOffset)) {
+        case ((cells, offset), char) if char == '\n' =>
+          (cells, offset + 1)
+        case ((cells, offset), char) =>
+          val (line, column) = content.offsetToLineColumn(offset)
+          (
+            cells + (CharacterKey(column, line) -> CellAnimation(char, startColor, endColor)),
+            offset + 1
+          )
+      }
+      ._1
 
   private def selectionFocusOrCursor(buffer: Buffer, cursor: CursorPosition): CursorPosition =
     buffer.primarySelection.map(_.focus).getOrElse(cursor)
@@ -1731,7 +1811,11 @@ object EditorEventReducer:
   ): java.awt.Font =
     FontLoader.previewFontForRole(config, buffer.typographyRole)
 
-  private def replaceSelectionOrInsert(buffer: Buffer, cursor: CursorPosition, insertedText: String): Buffer =
+  private def replaceSelectionOrInsert(
+    buffer: Buffer,
+    cursor: CursorPosition,
+    insertedText: String
+  ): (Buffer, MultiCursorEdit) =
     val (baseContent, insertionStart, startOffset, endOffset) = buffer.primarySelection match
       case Some(selection) =>
         val startOffset = selectionStartOffset(selection, buffer.content)
@@ -1752,25 +1836,29 @@ object EditorEventReducer:
           startOffset
         )
 
-    val newContent = baseContent.insert(startOffset, insertedText)
-    val newCursor  = cursorAfterInsertion(insertionStart, insertedText)
+    val newContent      = baseContent.insert(startOffset, insertedText)
+    val newCursor       = cursorAfterInsertion(insertionStart, insertedText)
+    val replacementEdit = MultiCursorEdit(0, startOffset, endOffset, insertedText)
 
-    buffer.copy(
-      content = newContent,
-      isDirty = true,
-      isNewEmpty = false,
-      cursors = newCursor :: buffer.cursors.tail,
-      selection = None,
-      selections = Nil,
-      preferredColumn = Some(newCursor.column),
-      preferredXPx = None,
-      documentComments = adjustDocumentComments(
-        buffer.documentComments,
-        buffer.content,
-        newContent,
-        List(MultiCursorEdit(0, startOffset, endOffset, insertedText))
+    (
+      buffer.copy(
+        content = newContent,
+        isDirty = true,
+        isNewEmpty = false,
+        cursors = newCursor :: buffer.cursors.tail,
+        selection = None,
+        selections = Nil,
+        preferredColumn = Some(newCursor.column),
+        preferredXPx = None,
+        documentComments = adjustDocumentComments(
+          buffer.documentComments,
+          buffer.content,
+          newContent,
+          List(replacementEdit)
+        ),
+        richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
       ),
-      richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
+      replacementEdit
     )
 
   private def deleteSelectedRange(

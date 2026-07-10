@@ -6,7 +6,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationState, CharacterKey, TransitionKind}
 import com.serenity.config.{AppConfig, MotionPreset}
-import com.serenity.keystroke.events.{InsertChar, ScrollDown}
+import com.serenity.keystroke.events.{InsertChar, Paste, ScrollDown}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -136,6 +136,72 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
       val buffer = newState.buffers(bufferId)
       buffer.content.collect() shouldBe "Helloa"
       buffer.animations.animations shouldBe empty
+
+    program.unsafeRunSync()
+  }
+
+  it should "animate pasted inserted spans with editor insertion choreography" in {
+    val program = for
+      sm <- IO.pure(makeStateManager())
+      _ <- sm.updateState(state =>
+        state.copy(
+          config = AppConfig.default
+            .withMotionPreset(MotionPreset.Subtle)
+            .withEditorInsertionTransitionKind(TransitionKind.DirectionalSweep),
+          clipboard = Some("ab")
+        )
+      )
+      bufferId <- sm.createBuffer("Hello")
+      state    <- sm.getCurrentState
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      _        <- sm.setBufferForPane(paneId, bufferId)
+      _        <- sm.setCursorPosition(paneId, 0, 5)
+      _        <- sm.applyEvent(Paste)
+      newState <- sm.getCurrentState
+    yield
+      val buffer     = newState.buffers(bufferId)
+      val firstCell  = buffer.animations.getCell(5, 0).getOrElse(fail("Expected first pasted cell animation"))
+      val secondCell = buffer.animations.getCell(6, 0).getOrElse(fail("Expected second pasted cell animation"))
+      buffer.content.collect() shouldBe "Helloab"
+      buffer.animations.animations.keySet should contain allOf (CharacterKey(5, 0), CharacterKey(6, 0))
+      firstCell.foregroundAnimation.map(animation => animation.steps -> animation.delayFrames) shouldBe Some(10 -> 0)
+      secondCell.foregroundAnimation.map(animation => animation.steps -> animation.delayFrames) shouldBe Some(10 -> 1)
+
+    program.unsafeRunSync()
+  }
+
+  it should "use the editor text speed scale for inserted span choreography" in {
+    val program = for
+      sm <- IO.pure(makeStateManager())
+      _ <- sm.updateState(state =>
+        state.copy(
+          config = AppConfig.default
+            .withMotionPreset(MotionPreset.Smooth)
+            .withEditorInsertionTransitionKind(TransitionKind.DirectionalSweep)
+            .withEditorTextTransitionSpeedScale(Some(0.5))
+            .withUiTransitionSpeedScale(Some(2.0)),
+          clipboard = Some("ab")
+        )
+      )
+      bufferId <- sm.createBuffer("Hello")
+      state    <- sm.getCurrentState
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      _        <- sm.setBufferForPane(paneId, bufferId)
+      _        <- sm.setCursorPosition(paneId, 0, 5)
+      _        <- sm.applyEvent(Paste)
+      newState <- sm.getCurrentState
+    yield
+      val buffer = newState.buffers(bufferId)
+      buffer.animations
+        .getCell(5, 0)
+        .flatMap(_.foregroundAnimation)
+        .map(animation => animation.steps -> animation.delayFrames) shouldBe
+        Some(7 -> 0)
+      buffer.animations
+        .getCell(6, 0)
+        .flatMap(_.foregroundAnimation)
+        .map(animation => animation.steps -> animation.delayFrames) shouldBe
+        Some(7 -> 1)
 
     program.unsafeRunSync()
   }
