@@ -154,6 +154,60 @@ class ElementTransitionLowererSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "lower typed text in reading order across multiple rows" in {
+    val plan = ElementTransitionPlan(
+      scope = TransitionScope.EditorInsertion,
+      kind = TransitionKind.TypedText,
+      direction = TransitionDirection.AnchorIn,
+      timing = TransitionTiming(durationMs = 160, staggerMs = 16, delayMs = 0, speedScale = 1.0)
+    )
+
+    val state = ElementTransitionLowerer.lower(
+      plan,
+      ElementTransitionCells(
+        content = Map(
+          CharacterKey(0, 0) -> cell('a'),
+          CharacterKey(1, 0) -> cell('b'),
+          CharacterKey(0, 1) -> cell('c'),
+          CharacterKey(1, 1) -> cell('d')
+        )
+      ),
+      tickRateMs = 16
+    )
+
+    state.animations(CharacterKey(0, 0)).foregroundAnimation.map(_.delayFrames).shouldBe(Some(0))
+    state.animations(CharacterKey(1, 0)).foregroundAnimation.map(_.delayFrames).shouldBe(Some(1))
+    state.animations(CharacterKey(0, 1)).foregroundAnimation.map(_.delayFrames).shouldBe(Some(2))
+    state.animations(CharacterKey(1, 1)).foregroundAnimation.map(_.delayFrames).shouldBe(Some(3))
+  }
+
+  it should "lower tandem text with overlapping line and character offsets" in {
+    val plan = ElementTransitionPlan(
+      scope = TransitionScope.Row,
+      kind = TransitionKind.LineAndCharacterTandem,
+      direction = TransitionDirection.LeftToRight,
+      timing = TransitionTiming(durationMs = 160, staggerMs = 16, delayMs = 0, speedScale = 1.0)
+    )
+
+    val state = ElementTransitionLowerer.lower(
+      plan,
+      ElementTransitionCells(
+        content = Map(
+          CharacterKey(0, 0) -> cell('a'),
+          CharacterKey(1, 0) -> cell('b'),
+          CharacterKey(0, 1) -> cell('c'),
+          CharacterKey(1, 1) -> cell('d')
+        )
+      ),
+      tickRateMs = 16
+    )
+
+    state.animations(CharacterKey(0, 0)).foregroundAnimation.map(_.delayFrames).shouldBe(Some(0))
+    state.animations(CharacterKey(1, 0)).foregroundAnimation.map(_.delayFrames).shouldBe(Some(1))
+    state.animations(CharacterKey(0, 1)).foregroundAnimation.map(_.delayFrames).shouldBe(Some(1))
+    state.animations(CharacterKey(1, 1)).foregroundAnimation.map(_.delayFrames).shouldBe(Some(2))
+  }
+
   it should "delay outline-then-content cells until after frame cells begin" in {
     val plan = ElementTransitionPlanner.plan(
       ElementTransitionRequest(TransitionScope.PanelOpen, Some(PanelPosition.Left)),
