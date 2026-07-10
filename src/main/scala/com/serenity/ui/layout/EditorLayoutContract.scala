@@ -27,6 +27,7 @@ case class EditorLayoutContract(
     expandedSurfaceRects: Map[SurfaceId, LayoutRect],
     expandedSurfaceTitleRects: Map[SurfaceId, LayoutRect],
     expandedSurfaceContentRects: Map[SurfaceId, LayoutRect],
+    expandedSurfaceRowSlots: Map[SurfaceId, List[SurfaceContentRowSlot]],
     aboveCursorOverlayRects: List[(SurfaceId, LayoutRect)],
     belowCursorOverlayRects: List[(SurfaceId, LayoutRect)],
     floatingOverlayRects: List[(SurfaceId, LayoutRect)],
@@ -42,6 +43,7 @@ case class EditorLayoutContract(
       pinnedSurfaceViolations ++
       expandedSurfaceViolations ++
       pinnedSurfaceRowSlotViolations ++
+      expandedSurfaceRowSlotViolations ++
       floatingOverlayViolations ++
       floatingOverlayRowSlotViolations ++
       floatingOverlayStackViolations ++
@@ -140,6 +142,9 @@ case class EditorLayoutContract(
 
   private def pinnedSurfaceRowSlotViolations: List[LayoutContractViolation] =
     rowSlotViolations("pinned surface", pinnedSurfaceContentRects, pinnedSurfaceRowSlots)
+
+  private def expandedSurfaceRowSlotViolations: List[LayoutContractViolation] =
+    rowSlotViolations("expanded surface", expandedSurfaceContentRects, expandedSurfaceRowSlots)
 
   private def floatingOverlayRowSlotViolations: List[LayoutContractViolation] =
     rowSlotViolations("floating overlay", floatingOverlayContentRects.toMap, floatingOverlayRowSlots)
@@ -255,6 +260,10 @@ object EditorLayoutContract:
       .filter(view => view.surfaceId.exists(expandedSurfaceRects.contains))
       .flatMap(view => view.surfaceId.map(_ -> view.resolvedContentRect))
       .toMap
+    val expandedSurfaceRowSlots = panelViews
+      .filter(view => view.surfaceId.exists(expandedSurfaceRects.contains))
+      .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
+      .toMap
     val aboveCursorOverlayRects = calculatedLayout.aboveCursorOverlayStack
     val belowCursorOverlayRects = calculatedLayout.belowCursorOverlayStack
     val floatingOverlayRects    = aboveCursorOverlayRects ++ belowCursorOverlayRects
@@ -282,6 +291,7 @@ object EditorLayoutContract:
       expandedSurfaceRects = expandedSurfaceRects,
       expandedSurfaceTitleRects = expandedSurfaceTitleRects,
       expandedSurfaceContentRects = expandedSurfaceContentRects,
+      expandedSurfaceRowSlots = expandedSurfaceRowSlots,
       aboveCursorOverlayRects = aboveCursorOverlayRects,
       belowCursorOverlayRects = belowCursorOverlayRects,
       floatingOverlayRects = floatingOverlayRects,

@@ -446,11 +446,25 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       calculatedLayout.expandedPanelRect.getOrElse(fail("expected expanded panel rect"))
     contract.expandedSurfaceTitleRects(expandedPanel.id) shouldBe expandedView.titleRect
     contract.expandedSurfaceContentRects(expandedPanel.id) shouldBe expandedView.resolvedContentRect
+    contract.expandedSurfaceRowSlots(expandedPanel.id) shouldBe expandedView.contentRowSlots
 
     val expandedFrame = contract.expandedSurfaceRects(expandedPanel.id)
     assertInside(contract.contentAreaRect, expandedFrame, "expanded panel frame")
     assertInside(expandedFrame, contract.expandedSurfaceTitleRects(expandedPanel.id), "expanded panel title")
     assertInside(expandedFrame, contract.expandedSurfaceContentRects(expandedPanel.id), "expanded panel content")
+    contract
+      .expandedSurfaceRowSlots(expandedPanel.id)
+      .foreach(slot =>
+        withClue(s"expanded ${expandedPanel.id} slot $slot") {
+          contract
+            .expandedSurfaceContentRects(expandedPanel.id)
+            .contains(
+              contract.expandedSurfaceContentRects(expandedPanel.id).x,
+              slot.y
+            )
+            .shouldBe(true)
+        }
+      )
     contract.violations shouldBe Nil
   }
 
