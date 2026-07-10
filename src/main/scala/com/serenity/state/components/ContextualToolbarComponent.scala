@@ -3,7 +3,7 @@ package com.serenity.state.components
 import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, SurfaceFrameLayout}
+import com.serenity.ui.layout.{EditorLayoutContract, LayoutEngine, SurfaceFrameLayout}
 
 class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocusedComponent[ModalInputEvent]:
 
@@ -141,11 +141,10 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
   ): Option[Int] =
     for
       viewport <- state.viewportSize
-      rect <- {
-        val layout = LayoutEngine.calculateLayoutWithUI(state, viewport)
-        layout.aboveCursorOverlayStack ++ layout.belowCursorOverlayStack
-      }
-        .collectFirst { case (`surface`.id, rect) => rect }
+      rect <-
+        val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+        val contract = EditorLayoutContract.from(state, viewport, layout)
+        contract.overlayRect(surface.id)
     yield SurfaceFrameLayout
       .forContent(rect, SurfaceContent.ContextualToolbar(toolbarState))
       .contentRect
