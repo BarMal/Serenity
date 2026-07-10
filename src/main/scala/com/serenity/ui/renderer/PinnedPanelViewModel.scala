@@ -11,12 +11,37 @@ case class TextPanelRow(
 
 case class TextPanelView(
     rect: LayoutRect,
+    contentRect: Option[LayoutRect] = None,
     title: String,
     rows: List[TextPanelRow],
     header: Option[TextPanelRow] = None,
     footer: Option[TextPanelRow] = None
 ):
   def lines: List[String] = (header.toList ++ rows ++ footer.toList).map(_.plainText)
+
+  def resolvedContentRect: LayoutRect =
+    contentRect.getOrElse(SurfaceFrameLayout(rect).contentRect)
+
+  def contentRowSlots: List[SurfaceContentRowSlot] =
+    val content = resolvedContentRect
+    if content.height <= 0 then Nil
+    else
+      val headerRows = if header.nonEmpty then 1 else 0
+      val footerRows = if footer.nonEmpty then 1 else 0
+      val itemRows   = math.max(0, content.height - headerRows - footerRows)
+      val itemSlots =
+        (0 until math.min(rows.length, itemRows)).toList.map { index =>
+          SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), content.y + headerRows + index)
+        }
+      val headerSlots =
+        if header.nonEmpty then List(SurfaceContentRowSlot(SurfaceContentRowKind.Header, content.y))
+        else Nil
+      val footerSlots =
+        if footer.nonEmpty && content.height > headerRows then
+          List(SurfaceContentRowSlot(SurfaceContentRowKind.Footer, content.bottom - 1))
+        else Nil
+
+      headerSlots ++ itemSlots ++ footerSlots
 
 object PinnedPanelViewModel:
 
@@ -69,6 +94,7 @@ object PinnedPanelViewModel:
           SurfaceContentResolver.resolve(other, rect, SurfaceRenderMode.Pinned)
     TextPanelView(
       rect = rect,
+      contentRect = Some(SurfaceFrameLayout.forContent(rect, surface.content).contentRect),
       title = resolved.title.getOrElse(""),
       rows = resolved.rows.map(toPanelRow),
       header = resolved.header.map(toPanelRow),

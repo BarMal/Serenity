@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import com.serenity.animation.AnimationState
 import com.serenity.config.AppConfig
-import com.serenity.ui.layout.{SurfaceContentRowKind, SurfaceFrameLayout}
+import com.serenity.ui.layout.SurfaceContentRowKind
 import com.serenity.ui.theme.Theme
 
 object PinnedPanelRenderer:
@@ -61,8 +61,7 @@ object PinnedPanelRenderer:
     theme: Theme,
     animationState: AnimationState
   ): Unit =
-    val frameLayout = SurfaceFrameLayout(panel.rect)
-    val contentRect = frameLayout.contentRect
+    val contentRect = panel.resolvedContentRect
     val title       = panel.title.take(contentRect.width).padTo(contentRect.width, ' ')
     if contentRect.width > 0 then
       renderAnimatedText(surface, contentRect.x, panel.rect.y, title, 0, theme.panel.foreground, animationState)
@@ -73,15 +72,9 @@ object PinnedPanelRenderer:
     theme: Theme,
     animationState: AnimationState
   ): Unit =
-    val frameLayout = SurfaceFrameLayout(panel.rect)
-    val contentRect = frameLayout.contentRect
+    val contentRect = panel.resolvedContentRect
     val maxLineSize = contentRect.width
-    frameLayout
-      .contentRowSlots(
-        itemCount = panel.rows.length,
-        hasHeader = panel.header.nonEmpty,
-        hasFooter = panel.footer.nonEmpty
-      )
+    panel.contentRowSlots
       .foreach { slot =>
         val maybeRow = slot.kind match
           case SurfaceContentRowKind.Header      => panel.header
@@ -134,7 +127,7 @@ object PinnedPanelRenderer:
     config: AppConfig
   ): Unit =
     SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
-      val contentRect = SurfaceFrameLayout(panel.rect).contentRect
+      val contentRect = panel.resolvedContentRect
       val sheenWidth  = contentRect.width
       val sheenHeight = math.min(2, contentRect.height)
       if sheenWidth > 0 && sheenHeight > 0 then
