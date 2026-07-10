@@ -2,11 +2,12 @@ package com.serenity.ui.renderer
 
 import com.serenity.animation.AnimationState
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CalculatedLayout, LayoutRect}
+import com.serenity.ui.layout.*
 import org.slf4j.LoggerFactory
 
 case class TextOverlayView(
     rect: LayoutRect,
+    contentRect: Option[LayoutRect] = None,
     borderCells: Int = 1,
     animationState: AnimationState = AnimationState.empty,
     alphaMultiplier: Float = 1.0f,
@@ -14,7 +15,31 @@ case class TextOverlayView(
     header: Option[OverlayRow] = None,
     rows: List[OverlayRow] = Nil,
     footer: Option[OverlayRow] = None
-)
+):
+
+  def resolvedContentRect: LayoutRect =
+    contentRect.getOrElse(com.serenity.ui.layout.SurfaceFrameLayout(rect, borderCells).contentRect)
+
+  def contentRowSlots: List[SurfaceContentRowSlot] =
+    val content = resolvedContentRect
+    if content.height <= 0 then Nil
+    else
+      val headerRows = if header.nonEmpty then 1 else 0
+      val footerRows = if footer.nonEmpty then 1 else 0
+      val itemRows   = math.max(0, content.height - headerRows - footerRows)
+      val itemSlots =
+        (0 until math.min(rows.length, itemRows)).toList.map { index =>
+          SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), content.y + headerRows + index)
+        }
+      val headerSlots =
+        if header.nonEmpty then List(SurfaceContentRowSlot(SurfaceContentRowKind.Header, content.y))
+        else Nil
+      val footerSlots =
+        if footer.nonEmpty && content.height > headerRows then
+          List(SurfaceContentRowSlot(SurfaceContentRowKind.Footer, content.bottom - 1))
+        else Nil
+
+      headerSlots ++ itemSlots ++ footerSlots
 
 case class OverlayViews(
     aboveCursor: Option[TextOverlayView] = None,
@@ -51,6 +76,8 @@ object OverlayViewModel:
         contentView(originalContent, state, cachedRect).map { content =>
           TextOverlayView(
             rect = cachedRect,
+            contentRect =
+              Some(com.serenity.ui.layout.SurfaceFrameLayout.forContent(cachedRect, originalContent).contentRect),
             borderCells = com.serenity.ui.layout.SurfaceFrameLayout.borderCellsFor(originalContent),
             animationState = animState,
             alphaMultiplier = 1.0f,
@@ -65,6 +92,7 @@ object OverlayViewModel:
           contentView(content, state, rect, collapsed).map { resolved =>
             TextOverlayView(
               rect = rect,
+              contentRect = Some(com.serenity.ui.layout.SurfaceFrameLayout.forContent(rect, content).contentRect),
               borderCells = com.serenity.ui.layout.SurfaceFrameLayout.borderCellsFor(content),
               animationState = animState,
               alphaMultiplier = alphaMultiplierFor(surface, state),
