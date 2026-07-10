@@ -445,13 +445,30 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       surface.drawRunPxCalls.find(_.s.contains("Line 1, Col 5")).getOrElse(fail("Expected measured gutter text"))
     val gutterTopPx    = cellMetrics.toPixelY(gutter.y)
     val gutterHeightPx = gutter.height * cellMetrics.lineHeight
+    val expectedText   = " Line 1, Col 5 "
+    val expectedPlacement = TextAlignment.placeLine(
+      text = expectedText,
+      area = TextAreaPx(
+        xPx = cellMetrics.toPixelX(gutter.x).toFloat,
+        yPx = gutterTopPx,
+        widthPx = gutter.width * cellMetrics.charWidth.toFloat,
+        heightPx = gutterHeightPx
+      ),
+      font = uiFont,
+      lineHeightPx = math.max(1, math.min(uiMetrics.lineHeight, gutterHeightPx - 2)),
+      ascentPx = math.max(1, math.min(uiMetrics.ascent, math.min(uiMetrics.lineHeight, gutterHeightPx - 2))),
+      horizontal = TextHorizontalAlignment.Left,
+      vertical = TextVerticalAlignment.Middle,
+      fontRenderContext = surface.fontRenderContext.get
+    )
 
     gutterTextDraw.font shouldBe Some(uiFont)
-    gutterTextDraw.yPx should be > gutterTopPx
-    gutterTextDraw.yPx + gutterTextDraw.lineHeightPx should be <= (gutterTopPx + gutterHeightPx)
-    gutterTextDraw.lineHeightPx should be < gutterHeightPx
-    gutterTextDraw.ascentPx should be > cellMetrics.ascent
-    gutterTextDraw.ascentPx should be <= gutterHeightPx
+    gutterTextDraw.s shouldBe expectedText
+    gutterTextDraw.xPx shouldBe expectedPlacement.xPx
+    gutterTextDraw.yPx shouldBe expectedPlacement.yPx
+    gutterTextDraw.bgWidthPx shouldBe expectedPlacement.widthPx
+    gutterTextDraw.lineHeightPx shouldBe expectedPlacement.lineHeightPx
+    gutterTextDraw.ascentPx shouldBe expectedPlacement.ascentPx
     surface.putStringCalls.map(_.s).mkString should not include "Line 1, Col 5"
   }
 
