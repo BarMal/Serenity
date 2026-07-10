@@ -544,6 +544,29 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     multiline.lineColumnToOffset(20, 0) shouldBe multiline.weight
     multiline.lineColumnToOffset(-1, -4) shouldBe 0
 
+  it should "treat line and column conversions as UTF-16 code unit indexes for grapheme content" in new ChunkedRopeSpecScope:
+    val content         = "a\uD83D\uDE42b\ncafe\u0301!"
+    val rope            = Rope(content)
+    val secondLineStart = "a\uD83D\uDE42b\n".length
+
+    rope.lineColumnToOffset(0, 0) shouldBe 0
+    rope.lineColumnToOffset(0, 1) shouldBe 1
+    rope.lineColumnToOffset(0, 2) shouldBe 2
+    rope.lineColumnToOffset(0, 3) shouldBe 3
+    rope.lineColumnToOffset(0, 4) shouldBe 4
+
+    rope.offsetToLineColumn(1) shouldBe (0, 1)
+    rope.offsetToLineColumn(2) shouldBe (0, 2)
+    rope.offsetToLineColumn(3) shouldBe (0, 3)
+
+    rope.lineColumnToOffset(1, 3) shouldBe secondLineStart + 3
+    rope.lineColumnToOffset(1, 4) shouldBe secondLineStart + 4
+    rope.lineColumnToOffset(1, 5) shouldBe secondLineStart + 5
+
+    rope.offsetToLineColumn(secondLineStart + 3) shouldBe (1, 3)
+    rope.offsetToLineColumn(secondLineStart + 4) shouldBe (1, 4)
+    rope.offsetToLineColumn(secondLineStart + 5) shouldBe (1, 5)
+
   it should "extract string slices without materialising the whole rope" in new ChunkedRopeSpecScope:
     val rope = Rope("alpha\nbeta\ngamma")
 

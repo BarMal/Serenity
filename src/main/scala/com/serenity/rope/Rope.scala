@@ -129,6 +129,9 @@ trait Rope(using balance: Balance):
           Some((line -> next.value) -> (next.nextOffset, line + 1, next.isFinalLine))
       }
 
+  /** Resolve a logical line and internal UTF-16 column to the corresponding rope offset. Columns are not grapheme
+    * counts; they share the same UTF-16 code-unit contract as Java `String` indexes and `CursorPosition.column`.
+    */
   def lineColumnToOffset(line: Int, column: Int): Int =
     val targetLine = math.max(0, line)
     val targetCol  = math.max(0, column)
@@ -136,6 +139,9 @@ trait Rope(using balance: Balance):
     if targetLine > newlineCount then weight
     else lineColumnToOffsetIn(this, targetLine, targetCol, 0)
 
+  /** Resolve an internal rope offset to a logical line and UTF-16 column pair. The returned column may point inside a
+    * multi-code-unit grapheme; user-facing edits should snap through grapheme helpers before mutating text.
+    */
   def offsetToLineColumn(offset: Int): (Int, Int) =
     val clamped = math.max(0, math.min(offset, weight))
     offsetToLineColumnIn(this, clamped, 0, 0)
