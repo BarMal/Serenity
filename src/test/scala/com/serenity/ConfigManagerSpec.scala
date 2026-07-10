@@ -402,6 +402,23 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("interface.density = spacious")
   }
 
+  it should "report invalid interface config values through the interface schema" in {
+    val configFile = Files.createTempFile("serenity-interface-invalid-config", ".conf")
+    Files.writeString(
+      configFile,
+      """interface.density = roomy
+        |ui.element_gap = wide
+        |ui.outline_thickness =
+        |""".stripMargin
+    )
+
+    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+
+    result.report.invalidEntries.map(_.key) should contain("interface.density")
+    result.report.invalidEntries.map(_.key) should contain("ui.element_gap")
+    result.report.invalidEntries.map(_.key) should contain("ui.outline_thickness")
+  }
+
   it should "load and write command runner visible rows" in {
     val configFile = Files.createTempFile("serenity-command-rows-config", ".conf")
     Files.writeString(

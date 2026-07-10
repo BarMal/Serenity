@@ -624,6 +624,34 @@ object InterfaceConfig:
     val outlineThicknessKeys: Set[String] =
       Set("ui.outline_thickness", "ui.outline.thickness", "ui_outline_thickness")
 
+    private val handledKeys: Set[String] =
+      densityKeys ++ elementGapKeys ++ cornerRadiusKeys ++ outlineThicknessKeys
+
+    def handles(key: String): Boolean =
+      handledKeys.contains(key)
+
+    def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
+      val trimmed = value.trim
+      if densityKeys.contains(key) then InterfaceDensity.fromConfigKey(trimmed).map(config.withInterfaceDensity)
+      else if elementGapKeys.contains(key) then
+        trimmed.toIntOption
+          .filter(gap => gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap)
+          .map(config.withUiElementGap)
+      else if cornerRadiusKeys.contains(key) then
+        trimmed.toIntOption
+          .filter(radius => radius >= AppConfig.MinUiCornerRadiusPx && radius <= AppConfig.MaxUiCornerRadiusPx)
+          .map(config.withUiCornerRadiusPx)
+      else if outlineThicknessKeys.contains(key) then
+        trimmed.toIntOption
+          .filter(thickness =>
+            thickness >= AppConfig.MinUiOutlineThicknessPx && thickness <= AppConfig.MaxUiOutlineThicknessPx
+          )
+          .map(config.withUiOutlineThicknessPx)
+      else None
+
+    def invalidValue(key: String, value: String): Boolean =
+      parse(AppConfig.default, key, value).isEmpty
+
 case class InputConfig(
     hotkeyConfig: HotkeyConfig = HotkeyConfig(),
     focusedKeymapConfig: FocusedKeymapConfig = FocusedKeymapConfig()

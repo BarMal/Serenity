@@ -218,14 +218,8 @@ object ConfigManager:
               CursorInfoBarMode.fromConfigKey(value).map(config.withCursorInfoBarMode).getOrElse(config)
             case key if CursorConfig.Schema.infoBarPlacementKeys.contains(key) =>
               CursorInfoBarPlacement.fromConfigKey(value).map(config.withCursorInfoBarPlacement).getOrElse(config)
-            case key if InterfaceConfig.Schema.densityKeys.contains(key) =>
-              InterfaceDensity.fromConfigKey(value).map(config.withInterfaceDensity).getOrElse(config)
-            case key if InterfaceConfig.Schema.elementGapKeys.contains(key) =>
-              parseUiElementGap(value.trim).map(config.withUiElementGap).getOrElse(config)
-            case key if InterfaceConfig.Schema.cornerRadiusKeys.contains(key) =>
-              parseUiCornerRadiusPx(value.trim).map(config.withUiCornerRadiusPx).getOrElse(config)
-            case key if InterfaceConfig.Schema.outlineThicknessKeys.contains(key) =>
-              parseUiOutlineThicknessPx(value.trim).map(config.withUiOutlineThicknessPx).getOrElse(config)
+            case key if InterfaceConfig.Schema.handles(key) =>
+              InterfaceConfig.Schema.parse(config, key, value).getOrElse(config)
             case "ui.material" | "ui_material" | "material.preset" | "material_preset" =>
               parseMaterialPreset(value.trim).map(config.withMaterialPreset).getOrElse(config)
             case "ui.motion" | "ui_motion" | "motion.preset" | "motion_preset" =>
@@ -598,8 +592,6 @@ object ConfigManager:
             if CursorConfig.Schema.activeColorKeys.contains(key) ||
               CursorConfig.Schema.inactiveColorKeys.contains(key) =>
           value.nonEmpty && parseColor(value).isEmpty
-        case key if InterfaceConfig.Schema.densityKeys.contains(key) =>
-          InterfaceDensity.fromConfigKey(value).isEmpty
         case key if CursorConfig.Schema.infoBarModeKeys.contains(key) =>
           CursorInfoBarMode.fromConfigKey(value).isEmpty
         case key if CursorConfig.Schema.infoBarPlacementKeys.contains(key) =>
@@ -632,12 +624,8 @@ object ConfigManager:
           MarkdownViewMode.fromConfigKey(value).isEmpty
         case key if WindowConfig.Schema.handles(key) =>
           WindowConfig.Schema.invalidValue(key, value)
-        case key if InterfaceConfig.Schema.elementGapKeys.contains(key) =>
-          parseUiElementGap(value).isEmpty
-        case key if InterfaceConfig.Schema.cornerRadiusKeys.contains(key) =>
-          parseUiCornerRadiusPx(value).isEmpty
-        case key if InterfaceConfig.Schema.outlineThicknessKeys.contains(key) =>
-          parseUiOutlineThicknessPx(value).isEmpty
+        case key if InterfaceConfig.Schema.handles(key) =>
+          InterfaceConfig.Schema.invalidValue(key, value)
         case "command_runner.visible_rows" | "command.runner.visible.rows" | "command_runner_visible_rows" =>
           parseCommandRunnerVisibleRows(value).isEmpty
         case "render.fps" | "render_fps" | "ui.render.fps" | "ui_render_fps" =>
