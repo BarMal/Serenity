@@ -46,9 +46,9 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
           .withLineNumbers(true)
           .withGutter(true)
           .copy(
-            uiElementGap = 2,
             textAreaInsets = TextAreaInsets(left = 0.05, right = 0.10)
-          ),
+          )
+          .withUiElementGap(2),
         uiSurfaces = List(
           UiSurface(
             SurfaceId("left-panel"),
@@ -220,12 +220,13 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val constrainedViewport = ViewportSize(20, 8)
     val gap                 = 2
     val state = AppState.initial.copy(
-      config = AppConfig.default.copy(
-        showLineNumbers = false,
-        showGutter = false,
-        uiElementGap = gap,
-        textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0)
-      ),
+      config = AppConfig.default
+        .copy(
+          showLineNumbers = false,
+          showGutter = false,
+          textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0)
+        )
+        .withUiElementGap(gap),
       uiSurfaces = List(
         UiSurface(
           SurfaceId("left-panel"),
@@ -256,12 +257,13 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val constrainedViewport = ViewportSize(18, 9)
     val gap                 = 2
     val state = AppState.initial.copy(
-      config = AppConfig.default.copy(
-        showLineNumbers = false,
-        showGutter = false,
-        uiElementGap = gap,
-        textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0, top = 0.0, bottom = 0.0)
-      ),
+      config = AppConfig.default
+        .copy(
+          showLineNumbers = false,
+          showGutter = false,
+          textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0, top = 0.0, bottom = 0.0)
+        )
+        .withUiElementGap(gap),
       uiSurfaces = List(
         UiSurface(
           SurfaceId("top-panel"),
@@ -323,7 +325,8 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       config = AppConfig.default
         .withLineNumbers(true)
         .withGutter(true)
-        .copy(uiElementGap = 1, textAreaInsets = TextAreaInsets(left = 0.05, right = 0.05)),
+        .copy(textAreaInsets = TextAreaInsets(left = 0.05, right = 0.05))
+        .withUiElementGap(1),
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),
       layout = AppState.initial.layout.copy(

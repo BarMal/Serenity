@@ -67,12 +67,9 @@ object UiPreset:
       .copy(
         blurRadius = source.blurRadius,
         backgroundStyle = source.backgroundStyle,
-        materialPreset = source.materialPreset,
-        interfaceDensity = source.interfaceDensity,
-        uiElementGap = source.uiElementGap,
-        uiCornerRadiusPx = source.uiCornerRadiusPx,
-        uiOutlineThicknessPx = source.uiOutlineThicknessPx
+        materialPreset = source.materialPreset
       )
+      .withInterfaceConfig(source.interfaceConfig)
       .withCursorConfig(source.cursorConfig)
 
   private def patchDocumentDefaultsConfig(base: AppConfig, source: AppConfig): AppConfig =

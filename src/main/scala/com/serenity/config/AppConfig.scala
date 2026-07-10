@@ -384,6 +384,50 @@ object DocumentConfig:
 
     val defaultModeKeys: Set[String] = currentKeys ++ deprecatedKeys.keySet
 
+case class InterfaceConfig(
+    density: InterfaceDensity = InterfaceDensity.Comfortable,
+    elementGap: Int = 0,
+    cornerRadiusPx: Int = 8,
+    outlineThicknessPx: Int = 2
+):
+
+  def normalized: InterfaceConfig =
+    copy(
+      elementGap = AppConfig.clampUiElementGap(elementGap),
+      cornerRadiusPx = AppConfig.clampUiCornerRadiusPx(cornerRadiusPx),
+      outlineThicknessPx = AppConfig.clampUiOutlineThicknessPx(outlineThicknessPx)
+    )
+
+object InterfaceConfig:
+
+  object Schema:
+
+    val currentKeys: Set[String] = Set(
+      "interface.density",
+      "ui.element_gap",
+      "ui.element.gap",
+      "ui.corner_radius",
+      "ui.corner.radius",
+      "ui.outline_thickness",
+      "ui.outline.thickness"
+    )
+
+    val deprecatedKeys: Map[String, String] = Map(
+      "interface_density"    -> "interface.density",
+      "ui_element_gap"       -> "ui.element_gap",
+      "ui_corner_radius"     -> "ui.corner_radius",
+      "ui_outline_thickness" -> "ui.outline_thickness"
+    )
+
+    val densityKeys: Set[String] = Set("interface.density", "interface_density")
+
+    val elementGapKeys: Set[String] = Set("ui.element_gap", "ui.element.gap", "ui_element_gap")
+
+    val cornerRadiusKeys: Set[String] = Set("ui.corner_radius", "ui.corner.radius", "ui_corner_radius")
+
+    val outlineThicknessKeys: Set[String] =
+      Set("ui.outline_thickness", "ui.outline.thickness", "ui_outline_thickness")
+
 case class TextAreaInsets(
     left: Double = TextAreaInsets.DefaultInset,
     right: Double = TextAreaInsets.DefaultInset,
@@ -512,10 +556,7 @@ case class AppConfig(
     cursorConfig: CursorConfig = CursorConfig(),
     windowConfig: WindowConfig = WindowConfig(),
     documentConfig: DocumentConfig = DocumentConfig(),
-    interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
-    uiElementGap: Int = 0,
-    uiCornerRadiusPx: Int = 8,
-    uiOutlineThicknessPx: Int = 2,
+    interfaceConfig: InterfaceConfig = InterfaceConfig(),
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     viewportSizing: ViewportSizing = ViewportSizing(),
     lspUserConfig: LspUserConfig = LspUserConfig.empty,
@@ -532,6 +573,18 @@ case class AppConfig(
 
   def defaultDocumentMode: DefaultDocumentMode =
     documentConfig.defaultMode
+
+  def interfaceDensity: InterfaceDensity =
+    interfaceConfig.density
+
+  def uiElementGap: Int =
+    interfaceConfig.elementGap
+
+  def uiCornerRadiusPx: Int =
+    interfaceConfig.cornerRadiusPx
+
+  def uiOutlineThicknessPx: Int =
+    interfaceConfig.outlineThicknessPx
 
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
@@ -788,17 +841,20 @@ case class AppConfig(
   def withDefaultDocumentMode(mode: DefaultDocumentMode): AppConfig =
     withDocumentConfig(documentConfig.copy(defaultMode = mode))
 
+  def withInterfaceConfig(config: InterfaceConfig): AppConfig =
+    copy(interfaceConfig = config.normalized)
+
   def withInterfaceDensity(density: InterfaceDensity): AppConfig =
-    copy(interfaceDensity = density)
+    withInterfaceConfig(interfaceConfig.copy(density = density))
 
   def withUiElementGap(gap: Int): AppConfig =
-    copy(uiElementGap = AppConfig.clampUiElementGap(gap))
+    withInterfaceConfig(interfaceConfig.copy(elementGap = gap))
 
   def withUiCornerRadiusPx(radius: Int): AppConfig =
-    copy(uiCornerRadiusPx = AppConfig.clampUiCornerRadiusPx(radius))
+    withInterfaceConfig(interfaceConfig.copy(cornerRadiusPx = radius))
 
   def withUiOutlineThicknessPx(thickness: Int): AppConfig =
-    copy(uiOutlineThicknessPx = AppConfig.clampUiOutlineThicknessPx(thickness))
+    withInterfaceConfig(interfaceConfig.copy(outlineThicknessPx = thickness))
 
   def withTextAreaInsets(insets: TextAreaInsets): AppConfig =
     copy(textAreaInsets = insets.normalized)

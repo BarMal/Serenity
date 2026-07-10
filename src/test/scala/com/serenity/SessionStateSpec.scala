@@ -328,8 +328,10 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
           infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
         ),
         windowConfig = WindowConfig(chromeMode = WindowChromeMode.Custom),
-        interfaceDensity = InterfaceDensity.Spacious,
-        uiOutlineThicknessPx = 4,
+        interfaceConfig = InterfaceConfig(
+          density = InterfaceDensity.Spacious,
+          outlineThicknessPx = 4
+        ),
         showLineNumbers = false,
         showGutter = false,
         lspUserConfig = LspUserConfig(
