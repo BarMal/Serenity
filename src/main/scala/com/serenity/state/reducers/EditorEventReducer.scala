@@ -1,15 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.animation.{
-  CellAnimation,
-  CharacterKey,
-  ElementTransitionCells,
-  ElementTransitionLowerer,
-  ElementTransitionPlanner,
-  ElementTransitionRequest,
-  TransitionKind,
-  TransitionScope
-}
+import com.serenity.animation.*
 import com.serenity.keystroke.events.*
 import com.serenity.richtext.{RichTextDocument, RichTextPosition, RichTextRange}
 import com.serenity.rope.Rope
