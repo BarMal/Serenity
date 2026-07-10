@@ -1385,48 +1385,45 @@ object Renderer:
         case _                                  => false
     }).foreach {
       case surface @ UiSurface(_, content, SurfacePresentation.Pinned(position, _), _) =>
-        context.layout.pinnedSurfaceRects
-          .get(surface.id)
-          .orElse(context.layout.pinnedPanelRects.get(position))
-          .foreach { rect =>
-            val animationState =
-              state.surfaceAnimations
-                .get(surface.id)
-                .map(_.animationState)
-                .getOrElse(com.serenity.animation.AnimationState.empty)
-            val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
-            if blurRadius > 0f then
-              context.surface.blurRegion(
-                rect.x,
-                rect.y,
-                rect.width,
-                rect.height,
-                blurRadius
+        contract.panelRect(surface.id).foreach { rect =>
+          val animationState =
+            state.surfaceAnimations
+              .get(surface.id)
+              .map(_.animationState)
+              .getOrElse(com.serenity.animation.AnimationState.empty)
+          val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
+          if blurRadius > 0f then
+            context.surface.blurRegion(
+              rect.x,
+              rect.y,
+              rect.width,
+              rect.height,
+              blurRadius
+            )
+          content match
+            case SurfaceContent.MarkdownPreview(bufferId, title) =>
+              renderMarkdownPreviewPanel(
+                bufferId,
+                title,
+                rect,
+                contract
+                  .panelContentRect(surface.id)
+                  .getOrElse(SurfaceFrameLayout.forContent(rect, content).contentRect),
+                state,
+                context,
+                animationState
               )
-            content match
-              case SurfaceContent.MarkdownPreview(bufferId, title) =>
-                renderMarkdownPreviewPanel(
-                  bufferId,
-                  title,
-                  rect,
-                  contract
-                    .panelContentRect(surface.id)
-                    .getOrElse(SurfaceFrameLayout.forContent(rect, content).contentRect),
-                  state,
-                  context,
-                  animationState
-                )
-              case _ =>
-                PinnedPanelRenderer.render(
-                  context.surface,
-                  PinnedPanelViewModel.resolve(surface, rect, state),
-                  state.theme,
-                  state.config,
-                  animationState
-                )
-          }
+            case _ =>
+              PinnedPanelRenderer.render(
+                context.surface,
+                PinnedPanelViewModel.resolve(surface, rect, state),
+                state.theme,
+                state.config,
+                animationState
+              )
+        }
       case surface @ UiSurface(_, content, SurfacePresentation.Expanded(_, _), _) =>
-        context.layout.expandedPanelRect.foreach { rect =>
+        contract.panelRect(surface.id).foreach { rect =>
           val animationState =
             state.surfaceAnimations
               .get(surface.id)
