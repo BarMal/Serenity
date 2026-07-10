@@ -723,6 +723,21 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("document.default_mode = markdown")
   }
 
+  it should "report invalid document config values through the document schema" in {
+    val configFile = Files.createTempFile("serenity-document-invalid-config", ".conf")
+    Files.writeString(
+      configFile,
+      """document.default_mode = wordperfect
+        |document.markdown_view = preview-ish
+        |""".stripMargin
+    )
+
+    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+
+    result.report.invalidEntries.map(_.key) should contain("document.default_mode")
+    result.report.invalidEntries.map(_.key) should contain("document.markdown_view")
+  }
+
   it should "load and write the markdown view mode" in {
     val configFile = Files.createTempFile("serenity-markdown-view-mode", ".conf")
     Files.writeString(
