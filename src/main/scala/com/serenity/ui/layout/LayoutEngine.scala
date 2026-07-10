@@ -524,11 +524,18 @@ object LayoutEngine:
         contentRect.x,
         math.min(screenPosition.x - (preferredWidth / 2), contentRect.right - preferredWidth)
       )
+      val preferredAboveY = screenPosition.y - finalHeight - gapRows
+      val preferredBelowY = screenPosition.y + 1 + gapRows
       val overlayY = topYOverride.getOrElse(surface.presentation match
         case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) =>
-          math.max(contentRect.y, screenPosition.y - preferredHeight - gapRows)
+          surface.content match
+            case SurfaceContent.ContextualToolbar(_)
+                if preferredAboveY < contentRect.y &&
+                  preferredBelowY + finalHeight <= contentRect.bottom =>
+              preferredBelowY
+            case _ =>
+              math.max(contentRect.y, preferredAboveY)
         case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) =>
-          val preferredBelowY = screenPosition.y + 1 + gapRows
           if preferredBelowY + preferredHeight <= contentRect.bottom then preferredBelowY
           else math.max(contentRect.y, screenPosition.y - preferredHeight - gapRows)
         case _ =>
