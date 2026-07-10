@@ -59,7 +59,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     result.effects shouldBe Nil
   }
 
-  it should "open the contextual toolbar above the cursor and focus it" in {
+  it should "open the contextual toolbar below the cursor without stealing editor focus" in {
     val initialState = AppState.initial.copy(focus = Focus.EditorPane(PaneId(0)))
 
     val result  = AppEventReducer.reduce(ToggleContextualToolbar, initialState, registry)
@@ -67,9 +67,9 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
     surface.presentation shouldBe SurfacePresentation.Floating(
       initialState.activeCursorPosition,
-      SurfacePlacement.AboveCursor
+      SurfacePlacement.BelowCursor
     )
-    result.state.focus shouldBe Focus.Surface(surface.id)
+    result.state.focus shouldBe Focus.EditorPane(PaneId(0))
     result.effects shouldBe Nil
   }
 

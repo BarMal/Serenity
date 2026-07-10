@@ -12,7 +12,7 @@ import org.scalatest.matchers.should.Matchers
 
 class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
-  "Contextual toolbar" should "toggle on above the cursor, keep the command runner below it, and restore toolbar focus when the runner closes" in {
+  "Contextual toolbar" should "toggle on below the cursor without stealing focus and stack above the command runner" in {
     val stateManager = createStateManager("ContextualToolbarSpec-stack")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
@@ -20,26 +20,54 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val opened         = stateManager.getCurrentState.unsafeRunSync()
     val toolbarSurface = opened.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar"))
-    opened.focus shouldBe Focus.Surface(toolbarSurface.id)
+    opened.focus shouldBe Focus.EditorPane(PaneId(0))
     toolbarSurface.presentation shouldBe SurfacePresentation.Floating(
       opened.activeCursorPosition,
-      SurfacePlacement.AboveCursor
+      SurfacePlacement.BelowCursor
     )
+    toolbarStateFrom(opened).displayMode shouldBe ToolbarDisplayMode.IconOnly
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     val withRunner = stateManager.getCurrentState.unsafeRunSync()
     val layout = LayoutEngine
       .calculateLayoutWithUI(withRunner, withRunner.viewportSize.getOrElse(fail("Expected viewport size")))
-    layout.aboveCursorOverlayStack.map(_._1) should contain(toolbarSurface.id)
+    layout.aboveCursorOverlayStack.map(_._1) shouldBe Nil
     layout.belowCursorOverlayStack.map(_._1) shouldBe List(
+      toolbarSurface.id,
       withRunner.commandRunnerSurface.getOrElse(fail("Expected command runner")).id
     )
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     val afterClose = stateManager.getCurrentState.unsafeRunSync()
-    afterClose.focus shouldBe Focus.Surface(toolbarSurface.id)
+    afterClose.focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
+  it should "leave editor typing active while the toolbar is open" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-editor-focus")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val bufferId = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha"),
+            cursors = List(CursorPosition(0, 5))
+          )
+        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('!')).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val bufferId = activeBufferId(state)
+    state.buffers(bufferId).content.toString shouldBe "alpha!"
+    state.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "execute the focused formatting command on Enter" in {
@@ -62,6 +90,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .unsafeRunSync()
 
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    focusToolbar(stateManager)
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
@@ -79,6 +108,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    focusToolbar(stateManager)
     stateManager.applyEvent(Escape).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
@@ -196,6 +226,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    focusToolbar(stateManager)
     moveToolbarFocusTo(stateManager, "paragraph-role")
 
     stateManager.applyEvent(Enter).unsafeRunSync()
@@ -631,12 +662,23 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     start + math.max(0, (end - start) / 2)
 
   private def moveToolbarFocusTo(stateManager: com.serenity.state.manager.StateManager, itemId: String): Unit =
+    focusToolbar(stateManager)
     val state     = stateManager.getCurrentState.unsafeRunSync()
     val target    = toolbarItemIndex(state, itemId)
     val toolbar   = toolbarStateFrom(state)
     val itemCount = ContextualToolbar.itemsFor(state).length
     val delta     = (target - toolbar.focusedIndex + itemCount) % itemCount
     (0 until delta).foreach(_ => stateManager.applyEvent(MoveRight).unsafeRunSync())
+
+  private def focusToolbar(stateManager: com.serenity.state.manager.StateManager): Unit =
+    stateManager
+      .updateState { state =>
+        val toolbarId = state.contextualToolbarSurface
+          .map(_.id)
+          .getOrElse(fail("Expected contextual toolbar surface"))
+        state.pushFocus(Focus.Surface(toolbarId))
+      }
+      .unsafeRunSync()
 
   private def toolbarItemIndex(state: AppState, itemId: String): Int =
     ContextualToolbar.itemsFor(state).indexWhere(_.id == itemId) match

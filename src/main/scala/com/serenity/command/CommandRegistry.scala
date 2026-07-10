@@ -125,7 +125,7 @@ object CommandRegistry:
     ),
     Command.typed(
       "toggle-contextual-toolbar",
-      "Show or hide the floating rich-text formatting toolbar above the cursor.",
+      "Show or hide the floating rich-text formatting toolbar near the cursor.",
       CommandIntent.ToggleContextualToolbar,
       CommandCategory.View,
       label = "Toggle Contextual Toolbar"
