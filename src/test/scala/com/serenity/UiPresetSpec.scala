@@ -268,16 +268,21 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("outline should be capturable"))
     val preset = UiPreset(
       name = "Drafting",
-      config = AppConfig.default.withDefaultDocumentMode(DefaultDocumentMode.PlainText),
+      config = AppConfig.default
+        .withDefaultDocumentMode(DefaultDocumentMode.PlainText)
+        .withMarkdownViewMode(MarkdownViewMode.Source),
       themeName = Theme.dark.name,
       pinnedPanels = List(panel),
       targetEditorPaneCount = Some(1)
     )
-    val sourceConfig = AppConfig.default.withDefaultDocumentMode(DefaultDocumentMode.RichText)
+    val sourceConfig = AppConfig.default
+      .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
+      .withMarkdownViewMode(MarkdownViewMode.InlineLens)
 
     val patched = UiPreset.Patch.DocumentDefaults(sourceConfig).applyTo(preset)
 
-    patched.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
+    patched.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
+    patched.config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
     patched.pinnedPanels shouldBe List(panel)
     patched.targetEditorPaneCount shouldBe Some(1)
   }
