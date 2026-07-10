@@ -398,7 +398,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           val steps         = config.steps
           val tSize         = s.viewportSize.getOrElse(ViewportSize(80, 24))
           val layout        = LayoutEngine.calculateLayoutWithUI(s, tSize)
-          val overlayRect   = overlayRectForSurface(layout, surface.id)
+          val contract      = EditorLayoutContract.from(s, tSize, layout)
+          val overlayRect   = contract.overlayRect(surface.id)
           val overlayHeight = overlayRect.map(_.height).getOrElse(4)
           val revealKind    = s.config.effectiveCommandRunnerTransitionKind
           val animationState =
@@ -476,12 +477,14 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           val steps          = config.steps
           val tSize          = prevState.viewportSize.orElse(s.viewportSize).getOrElse(ViewportSize(80, 24))
           val previousLayout = LayoutEngine.calculateLayoutWithUI(prevState, tSize)
+          val contract       = EditorLayoutContract.from(prevState, tSize, previousLayout)
           val overlayHeight = prevState.surfaceAnimations
             .get(closedSurface.id)
             .map(_.overlayHeight)
-            .orElse(overlayRectForSurface(previousLayout, closedSurface.id).map(_.height))
+            .orElse(contract.overlayRect(closedSurface.id).map(_.height))
             .getOrElse(4)
-          val cachedRect = overlayRectForSurface(previousLayout, closedSurface.id)
+          val cachedRect = contract
+            .overlayRect(closedSurface.id)
             .getOrElse(LayoutRect(12, 2, 56, overlayHeight))
           val overlayFadeOutAnims = (0 until overlayHeight).map { rowOffset =>
             val panelBg  = s.theme.panel.background
@@ -547,13 +550,13 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
 
   private def applyPinnedPanelOpenAnimation(surface: UiSurface): cats.effect.IO[Unit] =
     stateRef.update { state =>
+      val viewportSize = state.viewportSize.getOrElse(ViewportSize(80, 24))
+      val layout       = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      val contract     = EditorLayoutContract.from(state, viewportSize, layout)
       val maybeAnimation =
         for
-          position <- panelPosition(surface)
-          rect <- panelRectForSurface(
-            LayoutEngine.calculateLayoutWithUI(state, state.viewportSize.getOrElse(ViewportSize(80, 24))),
-            surface
-          )
+          position  <- panelPosition(surface)
+          rect      <- contract.panelRect(surface.id)
           animation <- pinnedPanelOpenAnimation(position, rect, state)
         yield animation
 
@@ -566,10 +569,11 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     stateRef.update { state =>
       val tSize          = prevState.viewportSize.orElse(state.viewportSize).getOrElse(ViewportSize(80, 24))
       val previousLayout = LayoutEngine.calculateLayoutWithUI(prevState, tSize)
+      val contract       = EditorLayoutContract.from(prevState, tSize, previousLayout)
       val maybeGhost =
         for
           position  <- panelPosition(closedSurface)
-          rect      <- panelRectForSurface(previousLayout, closedSurface)
+          rect      <- contract.panelRect(closedSurface.id)
           animation <- pinnedPanelCloseAnimation(position, rect, state)
         yield
           val (stateWithId, ghostId) = state.allocateSurfaceId
@@ -667,21 +671,6 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       case SurfacePresentation.Pinned(position, _)   => Some(position)
       case SurfacePresentation.Expanded(position, _) => Some(position)
       case _                                         => None
-
-  private def panelRectForSurface(layout: CalculatedLayout, surface: UiSurface): Option[LayoutRect] =
-    surface.presentation match
-      case SurfacePresentation.Pinned(position, _) =>
-        layout.pinnedSurfaceRects.get(surface.id).orElse(layout.pinnedPanelRects.get(position))
-      case SurfacePresentation.Expanded(_, _) =>
-        layout.expandedPanelRect
-      case _ =>
-        None
-
-  private def overlayRectForSurface(layout: CalculatedLayout, surfaceId: SurfaceId): Option[LayoutRect] =
-    layout.aboveCursorOverlayStack
-      .find(_._1 == surfaceId)
-      .map(_._2)
-      .orElse(layout.belowCursorOverlayStack.find(_._1 == surfaceId).map(_._2))
 
   protected def advanceSurfaceAnimations(state: AppState): AppState =
     state.surfaceAnimations.foldLeft(state) {
