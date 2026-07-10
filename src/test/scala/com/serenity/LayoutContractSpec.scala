@@ -506,6 +506,55 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     contract.panelRowSlots(SurfaceId("missing")) shouldBe Nil
   }
 
+  it should "provide shared overlay lookups for floating surfaces" in {
+    val cursor = CursorPosition(1, 2)
+    val buffer = Buffer
+      .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
+      .copy(cursors = List(cursor))
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    val quickInfo = UiSurface(
+      SurfaceId("quick-info"),
+      SurfaceContent.QuickInfo("List.map(f)"),
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
+    )
+    val commandRunner = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.Surface(commandRunner.id),
+      uiSurfaces = List(quickInfo, commandRunner)
+    )
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
+    val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+    val overlayViews     = OverlayViewModel.fromState(state, calculatedLayout)
+    val overlaysById = (overlayViews.aboveCursor.toList ++ overlayViews.belowCursorStack)
+      .flatMap(view => view.surfaceId.map(_ -> view))
+      .toMap
+    val overlayRects = contract.floatingOverlayRects.toMap
+
+    contract.overlayRect(quickInfo.id) shouldBe Some(overlayRects(quickInfo.id))
+    contract.overlayContentRect(quickInfo.id) shouldBe Some(overlaysById(quickInfo.id).resolvedContentRect)
+    contract.overlayRowSlots(quickInfo.id) shouldBe overlaysById(quickInfo.id).contentRowSlots
+
+    contract.overlayRect(commandRunner.id) shouldBe Some(overlayRects(commandRunner.id))
+    contract.overlayContentRect(commandRunner.id) shouldBe Some(overlaysById(commandRunner.id).resolvedContentRect)
+    contract.overlayRowSlots(commandRunner.id) shouldBe overlaysById(commandRunner.id).contentRowSlots
+
+    contract.overlayRect(SurfaceId("missing")) shouldBe None
+    contract.overlayContentRect(SurfaceId("missing")) shouldBe None
+    contract.overlayRowSlots(SurfaceId("missing")) shouldBe Nil
+  }
+
   it should "expose pinned and floating row slots from the shared frame contract" in {
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer

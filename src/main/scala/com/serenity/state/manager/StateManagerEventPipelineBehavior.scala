@@ -1290,11 +1290,11 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         case _                                => None
       layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       contract = EditorLayoutContract.from(state, viewportSize, layout)
-      contentRect <- overlayContentRectForSurface(contract, surface.id)
+      contentRect <- contract.overlayContentRect(surface.id)
       index <- overlayItemIndex(
         event,
         contentRect,
-        contract.floatingOverlayRowSlots.getOrElse(surface.id, Nil),
+        contract.overlayRowSlots(surface.id),
         menu.items.length,
         menu.selectedIndex,
         hasHeader = true,
@@ -1402,13 +1402,13 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         case _                                              => None
       layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       contract = EditorLayoutContract.from(state, viewportSize, layout)
-      contentRect <- overlayContentRectForSurface(contract, surface.id)
+      contentRect <- contract.overlayContentRect(surface.id)
       hit <- contextualToolbarItemHit(
         event,
         contentRect,
         state,
         toolbarState,
-        contract.floatingOverlayRowSlots.getOrElse(surface.id, Nil)
+        contract.overlayRowSlots(surface.id)
       )
     yield (surface, toolbarState, hit)
 
@@ -1538,8 +1538,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     surface: UiSurface,
     contract: EditorLayoutContract
   ): Option[CommandRunnerEvent] =
-    overlayContentRectForSurface(contract, surface.id).flatMap { contentRect =>
-      val rowSlots = contract.floatingOverlayRowSlots.getOrElse(surface.id, Nil)
+    contract.overlayContentRect(surface.id).flatMap { contentRect =>
+      val rowSlots = contract.overlayRowSlots(surface.id)
       surface.content match
         case SurfaceContent.CommandPalette(runner) =>
           overlayItemIndex(
@@ -1611,12 +1611,6 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
             index
         }
       )
-
-  private def overlayContentRectForSurface(
-    contract: EditorLayoutContract,
-    surfaceId: SurfaceId
-  ): Option[LayoutRect] =
-    contract.floatingOverlayContentRects.collectFirst { case (`surfaceId`, rect) => rect }
 
   private def commandRunnerSubmenuDetailRowCount(
     groupId: String,

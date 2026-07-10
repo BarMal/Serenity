@@ -679,11 +679,11 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val surface  = state.contextMenuSurface.getOrElse(fail("Expected context menu surface"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val contract = EditorLayoutContract.from(state, viewport, layout)
-    val contentRect = contract.floatingOverlayContentRects
-      .collectFirst { case (`surface`.id, rect) => rect }
+    val contentRect = contract
+      .overlayContentRect(surface.id)
       .getOrElse(fail("Expected context menu overlay content rect"))
-    val rowY = contract.floatingOverlayRowSlots
-      .getOrElse(surface.id, Nil)
+    val rowY = contract
+      .overlayRowSlots(surface.id)
       .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(`itemIndex`), y) => y }
       .getOrElse(fail(s"Expected context menu item row $itemIndex"))
     (contentRect.x + 1, rowY)
