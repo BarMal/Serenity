@@ -184,22 +184,8 @@ object ConfigManager:
               parseUiCornerRadiusPx(value.trim).map(config.withUiCornerRadiusPx).getOrElse(config)
             case "ui.outline_thickness" | "ui.outline.thickness" | "ui_outline_thickness" =>
               parseUiOutlineThicknessPx(value.trim).map(config.withUiOutlineThicknessPx).getOrElse(config)
-            case "command_runner.visible_rows" | "command.runner.visible.rows" | "command_runner_visible_rows" =>
-              parseCommandRunnerVisibleRows(value.trim).map(config.withCommandRunnerVisibleRows).getOrElse(config)
-            case "render.fps" | "render_fps" | "ui.render.fps" | "ui_render_fps" =>
-              RenderFpsTarget.fromConfigKey(value.trim).map(config.withRenderFpsTarget).getOrElse(config)
-            case "display.word_wrap" | "display.word.wrap" | "display_word_wrap" =>
-              parseBoolean(value.trim).map(config.withWordWrap).getOrElse(config)
-            case "display.focused_text_body" | "display.focused.text.body" | "display_focused_text_body" =>
-              parseBoolean(value.trim).map(config.withFocusedTextBody).getOrElse(config)
-            case "display.contextual_toolbar" | "display.contextual.toolbar" | "display_contextual_toolbar" =>
-              parseBoolean(value.trim).map(config.withContextualToolbarEnabled).getOrElse(config)
-            case "display.contextual_toolbar_mode" | "display.contextual.toolbar.mode" |
-                "display_contextual_toolbar_mode" =>
-              ToolbarDisplayMode
-                .fromConfigKey(value.trim)
-                .map(config.withContextualToolbarDisplayMode)
-                .getOrElse(config)
+            case key if SurfaceConfig.Schema.handles(key) =>
+              SurfaceConfig.Schema.parse(config, key, value).getOrElse(config)
             case key if InterfaceConfig.Schema.handles(key) =>
               InterfaceConfig.Schema.parse(config, key, value).getOrElse(config)
             case "ui.material" | "ui_material" | "material.preset" | "material_preset" =>
@@ -543,13 +529,10 @@ object ConfigManager:
           LanguageToolsConfig.Schema.invalidValue(key, value)
         case "font.code.ligatures" | "font_code_ligatures" | "font.text.ligatures" | "font.prose.ligatures" |
             "font_text_ligatures" | "font_prose_ligatures" | "font.ui.ligatures" | "font_ui_ligatures" |
-            "font.ligatures" | "font_ligatures" | "display.word_wrap" | "display.word.wrap" | "display_word_wrap" |
-            "display.focused_text_body" | "display.focused.text.body" | "display_focused_text_body" |
-            "display.contextual_toolbar" | "display.contextual.toolbar" | "display_contextual_toolbar" =>
+            "font.ligatures" | "font_ligatures" =>
           parseBoolean(value).isEmpty
-        case "display.contextual_toolbar_mode" | "display.contextual.toolbar.mode" |
-            "display_contextual_toolbar_mode" =>
-          ToolbarDisplayMode.fromConfigKey(value).isEmpty
+        case key if SurfaceConfig.Schema.handles(key) =>
+          SurfaceConfig.Schema.invalidValue(key, value)
         case "font.code.size" | "font_code_size" | "font.text.size" | "font.prose.size" | "font_text_size" |
             "font_prose_size" | "font.size" | "font_size" | "font.ui.size" | "font_ui_size" =>
           value.trim.toFloatOption.isEmpty
@@ -589,10 +572,6 @@ object ConfigManager:
           WindowConfig.Schema.invalidValue(key, value)
         case key if InterfaceConfig.Schema.handles(key) =>
           InterfaceConfig.Schema.invalidValue(key, value)
-        case "command_runner.visible_rows" | "command.runner.visible.rows" | "command_runner_visible_rows" =>
-          parseCommandRunnerVisibleRows(value).isEmpty
-        case "render.fps" | "render_fps" | "ui.render.fps" | "ui_render_fps" =>
-          RenderFpsTarget.fromConfigKey(value).isEmpty
         case "text_area.left.percent" | "text.area.left.percent" | "text_area_left_percent" |
             "text_area.right.percent" | "text.area.right.percent" | "text_area_right_percent" |
             "text_area.top.percent" | "text.area.top.percent" | "text_area_top_percent" | "text_area.bottom.percent" |
@@ -687,17 +666,6 @@ object ConfigManager:
     value.toIntOption.filter(thickness =>
       thickness >= AppConfig.MinUiOutlineThicknessPx && thickness <= AppConfig.MaxUiOutlineThicknessPx
     )
-
-  private def parseCommandRunnerVisibleRows(value: String): Option[Option[Int]] =
-    value.toLowerCase match
-      case "auto" | "default" | "" => Some(None)
-      case other =>
-        other.toIntOption
-          .filter(rows =>
-            rows >= AppConfig.MinCommandRunnerVisibleRows &&
-              rows <= AppConfig.MaxCommandRunnerVisibleRows
-          )
-          .map(rows => Some(rows))
 
   private def parseViewportPercent(value: String): Option[Double] =
     value.toDoubleOption
