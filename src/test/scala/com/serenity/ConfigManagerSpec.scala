@@ -340,6 +340,25 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     config.cursorColors.inactive shouldBe None
   }
 
+  it should "report invalid cursor config values through the cursor schema" in {
+    val configFile = Files.createTempFile("serenity-cursor-invalid-config", ".conf")
+    Files.writeString(
+      configFile,
+      """cursor.mode = unknown
+        |cursor.active.color = not-a-colour
+        |cursor.info_bar = sideways
+        |cursor.info_bar.placement = upside-down
+        |""".stripMargin
+    )
+
+    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+
+    result.report.invalidEntries.map(_.key) should contain("cursor.mode")
+    result.report.invalidEntries.map(_.key) should contain("cursor.active.color")
+    result.report.invalidEntries.map(_.key) should contain("cursor.info_bar")
+    result.report.invalidEntries.map(_.key) should contain("cursor.info_bar.placement")
+  }
+
   it should "load and write preferred window size" in {
     val configFile = Files.createTempFile("serenity-window-size-config", ".conf")
     Files.writeString(

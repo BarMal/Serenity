@@ -496,6 +496,49 @@ object CursorConfig:
     val infoBarPlacementKeys: Set[String] =
       Set("cursor.info_bar.placement", "cursor.info.bar.placement", "cursor_info_bar_placement")
 
+    private val handledKeys: Set[String] =
+      modeKeys ++ activeColorKeys ++ inactiveColorKeys ++ infoBarModeKeys ++ infoBarPlacementKeys
+
+    def handles(key: String): Boolean =
+      handledKeys.contains(key)
+
+    def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
+      val trimmed = value.trim
+      if modeKeys.contains(key) then CursorMode.fromConfigKey(trimmed).map(config.withCursorMode)
+      else if activeColorKeys.contains(key) then
+        if trimmed.isEmpty then Some(config)
+        else
+          parseColor(trimmed)
+            .map(color => config.withCursorColors(config.cursorColors.copy(active = Some(color))))
+      else if inactiveColorKeys.contains(key) then
+        if trimmed.isEmpty then Some(config)
+        else
+          parseColor(trimmed)
+            .map(color => config.withCursorColors(config.cursorColors.copy(inactive = Some(color))))
+      else if infoBarModeKeys.contains(key) then
+        CursorInfoBarMode.fromConfigKey(trimmed).map(config.withCursorInfoBarMode)
+      else if infoBarPlacementKeys.contains(key) then
+        CursorInfoBarPlacement.fromConfigKey(trimmed).map(config.withCursorInfoBarPlacement)
+      else None
+
+    def invalidValue(key: String, value: String): Boolean =
+      parse(AppConfig.default, key, value).isEmpty
+
+    private def parseColor(value: String): Option[Color] =
+      val hex = value.stripPrefix("#")
+      Option
+        .when(hex.length == 6 || hex.length == 8)(hex)
+        .filter(_.forall(ch => Character.digit(ch, 16) >= 0))
+        .flatMap { normalized =>
+          scala.util.Try {
+            val red   = Integer.parseInt(normalized.substring(0, 2), 16)
+            val green = Integer.parseInt(normalized.substring(2, 4), 16)
+            val blue  = Integer.parseInt(normalized.substring(4, 6), 16)
+            val alpha = if normalized.length == 8 then Integer.parseInt(normalized.substring(6, 8), 16) else 255
+            Color(red, green, blue, alpha)
+          }.toOption
+        }
+
 case class EditorConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
     fontConfig: FontConfig = FontConfig(),

@@ -55,3 +55,51 @@ class CursorConfigSpec extends AnyFlatSpec with Matchers:
     CursorInfoBarPlacement.fromConfigKey("bottom").shouldBe(Some(CursorInfoBarPlacement.PinnedBottom))
     CursorMode.fromConfigKey("unknown").shouldBe(None)
   }
+
+  it should "parse cursor config entries centrally" in {
+    val active   = new Color(0x33, 0x66, 0xcc)
+    val inactive = new Color(0xcc, 0x66, 0x33, 0x80)
+    val modeConfig =
+      CursorConfig.Schema
+        .parse(AppConfig.default, "cursor_mode", "breathing")
+        .getOrElse(fail("cursor mode parse"))
+    val activeColorConfig =
+      CursorConfig.Schema
+        .parse(AppConfig.default, "cursor.active.color", "#3366CC")
+        .getOrElse(fail("active cursor colour parse"))
+    val inactiveColorConfig =
+      CursorConfig.Schema
+        .parse(AppConfig.default, "cursor_inactive_color", "#CC663380")
+        .getOrElse(fail("inactive cursor colour parse"))
+    val infoBarModeConfig =
+      CursorConfig.Schema
+        .parse(AppConfig.default, "cursor.info.bar", "minimal")
+        .getOrElse(fail("cursor info-bar mode parse"))
+    val placementConfig =
+      CursorConfig.Schema
+        .parse(AppConfig.default, "cursor_info_bar_placement", "bottom")
+        .getOrElse(fail("cursor info-bar placement parse"))
+
+    modeConfig.cursorConfig.mode.shouldBe(CursorMode.Breathe)
+    activeColorConfig.cursorConfig.colors.active.shouldBe(Some(active))
+    inactiveColorConfig.cursorConfig.colors.inactive.shouldBe(Some(inactive))
+    infoBarModeConfig.cursorConfig.infoBarMode.shouldBe(CursorInfoBarMode.Position)
+    placementConfig.cursorConfig.infoBarPlacement.shouldBe(CursorInfoBarPlacement.PinnedBottom)
+    CursorConfig.Schema
+      .parse(AppConfig.default, "cursor.active.color", "")
+      .map(_.cursorConfig.colors.active)
+      .shouldBe(Some(None))
+    CursorConfig.Schema.parse(AppConfig.default, "cursor.mode", "unknown").shouldBe(None)
+  }
+
+  it should "validate cursor config entries centrally" in {
+    CursorConfig.Schema.invalidValue("cursor.mode", "breathing").shouldBe(false)
+    CursorConfig.Schema.invalidValue("cursor.mode", "unknown").shouldBe(true)
+    CursorConfig.Schema.invalidValue("cursor.active.color", "#3366CC").shouldBe(false)
+    CursorConfig.Schema.invalidValue("cursor.active.color", "").shouldBe(false)
+    CursorConfig.Schema.invalidValue("cursor.active.color", "not-a-colour").shouldBe(true)
+    CursorConfig.Schema.invalidValue("cursor.info_bar", "minimal").shouldBe(false)
+    CursorConfig.Schema.invalidValue("cursor.info_bar", "sideways").shouldBe(true)
+    CursorConfig.Schema.invalidValue("cursor.info_bar.placement", "bottom").shouldBe(false)
+    CursorConfig.Schema.invalidValue("cursor.info_bar.placement", "sideways").shouldBe(true)
+  }
