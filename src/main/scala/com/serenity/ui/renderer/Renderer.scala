@@ -222,7 +222,7 @@ object Renderer:
         val context =
           RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
         val editorRenderPlan = prepareEditorPaneRenderPlan(state, context)
-        renderSpacerColumns(state, context)
+        renderSpacerColumns(state, context, editorRenderPlan.layoutContract)
         renderLineNumbers(state, context, editorRenderPlan)
         renderGutter(state, context, editorRenderPlan.layoutContract)
         renderPinnedPanels(state, context)
@@ -231,21 +231,21 @@ object Renderer:
 
     surface.flush()
 
-  private def renderSpacerColumns(state: AppState, context: RenderContext): Unit =
+  private def renderSpacerColumns(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     val surface = context.surface
     surface.setBackgroundColor(state.theme.margin)
-    List(context.layout.leftSpacerRect, context.layout.rightSpacerRect)
+    List(contract.leftSpacerRect, contract.rightSpacerRect)
       .filter(rect => rect.width > 0 && rect.height > 0)
       .foreach(rect => surface.fillRect(rect.x, rect.y, rect.width, rect.height, ' '))
 
   private def prepareEditorPaneRenderPlan(state: AppState, context: RenderContext): EditorPaneRenderPlan =
-    val workspaceLayout = LayoutEngine.calculateEditorWorkspaceLayout(state, context.layout)
     val layoutContract =
       EditorLayoutContract.from(
         state,
         ViewportSize(context.surface.viewportWidth, context.surface.viewportHeight),
         context.layout
       )
+    val workspaceLayout = layoutContract.workspace
     val snapshots =
       state.layout.editorPanes.flatMap {
         case (paneId, pane) =>
