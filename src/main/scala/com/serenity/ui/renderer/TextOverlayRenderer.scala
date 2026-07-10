@@ -75,16 +75,10 @@ object TextOverlayRenderer:
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
-    val frameLayout = SurfaceFrameLayout(overlay.rect, overlay.borderCells)
-    val contentRect = frameLayout.contentRect
+    val contentRect = overlay.resolvedContentRect
     val maxLineSize = contentRect.width
 
-    frameLayout
-      .contentRowSlots(
-        itemCount = overlay.rows.length,
-        hasHeader = overlay.header.nonEmpty,
-        hasFooter = overlay.footer.nonEmpty
-      )
+    overlay.contentRowSlots
       .foreach { slot =>
         val row = slot.kind match
           case SurfaceContentRowKind.Header      => overlay.header
@@ -670,7 +664,7 @@ object TextOverlayRenderer:
     config: AppConfig
   ): Unit =
     SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
-      val contentRect = SurfaceFrameLayout(overlay.rect, overlay.borderCells).contentRect
+      val contentRect = overlay.resolvedContentRect
       val sheenWidth  = contentRect.width
       val sheenHeight = math.min(2, contentRect.height)
       if sheenWidth > 0 && sheenHeight > 0 then

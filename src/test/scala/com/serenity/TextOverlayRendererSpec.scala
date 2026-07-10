@@ -239,6 +239,23 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
       secondRow.indexOf("SansSerif") + "SansSerif".length
   }
 
+  it should "render content from an explicit overlay content rect when one is provided" in {
+    val surface = new MockRenderSurface(20, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 10, 6),
+      contentRect = Some(LayoutRect(3, 2, 4, 2)),
+      rows = List(OverlayRow(plainText = "ABCD"))
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.getRow(2).slice(3, 7) shouldBe "ABCD"
+    surface.getRow(1) should not include "ABCD"
+    surface.getRow(2).slice(1, 3) shouldBe "  "
+  }
+
   it should "right-align selected command option values in the value column" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
