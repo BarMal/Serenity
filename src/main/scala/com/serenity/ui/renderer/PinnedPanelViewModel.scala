@@ -23,25 +23,12 @@ case class TextPanelView(
     contentRect.getOrElse(SurfaceFrameLayout(rect).contentRect)
 
   def contentRowSlots: List[SurfaceContentRowSlot] =
-    val content = resolvedContentRect
-    if content.height <= 0 then Nil
-    else
-      val headerRows = if header.nonEmpty then 1 else 0
-      val footerRows = if footer.nonEmpty then 1 else 0
-      val itemRows   = math.max(0, content.height - headerRows - footerRows)
-      val itemSlots =
-        (0 until math.min(rows.length, itemRows)).toList.map { index =>
-          SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), content.y + headerRows + index)
-        }
-      val headerSlots =
-        if header.nonEmpty then List(SurfaceContentRowSlot(SurfaceContentRowKind.Header, content.y))
-        else Nil
-      val footerSlots =
-        if footer.nonEmpty && content.height > headerRows then
-          List(SurfaceContentRowSlot(SurfaceContentRowKind.Footer, content.bottom - 1))
-        else Nil
-
-      headerSlots ++ itemSlots ++ footerSlots
+    SurfaceFrameLayout.contentRowSlotsFor(
+      resolvedContentRect,
+      rows.length,
+      header.nonEmpty,
+      footer.nonEmpty
+    )
 
 object PinnedPanelViewModel:
 
