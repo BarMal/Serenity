@@ -264,4 +264,23 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     compact.title shouldBe "diagnostics"
     compact.rows.map(_.plainText) shouldBe List("3 issues", "1 error")
   }
+
+  it should "mark the active diagnostic in tall and square panel geometry" in {
+    val activePanel = diagnosticsPanel.copy(
+      content = SurfaceContent.Diagnostics(
+        List(
+          Diagnostic("Unused import", DiagnosticSeverity.Warning, Location(2, 1)),
+          Diagnostic("Type mismatch", DiagnosticSeverity.Error, Location(8, 4)),
+          Diagnostic("Can inline", DiagnosticSeverity.Info, Location(12, 2))
+        ),
+        Some(Location(8, 4))
+      )
+    )
+
+    val tall   = PinnedPanelViewModel.resolve(activePanel, LayoutRect(0, 0, 18, 40))
+    val square = PinnedPanelViewModel.resolve(activePanel, LayoutRect(0, 0, 24, 20))
+
+    tall.rows.map(_.selected) shouldBe List(false, true, false)
+    square.rows.map(_.selected) shouldBe List(false, false, true, false)
+  }
 end PinnedPanelViewModelSpec

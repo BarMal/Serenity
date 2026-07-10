@@ -100,8 +100,8 @@ object SurfaceContentResolver:
         resolveTerminal(rect, mode, buffer, cursor)
       case SurfaceContent.Outline(symbols, activeLocation) =>
         resolveOutline(rect, mode, symbols, activeLocation)
-      case SurfaceContent.Diagnostics(issues) =>
-        resolveDiagnostics(rect, mode, issues)
+      case SurfaceContent.Diagnostics(issues, activeLocation) =>
+        resolveDiagnostics(rect, mode, issues, activeLocation)
       case SurfaceContent.ThemePicker(state) =>
         resolveThemePicker(state, rect, mode)
       case SurfaceContent.ThemeCreator(state) =>
@@ -746,7 +746,8 @@ object SurfaceContentResolver:
   private def resolveDiagnostics(
     rect: LayoutRect,
     mode: SurfaceRenderMode,
-    issues: List[com.serenity.ui.layout.Diagnostic]
+    issues: List[com.serenity.ui.layout.Diagnostic],
+    activeLocation: Option[Location]
   ): ResolvedSurfaceContent =
     val errorCount   = issues.count(_.severity == com.serenity.ui.layout.DiagnosticSeverity.Error)
     val warningCount = issues.count(_.severity == com.serenity.ui.layout.DiagnosticSeverity.Warning)
@@ -756,15 +757,23 @@ object SurfaceContentResolver:
     )
     val shaped = SurfaceLayoutKind.classify(rect) match
       case SurfaceLayoutKind.Horizontal =>
-        List(s"$errorCount error | $warningCount warning | $infoCount info")
+        List(OverlayRow(s"$errorCount error | $warningCount warning | $infoCount info"))
       case SurfaceLayoutKind.Vertical =>
-        issues.take(math.max(1, rect.height - 2)).map(issue => s"${issue.severity}: ${issue.message}")
+        issues.take(math.max(1, rect.height - 2)).map { issue =>
+          OverlayRow(
+            s"${issue.severity}: ${issue.message}",
+            selected = activeLocation.contains(issue.location)
+          )
+        }
       case SurfaceLayoutKind.Square =>
-        s"$errorCount error, $warningCount warning" :: issues.take(math.max(0, rect.height - 3)).map(_.message)
+        OverlayRow(s"$errorCount error, $warningCount warning") ::
+          issues.take(math.max(0, rect.height - 3)).map { issue =>
+            OverlayRow(issue.message, selected = activeLocation.contains(issue.location))
+          }
       case SurfaceLayoutKind.Compact =>
-        List(s"${issues.length} issues", s"$errorCount error")
+        List(OverlayRow(s"${issues.length} issues"), OverlayRow(s"$errorCount error"))
 
-    ResolvedSurfaceContent(titleFor(mode, "diagnostics"), rows = shaped.map(OverlayRow(_)))
+    ResolvedSurfaceContent(titleFor(mode, "diagnostics"), rows = shaped)
 
   private def resolveThemePicker(
     state: ThemePickerState,

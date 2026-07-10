@@ -356,7 +356,7 @@ object UiPreset:
           Some(PanelContentSnapshot.Terminal(buffer, cursor))
         case SurfaceContent.Outline(symbols, _) =>
           Some(PanelContentSnapshot.Outline(symbols))
-        case SurfaceContent.Diagnostics(issues) =>
+        case SurfaceContent.Diagnostics(issues, _) =>
           Some(PanelContentSnapshot.Diagnostics(issues))
         case SurfaceContent.MarkdownPreview(bufferId, title) =>
           Some(PanelContentSnapshot.MarkdownPreview(bufferId.value, title))

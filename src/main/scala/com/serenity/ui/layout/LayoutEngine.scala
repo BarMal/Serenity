@@ -747,7 +747,7 @@ object LayoutEngine:
             SurfaceFrameLayout.frameHeightForItemRows(itemRows = 2, hasHeader = true, hasFooter = false)
           case Modal.Custom(_, _) => 4
           case _                  => 3
-      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Diagnostics(_) |
+      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Diagnostics(_, _) |
           SurfaceContent.MarkdownPreview(_, _) =>
         math.min(8, math.max(4, maxHeight - 1))
       case SurfaceContent.GhostOverlay(_, cachedRect) =>

@@ -1018,7 +1018,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       case UiSurface(_, SurfaceContent.Outline(_, _), SurfacePresentation.Pinned(position, _), _) => position
     } shouldBe List(PanelPosition.Left)
     updatedState.pinnedSurfaces.collect {
-      case UiSurface(_, SurfaceContent.Diagnostics(_), SurfacePresentation.Pinned(position, _), _) => position
+      case UiSurface(_, SurfaceContent.Diagnostics(_, _), SurfacePresentation.Pinned(position, _), _) => position
     } shouldBe List(PanelPosition.Bottom)
   }
 

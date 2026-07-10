@@ -205,6 +205,32 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     updated.buffers(bufferId).cursors shouldBe List(CursorPosition(2, 3))
   }
 
+  it should "highlight a diagnostics row on hover without stealing focus" in {
+    val sm = makeStateManager()
+    withActiveBuffer(sm, "first\nsecond\nthird")
+    val issues = List(
+      Diagnostic("unused import", DiagnosticSeverity.Warning, Location(0, 1)),
+      Diagnostic("type mismatch", DiagnosticSeverity.Error, Location(2, 3))
+    )
+    val surface = UiSurface(
+      id = SurfaceId("diagnostics"),
+      content = SurfaceContent.Diagnostics(issues),
+      presentation = SurfacePresentation.Pinned(PanelPosition.Left, 28)
+    )
+    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+
+    val before = sm.getCurrentState.unsafeRunSync()
+    val rect   = panelContentRect(before, surface.id)
+    sm.applyEvent(MouseMove(rect.x + 1, rect.y + 2)).unsafeRunSync()
+
+    val updated = sm.getCurrentState.unsafeRunSync()
+    updated.focus shouldBe before.focus
+    updated.surfaceById(surface.id).map(_.content) shouldBe Some(
+      SurfaceContent.Diagnostics(issues, Some(Location(2, 3)))
+    )
+  }
+
   it should "navigate to rendered diagnostics rows when frame and content layout kinds disagree" in {
     val sm       = makeStateManager()
     val bufferId = withActiveBuffer(sm, "first\nsecond\nthird")

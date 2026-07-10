@@ -107,9 +107,9 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val pinned = state.pinnedSurfaces
     pinned should have size 2
     pinned.map(_.content).map {
-      case SurfaceContent.Outline(_, _)  => "outline"
-      case SurfaceContent.Diagnostics(_) => "diagnostics"
-      case other                         => fail(s"Unexpected pinned content: $other")
+      case SurfaceContent.Outline(_, _)     => "outline"
+      case SurfaceContent.Diagnostics(_, _) => "diagnostics"
+      case other                            => fail(s"Unexpected pinned content: $other")
     } shouldBe List("outline", "diagnostics")
 
   it should "start an element transition animation when pinning a panel" in new UIFixture:
