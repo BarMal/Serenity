@@ -507,8 +507,7 @@ object LayoutEngine:
     val preferredWidth  = calculateFloatingSurfaceWidth(contentRect.width)
     val preferredHeight = calculateFloatingSurfaceHeight(surface.content, contentRect.width, contentRect.height, state)
     val finalHeight     = forcedHeight.getOrElse(preferredHeight)
-    val densityGapRows  = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows
-    val gapRows         = floatingCursorGapRows(surface, densityGapRows)
+    val gapRows         = floatingCursorGapRows(state)
 
     for
       anchor <- floatingAnchor(surface, state)
@@ -627,9 +626,8 @@ object LayoutEngine:
           (mainRectOpt, submenuBaseRectOpt, anchorFrameOpt) match
             case (Some(mainRect), Some(submenuRect), Some(anchorFrame)) =>
               val collapsedHeight = 3
-              val densityGapRows  = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows
-              val gapRows         = floatingCursorGapRows(main, densityGapRows)
-              val stackGapRows    = densityGapRows
+              val gapRows         = floatingCursorGapRows(state)
+              val stackGapRows    = floatingStackGapRows(state)
               val availableBottom = anchorFrame.contentRect.bottom
               val totalHeight     = mainRect.height + stackGapRows + submenuRect.height
               val preferredBelowY = anchorFrame.screenPosition.y + 1 + gapRows
@@ -669,10 +667,14 @@ object LayoutEngine:
   private def calculateFloatingSurfaceWidth(maxWidth: Int): Int =
     maxWidth
 
-  private def floatingCursorGapRows(surface: UiSurface, densityGapRows: Int): Int =
-    surface.content match
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) => 0
-      case _                                                                                => densityGapRows
+  private def floatingCursorGapRows(state: AppState): Int =
+    floatingStackGapRows(state)
+
+  private def floatingStackGapRows(state: AppState): Int =
+    math.max(
+      InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows,
+      math.max(0, state.config.uiElementGap)
+    )
 
   private def calculateFloatingSurfaceHeight(
     content: SurfaceContent,
@@ -785,9 +787,8 @@ object LayoutEngine:
       case Some(_) if baseRects.isEmpty =>
         BelowOverlayLayout(Nil, Set.empty)
       case Some(anchorFrame) =>
-        val densityGapRows  = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows
-        val gapRows         = floatingCursorGapRows(surfaces.head, densityGapRows)
-        val stackGapRows    = densityGapRows
+        val gapRows         = floatingCursorGapRows(state)
+        val stackGapRows    = floatingStackGapRows(state)
         val availableBottom = anchorFrame.contentRect.bottom
         val totalHeight     = baseRects.map(_._2.height).sum + (stackGapRows * (baseRects.length - 1).max(0))
         val preferredBelowY = anchorFrame.screenPosition.y + 1 + gapRows
