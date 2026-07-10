@@ -158,6 +158,30 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     updated.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 2))
   }
 
+  it should "highlight an outline row on hover without stealing focus" in {
+    val sm = makeStateManager()
+    withActiveBuffer(sm, "intro\nmiddle\nend")
+    val symbols = List(
+      Symbol("Intro", SymbolKind.Heading, Location(0, 0)),
+      Symbol("Middle", SymbolKind.Heading, Location(1, 2))
+    )
+    val surface = UiSurface(
+      id = SurfaceId("outline"),
+      content = SurfaceContent.Outline(symbols, Some(Location(0, 0))),
+      presentation = SurfacePresentation.Pinned(PanelPosition.Right, 28)
+    )
+    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+
+    val before = sm.getCurrentState.unsafeRunSync()
+    val rect   = panelContentRect(before, surface.id)
+    sm.applyEvent(MouseMove(rect.x + 1, rect.y + 1)).unsafeRunSync()
+
+    val updated = sm.getCurrentState.unsafeRunSync()
+    updated.focus shouldBe before.focus
+    updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.Outline(symbols, Some(Location(1, 2))))
+  }
+
   it should "navigate to a diagnostics row on primary click" in {
     val sm       = makeStateManager()
     val bufferId = withActiveBuffer(sm, "first\nsecond\nthird")

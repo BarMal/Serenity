@@ -99,11 +99,12 @@ object PinnedPanelViewModel:
     fallback: Option[Location],
     state: Option[AppState]
   ): Option[Location] =
-    state
-      .flatMap(_.activeCursorPosition)
-      .flatMap(cursor => DocumentNavigation.currentSymbol(symbols, cursor))
-      .map(_.location)
-      .orElse(fallback)
+    fallback.orElse {
+      state
+        .flatMap(_.activeCursorPosition)
+        .flatMap(cursor => DocumentNavigation.currentSymbol(symbols, cursor))
+        .map(_.location)
+    }
 
   private def pinnedRect(surface: UiSurface, position: PanelPosition, layout: CalculatedLayout): Option[LayoutRect] =
     layout.pinnedSurfaceRects.get(surface.id).orElse(layout.pinnedPanelRects.get(position))
