@@ -1431,7 +1431,7 @@ object Renderer:
     context: RenderContext,
     animationState: com.serenity.animation.AnimationState
   ): Unit =
-    val shell = TextPanelView(rect, s"Preview: $title", Nil)
+    val shell = TextPanelView(rect = rect, title = s"Preview: $title", rows = Nil)
     PinnedPanelRenderer.render(context.surface, shell, state.theme, state.config, animationState)
 
     val contentRect        = markdownPreviewImageRect(rect, context)

@@ -153,6 +153,14 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     view.footer.map(_.plainText) shouldBe Some("1 match, 1/1 at 3:5")
   }
 
+  it should "capture the resolved content rectangle from the pinned surface content" in {
+    val rect = LayoutRect(0, 0, 24, 8)
+
+    val view = PinnedPanelViewModel.resolve(panel, rect)
+
+    view.contentRect.shouldBe(Some(SurfaceFrameLayout.forContent(rect, panel.content).contentRect))
+  }
+
   it should "shape outline content differently for tall and wide geometry" in {
     val tall = PinnedPanelViewModel.resolve(outlinePanel, LayoutRect(0, 0, 18, 40))
     val wide = PinnedPanelViewModel.resolve(outlinePanel, LayoutRect(0, 0, 60, 10))

@@ -110,6 +110,22 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getRow(contentRect.y + 2).slice(contentRect.x, contentRect.x + 4) shouldBe "    "
   }
 
+  it should "respect an explicit content rectangle for title and row placement" in {
+    val surface = new MockRenderSurface(20, 10)
+    val panel = TextPanelView(
+      rect = LayoutRect(1, 1, 8, 5),
+      contentRect = Some(LayoutRect(4, 3, 3, 1)),
+      title = "title",
+      rows = List(TextPanelRow("abcdef"))
+    )
+
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default)
+
+    surface.getRow(panel.rect.y).slice(4, 7) shouldBe "tit"
+    surface.getRow(3).slice(4, 7) shouldBe "abc"
+    surface.getRow(2).slice(4, 7) shouldBe "   "
+  }
+
   it should "apply active animation foreground colors to panel text" in {
     val surface            = new MockRenderSurface(40, 12)
     val animatedForeground = new Color(10, 20, 30, 96)
