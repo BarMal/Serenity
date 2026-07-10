@@ -246,14 +246,16 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "draw right pinned split preview images flush to the viewport edge" in {
-    val surface = new MockRenderSurface(120, 32)
-    val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val state    = markdownPreviewPanelState("# Edge", CursorPosition(0, 0))
+    val surface  = new MockRenderSurface(120, 32)
+    val font     = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val viewport = ViewportSize(120, 32)
 
     Renderer.render(
-      markdownPreviewPanelState("# Edge", CursorPosition(0, 0)),
+      state,
       cursorVisible = true,
       surface,
-      ViewportSize(120, 32),
+      viewport,
       codeFont = font,
       textFont = font,
       cellMetrics = CellMetrics.fromFont(font),
@@ -261,7 +263,14 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     )
 
     surface.drawImageCalls should have size 1
-    val drawn = surface.drawImageCalls.head
+    val drawn    = surface.drawImageCalls.head
+    val contract = EditorLayoutContract.from(state, viewport, LayoutEngine.calculateLayout(state, viewport))
+    val contentRect = contract.pinnedSurfaceContentRects(
+      SurfaceId("markdown-preview")
+    )
+    drawn.x shouldBe contentRect.x
+    drawn.y shouldBe contentRect.y
+    drawn.height shouldBe contentRect.height
     drawn.x + drawn.width shouldBe surface.width
   }
 

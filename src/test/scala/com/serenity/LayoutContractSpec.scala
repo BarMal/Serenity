@@ -425,6 +425,35 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     assertInside(contract.contentAreaRect, contract.pinnedSurfaceContentRects(pinnedPanel.id), "pinned panel content")
   }
 
+  it should "expose frame, title, and content rectangles for expanded surfaces" in {
+    val expandedPanel = UiSurface(
+      SurfaceId("expanded-panel"),
+      SurfaceContent.Diagnostics(Nil),
+      SurfacePresentation.Expanded(PanelPosition.Right, 24)
+    )
+    val state = AppState.initial.copy(
+      uiSurfaces = List(expandedPanel)
+    )
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
+    val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+    val expandedView = PinnedPanelViewModel
+      .fromState(state, calculatedLayout)
+      .find(_.surfaceId.contains(expandedPanel.id))
+      .getOrElse(fail("expected expanded panel view"))
+
+    contract.expandedSurfaceRects(expandedPanel.id) shouldBe
+      calculatedLayout.expandedPanelRect.getOrElse(fail("expected expanded panel rect"))
+    contract.expandedSurfaceTitleRects(expandedPanel.id) shouldBe expandedView.titleRect
+    contract.expandedSurfaceContentRects(expandedPanel.id) shouldBe expandedView.resolvedContentRect
+
+    val expandedFrame = contract.expandedSurfaceRects(expandedPanel.id)
+    assertInside(contract.contentAreaRect, expandedFrame, "expanded panel frame")
+    assertInside(expandedFrame, contract.expandedSurfaceTitleRects(expandedPanel.id), "expanded panel title")
+    assertInside(expandedFrame, contract.expandedSurfaceContentRects(expandedPanel.id), "expanded panel content")
+    contract.violations shouldBe Nil
+  }
+
   it should "expose pinned and floating row slots from the shared frame contract" in {
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
