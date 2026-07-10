@@ -285,6 +285,15 @@ object EditorLayoutContract:
       .find(_._1 == surfaceId)
       .map(_._2)
       .orElse(calculatedLayout.belowCursorOverlayStack.find(_._1 == surfaceId).map(_._2))
+      .orElse {
+        Option
+          .when(
+            calculatedLayout.aboveCursorOverlayStack.isEmpty && calculatedLayout.belowCursorOverlayStack.isEmpty
+          )(
+            calculatedLayout.aboveCursorOverlayRect.orElse(calculatedLayout.belowCursorOverlayRect)
+          )
+          .flatten
+      }
 
   /** Build the reusable editor layout contract from an already calculated layout. */
   def from(
