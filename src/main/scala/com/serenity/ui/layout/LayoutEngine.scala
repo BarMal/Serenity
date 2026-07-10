@@ -708,9 +708,11 @@ object LayoutEngine:
           borderCells = borderCells
         )
       case SurfaceContent.ContextMenu(menu) =>
-        math.min(
-          densityMetrics.commandSurfaceMaxHeight,
-          math.max(4, menu.items.length + densityMetrics.commandSurfaceVerticalPadding)
+        SurfaceFrameLayout.frameHeightForItemRows(
+          itemRows = menu.items.length,
+          hasHeader = true,
+          hasFooter = menu.items.nonEmpty,
+          borderCells = SurfaceFrameLayout.borderCellsFor(content)
         )
       case SurfaceContent.CommentLens(lens) =>
         math.max(4, math.min(8, lens.draft.split("\n", -1).length + 3))

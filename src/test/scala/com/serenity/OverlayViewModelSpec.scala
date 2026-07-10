@@ -129,6 +129,54 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlay.rect shouldBe layout.belowCursorOverlayRect.get
   }
 
+  it should "allocate enough framed rows for a one-item context menu at compact density" in {
+    val save = Command.typed("save", "Save file", CommandIntent.SaveCurrentFile, label = "Save")
+    val menu = ContextMenu(
+      title = "editor",
+      targetFocus = Focus.EditorPane(paneId),
+      items = List(ContextMenuItem(save.name, save.label, save)),
+      selectedIndex = 0
+    )
+    val buffer = Buffer
+      .fromString(bufferId, "one\ntwo\nthree")
+      .copy(
+        cursors = List(CursorPosition(1, 2))
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      config = AppConfig.default.withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact),
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> pane),
+        activeEditorPaneId = Some(paneId)
+      ),
+      focus = Focus.Surface(SurfaceId("context-menu")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("context-menu"),
+          SurfaceContent.ContextMenu(menu),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
+
+    val overlays = OverlayViewModel.fromState(state, layout)
+    val overlay  = overlays.belowCursor.getOrElse(fail("Expected context menu overlay"))
+
+    overlay.rect.height shouldBe SurfaceFrameLayout.frameHeightForItemRows(
+      itemRows = 1,
+      hasHeader = true,
+      hasFooter = true
+    )
+    overlay.contentRowSlots.map(_.kind) shouldBe List(
+      SurfaceContentRowKind.Header,
+      SurfaceContentRowKind.Item(0),
+      SurfaceContentRowKind.Footer
+    )
+  }
+
   it should "derive an interactive command palette view with cursor and selected row metadata" in {
     val commands = List(
       Command.typed("open", "Open file", CommandIntent.OpenFile),
