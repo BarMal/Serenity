@@ -14,7 +14,8 @@ case class TextOverlayView(
     title: Option[String] = None,
     header: Option[OverlayRow] = None,
     rows: List[OverlayRow] = Nil,
-    footer: Option[OverlayRow] = None
+    footer: Option[OverlayRow] = None,
+    surfaceId: Option[SurfaceId] = None
 ):
 
   def resolvedContentRect: LayoutRect =
@@ -71,7 +72,8 @@ object OverlayViewModel:
             title = content.title,
             header = content.header,
             rows = content.rows,
-            footer = content.footer
+            footer = content.footer,
+            surfaceId = Some(surface.id)
           )
         }
       case content =>
@@ -86,7 +88,8 @@ object OverlayViewModel:
               title = resolved.title,
               header = resolved.header,
               rows = resolved.rows,
-              footer = resolved.footer
+              footer = resolved.footer,
+              surfaceId = Some(surface.id)
             )
           }
         }

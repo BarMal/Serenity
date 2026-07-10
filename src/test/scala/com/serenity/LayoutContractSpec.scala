@@ -5,6 +5,7 @@ import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.renderer.{OverlayViewModel, PinnedPanelViewModel}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -415,6 +416,72 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     assertInside(activeContent, overlayContents(quickInfo.id), "quick info overlay content")
     assertInside(activeContent, overlayContents(commandRunner.id), "command runner overlay content")
     assertInside(contract.contentAreaRect, contract.pinnedSurfaceContentRects(pinnedPanel.id), "pinned panel content")
+  }
+
+  it should "expose pinned and floating row slots from the shared frame contract" in {
+    val cursor = CursorPosition(1, 2)
+    val buffer = Buffer
+      .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
+      .copy(cursors = List(cursor))
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    val pinnedPanel = UiSurface(
+      SurfaceId("find-panel"),
+      SurfaceContent.ModalWorkflow(Modal.Find("needle", List(FindResult(2, 4)), 0)),
+      SurfacePresentation.Pinned(PanelPosition.Left, 18)
+    )
+    val quickInfo = UiSurface(
+      SurfaceId("quick-info"),
+      SurfaceContent.QuickInfo("List.map(f)"),
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
+    )
+    val commandRunner = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.Surface(commandRunner.id),
+      uiSurfaces = List(pinnedPanel, quickInfo, commandRunner)
+    )
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
+    val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+    val pinnedView = PinnedPanelViewModel
+      .fromState(state, calculatedLayout)
+      .find(_.surfaceId.contains(pinnedPanel.id))
+      .getOrElse(fail("expected pinned panel view"))
+    val overlayViews = OverlayViewModel.fromState(state, calculatedLayout)
+    val overlaysById = (overlayViews.aboveCursor.toList ++ overlayViews.belowCursorStack)
+      .flatMap(view => view.surfaceId.map(_ -> view))
+      .toMap
+
+    contract.pinnedSurfaceRowSlots(pinnedPanel.id).shouldBe(pinnedView.contentRowSlots)
+    contract.floatingOverlayRowSlots(quickInfo.id).shouldBe(overlaysById(quickInfo.id).contentRowSlots)
+    contract.floatingOverlayRowSlots(commandRunner.id).shouldBe(overlaysById(commandRunner.id).contentRowSlots)
+
+    contract.pinnedSurfaceRowSlots.foreach {
+      case (surfaceId, slots) =>
+        val contentRect = contract.pinnedSurfaceContentRects(surfaceId)
+        slots.foreach(slot =>
+          withClue(s"pinned $surfaceId slot $slot")(contentRect.contains(contentRect.x, slot.y).shouldBe(true))
+        )
+    }
+    val overlayContentRects = contract.floatingOverlayContentRects.toMap
+    contract.floatingOverlayRowSlots.foreach {
+      case (surfaceId, slots) =>
+        val contentRect = overlayContentRects(surfaceId)
+        slots.foreach(slot =>
+          withClue(s"overlay $surfaceId slot $slot")(contentRect.contains(contentRect.x, slot.y).shouldBe(true))
+        )
+    }
+    contract.violations shouldBe Nil
   }
 
   it should "enforce configured minimum gaps between stacked below-cursor overlays" in {

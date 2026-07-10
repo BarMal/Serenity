@@ -15,7 +15,8 @@ case class TextPanelView(
     title: String,
     rows: List[TextPanelRow],
     header: Option[TextPanelRow] = None,
-    footer: Option[TextPanelRow] = None
+    footer: Option[TextPanelRow] = None,
+    surfaceId: Option[SurfaceId] = None
 ):
   def lines: List[String] = (header.toList ++ rows ++ footer.toList).map(_.plainText)
 
@@ -85,7 +86,8 @@ object PinnedPanelViewModel:
       title = resolved.title.getOrElse(""),
       rows = resolved.rows.map(toPanelRow),
       header = resolved.header.map(toPanelRow),
-      footer = resolved.footer.map(toPanelRow)
+      footer = resolved.footer.map(toPanelRow),
+      surfaceId = Some(surface.id)
     )
 
   private def toPanelRow(row: OverlayRow): TextPanelRow =
