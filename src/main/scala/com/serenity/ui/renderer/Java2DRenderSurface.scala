@@ -33,6 +33,8 @@ class Java2DRenderSurface(
     if logicalWidthPx > 0 then logicalWidthPx else image.getWidth
   private val effectiveLogicalHeightPx =
     if logicalHeightPx > 0 then logicalHeightPx else image.getHeight
+  private val cellGridWidthPx  = (effectiveLogicalWidthPx / metrics.charWidth) * metrics.charWidth
+  private val cellGridHeightPx = (effectiveLogicalHeightPx / metrics.lineHeight) * metrics.lineHeight
 
   g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
   g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
@@ -55,18 +57,26 @@ class Java2DRenderSurface(
   override def fontRenderContext: Option[FontRenderContext] = Some(renderContext)
 
   override def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit =
-    val clipX     = math.floor(xPx.toDouble).toInt
-    val clipRight = math.ceil((xPx + bgWidthPx).toDouble).toInt
-    val clipWidth = (clipRight - clipX).max(1)
-    g.setColor(bgRef.get())
-    g.fillRect(clipX, yPx, clipWidth, lineHeightPx)
-    if s.nonEmpty then
-      val savedClip = g.getClip
-      g.setColor(fgRef.get())
-      try
-        g.clipRect(clipX, yPx, clipWidth, lineHeightPx)
-        g.drawString(s, xPx, (yPx + ascentPx).toFloat)
-      finally g.setClip(savedClip)
+    val clipX         = math.floor(xPx.toDouble).toInt
+    val clipRight     = math.ceil((xPx + bgWidthPx).toDouble).toInt
+    val clipBottom    = yPx + lineHeightPx
+    val boundedLeft   = clipX.max(0).min(cellGridWidthPx)
+    val boundedRight  = clipRight.max(0).min(cellGridWidthPx)
+    val boundedTop    = yPx.max(0).min(cellGridHeightPx)
+    val boundedBottom = clipBottom.max(0).min(cellGridHeightPx)
+
+    if boundedLeft < boundedRight && boundedTop < boundedBottom then
+      val boundedWidth  = boundedRight - boundedLeft
+      val boundedHeight = boundedBottom - boundedTop
+      g.setColor(bgRef.get())
+      g.fillRect(boundedLeft, boundedTop, boundedWidth, boundedHeight)
+      if s.nonEmpty then
+        val savedClip = g.getClip
+        g.setColor(fgRef.get())
+        try
+          g.clipRect(boundedLeft, boundedTop, boundedWidth, boundedHeight)
+          g.drawString(s, xPx, (yPx + ascentPx).toFloat)
+        finally g.setClip(savedClip)
 
   def setForegroundColor(color: Color): Unit = fgRef.set(color)
   def setBackgroundColor(color: Color): Unit = bgRef.set(color)
