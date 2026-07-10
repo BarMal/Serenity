@@ -1189,7 +1189,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         .map { surface =>
           panelPosition(surface).flatMap { position =>
             for
-              rect        <- panelRectForSurface(layout, surface)
+              rect        <- contract.panelRect(surface.id)
               contentRect <- contract.panelContentRect(surface.id)
               rowIndex <- pinnedPanelItemRowIndexAt(
                 event,
