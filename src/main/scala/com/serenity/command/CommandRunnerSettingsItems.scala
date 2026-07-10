@@ -581,7 +581,7 @@ object CommandRunnerSettingsItems:
       selectedIndex = optionSelections.getOrElse("contextual-toolbar", 0),
       enabledIntent = CommandIntent.SetContextualToolbarEnabled(true),
       disabledIntent = CommandIntent.SetContextualToolbarEnabled(false),
-      hint = "Show the floating rich-text toolbar above the cursor"
+      hint = "Show the floating rich-text toolbar near the cursor"
     )
 
   private[command] def contextualToolbarDisplayModeOptionItem(

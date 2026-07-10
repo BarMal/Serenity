@@ -78,9 +78,9 @@ object AppEventReducer:
     else
       state.contextualToolbarSurface match
         case Some(surface) =>
-          state
-            .copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id))
-            .popFocus
+          val cleared = state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id))
+          if state.focus == Focus.Surface(surface.id) then cleared.popFocus
+          else cleared
         case None =>
           val items = ContextualToolbar.itemsFor(state)
           if items.isEmpty then state
@@ -91,11 +91,10 @@ object AppEventReducer:
               content = SurfaceContent.ContextualToolbar(
                 ContextualToolbarState(displayMode = state.config.contextualToolbarDisplayMode)
               ),
-              presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.AboveCursor)
+              presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
             )
             stateWithId
               .copy(uiSurfaces = upsertSurface(stateWithId.uiSurfaces, surface))
-              .pushFocus(Focus.Surface(surfaceId))
 
   private def closeTabState(state: AppState, registry: CommandRegistry)(using com.serenity.rope.Balance): AppState =
     val closedState = EditorState.closeFocusedTab(state)
