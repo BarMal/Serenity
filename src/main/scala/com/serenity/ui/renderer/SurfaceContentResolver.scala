@@ -103,7 +103,7 @@ object SurfaceContentResolver:
       case SurfaceContent.Diagnostics(issues) =>
         resolveDiagnostics(rect, mode, issues)
       case SurfaceContent.ThemePicker(state) =>
-        resolveThemePicker(state, mode)
+        resolveThemePicker(state, rect, mode)
       case SurfaceContent.ThemeCreator(state) =>
         resolveThemeCreator(state, rect, mode)
       case SurfaceContent.FileSearch(state) =>
@@ -766,9 +766,21 @@ object SurfaceContentResolver:
 
     ResolvedSurfaceContent(titleFor(mode, "diagnostics"), rows = shaped.map(OverlayRow(_)))
 
-  private def resolveThemePicker(state: ThemePickerState, mode: SurfaceRenderMode): ResolvedSurfaceContent =
-    val rows =
-      state.themes.zipWithIndex.map((name, idx) => OverlayRow(plainText = name, selected = idx == state.selectedIndex))
+  private def resolveThemePicker(
+    state: ThemePickerState,
+    rect: LayoutRect,
+    mode: SurfaceRenderMode
+  ): ResolvedSurfaceContent =
+    val itemWindow = SurfaceFrameLayout(rect).itemWindow(
+      itemCount = state.themes.size,
+      selectedIndex = state.selectedIndex,
+      hasHeader = false,
+      hasFooter = false
+    )
+    val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(state.selectedIndex)
+    val rows = itemWindow.slice(state.themes).zipWithIndex.map { (name, idx) =>
+      OverlayRow(plainText = name, selected = idx == adjustedSelectedIndex)
+    }
     ResolvedSurfaceContent(titleFor(mode, "Theme"), rows = rows)
 
   private def resolveThemeCreator(
