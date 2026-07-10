@@ -1069,6 +1069,9 @@ object Renderer:
     )
 
   private def renderEmptyPane(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
+    val textMetrics  = CellMetrics.fromFont(context.textFont)
+    val lineHeightPx = math.max(context.cellMetrics.lineHeight, textMetrics.lineHeight)
+    val yPx          = centeredBlockTopPx(rect, context.cellMetrics, 1, lineHeightPx)
     context.surface.setFont(context.textFont)
     context.surface.setForegroundColor(theme.muted)
     context.surface.setBackgroundColor(theme.background)
@@ -1076,10 +1079,10 @@ object Renderer:
       surface = context.surface,
       line = "~ Empty ~",
       rect = rect,
-      y = rect.y + rect.height / 2,
+      yPx = yPx,
       font = context.textFont,
       cellMetrics = context.cellMetrics,
-      textMetrics = CellMetrics.fromFont(context.textFont)
+      textMetrics = textMetrics
     )
 
   private def renderWelcomeText(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
@@ -1091,7 +1094,9 @@ object Renderer:
       "Press Ctrl+P for command palette"
     )
 
-    val startY = rect.y + (rect.height - lines.length) / 2
+    val textMetrics  = CellMetrics.fromFont(context.textFont)
+    val lineHeightPx = math.max(context.cellMetrics.lineHeight, textMetrics.lineHeight)
+    val startYPx     = centeredBlockTopPx(rect, context.cellMetrics, lines.length, lineHeightPx)
 
     context.surface.setFont(context.textFont)
     context.surface.setForegroundColor(theme.placeholder)
@@ -1103,10 +1108,10 @@ object Renderer:
           surface = context.surface,
           line = line,
           rect = rect,
-          y = startY + index,
+          yPx = startYPx + (index * lineHeightPx),
           font = context.textFont,
           cellMetrics = context.cellMetrics,
-          textMetrics = CellMetrics.fromFont(context.textFont)
+          textMetrics = textMetrics
         )
     }
 
@@ -1114,20 +1119,21 @@ object Renderer:
     surface: RenderSurface,
     line: String,
     rect: LayoutRect,
-    y: Int,
+    yPx: Int,
     font: java.awt.Font,
     cellMetrics: CellMetrics,
     textMetrics: CellMetrics
   ): Unit =
-    if y >= 0 && y < surface.viewportHeight then
+    val lineHeightPx     = math.max(cellMetrics.lineHeight, textMetrics.lineHeight)
+    val viewportHeightPx = surface.viewportHeight * cellMetrics.lineHeight
+    if yPx + lineHeightPx > 0 && yPx < viewportHeightPx then
       surface.fontRenderContext match
         case Some(frc) =>
-          val lineHeightPx = math.max(cellMetrics.lineHeight, textMetrics.lineHeight)
           val placement = TextAlignment.placeLine(
             text = line,
             area = TextAreaPx(
               xPx = cellMetrics.toPixelX(rect.x).toFloat,
-              yPx = cellMetrics.toPixelY(y),
+              yPx = yPx,
               widthPx = rect.width * cellMetrics.charWidth,
               heightPx = lineHeightPx
             ),
@@ -1147,6 +1153,7 @@ object Renderer:
             line
           )
         case None =>
+          val y       = cellMetrics.toRow(yPx)
           val centerX = rect.x + (rect.width - line.length) / 2
           if centerX >= 0 then CharacterRenderer.renderString(surface, centerX, y, line)
 
@@ -1160,8 +1167,10 @@ object Renderer:
     uiMetrics: CellMetrics
   ): Unit =
     surface.setFont(uiFont)
-    val lines  = page.renderLines
-    val startY = (viewportSize.height - lines.size) / 2
+    val lines         = page.renderLines
+    val lineHeightPx  = math.max(cellMetrics.lineHeight, uiMetrics.lineHeight)
+    val totalHeightPx = lines.size * lineHeightPx
+    val startYPx      = math.max(0, ((viewportSize.height * cellMetrics.lineHeight) - totalHeightPx) / 2)
 
     val titleLines       = 2
     val optionStartIndex = titleLines
@@ -1169,9 +1178,9 @@ object Renderer:
 
     lines.zipWithIndex.foreach {
       case (line, lineIndex) =>
-        val y = startY + lineIndex
+        val yPx = startYPx + (lineIndex * lineHeightPx)
 
-        if y >= 0 && y < viewportSize.height then
+        if yPx + lineHeightPx > 0 && yPx < viewportSize.height * cellMetrics.lineHeight then
           val isOption    = lineIndex >= optionStartIndex && lineIndex <= optionEndIndex
           val optionIndex = lineIndex - optionStartIndex
           val isSelected  = isOption && optionIndex == page.selectedIndex
@@ -1179,18 +1188,24 @@ object Renderer:
           if isSelected then
             surface.setForegroundColor(theme.highlighted.foreground)
             surface.setBackgroundColor(theme.highlighted.background)
-            CharacterRenderer.renderStringPlain(surface, 0, y, " " * viewportSize.width)
-            renderCenteredStartPageLine(surface, line, y, viewportSize, uiFont, cellMetrics, uiMetrics)
+            surface.fillPixelRect(
+              xPx = 0,
+              yPx = yPx,
+              widthPx = viewportSize.width * cellMetrics.charWidth,
+              heightPx = lineHeightPx,
+              color = theme.highlighted.background
+            )
+            renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
           else
             surface.setForegroundColor(theme.placeholder)
             surface.setBackgroundColor(theme.background)
-            renderCenteredStartPageLine(surface, line, y, viewportSize, uiFont, cellMetrics, uiMetrics)
+            renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
     }
 
   private def renderCenteredStartPageLine(
     surface: RenderSurface,
     line: String,
-    y: Int,
+    yPx: Int,
     viewportSize: ViewportSize,
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
@@ -1203,7 +1218,7 @@ object Renderer:
           text = line,
           area = TextAreaPx(
             xPx = 0.0f,
-            yPx = cellMetrics.toPixelY(y),
+            yPx = yPx,
             widthPx = viewportSize.width * cellMetrics.charWidth,
             heightPx = lineHeightPx
           ),
@@ -1223,8 +1238,19 @@ object Renderer:
           s = line
         )
       case None =>
+        val y = cellMetrics.toRow(yPx)
         val x = math.max(0, (viewportSize.width - line.length) / 2)
         CharacterRenderer.renderString(surface, x, y, line)
+
+  private def centeredBlockTopPx(
+    rect: LayoutRect,
+    cellMetrics: CellMetrics,
+    lineCount: Int,
+    lineHeightPx: Int
+  ): Int =
+    val contentTopPx    = cellMetrics.toPixelY(rect.y)
+    val contentHeightPx = rect.height * cellMetrics.lineHeight
+    contentTopPx + math.max(0, (contentHeightPx - (lineCount * lineHeightPx)) / 2)
 
   private def renderCursors(
     buffer: Buffer,
