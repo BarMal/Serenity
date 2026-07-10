@@ -36,11 +36,22 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       presentation = SurfacePresentation.Pinned(PanelPosition.Left, 28)
     )
 
+  private def expandedExplorerSurface(tree: DirectoryTreeData, selectedPath: Option[java.nio.file.Path]) =
+    UiSurface(
+      id = SurfaceId("expanded-explorer"),
+      content = SurfaceContent.DirectoryTree(tree, selectedPath),
+      presentation = SurfacePresentation.Expanded(PanelPosition.Left, 28)
+    )
+
   private def leftPanelContentRect(state: AppState): LayoutRect =
     panelContentRect(state, SurfaceId("explorer"))
 
   private def panelContentRect(state: AppState, surfaceId: SurfaceId): LayoutRect =
-    panelContract(state).pinnedSurfaceContentRects(surfaceId)
+    val contract = panelContract(state)
+    contract.pinnedSurfaceContentRects
+      .get(surfaceId)
+      .orElse(contract.expandedSurfaceContentRects.get(surfaceId))
+      .getOrElse(fail(s"Expected panel content rect for ${surfaceId.value}"))
 
   private def panelContract(
     state: AppState,
@@ -55,10 +66,15 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     displayedItemRow: Int,
     viewportSize: ViewportSize = viewport
   ): (Int, Int) =
-    val contract    = panelContract(state, viewportSize)
-    val contentRect = contract.pinnedSurfaceContentRects(surfaceId)
+    val contract = panelContract(state, viewportSize)
+    val contentRect = contract.pinnedSurfaceContentRects
+      .get(surfaceId)
+      .orElse(contract.expandedSurfaceContentRects.get(surfaceId))
+      .getOrElse(fail(s"Expected panel content rect for ${surfaceId.value}"))
     val rowY = contract.pinnedSurfaceRowSlots
-      .getOrElse(surfaceId, Nil)
+      .get(surfaceId)
+      .orElse(contract.expandedSurfaceRowSlots.get(surfaceId))
+      .getOrElse(Nil)
       .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(`displayedItemRow`), y) => y }
       .getOrElse(fail(s"Expected pinned panel row $displayedItemRow for ${surfaceId.value}"))
     (contentRect.x + 1, rowY)
@@ -98,6 +114,32 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       )
     )
     val surface = explorerSurface(tree, selectedPath = Some(root))
+    val sm      = makeStateManager()
+    sm.updateState(_.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 2)
+    sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
+
+    val updated = sm.getCurrentState.unsafeRunSync()
+    updated.focus shouldBe Focus.Surface(surface.id)
+    updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(test)))
+  }
+
+  it should "select and focus an expanded directory tree row on primary click" in {
+    val root = Paths.get("/repo")
+    val src  = root.resolve("src")
+    val test = root.resolve("test")
+    val tree = DirectoryTreeData(
+      root,
+      entries = Map(
+        root -> List(
+          DirEntry(src, "src", isDirectory = true),
+          DirEntry(test, "test", isDirectory = true)
+        )
+      )
+    )
+    val surface = expandedExplorerSurface(tree, selectedPath = Some(root))
     val sm      = makeStateManager()
     sm.updateState(_.copy(uiSurfaces = List(surface))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()

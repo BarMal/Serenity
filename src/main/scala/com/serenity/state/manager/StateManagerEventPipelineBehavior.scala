@@ -1190,17 +1190,32 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           panelPosition(surface).flatMap { position =>
             for
               rect        <- panelRectForSurface(layout, surface)
-              contentRect <- contract.pinnedSurfaceContentRects.get(surface.id)
+              contentRect <- panelContentRectForSurface(contract, surface.id)
               rowIndex <- pinnedPanelItemRowIndexAt(
                 event,
                 contentRect,
-                contract.pinnedSurfaceRowSlots.getOrElse(surface.id, Nil)
+                panelRowSlotsForSurface(contract, surface.id)
               )
             yield PinnedPanelRowHit(surface, position, rowIndex, SurfaceLayoutKind.classify(rect))
           }
         }
         .collectFirst { case Some(hit) => hit }
     }
+
+  private def panelContentRectForSurface(
+    contract: EditorLayoutContract,
+    surfaceId: SurfaceId
+  ): Option[LayoutRect] =
+    contract.pinnedSurfaceContentRects.get(surfaceId).orElse(contract.expandedSurfaceContentRects.get(surfaceId))
+
+  private def panelRowSlotsForSurface(
+    contract: EditorLayoutContract,
+    surfaceId: SurfaceId
+  ): List[SurfaceContentRowSlot] =
+    contract.pinnedSurfaceRowSlots
+      .get(surfaceId)
+      .orElse(contract.expandedSurfaceRowSlots.get(surfaceId))
+      .getOrElse(Nil)
 
   private def pinnedPanelItemRowIndexAt(
     event: MouseInputEvent,
