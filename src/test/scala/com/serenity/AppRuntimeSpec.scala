@@ -392,6 +392,55 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
 
+  it should "skip idle cursor rendering when the cursor idle interval is disabled" in {
+    val state = AppState.initial.copy(
+      config = AppState.initial.config.withCursorTransitionSpeedScale(Some(0.0))
+    )
+
+    val program = for
+      cursorVisible <- Ref.of[IO, Boolean](true)
+      breathIndex   <- Ref.of[IO, Int](0)
+      renderCalls   <- Ref.of[IO, Int](0)
+      given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+      _ <- AppRuntime.runIdleRenderStep(
+        currentStateForDiagnostics = IO.pure(Some(state)),
+        loadState = IO.pure(state),
+        checkResizeAndHandle = IO.unit,
+        cursorVisible = cursorVisible,
+        breathIndex = breathIndex,
+        renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color]) => renderCalls.update(_ + 1),
+        requestFastRender = IO.unit
+      )
+      calls <- renderCalls.get
+    yield calls shouldBe 0
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "render one idle blink frame when the cursor idle interval is enabled" in {
+    val state = AppState.initial
+
+    val program = for
+      cursorVisible <- Ref.of[IO, Boolean](true)
+      breathIndex   <- Ref.of[IO, Int](0)
+      rendered      <- Ref.of[IO, Vector[(Boolean, Option[Color])]](Vector.empty)
+      given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+      _ <- AppRuntime.runIdleRenderStep(
+        currentStateForDiagnostics = IO.pure(Some(state)),
+        loadState = IO.pure(state),
+        checkResizeAndHandle = IO.unit,
+        cursorVisible = cursorVisible,
+        breathIndex = breathIndex,
+        renderCursorOnly =
+          (_: AppState, visible: Boolean, cursor: Option[Color]) => rendered.update(_ :+ (visible -> cursor)),
+        requestFastRender = IO.unit
+      )
+      frames <- rendered.get
+    yield frames shouldBe Vector(false -> None)
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
   it should "recover idle cursor render failures with phase and state diagnostics" in {
     val program = for
       logs <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
