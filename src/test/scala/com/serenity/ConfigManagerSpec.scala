@@ -294,6 +294,20 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("cursor.inactive.color = #CC663380")
   }
 
+  it should "load and write cursor mode" in {
+    val configFile = Files.createTempFile("serenity-cursor-mode-config", ".conf")
+    Files.writeString(
+      configFile,
+      """cursor.mode = breathe
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.cursorMode shouldBe CursorMode.Breathe
+    ConfigManager.configToString(config) should include("cursor.mode = breathe")
+  }
+
   it should "load and write cursor information bar mode" in {
     val configFile = Files.createTempFile("serenity-cursor-info-config", ".conf")
     Files.writeString(
