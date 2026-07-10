@@ -26,7 +26,7 @@ object ElementTransitionLowerer:
         AnimationState(
           lowerCells(plan, cells.all, tickRateMs, staggerFrames = 0, delayFrames = delayFrames(plan, tickRateMs))
         )
-      case TransitionKind.TypedText | TransitionKind.DirectionalSweep | TransitionKind.LineAndCharacterTandem =>
+      case TransitionKind.DirectionalSweep =>
         AnimationState(
           lowerCells(
             plan,
@@ -36,6 +36,10 @@ object ElementTransitionLowerer:
             delayFrames = delayFrames(plan, tickRateMs)
           )
         )
+      case TransitionKind.TypedText =>
+        AnimationState(lowerTypedText(plan, cells.all, tickRateMs))
+      case TransitionKind.LineAndCharacterTandem =>
+        AnimationState(lowerLineAndCharacterTandem(plan, cells.all, tickRateMs))
 
   private def lowerOutlineThenContent(
     plan: ElementTransitionPlan,
@@ -70,6 +74,80 @@ object ElementTransitionLowerer:
       staggerFrames = staggerFrames,
       delayFrames = delayFrames
     )
+
+  private def lowerTypedText(
+    plan: ElementTransitionPlan,
+    cells: Map[CharacterKey, CellAnimation],
+    tickRateMs: Int
+  ): Map[CharacterKey, AnimatedCell] =
+    val orderedKeys = typedOrdering(plan.direction, cells.keys.toList)
+    val offsets     = orderedKeys.zipWithIndex.toMap
+    lowerCellsWithOffsets(
+      cells,
+      steps = durationFrames(plan, tickRateMs),
+      staggerFrames = staggerFrames(plan, tickRateMs),
+      delayFrames = delayFrames(plan, tickRateMs),
+      key => offsets.getOrElse(key, 0)
+    )
+
+  private def lowerLineAndCharacterTandem(
+    plan: ElementTransitionPlan,
+    cells: Map[CharacterKey, CellAnimation],
+    tickRateMs: Int
+  ): Map[CharacterKey, AnimatedCell] =
+    lowerCellsWithOffsets(
+      cells,
+      steps = durationFrames(plan, tickRateMs),
+      staggerFrames = staggerFrames(plan, tickRateMs),
+      delayFrames = delayFrames(plan, tickRateMs),
+      tandemOffsetFor(plan.direction, cells.keys)
+    )
+
+  private def lowerCellsWithOffsets(
+    cells: Map[CharacterKey, CellAnimation],
+    steps: Int,
+    staggerFrames: Int,
+    delayFrames: Int,
+    offsetFor: CharacterKey => Int
+  ): Map[CharacterKey, AnimatedCell] =
+    cells.map { (key, cell) =>
+      key -> AnimatedCell.parametricForeground(
+        char = cell.char,
+        startColor = cell.startColor,
+        endColor = cell.endColor,
+        steps = steps,
+        delayFrames = delayFrames.max(0) + offsetFor(key).max(0) * staggerFrames.max(0)
+      )
+    }
+
+  private def typedOrdering(direction: TransitionDirection, keys: List[CharacterKey]): List[CharacterKey] =
+    direction match
+      case TransitionDirection.RightToLeft =>
+        keys.sortBy(key => (key.line, -key.column))
+      case TransitionDirection.TopToBottom =>
+        keys.sortBy(key => (key.column, key.line))
+      case TransitionDirection.BottomToTop =>
+        keys.sortBy(key => (key.column, -key.line))
+      case TransitionDirection.LeftToRight | TransitionDirection.AnchorIn | TransitionDirection.AnchorOut =>
+        keys.sortBy(key => (key.line, key.column))
+
+  private def tandemOffsetFor(direction: TransitionDirection, keys: Iterable[CharacterKey]): CharacterKey => Int =
+    if keys.isEmpty then _ => 0
+    else
+      val minCol = keys.map(_.column).min
+      val maxCol = keys.map(_.column).max
+      val minRow = keys.map(_.line).min
+      val maxRow = keys.map(_.line).max
+
+      direction match
+        case TransitionDirection.RightToLeft =>
+          key => (key.line - minRow) + (maxCol - key.column)
+        case TransitionDirection.TopToBottom =>
+          key => (key.column - minCol) + (key.line - minRow)
+        case TransitionDirection.BottomToTop =>
+          key => (key.column - minCol) + (maxRow - key.line)
+        case TransitionDirection.LeftToRight | TransitionDirection.AnchorIn | TransitionDirection.AnchorOut =>
+          key => (key.line - minRow) + (key.column - minCol)
 
   private def flowFor(direction: TransitionDirection): (FlowDirection, SweepDirection) =
     direction match
