@@ -18,6 +18,7 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
+import com.serenity.ui.renderer.OverlayViewModel
 
 private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEffectBehavior:
   this: StateManager =>
@@ -1277,6 +1278,9 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         event,
         rect,
         surface.content,
+        SurfaceFrameLayout
+          .forContent(rect, surface.content)
+          .contentRowSlots(menu.items.length, hasHeader = true, hasFooter = menu.items.nonEmpty),
         menu.items.length,
         menu.selectedIndex,
         hasHeader = true,
@@ -1444,6 +1448,11 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
   private def commandRunnerSelectionAt(event: MouseInputEvent, state: AppState): Option[CommandRunnerEvent] =
     state.viewportSize.flatMap { viewportSize =>
       val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      val overlayRowSlotsBySurface =
+        val overlays = OverlayViewModel.fromState(state, layout)
+        (overlays.aboveCursor.toList ++ overlays.belowCursorStack)
+          .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
+          .toMap
       val surfaces =
         event match
           case _: MouseMove
@@ -1451,7 +1460,9 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
             state.commandRunnerSubmenuSurface.toList
           case _ =>
             List(state.commandRunnerSubmenuSurface, state.commandRunnerSurface).flatten
-      surfaces.view.flatMap(surface => commandRunnerSelectionForSurface(event, layout, surface)).headOption
+      surfaces.view
+        .flatMap(surface => commandRunnerSelectionForSurface(event, layout, surface, overlayRowSlotsBySurface))
+        .headOption
     }
 
   private def handleTextAreaResizeDrag(drag: MouseDrag, state: AppState): cats.effect.IO[Boolean] =
@@ -1510,15 +1521,18 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
   private def commandRunnerSelectionForSurface(
     event: MouseInputEvent,
     layout: CalculatedLayout,
-    surface: UiSurface
+    surface: UiSurface,
+    overlayRowSlotsBySurface: Map[SurfaceId, List[SurfaceContentRowSlot]]
   ): Option[CommandRunnerEvent] =
     overlayRectForSurface(layout, surface.id).flatMap { rect =>
+      val rowSlots = overlayRowSlotsBySurface.getOrElse(surface.id, Nil)
       surface.content match
         case SurfaceContent.CommandPalette(runner) =>
           overlayItemIndex(
             event,
             rect,
             surface.content,
+            rowSlots,
             runner.visibleItems.length,
             runner.selectedIndex,
             hasHeader = true,
@@ -1537,6 +1551,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
             event,
             rect,
             surface.content,
+            rowSlots,
             items.length,
             selectedIndex,
             hasHeader = group.nonEmpty,
@@ -1554,27 +1569,32 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     event: MouseInputEvent,
     rect: LayoutRect,
     content: SurfaceContent,
+    rowSlots: List[SurfaceContentRowSlot],
     itemCount: Int,
     selectedIndex: Int,
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0
   ): Option[Int] =
-    val frameLayout   = SurfaceFrameLayout.forContent(rect, content)
-    val contentRect   = frameLayout.contentRect
+    val frameLayout = SurfaceFrameLayout.forContent(rect, content)
+    val contentRect = frameLayout.contentRect
+    val itemWindow = frameLayout.itemWindow(
+      itemCount,
+      selectedIndex,
+      hasHeader,
+      hasFooter,
+      reservedContentRows
+    )
     val insideColumns = event.col >= contentRect.x && event.col < contentRect.right
     Option
       .when(insideColumns)(())
       .flatMap(_ =>
-        frameLayout.itemIndexAt(
-          event.row,
-          itemCount,
-          selectedIndex,
-          hasHeader,
-          hasFooter,
-          reservedContentRows
-        )
+        rowSlots.collectFirst {
+          case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) if y == event.row =>
+            index
+        }
       )
+      .flatMap(itemWindow.absoluteIndexAt)
 
   private def commandRunnerSubmenuDetailRowCount(
     groupId: String,

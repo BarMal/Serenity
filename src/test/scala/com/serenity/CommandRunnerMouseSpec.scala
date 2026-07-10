@@ -147,54 +147,31 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
   private case class Point(x: Int, y: Int)
 
   private def commandRunnerItemPoint(state: AppState, displayedItemRow: Int): Point =
-    val surface     = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
-    val rect        = commandRunnerRect(state)
-    val contentRect = SurfaceFrameLayout.forContent(rect, surface.content).contentRect
-    Point(
-      x = contentRect.x + 1,
-      y = contentRect.y + overlayHeaderRows(surface.content) + displayedItemRow
-    )
+    val surface = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
+    overlayItemPoint(state, surface.id, displayedItemRow)
 
   private def commandRunnerSubmenuItemPoint(state: AppState, displayedItemRow: Int): Point =
-    val surface     = state.commandRunnerSubmenuSurface.getOrElse(fail("Expected command runner submenu surface"))
-    val rect        = commandRunnerSubmenuRect(state)
-    val contentRect = SurfaceFrameLayout.forContent(rect, surface.content).contentRect
-    Point(
-      x = contentRect.x + 1,
-      y = contentRect.y + overlayHeaderRows(surface.content) + displayedItemRow
-    )
+    val surface = state.commandRunnerSubmenuSurface.getOrElse(fail("Expected command runner submenu surface"))
+    overlayItemPoint(state, surface.id, displayedItemRow)
 
-  private def overlayHeaderRows(content: SurfaceContent): Int =
-    content match
-      case SurfaceContent.CommandPalette(_) => 1
-      case SurfaceContent.CommandPaletteSubmenu(runner, groupId, _) =>
-        if runner.submenuGroup(groupId).nonEmpty then 1 else 0
-      case _ =>
-        0
+  private def overlayItemPoint(state: AppState, surfaceId: SurfaceId, displayedItemRow: Int): Point =
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val contract = EditorLayoutContract.from(state, viewport, layout)
+    val contentRect = contract.floatingOverlayContentRects
+      .collectFirst { case (`surfaceId`, rect) => rect }
+      .getOrElse(fail(s"Expected overlay content rect for ${surfaceId.value}"))
+    val rowY = contract.floatingOverlayRowSlots
+      .getOrElse(surfaceId, Nil)
+      .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(`displayedItemRow`), y) => y }
+      .getOrElse(fail(s"Expected overlay item row $displayedItemRow for ${surfaceId.value}"))
+    Point(x = contentRect.x + 1, y = rowY)
 
   private def openLanguageSubmenu(stateManager: com.serenity.state.manager.StateManager): Unit =
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     "language".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
-
-  private def commandRunnerRect(state: AppState): LayoutRect =
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
-    val surface  = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
-    LayoutEngine
-      .calculateLayoutWithUI(state, viewport)
-      .belowCursorOverlayStack
-      .collectFirst { case (`surface`.id, rect) => rect }
-      .getOrElse(fail("Expected command runner overlay rect"))
-
-  private def commandRunnerSubmenuRect(state: AppState): LayoutRect =
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
-    val surface  = state.commandRunnerSubmenuSurface.getOrElse(fail("Expected command runner submenu surface"))
-    LayoutEngine
-      .calculateLayoutWithUI(state, viewport)
-      .belowCursorOverlayStack
-      .collectFirst { case (`surface`.id, rect) => rect }
-      .getOrElse(fail("Expected command runner submenu overlay rect"))
 
   private def runnerFrom(state: AppState): CommandRunner =
     state.commandRunnerSurface
