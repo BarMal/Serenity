@@ -617,9 +617,9 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
   private def toolbarRect(state: AppState) =
     val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
     val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar surface"))
-    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    (layout.aboveCursorOverlayStack ++ layout.belowCursorOverlayStack)
-      .collectFirst { case (`surface`.id, rect) => rect }
+    val contract = EditorLayoutContract.from(state, viewport, LayoutEngine.calculateLayoutWithUI(state, viewport))
+    contract
+      .overlayRect(surface.id)
       .getOrElse(fail("Expected toolbar overlay rect"))
 
   private def toolbarContentWidth(state: AppState): Int =
