@@ -117,27 +117,6 @@ object AppRuntime:
               requestFastRender
           ).drain
         _ <-
-          def computeCursorForIdle(state: AppState): IO[(Boolean, Option[Color])] =
-            state.config.cursorMode match
-              case CursorMode.Blink =>
-                cursorVisible.updateAndGet(!_).map(vis => (vis, None))
-              case CursorMode.Breathe =>
-                for
-                  i <- breathIndex.updateAndGet(i => (i + 1) % 48)
-                  c     = state.config.cursorColors.activeOr(state.theme.cursor)
-                  alpha = ((math.sin(i * math.Pi / 24) + 1.0) / 2.0 * 255).toInt
-                yield (true, Some(new Color(c.getRed, c.getGreen, c.getBlue, alpha)))
-
-          def recoverIdleCursorRenderFailure(error: Throwable): IO[Unit] =
-            val (phase, diagnostics, cause) = error match
-              case RuntimeFailure(_, failedPhase, failureDiagnostics, failureCause) =>
-                (failedPhase, failureDiagnostics, failureCause)
-              case other =>
-                ("idle.cursor-render", "state=unavailable", other)
-            logger.warn(cause)(
-              s"[RUNTIME] idle cursor render failed phase=$phase; $diagnostics; requesting full render"
-            ) >> requestFastRender
-
           def idlePhase: Stream[IO, Unit] =
             Stream
               .repeatEval(
@@ -161,12 +140,13 @@ object AppRuntime:
                           "render loop",
                           "idle.cursor",
                           IO.pure(Some(state))
-                        )(computeCursorForIdle(state))
+                        )(computeIdleCursorFrame(state, cursorVisible, breathIndex))
                         _ <- withRuntimeDiagnostics(
                           "render loop",
                           "idle.cursor-render",
                           IO.pure(Some(state))
-                        )(renderCursorOnly(state, visible, cursor)).handleErrorWith(recoverIdleCursorRenderFailure)
+                        )(renderCursorOnly(state, visible, cursor))
+                          .handleErrorWith(recoverIdleCursorRenderFailure(_, requestFastRender))
                       yield ()
                     case None =>
                       IO.unit
@@ -283,6 +263,34 @@ object AppRuntime:
       logger.error(loggedError)(s"[RUNTIME] $name failed$phase$diagnostics; forcing safe shutdown") >>
         forceQuit.attempt.void
     }
+
+  private[serenity] def computeIdleCursorFrame(
+    state: AppState,
+    cursorVisible: Ref[IO, Boolean],
+    breathIndex: Ref[IO, Int]
+  ): IO[(Boolean, Option[Color])] =
+    state.config.cursorMode match
+      case CursorMode.Blink =>
+        cursorVisible.updateAndGet(!_).map(vis => (vis, None))
+      case CursorMode.Breathe =>
+        for
+          i <- breathIndex.updateAndGet(i => (i + 1) % 48)
+          c     = state.config.cursorColors.activeOr(state.theme.cursor)
+          alpha = ((math.sin(i * math.Pi / 24) + 1.0) / 2.0 * 255).toInt
+        yield (true, Some(new Color(c.getRed, c.getGreen, c.getBlue, alpha)))
+
+  private[serenity] def recoverIdleCursorRenderFailure(
+    error: Throwable,
+    requestFastRender: IO[Unit]
+  )(using logger: Logger[IO]): IO[Unit] =
+    val (phase, diagnostics, cause) = error match
+      case RuntimeFailure(_, failedPhase, failureDiagnostics, failureCause) =>
+        (failedPhase, failureDiagnostics, failureCause)
+      case other =>
+        ("idle.cursor-render", "state=unavailable", other)
+    logger.warn(cause)(
+      s"[RUNTIME] idle cursor render failed phase=$phase; $diagnostics; requesting full render"
+    ) >> requestFastRender
 
   private[serenity] def resizeCallbackBridge(
     signalResize: IO[Unit],
