@@ -1183,22 +1183,39 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
 
   private def pinnedPanelRowHitAt(event: MouseInputEvent, state: AppState): Option[PinnedPanelRowHit] =
     state.viewportSize.flatMap { viewportSize =>
-      val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      val layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      val contract = EditorLayoutContract.from(state, viewportSize, layout)
       state.uiSurfaces.reverseIterator
         .map { surface =>
           panelPosition(surface).flatMap { position =>
-            panelRectForSurface(layout, surface).flatMap { rect =>
-              val contentRect   = SurfaceFrameLayout.forContent(rect, surface.content).contentRect
-              val insideColumns = event.col >= contentRect.x && event.col < contentRect.right
-              val rowIndex      = event.row - contentRect.y
-              Option.when(insideColumns && rowIndex >= 0 && rowIndex < contentRect.height) {
-                PinnedPanelRowHit(surface, position, rowIndex, SurfaceLayoutKind.classify(rect))
-              }
-            }
+            for
+              rect        <- panelRectForSurface(layout, surface)
+              contentRect <- contract.pinnedSurfaceContentRects.get(surface.id)
+              rowIndex <- pinnedPanelItemRowIndexAt(
+                event,
+                contentRect,
+                contract.pinnedSurfaceRowSlots.getOrElse(surface.id, Nil)
+              )
+            yield PinnedPanelRowHit(surface, position, rowIndex, SurfaceLayoutKind.classify(rect))
           }
         }
         .collectFirst { case Some(hit) => hit }
     }
+
+  private def pinnedPanelItemRowIndexAt(
+    event: MouseInputEvent,
+    contentRect: LayoutRect,
+    rowSlots: List[SurfaceContentRowSlot]
+  ): Option[Int] =
+    val insideColumns = event.col >= contentRect.x && event.col < contentRect.right
+    Option
+      .when(insideColumns)(())
+      .flatMap(_ =>
+        rowSlots.collectFirst {
+          case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) if y == event.row =>
+            index
+        }
+      )
 
   private def updateEditorHoverTarget(move: MouseMove, state: AppState): cats.effect.IO[Unit] =
     resolveMouseTarget(move, state).flatMap {
