@@ -5,7 +5,7 @@ import com.serenity.command.CommandRunner
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, LayoutRect, ViewportSize}
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -147,18 +147,30 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
   private case class Point(x: Int, y: Int)
 
   private def commandRunnerItemPoint(state: AppState, displayedItemRow: Int): Point =
-    val rect = commandRunnerRect(state)
+    val surface     = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
+    val rect        = commandRunnerRect(state)
+    val contentRect = SurfaceFrameLayout.forContent(rect, surface.content).contentRect
     Point(
-      x = rect.x + 2,
-      y = rect.y + 2 + displayedItemRow
+      x = contentRect.x + 1,
+      y = contentRect.y + overlayHeaderRows(surface.content) + displayedItemRow
     )
 
   private def commandRunnerSubmenuItemPoint(state: AppState, displayedItemRow: Int): Point =
-    val rect = commandRunnerSubmenuRect(state)
+    val surface     = state.commandRunnerSubmenuSurface.getOrElse(fail("Expected command runner submenu surface"))
+    val rect        = commandRunnerSubmenuRect(state)
+    val contentRect = SurfaceFrameLayout.forContent(rect, surface.content).contentRect
     Point(
-      x = rect.x + 2,
-      y = rect.y + 2 + displayedItemRow
+      x = contentRect.x + 1,
+      y = contentRect.y + overlayHeaderRows(surface.content) + displayedItemRow
     )
+
+  private def overlayHeaderRows(content: SurfaceContent): Int =
+    content match
+      case SurfaceContent.CommandPalette(_) => 1
+      case SurfaceContent.CommandPaletteSubmenu(runner, groupId, _) =>
+        if runner.submenuGroup(groupId).nonEmpty then 1 else 0
+      case _ =>
+        0
 
   private def openLanguageSubmenu(stateManager: com.serenity.state.manager.StateManager): Unit =
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()

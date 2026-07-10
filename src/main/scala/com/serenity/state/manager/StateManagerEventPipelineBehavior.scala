@@ -1193,6 +1193,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       index <- overlayItemIndex(
         event,
         rect,
+        surface.content,
         menu.items.length,
         menu.selectedIndex,
         hasHeader = true,
@@ -1434,6 +1435,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           overlayItemIndex(
             event,
             rect,
+            surface.content,
             runner.visibleItems.length,
             runner.selectedIndex,
             hasHeader = true,
@@ -1451,6 +1453,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           overlayItemIndex(
             event,
             rect,
+            surface.content,
             items.length,
             selectedIndex,
             hasHeader = group.nonEmpty,
@@ -1467,13 +1470,14 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
   private def overlayItemIndex(
     event: MouseInputEvent,
     rect: LayoutRect,
+    content: SurfaceContent,
     itemCount: Int,
     selectedIndex: Int,
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0
   ): Option[Int] =
-    val frameLayout   = SurfaceFrameLayout(rect)
+    val frameLayout   = SurfaceFrameLayout.forContent(rect, content)
     val contentRect   = frameLayout.contentRect
     val insideColumns = event.col >= contentRect.x && event.col < contentRect.right
     Option
