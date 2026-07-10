@@ -2,6 +2,7 @@ package com.serenity.ui.layout
 
 import com.serenity.config.InterfaceDensityMetrics
 import com.serenity.state.models.{AppState, PaneId, SurfaceId}
+import com.serenity.ui.renderer.{OverlayViewModel, PinnedPanelViewModel}
 
 /** Named layout ownership violation for editor and surface rectangles. */
 case class LayoutContractViolation(
@@ -21,10 +22,12 @@ case class EditorLayoutContract(
     pinnedPanelRects: Map[PanelPosition, LayoutRect],
     pinnedSurfaceRects: Map[SurfaceId, LayoutRect],
     pinnedSurfaceContentRects: Map[SurfaceId, LayoutRect],
+    pinnedSurfaceRowSlots: Map[SurfaceId, List[SurfaceContentRowSlot]],
     aboveCursorOverlayRects: List[(SurfaceId, LayoutRect)],
     belowCursorOverlayRects: List[(SurfaceId, LayoutRect)],
     floatingOverlayRects: List[(SurfaceId, LayoutRect)],
-    floatingOverlayContentRects: List[(SurfaceId, LayoutRect)]
+    floatingOverlayContentRects: List[(SurfaceId, LayoutRect)],
+    floatingOverlayRowSlots: Map[SurfaceId, List[SurfaceContentRowSlot]]
 ):
 
   /** Return all currently detectable contract violations. */
@@ -33,7 +36,9 @@ case class EditorLayoutContract(
       activePaneViolations ++
       pinnedPanelViolations ++
       pinnedSurfaceViolations ++
+      pinnedSurfaceRowSlotViolations ++
       floatingOverlayViolations ++
+      floatingOverlayRowSlotViolations ++
       floatingOverlayStackViolations ++
       gutterViolations
 
@@ -102,6 +107,12 @@ case class EditorLayoutContract(
         )
       }
 
+  private def pinnedSurfaceRowSlotViolations: List[LayoutContractViolation] =
+    rowSlotViolations("pinned surface", pinnedSurfaceContentRects, pinnedSurfaceRowSlots)
+
+  private def floatingOverlayRowSlotViolations: List[LayoutContractViolation] =
+    rowSlotViolations("floating overlay", floatingOverlayContentRects.toMap, floatingOverlayRowSlots)
+
   private def floatingOverlayStackViolations: List[LayoutContractViolation] =
     belowCursorOverlayRects.sliding(2).toList.flatMap {
       case List((firstId, firstRect), (secondId, secondRect)) =>
@@ -147,6 +158,29 @@ case class EditorLayoutContract(
         LayoutContractViolation(ownerName, childName, ownerRect, childRect)
     }
 
+  private def rowSlotViolations(
+    ownerPrefix: String,
+    ownerRects: Map[SurfaceId, LayoutRect],
+    rowSlotsBySurface: Map[SurfaceId, List[SurfaceContentRowSlot]]
+  ): List[LayoutContractViolation] =
+    rowSlotsBySurface.toList.flatMap {
+      case (surfaceId, rowSlots) =>
+        ownerRects.get(surfaceId).toList.flatMap { ownerRect =>
+          rowSlots.collect {
+            case rowSlot
+                if !ownerRect.containsRect(
+                  LayoutRect(ownerRect.x, rowSlot.y, ownerRect.width.max(0), if ownerRect.height > 0 then 1 else 0)
+                ) =>
+              LayoutContractViolation(
+                s"$ownerPrefix ${surfaceId.value} content",
+                s"$ownerPrefix ${surfaceId.value} ${rowSlot.kind} row slot",
+                ownerRect,
+                LayoutRect(ownerRect.x, rowSlot.y, ownerRect.width.max(0), 1)
+              )
+          }
+        }
+    }
+
 object EditorLayoutContract:
 
   /** Build the reusable editor layout contract from an already calculated layout. */
@@ -170,6 +204,10 @@ object EditorLayoutContract:
           .surfaceById(surfaceId)
           .map(surface => surfaceId -> SurfaceFrameLayout.forContent(frameRect, surface.content).contentRect)
     }.toMap
+    val pinnedSurfaceRowSlots = PinnedPanelViewModel
+      .fromState(state, calculatedLayout)
+      .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
+      .toMap
     val aboveCursorOverlayRects = calculatedLayout.aboveCursorOverlayStack
     val belowCursorOverlayRects = calculatedLayout.belowCursorOverlayStack
     val floatingOverlayRects    = aboveCursorOverlayRects ++ belowCursorOverlayRects
@@ -179,6 +217,10 @@ object EditorLayoutContract:
           .surfaceById(surfaceId)
           .map(surface => surfaceId -> SurfaceFrameLayout.forContent(frameRect, surface.content).contentRect)
     }
+    val floatingOverlayRowSlots = (OverlayViewModel.fromState(state, calculatedLayout).aboveCursor.toList ++
+      OverlayViewModel.fromState(state, calculatedLayout).belowCursorStack)
+      .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
+      .toMap
     EditorLayoutContract(
       viewportRect = viewportRect,
       contentAreaRect = contentAreaRect,
@@ -188,8 +230,10 @@ object EditorLayoutContract:
       pinnedPanelRects = calculatedLayout.pinnedPanelRects,
       pinnedSurfaceRects = calculatedLayout.pinnedSurfaceRects,
       pinnedSurfaceContentRects = pinnedSurfaceContentRects,
+      pinnedSurfaceRowSlots = pinnedSurfaceRowSlots,
       aboveCursorOverlayRects = aboveCursorOverlayRects,
       belowCursorOverlayRects = belowCursorOverlayRects,
       floatingOverlayRects = floatingOverlayRects,
-      floatingOverlayContentRects = floatingOverlayContentRects
+      floatingOverlayContentRects = floatingOverlayContentRects,
+      floatingOverlayRowSlots = floatingOverlayRowSlots
     )
