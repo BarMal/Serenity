@@ -15,9 +15,9 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.{FontConfig, TextScaleMode}
 import com.serenity.ui.layout.{Layout, PaneSplitDirection}
 import com.serenity.ui.theme.Theme
+import io.circe.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.given
-import io.circe.{Decoder, DecodingFailure, Encoder}
 
 /** Represents the persistent session state that survives application restarts. This is a subset of AppState containing
   * only the information needed to restore the user's workspace.
@@ -646,49 +646,129 @@ given Decoder[RichTextParagraph] = deriveDecoder
 given Encoder[RichTextDocument] = deriveEncoder
 given Decoder[RichTextDocument] = deriveDecoder
 
+private def encodeCursorConfig(config: AppConfig): List[(String, Json)] =
+  List(
+    "cursorMode"             -> config.cursorConfig.mode.asJson,
+    "cursorColors"           -> config.cursorConfig.colors.asJson,
+    "cursorInfoBarMode"      -> config.cursorConfig.infoBarMode.asJson,
+    "cursorInfoBarPlacement" -> config.cursorConfig.infoBarPlacement.asJson
+  )
+
+private def encodeWindowConfig(config: AppConfig): List[(String, Json)] =
+  List(
+    "windowChromeMode"    -> config.windowConfig.chromeMode.asJson,
+    "preferredWindowSize" -> config.windowConfig.preferredSize.asJson
+  )
+
+private def encodeDocumentConfig(config: AppConfig): List[(String, Json)] =
+  List(
+    "markdownViewMode"    -> config.documentConfig.markdownViewMode.asJson,
+    "defaultDocumentMode" -> config.documentConfig.defaultMode.asJson
+  )
+
+private def encodeInterfaceConfig(config: AppConfig): List[(String, Json)] =
+  List(
+    "interfaceDensity"     -> config.interfaceConfig.density.asJson,
+    "uiElementGap"         -> config.interfaceConfig.elementGap.asJson,
+    "uiCornerRadiusPx"     -> config.interfaceConfig.cornerRadiusPx.asJson,
+    "uiOutlineThicknessPx" -> config.interfaceConfig.outlineThicknessPx.asJson
+  )
+
+private def decodeCursorConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[CursorConfig] =
+  for
+    mode        <- cursor.getOrElse[CursorMode]("cursorMode")(defaultConfig.cursorConfig.mode)
+    colors      <- cursor.getOrElse[CursorColorConfig]("cursorColors")(defaultConfig.cursorConfig.colors)
+    infoBarMode <- cursor.getOrElse[CursorInfoBarMode]("cursorInfoBarMode")(defaultConfig.cursorConfig.infoBarMode)
+    infoBarPlacement <- cursor.getOrElse[CursorInfoBarPlacement]("cursorInfoBarPlacement")(
+      defaultConfig.cursorConfig.infoBarPlacement
+    )
+  yield CursorConfig(
+    mode = mode,
+    colors = colors,
+    infoBarMode = infoBarMode,
+    infoBarPlacement = infoBarPlacement
+  )
+
+private def decodeWindowConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[WindowConfig] =
+  for
+    chromeMode <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(defaultConfig.windowConfig.chromeMode)
+    preferredSize <- cursor.getOrElse[Option[PreferredWindowSize]]("preferredWindowSize")(
+      defaultConfig.windowConfig.preferredSize
+    )
+  yield WindowConfig(
+    chromeMode = chromeMode,
+    preferredSize = preferredSize
+  )
+
+private def decodeDocumentConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[DocumentConfig] =
+  for
+    markdownViewMode <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(
+      defaultConfig.documentConfig.markdownViewMode
+    )
+    defaultMode <- cursor.getOrElse[DefaultDocumentMode]("defaultDocumentMode")(
+      defaultConfig.documentConfig.defaultMode
+    )
+  yield DocumentConfig(
+    markdownViewMode = markdownViewMode,
+    defaultMode = defaultMode
+  )
+
+private def decodeInterfaceConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[InterfaceConfig] =
+  for
+    density        <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(defaultConfig.interfaceConfig.density)
+    elementGap     <- cursor.getOrElse[Int]("uiElementGap")(defaultConfig.interfaceConfig.elementGap)
+    cornerRadiusPx <- cursor.getOrElse[Int]("uiCornerRadiusPx")(defaultConfig.interfaceConfig.cornerRadiusPx)
+    outlineThicknessPx <- cursor.getOrElse[Int]("uiOutlineThicknessPx")(
+      defaultConfig.interfaceConfig.outlineThicknessPx
+    )
+  yield InterfaceConfig(
+    density = density,
+    elementGap = elementGap,
+    cornerRadiusPx = cornerRadiusPx,
+    outlineThicknessPx = outlineThicknessPx
+  )
+
 given Encoder[AppConfig] = Encoder.instance { config =>
-  io.circe.Json.obj(
-    "characterAnimation"                -> config.characterAnimation.asJson,
-    "syntaxHighlightingEnabled"         -> config.syntaxHighlightingEnabled.asJson,
-    "hotkeyConfig"                      -> config.hotkeyConfig.asJson,
-    "focusedKeymapConfig"               -> config.focusedKeymapConfig.asJson,
-    "fontConfig"                        -> config.fontConfig.asJson,
-    "minimumPaneWidth"                  -> config.minimumPaneWidth.asJson,
-    "showLineNumbers"                   -> config.showLineNumbers.asJson,
-    "showGutter"                        -> config.showGutter.asJson,
-    "wordWrapEnabled"                   -> config.wordWrapEnabled.asJson,
-    "blurRadius"                        -> config.blurRadius.asJson,
-    "backgroundStyle"                   -> config.backgroundStyle.asJson,
-    "materialPreset"                    -> config.materialPreset.asJson,
-    "motionPreset"                      -> config.motionPreset.asJson,
-    "elementTransitionSpeedScale"       -> config.elementTransitionSpeedScale.asJson,
-    "editorTextTransitionSpeedScale"    -> config.editorTextTransitionSpeedScale.asJson,
-    "commandRunnerTransitionSpeedScale" -> config.commandRunnerTransitionSpeedScale.asJson,
-    "uiTransitionSpeedScale"            -> config.uiTransitionSpeedScale.asJson,
-    "cursorTransitionSpeedScale"        -> config.cursorTransitionSpeedScale.asJson,
-    "commandRunnerAnimation"            -> config.commandRunnerAnimation.asJson,
-    "uiAnimation"                       -> config.uiAnimation.asJson,
-    "commandRunnerVisibleRows"          -> config.commandRunnerVisibleRows.asJson,
-    "renderFpsTarget"                   -> config.renderFpsTarget.asJson,
-    "editorInsertionTransitionKind"     -> config.editorInsertionTransitionKind.asJson,
-    "commandRunnerTransitionKind"       -> config.commandRunnerTransitionKind.asJson,
-    "panelOpenTransitionKind"           -> config.panelOpenTransitionKind.asJson,
-    "panelCloseTransitionKind"          -> config.panelCloseTransitionKind.asJson,
-    "cursorMode"                        -> config.cursorMode.asJson,
-    "cursorColors"                      -> config.cursorColors.asJson,
-    "cursorInfoBarMode"                 -> config.cursorInfoBarMode.asJson,
-    "cursorInfoBarPlacement"            -> config.cursorInfoBarPlacement.asJson,
-    "windowChromeMode"                  -> config.windowChromeMode.asJson,
-    "markdownViewMode"                  -> config.markdownViewMode.asJson,
-    "defaultDocumentMode"               -> config.defaultDocumentMode.asJson,
-    "interfaceDensity"                  -> config.interfaceDensity.asJson,
-    "uiElementGap"                      -> config.uiElementGap.asJson,
-    "uiCornerRadiusPx"                  -> config.uiCornerRadiusPx.asJson,
-    "uiOutlineThicknessPx"              -> config.uiOutlineThicknessPx.asJson,
-    "textAreaInsets"                    -> config.textAreaInsets.asJson,
-    "preferredWindowSize"               -> config.preferredWindowSize.asJson,
-    "lspUserConfig"                     -> config.lspUserConfig.asJson,
-    "spellCheck"                        -> config.spellCheck.asJson
+  Json.obj(
+    (
+      List(
+        "characterAnimation"                -> config.characterAnimation.asJson,
+        "syntaxHighlightingEnabled"         -> config.syntaxHighlightingEnabled.asJson,
+        "hotkeyConfig"                      -> config.hotkeyConfig.asJson,
+        "focusedKeymapConfig"               -> config.focusedKeymapConfig.asJson,
+        "fontConfig"                        -> config.fontConfig.asJson,
+        "minimumPaneWidth"                  -> config.minimumPaneWidth.asJson,
+        "showLineNumbers"                   -> config.showLineNumbers.asJson,
+        "showGutter"                        -> config.showGutter.asJson,
+        "wordWrapEnabled"                   -> config.wordWrapEnabled.asJson,
+        "blurRadius"                        -> config.blurRadius.asJson,
+        "backgroundStyle"                   -> config.backgroundStyle.asJson,
+        "materialPreset"                    -> config.materialPreset.asJson,
+        "motionPreset"                      -> config.motionPreset.asJson,
+        "elementTransitionSpeedScale"       -> config.elementTransitionSpeedScale.asJson,
+        "editorTextTransitionSpeedScale"    -> config.editorTextTransitionSpeedScale.asJson,
+        "commandRunnerTransitionSpeedScale" -> config.commandRunnerTransitionSpeedScale.asJson,
+        "uiTransitionSpeedScale"            -> config.uiTransitionSpeedScale.asJson,
+        "cursorTransitionSpeedScale"        -> config.cursorTransitionSpeedScale.asJson,
+        "commandRunnerAnimation"            -> config.commandRunnerAnimation.asJson,
+        "uiAnimation"                       -> config.uiAnimation.asJson,
+        "commandRunnerVisibleRows"          -> config.commandRunnerVisibleRows.asJson,
+        "renderFpsTarget"                   -> config.renderFpsTarget.asJson,
+        "editorInsertionTransitionKind"     -> config.editorInsertionTransitionKind.asJson,
+        "commandRunnerTransitionKind"       -> config.commandRunnerTransitionKind.asJson,
+        "panelOpenTransitionKind"           -> config.panelOpenTransitionKind.asJson,
+        "panelCloseTransitionKind"          -> config.panelCloseTransitionKind.asJson
+      ) ++
+        encodeCursorConfig(config) ++
+        encodeWindowConfig(config) ++
+        encodeDocumentConfig(config) ++
+        encodeInterfaceConfig(config) ++
+        List(
+          "textAreaInsets" -> config.textAreaInsets.asJson,
+          "lspUserConfig"  -> config.lspUserConfig.asJson,
+          "spellCheck"     -> config.spellCheck.asJson
+        )
+    )*
   )
 }
 
@@ -742,23 +822,13 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     commandRunnerTransitionKind <- cursor.getOrElse[Option[TransitionKind]]("commandRunnerTransitionKind")(None)
     panelOpenTransitionKind     <- cursor.getOrElse[Option[TransitionKind]]("panelOpenTransitionKind")(None)
     panelCloseTransitionKind    <- cursor.getOrElse[Option[TransitionKind]]("panelCloseTransitionKind")(None)
-    cursorMode                  <- cursor.getOrElse[CursorMode]("cursorMode")(CursorMode.Blink)
-    cursorColors                <- cursor.getOrElse[CursorColorConfig]("cursorColors")(CursorColorConfig())
-    cursorInfoBarMode           <- cursor.getOrElse[CursorInfoBarMode]("cursorInfoBarMode")(CursorInfoBarMode.Off)
-    cursorInfoBarPlacement <- cursor.getOrElse[CursorInfoBarPlacement]("cursorInfoBarPlacement")(
-      CursorInfoBarPlacement.Floating
-    )
-    windowChromeMode     <- cursor.getOrElse[WindowChromeMode]("windowChromeMode")(defaultConfig.windowChromeMode)
-    markdownViewMode     <- cursor.getOrElse[MarkdownViewMode]("markdownViewMode")(MarkdownViewMode.Source)
-    defaultDocumentMode  <- cursor.getOrElse[DefaultDocumentMode]("defaultDocumentMode")(DefaultDocumentMode.PlainText)
-    interfaceDensity     <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(InterfaceDensity.Comfortable)
-    uiElementGap         <- cursor.getOrElse[Int]("uiElementGap")(0)
-    uiCornerRadiusPx     <- cursor.getOrElse[Int]("uiCornerRadiusPx")(8)
-    uiOutlineThicknessPx <- cursor.getOrElse[Int]("uiOutlineThicknessPx")(defaultConfig.uiOutlineThicknessPx)
-    textAreaInsets       <- cursor.getOrElse[TextAreaInsets]("textAreaInsets")(TextAreaInsets())
-    preferredWindowSize  <- cursor.getOrElse[Option[PreferredWindowSize]]("preferredWindowSize")(None)
-    lspUserConfig        <- cursor.getOrElse[LspUserConfig]("lspUserConfig")(LspUserConfig.empty)
-    spellCheck           <- cursor.getOrElse[SpellCheckConfig]("spellCheck")(SpellCheckConfig())
+    cursorConfig                <- decodeCursorConfig(cursor, defaultConfig)
+    windowConfig                <- decodeWindowConfig(cursor, defaultConfig)
+    documentConfig              <- decodeDocumentConfig(cursor, defaultConfig)
+    interfaceConfig             <- decodeInterfaceConfig(cursor, defaultConfig)
+    textAreaInsets              <- cursor.getOrElse[TextAreaInsets]("textAreaInsets")(TextAreaInsets())
+    lspUserConfig               <- cursor.getOrElse[LspUserConfig]("lspUserConfig")(LspUserConfig.empty)
+    spellCheck                  <- cursor.getOrElse[SpellCheckConfig]("spellCheck")(SpellCheckConfig())
   yield AppConfig(
     characterAnimation = characterAnimation,
     syntaxHighlightingEnabled = syntaxHighlightingEnabled,
@@ -786,26 +856,10 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     commandRunnerTransitionKind = commandRunnerTransitionKind,
     panelOpenTransitionKind = panelOpenTransitionKind,
     panelCloseTransitionKind = panelCloseTransitionKind,
-    cursorConfig = CursorConfig(
-      mode = cursorMode,
-      colors = cursorColors,
-      infoBarMode = cursorInfoBarMode,
-      infoBarPlacement = cursorInfoBarPlacement
-    ),
-    windowConfig = WindowConfig(
-      chromeMode = windowChromeMode,
-      preferredSize = preferredWindowSize
-    ),
-    documentConfig = DocumentConfig(
-      markdownViewMode = markdownViewMode,
-      defaultMode = defaultDocumentMode
-    ),
-    interfaceConfig = InterfaceConfig(
-      density = interfaceDensity,
-      elementGap = uiElementGap,
-      cornerRadiusPx = uiCornerRadiusPx,
-      outlineThicknessPx = uiOutlineThicknessPx
-    ),
+    cursorConfig = cursorConfig,
+    windowConfig = windowConfig,
+    documentConfig = documentConfig,
+    interfaceConfig = interfaceConfig,
     textAreaInsets = textAreaInsets,
     lspUserConfig = lspUserConfig,
     spellCheck = spellCheck.normalized
