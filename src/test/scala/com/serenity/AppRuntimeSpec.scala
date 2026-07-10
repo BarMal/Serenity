@@ -9,7 +9,7 @@ import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntime
-import com.serenity.config.{AppConfig, RenderFpsTarget}
+import com.serenity.config.{AppConfig, CursorMode, RenderFpsTarget}
 import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.Event
@@ -322,6 +322,68 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     yield
       forced shouldBe true
       val failure = entries.find(_.message.contains("[RUNTIME] render loop failed"))
+      failure.map(_.message) shouldBe defined
+      failure.get.message should include("phase=idle.cursor-render")
+      failure.get.message should include("viewport=120x40")
+      failure.flatMap(_.error).map(_.getMessage) should contain("boom")
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "toggle blink cursor visibility for idle frames" in {
+    val program = for
+      cursorVisible <- Ref.of[IO, Boolean](true)
+      breathIndex   <- Ref.of[IO, Int](0)
+      first         <- AppRuntime.computeIdleCursorFrame(AppState.initial, cursorVisible, breathIndex)
+      second        <- AppRuntime.computeIdleCursorFrame(AppState.initial, cursorVisible, breathIndex)
+    yield
+      first shouldBe ((false, None))
+      second shouldBe ((true, None))
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "derive breathing cursor colours for idle frames" in {
+    val state             = AppState.initial.copy(config = AppState.initial.config.withCursorMode(CursorMode.Breathe))
+    val expectedBaseColor = state.config.cursorColors.activeOr(state.theme.cursor)
+    val expectedAlpha     = ((math.sin(math.Pi / 24) + 1.0) / 2.0 * 255).toInt
+
+    val program = for
+      cursorVisible <- Ref.of[IO, Boolean](true)
+      breathIndex   <- Ref.of[IO, Int](0)
+      frame         <- AppRuntime.computeIdleCursorFrame(state, cursorVisible, breathIndex)
+      nextIndex     <- breathIndex.get
+    yield
+      frame._1 shouldBe true
+      nextIndex shouldBe 1
+      val cursor = frame._2.getOrElse(fail("Expected breathing cursor colour"))
+      cursor.getRed shouldBe expectedBaseColor.getRed
+      cursor.getGreen shouldBe expectedBaseColor.getGreen
+      cursor.getBlue shouldBe expectedBaseColor.getBlue
+      cursor.getAlpha shouldBe expectedAlpha
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "request a full render after recovering an idle cursor render failure" in {
+    val program = for
+      logs          <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
+      requestedFast <- Ref.of[IO, Boolean](false)
+      given Logger[IO] = new RecordingLogger(logs)
+      _ <- AppRuntime.recoverIdleCursorRenderFailure(
+        AppRuntime.RuntimeFailure(
+          loopName = "render loop",
+          phase = "idle.cursor-render",
+          diagnostics = "viewport=120x40",
+          cause = RuntimeException("boom")
+        ),
+        requestedFast.set(true)
+      )
+      entries   <- logs.get
+      requested <- requestedFast.get
+    yield
+      requested shouldBe true
+      val failure = entries.find(_.message.contains("[RUNTIME] idle cursor render failed"))
       failure.map(_.message) shouldBe defined
       failure.get.message should include("phase=idle.cursor-render")
       failure.get.message should include("viewport=120x40")
