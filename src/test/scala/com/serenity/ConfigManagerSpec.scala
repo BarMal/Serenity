@@ -509,6 +509,21 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("ui.outline_thickness = 4")
   }
 
+  it should "store interface density and chrome metrics inside the interface sub-config" in {
+    val config = AppConfig.default
+      .withInterfaceDensity(InterfaceDensity.Spacious)
+      .withUiElementGap(3)
+      .withUiCornerRadiusPx(14)
+      .withUiOutlineThicknessPx(4)
+
+    config.interfaceConfig shouldBe InterfaceConfig(
+      density = InterfaceDensity.Spacious,
+      elementGap = 3,
+      cornerRadiusPx = 14,
+      outlineThicknessPx = 4
+    )
+  }
+
   it should "load and write word wrap display mode" in {
     val configFile = Files.createTempFile("serenity-word-wrap-config", ".conf")
     Files.writeString(

@@ -43,7 +43,6 @@ object ConfigKeySchema:
       "font.text.ligatures",
       "font.prose.ligatures",
       "font.ui.ligatures",
-      "interface.density",
       "ui.material",
       "material.preset",
       "ui.motion",
@@ -73,12 +72,6 @@ object ConfigKeySchema:
       "ui.motion.panel.open",
       "ui.motion.panel_close",
       "ui.motion.panel.close",
-      "ui.element_gap",
-      "ui.element.gap",
-      "ui.corner_radius",
-      "ui.corner.radius",
-      "ui.outline_thickness",
-      "ui.outline.thickness",
       "command_runner.visible_rows",
       "command.runner.visible.rows",
       "render.fps",
@@ -108,7 +101,10 @@ object ConfigKeySchema:
       "spellcheck.dictionary_paths",
       "spellcheck.dictionary.paths",
       "spellcheck.words"
-    ) ++ CursorConfig.Schema.currentKeys ++ DocumentConfig.Schema.currentKeys ++ WindowConfig.Schema.currentKeys
+    ) ++ CursorConfig.Schema.currentKeys ++
+      DocumentConfig.Schema.currentKeys ++
+      InterfaceConfig.Schema.currentKeys ++
+      WindowConfig.Schema.currentKeys
 
   val deprecatedKeys: Map[String, String] =
     Map(
@@ -131,7 +127,6 @@ object ConfigKeySchema:
       "font_prose_ligatures"                 -> "font.text.ligatures",
       "font_ligatures"                       -> "font.code.ligatures and font.text.ligatures",
       "font_ui_ligatures"                    -> "font.ui.ligatures",
-      "interface_density"                    -> "interface.density",
       "ui_material"                          -> "ui.material",
       "material_preset"                      -> "material.preset",
       "ui_motion"                            -> "ui.motion",
@@ -148,9 +143,6 @@ object ConfigKeySchema:
       "ui_motion_panel_open"                 -> "ui.motion.panel_open",
       "ui_motion_panel_close"                -> "ui.motion.panel_close",
       "motion_speed_scale"                   -> "motion.speed_scale",
-      "ui_element_gap"                       -> "ui.element_gap",
-      "ui_corner_radius"                     -> "ui.corner_radius",
-      "ui_outline_thickness"                 -> "ui.outline_thickness",
       "command_runner_visible_rows"          -> "command_runner.visible_rows",
       "render_fps"                           -> "render.fps",
       "ui_render_fps"                        -> "ui.render.fps",
@@ -170,4 +162,7 @@ object ConfigKeySchema:
       "spellcheck_languages"                 -> "spellcheck.languages",
       "spellcheck_dictionary_paths"          -> "spellcheck.dictionary_paths",
       "spellcheck_words"                     -> "spellcheck.words"
-    ) ++ CursorConfig.Schema.deprecatedKeys ++ DocumentConfig.Schema.deprecatedKeys ++ WindowConfig.Schema.deprecatedKeys
+    ) ++ CursorConfig.Schema.deprecatedKeys ++
+      DocumentConfig.Schema.deprecatedKeys ++
+      InterfaceConfig.Schema.deprecatedKeys ++
+      WindowConfig.Schema.deprecatedKeys

@@ -166,11 +166,12 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
   it should "apply configured gaps between pinned panels and the editor workspace" in {
     val state = AppState.initial.copy(
-      config = AppConfig.default.copy(
-        uiElementGap = 2,
-        showLineNumbers = false,
-        textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0)
-      ),
+      config = AppConfig.default
+        .copy(
+          showLineNumbers = false,
+          textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0)
+        )
+        .withUiElementGap(2),
       uiSurfaces = List(
         UiSurface(
           SurfaceId("left-panel"),

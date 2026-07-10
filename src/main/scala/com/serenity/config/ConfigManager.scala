@@ -238,6 +238,14 @@ object ConfigManager:
                   config.withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
                 case _ =>
                   config
+            case key if InterfaceConfig.Schema.densityKeys.contains(key) =>
+              parseInterfaceDensity(value.trim).map(config.withInterfaceDensity).getOrElse(config)
+            case key if InterfaceConfig.Schema.elementGapKeys.contains(key) =>
+              parseUiElementGap(value.trim).map(config.withUiElementGap).getOrElse(config)
+            case key if InterfaceConfig.Schema.cornerRadiusKeys.contains(key) =>
+              parseUiCornerRadiusPx(value.trim).map(config.withUiCornerRadiusPx).getOrElse(config)
+            case key if InterfaceConfig.Schema.outlineThicknessKeys.contains(key) =>
+              parseUiOutlineThicknessPx(value.trim).map(config.withUiOutlineThicknessPx).getOrElse(config)
             case "ui.material" | "ui_material" | "material.preset" | "material_preset" =>
               parseMaterialPreset(value.trim).map(config.withMaterialPreset).getOrElse(config)
             case "ui.motion" | "ui_motion" | "motion.preset" | "motion_preset" =>
@@ -618,7 +626,7 @@ object ConfigManager:
             if CursorConfig.Schema.activeColorKeys.contains(key) ||
               CursorConfig.Schema.inactiveColorKeys.contains(key) =>
           value.nonEmpty && parseColor(value).isEmpty
-        case "interface.density" | "interface_density" =>
+        case key if InterfaceConfig.Schema.densityKeys.contains(key) =>
           !Set("compact", "comfortable", "spacious").contains(normalizedValue)
         case key if CursorConfig.Schema.infoBarModeKeys.contains(key) =>
           !Set("off", "false", "disabled", "position", "minimal", "detailed", "full").contains(normalizedValue)
@@ -650,11 +658,11 @@ object ConfigManager:
           parseTransitionKind(value).isEmpty
         case key if WindowConfig.Schema.chromeKeys.contains(key) =>
           parseWindowChromeMode(value).isEmpty
-        case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
+        case key if InterfaceConfig.Schema.elementGapKeys.contains(key) =>
           parseUiElementGap(value).isEmpty
-        case "ui.corner_radius" | "ui.corner.radius" | "ui_corner_radius" =>
+        case key if InterfaceConfig.Schema.cornerRadiusKeys.contains(key) =>
           parseUiCornerRadiusPx(value).isEmpty
-        case "ui.outline_thickness" | "ui.outline.thickness" | "ui_outline_thickness" =>
+        case key if InterfaceConfig.Schema.outlineThicknessKeys.contains(key) =>
           parseUiOutlineThicknessPx(value).isEmpty
         case "command_runner.visible_rows" | "command.runner.visible.rows" | "command_runner_visible_rows" =>
           parseCommandRunnerVisibleRows(value).isEmpty
@@ -745,6 +753,13 @@ object ConfigManager:
       case "markdown" | "md"                             => Some(DefaultDocumentMode.Markdown)
       case "rich-text" | "richtext" | "rich" | "rtf"     => Some(DefaultDocumentMode.RichText)
       case _                                             => None
+
+  private def parseInterfaceDensity(value: String): Option[InterfaceDensity] =
+    value.toLowerCase match
+      case "compact"     => Some(InterfaceDensity.Compact)
+      case "comfortable" => Some(InterfaceDensity.Comfortable)
+      case "spacious"    => Some(InterfaceDensity.Spacious)
+      case _             => None
 
   private def parseWindowChromeMode(value: String): Option[WindowChromeMode] =
     value.toLowerCase match

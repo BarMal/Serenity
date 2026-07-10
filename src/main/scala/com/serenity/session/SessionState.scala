@@ -508,6 +508,8 @@ given Encoder[CursorConfig]        = deriveEncoder
 given Decoder[CursorConfig]        = deriveDecoder
 given Encoder[DocumentConfig]      = deriveEncoder
 given Decoder[DocumentConfig]      = deriveDecoder
+given Encoder[InterfaceConfig]     = deriveEncoder
+given Decoder[InterfaceConfig]     = deriveDecoder
 
 given Encoder[TextAreaInsets] = deriveEncoder
 given Decoder[TextAreaInsets] = deriveDecoder
@@ -798,10 +800,12 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
       markdownViewMode = markdownViewMode,
       defaultMode = defaultDocumentMode
     ),
-    interfaceDensity = interfaceDensity,
-    uiElementGap = AppConfig.clampUiElementGap(uiElementGap),
-    uiCornerRadiusPx = AppConfig.clampUiCornerRadiusPx(uiCornerRadiusPx),
-    uiOutlineThicknessPx = AppConfig.clampUiOutlineThicknessPx(uiOutlineThicknessPx),
+    interfaceConfig = InterfaceConfig(
+      density = interfaceDensity,
+      elementGap = uiElementGap,
+      cornerRadiusPx = uiCornerRadiusPx,
+      outlineThicknessPx = uiOutlineThicknessPx
+    ),
     textAreaInsets = textAreaInsets,
     lspUserConfig = lspUserConfig,
     spellCheck = spellCheck.normalized
