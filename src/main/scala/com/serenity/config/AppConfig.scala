@@ -78,9 +78,9 @@ object RenderFpsTarget:
       case "uncapped" | "max" | "maximum" => Some(Uncapped)
       case _                              => None
 
-enum CursorMode:
-  case Blink
-  case Breathe
+enum CursorMode(val configKey: String):
+  case Blink   extends CursorMode("blink")
+  case Breathe extends CursorMode("breathe")
 
 enum CursorInfoBarMode:
   case Off
@@ -372,6 +372,7 @@ object CursorConfig:
   object Schema:
 
     val currentKeys: Set[String] = Set(
+      "cursor.mode",
       "cursor.active.color",
       "cursor.inactive.color",
       "cursor.info_bar",
@@ -381,11 +382,14 @@ object CursorConfig:
     )
 
     val deprecatedKeys: Map[String, String] = Map(
+      "cursor_mode"               -> "cursor.mode",
       "cursor_active_color"       -> "cursor.active.color",
       "cursor_inactive_color"     -> "cursor.inactive.color",
       "cursor_info_bar"           -> "cursor.info_bar",
       "cursor_info_bar_placement" -> "cursor.info_bar.placement"
     )
+
+    val modeKeys: Set[String] = Set("cursor.mode", "cursor_mode")
 
     val activeColorKeys: Set[String] = Set("cursor.active.color", "cursor_active_color")
 

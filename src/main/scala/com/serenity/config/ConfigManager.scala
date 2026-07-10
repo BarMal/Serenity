@@ -180,6 +180,8 @@ object ConfigManager:
                   config.withFontConfig(config.fontConfig.copy(enableLigatures = false, textLigatures = false))
                 case _ =>
                   config
+            case key if CursorConfig.Schema.modeKeys.contains(key) =>
+              parseCursorMode(value.trim).map(config.withCursorMode).getOrElse(config)
             case key if CursorConfig.Schema.activeColorKeys.contains(key) =>
               parseColor(value.trim)
                 .map(color => config.withCursorColors(config.cursorColors.copy(active = Some(color))))
@@ -465,6 +467,7 @@ object ConfigManager:
         |font.ui.ligatures = ${config.fontConfig.uiLigatures}
        |
        |# Cursor colour overrides. Leave empty to use the active theme cursor.
+       |cursor.mode = ${config.cursorMode.configKey}
        |cursor.active.color = ${config.cursorColors.active.map(formatColor).getOrElse("")}
        |cursor.inactive.color = ${config.cursorColors.inactive.map(formatColor).getOrElse("")}
        |cursor.info_bar = ${config.cursorInfoBarMode.configKey}
@@ -627,6 +630,8 @@ object ConfigManager:
           parseTextScaleMode(value).isEmpty
         case "font.text_scale" | "font.text.scale" | "font_text_scale" =>
           parseTextScaleMultiplier(value).isEmpty
+        case key if CursorConfig.Schema.modeKeys.contains(key) =>
+          parseCursorMode(value).isEmpty
         case key
             if CursorConfig.Schema.activeColorKeys.contains(key) ||
               CursorConfig.Schema.inactiveColorKeys.contains(key) =>
@@ -889,6 +894,12 @@ object ConfigManager:
       case "true" | "on" | "enabled"    => Some(true)
       case "false" | "off" | "disabled" => Some(false)
       case _                            => None
+
+  private def parseCursorMode(value: String): Option[CursorMode] =
+    value.toLowerCase match
+      case "blink"                 => Some(CursorMode.Blink)
+      case "breathe" | "breathing" => Some(CursorMode.Breathe)
+      case _                       => None
 
   private def lspConfigToString(config: LspUserConfig): String =
     config.servers
