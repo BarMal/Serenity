@@ -90,6 +90,22 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
     plan.kind shouldBe TransitionKind.TypedText
   }
 
+  it should "derive editor insertion timing from the editor text speed scale" in {
+    val config = AppConfig.default
+      .withMotionPreset(MotionPreset.Subtle)
+      .withEditorInsertionTransitionKind(TransitionKind.DirectionalSweep)
+      .withEditorTextTransitionSpeedScale(Some(0.5))
+      .withUiTransitionSpeedScale(Some(2.0))
+
+    val plan = ElementTransitionPlanner.plan(
+      ElementTransitionRequest(TransitionScope.EditorInsertion),
+      config.editorInsertionTransitionSettings
+    )
+
+    plan.kind shouldBe TransitionKind.DirectionalSweep
+    plan.timing shouldBe TransitionTiming(durationMs = 80, staggerMs = 6, delayMs = 0, speedScale = 0.5)
+  }
+
   it should "derive panel open and close transition overrides from app config" in {
     val config = AppConfig.default
       .withMotionPreset(MotionPreset.Subtle)
