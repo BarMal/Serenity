@@ -491,6 +491,12 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       .flatMap(view => view.surfaceId.map(_ -> view))
       .toMap
 
+    EditorLayoutContract.panelRectFor(pinnedPanel, calculatedLayout) shouldBe Some(
+      contract.pinnedSurfaceRects(pinnedPanel.id)
+    )
+    EditorLayoutContract.panelRectFor(expandedPanel, calculatedLayout) shouldBe Some(
+      contract.expandedSurfaceRects(expandedPanel.id)
+    )
     contract.panelRect(pinnedPanel.id) shouldBe Some(contract.pinnedSurfaceRects(pinnedPanel.id))
     contract.panelTitleRect(pinnedPanel.id) shouldBe Some(contract.pinnedSurfaceTitleRects(pinnedPanel.id))
     contract.panelContentRect(pinnedPanel.id) shouldBe Some(panelViews(pinnedPanel.id).resolvedContentRect)
@@ -543,6 +549,10 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       .toMap
     val overlayRects = contract.floatingOverlayRects.toMap
 
+    EditorLayoutContract.overlayRectFor(quickInfo.id, calculatedLayout) shouldBe Some(overlayRects(quickInfo.id))
+    EditorLayoutContract.overlayRectFor(commandRunner.id, calculatedLayout) shouldBe Some(
+      overlayRects(commandRunner.id)
+    )
     contract.overlayRect(quickInfo.id) shouldBe Some(overlayRects(quickInfo.id))
     contract.overlayContentRect(quickInfo.id) shouldBe Some(overlaysById(quickInfo.id).resolvedContentRect)
     contract.overlayRowSlots(quickInfo.id) shouldBe overlaysById(quickInfo.id).contentRowSlots
