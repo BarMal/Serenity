@@ -52,3 +52,32 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
     InterfaceDensity.fromConfigKey("comfortable").shouldBe(Some(InterfaceDensity.Comfortable))
     InterfaceDensity.fromConfigKey("unknown").shouldBe(None)
   }
+
+  it should "parse interface config entries centrally" in {
+    val densityConfig =
+      InterfaceConfig.Schema
+        .parse(AppConfig.default, "interface_density", "spacious")
+        .getOrElse(fail("density parse"))
+    val gapConfig =
+      InterfaceConfig.Schema.parse(AppConfig.default, "ui.element_gap", "4").getOrElse(fail("gap parse"))
+    val radiusConfig =
+      InterfaceConfig.Schema.parse(AppConfig.default, "ui_corner_radius", "14").getOrElse(fail("radius parse"))
+    val outlineConfig =
+      InterfaceConfig.Schema
+        .parse(AppConfig.default, "ui.outline.thickness", "5")
+        .getOrElse(fail("outline parse"))
+
+    densityConfig.interfaceConfig.density.shouldBe(InterfaceDensity.Spacious)
+    gapConfig.interfaceConfig.elementGap.shouldBe(4)
+    radiusConfig.interfaceConfig.cornerRadiusPx.shouldBe(14)
+    outlineConfig.interfaceConfig.outlineThicknessPx.shouldBe(5)
+    InterfaceConfig.Schema.parse(AppConfig.default, "interface.density", "unknown").shouldBe(None)
+  }
+
+  it should "validate interface config entries centrally" in {
+    InterfaceConfig.Schema.invalidValue("interface.density", "compact").shouldBe(false)
+    InterfaceConfig.Schema.invalidValue("interface.density", "unknown").shouldBe(true)
+    InterfaceConfig.Schema.invalidValue("ui.element_gap", "wide").shouldBe(true)
+    InterfaceConfig.Schema.invalidValue("ui.corner_radius", "14").shouldBe(false)
+    InterfaceConfig.Schema.invalidValue("ui.outline.thickness", "").shouldBe(true)
+  }
