@@ -4,6 +4,7 @@ import java.nio.file.Paths
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -18,7 +19,8 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val viewport = ViewportSize(100, 32)
+  private val viewport              = ViewportSize(100, 32)
+  private val compactSquareViewport = ViewportSize(40, 12)
 
   private def makeStateManager() =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
@@ -40,6 +42,10 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
   private def panelContentRect(state: AppState, surfaceId: SurfaceId): LayoutRect =
     val layout = LayoutEngine.calculateLayoutWithUI(state, viewport)
     SurfaceFrameLayout(layout.pinnedSurfaceRects(surfaceId)).contentRect
+
+  private def panelFrameRect(state: AppState, surfaceId: SurfaceId, viewportSize: ViewportSize = viewport): LayoutRect =
+    val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+    layout.pinnedSurfaceRects(surfaceId)
 
   private def withActiveBuffer(sm: StateManager, text: String): BufferId =
     val bufferId = BufferId(42)
@@ -173,6 +179,40 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe Focus.EditorPane(PaneId(0))
     updated.buffers(bufferId).cursors shouldBe List(CursorPosition(2, 3))
+  }
+
+  it should "navigate to rendered diagnostics rows when frame and content layout kinds disagree" in {
+    val sm       = makeStateManager()
+    val bufferId = withActiveBuffer(sm, "first\nsecond\nthird")
+    val issues = List(
+      Diagnostic("unused import", DiagnosticSeverity.Warning, Location(0, 1)),
+      Diagnostic("type mismatch", DiagnosticSeverity.Error, Location(2, 3))
+    )
+    val surface = UiSurface(
+      id = SurfaceId("diagnostics"),
+      content = SurfaceContent.Diagnostics(issues),
+      presentation = SurfacePresentation.Pinned(PanelPosition.Right, 18)
+    )
+    sm.updateState(
+      _.copy(
+        config = AppConfig.default.copy(showLineNumbers = false, showGutter = false),
+        uiSurfaces = List(surface)
+      )
+    ).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(compactSquareViewport)).unsafeRunSync()
+
+    val state       = sm.getCurrentState.unsafeRunSync()
+    val frameRect   = panelFrameRect(state, surface.id, compactSquareViewport)
+    val contentRect = SurfaceFrameLayout(frameRect).contentRect
+
+    SurfaceLayoutKind.classify(frameRect) shouldBe SurfaceLayoutKind.Square
+    SurfaceLayoutKind.classify(contentRect) shouldBe SurfaceLayoutKind.Compact
+
+    sm.applyEvent(MouseClick(contentRect.x + 1, contentRect.y + 1)).unsafeRunSync()
+
+    val updated = sm.getCurrentState.unsafeRunSync()
+    updated.focus shouldBe Focus.EditorPane(PaneId(0))
+    updated.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 1))
   }
 
   it should "not navigate from blank rows in a horizontal bottom diagnostics panel" in {

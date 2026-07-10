@@ -1105,11 +1105,11 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         .map { surface =>
           panelPosition(surface).flatMap { position =>
             panelRectForSurface(layout, surface).flatMap { rect =>
-              val contentRect   = SurfaceFrameLayout(rect).contentRect
+              val contentRect   = SurfaceFrameLayout.forContent(rect, surface.content).contentRect
               val insideColumns = event.col >= contentRect.x && event.col < contentRect.right
               val rowIndex      = event.row - contentRect.y
               Option.when(insideColumns && rowIndex >= 0 && rowIndex < contentRect.height) {
-                PinnedPanelRowHit(surface, position, rowIndex, SurfaceLayoutKind.classify(contentRect))
+                PinnedPanelRowHit(surface, position, rowIndex, SurfaceLayoutKind.classify(rect))
               }
             }
           }
