@@ -158,11 +158,11 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val contract = EditorLayoutContract.from(state, viewport, layout)
-    val contentRect = contract.floatingOverlayContentRects
-      .collectFirst { case (`surfaceId`, rect) => rect }
+    val contentRect = contract
+      .overlayContentRect(surfaceId)
       .getOrElse(fail(s"Expected overlay content rect for ${surfaceId.value}"))
-    val rowY = contract.floatingOverlayRowSlots
-      .getOrElse(surfaceId, Nil)
+    val rowY = contract
+      .overlayRowSlots(surfaceId)
       .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(`displayedItemRow`), y) => y }
       .getOrElse(fail(s"Expected overlay item row $displayedItemRow for ${surfaceId.value}"))
     Point(x = contentRect.x + 1, y = rowY)
