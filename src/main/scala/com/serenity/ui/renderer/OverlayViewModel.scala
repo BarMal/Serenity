@@ -41,7 +41,9 @@ object OverlayViewModel:
 
   def fromState(state: AppState, layout: CalculatedLayout): OverlayViews =
     val aboveCursor = preferredFloatingSurface(state, SurfacePlacement.AboveCursor)
-      .flatMap(surface => buildView(surface, state, layout.aboveCursorOverlayRect, collapsed = false))
+      .flatMap(surface =>
+        buildView(surface, state, EditorLayoutContract.overlayRectFor(surface.id, layout), collapsed = false)
+      )
 
     val belowCursorStack = preferredBelowCursorSurfaces(state, layout)
     val belowCursor      = belowCursorStack.headOption
@@ -123,18 +125,17 @@ object OverlayViewModel:
     selectedSurface
 
   private def preferredBelowCursorSurfaces(state: AppState, layout: CalculatedLayout): List[TextOverlayView] =
-    layout.belowCursorOverlayStack.flatMap {
-      case (surfaceId, rect) =>
-        state
-          .surfaceById(surfaceId)
-          .flatMap(surface =>
-            buildView(
-              surface,
-              state,
-              Some(rect),
-              collapsed = layout.collapsedFloatingSurfaceIds.contains(surfaceId)
-            )
+    layout.belowCursorOverlayStack.map(_._1).flatMap { surfaceId =>
+      state
+        .surfaceById(surfaceId)
+        .flatMap(surface =>
+          buildView(
+            surface,
+            state,
+            EditorLayoutContract.overlayRectFor(surfaceId, layout),
+            collapsed = layout.collapsedFloatingSurfaceIds.contains(surfaceId)
           )
+        )
     }
 
   private def contentView(

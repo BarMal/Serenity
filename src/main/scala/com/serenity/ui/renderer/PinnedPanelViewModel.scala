@@ -43,20 +43,20 @@ object PinnedPanelViewModel:
         case SurfacePresentation.Expanded(_, _) => true
         case _                                  => false
     }).flatMap {
-      case surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, _), _) =>
-        pinnedRect(surface, position, layout).map(rect => resolve(surface, rect, Some(state)))
+      case surface @ UiSurface(_, _, SurfacePresentation.Pinned(_, _), _) =>
+        EditorLayoutContract.panelRectFor(surface, layout).map(rect => resolve(surface, rect, Some(state)))
       case surface @ UiSurface(_, _, SurfacePresentation.Expanded(_, _), _) =>
-        layout.expandedPanelRect.map(rect => resolve(surface, rect, Some(state)))
+        EditorLayoutContract.panelRectFor(surface, layout).map(rect => resolve(surface, rect, Some(state)))
       case _ =>
         None
     }
 
   def fromLayout(layout: CalculatedLayout, surfaces: List[UiSurface]): List[TextPanelView] =
     surfaces.flatMap {
-      case surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, _), _) =>
-        pinnedRect(surface, position, layout).map(rect => resolve(surface, rect, None))
+      case surface @ UiSurface(_, _, SurfacePresentation.Pinned(_, _), _) =>
+        EditorLayoutContract.panelRectFor(surface, layout).map(rect => resolve(surface, rect, None))
       case surface @ UiSurface(_, _, SurfacePresentation.Expanded(_, _), _) =>
-        layout.expandedPanelRect.map(rect => resolve(surface, rect, None))
+        EditorLayoutContract.panelRectFor(surface, layout).map(rect => resolve(surface, rect, None))
       case _ =>
         None
     }
@@ -111,6 +111,3 @@ object PinnedPanelViewModel:
         .flatMap(cursor => DocumentNavigation.currentSymbol(symbols, cursor))
         .map(_.location)
     }
-
-  private def pinnedRect(surface: UiSurface, position: PanelPosition, layout: CalculatedLayout): Option[LayoutRect] =
-    layout.pinnedSurfaceRects.get(surface.id).orElse(layout.pinnedPanelRects.get(position))

@@ -1,7 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.config.InterfaceDensityMetrics
-import com.serenity.state.models.{AppState, PaneId, SurfaceId}
+import com.serenity.state.models.*
 import com.serenity.ui.renderer.{OverlayViewModel, PinnedPanelViewModel}
 
 /** Named layout ownership violation for editor and surface rectangles. */
@@ -270,6 +270,21 @@ case class EditorLayoutContract(
     }
 
 object EditorLayoutContract:
+
+  def panelRectFor(surface: UiSurface, calculatedLayout: CalculatedLayout): Option[LayoutRect] =
+    surface.presentation match
+      case SurfacePresentation.Pinned(position, _) =>
+        calculatedLayout.pinnedSurfaceRects.get(surface.id).orElse(calculatedLayout.pinnedPanelRects.get(position))
+      case SurfacePresentation.Expanded(_, _) =>
+        calculatedLayout.expandedPanelRect
+      case _ =>
+        None
+
+  def overlayRectFor(surfaceId: SurfaceId, calculatedLayout: CalculatedLayout): Option[LayoutRect] =
+    calculatedLayout.aboveCursorOverlayStack
+      .find(_._1 == surfaceId)
+      .map(_._2)
+      .orElse(calculatedLayout.belowCursorOverlayStack.find(_._1 == surfaceId).map(_._2))
 
   /** Build the reusable editor layout contract from an already calculated layout. */
   def from(
