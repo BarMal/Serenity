@@ -41,6 +41,16 @@ case class EditorWorkspaceLayout(
   def activeContentRect(state: AppState): Option[LayoutRect] =
     activePaneLayout(state).map(_.contentRect)
 
+  def lineNumberRowSlots(itemCount: Int): List[SurfaceContentRowSlot] =
+    lineNumberRect.toList.flatMap(rect =>
+      SurfaceFrameLayout.contentRowSlotsFor(
+        content = rect,
+        itemCount = itemCount,
+        hasHeader = false,
+        hasFooter = false
+      )
+    )
+
 case class CalculatedLayout(
     editorPanelRect: LayoutRect,
     leftSpacerRect: LayoutRect,

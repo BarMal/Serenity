@@ -273,11 +273,17 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
           .copy(showLineNumbers = true),
         theme = Theme.light
       )
-      val surface   = new MockRenderSurface(80, 24)
-      val viewport  = ViewportSize(80, 24)
-      val layout    = LayoutEngine.calculateLayout(state, viewport)
-      val lineRect  = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
-      val firstRowY = layout.editorPanelRect.y + 1
+      val surface  = new MockRenderSurface(80, 24)
+      val viewport = ViewportSize(80, 24)
+      val layout   = LayoutEngine.calculateLayout(state, viewport)
+      val lineRect = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
+      val firstRowY =
+        LayoutEngine
+          .calculateEditorWorkspaceLayout(state, layout)
+          .lineNumberRowSlots(itemCount = 1)
+          .headOption
+          .map(_.y)
+          .getOrElse(fail("Expected first line-number row slot"))
 
       Renderer.render(state, cursorVisible = true, surface, viewport)
 
