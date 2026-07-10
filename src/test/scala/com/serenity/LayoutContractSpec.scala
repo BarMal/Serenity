@@ -354,7 +354,63 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     contract.viewportRect shouldBe viewportRect
     contract.contentAreaRect.bottom shouldBe calculatedLayout.gutterRect.map(_.y).getOrElse(viewport.height)
     contract.workspace.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
+    contract.pinnedSurfaceContentRects.keySet shouldBe contract.pinnedSurfaceRects.keySet
+    contract.floatingOverlayContentRects.map(_._1) shouldBe contract.floatingOverlayRects.map(_._1)
     contract.violations shouldBe Nil
+  }
+
+  it should "expose frame and content rectangles for pinned surfaces and floating overlays" in {
+    val cursor = CursorPosition(1, 2)
+    val buffer = Buffer
+      .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
+      .copy(cursors = List(cursor))
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    val pinnedPanel = UiSurface(
+      SurfaceId("left-panel"),
+      SurfaceContent.Outline(Nil),
+      SurfacePresentation.Pinned(PanelPosition.Left, 16)
+    )
+    val quickInfo = UiSurface(
+      SurfaceId("quick-info"),
+      SurfaceContent.QuickInfo("List.map(f)"),
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
+    )
+    val commandRunner = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.Surface(commandRunner.id),
+      uiSurfaces = List(pinnedPanel, quickInfo, commandRunner)
+    )
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
+    val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+
+    val pinnedFrame = contract.pinnedSurfaceRects(pinnedPanel.id)
+    contract.pinnedSurfaceContentRects(pinnedPanel.id) shouldBe
+      SurfaceFrameLayout.forContent(pinnedFrame, pinnedPanel.content).contentRect
+
+    val overlayFrames   = contract.floatingOverlayRects.toMap
+    val overlayContents = contract.floatingOverlayContentRects.toMap
+
+    overlayContents(quickInfo.id) shouldBe
+      SurfaceFrameLayout.forContent(overlayFrames(quickInfo.id), quickInfo.content).contentRect
+    overlayContents(commandRunner.id) shouldBe
+      SurfaceFrameLayout.forContent(overlayFrames(commandRunner.id), commandRunner.content).contentRect
+
+    val activeContent = contract.workspace.activeContentRect(state).getOrElse(fail("expected active content rect"))
+    assertInside(activeContent, overlayContents(quickInfo.id), "quick info overlay content")
+    assertInside(activeContent, overlayContents(commandRunner.id), "command runner overlay content")
+    assertInside(contract.contentAreaRect, contract.pinnedSurfaceContentRects(pinnedPanel.id), "pinned panel content")
   }
 
   it should "report contract violations with the owning rectangle names" in {

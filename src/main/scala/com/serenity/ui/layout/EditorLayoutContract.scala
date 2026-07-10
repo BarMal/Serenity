@@ -18,7 +18,9 @@ case class EditorLayoutContract(
     activePaneId: Option[PaneId],
     pinnedPanelRects: Map[PanelPosition, LayoutRect],
     pinnedSurfaceRects: Map[SurfaceId, LayoutRect],
-    floatingOverlayRects: List[(SurfaceId, LayoutRect)]
+    pinnedSurfaceContentRects: Map[SurfaceId, LayoutRect],
+    floatingOverlayRects: List[(SurfaceId, LayoutRect)],
+    floatingOverlayContentRects: List[(SurfaceId, LayoutRect)]
 ):
 
   /** Return all currently detectable contract violations. */
@@ -74,7 +76,10 @@ case class EditorLayoutContract(
     containedBy(
       "content area",
       contentAreaRect,
-      pinnedSurfaceRects.toList.map((surfaceId, rect) => s"pinned surface ${surfaceId.value}" -> Some(rect))
+      pinnedSurfaceRects.toList.map((surfaceId, rect) => s"pinned surface ${surfaceId.value} frame" -> Some(rect)) ++
+        pinnedSurfaceContentRects.toList.map((surfaceId, rect) =>
+          s"pinned surface ${surfaceId.value} content" -> Some(rect)
+        )
     )
 
   private def floatingOverlayViolations: List[LayoutContractViolation] =
@@ -86,7 +91,9 @@ case class EditorLayoutContract(
         containedBy(
           "active content",
           activeContent,
-          floatingOverlayRects.map((surfaceId, rect) => s"floating overlay ${surfaceId.value}" -> Some(rect))
+          floatingOverlayRects.map((surfaceId, rect) => s"floating overlay ${surfaceId.value} frame" -> Some(rect)) ++
+            floatingOverlayContentRects
+              .map((surfaceId, rect) => s"floating overlay ${surfaceId.value} content" -> Some(rect))
         )
       }
 
@@ -123,6 +130,19 @@ object EditorLayoutContract:
       case Some(gutter) => LayoutRect(0, 0, viewportSize.width, gutter.y)
       case None         => viewportRect
     val workspace = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
+    val pinnedSurfaceContentRects = calculatedLayout.pinnedSurfaceRects.toList.flatMap {
+      case (surfaceId, frameRect) =>
+        state
+          .surfaceById(surfaceId)
+          .map(surface => surfaceId -> SurfaceFrameLayout.forContent(frameRect, surface.content).contentRect)
+    }.toMap
+    val floatingOverlayRects = calculatedLayout.aboveCursorOverlayStack ++ calculatedLayout.belowCursorOverlayStack
+    val floatingOverlayContentRects = floatingOverlayRects.flatMap {
+      case (surfaceId, frameRect) =>
+        state
+          .surfaceById(surfaceId)
+          .map(surface => surfaceId -> SurfaceFrameLayout.forContent(frameRect, surface.content).contentRect)
+    }
     EditorLayoutContract(
       viewportRect = viewportRect,
       contentAreaRect = contentAreaRect,
@@ -130,5 +150,7 @@ object EditorLayoutContract:
       activePaneId = state.layout.activeEditorPaneId,
       pinnedPanelRects = calculatedLayout.pinnedPanelRects,
       pinnedSurfaceRects = calculatedLayout.pinnedSurfaceRects,
-      floatingOverlayRects = calculatedLayout.aboveCursorOverlayStack ++ calculatedLayout.belowCursorOverlayStack
+      pinnedSurfaceContentRects = pinnedSurfaceContentRects,
+      floatingOverlayRects = floatingOverlayRects,
+      floatingOverlayContentRects = floatingOverlayContentRects
     )
