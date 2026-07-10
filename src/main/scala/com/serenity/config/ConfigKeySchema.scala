@@ -3,14 +3,9 @@ package com.serenity.config
 /** Static and dynamic keys understood by the text config format. */
 object ConfigKeySchema:
 
-  val dynamicPrefixes: List[String] = List(
-    "hotkey.",
-    "keymap.editor.",
-    "keymap.command_runner.",
-    "keymap.modal.",
-    "keymap.panel.",
-    "keymap.peek."
-  ) ++ LanguageToolsConfig.Schema.dynamicPrefixes
+  val dynamicPrefixes: List[String] =
+    LanguageToolsConfig.Schema.dynamicPrefixes ++
+      InputConfig.Schema.dynamicPrefixes
 
   def deprecatedReplacement(key: String): Option[String] =
     deprecatedKeys.get(key)
