@@ -181,7 +181,7 @@ object ConfigManager:
                 case _ =>
                   config
             case key if CursorConfig.Schema.modeKeys.contains(key) =>
-              parseCursorMode(value.trim).map(config.withCursorMode).getOrElse(config)
+              CursorMode.fromConfigKey(value).map(config.withCursorMode).getOrElse(config)
             case key if CursorConfig.Schema.activeColorKeys.contains(key) =>
               parseColor(value.trim)
                 .map(color => config.withCursorColors(config.cursorColors.copy(active = Some(color))))
@@ -191,15 +191,7 @@ object ConfigManager:
                 .map(color => config.withCursorColors(config.cursorColors.copy(inactive = Some(color))))
                 .getOrElse(config)
             case "interface.density" | "interface_density" =>
-              value.trim.toLowerCase match
-                case "compact" =>
-                  config.withInterfaceDensity(InterfaceDensity.Compact)
-                case "comfortable" =>
-                  config.withInterfaceDensity(InterfaceDensity.Comfortable)
-                case "spacious" =>
-                  config.withInterfaceDensity(InterfaceDensity.Spacious)
-                case _ =>
-                  config
+              InterfaceDensity.fromConfigKey(value).map(config.withInterfaceDensity).getOrElse(config)
             case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
               parseUiElementGap(value.trim).map(config.withUiElementGap).getOrElse(config)
             case "ui.corner_radius" | "ui.corner.radius" | "ui_corner_radius" =>
@@ -223,25 +215,11 @@ object ConfigManager:
                 .map(config.withContextualToolbarDisplayMode)
                 .getOrElse(config)
             case key if CursorConfig.Schema.infoBarModeKeys.contains(key) =>
-              value.trim.toLowerCase match
-                case "off" | "false" | "disabled" =>
-                  config.withCursorInfoBarMode(CursorInfoBarMode.Off)
-                case "position" | "minimal" =>
-                  config.withCursorInfoBarMode(CursorInfoBarMode.Position)
-                case "detailed" | "full" =>
-                  config.withCursorInfoBarMode(CursorInfoBarMode.Detailed)
-                case _ =>
-                  config
+              CursorInfoBarMode.fromConfigKey(value).map(config.withCursorInfoBarMode).getOrElse(config)
             case key if CursorConfig.Schema.infoBarPlacementKeys.contains(key) =>
-              value.trim.toLowerCase match
-                case "floating" | "float" =>
-                  config.withCursorInfoBarPlacement(CursorInfoBarPlacement.Floating)
-                case "pinned-bottom" | "bottom" | "pinned" =>
-                  config.withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
-                case _ =>
-                  config
+              CursorInfoBarPlacement.fromConfigKey(value).map(config.withCursorInfoBarPlacement).getOrElse(config)
             case key if InterfaceConfig.Schema.densityKeys.contains(key) =>
-              parseInterfaceDensity(value.trim).map(config.withInterfaceDensity).getOrElse(config)
+              InterfaceDensity.fromConfigKey(value).map(config.withInterfaceDensity).getOrElse(config)
             case key if InterfaceConfig.Schema.elementGapKeys.contains(key) =>
               parseUiElementGap(value.trim).map(config.withUiElementGap).getOrElse(config)
             case key if InterfaceConfig.Schema.cornerRadiusKeys.contains(key) =>
@@ -302,11 +280,11 @@ object ConfigManager:
                 .map(kind => config.withPanelCloseTransitionKind(Some(kind)))
                 .getOrElse(config)
             case key if DocumentConfig.Schema.markdownViewKeys.contains(key) =>
-              parseMarkdownViewMode(value.trim).map(config.withMarkdownViewMode).getOrElse(config)
+              MarkdownViewMode.fromConfigKey(value).map(config.withMarkdownViewMode).getOrElse(config)
             case key if DocumentConfig.Schema.defaultModeKeys.contains(key) =>
-              parseDefaultDocumentMode(value.trim).map(config.withDefaultDocumentMode).getOrElse(config)
+              DefaultDocumentMode.fromConfigKey(value).map(config.withDefaultDocumentMode).getOrElse(config)
             case key if WindowConfig.Schema.chromeKeys.contains(key) =>
-              parseWindowChromeMode(value.trim).map(config.withWindowChromeMode).getOrElse(config)
+              WindowChromeMode.fromConfigKey(value).map(config.withWindowChromeMode).getOrElse(config)
             case key if WindowConfig.Schema.preferredWidthKeys.contains(key) =>
               value.trim.toIntOption
                 .map(width =>
@@ -476,7 +454,7 @@ object ConfigManager:
        |# Interface density: compact, comfortable, spacious
        |interface.density = ${config.interfaceDensity.configKey}
        |# Window chrome: native preserves OS snap/window animations; custom is themed and applies after restart
-       |window.chrome = ${windowChromeModeConfigKey(config.windowChromeMode)}
+       |window.chrome = ${config.windowChromeMode.configKey}
        |ui.element_gap = ${config.uiElementGap}
        |ui.corner_radius = ${config.uiCornerRadiusPx}
        |ui.outline_thickness = ${config.uiOutlineThicknessPx}
@@ -631,17 +609,17 @@ object ConfigManager:
         case "font.text_scale" | "font.text.scale" | "font_text_scale" =>
           parseTextScaleMultiplier(value).isEmpty
         case key if CursorConfig.Schema.modeKeys.contains(key) =>
-          parseCursorMode(value).isEmpty
+          CursorMode.fromConfigKey(value).isEmpty
         case key
             if CursorConfig.Schema.activeColorKeys.contains(key) ||
               CursorConfig.Schema.inactiveColorKeys.contains(key) =>
           value.nonEmpty && parseColor(value).isEmpty
         case key if InterfaceConfig.Schema.densityKeys.contains(key) =>
-          !Set("compact", "comfortable", "spacious").contains(normalizedValue)
+          InterfaceDensity.fromConfigKey(value).isEmpty
         case key if CursorConfig.Schema.infoBarModeKeys.contains(key) =>
-          !Set("off", "false", "disabled", "position", "minimal", "detailed", "full").contains(normalizedValue)
+          CursorInfoBarMode.fromConfigKey(value).isEmpty
         case key if CursorConfig.Schema.infoBarPlacementKeys.contains(key) =>
-          !Set("floating", "float", "pinned-bottom", "bottom", "pinned").contains(normalizedValue)
+          CursorInfoBarPlacement.fromConfigKey(value).isEmpty
         case "ui.material" | "ui_material" | "material.preset" | "material_preset" =>
           parseMaterialPreset(value).isEmpty
         case "ui.motion" | "ui_motion" | "motion.preset" | "motion_preset" =>
@@ -667,9 +645,9 @@ object ConfigManager:
             "ui.motion.panel.close" | "ui_motion_panel_close" =>
           parseTransitionKind(value).isEmpty
         case key if DocumentConfig.Schema.markdownViewKeys.contains(key) =>
-          parseMarkdownViewMode(value).isEmpty
+          MarkdownViewMode.fromConfigKey(value).isEmpty
         case key if WindowConfig.Schema.chromeKeys.contains(key) =>
-          parseWindowChromeMode(value).isEmpty
+          WindowChromeMode.fromConfigKey(value).isEmpty
         case key if InterfaceConfig.Schema.elementGapKeys.contains(key) =>
           parseUiElementGap(value).isEmpty
         case key if InterfaceConfig.Schema.cornerRadiusKeys.contains(key) =>
@@ -758,38 +736,6 @@ object ConfigManager:
       case TransitionKind.LineAndCharacterTandem => "tandem"
       case TransitionKind.Disabled               => "off"
       case TransitionKind.OutlineThenContent     => "outline"
-
-  private def parseDefaultDocumentMode(value: String): Option[DefaultDocumentMode] =
-    value.toLowerCase match
-      case "plain-text" | "plaintext" | "plain" | "text" => Some(DefaultDocumentMode.PlainText)
-      case "markdown" | "md"                             => Some(DefaultDocumentMode.Markdown)
-      case "rich-text" | "richtext" | "rich" | "rtf"     => Some(DefaultDocumentMode.RichText)
-      case _                                             => None
-
-  private def parseMarkdownViewMode(value: String): Option[MarkdownViewMode] =
-    value.toLowerCase match
-      case "source"                                                => Some(MarkdownViewMode.Source)
-      case "split-preview" | "split_preview" | "split" | "preview" => Some(MarkdownViewMode.SplitPreview)
-      case "inline-lens" | "inline_lens" | "lens"                  => Some(MarkdownViewMode.InlineLens)
-      case _                                                       => None
-
-  private def parseInterfaceDensity(value: String): Option[InterfaceDensity] =
-    value.toLowerCase match
-      case "compact"     => Some(InterfaceDensity.Compact)
-      case "comfortable" => Some(InterfaceDensity.Comfortable)
-      case "spacious"    => Some(InterfaceDensity.Spacious)
-      case _             => None
-
-  private def parseWindowChromeMode(value: String): Option[WindowChromeMode] =
-    value.toLowerCase match
-      case "custom" | "themed" | "serenity" => Some(WindowChromeMode.Custom)
-      case "native" | "os" | "system"       => Some(WindowChromeMode.Native)
-      case _                                => None
-
-  private def windowChromeModeConfigKey(mode: WindowChromeMode): String =
-    mode match
-      case WindowChromeMode.Custom => "custom"
-      case WindowChromeMode.Native => "native"
 
   private def parseElementTransitionSpeedScale(value: String): Option[Double] =
     value.toDoubleOption
@@ -894,12 +840,6 @@ object ConfigManager:
       case "true" | "on" | "enabled"    => Some(true)
       case "false" | "off" | "disabled" => Some(false)
       case _                            => None
-
-  private def parseCursorMode(value: String): Option[CursorMode] =
-    value.toLowerCase match
-      case "blink"                 => Some(CursorMode.Blink)
-      case "breathe" | "breathing" => Some(CursorMode.Breathe)
-      case _                       => None
 
   private def lspConfigToString(config: LspUserConfig): String =
     config.servers

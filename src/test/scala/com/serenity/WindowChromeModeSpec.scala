@@ -26,6 +26,12 @@ class WindowChromeModeSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "parse window chrome config values centrally" in {
+    WindowChromeMode.fromConfigKey("serenity").shouldBe(Some(WindowChromeMode.Custom))
+    WindowChromeMode.fromConfigKey("os").shouldBe(Some(WindowChromeMode.Native))
+    WindowChromeMode.fromConfigKey("unknown").shouldBe(None)
+  }
+
   "AppConfig" should "default window chrome mode to Native" in {
     AppConfig.default.windowChromeMode shouldBe WindowChromeMode.Native
   }

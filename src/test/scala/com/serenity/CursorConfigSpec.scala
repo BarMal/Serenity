@@ -48,3 +48,10 @@ class CursorConfigSpec extends AnyFlatSpec with Matchers:
       )
     )
   }
+
+  it should "parse cursor config values centrally" in {
+    CursorMode.fromConfigKey("breathing").shouldBe(Some(CursorMode.Breathe))
+    CursorInfoBarMode.fromConfigKey("minimal").shouldBe(Some(CursorInfoBarMode.Position))
+    CursorInfoBarPlacement.fromConfigKey("bottom").shouldBe(Some(CursorInfoBarPlacement.PinnedBottom))
+    CursorMode.fromConfigKey("unknown").shouldBe(None)
+  }

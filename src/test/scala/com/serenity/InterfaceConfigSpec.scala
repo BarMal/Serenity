@@ -46,3 +46,9 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
       outlineThicknessPx = 4
     )
   }
+
+  it should "parse interface density values centrally" in {
+    InterfaceDensity.fromConfigKey("compact").shouldBe(Some(InterfaceDensity.Compact))
+    InterfaceDensity.fromConfigKey("comfortable").shouldBe(Some(InterfaceDensity.Comfortable))
+    InterfaceDensity.fromConfigKey("unknown").shouldBe(None)
+  }

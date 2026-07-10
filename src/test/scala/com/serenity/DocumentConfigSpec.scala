@@ -36,3 +36,9 @@ class DocumentConfigSpec extends AnyFlatSpec with Matchers:
       )
     )
   }
+
+  it should "parse document config values centrally" in {
+    MarkdownViewMode.fromConfigKey("preview").shouldBe(Some(MarkdownViewMode.SplitPreview))
+    DefaultDocumentMode.fromConfigKey("rtf").shouldBe(Some(DefaultDocumentMode.RichText))
+    MarkdownViewMode.fromConfigKey("unknown").shouldBe(None)
+  }

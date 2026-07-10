@@ -82,6 +82,14 @@ enum CursorMode(val configKey: String):
   case Blink   extends CursorMode("blink")
   case Breathe extends CursorMode("breathe")
 
+object CursorMode:
+
+  def fromConfigKey(value: String): Option[CursorMode] =
+    value.trim.toLowerCase match
+      case "blink"                 => Some(CursorMode.Blink)
+      case "breathe" | "breathing" => Some(CursorMode.Breathe)
+      case _                       => None
+
 enum CursorInfoBarMode:
   case Off
   case Position
@@ -93,18 +101,59 @@ enum CursorInfoBarMode:
       case Position => "position"
       case Detailed => "detailed"
 
+object CursorInfoBarMode:
+
+  def fromConfigKey(value: String): Option[CursorInfoBarMode] =
+    value.trim.toLowerCase match
+      case "off" | "false" | "disabled" =>
+        Some(CursorInfoBarMode.Off)
+      case "position" | "minimal" =>
+        Some(CursorInfoBarMode.Position)
+      case "detailed" | "full" =>
+        Some(CursorInfoBarMode.Detailed)
+      case _ =>
+        None
+
 enum CursorInfoBarPlacement(val configKey: String):
   case Floating     extends CursorInfoBarPlacement("floating")
   case PinnedBottom extends CursorInfoBarPlacement("pinned-bottom")
 
-enum WindowChromeMode:
-  case Native
-  case Custom
+object CursorInfoBarPlacement:
+
+  def fromConfigKey(value: String): Option[CursorInfoBarPlacement] =
+    value.trim.toLowerCase match
+      case "floating" | "float" =>
+        Some(CursorInfoBarPlacement.Floating)
+      case "pinned-bottom" | "bottom" | "pinned" =>
+        Some(CursorInfoBarPlacement.PinnedBottom)
+      case _ =>
+        None
+
+enum WindowChromeMode(val configKey: String):
+  case Native extends WindowChromeMode("native")
+  case Custom extends WindowChromeMode("custom")
+
+object WindowChromeMode:
+
+  def fromConfigKey(value: String): Option[WindowChromeMode] =
+    value.trim.toLowerCase match
+      case "custom" | "themed" | "serenity" => Some(WindowChromeMode.Custom)
+      case "native" | "os" | "system"       => Some(WindowChromeMode.Native)
+      case _                                => None
 
 enum MarkdownViewMode(val configKey: String):
   case Source       extends MarkdownViewMode("source")
   case SplitPreview extends MarkdownViewMode("split-preview")
   case InlineLens   extends MarkdownViewMode("inline-lens")
+
+object MarkdownViewMode:
+
+  def fromConfigKey(value: String): Option[MarkdownViewMode] =
+    value.trim.toLowerCase match
+      case "source"                                                => Some(MarkdownViewMode.Source)
+      case "split-preview" | "split_preview" | "split" | "preview" => Some(MarkdownViewMode.SplitPreview)
+      case "inline-lens" | "inline_lens" | "lens"                  => Some(MarkdownViewMode.InlineLens)
+      case _                                                       => None
 
 enum ToolbarDisplayMode:
   case IconOnly
@@ -136,6 +185,15 @@ enum DefaultDocumentMode(val configKey: String):
   case Markdown  extends DefaultDocumentMode("markdown")
   case RichText  extends DefaultDocumentMode("rich-text")
 
+object DefaultDocumentMode:
+
+  def fromConfigKey(value: String): Option[DefaultDocumentMode] =
+    value.trim.toLowerCase match
+      case "plain-text" | "plaintext" | "plain" | "text" => Some(DefaultDocumentMode.PlainText)
+      case "markdown" | "md"                             => Some(DefaultDocumentMode.Markdown)
+      case "rich-text" | "richtext" | "rich" | "rtf"     => Some(DefaultDocumentMode.RichText)
+      case _                                             => None
+
 enum InterfaceDensity:
   case Compact
   case Comfortable
@@ -146,6 +204,15 @@ enum InterfaceDensity:
       case Compact     => "compact"
       case Comfortable => "comfortable"
       case Spacious    => "spacious"
+
+object InterfaceDensity:
+
+  def fromConfigKey(value: String): Option[InterfaceDensity] =
+    value.trim.toLowerCase match
+      case "compact"     => Some(InterfaceDensity.Compact)
+      case "comfortable" => Some(InterfaceDensity.Comfortable)
+      case "spacious"    => Some(InterfaceDensity.Spacious)
+      case _             => None
 
 case class InterfaceDensityMetrics(
     editorSpacerPercentage: Double,
