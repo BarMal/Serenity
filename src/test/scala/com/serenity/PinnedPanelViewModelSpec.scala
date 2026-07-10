@@ -183,6 +183,17 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
       )
   }
 
+  it should "derive a title rect from the explicit pinned panel content rect" in {
+    val view = TextPanelView(
+      rect = LayoutRect(0, 0, 12, 8),
+      contentRect = Some(LayoutRect(2, 3, 6, 4)),
+      title = "panel",
+      rows = List(TextPanelRow("A"))
+    )
+
+    view.titleRect.shouldBe(LayoutRect(2, 0, 6, 1))
+  }
+
   it should "shape outline content differently for tall and wide geometry" in {
     val tall = PinnedPanelViewModel.resolve(outlinePanel, LayoutRect(0, 0, 18, 40))
     val wide = PinnedPanelViewModel.resolve(outlinePanel, LayoutRect(0, 0, 60, 10))
