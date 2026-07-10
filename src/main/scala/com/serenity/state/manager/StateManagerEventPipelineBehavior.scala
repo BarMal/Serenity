@@ -18,7 +18,6 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
-import com.serenity.ui.renderer.OverlayViewModel
 
 private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEffectBehavior:
   this: StateManager =>
@@ -1272,14 +1271,13 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       menu <- surface.content match
         case SurfaceContent.ContextMenu(menu) => Some(menu)
         case _                                => None
-      layout                   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      overlayRowSlotsBySurface = floatingOverlayRowSlotsBySurface(state, layout)
-      rect <- overlayRectForSurface(layout, surface.id)
+      layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      contract = EditorLayoutContract.from(state, viewportSize, layout)
+      contentRect <- overlayContentRectForSurface(contract, surface.id)
       index <- overlayItemIndex(
         event,
-        rect,
-        surface.content,
-        overlayRowSlotsBySurface.getOrElse(surface.id, Nil),
+        contentRect,
+        contract.floatingOverlayRowSlots.getOrElse(surface.id, Nil),
         menu.items.length,
         menu.selectedIndex,
         hasHeader = true,
@@ -1385,30 +1383,25 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       toolbarState <- surface.content match
         case SurfaceContent.ContextualToolbar(toolbarState) => Some(toolbarState)
         case _                                              => None
-      layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      overlayRowSlotsBySurface =
-        val overlays = OverlayViewModel.fromState(state, layout)
-        (overlays.aboveCursor.toList ++ overlays.belowCursorStack)
-          .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
-          .toMap
-      rect <- overlayRectForSurface(layout, surface.id)
+      layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      contract = EditorLayoutContract.from(state, viewportSize, layout)
+      contentRect <- overlayContentRectForSurface(contract, surface.id)
       hit <- contextualToolbarItemHit(
         event,
-        rect,
+        contentRect,
         state,
         toolbarState,
-        overlayRowSlotsBySurface.getOrElse(surface.id, Nil)
+        contract.floatingOverlayRowSlots.getOrElse(surface.id, Nil)
       )
     yield (surface, toolbarState, hit)
 
   private def contextualToolbarItemHit(
     event: MouseInputEvent,
-    rect: LayoutRect,
+    contentRect: LayoutRect,
     state: AppState,
     toolbarState: ContextualToolbarState,
     rowSlots: List[SurfaceContentRowSlot]
   ): Option[ContextualToolbarHit] =
-    val contentRect = SurfaceFrameLayout.forContent(rect, SurfaceContent.ContextualToolbar(toolbarState)).contentRect
     overlayDisplayedRowIndexAt(event, contentRect, rowSlots).flatMap { rowIndex =>
       ContextualToolbar.hitAt(
         rowIndex = rowIndex,
@@ -1456,8 +1449,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
 
   private def commandRunnerSelectionAt(event: MouseInputEvent, state: AppState): Option[CommandRunnerEvent] =
     state.viewportSize.flatMap { viewportSize =>
-      val layout                   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      val overlayRowSlotsBySurface = floatingOverlayRowSlotsBySurface(state, layout)
+      val layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      val contract = EditorLayoutContract.from(state, viewportSize, layout)
       val surfaces =
         event match
           case _: MouseMove
@@ -1466,7 +1459,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           case _ =>
             List(state.commandRunnerSubmenuSurface, state.commandRunnerSurface).flatten
       surfaces.view
-        .flatMap(surface => commandRunnerSelectionForSurface(event, layout, surface, overlayRowSlotsBySurface))
+        .flatMap(surface => commandRunnerSelectionForSurface(event, surface, contract))
         .headOption
     }
 
@@ -1525,18 +1518,16 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
 
   private def commandRunnerSelectionForSurface(
     event: MouseInputEvent,
-    layout: CalculatedLayout,
     surface: UiSurface,
-    overlayRowSlotsBySurface: Map[SurfaceId, List[SurfaceContentRowSlot]]
+    contract: EditorLayoutContract
   ): Option[CommandRunnerEvent] =
-    overlayRectForSurface(layout, surface.id).flatMap { rect =>
-      val rowSlots = overlayRowSlotsBySurface.getOrElse(surface.id, Nil)
+    overlayContentRectForSurface(contract, surface.id).flatMap { contentRect =>
+      val rowSlots = contract.floatingOverlayRowSlots.getOrElse(surface.id, Nil)
       surface.content match
         case SurfaceContent.CommandPalette(runner) =>
           overlayItemIndex(
             event,
-            rect,
-            surface.content,
+            contentRect,
             rowSlots,
             runner.visibleItems.length,
             runner.selectedIndex,
@@ -1554,8 +1545,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           val detailRows    = commandRunnerSubmenuDetailRowCount(groupId, items.lift(selectedIndex))
           overlayItemIndex(
             event,
-            rect,
-            surface.content,
+            contentRect,
             rowSlots,
             items.length,
             selectedIndex,
@@ -1572,8 +1562,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
 
   private def overlayItemIndex(
     event: MouseInputEvent,
-    rect: LayoutRect,
-    content: SurfaceContent,
+    contentRect: LayoutRect,
     rowSlots: List[SurfaceContentRowSlot],
     itemCount: Int,
     selectedIndex: Int,
@@ -1581,9 +1570,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     hasFooter: Boolean,
     reservedContentRows: Int = 0
   ): Option[Int] =
-    val frameLayout = SurfaceFrameLayout.forContent(rect, content)
-    val contentRect = frameLayout.contentRect
-    val itemWindow = frameLayout.itemWindow(
+    val itemWindow = SurfaceFrameLayout(contentRect, borderCells = 0).itemWindow(
       itemCount,
       selectedIndex,
       hasHeader,
@@ -1608,14 +1595,11 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         }
       )
 
-  private def floatingOverlayRowSlotsBySurface(
-    state: AppState,
-    layout: CalculatedLayout
-  ): Map[SurfaceId, List[SurfaceContentRowSlot]] =
-    val overlays = OverlayViewModel.fromState(state, layout)
-    (overlays.aboveCursor.toList ++ overlays.belowCursorStack)
-      .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
-      .toMap
+  private def overlayContentRectForSurface(
+    contract: EditorLayoutContract,
+    surfaceId: SurfaceId
+  ): Option[LayoutRect] =
+    contract.floatingOverlayContentRects.collectFirst { case (`surfaceId`, rect) => rect }
 
   private def commandRunnerSubmenuDetailRowCount(
     groupId: String,
