@@ -312,4 +312,61 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     paneLayout.contentRect.x shouldBe layout.editorPanelRect.x
     paneLayout.contentRect.width shouldBe layout.editorPanelRect.width
   }
+
+  it should "expose reusable contract violations for editor, pane, panel, gutter, and overlay ownership" in {
+    val cursor = CursorPosition(1, 2)
+    val buffer = Buffer
+      .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
+      .copy(cursors = List(cursor))
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    val state = AppState.initial.copy(
+      config = AppConfig.default
+        .withLineNumbers(true)
+        .withGutter(true)
+        .copy(uiElementGap = 1, textAreaInsets = TextAreaInsets(left = 0.05, right = 0.05)),
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("left-panel"),
+          SurfaceContent.Outline(Nil),
+          SurfacePresentation.Pinned(PanelPosition.Left, 16)
+        ),
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
+    val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+
+    contract.viewportRect shouldBe viewportRect
+    contract.contentAreaRect.bottom shouldBe calculatedLayout.gutterRect.map(_.y).getOrElse(viewport.height)
+    contract.workspace.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
+    contract.violations shouldBe Nil
+  }
+
+  it should "report contract violations with the owning rectangle names" in {
+    val badLayout = CalculatedLayout(
+      editorPanelRect = LayoutRect(0, 0, viewport.width + 1, viewport.height),
+      leftSpacerRect = LayoutRect(0, 0, 0, viewport.height),
+      rightSpacerRect = LayoutRect(viewport.width, 0, 0, viewport.height),
+      gutterRect = Some(LayoutRect(0, viewport.height - 1, viewport.width - 1, 1))
+    )
+
+    val violations = EditorLayoutContract.from(AppState.initial, viewport, badLayout).violations
+
+    violations.map(violation => violation.ownerName -> violation.childName) should contain allOf (
+      "content area" -> "editor panel",
+      "viewport"     -> "gutter"
+    )
+  }
 end LayoutContractSpec
