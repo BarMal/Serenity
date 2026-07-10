@@ -1386,22 +1386,32 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         case SurfaceContent.ContextualToolbar(toolbarState) => Some(toolbarState)
         case _                                              => None
       layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      overlayRowSlotsBySurface =
+        val overlays = OverlayViewModel.fromState(state, layout)
+        (overlays.aboveCursor.toList ++ overlays.belowCursorStack)
+          .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
+          .toMap
       rect <- overlayRectForSurface(layout, surface.id)
-      hit  <- contextualToolbarItemHit(event, rect, state, toolbarState)
+      hit <- contextualToolbarItemHit(
+        event,
+        rect,
+        state,
+        toolbarState,
+        overlayRowSlotsBySurface.getOrElse(surface.id, Nil)
+      )
     yield (surface, toolbarState, hit)
 
   private def contextualToolbarItemHit(
     event: MouseInputEvent,
     rect: LayoutRect,
     state: AppState,
-    toolbarState: ContextualToolbarState
+    toolbarState: ContextualToolbarState,
+    rowSlots: List[SurfaceContentRowSlot]
   ): Option[ContextualToolbarHit] =
-    val contentRect   = SurfaceFrameLayout.forContent(rect, SurfaceContent.ContextualToolbar(toolbarState)).contentRect
-    val withinColumns = event.col >= contentRect.x && event.col < contentRect.right
-    val withinRows    = event.row >= contentRect.y && event.row < contentRect.bottom
-    Option.when(withinColumns && withinRows)(()).flatMap { _ =>
+    val contentRect = SurfaceFrameLayout.forContent(rect, SurfaceContent.ContextualToolbar(toolbarState)).contentRect
+    overlayDisplayedRowIndexAt(event, contentRect, rowSlots).flatMap { rowIndex =>
       ContextualToolbar.hitAt(
-        rowIndex = event.row - contentRect.y,
+        rowIndex = rowIndex,
         columnOffset = event.col - contentRect.x,
         contentWidth = contentRect.width.max(1),
         toolbarState = toolbarState,
@@ -1580,6 +1590,14 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       hasFooter,
       reservedContentRows
     )
+    overlayDisplayedRowIndexAt(event, contentRect, rowSlots)
+      .flatMap(itemWindow.absoluteIndexAt)
+
+  private def overlayDisplayedRowIndexAt(
+    event: MouseInputEvent,
+    contentRect: LayoutRect,
+    rowSlots: List[SurfaceContentRowSlot]
+  ): Option[Int] =
     val insideColumns = event.col >= contentRect.x && event.col < contentRect.right
     Option
       .when(insideColumns)(())
@@ -1589,7 +1607,6 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
             index
         }
       )
-      .flatMap(itemWindow.absoluteIndexAt)
 
   private def floatingOverlayRowSlotsBySurface(
     state: AppState,

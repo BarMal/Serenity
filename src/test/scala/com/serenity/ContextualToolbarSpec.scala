@@ -6,7 +6,7 @@ import com.serenity.config.ToolbarDisplayMode
 import com.serenity.keystroke.events.*
 import com.serenity.richtext.*
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, SurfaceFrameLayout, ViewportSize}
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -575,7 +575,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val rowItems = rowGroups.lift(rowIndex).getOrElse(fail(s"Expected toolbar row $rowIndex"))
     Point(
       x = contentRect.x + hitColumnCenter(localIndex, rowItems.length, contentRect.width),
-      y = contentRect.y + rowIndex
+      y = toolbarRowY(state, rowIndex)
     )
 
   private def toolbarDetailPoint(state: AppState, itemId: String, optionLabel: String): Point =
@@ -602,8 +602,17 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val rowOptions = detailRows.lift(rowIndex).getOrElse(fail(s"Expected toolbar detail row $rowIndex"))
     Point(
       x = contentRect.x + hitColumnCenter(localIndex, rowOptions.length, contentRect.width),
-      y = contentRect.y + rowGroups.length + rowIndex
+      y = toolbarRowY(state, rowGroups.length + rowIndex)
     )
+
+  private def toolbarRowY(state: AppState, displayedRowIndex: Int): Int =
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar surface"))
+    val contract = EditorLayoutContract.from(state, viewport, LayoutEngine.calculateLayoutWithUI(state, viewport))
+    contract.floatingOverlayRowSlots
+      .getOrElse(surface.id, Nil)
+      .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(`displayedRowIndex`), y) => y }
+      .getOrElse(fail(s"Expected toolbar content row $displayedRowIndex"))
 
   private def toolbarRect(state: AppState) =
     val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
