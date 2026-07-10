@@ -682,6 +682,25 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     result.report.invalidEntries.map(_.key) should contain("viewport.height.max")
   }
 
+  it should "report invalid surface motion config values through the surface schema" in {
+    val configFile = Files.createTempFile("serenity-surface-motion-invalid-config", ".conf")
+    Files.writeString(
+      configFile,
+      """ui.material = neon
+        |ui.motion = turbo
+        |ui.motion.speed_scale = 5
+        |ui.motion.command_runner_reveal = sideways
+        |""".stripMargin
+    )
+
+    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+
+    result.report.invalidEntries.map(_.key) should contain("ui.material")
+    result.report.invalidEntries.map(_.key) should contain("ui.motion")
+    result.report.invalidEntries.map(_.key) should contain("ui.motion.speed_scale")
+    result.report.invalidEntries.map(_.key) should contain("ui.motion.command_runner_reveal")
+  }
+
   it should "load and write viewport sizing policy" in {
     val configFile = Files.createTempFile("serenity-viewport-config", ".conf")
     Files.writeString(

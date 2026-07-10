@@ -188,59 +188,6 @@ object ConfigManager:
               SurfaceConfig.Schema.parse(config, key, value).getOrElse(config)
             case key if InterfaceConfig.Schema.handles(key) =>
               InterfaceConfig.Schema.parse(config, key, value).getOrElse(config)
-            case "ui.material" | "ui_material" | "material.preset" | "material_preset" =>
-              parseMaterialPreset(value.trim).map(config.withMaterialPreset).getOrElse(config)
-            case "ui.motion" | "ui_motion" | "motion.preset" | "motion_preset" =>
-              parseMotionPreset(value.trim).map(config.withMotionPreset).getOrElse(config)
-            case "ui.motion.speed_scale" | "motion.speed_scale" | "ui_motion_speed_scale" | "motion_speed_scale" =>
-              parseElementTransitionSpeedScale(value.trim)
-                .map(config.withElementTransitionSpeedScale)
-                .getOrElse(config)
-            case "ui.motion.editor_text.speed_scale" | "ui.motion.editor.text.speed_scale" |
-                "ui_motion_editor_text_speed_scale" =>
-              parseElementTransitionSpeedScale(value.trim)
-                .map(scale => config.withEditorTextTransitionSpeedScale(Some(scale)))
-                .getOrElse(config)
-            case "ui.motion.command_runner.speed_scale" | "ui.motion.command.runner.speed_scale" |
-                "ui_motion_command_runner_speed_scale" =>
-              parseElementTransitionSpeedScale(value.trim)
-                .map(scale => config.withCommandRunnerTransitionSpeedScale(Some(scale)))
-                .getOrElse(config)
-            case "ui.motion.ui.speed_scale" | "ui.motion.ui_elements.speed_scale" |
-                "ui.motion.ui.elements.speed_scale" | "ui_motion_ui_speed_scale" =>
-              parseElementTransitionSpeedScale(value.trim)
-                .map(scale => config.withUiTransitionSpeedScale(Some(scale)))
-                .getOrElse(config)
-            case "ui.motion.cursor.speed_scale" | "ui.motion.cursor_speed_scale" | "ui.motion.cursor.speed.scale" |
-                "ui_motion_cursor_speed_scale" =>
-              parseElementTransitionSpeedScale(value.trim)
-                .map(scale => config.withCursorTransitionSpeedScale(Some(scale)))
-                .getOrElse(config)
-            case "ui.motion.command_runner" | "ui.motion.command.runner" | "ui_motion_command_runner" =>
-              parseAnimationPreset(value.trim)
-                .map(config.withCommandRunnerAnimation)
-                .getOrElse(config)
-            case "ui.motion.command_runner_reveal" | "ui.motion.command.runner.reveal" |
-                "ui_motion_command_runner_reveal" =>
-              parseTransitionKind(value.trim)
-                .map(kind => config.withCommandRunnerTransitionKind(Some(kind)))
-                .getOrElse(config)
-            case "ui.motion.ui" | "ui.motion.ui_elements" | "ui.motion.ui.elements" | "ui_motion_ui" =>
-              parseAnimationPreset(value.trim)
-                .map(config.withUiAnimation)
-                .getOrElse(config)
-            case "ui.motion.editor_text" | "ui.motion.editor.text" | "ui_motion_editor_text" =>
-              parseTransitionKind(value.trim)
-                .map(config.withEditorInsertionTransitionKind)
-                .getOrElse(config)
-            case "ui.motion.panel_open" | "ui.motion.panel.open" | "ui_motion_panel_open" =>
-              parseTransitionKind(value.trim)
-                .map(kind => config.withPanelOpenTransitionKind(Some(kind)))
-                .getOrElse(config)
-            case "ui.motion.panel_close" | "ui.motion.panel.close" | "ui_motion_panel_close" =>
-              parseTransitionKind(value.trim)
-                .map(kind => config.withPanelCloseTransitionKind(Some(kind)))
-                .getOrElse(config)
             case key if DocumentConfig.Schema.handles(key) =>
               DocumentConfig.Schema.parse(config, key, value).getOrElse(config)
             case key if WindowConfig.Schema.handles(key) =>
@@ -508,30 +455,6 @@ object ConfigManager:
           parseTextScaleMultiplier(value).isEmpty
         case key if CursorConfig.Schema.handles(key) =>
           CursorConfig.Schema.invalidValue(key, value)
-        case "ui.material" | "ui_material" | "material.preset" | "material_preset" =>
-          parseMaterialPreset(value).isEmpty
-        case "ui.motion" | "ui_motion" | "motion.preset" | "motion_preset" =>
-          parseMotionPreset(value).isEmpty
-        case "ui.motion.speed_scale" | "motion.speed_scale" | "ui_motion_speed_scale" | "motion_speed_scale" =>
-          parseElementTransitionSpeedScale(value).isEmpty
-        case "ui.motion.editor_text.speed_scale" | "ui.motion.editor.text.speed_scale" |
-            "ui_motion_editor_text_speed_scale" | "ui.motion.command_runner.speed_scale" |
-            "ui.motion.command.runner.speed_scale" | "ui_motion_command_runner_speed_scale" |
-            "ui.motion.ui.speed_scale" | "ui.motion.ui_elements.speed_scale" | "ui.motion.ui.elements.speed_scale" |
-            "ui_motion_ui_speed_scale" =>
-          parseElementTransitionSpeedScale(value).isEmpty
-        case "ui.motion.command_runner" | "ui.motion.command.runner" | "ui_motion_command_runner" =>
-          parseAnimationPreset(value).isEmpty
-        case "ui.motion.command_runner_reveal" | "ui.motion.command.runner.reveal" |
-            "ui_motion_command_runner_reveal" =>
-          parseTransitionKind(value).isEmpty
-        case "ui.motion.ui" | "ui.motion.ui_elements" | "ui.motion.ui.elements" | "ui_motion_ui" =>
-          parseAnimationPreset(value).isEmpty
-        case "ui.motion.editor_text" | "ui.motion.editor.text" | "ui_motion_editor_text" =>
-          parseTransitionKind(value).isEmpty
-        case "ui.motion.panel_open" | "ui.motion.panel.open" | "ui_motion_panel_open" | "ui.motion.panel_close" |
-            "ui.motion.panel.close" | "ui_motion_panel_close" =>
-          parseTransitionKind(value).isEmpty
         case key if DocumentConfig.Schema.handles(key) =>
           DocumentConfig.Schema.invalidValue(key, value)
         case key if WindowConfig.Schema.handles(key) =>
@@ -557,43 +480,6 @@ object ConfigManager:
     value.toDoubleOption
       .filter(scale => scale >= FontLoader.FontConfig.MinTextScale && scale <= FontLoader.FontConfig.MaxTextScale)
 
-  private def parseMaterialPreset(value: String): Option[MaterialPreset] =
-    value.toLowerCase match
-      case "solid" | "opaque"      => Some(MaterialPreset.Solid)
-      case "clear" | "transparent" => Some(MaterialPreset.Clear)
-      case "frosted" | "soft"      => Some(MaterialPreset.Frosted)
-      case "crystal" | "glass"     => Some(MaterialPreset.Crystal)
-      case "custom"                => Some(MaterialPreset.Custom)
-      case _                       => None
-
-  private def parseMotionPreset(value: String): Option[MotionPreset] =
-    value.toLowerCase match
-      case "reduced" | "none" | "off" | "disabled" => Some(MotionPreset.Reduced)
-      case "subtle"                                => Some(MotionPreset.Subtle)
-      case "smooth"                                => Some(MotionPreset.Smooth)
-      case "expressive" | "full" | "quick"         => Some(MotionPreset.Expressive)
-      case "custom"                                => Some(MotionPreset.Custom)
-      case _                                       => None
-
-  private def parseAnimationPreset(value: String): Option[Option[AnimationConfig]] =
-    value.toLowerCase match
-      case "none" | "false" | "off" | "disabled" => Some(None)
-      case "quick" | "expressive"                => Some(AnimationConfig.quick)
-      case "smooth"                              => Some(AnimationConfig.smooth)
-      case "subtle"                              => Some(AnimationConfig.subtle)
-      case _                                     => None
-
-  private def parseTransitionKind(value: String): Option[TransitionKind] =
-    value.toLowerCase match
-      case "fade"                                             => Some(TransitionKind.Fade)
-      case "typed" | "typed-text" | "type"                    => Some(TransitionKind.TypedText)
-      case "directional" | "directional-sweep" | "sweep"      => Some(TransitionKind.DirectionalSweep)
-      case "tandem" | "line-and-character" | "line-character" => Some(TransitionKind.LineAndCharacterTandem)
-      case "outline" | "outline-then-content" | "frame-then-content" =>
-        Some(TransitionKind.OutlineThenContent)
-      case "off" | "none" | "disabled" => Some(TransitionKind.Disabled)
-      case _                           => None
-
   private def transitionKindConfigKey(kind: TransitionKind): String =
     kind match
       case TransitionKind.Fade                   => "fade"
@@ -602,13 +488,6 @@ object ConfigManager:
       case TransitionKind.LineAndCharacterTandem => "tandem"
       case TransitionKind.Disabled               => "off"
       case TransitionKind.OutlineThenContent     => "outline"
-
-  private def parseElementTransitionSpeedScale(value: String): Option[Double] =
-    value.toDoubleOption
-      .filter(scale =>
-        scale >= AppConfig.MinElementTransitionSpeedScale &&
-          scale <= AppConfig.MaxElementTransitionSpeedScale
-      )
 
   private def parseUiElementGap(value: String): Option[Int] =
     value.toIntOption.filter(gap => gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap)

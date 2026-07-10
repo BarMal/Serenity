@@ -109,6 +109,80 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     SurfaceConfig.Schema.parse(AppConfig.default, "render.fps", "turbo").shouldBe(None)
   }
 
+  it should "parse surface motion config entries centrally" in {
+    val materialConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "ui_material", "crystal")
+        .getOrElse(fail("material preset parse"))
+    val motionConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "ui.motion", "reduced")
+        .getOrElse(fail("motion preset parse"))
+    val speedScaleConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "ui.motion.speed_scale", "1.75")
+        .getOrElse(fail("motion speed scale parse"))
+    val editorTextSpeedScaleConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "ui_motion_editor_text_speed_scale", "0.5")
+        .getOrElse(fail("editor text speed scale parse"))
+    val commandRunnerSpeedScaleConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "ui.motion.command.runner.speed_scale", "2.25")
+        .getOrElse(fail("command runner speed scale parse"))
+    val uiSpeedScaleConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "ui.motion.ui_elements.speed_scale", "1.25")
+        .getOrElse(fail("ui speed scale parse"))
+    val cursorSpeedScaleConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "ui.motion.cursor.speed.scale", "0.75")
+        .getOrElse(fail("cursor speed scale parse"))
+    val editorTextConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "ui.motion.editor_text", "typed")
+        .getOrElse(fail("editor text transition parse"))
+    val panelOpenConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "ui.motion.panel.open", "directional")
+        .getOrElse(fail("panel open transition parse"))
+    val panelCloseConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "ui_motion_panel_close", "off")
+        .getOrElse(fail("panel close transition parse"))
+    val commandRunnerRevealConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "ui.motion.command.runner.reveal", "outline")
+        .getOrElse(fail("command runner reveal transition parse"))
+    val commandRunnerAnimationConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "ui.motion.command_runner", "subtle")
+        .getOrElse(fail("command runner animation parse"))
+    val uiAnimationConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "ui_motion_ui", "smooth")
+        .getOrElse(fail("ui animation parse"))
+
+    materialConfig.surfaceConfig.materialPreset.shouldBe(MaterialPreset.Crystal)
+    motionConfig.surfaceConfig.motionPreset.shouldBe(MotionPreset.Reduced)
+    speedScaleConfig.surfaceConfig.elementTransitionSpeedScale.shouldBe(1.75)
+    editorTextSpeedScaleConfig.surfaceConfig.editorTextTransitionSpeedScale.shouldBe(Some(0.5))
+    commandRunnerSpeedScaleConfig.surfaceConfig.commandRunnerTransitionSpeedScale.shouldBe(Some(2.25))
+    uiSpeedScaleConfig.surfaceConfig.uiTransitionSpeedScale.shouldBe(Some(1.25))
+    cursorSpeedScaleConfig.surfaceConfig.cursorTransitionSpeedScale.shouldBe(Some(0.75))
+    editorTextConfig.surfaceConfig.editorInsertionTransitionKind.shouldBe(TransitionKind.TypedText)
+    panelOpenConfig.surfaceConfig.panelOpenTransitionKind.shouldBe(Some(TransitionKind.DirectionalSweep))
+    panelCloseConfig.surfaceConfig.panelCloseTransitionKind.shouldBe(Some(TransitionKind.Disabled))
+    commandRunnerRevealConfig.surfaceConfig.commandRunnerTransitionKind.shouldBe(
+      Some(TransitionKind.OutlineThenContent)
+    )
+    commandRunnerAnimationConfig.surfaceConfig.commandRunnerAnimation.shouldBe(
+      com.serenity.animation.AnimationConfig.subtle
+    )
+    uiAnimationConfig.surfaceConfig.uiAnimation.shouldBe(com.serenity.animation.AnimationConfig.smooth)
+    SurfaceConfig.Schema.parse(AppConfig.default, "ui.motion", "turbo").shouldBe(None)
+  }
+
   it should "validate surface display config entries centrally" in {
     SurfaceConfig.Schema.invalidValue("command_runner.visible_rows", "7").shouldBe(false)
     SurfaceConfig.Schema.invalidValue("command_runner.visible_rows", "0").shouldBe(true)
@@ -177,4 +251,15 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     SurfaceConfig.Schema.invalidValue("viewport.height.percent", "100").shouldBe(false)
     SurfaceConfig.Schema.invalidValue("viewport.height.max", "50").shouldBe(false)
     SurfaceConfig.Schema.invalidValue("viewport.height.max", "0").shouldBe(true)
+  }
+
+  it should "validate surface motion config entries centrally" in {
+    SurfaceConfig.Schema.invalidValue("ui.material", "crystal").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("ui.material", "neon").shouldBe(true)
+    SurfaceConfig.Schema.invalidValue("ui.motion", "reduced").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("ui.motion", "turbo").shouldBe(true)
+    SurfaceConfig.Schema.invalidValue("ui.motion.speed_scale", "1.75").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("ui.motion.speed_scale", "5").shouldBe(true)
+    SurfaceConfig.Schema.invalidValue("ui.motion.editor_text", "typed").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("ui.motion.command_runner_reveal", "sideways").shouldBe(true)
   }
