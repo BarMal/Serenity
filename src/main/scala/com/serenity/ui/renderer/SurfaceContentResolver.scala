@@ -826,10 +826,17 @@ object SurfaceContentResolver:
       plainText = if state.query.isEmpty then " " else state.query,
       cursorColumn = Some(state.query.length)
     )
-    val resultRows = state.results.take(rect.height - 2).zipWithIndex.map { (result, idx) =>
+    val itemWindow = SurfaceFrameLayout(rect).itemWindow(
+      itemCount = state.results.size,
+      selectedIndex = state.selectedIndex,
+      hasHeader = true,
+      hasFooter = state.hasMoreResults
+    )
+    val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(state.selectedIndex)
+    val resultRows = itemWindow.slice(state.results).zipWithIndex.map { (result, idx) =>
       OverlayRow(
         plainText = s"${result.bufferName}:${result.line + 1}  ${result.lineContent}",
-        selected = idx == state.selectedIndex
+        selected = idx == adjustedSelectedIndex
       )
     }
     ResolvedSurfaceContent(
