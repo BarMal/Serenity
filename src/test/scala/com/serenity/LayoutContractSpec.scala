@@ -355,6 +355,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     contract.viewportRect shouldBe viewportRect
     contract.contentAreaRect.bottom shouldBe calculatedLayout.gutterRect.map(_.y).getOrElse(viewport.height)
     contract.workspace.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
+    contract.pinnedSurfaceTitleRects.keySet shouldBe contract.pinnedSurfaceRects.keySet
     contract.pinnedSurfaceContentRects.keySet shouldBe contract.pinnedSurfaceRects.keySet
     contract.floatingOverlayContentRects.map(_._1) shouldBe contract.floatingOverlayRects.map(_._1)
     contract.belowCursorOverlayRects.map(_._1) shouldBe List(SurfaceId("command-runner"))
@@ -396,8 +397,13 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
     val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+    val pinnedView = PinnedPanelViewModel
+      .fromState(state, calculatedLayout)
+      .find(_.surfaceId.contains(pinnedPanel.id))
+      .getOrElse(fail("expected pinned panel view"))
 
     val pinnedFrame = contract.pinnedSurfaceRects(pinnedPanel.id)
+    contract.pinnedSurfaceTitleRects(pinnedPanel.id) shouldBe pinnedView.titleRect
     contract.pinnedSurfaceContentRects(pinnedPanel.id) shouldBe
       SurfaceFrameLayout.forContent(pinnedFrame, pinnedPanel.content).contentRect
 
@@ -415,6 +421,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val activeContent = contract.workspace.activeContentRect(state).getOrElse(fail("expected active content rect"))
     assertInside(activeContent, overlayContents(quickInfo.id), "quick info overlay content")
     assertInside(activeContent, overlayContents(commandRunner.id), "command runner overlay content")
+    assertInside(pinnedFrame, contract.pinnedSurfaceTitleRects(pinnedPanel.id), "pinned panel title")
     assertInside(contract.contentAreaRect, contract.pinnedSurfaceContentRects(pinnedPanel.id), "pinned panel content")
   }
 
