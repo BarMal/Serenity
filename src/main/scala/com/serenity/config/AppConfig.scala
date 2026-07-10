@@ -1066,13 +1066,41 @@ object SurfaceConfig:
         "display_contextual_toolbar_mode"
       )
 
+    val textAreaLeftPercentKeys: Set[String] =
+      Set("text_area.left.percent", "text.area.left.percent", "text_area_left_percent")
+
+    val textAreaRightPercentKeys: Set[String] =
+      Set("text_area.right.percent", "text.area.right.percent", "text_area_right_percent")
+
+    val textAreaTopPercentKeys: Set[String] =
+      Set("text_area.top.percent", "text.area.top.percent", "text_area_top_percent")
+
+    val textAreaBottomPercentKeys: Set[String] =
+      Set("text_area.bottom.percent", "text.area.bottom.percent", "text_area_bottom_percent")
+
+    val viewportWidthPercentKeys: Set[String] = Set("viewport.width.percent", "viewport_width_percent")
+
+    val viewportWidthMaxKeys: Set[String] = Set("viewport.width.max", "viewport_width_max")
+
+    val viewportHeightPercentKeys: Set[String] = Set("viewport.height.percent", "viewport_height_percent")
+
+    val viewportHeightMaxKeys: Set[String] = Set("viewport.height.max", "viewport_height_max")
+
     private val handledKeys: Set[String] =
       commandRunnerVisibleRowsKeys ++
         renderFpsKeys ++
         wordWrapKeys ++
         focusedTextBodyKeys ++
         contextualToolbarKeys ++
-        contextualToolbarModeKeys
+        contextualToolbarModeKeys ++
+        textAreaLeftPercentKeys ++
+        textAreaRightPercentKeys ++
+        textAreaTopPercentKeys ++
+        textAreaBottomPercentKeys ++
+        viewportWidthPercentKeys ++
+        viewportWidthMaxKeys ++
+        viewportHeightPercentKeys ++
+        viewportHeightMaxKeys
 
     def handles(key: String): Boolean =
       handledKeys.contains(key)
@@ -1087,6 +1115,23 @@ object SurfaceConfig:
       else if contextualToolbarKeys.contains(key) then parseBoolean(trimmed).map(config.withContextualToolbarEnabled)
       else if contextualToolbarModeKeys.contains(key) then
         ToolbarDisplayMode.fromConfigKey(trimmed).map(config.withContextualToolbarDisplayMode)
+      else if textAreaLeftPercentKeys.contains(key) then parseInsetPercent(trimmed).map(config.withTextAreaLeftInset)
+      else if textAreaRightPercentKeys.contains(key) then parseInsetPercent(trimmed).map(config.withTextAreaRightInset)
+      else if textAreaTopPercentKeys.contains(key) then parseInsetPercent(trimmed).map(config.withTextAreaTopInset)
+      else if textAreaBottomPercentKeys.contains(key) then
+        parseInsetPercent(trimmed).map(config.withTextAreaBottomInset)
+      else if viewportWidthPercentKeys.contains(key) then
+        parseViewportPercent(trimmed)
+          .map(percent => config.withViewportWidthSizing(config.viewportSizing.width.copy(percent = percent)))
+      else if viewportWidthMaxKeys.contains(key) then
+        parseViewportMaxCells(trimmed)
+          .map(maxCells => config.withViewportWidthSizing(config.viewportSizing.width.copy(maxCells = maxCells)))
+      else if viewportHeightPercentKeys.contains(key) then
+        parseViewportPercent(trimmed)
+          .map(percent => config.withViewportHeightSizing(config.viewportSizing.height.copy(percent = percent)))
+      else if viewportHeightMaxKeys.contains(key) then
+        parseViewportMaxCells(trimmed)
+          .map(maxCells => config.withViewportHeightSizing(config.viewportSizing.height.copy(maxCells = maxCells)))
       else None
 
     def invalidValue(key: String, value: String): Boolean =
@@ -1108,6 +1153,23 @@ object SurfaceConfig:
                 rows <= AppConfig.MaxCommandRunnerVisibleRows
             )
             .map(rows => Some(rows))
+
+    private def parseInsetPercent(value: String): Option[Double] =
+      value.toDoubleOption
+        .map(_ / 100.0)
+        .filter(percent => percent >= 0.0 && percent <= TextAreaInsets.MaxInset)
+
+    private def parseViewportPercent(value: String): Option[Double] =
+      value.toDoubleOption
+        .map(_ / 100.0)
+        .filter(percent =>
+          percent >= ViewportAxisSizing.MinPercent &&
+            percent <= ViewportAxisSizing.MaxPercent
+        )
+
+    private def parseViewportMaxCells(value: String): Option[Option[Int]] =
+      if value.trim.isEmpty then Some(None)
+      else value.toIntOption.filter(_ >= 1).map(Some(_))
 
 /** Global application configuration */
 case class AppConfig(

@@ -247,40 +247,6 @@ object ConfigManager:
               WindowConfig.Schema.parse(config, key, value).getOrElse(config)
             case lspKey if lspKey.startsWith("lsp.") =>
               parseLspConfigEntry(config, lspKey, value.trim)
-            case "text_area.left.percent" | "text.area.left.percent" | "text_area_left_percent" =>
-              value.trim.toDoubleOption
-                .map(percent => config.withTextAreaLeftInset(percent / 100.0))
-                .getOrElse(config)
-            case "text_area.right.percent" | "text.area.right.percent" | "text_area_right_percent" =>
-              value.trim.toDoubleOption
-                .map(percent => config.withTextAreaRightInset(percent / 100.0))
-                .getOrElse(config)
-            case "text_area.top.percent" | "text.area.top.percent" | "text_area_top_percent" =>
-              value.trim.toDoubleOption
-                .map(percent => config.withTextAreaTopInset(percent / 100.0))
-                .getOrElse(config)
-            case "text_area.bottom.percent" | "text.area.bottom.percent" | "text_area_bottom_percent" =>
-              value.trim.toDoubleOption
-                .map(percent => config.withTextAreaBottomInset(percent / 100.0))
-                .getOrElse(config)
-            case "viewport.width.percent" | "viewport_width_percent" =>
-              parseViewportPercent(value.trim)
-                .map(percent => config.withViewportWidthSizing(config.viewportSizing.width.copy(percent = percent)))
-                .getOrElse(config)
-            case "viewport.width.max" | "viewport_width_max" =>
-              parseViewportMaxCells(value.trim)
-                .map(maxCells => config.withViewportWidthSizing(config.viewportSizing.width.copy(maxCells = maxCells)))
-                .getOrElse(config)
-            case "viewport.height.percent" | "viewport_height_percent" =>
-              parseViewportPercent(value.trim)
-                .map(percent => config.withViewportHeightSizing(config.viewportSizing.height.copy(percent = percent)))
-                .getOrElse(config)
-            case "viewport.height.max" | "viewport_height_max" =>
-              parseViewportMaxCells(value.trim)
-                .map(maxCells =>
-                  config.withViewportHeightSizing(config.viewportSizing.height.copy(maxCells = maxCells))
-                )
-                .getOrElse(config)
             case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
               HotkeyAction.values
                 .find(action => s"hotkey.${action.configKey}" == hotkeyKey)
@@ -572,16 +538,6 @@ object ConfigManager:
           WindowConfig.Schema.invalidValue(key, value)
         case key if InterfaceConfig.Schema.handles(key) =>
           InterfaceConfig.Schema.invalidValue(key, value)
-        case "text_area.left.percent" | "text.area.left.percent" | "text_area_left_percent" |
-            "text_area.right.percent" | "text.area.right.percent" | "text_area_right_percent" |
-            "text_area.top.percent" | "text.area.top.percent" | "text_area_top_percent" | "text_area.bottom.percent" |
-            "text.area.bottom.percent" | "text_area_bottom_percent" =>
-          value.trim.toDoubleOption.isEmpty
-        case "viewport.width.percent" | "viewport_width_percent" | "viewport.height.percent" |
-            "viewport_height_percent" =>
-          parseViewportPercent(value).isEmpty
-        case "viewport.width.max" | "viewport_width_max" | "viewport.height.max" | "viewport_height_max" =>
-          parseViewportMaxCells(value).isEmpty
         case _ =>
           false
 
@@ -666,18 +622,6 @@ object ConfigManager:
     value.toIntOption.filter(thickness =>
       thickness >= AppConfig.MinUiOutlineThicknessPx && thickness <= AppConfig.MaxUiOutlineThicknessPx
     )
-
-  private def parseViewportPercent(value: String): Option[Double] =
-    value.toDoubleOption
-      .map(_ / 100.0)
-      .filter(percent =>
-        percent >= ViewportAxisSizing.MinPercent &&
-          percent <= ViewportAxisSizing.MaxPercent
-      )
-
-  private def parseViewportMaxCells(value: String): Option[Option[Int]] =
-    if value.trim.isEmpty then Some(None)
-    else value.toIntOption.filter(_ >= 1).map(Some(_))
 
   private def formatColor(color: java.awt.Color): String =
     val rgb = f"#${color.getRed}%02X${color.getGreen}%02X${color.getBlue}%02X"

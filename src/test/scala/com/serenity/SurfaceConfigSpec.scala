@@ -121,3 +121,60 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     SurfaceConfig.Schema.invalidValue("display.contextual_toolbar_mode", "both").shouldBe(false)
     SurfaceConfig.Schema.invalidValue("display.contextual_toolbar_mode", "pictures").shouldBe(true)
   }
+
+  it should "parse surface layout config entries centrally" in {
+    val leftInsetConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "text_area.left.percent", "20")
+        .getOrElse(fail("left inset parse"))
+    val rightInsetConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "text.area.right.percent", "10")
+        .getOrElse(fail("right inset parse"))
+    val topInsetConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "text_area_top_percent", "5")
+        .getOrElse(fail("top inset parse"))
+    val bottomInsetConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "text_area.bottom.percent", "15")
+        .getOrElse(fail("bottom inset parse"))
+    val widthPercentConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "viewport_width_percent", "80")
+        .getOrElse(fail("viewport width percent parse"))
+    val widthMaxConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "viewport.width.max", "")
+        .getOrElse(fail("viewport width max parse"))
+    val heightPercentConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "viewport.height.percent", "100")
+        .getOrElse(fail("viewport height percent parse"))
+    val heightMaxConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "viewport_height_max", "50")
+        .getOrElse(fail("viewport height max parse"))
+
+    leftInsetConfig.surfaceConfig.textAreaInsets.leftPercent.shouldBe(20.0)
+    rightInsetConfig.surfaceConfig.textAreaInsets.rightPercent.shouldBe(10.0)
+    topInsetConfig.surfaceConfig.textAreaInsets.topPercent.shouldBe(5.0)
+    bottomInsetConfig.surfaceConfig.textAreaInsets.bottomPercent.shouldBe(15.0)
+    widthPercentConfig.surfaceConfig.viewportSizing.width.percentValue.shouldBe(80.0)
+    widthMaxConfig.surfaceConfig.viewportSizing.width.maxCells.shouldBe(None)
+    heightPercentConfig.surfaceConfig.viewportSizing.height.percentValue.shouldBe(100.0)
+    heightMaxConfig.surfaceConfig.viewportSizing.height.maxCells.shouldBe(Some(50))
+    SurfaceConfig.Schema.parse(AppConfig.default, "viewport.width.percent", "0").shouldBe(None)
+  }
+
+  it should "validate surface layout config entries centrally" in {
+    SurfaceConfig.Schema.invalidValue("text_area.left.percent", "20").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("text_area.left.percent", "60").shouldBe(true)
+    SurfaceConfig.Schema.invalidValue("viewport.width.percent", "80").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("viewport.width.percent", "0").shouldBe(true)
+    SurfaceConfig.Schema.invalidValue("viewport.width.max", "").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("viewport.width.max", "0").shouldBe(true)
+    SurfaceConfig.Schema.invalidValue("viewport.height.percent", "100").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("viewport.height.max", "50").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("viewport.height.max", "0").shouldBe(true)
+  }
