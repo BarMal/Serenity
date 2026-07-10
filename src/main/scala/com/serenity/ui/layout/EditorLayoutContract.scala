@@ -35,6 +35,18 @@ case class EditorLayoutContract(
     floatingOverlayRowSlots: Map[SurfaceId, List[SurfaceContentRowSlot]]
 ):
 
+  def panelRect(surfaceId: SurfaceId): Option[LayoutRect] =
+    pinnedSurfaceRects.get(surfaceId).orElse(expandedSurfaceRects.get(surfaceId))
+
+  def panelTitleRect(surfaceId: SurfaceId): Option[LayoutRect] =
+    pinnedSurfaceTitleRects.get(surfaceId).orElse(expandedSurfaceTitleRects.get(surfaceId))
+
+  def panelContentRect(surfaceId: SurfaceId): Option[LayoutRect] =
+    pinnedSurfaceContentRects.get(surfaceId).orElse(expandedSurfaceContentRects.get(surfaceId))
+
+  def panelRowSlots(surfaceId: SurfaceId): List[SurfaceContentRowSlot] =
+    pinnedSurfaceRowSlots.get(surfaceId).orElse(expandedSurfaceRowSlots.get(surfaceId)).getOrElse(Nil)
+
   /** Return all currently detectable contract violations. */
   def violations: List[LayoutContractViolation] =
     workspaceViolations ++

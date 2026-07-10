@@ -1392,8 +1392,8 @@ object Renderer:
                   bufferId,
                   title,
                   rect,
-                  contract.pinnedSurfaceContentRects
-                    .get(surface.id)
+                  contract
+                    .panelContentRect(surface.id)
                     .getOrElse(SurfaceFrameLayout.forContent(rect, content).contentRect),
                   state,
                   context,
@@ -1430,8 +1430,8 @@ object Renderer:
                 bufferId,
                 title,
                 rect,
-                contract.expandedSurfaceContentRects
-                  .get(surface.id)
+                contract
+                  .panelContentRect(surface.id)
                   .getOrElse(SurfaceFrameLayout.forContent(rect, content).contentRect),
                 state,
                 context,

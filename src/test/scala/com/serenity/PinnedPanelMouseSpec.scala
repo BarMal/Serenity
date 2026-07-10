@@ -48,9 +48,8 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
   private def panelContentRect(state: AppState, surfaceId: SurfaceId): LayoutRect =
     val contract = panelContract(state)
-    contract.pinnedSurfaceContentRects
-      .get(surfaceId)
-      .orElse(contract.expandedSurfaceContentRects.get(surfaceId))
+    contract
+      .panelContentRect(surfaceId)
       .getOrElse(fail(s"Expected panel content rect for ${surfaceId.value}"))
 
   private def panelContract(
@@ -67,21 +66,19 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     viewportSize: ViewportSize = viewport
   ): (Int, Int) =
     val contract = panelContract(state, viewportSize)
-    val contentRect = contract.pinnedSurfaceContentRects
-      .get(surfaceId)
-      .orElse(contract.expandedSurfaceContentRects.get(surfaceId))
+    val contentRect = contract
+      .panelContentRect(surfaceId)
       .getOrElse(fail(s"Expected panel content rect for ${surfaceId.value}"))
-    val rowY = contract.pinnedSurfaceRowSlots
-      .get(surfaceId)
-      .orElse(contract.expandedSurfaceRowSlots.get(surfaceId))
-      .getOrElse(Nil)
+    val rowY = contract
+      .panelRowSlots(surfaceId)
       .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(`displayedItemRow`), y) => y }
       .getOrElse(fail(s"Expected pinned panel row $displayedItemRow for ${surfaceId.value}"))
     (contentRect.x + 1, rowY)
 
   private def panelFrameRect(state: AppState, surfaceId: SurfaceId, viewportSize: ViewportSize = viewport): LayoutRect =
-    val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-    layout.pinnedSurfaceRects(surfaceId)
+    panelContract(state, viewportSize)
+      .panelRect(surfaceId)
+      .getOrElse(fail(s"Expected panel frame rect for ${surfaceId.value}"))
 
   private def withActiveBuffer(sm: StateManager, text: String): BufferId =
     val bufferId = BufferId(42)
@@ -315,7 +312,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
     val state       = sm.getCurrentState.unsafeRunSync()
     val frameRect   = panelFrameRect(state, surface.id, compactSquareViewport)
-    val contentRect = panelContract(state, compactSquareViewport).pinnedSurfaceContentRects(surface.id)
+    val contentRect = panelContract(state, compactSquareViewport).panelContentRect(surface.id).get
 
     SurfaceLayoutKind.classify(frameRect) shouldBe SurfaceLayoutKind.Square
     SurfaceLayoutKind.classify(contentRect) shouldBe SurfaceLayoutKind.Compact

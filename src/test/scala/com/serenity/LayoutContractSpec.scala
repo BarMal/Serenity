@@ -468,6 +468,44 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     contract.violations shouldBe Nil
   }
 
+  it should "provide shared panel lookups for pinned and expanded surfaces" in {
+    val pinnedPanel = UiSurface(
+      SurfaceId("left-panel"),
+      SurfaceContent.Outline(Nil),
+      SurfacePresentation.Pinned(PanelPosition.Left, 16)
+    )
+    val expandedPanel = UiSurface(
+      SurfaceId("expanded-panel"),
+      SurfaceContent.Diagnostics(Nil),
+      SurfacePresentation.Expanded(PanelPosition.Right, 24)
+    )
+    val state = AppState.initial.copy(
+      uiSurfaces = List(pinnedPanel, expandedPanel)
+    )
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
+    val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+    val panelViews = PinnedPanelViewModel
+      .fromState(state, calculatedLayout)
+      .flatMap(view => view.surfaceId.map(_ -> view))
+      .toMap
+
+    contract.panelRect(pinnedPanel.id) shouldBe Some(contract.pinnedSurfaceRects(pinnedPanel.id))
+    contract.panelTitleRect(pinnedPanel.id) shouldBe Some(contract.pinnedSurfaceTitleRects(pinnedPanel.id))
+    contract.panelContentRect(pinnedPanel.id) shouldBe Some(panelViews(pinnedPanel.id).resolvedContentRect)
+    contract.panelRowSlots(pinnedPanel.id) shouldBe panelViews(pinnedPanel.id).contentRowSlots
+
+    contract.panelRect(expandedPanel.id) shouldBe Some(contract.expandedSurfaceRects(expandedPanel.id))
+    contract.panelTitleRect(expandedPanel.id) shouldBe Some(contract.expandedSurfaceTitleRects(expandedPanel.id))
+    contract.panelContentRect(expandedPanel.id) shouldBe Some(panelViews(expandedPanel.id).resolvedContentRect)
+    contract.panelRowSlots(expandedPanel.id) shouldBe panelViews(expandedPanel.id).contentRowSlots
+
+    contract.panelRect(SurfaceId("missing")) shouldBe None
+    contract.panelTitleRect(SurfaceId("missing")) shouldBe None
+    contract.panelContentRect(SurfaceId("missing")) shouldBe None
+    contract.panelRowSlots(SurfaceId("missing")) shouldBe Nil
+  }
+
   it should "expose pinned and floating row slots from the shared frame contract" in {
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
