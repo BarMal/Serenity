@@ -39,6 +39,7 @@ object Renderer:
 
   private case class EditorPaneRenderPlan(
       workspaceLayout: EditorWorkspaceLayout,
+      layoutContract: EditorLayoutContract,
       snapshots: Map[PaneId, TextLayoutSnapshot]
   ):
     def paneLayouts: Map[PaneId, EditorPaneLayout] = workspaceLayout.paneLayouts
@@ -223,7 +224,7 @@ object Renderer:
         val editorRenderPlan = prepareEditorPaneRenderPlan(state, context)
         renderSpacerColumns(state, context)
         renderLineNumbers(state, context, editorRenderPlan)
-        renderGutter(state, context, editorRenderPlan.workspaceLayout)
+        renderGutter(state, context, editorRenderPlan.layoutContract)
         renderPinnedPanels(state, context)
         renderEditorPanes(state, context, editorRenderPlan)
         renderFloatingPanels(state, context)
@@ -239,6 +240,12 @@ object Renderer:
 
   private def prepareEditorPaneRenderPlan(state: AppState, context: RenderContext): EditorPaneRenderPlan =
     val workspaceLayout = LayoutEngine.calculateEditorWorkspaceLayout(state, context.layout)
+    val layoutContract =
+      EditorLayoutContract.from(
+        state,
+        ViewportSize(context.surface.viewportWidth, context.surface.viewportHeight),
+        context.layout
+      )
     val snapshots =
       state.layout.editorPanes.flatMap {
         case (paneId, pane) =>
@@ -249,7 +256,7 @@ object Renderer:
           yield paneId -> snapshotForBuffer(buffer, paneLayout.contentRect, state, context)
       }
 
-    EditorPaneRenderPlan(workspaceLayout, snapshots)
+    EditorPaneRenderPlan(workspaceLayout, layoutContract, snapshots)
 
   private def snapshotForBuffer(
     buffer: Buffer,
@@ -330,8 +337,16 @@ object Renderer:
 
     orderedPanes.foreach { (paneId, pane) =>
       renderPlan.paneLayouts.get(paneId) match
-        case Some(paneLayout) => renderEditorPane(pane, paneLayout, state, context, renderPlan.snapshots.get(paneId))
-        case None             => ()
+        case Some(paneLayout) =>
+          renderEditorPane(
+            pane,
+            paneLayout,
+            state,
+            context,
+            renderPlan.snapshots.get(paneId),
+            renderPlan.layoutContract
+          )
+        case None => ()
     }
 
   private def renderEditorCursors(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
@@ -355,11 +370,12 @@ object Renderer:
     paneLayout: EditorPaneLayout,
     state: AppState,
     context: RenderContext,
-    preparedSnapshot: Option[TextLayoutSnapshot]
+    preparedSnapshot: Option[TextLayoutSnapshot],
+    contract: EditorLayoutContract
   ): Unit =
     val buffer = pane.bufferId.flatMap(state.buffers.get)
 
-    renderBufferHeader(pane, buffer, paneLayout, state, context)
+    renderBufferHeader(pane, buffer, paneLayout, state, context, contract)
     renderEditorPaneVerticalSpacers(paneLayout, state, context)
 
     val contentRect = paneLayout.contentRect
@@ -402,13 +418,14 @@ object Renderer:
     buffer: Option[Buffer],
     paneLayout: EditorPaneLayout,
     state: AppState,
-    context: RenderContext
+    context: RenderContext,
+    contract: EditorLayoutContract
   ): Unit =
     context.surface.setFont(context.uiFont)
     val surface    = context.surface
     val isActive   = state.layout.activeEditorPaneId.contains(pane.id)
-    val headerRect = paneLayout.headerRect
-    val titleRect  = paneLayout.titleRect
+    val headerRect = contract.paneHeaderRect(pane.id).getOrElse(paneLayout.headerRect)
+    val titleRect  = contract.paneTitleRect(pane.id).getOrElse(paneLayout.titleRect)
 
     if isActive then
       surface.setBackgroundColor(state.theme.highlighted.background)
@@ -1610,8 +1627,8 @@ object Renderer:
         surface.putString(lineRect.x + lineRect.width - 1, screenY, "!")
     }
 
-  private def renderGutter(state: AppState, context: RenderContext, workspaceLayout: EditorWorkspaceLayout): Unit =
-    workspaceLayout.gutterRect.foreach { gutterRect =>
+  private def renderGutter(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
+    contract.gutterRect.foreach { gutterRect =>
       context.surface.setFont(context.uiFont)
       val surface = context.surface
 

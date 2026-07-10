@@ -35,6 +35,27 @@ case class EditorLayoutContract(
     floatingOverlayRowSlots: Map[SurfaceId, List[SurfaceContentRowSlot]]
 ):
 
+  def paneLayout(paneId: PaneId): Option[EditorPaneLayout] =
+    workspace.paneLayouts.get(paneId)
+
+  def paneHeaderRect(paneId: PaneId): Option[LayoutRect] =
+    paneLayout(paneId).map(_.headerRect)
+
+  def paneTitleRect(paneId: PaneId): Option[LayoutRect] =
+    paneLayout(paneId).map(_.titleRect)
+
+  def activePaneLayout: Option[EditorPaneLayout] =
+    activePaneId.flatMap(paneLayout)
+
+  def activePaneHeaderRect: Option[LayoutRect] =
+    activePaneLayout.map(_.headerRect)
+
+  def activePaneTitleRect: Option[LayoutRect] =
+    activePaneLayout.map(_.titleRect)
+
+  def gutterRect: Option[LayoutRect] =
+    workspace.gutterRect
+
   def panelRect(surfaceId: SurfaceId): Option[LayoutRect] =
     pinnedSurfaceRects.get(surfaceId).orElse(expandedSurfaceRects.get(surfaceId))
 
