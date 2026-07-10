@@ -21,6 +21,7 @@ case class EditorLayoutContract(
     minimumFloatingOverlayGapRows: Int,
     pinnedPanelRects: Map[PanelPosition, LayoutRect],
     pinnedSurfaceRects: Map[SurfaceId, LayoutRect],
+    pinnedSurfaceTitleRects: Map[SurfaceId, LayoutRect],
     pinnedSurfaceContentRects: Map[SurfaceId, LayoutRect],
     pinnedSurfaceRowSlots: Map[SurfaceId, List[SurfaceContentRowSlot]],
     aboveCursorOverlayRects: List[(SurfaceId, LayoutRect)],
@@ -86,11 +87,19 @@ case class EditorLayoutContract(
     containedBy(
       "content area",
       contentAreaRect,
-      pinnedSurfaceRects.toList.map((surfaceId, rect) => s"pinned surface ${surfaceId.value} frame" -> Some(rect)) ++
-        pinnedSurfaceContentRects.toList.map((surfaceId, rect) =>
-          s"pinned surface ${surfaceId.value} content" -> Some(rect)
-        )
-    )
+      pinnedSurfaceRects.toList.map((surfaceId, rect) => s"pinned surface ${surfaceId.value} frame" -> Some(rect))
+    ) ++
+      pinnedSurfaceRects.toList.flatMap {
+        case (surfaceId, frameRect) =>
+          containedBy(
+            s"pinned surface ${surfaceId.value} frame",
+            frameRect,
+            List(
+              s"pinned surface ${surfaceId.value} title"   -> pinnedSurfaceTitleRects.get(surfaceId),
+              s"pinned surface ${surfaceId.value} content" -> pinnedSurfaceContentRects.get(surfaceId)
+            )
+          )
+      }
 
   private def floatingOverlayViolations: List[LayoutContractViolation] =
     activePaneId
@@ -204,8 +213,12 @@ object EditorLayoutContract:
           .surfaceById(surfaceId)
           .map(surface => surfaceId -> SurfaceFrameLayout.forContent(frameRect, surface.content).contentRect)
     }.toMap
-    val pinnedSurfaceRowSlots = PinnedPanelViewModel
+    val pinnedSurfaceViews = PinnedPanelViewModel
       .fromState(state, calculatedLayout)
+    val pinnedSurfaceTitleRects = pinnedSurfaceViews
+      .flatMap(view => view.surfaceId.map(_ -> view.titleRect))
+      .toMap
+    val pinnedSurfaceRowSlots = pinnedSurfaceViews
       .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
       .toMap
     val aboveCursorOverlayRects = calculatedLayout.aboveCursorOverlayStack
@@ -229,6 +242,7 @@ object EditorLayoutContract:
       minimumFloatingOverlayGapRows = minimumFloatingOverlayGapRows,
       pinnedPanelRects = calculatedLayout.pinnedPanelRects,
       pinnedSurfaceRects = calculatedLayout.pinnedSurfaceRects,
+      pinnedSurfaceTitleRects = pinnedSurfaceTitleRects,
       pinnedSurfaceContentRects = pinnedSurfaceContentRects,
       pinnedSurfaceRowSlots = pinnedSurfaceRowSlots,
       aboveCursorOverlayRects = aboveCursorOverlayRects,
