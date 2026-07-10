@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.command.CommandRunner
+import com.serenity.command.*
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -118,7 +118,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    rect.y shouldBe contentRect.y + 7
+    rect.y shouldBe contentRect.y + 8
     rect.x shouldBe contentRect.x
     rect.width shouldBe contentRect.width
     rect.right shouldBe contentRect.right
@@ -178,7 +178,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    rect.y shouldBe contentRect.y + 1
+    rect.y shouldBe contentRect.y + 2
   }
 
   it should "place command runner overlays from the live editor cursor rather than a stale surface anchor" in {
@@ -207,7 +207,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    rect.y shouldBe contentRect.y + 1
+    rect.y shouldBe contentRect.y + 2
   }
 
   it should "place command runner overlays below the visible wrapped cursor row" in {
@@ -250,7 +250,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    rect.y shouldBe contentRect.y + 1
+    rect.y shouldBe contentRect.y + 2
   }
 
   it should "place command runner overlays below the visible unwrapped cursor row after scrolling past long lines" in {
@@ -299,7 +299,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    rect.y shouldBe contentRect.y + (cursor.line - buffer.viewport.topLine) + 1
+    rect.y shouldBe contentRect.y + (cursor.line - buffer.viewport.topLine) + 2
   }
 
   it should "size command runner overlays from configured visible rows" in {
@@ -324,6 +324,41 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
     layout.belowCursorOverlayRect.map(_.height) shouldBe Some(9)
+  }
+
+  it should "apply configured gaps below the cursor and between stacked overlays" in {
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val registry = CommandRegistry(commands)
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("op")(using registry)
+    val cursor = CursorPosition(1, 2)
+    val state = baseState(cursor = cursor).copy(
+      config = AppState.initial.config.withUiElementGap(2),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("contextual-toolbar"),
+          SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout      = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
+    val paneLayout  = LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId)
+    val contentRect = paneLayout.contentRect
+    val stack       = layout.belowCursorOverlayStack.toMap
+
+    val toolbarRect = stack.getOrElse(SurfaceId("contextual-toolbar"), fail("Expected toolbar overlay"))
+    val runnerRect  = stack.getOrElse(SurfaceId("command-runner"), fail("Expected command runner overlay"))
+
+    toolbarRect.y shouldBe contentRect.y + cursor.line + 3
+    runnerRect.y shouldBe toolbarRect.bottom + 2
   }
 
   it should "move a command runner stack above the cursor as one unit when it cannot fit below" in {
