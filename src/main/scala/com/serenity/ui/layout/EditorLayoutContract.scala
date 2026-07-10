@@ -56,6 +56,12 @@ case class EditorLayoutContract(
   def gutterRect: Option[LayoutRect] =
     workspace.gutterRect
 
+  def lineNumberRect: Option[LayoutRect] =
+    workspace.lineNumberRect
+
+  def lineNumberRowSlots(itemCount: Int): List[SurfaceContentRowSlot] =
+    workspace.lineNumberRowSlots(itemCount)
+
   def panelRect(surfaceId: SurfaceId): Option[LayoutRect] =
     pinnedSurfaceRects.get(surfaceId).orElse(expandedSurfaceRects.get(surfaceId))
 

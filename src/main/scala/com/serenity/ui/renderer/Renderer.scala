@@ -1544,7 +1544,7 @@ object Renderer:
   private def renderLineNumbers(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
     if state.config.showLineNumbers then
       context.surface.setFont(context.uiFont)
-      renderPlan.workspaceLayout.lineNumberRect foreach { lineRect =>
+      renderPlan.layoutContract.lineNumberRect foreach { lineRect =>
         val surface = context.surface
 
         surface.setBackgroundColor(state.theme.panel.background)
@@ -1565,7 +1565,7 @@ object Renderer:
                   yield snapshotForBuffer(buf, paneLayout.contentRect, state, context)
                 }
             snapshot.foreach { snapshot =>
-              renderPlan.workspaceLayout.lineNumberRowSlots(snapshot.visualLines.length).foreach {
+              renderPlan.layoutContract.lineNumberRowSlots(snapshot.visualLines.length).foreach {
                 case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), rowY)
                     if visualLineFits(lineRect, index, context, snapshot) =>
                   snapshot.visualLines.lift(index).foreach { visualLine =>

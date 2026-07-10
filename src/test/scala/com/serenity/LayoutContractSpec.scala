@@ -589,6 +589,30 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     contract.paneTitleRect(PaneId(99)) shouldBe None
   }
 
+  it should "provide shared line-number lookups" in {
+    val buffer = Buffer
+      .fromString(BufferId(1), "alpha\nbeta\ngamma")
+      .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 8, visibleColumns = 40))
+    val paneId = PaneId(0)
+    val state = AppState.initial.copy(
+      config = AppConfig.default.withLineNumbers(true),
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+        activeEditorPaneId = Some(paneId),
+        paneOrder = List(paneId)
+      )
+    )
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
+    val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+
+    contract.lineNumberRect shouldBe contract.workspace.lineNumberRect
+    contract.lineNumberRect shouldBe calculatedLayout.lineNumberRect
+    contract.lineNumberRowSlots(itemCount = 3) shouldBe contract.workspace.lineNumberRowSlots(itemCount = 3)
+  }
+
   it should "expose pinned and floating row slots from the shared frame contract" in {
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
