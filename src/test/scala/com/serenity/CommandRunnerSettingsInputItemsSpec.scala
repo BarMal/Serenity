@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.{CommandIntent, CommandRunnerSettingsInputItems, CommandSurfaceItem}
-import com.serenity.config.{AppConfig, SpellCheckConfig, TextAreaInsets}
+import com.serenity.config.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -12,8 +12,7 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
 
   "CommandRunnerSettingsInputItems" should "build config-backed settings input rows independently of runner state" in {
     val config = AppConfig.default
-      .withUiElementGap(3)
-      .withUiOutlineThicknessPx(4)
+      .withInterfaceConfig(InterfaceConfig(elementGap = 3, outlineThicknessPx = 4))
       .withCommandRunnerVisibleRows(Some(9))
       .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20, top = 0.15, bottom = 0.25))
       .withSpellCheck(

@@ -8,43 +8,50 @@ import com.serenity.ui.fonts.FontLoader.TextScaleMode
 object CommandRunnerOptionSelections:
 
   def default(config: AppConfig): Map[String, Int] =
+    val editorConfig        = config.editorConfig
+    val surfaceConfig       = config.surfaceConfig
+    val cursorConfig        = config.cursorConfig
+    val documentConfig      = config.documentConfig
+    val interfaceConfig     = config.interfaceConfig
+    val languageToolsConfig = config.languageToolsConfig
+
     Map(
-      "animation-mode"             -> animationModeIndex(config),
-      "material-preset"            -> materialPresetIndex(config.materialPreset),
-      "motion-preset"              -> motionPresetIndex(config.motionPreset),
-      "command-runner-fade"        -> commandRunnerFadeIndex(config.commandRunnerAnimation),
-      "ui-animation"               -> animationPresetIndex(config.uiAnimation),
-      "render-fps"                 -> renderFpsTargetIndex(config.renderFpsTarget),
-      "editor-text-transition"     -> editorTextTransitionIndex(config.editorInsertionTransitionKind),
+      "animation-mode"             -> animationModeIndex(editorConfig.characterAnimation),
+      "material-preset"            -> materialPresetIndex(surfaceConfig.materialPreset),
+      "motion-preset"              -> motionPresetIndex(surfaceConfig.motionPreset),
+      "command-runner-fade"        -> commandRunnerFadeIndex(surfaceConfig.commandRunnerAnimation),
+      "ui-animation"               -> animationPresetIndex(surfaceConfig.uiAnimation),
+      "render-fps"                 -> renderFpsTargetIndex(surfaceConfig.renderFpsTarget),
+      "editor-text-transition"     -> editorTextTransitionIndex(surfaceConfig.editorInsertionTransitionKind),
       "command-runner-transition"  -> panelTransitionIndex(config.effectiveCommandRunnerTransitionKind),
       "panel-open-transition"      -> panelTransitionIndex(config.effectivePanelOpenTransitionKind),
       "panel-close-transition"     -> panelTransitionIndex(config.effectivePanelCloseTransitionKind),
-      "cursor-mode"                -> cursorModeIndex(config.cursorMode),
-      "cursor-info-bar"            -> cursorInfoBarModeIndex(config.cursorInfoBarMode),
-      "cursor-info-bar-placement"  -> cursorInfoBarPlacementIndex(config.cursorInfoBarPlacement),
-      "background-style"           -> backgroundStyleIndex(config.backgroundStyle),
-      "interface-density"          -> interfaceDensityIndex(config.interfaceDensity),
-      "markdown-view"              -> markdownViewModeIndex(config.markdownViewMode),
-      "default-document-mode"      -> defaultDocumentModeIndex(config.defaultDocumentMode),
-      "spellcheck-enabled"         -> spellCheckEnabledIndex(config.spellCheck.enabled),
-      "line-numbers"               -> enabledIndex(config.showLineNumbers),
-      "gutter"                     -> enabledIndex(config.showGutter),
-      "line-wrap"                  -> enabledIndex(config.wordWrapEnabled),
-      "word-wrap"                  -> enabledIndex(config.wordWrapEnabled),
-      "focused-text-body"          -> enabledIndex(config.focusedTextBodyEnabled),
-      "contextual-toolbar"         -> enabledIndex(config.contextualToolbarEnabled),
-      "contextual-toolbar-display" -> contextualToolbarDisplayModeIndex(config.contextualToolbarDisplayMode),
-      "code-font"                  -> codeFontIndex(config.fontConfig.codeFontFamily),
-      "text-font"                  -> textFontIndex(config.fontConfig.textFontFamily),
-      "ui-font"                    -> uiFontIndex(config.fontConfig.uiFontFamily),
-      "text-scale-mode"            -> textScaleModeIndex(config.fontConfig.textScaleMode),
-      "code-ligatures"             -> ligaturesIndex(config.fontConfig.codeLigatures),
-      "text-ligatures"             -> ligaturesIndex(config.fontConfig.textLigatures),
-      "ui-ligatures"               -> ligaturesIndex(config.fontConfig.uiLigatures)
+      "cursor-mode"                -> cursorModeIndex(cursorConfig.mode),
+      "cursor-info-bar"            -> cursorInfoBarModeIndex(cursorConfig.infoBarMode),
+      "cursor-info-bar-placement"  -> cursorInfoBarPlacementIndex(cursorConfig.infoBarPlacement),
+      "background-style"           -> backgroundStyleIndex(surfaceConfig.backgroundStyle),
+      "interface-density"          -> interfaceDensityIndex(interfaceConfig.density),
+      "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
+      "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
+      "spellcheck-enabled"         -> spellCheckEnabledIndex(languageToolsConfig.spellCheck.enabled),
+      "line-numbers"               -> enabledIndex(surfaceConfig.showLineNumbers),
+      "gutter"                     -> enabledIndex(surfaceConfig.showGutter),
+      "line-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
+      "word-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
+      "focused-text-body"          -> enabledIndex(surfaceConfig.focusedTextBodyEnabled),
+      "contextual-toolbar"         -> enabledIndex(surfaceConfig.contextualToolbarEnabled),
+      "contextual-toolbar-display" -> contextualToolbarDisplayModeIndex(surfaceConfig.contextualToolbarDisplayMode),
+      "code-font"                  -> codeFontIndex(editorConfig.fontConfig.codeFontFamily),
+      "text-font"                  -> textFontIndex(editorConfig.fontConfig.textFontFamily),
+      "ui-font"                    -> uiFontIndex(editorConfig.fontConfig.uiFontFamily),
+      "text-scale-mode"            -> textScaleModeIndex(editorConfig.fontConfig.textScaleMode),
+      "code-ligatures"             -> ligaturesIndex(editorConfig.fontConfig.codeLigatures),
+      "text-ligatures"             -> ligaturesIndex(editorConfig.fontConfig.textLigatures),
+      "ui-ligatures"               -> ligaturesIndex(editorConfig.fontConfig.uiLigatures)
     )
 
-  private def animationModeIndex(config: AppConfig): Int =
-    config.characterAnimation match
+  private def animationModeIndex(animation: Option[AnimationConfig]): Int =
+    animation match
       case None                                                          => 0
       case Some(animation) if AnimationConfig.subtle.contains(animation) => 1
       case _                                                             => 2

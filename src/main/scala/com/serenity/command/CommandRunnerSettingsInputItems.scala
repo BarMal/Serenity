@@ -12,29 +12,35 @@ object CommandRunnerSettingsInputItems:
     normalizeHexColor(text).map(CommandIntent.SetRichTextColor(_))
 
   def build(config: AppConfig): List[CommandSurfaceItem.InputItem] =
-    val durationValue       = config.characterAnimation.map(_.durationMs.toString).getOrElse("0")
-    val stepsValue          = config.characterAnimation.map(_.steps.toString).getOrElse("0")
-    val blurValue           = config.blurRadius.toString
-    val codeFontSizeValue   = config.fontConfig.codeFontSize.toString
-    val textFontSizeValue   = config.fontConfig.textFontSize.toString
-    val uiFontSizeValue     = config.fontConfig.uiFontSize.toString
-    val textScaleValue      = f"${config.fontConfig.textScaleMultiplier}%.2f"
-    val textAreaLeftValue   = f"${config.textAreaInsets.leftPercent}%.1f"
-    val textAreaRightValue  = f"${config.textAreaInsets.rightPercent}%.1f"
-    val textAreaTopValue    = f"${config.textAreaInsets.topPercent}%.1f"
-    val textAreaBottomValue = f"${config.textAreaInsets.bottomPercent}%.1f"
-    val speedScaleValue     = f"${config.elementTransitionSpeedScale}%.2f"
+    val editorConfig        = config.editorConfig
+    val inputConfig         = config.inputConfig
+    val surfaceConfig       = config.surfaceConfig
+    val interfaceConfig     = config.interfaceConfig
+    val languageToolsConfig = config.languageToolsConfig
+
+    val durationValue       = editorConfig.characterAnimation.map(_.durationMs.toString).getOrElse("0")
+    val stepsValue          = editorConfig.characterAnimation.map(_.steps.toString).getOrElse("0")
+    val blurValue           = surfaceConfig.blurRadius.toString
+    val codeFontSizeValue   = editorConfig.fontConfig.codeFontSize.toString
+    val textFontSizeValue   = editorConfig.fontConfig.textFontSize.toString
+    val uiFontSizeValue     = editorConfig.fontConfig.uiFontSize.toString
+    val textScaleValue      = f"${editorConfig.fontConfig.textScaleMultiplier}%.2f"
+    val textAreaLeftValue   = f"${surfaceConfig.textAreaInsets.leftPercent}%.1f"
+    val textAreaRightValue  = f"${surfaceConfig.textAreaInsets.rightPercent}%.1f"
+    val textAreaTopValue    = f"${surfaceConfig.textAreaInsets.topPercent}%.1f"
+    val textAreaBottomValue = f"${surfaceConfig.textAreaInsets.bottomPercent}%.1f"
+    val speedScaleValue     = f"${surfaceConfig.elementTransitionSpeedScale}%.2f"
     val editorTextSpeedScaleValue =
       f"${config.effectiveEditorTextTransitionSpeedScale}%.2f"
     val commandRunnerSpeedScaleValue =
       f"${config.effectiveCommandRunnerTransitionSpeedScale}%.2f"
     val uiSpeedScaleValue     = f"${config.effectiveUiTransitionSpeedScale}%.2f"
     val cursorSpeedScaleValue = f"${config.effectiveCursorTransitionSpeedScale}%.2f"
-    val elementGapValue       = config.uiElementGap.toString
-    val cornerRadiusValue     = config.uiCornerRadiusPx.toString
-    val outlineThicknessValue = config.uiOutlineThicknessPx.toString
-    val commandRowsValue      = config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
-    val spellCheck            = config.spellCheck.normalized
+    val elementGapValue       = interfaceConfig.elementGap.toString
+    val cornerRadiusValue     = interfaceConfig.cornerRadiusPx.toString
+    val outlineThicknessValue = interfaceConfig.outlineThicknessPx.toString
+    val commandRowsValue      = surfaceConfig.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
+    val spellCheck            = languageToolsConfig.spellCheck.normalized
 
     val commentItems = List(
       CommandSurfaceItem.InputItem(
@@ -464,7 +470,7 @@ object CommandRunnerSettingsInputItems:
     )
 
     commentItems ++ presetItems ++ richTextItems ++ textAreaItems ++ spellCheckItems ++ numericItems ++
-      buildKeymapInputItems(config)
+      buildKeymapInputItems(inputConfig)
 
   private def nonEmptyText(text: String): Option[String] =
     Option(text.trim).filter(_.nonEmpty)
@@ -508,7 +514,7 @@ object CommandRunnerSettingsInputItems:
       .filter(_.nonEmpty)
       .distinct
 
-  private def buildKeymapInputItems(config: AppConfig): List[CommandSurfaceItem.InputItem] =
+  private def buildKeymapInputItems(config: InputConfig): List[CommandSurfaceItem.InputItem] =
     List(
       bindingInputItem(
         id = "keymap-global-command_palette",
