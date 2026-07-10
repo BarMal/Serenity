@@ -1013,6 +1013,27 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.footer.map(_.plainText) shouldBe Some("1 loaded, more available")
   }
 
+  it should "window FileSearch results against the shared frame contract when header and footer leave one item row" in {
+    val results = List(
+      FileSearchResult(BufferId(0), "main.scala", 5, "def foo(x: Int)"),
+      FileSearchResult(BufferId(1), "util.scala", 12, "def helper()"),
+      FileSearchResult(BufferId(2), "notes.md", 8, "def summary"),
+      FileSearchResult(BufferId(3), "tail.scala", 21, "def selected()")
+    )
+    val search = FileSearchState("def", results, selectedIndex = 3, hasMoreResults = true)
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.FileSearch(search),
+      LayoutRect(0, 0, 60, 5),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.header.map(_.plainText) shouldBe Some("def")
+    resolved.rows.map(_.plainText) shouldBe List("tail.scala:22  def selected()")
+    resolved.rows.map(_.selected) shouldBe List(true)
+    resolved.footer.map(_.plainText) shouldBe Some("4 loaded, more available")
+  }
+
   it should "resolve Markdown previews as rendered pinned preview shells" in {
     val resolved = SurfaceContentResolver.resolveMarkdownPreview(
       title = "notes.md",
