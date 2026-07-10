@@ -291,7 +291,7 @@ object ConfigManager:
               parseTransitionKind(value.trim)
                 .map(kind => config.withPanelCloseTransitionKind(Some(kind)))
                 .getOrElse(config)
-            case "document.default_mode" | "document.default.mode" | "document_default_mode" =>
+            case key if DocumentConfig.Schema.defaultModeKeys.contains(key) =>
               parseDefaultDocumentMode(value.trim).map(config.withDefaultDocumentMode).getOrElse(config)
             case key if WindowConfig.Schema.chromeKeys.contains(key) =>
               parseWindowChromeMode(value.trim).map(config.withWindowChromeMode).getOrElse(config)

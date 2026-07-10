@@ -364,6 +364,26 @@ object CursorConfig:
     val infoBarPlacementKeys: Set[String] =
       Set("cursor.info_bar.placement", "cursor.info.bar.placement", "cursor_info_bar_placement")
 
+case class DocumentConfig(
+    markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
+    defaultMode: DefaultDocumentMode = DefaultDocumentMode.PlainText
+)
+
+object DocumentConfig:
+
+  object Schema:
+
+    val currentKeys: Set[String] = Set(
+      "document.default_mode",
+      "document.default.mode"
+    )
+
+    val deprecatedKeys: Map[String, String] = Map(
+      "document_default_mode" -> "document.default_mode"
+    )
+
+    val defaultModeKeys: Set[String] = currentKeys ++ deprecatedKeys.keySet
+
 case class TextAreaInsets(
     left: Double = TextAreaInsets.DefaultInset,
     right: Double = TextAreaInsets.DefaultInset,
@@ -491,8 +511,7 @@ case class AppConfig(
     panelCloseTransitionKind: Option[TransitionKind] = None,
     cursorConfig: CursorConfig = CursorConfig(),
     windowConfig: WindowConfig = WindowConfig(),
-    markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
-    defaultDocumentMode: DefaultDocumentMode = DefaultDocumentMode.PlainText,
+    documentConfig: DocumentConfig = DocumentConfig(),
     interfaceDensity: InterfaceDensity = InterfaceDensity.Comfortable,
     uiElementGap: Int = 0,
     uiCornerRadiusPx: Int = 8,
@@ -507,6 +526,12 @@ case class AppConfig(
 
   def preferredWindowSize: Option[PreferredWindowSize] =
     windowConfig.preferredSize
+
+  def markdownViewMode: MarkdownViewMode =
+    documentConfig.markdownViewMode
+
+  def defaultDocumentMode: DefaultDocumentMode =
+    documentConfig.defaultMode
 
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
@@ -753,12 +778,15 @@ case class AppConfig(
   def withWindowChromeMode(mode: WindowChromeMode): AppConfig =
     withWindowConfig(windowConfig.copy(chromeMode = mode))
 
+  def withDocumentConfig(config: DocumentConfig): AppConfig =
+    copy(documentConfig = config)
+
   def withMarkdownViewMode(mode: MarkdownViewMode): AppConfig =
-    copy(markdownViewMode = mode)
+    withDocumentConfig(documentConfig.copy(markdownViewMode = mode))
 
   /** Create a new config with the default mode used for new empty buffers. */
   def withDefaultDocumentMode(mode: DefaultDocumentMode): AppConfig =
-    copy(defaultDocumentMode = mode)
+    withDocumentConfig(documentConfig.copy(defaultMode = mode))
 
   def withInterfaceDensity(density: InterfaceDensity): AppConfig =
     copy(interfaceDensity = density)

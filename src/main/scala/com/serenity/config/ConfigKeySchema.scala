@@ -91,8 +91,6 @@ object ConfigKeySchema:
       "display.contextual.toolbar",
       "display.contextual_toolbar_mode",
       "display.contextual.toolbar.mode",
-      "document.default_mode",
-      "document.default.mode",
       "text_area.left.percent",
       "text.area.left.percent",
       "text_area.right.percent",
@@ -110,7 +108,7 @@ object ConfigKeySchema:
       "spellcheck.dictionary_paths",
       "spellcheck.dictionary.paths",
       "spellcheck.words"
-    ) ++ CursorConfig.Schema.currentKeys ++ WindowConfig.Schema.currentKeys
+    ) ++ CursorConfig.Schema.currentKeys ++ DocumentConfig.Schema.currentKeys ++ WindowConfig.Schema.currentKeys
 
   val deprecatedKeys: Map[String, String] =
     Map(
@@ -160,7 +158,6 @@ object ConfigKeySchema:
       "display_focused_text_body"            -> "display.focused_text_body",
       "display_contextual_toolbar"           -> "display.contextual_toolbar",
       "display_contextual_toolbar_mode"      -> "display.contextual_toolbar_mode",
-      "document_default_mode"                -> "document.default_mode",
       "text_area_left_percent"               -> "text_area.left.percent",
       "text_area_right_percent"              -> "text_area.right.percent",
       "text_area_top_percent"                -> "text_area.top.percent",
@@ -173,4 +170,4 @@ object ConfigKeySchema:
       "spellcheck_languages"                 -> "spellcheck.languages",
       "spellcheck_dictionary_paths"          -> "spellcheck.dictionary_paths",
       "spellcheck_words"                     -> "spellcheck.words"
-    ) ++ CursorConfig.Schema.deprecatedKeys ++ WindowConfig.Schema.deprecatedKeys
+    ) ++ CursorConfig.Schema.deprecatedKeys ++ DocumentConfig.Schema.deprecatedKeys ++ WindowConfig.Schema.deprecatedKeys

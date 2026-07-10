@@ -506,6 +506,8 @@ given Encoder[WindowConfig]        = deriveEncoder
 given Decoder[WindowConfig]        = deriveDecoder
 given Encoder[CursorConfig]        = deriveEncoder
 given Decoder[CursorConfig]        = deriveDecoder
+given Encoder[DocumentConfig]      = deriveEncoder
+given Decoder[DocumentConfig]      = deriveDecoder
 
 given Encoder[TextAreaInsets] = deriveEncoder
 given Decoder[TextAreaInsets] = deriveDecoder
@@ -792,8 +794,10 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
       chromeMode = windowChromeMode,
       preferredSize = preferredWindowSize
     ),
-    markdownViewMode = markdownViewMode,
-    defaultDocumentMode = defaultDocumentMode,
+    documentConfig = DocumentConfig(
+      markdownViewMode = markdownViewMode,
+      defaultMode = defaultDocumentMode
+    ),
     interfaceDensity = interfaceDensity,
     uiElementGap = AppConfig.clampUiElementGap(uiElementGap),
     uiCornerRadiusPx = AppConfig.clampUiCornerRadiusPx(uiCornerRadiusPx),

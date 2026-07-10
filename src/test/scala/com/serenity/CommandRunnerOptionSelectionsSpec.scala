@@ -31,8 +31,10 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
       ),
       backgroundStyle = BackgroundStyle.GlassLike,
       interfaceDensity = InterfaceDensity.Compact,
-      markdownViewMode = MarkdownViewMode.InlineLens,
-      defaultDocumentMode = DefaultDocumentMode.RichText,
+      documentConfig = DocumentConfig(
+        markdownViewMode = MarkdownViewMode.InlineLens,
+        defaultMode = DefaultDocumentMode.RichText
+      ),
       contextualToolbarDisplayMode = ToolbarDisplayMode.TextOnly,
       spellCheck = SpellCheckConfig(enabled = true),
       showLineNumbers = false,
