@@ -86,6 +86,28 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     state.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
+  it should "move below the cursor line when there is no room above the selection" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-top-row-placement")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 20))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val contentRect = LayoutEngine
+      .calculateEditorWorkspaceLayout(state, layout)
+      .activeContentRect(state)
+      .getOrElse(
+        fail("Expected active content rect")
+      )
+    val rect = toolbarRect(state)
+
+    rect.y should be > contentRect.y
+    rect.bottom should be <= contentRect.bottom
+  }
+
   it should "open a focused font size field with the current value prefilled, accept edits, and apply them on Enter" in {
     val stateManager = createStateManager("ContextualToolbarSpec-font-size")
 
