@@ -377,7 +377,57 @@ object LanguageToolsConfig:
       "spellcheck_words"            -> "spellcheck.words"
     )
 
+    val syntaxHighlightingKeys: Set[String] = Set("syntax.highlighting", "syntax_highlighting")
+
+    val spellCheckEnabledKeys: Set[String] = Set("spellcheck.enabled", "spellcheck_enabled")
+
+    val spellCheckLanguageKeys: Set[String] = Set("spellcheck.languages", "spellcheck_languages")
+
+    val spellCheckDictionaryPathKeys: Set[String] =
+      Set("spellcheck.dictionary_paths", "spellcheck.dictionary.paths", "spellcheck_dictionary_paths")
+
+    val spellCheckWordKeys: Set[String] = Set("spellcheck.words", "spellcheck_words")
+
     val dynamicPrefixes: List[String] = List("lsp.")
+
+    private val handledKeys: Set[String] =
+      syntaxHighlightingKeys ++
+        spellCheckEnabledKeys ++
+        spellCheckLanguageKeys ++
+        spellCheckDictionaryPathKeys ++
+        spellCheckWordKeys
+
+    def handles(key: String): Boolean =
+      handledKeys.contains(key)
+
+    def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
+      val trimmed = value.trim
+      if syntaxHighlightingKeys.contains(key) then parseBoolean(trimmed).map(config.withSyntaxHighlighting)
+      else if spellCheckEnabledKeys.contains(key) then
+        parseBoolean(trimmed)
+          .map(enabled => config.withSpellCheck(config.spellCheck.copy(enabled = enabled)))
+      else if spellCheckLanguageKeys.contains(key) then
+        Some(config.withSpellCheck(config.spellCheck.copy(languages = parseCommaList(trimmed))))
+      else if spellCheckDictionaryPathKeys.contains(key) then
+        Some(config.withSpellCheck(config.spellCheck.copy(dictionaryPaths = parseCommaListPreserveCase(trimmed))))
+      else if spellCheckWordKeys.contains(key) then
+        Some(config.withSpellCheck(config.spellCheck.copy(additionalWords = parseCommaList(trimmed))))
+      else None
+
+    def invalidValue(key: String, value: String): Boolean =
+      parse(AppConfig.default, key, value).isEmpty
+
+    private def parseBoolean(value: String): Option[Boolean] =
+      value.toLowerCase match
+        case "true" | "on" | "enabled"    => Some(true)
+        case "false" | "off" | "disabled" => Some(false)
+        case _                            => None
+
+    private def parseCommaList(value: String): List[String] =
+      value.split(',').toList.map(_.trim.toLowerCase).filter(_.nonEmpty)
+
+    private def parseCommaListPreserveCase(value: String): List[String] =
+      value.split(',').toList.map(_.trim).filter(_.nonEmpty)
 
 case class PreferredWindowSize(width: Int, height: Int):
   def normalized: PreferredWindowSize =

@@ -100,14 +100,8 @@ object ConfigManager:
                   )
                 )
                 .getOrElse(config)
-            case "syntax.highlighting" | "syntax_highlighting" =>
-              value.trim.toLowerCase match
-                case "true" | "on" | "enabled" =>
-                  config.withSyntaxHighlighting(true)
-                case "false" | "off" | "disabled" =>
-                  config.withSyntaxHighlighting(false)
-                case _ =>
-                  config // Unknown value, keep current config
+            case key if LanguageToolsConfig.Schema.handles(key) =>
+              LanguageToolsConfig.Schema.parse(config, key, value).getOrElse(config)
             case "font.code.family" | "font_code_family" =>
               config.withFontConfig(config.fontConfig.copy(codeFontFamily = value.trim))
             case "font.text.family" | "font_text_family" =>
@@ -301,16 +295,6 @@ object ConfigManager:
                   config.withViewportHeightSizing(config.viewportSizing.height.copy(maxCells = maxCells))
                 )
                 .getOrElse(config)
-            case "spellcheck.enabled" | "spellcheck_enabled" =>
-              parseBoolean(value.trim)
-                .map(enabled => config.withSpellCheck(config.spellCheck.copy(enabled = enabled)))
-                .getOrElse(config)
-            case "spellcheck.languages" | "spellcheck_languages" =>
-              config.withSpellCheck(config.spellCheck.copy(languages = parseCommaList(value.trim)))
-            case "spellcheck.dictionary_paths" | "spellcheck.dictionary.paths" | "spellcheck_dictionary_paths" =>
-              config.withSpellCheck(config.spellCheck.copy(dictionaryPaths = parseCommaListPreserveCase(value.trim)))
-            case "spellcheck.words" | "spellcheck_words" =>
-              config.withSpellCheck(config.spellCheck.copy(additionalWords = parseCommaList(value.trim)))
             case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
               HotkeyAction.values
                 .find(action => s"hotkey.${action.configKey}" == hotkeyKey)
@@ -555,10 +539,11 @@ object ConfigManager:
         case "character.animation.duration_ms" | "character.animation.duration.ms" | "character_animation_duration_ms" |
             "character.animation.steps" | "character_animation_steps" =>
           value.trim.toIntOption.forall(_ <= 0)
-        case "syntax.highlighting" | "syntax_highlighting" | "font.code.ligatures" | "font_code_ligatures" |
-            "font.text.ligatures" | "font.prose.ligatures" | "font_text_ligatures" | "font_prose_ligatures" |
-            "font.ui.ligatures" | "font_ui_ligatures" | "font.ligatures" | "font_ligatures" | "spellcheck.enabled" |
-            "spellcheck_enabled" | "display.word_wrap" | "display.word.wrap" | "display_word_wrap" |
+        case key if LanguageToolsConfig.Schema.handles(key) =>
+          LanguageToolsConfig.Schema.invalidValue(key, value)
+        case "font.code.ligatures" | "font_code_ligatures" | "font.text.ligatures" | "font.prose.ligatures" |
+            "font_text_ligatures" | "font_prose_ligatures" | "font.ui.ligatures" | "font_ui_ligatures" |
+            "font.ligatures" | "font_ligatures" | "display.word_wrap" | "display.word.wrap" | "display_word_wrap" |
             "display.focused_text_body" | "display.focused.text.body" | "display_focused_text_body" |
             "display.contextual_toolbar" | "display.contextual.toolbar" | "display_contextual_toolbar" =>
           parseBoolean(value).isEmpty
@@ -786,22 +771,6 @@ object ConfigManager:
           ).flatten
       }
       .mkString("\n")
-
-  private def parseCommaList(value: String): List[String] =
-    value
-      .split(",")
-      .toList
-      .map(_.trim.toLowerCase)
-      .filter(_.nonEmpty)
-      .distinct
-
-  private def parseCommaListPreserveCase(value: String): List[String] =
-    value
-      .split(",")
-      .toList
-      .map(_.trim)
-      .filter(_.nonEmpty)
-      .distinct
 
   /** Create a sample configuration file */
   def createSampleConfig(path: String): Boolean =

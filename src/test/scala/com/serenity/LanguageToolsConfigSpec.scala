@@ -50,3 +50,49 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
       )
     )
   }
+
+  it should "parse language-tool config entries centrally" in {
+    val syntaxConfig =
+      LanguageToolsConfig.Schema
+        .parse(AppConfig.default, "syntax_highlighting", "true")
+        .getOrElse(fail("syntax parse"))
+    val spellEnabledConfig =
+      LanguageToolsConfig.Schema
+        .parse(AppConfig.default, "spellcheck.enabled", "on")
+        .getOrElse(fail("spellcheck enabled parse"))
+    val languageConfig =
+      LanguageToolsConfig.Schema
+        .parse(AppConfig.default, "spellcheck_languages", " en,FR,,en ")
+        .getOrElse(fail("spellcheck languages parse"))
+    val dictionaryConfig =
+      LanguageToolsConfig.Schema
+        .parse(
+          AppConfig.default,
+          "spellcheck.dictionary.paths",
+          " C:\\Dictionaries\\en_US.dic , /usr/share/hunspell/fr.dic "
+        )
+        .getOrElse(fail("spellcheck dictionary paths parse"))
+    val wordsConfig =
+      LanguageToolsConfig.Schema
+        .parse(AppConfig.default, "spellcheck.words", " Serenity,IO,,serenity ")
+        .getOrElse(fail("spellcheck words parse"))
+
+    syntaxConfig.languageToolsConfig.syntaxHighlightingEnabled.shouldBe(true)
+    spellEnabledConfig.spellCheck.enabled.shouldBe(true)
+    languageConfig.spellCheck.languages.shouldBe(List("en", "fr"))
+    dictionaryConfig.spellCheck.dictionaryPaths.shouldBe(
+      List("C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic")
+    )
+    wordsConfig.spellCheck.additionalWords.shouldBe(List("serenity", "io"))
+    LanguageToolsConfig.Schema.parse(AppConfig.default, "syntax.highlighting", "maybe").shouldBe(None)
+  }
+
+  it should "validate language-tool config entries centrally" in {
+    LanguageToolsConfig.Schema.invalidValue("syntax.highlighting", "true").shouldBe(false)
+    LanguageToolsConfig.Schema.invalidValue("syntax.highlighting", "maybe").shouldBe(true)
+    LanguageToolsConfig.Schema.invalidValue("spellcheck.enabled", "on").shouldBe(false)
+    LanguageToolsConfig.Schema.invalidValue("spellcheck.enabled", "perhaps").shouldBe(true)
+    LanguageToolsConfig.Schema.invalidValue("spellcheck.languages", "en,fr").shouldBe(false)
+    LanguageToolsConfig.Schema.invalidValue("spellcheck.dictionary_paths", "").shouldBe(false)
+    LanguageToolsConfig.Schema.invalidValue("spellcheck.words", "Serenity,IO").shouldBe(false)
+  }
