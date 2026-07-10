@@ -1,6 +1,6 @@
 package com.serenity
 
-import java.awt.Font
+import java.awt.{Color, Font}
 import java.nio.file.Files
 
 import _root_.io.circe.syntax.*
@@ -324,12 +324,26 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         commandRunnerVisibleRows = Some(9),
         renderFpsTarget = RenderFpsTarget.Fps120,
         cursorConfig = CursorConfig(
+          mode = CursorMode.Breathe,
+          colors = CursorColorConfig(
+            active = Some(Color(0x22, 0x44, 0x88)),
+            inactive = Some(Color(0x88, 0x44, 0x22, 0x99))
+          ),
           infoBarMode = CursorInfoBarMode.Detailed,
           infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
         ),
-        windowConfig = WindowConfig(chromeMode = WindowChromeMode.Custom),
+        windowConfig = WindowConfig(
+          chromeMode = WindowChromeMode.Custom,
+          preferredSize = Some(PreferredWindowSize(1400, 900))
+        ),
+        documentConfig = DocumentConfig(
+          markdownViewMode = MarkdownViewMode.InlineLens,
+          defaultMode = DefaultDocumentMode.Markdown
+        ),
         interfaceConfig = InterfaceConfig(
           density = InterfaceDensity.Spacious,
+          elementGap = 3,
+          cornerRadiusPx = 12,
           outlineThicknessPx = 4
         ),
         showLineNumbers = false,
@@ -371,11 +385,29 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.uiAnimation shouldBe AnimationConfig.subtle
     decoded.config.commandRunnerVisibleRows shouldBe Some(9)
     decoded.config.renderFpsTarget shouldBe RenderFpsTarget.Fps120
-    decoded.config.windowChromeMode shouldBe WindowChromeMode.Custom
-    decoded.config.interfaceDensity shouldBe InterfaceDensity.Spacious
-    decoded.config.cursorInfoBarMode shouldBe CursorInfoBarMode.Detailed
-    decoded.config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.PinnedBottom
-    decoded.config.uiOutlineThicknessPx shouldBe 4
+    decoded.config.cursorConfig shouldBe CursorConfig(
+      mode = CursorMode.Breathe,
+      colors = CursorColorConfig(
+        active = Some(Color(0x22, 0x44, 0x88)),
+        inactive = Some(Color(0x88, 0x44, 0x22, 0x99))
+      ),
+      infoBarMode = CursorInfoBarMode.Detailed,
+      infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
+    )
+    decoded.config.windowConfig shouldBe WindowConfig(
+      chromeMode = WindowChromeMode.Custom,
+      preferredSize = Some(PreferredWindowSize(1400, 900))
+    )
+    decoded.config.documentConfig shouldBe DocumentConfig(
+      markdownViewMode = MarkdownViewMode.InlineLens,
+      defaultMode = DefaultDocumentMode.Markdown
+    )
+    decoded.config.interfaceConfig shouldBe InterfaceConfig(
+      density = InterfaceDensity.Spacious,
+      elementGap = 3,
+      cornerRadiusPx = 12,
+      outlineThicknessPx = 4
+    )
     decoded.config.fontConfig.codeFontFamily shouldBe "Monospaced"
     decoded.config.fontConfig.textFontFamily shouldBe "SansSerif"
     decoded.config.fontConfig.uiFontFamily shouldBe "Dialog"
