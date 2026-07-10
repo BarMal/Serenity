@@ -91,7 +91,7 @@ enum SurfaceContent:
   case ModalWorkflow(modal: Modal)
   case Terminal(buffer: String, cursor: Int)
   case Outline(symbols: List[Symbol], activeLocation: Option[Location] = None)
-  case Diagnostics(issues: List[Diagnostic])
+  case Diagnostics(issues: List[Diagnostic], activeLocation: Option[Location] = None)
 
   /** Transient ghost surface used during close-fade-out animation; never persisted in sessions. */
   case GhostOverlay(originalContent: SurfaceContent, cachedRect: LayoutRect)

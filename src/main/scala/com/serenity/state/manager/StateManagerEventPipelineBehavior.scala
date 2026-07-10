@@ -1012,7 +1012,11 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           case Some((surface, symbols, location)) =>
             stateRef.update(selectPinnedOutlineLocation(_, surface, symbols, location)).as(true)
           case None =>
-            cats.effect.IO.pure(false)
+            pinnedDiagnosticsMouseHitAt(event, state) match
+              case Some((surface, issues, location)) =>
+                stateRef.update(selectPinnedDiagnosticsLocation(_, surface, issues, location)).as(true)
+              case None =>
+                cats.effect.IO.pure(false)
     }
 
   private def handlePinnedPanelLocationClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =
@@ -1050,6 +1054,19 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         existing
     })
 
+  private def selectPinnedDiagnosticsLocation(
+    state: AppState,
+    surface: UiSurface,
+    issues: List[Diagnostic],
+    location: Location
+  ): AppState =
+    state.copy(uiSurfaces = state.uiSurfaces.map {
+      case existing if existing.id == surface.id =>
+        existing.copy(content = SurfaceContent.Diagnostics(issues, Some(location)))
+      case existing =>
+        existing
+    })
+
   private def pinnedDirectoryMouseHitAt(
     event: MouseInputEvent,
     state: AppState
@@ -1082,6 +1099,28 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           None
     yield locationHit
 
+  private def pinnedDiagnosticsMouseHitAt(
+    event: MouseInputEvent,
+    state: AppState
+  ): Option[(UiSurface, List[Diagnostic], Location)] =
+    for
+      hit <- pinnedPanelRowHitAt(event, state)
+      locationHit <- hit.surface.content match
+        case SurfaceContent.Diagnostics(issues, _) =>
+          hit.layoutKind match
+            case SurfaceLayoutKind.Vertical =>
+              issues.lift(hit.rowIndex).map(issue => (hit.surface, issues, issue.location))
+            case SurfaceLayoutKind.Square =>
+              Option
+                .when(hit.rowIndex > 0)(hit.rowIndex - 1)
+                .flatMap(issues.lift)
+                .map(issue => (hit.surface, issues, issue.location))
+            case SurfaceLayoutKind.Horizontal | SurfaceLayoutKind.Compact =>
+              None
+        case _ =>
+          None
+    yield locationHit
+
   private def pinnedLocationMouseHitAt(
     event: MouseInputEvent,
     state: AppState
@@ -1095,7 +1134,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
               symbols.lift(hit.rowIndex).map(_.location)
             case SurfaceLayoutKind.Horizontal | SurfaceLayoutKind.Compact =>
               None
-        case SurfaceContent.Diagnostics(issues) =>
+        case SurfaceContent.Diagnostics(issues, _) =>
           hit.layoutKind match
             case SurfaceLayoutKind.Vertical =>
               issues.lift(hit.rowIndex).map(_.location)

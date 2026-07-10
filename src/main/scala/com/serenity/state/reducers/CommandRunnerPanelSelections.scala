@@ -29,7 +29,7 @@ private[serenity] object CommandRunnerPanelSelections:
     content match
       case SurfaceContent.DirectoryTree(_, _)            => Some(PanelKind.Explorer)
       case SurfaceContent.Outline(_, _)                  => Some(PanelKind.Outline)
-      case SurfaceContent.Diagnostics(_)                 => Some(PanelKind.Diagnostics)
+      case SurfaceContent.Diagnostics(_, _)              => Some(PanelKind.Diagnostics)
       case SurfaceContent.MarkdownPreview(_, _)          => Some(PanelKind.MarkdownPreview)
       case SurfaceContent.StartPage(_)                   => None
       case SurfaceContent.QuickInfo(_)                   => None
