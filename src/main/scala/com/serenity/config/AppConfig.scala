@@ -1051,6 +1051,57 @@ object SurfaceConfig:
 
     val renderFpsKeys: Set[String] = Set("render.fps", "render_fps", "ui.render.fps", "ui_render_fps")
 
+    val materialPresetKeys: Set[String] = Set("ui.material", "ui_material", "material.preset", "material_preset")
+
+    val motionPresetKeys: Set[String] = Set("ui.motion", "ui_motion", "motion.preset", "motion_preset")
+
+    val elementTransitionSpeedScaleKeys: Set[String] =
+      Set("ui.motion.speed_scale", "motion.speed_scale", "ui_motion_speed_scale", "motion_speed_scale")
+
+    val editorTextTransitionSpeedScaleKeys: Set[String] =
+      Set("ui.motion.editor_text.speed_scale", "ui.motion.editor.text.speed_scale", "ui_motion_editor_text_speed_scale")
+
+    val commandRunnerTransitionSpeedScaleKeys: Set[String] =
+      Set(
+        "ui.motion.command_runner.speed_scale",
+        "ui.motion.command.runner.speed_scale",
+        "ui_motion_command_runner_speed_scale"
+      )
+
+    val uiTransitionSpeedScaleKeys: Set[String] =
+      Set(
+        "ui.motion.ui.speed_scale",
+        "ui.motion.ui_elements.speed_scale",
+        "ui.motion.ui.elements.speed_scale",
+        "ui_motion_ui_speed_scale"
+      )
+
+    val cursorTransitionSpeedScaleKeys: Set[String] =
+      Set(
+        "ui.motion.cursor.speed_scale",
+        "ui.motion.cursor_speed_scale",
+        "ui.motion.cursor.speed.scale",
+        "ui_motion_cursor_speed_scale"
+      )
+
+    val commandRunnerAnimationKeys: Set[String] =
+      Set("ui.motion.command_runner", "ui.motion.command.runner", "ui_motion_command_runner")
+
+    val commandRunnerTransitionKeys: Set[String] =
+      Set("ui.motion.command_runner_reveal", "ui.motion.command.runner.reveal", "ui_motion_command_runner_reveal")
+
+    val uiAnimationKeys: Set[String] =
+      Set("ui.motion.ui", "ui.motion.ui_elements", "ui.motion.ui.elements", "ui_motion_ui")
+
+    val editorTextTransitionKeys: Set[String] =
+      Set("ui.motion.editor_text", "ui.motion.editor.text", "ui_motion_editor_text")
+
+    val panelOpenTransitionKeys: Set[String] =
+      Set("ui.motion.panel_open", "ui.motion.panel.open", "ui_motion_panel_open")
+
+    val panelCloseTransitionKeys: Set[String] =
+      Set("ui.motion.panel_close", "ui.motion.panel.close", "ui_motion_panel_close")
+
     val wordWrapKeys: Set[String] = Set("display.word_wrap", "display.word.wrap", "display_word_wrap")
 
     val focusedTextBodyKeys: Set[String] =
@@ -1087,7 +1138,20 @@ object SurfaceConfig:
     val viewportHeightMaxKeys: Set[String] = Set("viewport.height.max", "viewport_height_max")
 
     private val handledKeys: Set[String] =
-      commandRunnerVisibleRowsKeys ++
+      materialPresetKeys ++
+        motionPresetKeys ++
+        elementTransitionSpeedScaleKeys ++
+        editorTextTransitionSpeedScaleKeys ++
+        commandRunnerTransitionSpeedScaleKeys ++
+        uiTransitionSpeedScaleKeys ++
+        cursorTransitionSpeedScaleKeys ++
+        commandRunnerAnimationKeys ++
+        commandRunnerTransitionKeys ++
+        uiAnimationKeys ++
+        editorTextTransitionKeys ++
+        panelOpenTransitionKeys ++
+        panelCloseTransitionKeys ++
+        commandRunnerVisibleRowsKeys ++
         renderFpsKeys ++
         wordWrapKeys ++
         focusedTextBodyKeys ++
@@ -1107,7 +1171,32 @@ object SurfaceConfig:
 
     def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
       val trimmed = value.trim
-      if commandRunnerVisibleRowsKeys.contains(key) then
+      if materialPresetKeys.contains(key) then parseMaterialPreset(trimmed).map(config.withMaterialPreset)
+      else if motionPresetKeys.contains(key) then parseMotionPreset(trimmed).map(config.withMotionPreset)
+      else if elementTransitionSpeedScaleKeys.contains(key) then
+        parseElementTransitionSpeedScale(trimmed).map(config.withElementTransitionSpeedScale)
+      else if editorTextTransitionSpeedScaleKeys.contains(key) then
+        parseElementTransitionSpeedScale(trimmed).map(scale => config.withEditorTextTransitionSpeedScale(Some(scale)))
+      else if commandRunnerTransitionSpeedScaleKeys.contains(key) then
+        parseElementTransitionSpeedScale(trimmed).map(scale =>
+          config.withCommandRunnerTransitionSpeedScale(Some(scale))
+        )
+      else if uiTransitionSpeedScaleKeys.contains(key) then
+        parseElementTransitionSpeedScale(trimmed).map(scale => config.withUiTransitionSpeedScale(Some(scale)))
+      else if cursorTransitionSpeedScaleKeys.contains(key) then
+        parseElementTransitionSpeedScale(trimmed).map(scale => config.withCursorTransitionSpeedScale(Some(scale)))
+      else if commandRunnerAnimationKeys.contains(key) then
+        parseAnimationPreset(trimmed).map(config.withCommandRunnerAnimation)
+      else if commandRunnerTransitionKeys.contains(key) then
+        parseTransitionKind(trimmed).map(kind => config.withCommandRunnerTransitionKind(Some(kind)))
+      else if uiAnimationKeys.contains(key) then parseAnimationPreset(trimmed).map(config.withUiAnimation)
+      else if editorTextTransitionKeys.contains(key) then
+        parseTransitionKind(trimmed).map(config.withEditorInsertionTransitionKind)
+      else if panelOpenTransitionKeys.contains(key) then
+        parseTransitionKind(trimmed).map(kind => config.withPanelOpenTransitionKind(Some(kind)))
+      else if panelCloseTransitionKeys.contains(key) then
+        parseTransitionKind(trimmed).map(kind => config.withPanelCloseTransitionKind(Some(kind)))
+      else if commandRunnerVisibleRowsKeys.contains(key) then
         parseCommandRunnerVisibleRows(trimmed).map(config.withCommandRunnerVisibleRows)
       else if renderFpsKeys.contains(key) then RenderFpsTarget.fromConfigKey(trimmed).map(config.withRenderFpsTarget)
       else if wordWrapKeys.contains(key) then parseBoolean(trimmed).map(config.withWordWrap)
@@ -1170,6 +1259,50 @@ object SurfaceConfig:
     private def parseViewportMaxCells(value: String): Option[Option[Int]] =
       if value.trim.isEmpty then Some(None)
       else value.toIntOption.filter(_ >= 1).map(Some(_))
+
+    private def parseMaterialPreset(value: String): Option[MaterialPreset] =
+      value.toLowerCase match
+        case "solid" | "opaque"      => Some(MaterialPreset.Solid)
+        case "clear" | "transparent" => Some(MaterialPreset.Clear)
+        case "frosted" | "soft"      => Some(MaterialPreset.Frosted)
+        case "crystal" | "glass"     => Some(MaterialPreset.Crystal)
+        case "custom"                => Some(MaterialPreset.Custom)
+        case _                       => None
+
+    private def parseMotionPreset(value: String): Option[MotionPreset] =
+      value.toLowerCase match
+        case "reduced" | "none" | "off" | "disabled" => Some(MotionPreset.Reduced)
+        case "subtle"                                => Some(MotionPreset.Subtle)
+        case "smooth"                                => Some(MotionPreset.Smooth)
+        case "expressive" | "full" | "quick"         => Some(MotionPreset.Expressive)
+        case "custom"                                => Some(MotionPreset.Custom)
+        case _                                       => None
+
+    private def parseAnimationPreset(value: String): Option[Option[AnimationConfig]] =
+      value.toLowerCase match
+        case "none" | "false" | "off" | "disabled" => Some(None)
+        case "quick" | "expressive"                => Some(AnimationConfig.quick)
+        case "smooth"                              => Some(AnimationConfig.smooth)
+        case "subtle"                              => Some(AnimationConfig.subtle)
+        case _                                     => None
+
+    private def parseTransitionKind(value: String): Option[TransitionKind] =
+      value.toLowerCase match
+        case "fade"                                             => Some(TransitionKind.Fade)
+        case "typed" | "typed-text" | "type"                    => Some(TransitionKind.TypedText)
+        case "directional" | "directional-sweep" | "sweep"      => Some(TransitionKind.DirectionalSweep)
+        case "tandem" | "line-and-character" | "line-character" => Some(TransitionKind.LineAndCharacterTandem)
+        case "outline" | "outline-then-content" | "frame-then-content" =>
+          Some(TransitionKind.OutlineThenContent)
+        case "off" | "none" | "disabled" => Some(TransitionKind.Disabled)
+        case _                           => None
+
+    private def parseElementTransitionSpeedScale(value: String): Option[Double] =
+      value.toDoubleOption
+        .filter(scale =>
+          scale >= AppConfig.MinElementTransitionSpeedScale &&
+            scale <= AppConfig.MaxElementTransitionSpeedScale
+        )
 
 /** Global application configuration */
 case class AppConfig(
