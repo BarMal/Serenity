@@ -69,3 +69,55 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
       )
     )
   }
+
+  it should "parse surface display config entries centrally" in {
+    val commandRunnerConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "command.runner.visible.rows", "7")
+        .getOrElse(fail("command runner visible rows parse"))
+    val renderFpsConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "render_fps", "uncapped")
+        .getOrElse(fail("render fps parse"))
+    val wordWrapConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "display.word.wrap", "off")
+        .getOrElse(fail("word wrap parse"))
+    val focusedTextBodyConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "display_focused_text_body", "on")
+        .getOrElse(fail("focused text body parse"))
+    val contextualToolbarConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "display.contextual_toolbar", "disabled")
+        .getOrElse(fail("contextual toolbar parse"))
+    val toolbarModeConfig =
+      SurfaceConfig.Schema
+        .parse(AppConfig.default, "display.contextual.toolbar.mode", "both")
+        .getOrElse(fail("contextual toolbar mode parse"))
+
+    commandRunnerConfig.surfaceConfig.commandRunnerVisibleRows.shouldBe(Some(7))
+    SurfaceConfig.Schema
+      .parse(AppConfig.default, "command_runner.visible_rows", "auto")
+      .map(_.surfaceConfig.commandRunnerVisibleRows)
+      .shouldBe(Some(None))
+    renderFpsConfig.surfaceConfig.renderFpsTarget.shouldBe(RenderFpsTarget.Uncapped)
+    wordWrapConfig.surfaceConfig.wordWrapEnabled.shouldBe(false)
+    focusedTextBodyConfig.surfaceConfig.focusedTextBodyEnabled.shouldBe(true)
+    contextualToolbarConfig.surfaceConfig.contextualToolbarEnabled.shouldBe(false)
+    toolbarModeConfig.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.IconAndText)
+    SurfaceConfig.Schema.parse(AppConfig.default, "render.fps", "turbo").shouldBe(None)
+  }
+
+  it should "validate surface display config entries centrally" in {
+    SurfaceConfig.Schema.invalidValue("command_runner.visible_rows", "7").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("command_runner.visible_rows", "0").shouldBe(true)
+    SurfaceConfig.Schema.invalidValue("render.fps", "uncapped").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("render.fps", "turbo").shouldBe(true)
+    SurfaceConfig.Schema.invalidValue("display.word_wrap", "off").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("display.word_wrap", "maybe").shouldBe(true)
+    SurfaceConfig.Schema.invalidValue("display.focused_text_body", "on").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("display.contextual_toolbar", "disabled").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("display.contextual_toolbar_mode", "both").shouldBe(false)
+    SurfaceConfig.Schema.invalidValue("display.contextual_toolbar_mode", "pictures").shouldBe(true)
+  }

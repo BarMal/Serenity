@@ -646,6 +646,25 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("display.contextual_toolbar_mode = text-only")
   }
 
+  it should "report invalid surface display config values through the surface schema" in {
+    val configFile = Files.createTempFile("serenity-surface-display-invalid-config", ".conf")
+    Files.writeString(
+      configFile,
+      """command_runner.visible_rows = 0
+        |render.fps = turbo
+        |display.word_wrap = maybe
+        |display.contextual_toolbar_mode = pictures
+        |""".stripMargin
+    )
+
+    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+
+    result.report.invalidEntries.map(_.key) should contain("command_runner.visible_rows")
+    result.report.invalidEntries.map(_.key) should contain("render.fps")
+    result.report.invalidEntries.map(_.key) should contain("display.word_wrap")
+    result.report.invalidEntries.map(_.key) should contain("display.contextual_toolbar_mode")
+  }
+
   it should "load and write viewport sizing policy" in {
     val configFile = Files.createTempFile("serenity-viewport-config", ".conf")
     Files.writeString(

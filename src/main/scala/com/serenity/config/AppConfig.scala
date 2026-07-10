@@ -1046,6 +1046,69 @@ object SurfaceConfig:
       "viewport_height_max"                  -> "viewport.height.max"
     )
 
+    val commandRunnerVisibleRowsKeys: Set[String] =
+      Set("command_runner.visible_rows", "command.runner.visible.rows", "command_runner_visible_rows")
+
+    val renderFpsKeys: Set[String] = Set("render.fps", "render_fps", "ui.render.fps", "ui_render_fps")
+
+    val wordWrapKeys: Set[String] = Set("display.word_wrap", "display.word.wrap", "display_word_wrap")
+
+    val focusedTextBodyKeys: Set[String] =
+      Set("display.focused_text_body", "display.focused.text.body", "display_focused_text_body")
+
+    val contextualToolbarKeys: Set[String] =
+      Set("display.contextual_toolbar", "display.contextual.toolbar", "display_contextual_toolbar")
+
+    val contextualToolbarModeKeys: Set[String] =
+      Set(
+        "display.contextual_toolbar_mode",
+        "display.contextual.toolbar.mode",
+        "display_contextual_toolbar_mode"
+      )
+
+    private val handledKeys: Set[String] =
+      commandRunnerVisibleRowsKeys ++
+        renderFpsKeys ++
+        wordWrapKeys ++
+        focusedTextBodyKeys ++
+        contextualToolbarKeys ++
+        contextualToolbarModeKeys
+
+    def handles(key: String): Boolean =
+      handledKeys.contains(key)
+
+    def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
+      val trimmed = value.trim
+      if commandRunnerVisibleRowsKeys.contains(key) then
+        parseCommandRunnerVisibleRows(trimmed).map(config.withCommandRunnerVisibleRows)
+      else if renderFpsKeys.contains(key) then RenderFpsTarget.fromConfigKey(trimmed).map(config.withRenderFpsTarget)
+      else if wordWrapKeys.contains(key) then parseBoolean(trimmed).map(config.withWordWrap)
+      else if focusedTextBodyKeys.contains(key) then parseBoolean(trimmed).map(config.withFocusedTextBody)
+      else if contextualToolbarKeys.contains(key) then parseBoolean(trimmed).map(config.withContextualToolbarEnabled)
+      else if contextualToolbarModeKeys.contains(key) then
+        ToolbarDisplayMode.fromConfigKey(trimmed).map(config.withContextualToolbarDisplayMode)
+      else None
+
+    def invalidValue(key: String, value: String): Boolean =
+      parse(AppConfig.default, key, value).isEmpty
+
+    private def parseBoolean(value: String): Option[Boolean] =
+      value.toLowerCase match
+        case "true" | "on" | "enabled"    => Some(true)
+        case "false" | "off" | "disabled" => Some(false)
+        case _                            => None
+
+    private def parseCommandRunnerVisibleRows(value: String): Option[Option[Int]] =
+      value.toLowerCase match
+        case "auto" | "default" | "" => Some(None)
+        case other =>
+          other.toIntOption
+            .filter(rows =>
+              rows >= AppConfig.MinCommandRunnerVisibleRows &&
+                rows <= AppConfig.MaxCommandRunnerVisibleRows
+            )
+            .map(rows => Some(rows))
+
 /** Global application configuration */
 case class AppConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
