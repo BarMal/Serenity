@@ -323,10 +323,12 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         uiAnimation = AnimationConfig.subtle,
         commandRunnerVisibleRows = Some(9),
         renderFpsTarget = RenderFpsTarget.Fps120,
-        windowChromeMode = WindowChromeMode.Custom,
+        cursorConfig = CursorConfig(
+          infoBarMode = CursorInfoBarMode.Detailed,
+          infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
+        ),
+        windowConfig = WindowConfig(chromeMode = WindowChromeMode.Custom),
         interfaceDensity = InterfaceDensity.Spacious,
-        cursorInfoBarMode = CursorInfoBarMode.Detailed,
-        cursorInfoBarPlacement = CursorInfoBarPlacement.PinnedBottom,
         uiOutlineThicknessPx = 4,
         showLineNumbers = false,
         showGutter = false,

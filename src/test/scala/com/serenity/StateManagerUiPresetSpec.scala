@@ -108,10 +108,9 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     )
     val preset = com.serenity.ui.presets.UiPreset(
       name = "Review",
-      config = AppConfig.default.copy(
-        backgroundStyle = BackgroundStyle.Solid,
-        preferredWindowSize = Some(PreferredWindowSize(1280, 720))
-      ),
+      config = AppConfig.default
+        .withBackgroundStyle(BackgroundStyle.Solid)
+        .withPreferredWindowSize(PreferredWindowSize(1280, 720)),
       themeName = Theme.dark.name,
       pinnedPanels = List(
         com.serenity.ui.presets.UiPreset.PinnedPanel

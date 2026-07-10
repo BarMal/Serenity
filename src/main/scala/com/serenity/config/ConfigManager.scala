@@ -180,11 +180,11 @@ object ConfigManager:
                   config.withFontConfig(config.fontConfig.copy(enableLigatures = false, textLigatures = false))
                 case _ =>
                   config
-            case "cursor.active.color" | "cursor_active_color" =>
+            case key if CursorConfig.Schema.activeColorKeys.contains(key) =>
               parseColor(value.trim)
                 .map(color => config.withCursorColors(config.cursorColors.copy(active = Some(color))))
                 .getOrElse(config)
-            case "cursor.inactive.color" | "cursor_inactive_color" =>
+            case key if CursorConfig.Schema.inactiveColorKeys.contains(key) =>
               parseColor(value.trim)
                 .map(color => config.withCursorColors(config.cursorColors.copy(inactive = Some(color))))
                 .getOrElse(config)
@@ -220,7 +220,7 @@ object ConfigManager:
                 .fromConfigKey(value.trim)
                 .map(config.withContextualToolbarDisplayMode)
                 .getOrElse(config)
-            case "cursor.info_bar" | "cursor.info.bar" | "cursor_info_bar" =>
+            case key if CursorConfig.Schema.infoBarModeKeys.contains(key) =>
               value.trim.toLowerCase match
                 case "off" | "false" | "disabled" =>
                   config.withCursorInfoBarMode(CursorInfoBarMode.Off)
@@ -230,7 +230,7 @@ object ConfigManager:
                   config.withCursorInfoBarMode(CursorInfoBarMode.Detailed)
                 case _ =>
                   config
-            case "cursor.info_bar.placement" | "cursor.info.bar.placement" | "cursor_info_bar_placement" =>
+            case key if CursorConfig.Schema.infoBarPlacementKeys.contains(key) =>
               value.trim.toLowerCase match
                 case "floating" | "float" =>
                   config.withCursorInfoBarPlacement(CursorInfoBarPlacement.Floating)
@@ -293,9 +293,9 @@ object ConfigManager:
                 .getOrElse(config)
             case "document.default_mode" | "document.default.mode" | "document_default_mode" =>
               parseDefaultDocumentMode(value.trim).map(config.withDefaultDocumentMode).getOrElse(config)
-            case "window.chrome" | "window.chrome.mode" | "window_chrome" | "window_chrome_mode" =>
+            case key if WindowConfig.Schema.chromeKeys.contains(key) =>
               parseWindowChromeMode(value.trim).map(config.withWindowChromeMode).getOrElse(config)
-            case "window.preferred.width" | "window_preferred_width" =>
+            case key if WindowConfig.Schema.preferredWidthKeys.contains(key) =>
               value.trim.toIntOption
                 .map(width =>
                   config.withPreferredWindowSize(
@@ -303,7 +303,7 @@ object ConfigManager:
                   )
                 )
                 .getOrElse(config)
-            case "window.preferred.height" | "window_preferred_height" =>
+            case key if WindowConfig.Schema.preferredHeightKeys.contains(key) =>
               value.trim.toIntOption
                 .map(height =>
                   config.withPreferredWindowSize(
@@ -614,13 +614,15 @@ object ConfigManager:
           parseTextScaleMode(value).isEmpty
         case "font.text_scale" | "font.text.scale" | "font_text_scale" =>
           parseTextScaleMultiplier(value).isEmpty
-        case "cursor.active.color" | "cursor_active_color" | "cursor.inactive.color" | "cursor_inactive_color" =>
+        case key
+            if CursorConfig.Schema.activeColorKeys.contains(key) ||
+              CursorConfig.Schema.inactiveColorKeys.contains(key) =>
           value.nonEmpty && parseColor(value).isEmpty
         case "interface.density" | "interface_density" =>
           !Set("compact", "comfortable", "spacious").contains(normalizedValue)
-        case "cursor.info_bar" | "cursor.info.bar" | "cursor_info_bar" =>
+        case key if CursorConfig.Schema.infoBarModeKeys.contains(key) =>
           !Set("off", "false", "disabled", "position", "minimal", "detailed", "full").contains(normalizedValue)
-        case "cursor.info_bar.placement" | "cursor.info.bar.placement" | "cursor_info_bar_placement" =>
+        case key if CursorConfig.Schema.infoBarPlacementKeys.contains(key) =>
           !Set("floating", "float", "pinned-bottom", "bottom", "pinned").contains(normalizedValue)
         case "ui.material" | "ui_material" | "material.preset" | "material_preset" =>
           parseMaterialPreset(value).isEmpty
@@ -646,7 +648,7 @@ object ConfigManager:
         case "ui.motion.panel_open" | "ui.motion.panel.open" | "ui_motion_panel_open" | "ui.motion.panel_close" |
             "ui.motion.panel.close" | "ui_motion_panel_close" =>
           parseTransitionKind(value).isEmpty
-        case "window.chrome" | "window.chrome.mode" | "window_chrome" | "window_chrome_mode" =>
+        case key if WindowConfig.Schema.chromeKeys.contains(key) =>
           parseWindowChromeMode(value).isEmpty
         case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
           parseUiElementGap(value).isEmpty
@@ -658,8 +660,9 @@ object ConfigManager:
           parseCommandRunnerVisibleRows(value).isEmpty
         case "render.fps" | "render_fps" | "ui.render.fps" | "ui_render_fps" =>
           RenderFpsTarget.fromConfigKey(value).isEmpty
-        case "window.preferred.width" | "window_preferred_width" | "window.preferred.height" |
-            "window_preferred_height" =>
+        case key
+            if WindowConfig.Schema.preferredWidthKeys.contains(key) ||
+              WindowConfig.Schema.preferredHeightKeys.contains(key) =>
           value.trim.nonEmpty && value.trim.toIntOption.isEmpty
         case "text_area.left.percent" | "text.area.left.percent" | "text_area_left_percent" |
             "text_area.right.percent" | "text.area.right.percent" | "text_area_right_percent" |

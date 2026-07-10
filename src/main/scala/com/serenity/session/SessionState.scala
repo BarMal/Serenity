@@ -502,6 +502,10 @@ given Decoder[InterfaceDensity] = Decoder.decodeString.emap {
 
 given Encoder[PreferredWindowSize] = deriveEncoder
 given Decoder[PreferredWindowSize] = deriveDecoder
+given Encoder[WindowConfig]        = deriveEncoder
+given Decoder[WindowConfig]        = deriveDecoder
+given Encoder[CursorConfig]        = deriveEncoder
+given Decoder[CursorConfig]        = deriveDecoder
 
 given Encoder[TextAreaInsets] = deriveEncoder
 given Decoder[TextAreaInsets] = deriveDecoder
@@ -778,11 +782,16 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     commandRunnerTransitionKind = commandRunnerTransitionKind,
     panelOpenTransitionKind = panelOpenTransitionKind,
     panelCloseTransitionKind = panelCloseTransitionKind,
-    cursorMode = cursorMode,
-    cursorColors = cursorColors,
-    cursorInfoBarMode = cursorInfoBarMode,
-    cursorInfoBarPlacement = cursorInfoBarPlacement,
-    windowChromeMode = windowChromeMode,
+    cursorConfig = CursorConfig(
+      mode = cursorMode,
+      colors = cursorColors,
+      infoBarMode = cursorInfoBarMode,
+      infoBarPlacement = cursorInfoBarPlacement
+    ),
+    windowConfig = WindowConfig(
+      chromeMode = windowChromeMode,
+      preferredSize = preferredWindowSize
+    ),
     markdownViewMode = markdownViewMode,
     defaultDocumentMode = defaultDocumentMode,
     interfaceDensity = interfaceDensity,
@@ -790,7 +799,6 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     uiCornerRadiusPx = AppConfig.clampUiCornerRadiusPx(uiCornerRadiusPx),
     uiOutlineThicknessPx = AppConfig.clampUiOutlineThicknessPx(uiOutlineThicknessPx),
     textAreaInsets = textAreaInsets,
-    preferredWindowSize = preferredWindowSize,
     lspUserConfig = lspUserConfig,
     spellCheck = spellCheck.normalized
   )
