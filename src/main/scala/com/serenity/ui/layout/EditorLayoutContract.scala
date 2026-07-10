@@ -24,6 +24,9 @@ case class EditorLayoutContract(
     pinnedSurfaceTitleRects: Map[SurfaceId, LayoutRect],
     pinnedSurfaceContentRects: Map[SurfaceId, LayoutRect],
     pinnedSurfaceRowSlots: Map[SurfaceId, List[SurfaceContentRowSlot]],
+    expandedSurfaceRects: Map[SurfaceId, LayoutRect],
+    expandedSurfaceTitleRects: Map[SurfaceId, LayoutRect],
+    expandedSurfaceContentRects: Map[SurfaceId, LayoutRect],
     aboveCursorOverlayRects: List[(SurfaceId, LayoutRect)],
     belowCursorOverlayRects: List[(SurfaceId, LayoutRect)],
     floatingOverlayRects: List[(SurfaceId, LayoutRect)],
@@ -37,6 +40,7 @@ case class EditorLayoutContract(
       activePaneViolations ++
       pinnedPanelViolations ++
       pinnedSurfaceViolations ++
+      expandedSurfaceViolations ++
       pinnedSurfaceRowSlotViolations ++
       floatingOverlayViolations ++
       floatingOverlayRowSlotViolations ++
@@ -97,6 +101,24 @@ case class EditorLayoutContract(
             List(
               s"pinned surface ${surfaceId.value} title"   -> pinnedSurfaceTitleRects.get(surfaceId),
               s"pinned surface ${surfaceId.value} content" -> pinnedSurfaceContentRects.get(surfaceId)
+            )
+          )
+      }
+
+  private def expandedSurfaceViolations: List[LayoutContractViolation] =
+    containedBy(
+      "content area",
+      contentAreaRect,
+      expandedSurfaceRects.toList.map((surfaceId, rect) => s"expanded surface ${surfaceId.value} frame" -> Some(rect))
+    ) ++
+      expandedSurfaceRects.toList.flatMap {
+        case (surfaceId, frameRect) =>
+          containedBy(
+            s"expanded surface ${surfaceId.value} frame",
+            frameRect,
+            List(
+              s"expanded surface ${surfaceId.value} title"   -> expandedSurfaceTitleRects.get(surfaceId),
+              s"expanded surface ${surfaceId.value} content" -> expandedSurfaceContentRects.get(surfaceId)
             )
           )
       }
@@ -207,19 +229,31 @@ object EditorLayoutContract:
       InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows,
       math.max(0, state.config.uiElementGap)
     )
+    val panelViews = PinnedPanelViewModel.fromState(state, calculatedLayout)
     val pinnedSurfaceContentRects = calculatedLayout.pinnedSurfaceRects.toList.flatMap {
       case (surfaceId, frameRect) =>
         state
           .surfaceById(surfaceId)
           .map(surface => surfaceId -> SurfaceFrameLayout.forContent(frameRect, surface.content).contentRect)
     }.toMap
-    val pinnedSurfaceViews = PinnedPanelViewModel
-      .fromState(state, calculatedLayout)
-    val pinnedSurfaceTitleRects = pinnedSurfaceViews
+    val pinnedSurfaceTitleRects = panelViews
+      .filter(view => view.surfaceId.exists(calculatedLayout.pinnedSurfaceRects.contains))
       .flatMap(view => view.surfaceId.map(_ -> view.titleRect))
       .toMap
-    val pinnedSurfaceRowSlots = pinnedSurfaceViews
+    val pinnedSurfaceRowSlots = panelViews
+      .filter(view => view.surfaceId.exists(calculatedLayout.pinnedSurfaceRects.contains))
       .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
+      .toMap
+    val expandedSurfaceRects = state.expandedPanelSurface.toList.flatMap { surface =>
+      calculatedLayout.expandedPanelRect.map(rect => surface.id -> rect)
+    }.toMap
+    val expandedSurfaceTitleRects = panelViews
+      .filter(view => view.surfaceId.exists(expandedSurfaceRects.contains))
+      .flatMap(view => view.surfaceId.map(_ -> view.titleRect))
+      .toMap
+    val expandedSurfaceContentRects = panelViews
+      .filter(view => view.surfaceId.exists(expandedSurfaceRects.contains))
+      .flatMap(view => view.surfaceId.map(_ -> view.resolvedContentRect))
       .toMap
     val aboveCursorOverlayRects = calculatedLayout.aboveCursorOverlayStack
     val belowCursorOverlayRects = calculatedLayout.belowCursorOverlayStack
@@ -245,6 +279,9 @@ object EditorLayoutContract:
       pinnedSurfaceTitleRects = pinnedSurfaceTitleRects,
       pinnedSurfaceContentRects = pinnedSurfaceContentRects,
       pinnedSurfaceRowSlots = pinnedSurfaceRowSlots,
+      expandedSurfaceRects = expandedSurfaceRects,
+      expandedSurfaceTitleRects = expandedSurfaceTitleRects,
+      expandedSurfaceContentRects = expandedSurfaceContentRects,
       aboveCursorOverlayRects = aboveCursorOverlayRects,
       belowCursorOverlayRects = belowCursorOverlayRects,
       floatingOverlayRects = floatingOverlayRects,

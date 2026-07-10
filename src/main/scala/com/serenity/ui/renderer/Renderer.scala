@@ -1356,6 +1356,12 @@ object Renderer:
 
   private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =
     context.surface.setFont(context.uiFont)
+    val contract =
+      EditorLayoutContract.from(
+        state,
+        ViewportSize(context.surface.viewportWidth, context.surface.viewportHeight),
+        context.layout
+      )
     (state.pinnedSurfaces ++ state.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Expanded(_, _) => true
@@ -1382,7 +1388,17 @@ object Renderer:
               )
             content match
               case SurfaceContent.MarkdownPreview(bufferId, title) =>
-                renderMarkdownPreviewPanel(bufferId, title, rect, state, context, animationState)
+                renderMarkdownPreviewPanel(
+                  bufferId,
+                  title,
+                  rect,
+                  contract.pinnedSurfaceContentRects
+                    .get(surface.id)
+                    .getOrElse(SurfaceFrameLayout.forContent(rect, content).contentRect),
+                  state,
+                  context,
+                  animationState
+                )
               case _ =>
                 PinnedPanelRenderer.render(
                   context.surface,
@@ -1410,7 +1426,17 @@ object Renderer:
             )
           content match
             case SurfaceContent.MarkdownPreview(bufferId, title) =>
-              renderMarkdownPreviewPanel(bufferId, title, rect, state, context, animationState)
+              renderMarkdownPreviewPanel(
+                bufferId,
+                title,
+                rect,
+                contract.expandedSurfaceContentRects
+                  .get(surface.id)
+                  .getOrElse(SurfaceFrameLayout.forContent(rect, content).contentRect),
+                state,
+                context,
+                animationState
+              )
             case _ =>
               PinnedPanelRenderer.render(
                 context.surface,
@@ -1427,16 +1453,17 @@ object Renderer:
     bufferId: BufferId,
     title: String,
     rect: LayoutRect,
+    contentRect: LayoutRect,
     state: AppState,
     context: RenderContext,
     animationState: com.serenity.animation.AnimationState
   ): Unit =
-    val shell = TextPanelView(rect = rect, title = s"Preview: $title", rows = Nil)
+    val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = s"Preview: $title", rows = Nil)
     PinnedPanelRenderer.render(context.surface, shell, state.theme, state.config, animationState)
 
-    val contentRect        = markdownPreviewImageRect(rect, context)
-    val contentWidthCells  = math.max(1, contentRect.width)
-    val contentHeightCells = math.max(1, contentRect.height)
+    val imageRect          = markdownPreviewImageRect(rect, contentRect, context)
+    val contentWidthCells  = math.max(1, imageRect.width)
+    val contentHeightCells = math.max(1, imageRect.height)
     val widthPx =
       scaledImagePixelDimension(contentWidthCells * context.cellMetrics.charWidth, context.surface.devicePixelScaleX)
     val heightPx =
@@ -1456,10 +1483,13 @@ object Renderer:
       font = context.textFont,
       baseUri = baseUri
     )
-    context.surface.drawImage(image, contentRect.x, contentRect.y, contentWidthCells, contentHeightCells)
+    context.surface.drawImage(image, imageRect.x, imageRect.y, contentWidthCells, contentHeightCells)
 
-  private def markdownPreviewImageRect(rect: LayoutRect, context: RenderContext): LayoutRect =
-    val contentRect = SurfaceFrameLayout(rect).contentRect
+  private def markdownPreviewImageRect(
+    rect: LayoutRect,
+    contentRect: LayoutRect,
+    context: RenderContext
+  ): LayoutRect =
     val x =
       if rect.x <= 0 then rect.x
       else contentRect.x
