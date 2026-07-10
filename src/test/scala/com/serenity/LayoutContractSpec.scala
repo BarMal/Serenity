@@ -603,6 +603,8 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
 
     contract.leftSpacerRect shouldBe calculatedLayout.leftSpacerRect
     contract.rightSpacerRect shouldBe calculatedLayout.rightSpacerRect
+    contract.topSpacerRect shouldBe calculatedLayout.topSpacerRect
+    contract.bottomSpacerRect shouldBe calculatedLayout.bottomSpacerRect
     contract.workspace.editorPanelRect shouldBe calculatedLayout.editorPanelRect
   }
 

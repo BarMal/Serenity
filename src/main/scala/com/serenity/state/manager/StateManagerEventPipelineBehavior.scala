@@ -1499,27 +1499,34 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
 
   private def textAreaInsetFromDrag(drag: MouseDrag, state: AppState): Option[TextAreaInsetDrag] =
     state.viewportSize.flatMap { viewportSize =>
-      val layout         = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      val workspaceX     = layout.leftSpacerRect.x
-      val workspaceRight = layout.rightSpacerRect.right
-      val workspaceWidth = (workspaceRight - workspaceX).max(1)
-      val contentTop     = layout.topSpacerRect.y
-      val contentBottom  = layout.editorPanelRect.bottom
-      val contentHeight  = (contentBottom - contentTop).max(1)
-      val withinWorkspaceY =
-        drag.row >= layout.leftSpacerRect.y && drag.row < layout.leftSpacerRect.bottom
-      val withinWorkspaceX =
-        drag.col >= layout.topSpacerRect.x && drag.col < layout.topSpacerRect.right
+      val layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      val contract = EditorLayoutContract.from(state, viewportSize, layout)
+      contract.activePaneLayout.flatMap { _ =>
+        val workspaceX     = contract.leftSpacerRect.x
+        val workspaceRight = contract.rightSpacerRect.right
+        val workspaceWidth = (workspaceRight - workspaceX).max(1)
+        val contentTop     = contract.topSpacerRect.y
+        val contentBottom  = contract.workspace.editorPanelRect.bottom
+        val contentHeight  = (contentBottom - contentTop).max(1)
+        val withinWorkspaceY =
+          drag.row >= contract.leftSpacerRect.y && drag.row < contract.leftSpacerRect.bottom
+        val withinWorkspaceX =
+          drag.col >= contract.topSpacerRect.x && drag.col < contract.topSpacerRect.right
 
-      if withinWorkspaceY && drag.col >= layout.leftSpacerRect.x && drag.col < layout.leftSpacerRect.right then
-        Some(TextAreaInsetDrag.Left((drag.col - workspaceX).toDouble / workspaceWidth.toDouble))
-      else if withinWorkspaceY && drag.col >= layout.rightSpacerRect.x && drag.col < layout.rightSpacerRect.right then
-        Some(TextAreaInsetDrag.Right((workspaceRight - drag.col).toDouble / workspaceWidth.toDouble))
-      else if withinWorkspaceX && drag.row >= layout.topSpacerRect.y && drag.row < layout.topSpacerRect.bottom then
-        Some(TextAreaInsetDrag.Top((drag.row - contentTop).toDouble / contentHeight.toDouble))
-      else if withinWorkspaceX && drag.row >= layout.bottomSpacerRect.y && drag.row < layout.bottomSpacerRect.bottom
-      then Some(TextAreaInsetDrag.Bottom((contentBottom - drag.row).toDouble / contentHeight.toDouble))
-      else None
+        if withinWorkspaceY && drag.col >= contract.leftSpacerRect.x && drag.col < contract.leftSpacerRect.right then
+          Some(TextAreaInsetDrag.Left((drag.col - workspaceX).toDouble / workspaceWidth.toDouble))
+        else if withinWorkspaceY && drag.col >= contract.rightSpacerRect.x && drag.col < contract.rightSpacerRect.right
+        then Some(TextAreaInsetDrag.Right((workspaceRight - drag.col).toDouble / workspaceWidth.toDouble))
+        else if withinWorkspaceX &&
+            drag.row >= contract.topSpacerRect.y &&
+            drag.row < contract.topSpacerRect.bottom
+        then Some(TextAreaInsetDrag.Top((drag.row - contentTop).toDouble / contentHeight.toDouble))
+        else if withinWorkspaceX &&
+            drag.row >= contract.bottomSpacerRect.y &&
+            drag.row < contract.bottomSpacerRect.bottom
+        then Some(TextAreaInsetDrag.Bottom((contentBottom - drag.row).toDouble / contentHeight.toDouble))
+        else None
+      }
     }
 
   private def commandRunnerSelectionForSurface(
