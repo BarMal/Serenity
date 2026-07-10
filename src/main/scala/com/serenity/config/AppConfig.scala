@@ -522,6 +522,180 @@ case class ViewportSizing(
   def normalized: ViewportSizing =
     copy(width = width.normalized, height = height.normalized)
 
+case class SurfaceConfig(
+    showLineNumbers: Boolean = true,
+    showGutter: Boolean = true,
+    wordWrapEnabled: Boolean = true,
+    focusedTextBodyEnabled: Boolean = false,
+    contextualToolbarEnabled: Boolean = true,
+    contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
+    blurRadius: Float = 0.0f,
+    backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
+    materialPreset: MaterialPreset = MaterialPreset.Frosted,
+    motionPreset: MotionPreset = MotionPreset.Reduced,
+    elementTransitionSpeedScale: Double = 1.0,
+    editorTextTransitionSpeedScale: Option[Double] = None,
+    commandRunnerTransitionSpeedScale: Option[Double] = None,
+    uiTransitionSpeedScale: Option[Double] = None,
+    cursorTransitionSpeedScale: Option[Double] = None,
+    commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
+    uiAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
+    commandRunnerVisibleRows: Option[Int] = None,
+    renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
+    editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
+    commandRunnerTransitionKind: Option[TransitionKind] = None,
+    panelOpenTransitionKind: Option[TransitionKind] = None,
+    panelCloseTransitionKind: Option[TransitionKind] = None,
+    textAreaInsets: TextAreaInsets = TextAreaInsets(),
+    viewportSizing: ViewportSizing = ViewportSizing()
+):
+
+  def normalized: SurfaceConfig =
+    copy(
+      blurRadius = blurRadius.max(0.0f).min(1.0f),
+      elementTransitionSpeedScale = AppConfig.clampElementTransitionSpeedScale(elementTransitionSpeedScale),
+      editorTextTransitionSpeedScale = editorTextTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
+      commandRunnerTransitionSpeedScale =
+        commandRunnerTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
+      uiTransitionSpeedScale = uiTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
+      cursorTransitionSpeedScale = cursorTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
+      commandRunnerVisibleRows = commandRunnerVisibleRows.map(AppConfig.clampCommandRunnerVisibleRows),
+      textAreaInsets = textAreaInsets.normalized,
+      viewportSizing = viewportSizing.normalized
+    )
+
+  def effectiveEditorTextTransitionSpeedScale: Double =
+    editorTextTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
+
+  def effectiveCommandRunnerTransitionSpeedScale: Double =
+    commandRunnerTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
+
+  def effectiveUiTransitionSpeedScale: Double =
+    uiTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
+
+  def effectiveCursorTransitionSpeedScale: Double =
+    cursorTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
+
+  def effectiveCommandRunnerTransitionKind: TransitionKind =
+    commandRunnerTransitionKind.getOrElse(TransitionKind.Fade)
+
+  def effectivePanelOpenTransitionKind: TransitionKind =
+    panelOpenTransitionKind.getOrElse(TransitionKind.OutlineThenContent)
+
+  def effectivePanelCloseTransitionKind: TransitionKind =
+    panelCloseTransitionKind.getOrElse(TransitionKind.Fade)
+
+  def elementTransitionSettings: ElementTransitionSettings =
+    val baseSettings = motionPreset.elementTransitionSettings
+    if !baseSettings.enabled then baseSettings
+    else
+      val transitionOverrides =
+        List(
+          Some(TransitionScope.EditorInsertion -> editorInsertionTransitionKind),
+          commandRunnerTransitionKind.map(TransitionScope.CommandRunner -> _),
+          panelOpenTransitionKind.map(TransitionScope.PanelOpen -> _),
+          panelCloseTransitionKind.map(TransitionScope.PanelClose -> _)
+        ).flatten.toMap
+
+      baseSettings.copy(
+        speedScale = effectiveUiTransitionSpeedScale,
+        overrides = baseSettings.overrides ++ transitionOverrides
+      )
+
+object SurfaceConfig:
+
+  object Schema:
+
+    val currentKeys: Set[String] = Set(
+      "ui.material",
+      "material.preset",
+      "ui.motion",
+      "motion.preset",
+      "ui.motion.speed_scale",
+      "motion.speed_scale",
+      "ui.motion.editor_text.speed_scale",
+      "ui.motion.editor.text.speed_scale",
+      "ui.motion.command_runner.speed_scale",
+      "ui.motion.command.runner.speed_scale",
+      "ui.motion.ui.speed_scale",
+      "ui.motion.ui_elements.speed_scale",
+      "ui.motion.ui.elements.speed_scale",
+      "ui.motion.cursor.speed_scale",
+      "ui.motion.cursor_speed_scale",
+      "ui.motion.cursor.speed.scale",
+      "ui.motion.command_runner",
+      "ui.motion.command.runner",
+      "ui.motion.command_runner_reveal",
+      "ui.motion.command.runner.reveal",
+      "ui.motion.ui",
+      "ui.motion.ui_elements",
+      "ui.motion.ui.elements",
+      "ui.motion.editor_text",
+      "ui.motion.editor.text",
+      "ui.motion.panel_open",
+      "ui.motion.panel.open",
+      "ui.motion.panel_close",
+      "ui.motion.panel.close",
+      "command_runner.visible_rows",
+      "command.runner.visible.rows",
+      "render.fps",
+      "ui.render.fps",
+      "display.word_wrap",
+      "display.word.wrap",
+      "display.focused_text_body",
+      "display.focused.text.body",
+      "display.contextual_toolbar",
+      "display.contextual.toolbar",
+      "display.contextual_toolbar_mode",
+      "display.contextual.toolbar.mode",
+      "text_area.left.percent",
+      "text.area.left.percent",
+      "text_area.right.percent",
+      "text.area.right.percent",
+      "text_area.top.percent",
+      "text.area.top.percent",
+      "text_area.bottom.percent",
+      "text.area.bottom.percent",
+      "viewport.width.percent",
+      "viewport.width.max",
+      "viewport.height.percent",
+      "viewport.height.max"
+    )
+
+    val deprecatedKeys: Map[String, String] = Map(
+      "ui_material"                          -> "ui.material",
+      "material_preset"                      -> "material.preset",
+      "ui_motion"                            -> "ui.motion",
+      "motion_preset"                        -> "motion.preset",
+      "ui_motion_speed_scale"                -> "ui.motion.speed_scale",
+      "motion_speed_scale"                   -> "motion.speed_scale",
+      "ui_motion_editor_text_speed_scale"    -> "ui.motion.editor_text.speed_scale",
+      "ui_motion_command_runner_speed_scale" -> "ui.motion.command_runner.speed_scale",
+      "ui_motion_ui_speed_scale"             -> "ui.motion.ui.speed_scale",
+      "ui_motion_cursor_speed_scale"         -> "ui.motion.cursor.speed_scale",
+      "ui_motion_command_runner"             -> "ui.motion.command_runner",
+      "ui_motion_command_runner_reveal"      -> "ui.motion.command_runner_reveal",
+      "ui_motion_ui"                         -> "ui.motion.ui",
+      "ui_motion_editor_text"                -> "ui.motion.editor_text",
+      "ui_motion_panel_open"                 -> "ui.motion.panel_open",
+      "ui_motion_panel_close"                -> "ui.motion.panel_close",
+      "command_runner_visible_rows"          -> "command_runner.visible_rows",
+      "render_fps"                           -> "render.fps",
+      "ui_render_fps"                        -> "ui.render.fps",
+      "display_word_wrap"                    -> "display.word_wrap",
+      "display_focused_text_body"            -> "display.focused_text_body",
+      "display_contextual_toolbar"           -> "display.contextual_toolbar",
+      "display_contextual_toolbar_mode"      -> "display.contextual_toolbar_mode",
+      "text_area_left_percent"               -> "text_area.left.percent",
+      "text_area_right_percent"              -> "text_area.right.percent",
+      "text_area_top_percent"                -> "text_area.top.percent",
+      "text_area_bottom_percent"             -> "text_area.bottom.percent",
+      "viewport_width_percent"               -> "viewport.width.percent",
+      "viewport_width_max"                   -> "viewport.width.max",
+      "viewport_height_percent"              -> "viewport.height.percent",
+      "viewport_height_max"                  -> "viewport.height.max"
+    )
+
 /** Global application configuration */
 case class AppConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
@@ -562,6 +736,66 @@ case class AppConfig(
     lspUserConfig: LspUserConfig = LspUserConfig.empty,
     spellCheck: SpellCheckConfig = SpellCheckConfig()
 ):
+
+  def surfaceConfig: SurfaceConfig =
+    SurfaceConfig(
+      showLineNumbers = showLineNumbers,
+      showGutter = showGutter,
+      wordWrapEnabled = wordWrapEnabled,
+      focusedTextBodyEnabled = focusedTextBodyEnabled,
+      contextualToolbarEnabled = contextualToolbarEnabled,
+      contextualToolbarDisplayMode = contextualToolbarDisplayMode,
+      blurRadius = blurRadius,
+      backgroundStyle = backgroundStyle,
+      materialPreset = materialPreset,
+      motionPreset = motionPreset,
+      elementTransitionSpeedScale = elementTransitionSpeedScale,
+      editorTextTransitionSpeedScale = editorTextTransitionSpeedScale,
+      commandRunnerTransitionSpeedScale = commandRunnerTransitionSpeedScale,
+      uiTransitionSpeedScale = uiTransitionSpeedScale,
+      cursorTransitionSpeedScale = cursorTransitionSpeedScale,
+      commandRunnerAnimation = commandRunnerAnimation,
+      uiAnimation = uiAnimation,
+      commandRunnerVisibleRows = commandRunnerVisibleRows,
+      renderFpsTarget = renderFpsTarget,
+      editorInsertionTransitionKind = editorInsertionTransitionKind,
+      commandRunnerTransitionKind = commandRunnerTransitionKind,
+      panelOpenTransitionKind = panelOpenTransitionKind,
+      panelCloseTransitionKind = panelCloseTransitionKind,
+      textAreaInsets = textAreaInsets,
+      viewportSizing = viewportSizing
+    )
+
+  def withSurfaceConfig(config: SurfaceConfig): AppConfig =
+    val normalized = config.normalized
+    copy(
+      showLineNumbers = normalized.showLineNumbers,
+      showGutter = normalized.showGutter,
+      wordWrapEnabled = normalized.wordWrapEnabled,
+      focusedTextBodyEnabled = normalized.focusedTextBodyEnabled,
+      contextualToolbarEnabled = normalized.contextualToolbarEnabled,
+      contextualToolbarDisplayMode = normalized.contextualToolbarDisplayMode,
+      blurRadius = normalized.blurRadius,
+      backgroundStyle = normalized.backgroundStyle,
+      materialPreset = normalized.materialPreset,
+      motionPreset = normalized.motionPreset,
+      elementTransitionSpeedScale = normalized.elementTransitionSpeedScale,
+      editorTextTransitionSpeedScale = normalized.editorTextTransitionSpeedScale,
+      commandRunnerTransitionSpeedScale = normalized.commandRunnerTransitionSpeedScale,
+      uiTransitionSpeedScale = normalized.uiTransitionSpeedScale,
+      cursorTransitionSpeedScale = normalized.cursorTransitionSpeedScale,
+      commandRunnerAnimation = normalized.commandRunnerAnimation,
+      uiAnimation = normalized.uiAnimation,
+      commandRunnerVisibleRows = normalized.commandRunnerVisibleRows,
+      renderFpsTarget = normalized.renderFpsTarget,
+      editorInsertionTransitionKind = normalized.editorInsertionTransitionKind,
+      commandRunnerTransitionKind = normalized.commandRunnerTransitionKind,
+      panelOpenTransitionKind = normalized.panelOpenTransitionKind,
+      panelCloseTransitionKind = normalized.panelCloseTransitionKind,
+      textAreaInsets = normalized.textAreaInsets,
+      viewportSizing = normalized.viewportSizing
+    )
+
   def windowChromeMode: WindowChromeMode =
     windowConfig.chromeMode
 
@@ -588,20 +822,21 @@ case class AppConfig(
 
   /** Create a new config with character animation enabled */
   def withCharacterAnimation(config: AnimationConfig): AppConfig =
-    copy(characterAnimation = Some(config), motionPreset = MotionPreset.Custom)
+    copy(characterAnimation = Some(config)).withSurfaceConfig(surfaceConfig.copy(motionPreset = MotionPreset.Custom))
 
   /** Create a new config with character animation disabled */
   def withoutCharacterAnimation: AppConfig =
-    copy(
-      characterAnimation = None,
-      motionPreset = MotionPreset.Reduced,
-      editorTextTransitionSpeedScale = None,
-      commandRunnerTransitionSpeedScale = None,
-      uiTransitionSpeedScale = None,
-      cursorTransitionSpeedScale = None,
-      commandRunnerAnimation = None,
-      uiAnimation = None,
-      commandRunnerTransitionKind = None
+    copy(characterAnimation = None).withSurfaceConfig(
+      surfaceConfig.copy(
+        motionPreset = MotionPreset.Reduced,
+        editorTextTransitionSpeedScale = None,
+        commandRunnerTransitionSpeedScale = None,
+        uiTransitionSpeedScale = None,
+        cursorTransitionSpeedScale = None,
+        commandRunnerAnimation = None,
+        uiAnimation = None,
+        commandRunnerTransitionKind = None
+      )
     )
 
   /** Create a new config with syntax highlighting toggled */
@@ -660,110 +895,99 @@ case class AppConfig(
 
   /** Create a new config with line numbers toggled */
   def withLineNumbers(enabled: Boolean): AppConfig =
-    copy(showLineNumbers = enabled)
+    withSurfaceConfig(surfaceConfig.copy(showLineNumbers = enabled))
 
   /** Create a new config with gutter toggled */
   def withGutter(enabled: Boolean): AppConfig =
-    copy(showGutter = enabled)
+    withSurfaceConfig(surfaceConfig.copy(showGutter = enabled))
 
   /** Create a new config with word wrapping toggled */
   def withWordWrap(enabled: Boolean): AppConfig =
-    copy(wordWrapEnabled = enabled)
+    withSurfaceConfig(surfaceConfig.copy(wordWrapEnabled = enabled))
 
   def withFocusedTextBody(enabled: Boolean): AppConfig =
-    copy(focusedTextBodyEnabled = enabled)
+    withSurfaceConfig(surfaceConfig.copy(focusedTextBodyEnabled = enabled))
 
   def withContextualToolbarEnabled(enabled: Boolean): AppConfig =
-    copy(contextualToolbarEnabled = enabled)
+    withSurfaceConfig(surfaceConfig.copy(contextualToolbarEnabled = enabled))
 
   def withContextualToolbarDisplayMode(mode: ToolbarDisplayMode): AppConfig =
-    copy(contextualToolbarDisplayMode = mode)
+    withSurfaceConfig(surfaceConfig.copy(contextualToolbarDisplayMode = mode))
 
   def withBlurRadius(r: Float): AppConfig =
-    copy(blurRadius = r.max(0.0f).min(1.0f), materialPreset = MaterialPreset.Custom)
+    withSurfaceConfig(surfaceConfig.copy(blurRadius = r, materialPreset = MaterialPreset.Custom))
 
   def withBackgroundStyle(style: BackgroundStyle): AppConfig =
-    copy(backgroundStyle = style, materialPreset = MaterialPreset.Custom)
+    withSurfaceConfig(surfaceConfig.copy(backgroundStyle = style, materialPreset = MaterialPreset.Custom))
 
   def withMaterialPreset(preset: MaterialPreset): AppConfig =
     preset match
       case MaterialPreset.Custom =>
-        copy(materialPreset = MaterialPreset.Custom)
+        withSurfaceConfig(surfaceConfig.copy(materialPreset = MaterialPreset.Custom))
       case _ =>
-        copy(
-          materialPreset = preset,
-          backgroundStyle = preset.backgroundStyle,
-          blurRadius = preset.blurRadius
+        withSurfaceConfig(
+          surfaceConfig.copy(
+            materialPreset = preset,
+            backgroundStyle = preset.backgroundStyle,
+            blurRadius = preset.blurRadius
+          )
         )
 
   def withMotionPreset(preset: MotionPreset): AppConfig =
     preset match
       case MotionPreset.Custom =>
-        copy(motionPreset = MotionPreset.Custom)
+        withSurfaceConfig(surfaceConfig.copy(motionPreset = MotionPreset.Custom))
       case _ =>
-        copy(
-          motionPreset = preset,
-          characterAnimation = preset.animationConfig,
-          commandRunnerAnimation = preset.animationConfig,
-          uiAnimation = preset.animationConfig
+        copy(characterAnimation = preset.animationConfig).withSurfaceConfig(
+          surfaceConfig.copy(
+            motionPreset = preset,
+            commandRunnerAnimation = preset.animationConfig,
+            uiAnimation = preset.animationConfig
+          )
         )
 
   /** Transition policy derived from the selected motion preset and UI speed scale. */
   def elementTransitionSettings: ElementTransitionSettings =
-    val baseSettings = motionPreset.elementTransitionSettings
-    if !baseSettings.enabled then baseSettings
-    else
-      val transitionOverrides =
-        List(
-          Some(TransitionScope.EditorInsertion -> editorInsertionTransitionKind),
-          commandRunnerTransitionKind.map(TransitionScope.CommandRunner -> _),
-          panelOpenTransitionKind.map(TransitionScope.PanelOpen -> _),
-          panelCloseTransitionKind.map(TransitionScope.PanelClose -> _)
-        ).flatten.toMap
-
-      baseSettings.copy(
-        speedScale = effectiveUiTransitionSpeedScale,
-        overrides = baseSettings.overrides ++ transitionOverrides
-      )
+    surfaceConfig.elementTransitionSettings
 
   def withElementTransitionSpeedScale(scale: Double): AppConfig =
-    copy(elementTransitionSpeedScale = AppConfig.clampElementTransitionSpeedScale(scale))
+    withSurfaceConfig(surfaceConfig.copy(elementTransitionSpeedScale = scale))
 
   def withEditorTextTransitionSpeedScale(scale: Option[Double]): AppConfig =
-    copy(editorTextTransitionSpeedScale = scale.map(AppConfig.clampElementTransitionSpeedScale))
+    withSurfaceConfig(surfaceConfig.copy(editorTextTransitionSpeedScale = scale))
 
   def withCommandRunnerTransitionSpeedScale(scale: Option[Double]): AppConfig =
-    copy(commandRunnerTransitionSpeedScale = scale.map(AppConfig.clampElementTransitionSpeedScale))
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerTransitionSpeedScale = scale))
 
   def withUiTransitionSpeedScale(scale: Option[Double]): AppConfig =
-    copy(uiTransitionSpeedScale = scale.map(AppConfig.clampElementTransitionSpeedScale))
+    withSurfaceConfig(surfaceConfig.copy(uiTransitionSpeedScale = scale))
 
   def withCursorTransitionSpeedScale(scale: Option[Double]): AppConfig =
-    copy(cursorTransitionSpeedScale = scale.map(AppConfig.clampElementTransitionSpeedScale))
+    withSurfaceConfig(surfaceConfig.copy(cursorTransitionSpeedScale = scale))
 
   def withCommandRunnerAnimation(animation: Option[AnimationConfig]): AppConfig =
-    copy(commandRunnerAnimation = animation)
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerAnimation = animation))
 
   def withUiAnimation(animation: Option[AnimationConfig]): AppConfig =
-    copy(uiAnimation = animation)
+    withSurfaceConfig(surfaceConfig.copy(uiAnimation = animation))
 
   def withCommandRunnerVisibleRows(rows: Option[Int]): AppConfig =
-    copy(commandRunnerVisibleRows = rows.map(AppConfig.clampCommandRunnerVisibleRows))
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerVisibleRows = rows))
 
   def withRenderFpsTarget(target: RenderFpsTarget): AppConfig =
-    copy(renderFpsTarget = target)
+    withSurfaceConfig(surfaceConfig.copy(renderFpsTarget = target))
 
   def effectiveEditorTextTransitionSpeedScale: Double =
-    editorTextTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
+    surfaceConfig.effectiveEditorTextTransitionSpeedScale
 
   def effectiveCommandRunnerTransitionSpeedScale: Double =
-    commandRunnerTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
+    surfaceConfig.effectiveCommandRunnerTransitionSpeedScale
 
   def effectiveUiTransitionSpeedScale: Double =
-    uiTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
+    surfaceConfig.effectiveUiTransitionSpeedScale
 
   def effectiveCursorTransitionSpeedScale: Double =
-    cursorTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
+    surfaceConfig.effectiveCursorTransitionSpeedScale
 
   /** Character insertion animation after applying the effective editor text motion speed. */
   def scaledCharacterAnimation: Option[AnimationConfig] =
@@ -778,25 +1002,25 @@ case class AppConfig(
     AppConfig.scaledAnimation(uiAnimation, effectiveUiTransitionSpeedScale)
 
   def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
-    copy(editorInsertionTransitionKind = kind)
+    withSurfaceConfig(surfaceConfig.copy(editorInsertionTransitionKind = kind))
 
   def withCommandRunnerTransitionKind(kind: Option[TransitionKind]): AppConfig =
-    copy(commandRunnerTransitionKind = kind)
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerTransitionKind = kind))
 
   def effectiveCommandRunnerTransitionKind: TransitionKind =
-    commandRunnerTransitionKind.getOrElse(TransitionKind.Fade)
+    surfaceConfig.effectiveCommandRunnerTransitionKind
 
   def withPanelOpenTransitionKind(kind: Option[TransitionKind]): AppConfig =
-    copy(panelOpenTransitionKind = kind)
+    withSurfaceConfig(surfaceConfig.copy(panelOpenTransitionKind = kind))
 
   def withPanelCloseTransitionKind(kind: Option[TransitionKind]): AppConfig =
-    copy(panelCloseTransitionKind = kind)
+    withSurfaceConfig(surfaceConfig.copy(panelCloseTransitionKind = kind))
 
   def effectivePanelOpenTransitionKind: TransitionKind =
-    panelOpenTransitionKind.getOrElse(TransitionKind.OutlineThenContent)
+    surfaceConfig.effectivePanelOpenTransitionKind
 
   def effectivePanelCloseTransitionKind: TransitionKind =
-    panelCloseTransitionKind.getOrElse(TransitionKind.Fade)
+    surfaceConfig.effectivePanelCloseTransitionKind
 
   def cursorMode: CursorMode =
     cursorConfig.mode
@@ -857,7 +1081,7 @@ case class AppConfig(
     withInterfaceConfig(interfaceConfig.copy(outlineThicknessPx = thickness))
 
   def withTextAreaInsets(insets: TextAreaInsets): AppConfig =
-    copy(textAreaInsets = insets.normalized)
+    withSurfaceConfig(surfaceConfig.copy(textAreaInsets = insets))
 
   def withTextAreaLeftInset(value: Double): AppConfig =
     withTextAreaInsets(textAreaInsets.copy(left = value))
@@ -872,7 +1096,7 @@ case class AppConfig(
     withTextAreaInsets(textAreaInsets.copy(bottom = value))
 
   def withViewportSizing(sizing: ViewportSizing): AppConfig =
-    copy(viewportSizing = sizing.normalized)
+    withSurfaceConfig(surfaceConfig.copy(viewportSizing = sizing))
 
   def withViewportWidthSizing(sizing: ViewportAxisSizing): AppConfig =
     withViewportSizing(viewportSizing.copy(width = sizing))

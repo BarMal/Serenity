@@ -64,10 +64,12 @@ object UiPreset:
 
   private def patchAppearanceConfig(base: AppConfig, source: AppConfig): AppConfig =
     base
-      .copy(
-        blurRadius = source.blurRadius,
-        backgroundStyle = source.backgroundStyle,
-        materialPreset = source.materialPreset
+      .withSurfaceConfig(
+        base.surfaceConfig.copy(
+          blurRadius = source.surfaceConfig.blurRadius,
+          backgroundStyle = source.surfaceConfig.backgroundStyle,
+          materialPreset = source.surfaceConfig.materialPreset
+        )
       )
       .withInterfaceConfig(source.interfaceConfig)
       .withCursorConfig(source.cursorConfig)
@@ -79,29 +81,34 @@ object UiPreset:
     base.copy(spellCheck = source.spellCheck)
 
   private def patchMotionConfig(base: AppConfig, source: AppConfig): AppConfig =
-    base.copy(
-      characterAnimation = source.characterAnimation,
-      motionPreset = source.motionPreset,
-      elementTransitionSpeedScale = source.elementTransitionSpeedScale,
-      editorTextTransitionSpeedScale = source.editorTextTransitionSpeedScale,
-      commandRunnerTransitionSpeedScale = source.commandRunnerTransitionSpeedScale,
-      uiTransitionSpeedScale = source.uiTransitionSpeedScale,
-      cursorTransitionSpeedScale = source.cursorTransitionSpeedScale,
-      commandRunnerAnimation = source.commandRunnerAnimation,
-      uiAnimation = source.uiAnimation,
-      editorInsertionTransitionKind = source.editorInsertionTransitionKind,
-      commandRunnerTransitionKind = source.commandRunnerTransitionKind,
-      panelOpenTransitionKind = source.panelOpenTransitionKind,
-      panelCloseTransitionKind = source.panelCloseTransitionKind
-    )
+    base
+      .copy(characterAnimation = source.characterAnimation)
+      .withSurfaceConfig(
+        base.surfaceConfig.copy(
+          motionPreset = source.surfaceConfig.motionPreset,
+          elementTransitionSpeedScale = source.surfaceConfig.elementTransitionSpeedScale,
+          editorTextTransitionSpeedScale = source.surfaceConfig.editorTextTransitionSpeedScale,
+          commandRunnerTransitionSpeedScale = source.surfaceConfig.commandRunnerTransitionSpeedScale,
+          uiTransitionSpeedScale = source.surfaceConfig.uiTransitionSpeedScale,
+          cursorTransitionSpeedScale = source.surfaceConfig.cursorTransitionSpeedScale,
+          commandRunnerAnimation = source.surfaceConfig.commandRunnerAnimation,
+          uiAnimation = source.surfaceConfig.uiAnimation,
+          editorInsertionTransitionKind = source.surfaceConfig.editorInsertionTransitionKind,
+          commandRunnerTransitionKind = source.surfaceConfig.commandRunnerTransitionKind,
+          panelOpenTransitionKind = source.surfaceConfig.panelOpenTransitionKind,
+          panelCloseTransitionKind = source.surfaceConfig.panelCloseTransitionKind
+        )
+      )
 
   private def patchTextDisplayConfig(base: AppConfig, source: AppConfig): AppConfig =
-    base.copy(
-      showLineNumbers = source.showLineNumbers,
-      showGutter = source.showGutter,
-      wordWrapEnabled = source.wordWrapEnabled,
-      textAreaInsets = source.textAreaInsets,
-      viewportSizing = source.viewportSizing
+    base.withSurfaceConfig(
+      base.surfaceConfig.copy(
+        showLineNumbers = source.surfaceConfig.showLineNumbers,
+        showGutter = source.surfaceConfig.showGutter,
+        wordWrapEnabled = source.surfaceConfig.wordWrapEnabled,
+        textAreaInsets = source.surfaceConfig.textAreaInsets,
+        viewportSizing = source.surfaceConfig.viewportSizing
+      )
     )
 
   private def patchTypographyConfig(base: AppConfig, source: AppConfig): AppConfig =
