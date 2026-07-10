@@ -103,6 +103,7 @@ object AppRuntime:
         animationTickCadence <- Ref.of[IO, AnimationTickCadence](
           AnimationTickCadence.empty
         )
+        currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
         inputFunnel = (s: Stream[IO, Event]) =>
           s.evalMap(event =>
@@ -116,26 +117,6 @@ object AppRuntime:
               requestFastRender
           ).drain
         _ <-
-          def withRuntimeDiagnostics[A](
-            loopName: String,
-            phase: String,
-            stateForDiagnostics: IO[Option[AppState]] = stateManager.getCurrentState.map(Some(_))
-          )(effect: IO[A]): IO[A] =
-            effect.handleErrorWith {
-              case failure: RuntimeFailure =>
-                IO.raiseError(failure)
-              case error =>
-                stateForDiagnostics.attempt.flatMap {
-                  case Right(Some(state)) =>
-                    IO.raiseError(RuntimeFailure(loopName, phase, describeStateForDiagnostics(state), error))
-                  case Right(None) =>
-                    IO.raiseError(RuntimeFailure(loopName, phase, "state=unavailable", error))
-                  case Left(stateError) =>
-                    val reason = Option(stateError.getMessage).getOrElse(stateError.getClass.getSimpleName)
-                    IO.raiseError(RuntimeFailure(loopName, phase, s"state=unavailable reason=$reason", error))
-                }
-            }
-
           def computeCursorForIdle(state: AppState): IO[(Boolean, Option[Color])] =
             state.config.cursorMode match
               case CursorMode.Blink =>
@@ -167,8 +148,12 @@ object AppRuntime:
               .interruptWhen(fastMode.discrete)
               .evalMap { _ =>
                 for
-                  _     <- withRuntimeDiagnostics("render loop", "idle.resize")(checkResizeAndHandle)
-                  state <- withRuntimeDiagnostics("render loop", "idle.state")(stateManager.getCurrentState)
+                  _ <- withRuntimeDiagnostics("render loop", "idle.resize", currentStateForDiagnostics)(
+                    checkResizeAndHandle
+                  )
+                  state <- withRuntimeDiagnostics("render loop", "idle.state", currentStateForDiagnostics)(
+                    stateManager.getCurrentState
+                  )
                   _ <- cursorIdleInterval(state.config) match
                     case Some(_) =>
                       for
@@ -196,14 +181,19 @@ object AppRuntime:
                 )
                 .evalMap { interval =>
                   for
-                    _              <- IO.sleep(interval)
-                    _              <- withRuntimeDiagnostics("render loop", "fast.resize")(checkResizeAndHandle)
+                    _ <- IO.sleep(interval)
+                    _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(
+                      checkResizeAndHandle
+                    )
                     animationTicks <- animationTickCadence.modify(_.advance(interval))
                     active <- withRuntimeDiagnostics(
                       "render loop",
-                      "fast.animation-tick"
+                      "fast.animation-tick",
+                      currentStateForDiagnostics
                     )(advanceAnimationsForCadence(animationTicks, stateManager))
-                    state <- withRuntimeDiagnostics("render loop", "fast.state")(stateManager.getCurrentState)
+                    state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
+                      stateManager.getCurrentState
+                    )
                     _ <- withRuntimeDiagnostics(
                       "render loop",
                       "fast.full-render",
@@ -231,19 +221,8 @@ object AppRuntime:
           val quitSignal = stateManager.awaitQuit.attempt
           val shutdownInputHandler =
             stateManager.awaitQuit >> inputHandler.shutdown
-          def supervised(name: String)(effect: IO[Unit]): IO[Unit] =
-            effect.handleErrorWith { error =>
-              val (phase, diagnostics, loggedError) = error match
-                case RuntimeFailure(_, failedPhase, failureDiagnostics, cause) =>
-                  (s" phase=$failedPhase", s"; $failureDiagnostics", cause)
-                case other =>
-                  ("", "", other)
-              logger.error(loggedError)(s"[RUNTIME] $name failed$phase$diagnostics; forcing safe shutdown") >>
-                stateManager.forceQuit().attempt.void
-            }
-
           (
-            supervised("input loop")(
+            superviseLoop("input loop", stateManager.forceQuit())(
               inputHandler.eventStream
                 .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
                 .through(inputFunnel)
@@ -251,22 +230,58 @@ object AppRuntime:
                 .compile
                 .drain
             ),
-            supervised("render loop")(renderLoop.interruptWhen(quitSignal).compile.drain),
+            superviseLoop("render loop", stateManager.forceQuit())(renderLoop.interruptWhen(quitSignal).compile.drain),
             stateManager.awaitQuit,
-            supervised("interval save loop")(stateManager.intervalSaveStream.compile.drain),
-            supervised("external quit coordinator")(
+            superviseLoop("interval save loop", stateManager.forceQuit())(
+              stateManager.intervalSaveStream.compile.drain
+            ),
+            superviseLoop("external quit coordinator", stateManager.forceQuit())(
               IO.race(
                 awaitExternalQuit >> stateManager.forceQuit(),
                 stateManager.awaitQuit
               ).void
             ),
-            supervised("input shutdown")(shutdownInputHandler),
-            supervised("LSP loop")(
+            superviseLoop("input shutdown", stateManager.forceQuit())(shutdownInputHandler),
+            superviseLoop("LSP loop", stateManager.forceQuit())(
               LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger, appConfig.lspUserConfig)
             )
           ).parMapN((_, _, _, _, _, _, _) => ())
         _ <- logger.info("Serenity editor shutdown complete")
       yield ()
+    }
+
+  private[serenity] def withRuntimeDiagnostics[A](
+    loopName: String,
+    phase: String,
+    stateForDiagnostics: IO[Option[AppState]]
+  )(effect: IO[A]): IO[A] =
+    effect.handleErrorWith {
+      case failure: RuntimeFailure =>
+        IO.raiseError(failure)
+      case error =>
+        stateForDiagnostics.attempt.flatMap {
+          case Right(Some(state)) =>
+            IO.raiseError(RuntimeFailure(loopName, phase, describeStateForDiagnostics(state), error))
+          case Right(None) =>
+            IO.raiseError(RuntimeFailure(loopName, phase, "state=unavailable", error))
+          case Left(stateError) =>
+            val reason = Option(stateError.getMessage).getOrElse(stateError.getClass.getSimpleName)
+            IO.raiseError(RuntimeFailure(loopName, phase, s"state=unavailable reason=$reason", error))
+        }
+    }
+
+  private[serenity] def superviseLoop(
+    name: String,
+    forceQuit: IO[Unit]
+  )(effect: IO[Unit])(using logger: Logger[IO]): IO[Unit] =
+    effect.handleErrorWith { error =>
+      val (phase, diagnostics, loggedError) = error match
+        case RuntimeFailure(_, failedPhase, failureDiagnostics, cause) =>
+          (s" phase=$failedPhase", s"; $failureDiagnostics", cause)
+        case other =>
+          ("", "", other)
+      logger.error(loggedError)(s"[RUNTIME] $name failed$phase$diagnostics; forcing safe shutdown") >>
+        forceQuit.attempt.void
     }
 
   private[serenity] def resizeCallbackBridge(
