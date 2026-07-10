@@ -101,10 +101,10 @@ enum WindowChromeMode:
   case Native
   case Custom
 
-enum MarkdownViewMode:
-  case Source
-  case SplitPreview
-  case InlineLens
+enum MarkdownViewMode(val configKey: String):
+  case Source       extends MarkdownViewMode("source")
+  case SplitPreview extends MarkdownViewMode("split-preview")
+  case InlineLens   extends MarkdownViewMode("inline-lens")
 
 enum ToolbarDisplayMode:
   case IconOnly
@@ -461,12 +461,21 @@ object DocumentConfig:
   object Schema:
 
     val currentKeys: Set[String] = Set(
+      "document.markdown_view",
+      "document.markdown.view",
       "document.default_mode",
       "document.default.mode"
     )
 
     val deprecatedKeys: Map[String, String] = Map(
-      "document_default_mode" -> "document.default_mode"
+      "document_markdown_view" -> "document.markdown_view",
+      "document_default_mode"  -> "document.default_mode"
+    )
+
+    val markdownViewKeys: Set[String] = Set(
+      "document.markdown_view",
+      "document.markdown.view",
+      "document_markdown_view"
     )
 
     val defaultModeKeys: Set[String] = currentKeys ++ deprecatedKeys.keySet

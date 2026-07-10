@@ -299,6 +299,8 @@ object ConfigManager:
               parseTransitionKind(value.trim)
                 .map(kind => config.withPanelCloseTransitionKind(Some(kind)))
                 .getOrElse(config)
+            case key if DocumentConfig.Schema.markdownViewKeys.contains(key) =>
+              parseMarkdownViewMode(value.trim).map(config.withMarkdownViewMode).getOrElse(config)
             case key if DocumentConfig.Schema.defaultModeKeys.contains(key) =>
               parseDefaultDocumentMode(value.trim).map(config.withDefaultDocumentMode).getOrElse(config)
             case key if WindowConfig.Schema.chromeKeys.contains(key) =>
@@ -497,6 +499,9 @@ object ConfigManager:
        |ui.motion.panel_open = ${transitionKindConfigKey(config.effectivePanelOpenTransitionKind)}
        |ui.motion.panel_close = ${transitionKindConfigKey(config.effectivePanelCloseTransitionKind)}
        |
+       |# Markdown rendering mode: source, split-preview, inline-lens
+       |document.markdown_view = ${config.markdownViewMode.configKey}
+       |
        |# Default mode for new buffers: plain-text, markdown, rich-text
        |document.default_mode = ${config.defaultDocumentMode.configKey}
        |
@@ -656,6 +661,8 @@ object ConfigManager:
         case "ui.motion.panel_open" | "ui.motion.panel.open" | "ui_motion_panel_open" | "ui.motion.panel_close" |
             "ui.motion.panel.close" | "ui_motion_panel_close" =>
           parseTransitionKind(value).isEmpty
+        case key if DocumentConfig.Schema.markdownViewKeys.contains(key) =>
+          parseMarkdownViewMode(value).isEmpty
         case key if WindowConfig.Schema.chromeKeys.contains(key) =>
           parseWindowChromeMode(value).isEmpty
         case key if InterfaceConfig.Schema.elementGapKeys.contains(key) =>
@@ -753,6 +760,13 @@ object ConfigManager:
       case "markdown" | "md"                             => Some(DefaultDocumentMode.Markdown)
       case "rich-text" | "richtext" | "rich" | "rtf"     => Some(DefaultDocumentMode.RichText)
       case _                                             => None
+
+  private def parseMarkdownViewMode(value: String): Option[MarkdownViewMode] =
+    value.toLowerCase match
+      case "source"                                                => Some(MarkdownViewMode.Source)
+      case "split-preview" | "split_preview" | "split" | "preview" => Some(MarkdownViewMode.SplitPreview)
+      case "inline-lens" | "inline_lens" | "lens"                  => Some(MarkdownViewMode.InlineLens)
+      case _                                                       => None
 
   private def parseInterfaceDensity(value: String): Option[InterfaceDensity] =
     value.toLowerCase match
