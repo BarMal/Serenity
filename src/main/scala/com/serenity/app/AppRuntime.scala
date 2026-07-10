@@ -125,33 +125,17 @@ object AppRuntime:
                   .flatMap(IO.sleep)
               )
               .interruptWhen(fastMode.discrete)
-              .evalMap { _ =>
-                for
-                  _ <- withRuntimeDiagnostics("render loop", "idle.resize", currentStateForDiagnostics)(
-                    checkResizeAndHandle
-                  )
-                  state <- withRuntimeDiagnostics("render loop", "idle.state", currentStateForDiagnostics)(
-                    stateManager.getCurrentState
-                  )
-                  _ <- cursorIdleInterval(state.config) match
-                    case Some(_) =>
-                      for
-                        (visible, cursor) <- withRuntimeDiagnostics(
-                          "render loop",
-                          "idle.cursor",
-                          IO.pure(Some(state))
-                        )(computeIdleCursorFrame(state, cursorVisible, breathIndex))
-                        _ <- withRuntimeDiagnostics(
-                          "render loop",
-                          "idle.cursor-render",
-                          IO.pure(Some(state))
-                        )(renderCursorOnly(state, visible, cursor))
-                          .handleErrorWith(recoverIdleCursorRenderFailure(_, requestFastRender))
-                      yield ()
-                    case None =>
-                      IO.unit
-                yield ()
-              }
+              .evalMap(_ =>
+                runIdleRenderStep(
+                  currentStateForDiagnostics = currentStateForDiagnostics,
+                  loadState = stateManager.getCurrentState,
+                  checkResizeAndHandle = checkResizeAndHandle,
+                  cursorVisible = cursorVisible,
+                  breathIndex = breathIndex,
+                  renderCursorOnly = renderCursorOnly,
+                  requestFastRender = requestFastRender
+                )
+              )
 
           def fastPhase: Stream[IO, Unit] =
             Stream.eval(fastRenderRequestEpoch.get).flatMap { phaseStartRenderRequest =>
@@ -291,6 +275,41 @@ object AppRuntime:
     logger.warn(cause)(
       s"[RUNTIME] idle cursor render failed phase=$phase; $diagnostics; requesting full render"
     ) >> requestFastRender
+
+  private[serenity] def runIdleRenderStep(
+    currentStateForDiagnostics: IO[Option[AppState]],
+    loadState: IO[AppState],
+    checkResizeAndHandle: IO[Unit],
+    cursorVisible: Ref[IO, Boolean],
+    breathIndex: Ref[IO, Int],
+    renderCursorOnly: (AppState, Boolean, Option[Color]) => IO[Unit],
+    requestFastRender: IO[Unit]
+  )(using logger: Logger[IO]): IO[Unit] =
+    for
+      _ <- withRuntimeDiagnostics("render loop", "idle.resize", currentStateForDiagnostics)(
+        checkResizeAndHandle
+      )
+      state <- withRuntimeDiagnostics("render loop", "idle.state", currentStateForDiagnostics)(
+        loadState
+      )
+      _ <- cursorIdleInterval(state.config) match
+        case Some(_) =>
+          for
+            (visible, cursor) <- withRuntimeDiagnostics(
+              "render loop",
+              "idle.cursor",
+              IO.pure(Some(state))
+            )(computeIdleCursorFrame(state, cursorVisible, breathIndex))
+            _ <- withRuntimeDiagnostics(
+              "render loop",
+              "idle.cursor-render",
+              IO.pure(Some(state))
+            )(renderCursorOnly(state, visible, cursor))
+              .handleErrorWith(recoverIdleCursorRenderFailure(_, requestFastRender))
+          yield ()
+        case None =>
+          IO.unit
+    yield ()
 
   private[serenity] def resizeCallbackBridge(
     signalResize: IO[Unit],
