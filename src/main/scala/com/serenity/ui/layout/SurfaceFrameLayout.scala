@@ -62,25 +62,7 @@ case class SurfaceFrameLayout(
     hasHeader: Boolean,
     hasFooter: Boolean
   ): List[SurfaceContentRowSlot] =
-    val content = contentRect
-    if content.height <= 0 then Nil
-    else
-      val headerRows = if hasHeader then 1 else 0
-      val footerRows = if hasFooter then 1 else 0
-      val itemRows   = math.max(0, content.height - headerRows - footerRows)
-      val itemSlots =
-        (0 until math.min(itemCount, itemRows)).toList.map { index =>
-          SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), content.y + headerRows + index)
-        }
-      val headerSlots =
-        if hasHeader then List(SurfaceContentRowSlot(SurfaceContentRowKind.Header, content.y))
-        else Nil
-      val footerSlots =
-        if hasFooter && content.height > headerRows then
-          List(SurfaceContentRowSlot(SurfaceContentRowKind.Footer, content.bottom - 1))
-        else Nil
-
-      headerSlots ++ itemSlots ++ footerSlots
+    SurfaceFrameLayout.contentRowSlotsFor(contentRect, itemCount, hasHeader, hasFooter)
 
 case class SurfaceItemWindow(offset: Int, rowCount: Int):
   def slice[A](items: List[A]): List[A] =
@@ -102,6 +84,31 @@ case class SurfaceContentRowSlot(kind: SurfaceContentRowKind, y: Int)
 object SurfaceFrameLayout:
   val DefaultBorderCells: Int        = 1
   val CommandSurfaceBorderCells: Int = 0
+
+  def contentRowSlotsFor(
+    content: LayoutRect,
+    itemCount: Int,
+    hasHeader: Boolean,
+    hasFooter: Boolean
+  ): List[SurfaceContentRowSlot] =
+    if content.height <= 0 then Nil
+    else
+      val headerRows = if hasHeader then 1 else 0
+      val footerRows = if hasFooter then 1 else 0
+      val itemRows   = math.max(0, content.height - headerRows - footerRows)
+      val itemSlots =
+        (0 until math.min(itemCount, itemRows)).toList.map { index =>
+          SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), content.y + headerRows + index)
+        }
+      val headerSlots =
+        if hasHeader then List(SurfaceContentRowSlot(SurfaceContentRowKind.Header, content.y))
+        else Nil
+      val footerSlots =
+        if hasFooter && content.height > headerRows then
+          List(SurfaceContentRowSlot(SurfaceContentRowKind.Footer, content.bottom - 1))
+        else Nil
+
+      headerSlots ++ itemSlots ++ footerSlots
 
   def borderCellsFor(content: SurfaceContent): Int =
     content match

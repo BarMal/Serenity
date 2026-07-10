@@ -4,7 +4,7 @@ import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
-import com.serenity.ui.layout.{CellMetrics, LayoutRect}
+import com.serenity.ui.layout.{CellMetrics, LayoutRect, SurfaceContentRowKind}
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -254,6 +254,27 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     surface.getRow(2).slice(3, 7) shouldBe "ABCD"
     surface.getRow(1) should not include "ABCD"
     surface.getRow(2).slice(1, 3) shouldBe "  "
+  }
+
+  it should "derive row slots from an explicit overlay content rect" in {
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 10, 6),
+      contentRect = Some(LayoutRect(3, 2, 4, 4)),
+      header = Some(OverlayRow("head")),
+      rows = List(OverlayRow("A"), OverlayRow("B"), OverlayRow("C")),
+      footer = Some(OverlayRow("foot"))
+    )
+
+    overlay.contentRowSlots
+      .map(slot => slot.kind -> slot.y)
+      .shouldBe(
+        List(
+          SurfaceContentRowKind.Header  -> 2,
+          SurfaceContentRowKind.Item(0) -> 3,
+          SurfaceContentRowKind.Item(1) -> 4,
+          SurfaceContentRowKind.Footer  -> 5
+        )
+      )
   }
 
   it should "right-align selected command option values in the value column" in {

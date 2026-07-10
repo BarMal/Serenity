@@ -4,7 +4,7 @@ import java.nio.file.Paths
 
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.PinnedPanelViewModel
+import com.serenity.ui.renderer.{PinnedPanelViewModel, TextPanelRow, TextPanelView}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -159,6 +159,28 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     val view = PinnedPanelViewModel.resolve(panel, rect)
 
     view.contentRect.shouldBe(Some(SurfaceFrameLayout.forContent(rect, panel.content).contentRect))
+  }
+
+  it should "derive row slots from an explicit pinned panel content rect" in {
+    val view = TextPanelView(
+      rect = LayoutRect(0, 0, 12, 8),
+      contentRect = Some(LayoutRect(2, 3, 6, 4)),
+      title = "panel",
+      rows = List(TextPanelRow("A"), TextPanelRow("B"), TextPanelRow("C")),
+      header = Some(TextPanelRow("head")),
+      footer = Some(TextPanelRow("foot"))
+    )
+
+    view.contentRowSlots
+      .map(slot => slot.kind -> slot.y)
+      .shouldBe(
+        List(
+          SurfaceContentRowKind.Header  -> 3,
+          SurfaceContentRowKind.Item(0) -> 4,
+          SurfaceContentRowKind.Item(1) -> 5,
+          SurfaceContentRowKind.Footer  -> 6
+        )
+      )
   }
 
   it should "shape outline content differently for tall and wide geometry" in {
