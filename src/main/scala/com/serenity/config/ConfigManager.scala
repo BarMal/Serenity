@@ -180,16 +180,8 @@ object ConfigManager:
                   config.withFontConfig(config.fontConfig.copy(enableLigatures = false, textLigatures = false))
                 case _ =>
                   config
-            case key if CursorConfig.Schema.modeKeys.contains(key) =>
-              CursorMode.fromConfigKey(value).map(config.withCursorMode).getOrElse(config)
-            case key if CursorConfig.Schema.activeColorKeys.contains(key) =>
-              parseColor(value.trim)
-                .map(color => config.withCursorColors(config.cursorColors.copy(active = Some(color))))
-                .getOrElse(config)
-            case key if CursorConfig.Schema.inactiveColorKeys.contains(key) =>
-              parseColor(value.trim)
-                .map(color => config.withCursorColors(config.cursorColors.copy(inactive = Some(color))))
-                .getOrElse(config)
+            case key if CursorConfig.Schema.handles(key) =>
+              CursorConfig.Schema.parse(config, key, value).getOrElse(config)
             case "interface.density" | "interface_density" =>
               InterfaceDensity.fromConfigKey(value).map(config.withInterfaceDensity).getOrElse(config)
             case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
@@ -214,10 +206,6 @@ object ConfigManager:
                 .fromConfigKey(value.trim)
                 .map(config.withContextualToolbarDisplayMode)
                 .getOrElse(config)
-            case key if CursorConfig.Schema.infoBarModeKeys.contains(key) =>
-              CursorInfoBarMode.fromConfigKey(value).map(config.withCursorInfoBarMode).getOrElse(config)
-            case key if CursorConfig.Schema.infoBarPlacementKeys.contains(key) =>
-              CursorInfoBarPlacement.fromConfigKey(value).map(config.withCursorInfoBarPlacement).getOrElse(config)
             case key if InterfaceConfig.Schema.handles(key) =>
               InterfaceConfig.Schema.parse(config, key, value).getOrElse(config)
             case "ui.material" | "ui_material" | "material.preset" | "material_preset" =>
@@ -584,16 +572,8 @@ object ConfigManager:
           parseTextScaleMode(value).isEmpty
         case "font.text_scale" | "font.text.scale" | "font_text_scale" =>
           parseTextScaleMultiplier(value).isEmpty
-        case key if CursorConfig.Schema.modeKeys.contains(key) =>
-          CursorMode.fromConfigKey(value).isEmpty
-        case key
-            if CursorConfig.Schema.activeColorKeys.contains(key) ||
-              CursorConfig.Schema.inactiveColorKeys.contains(key) =>
-          value.nonEmpty && parseColor(value).isEmpty
-        case key if CursorConfig.Schema.infoBarModeKeys.contains(key) =>
-          CursorInfoBarMode.fromConfigKey(value).isEmpty
-        case key if CursorConfig.Schema.infoBarPlacementKeys.contains(key) =>
-          CursorInfoBarPlacement.fromConfigKey(value).isEmpty
+        case key if CursorConfig.Schema.handles(key) =>
+          CursorConfig.Schema.invalidValue(key, value)
         case "ui.material" | "ui_material" | "material.preset" | "material_preset" =>
           parseMaterialPreset(value).isEmpty
         case "ui.motion" | "ui_motion" | "motion.preset" | "motion_preset" =>
@@ -745,21 +725,6 @@ object ConfigManager:
   private def parseViewportMaxCells(value: String): Option[Option[Int]] =
     if value.trim.isEmpty then Some(None)
     else value.toIntOption.filter(_ >= 1).map(Some(_))
-
-  private def parseColor(value: String): Option[java.awt.Color] =
-    val hex = value.stripPrefix("#")
-    Option
-      .when(hex.length == 6 || hex.length == 8)(hex)
-      .filter(_.forall(ch => Character.digit(ch, 16) >= 0))
-      .flatMap { normalized =>
-        scala.util.Try {
-          val red   = Integer.parseInt(normalized.substring(0, 2), 16)
-          val green = Integer.parseInt(normalized.substring(2, 4), 16)
-          val blue  = Integer.parseInt(normalized.substring(4, 6), 16)
-          val alpha = if normalized.length == 8 then Integer.parseInt(normalized.substring(6, 8), 16) else 255
-          java.awt.Color(red, green, blue, alpha)
-        }.toOption
-      }
 
   private def formatColor(color: java.awt.Color): String =
     val rgb = f"#${color.getRed}%02X${color.getGreen}%02X${color.getBlue}%02X"
