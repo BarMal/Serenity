@@ -417,6 +417,35 @@ object WindowConfig:
 
     val preferredHeightKeys: Set[String] = Set("window.preferred.height", "window_preferred_height")
 
+    private val handledKeys: Set[String] = chromeKeys ++ preferredWidthKeys ++ preferredHeightKeys
+
+    def handles(key: String): Boolean =
+      handledKeys.contains(key)
+
+    def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
+      val trimmed = value.trim
+      if chromeKeys.contains(key) then WindowChromeMode.fromConfigKey(trimmed).map(config.withWindowChromeMode)
+      else if preferredWidthKeys.contains(key) then
+        trimmed.toIntOption.map { width =>
+          config.withPreferredWindowSize(
+            config.preferredWindowSize.getOrElse(PreferredWindowSize(width, 768)).copy(width = width)
+          )
+        }
+      else if preferredHeightKeys.contains(key) then
+        trimmed.toIntOption.map { height =>
+          config.withPreferredWindowSize(
+            config.preferredWindowSize.getOrElse(PreferredWindowSize(1024, height)).copy(height = height)
+          )
+        }
+      else None
+
+    def invalidValue(key: String, value: String): Boolean =
+      val trimmed = value.trim
+      if chromeKeys.contains(key) then WindowChromeMode.fromConfigKey(trimmed).isEmpty
+      else if preferredWidthKeys.contains(key) || preferredHeightKeys.contains(key) then
+        trimmed.nonEmpty && trimmed.toIntOption.isEmpty
+      else false
+
 case class CursorColorConfig(
     active: Option[Color] = None,
     inactive: Option[Color] = None
