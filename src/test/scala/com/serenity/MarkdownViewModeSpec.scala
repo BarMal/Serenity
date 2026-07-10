@@ -3,7 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.{AppConfig, MarkdownViewMode}
+import com.serenity.config.*
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Rope
@@ -75,6 +75,17 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
 
   "Markdown view mode settings" should "default to source editing" in {
     AppConfig.default.markdownViewMode shouldBe MarkdownViewMode.Source
+  }
+
+  it should "store markdown and default document settings inside the document sub-config" in {
+    val config = AppConfig.default
+      .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      .withDefaultDocumentMode(DefaultDocumentMode.RichText)
+
+    config.documentConfig shouldBe DocumentConfig(
+      markdownViewMode = MarkdownViewMode.InlineLens,
+      defaultMode = DefaultDocumentMode.RichText
+    )
   }
 
   it should "include a command runner settings option for markdown view mode" in {

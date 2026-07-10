@@ -76,7 +76,7 @@ object UiPreset:
       .withCursorConfig(source.cursorConfig)
 
   private def patchDocumentDefaultsConfig(base: AppConfig, source: AppConfig): AppConfig =
-    base.copy(defaultDocumentMode = source.defaultDocumentMode)
+    base.withDocumentConfig(base.documentConfig.copy(defaultMode = source.defaultDocumentMode))
 
   private def patchLanguageToolsConfig(base: AppConfig, source: AppConfig): AppConfig =
     base.copy(spellCheck = source.spellCheck)
