@@ -674,7 +674,9 @@ object ContextualToolbar:
     document: RichTextDocument
   ): Option[RichTextStyle] =
     val paragraphIndex = cursor.line.max(0).min(document.paragraphs.length - 1)
-    document.paragraphs.lift(paragraphIndex).flatMap(paragraph => styleAtParagraphOffset(paragraph, cursor.column))
+    document.paragraphs
+      .lift(paragraphIndex)
+      .flatMap(paragraph => styleAtParagraphOffset(paragraph, (cursor.column - 1).max(0)))
 
   private def styleAtParagraphOffset(
     paragraph: com.serenity.richtext.RichTextParagraph,
