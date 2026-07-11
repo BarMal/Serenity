@@ -129,11 +129,21 @@ private[manager] trait StateManagerViewportBehavior extends StateManagerSurfaceF
   def handleViewportResize(newSize: ViewportSize): IO[Unit] =
     for
       _            <- logger.debug(s"Handling viewport resize to ${newSize.width}x${newSize.height}")
+      _            <- refreshAutoTextScale
       currentState <- stateRef.get
       resizedState = SystemEventReducer.reduce(com.serenity.keystroke.events.ResizeEvent(newSize), currentState).state
       rebalancedState = AppEventReducer.rebalancePanes(resizedState, resizedState.focusedBufferId)
       _ <- validateAndUpdateState(rebalancedState, currentState)
     yield ()
+
+  private def refreshAutoTextScale: IO[Unit] =
+    deviceTextScaleProvider.flatMap { deviceScale =>
+      stateRef.get.flatMap { state =>
+        val fontConfig = state.config.fontConfig
+        if fontConfig.resolveAutoTextScale(deviceScale) == fontConfig then IO.unit
+        else updateFontConfig(identity)
+      }
+    }
 
   private def previewFontForBuffer(
     buffer: Buffer,
