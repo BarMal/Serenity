@@ -139,34 +139,42 @@ object AppRuntime:
           val renderLoop: Stream[IO, Unit] =
             Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
 
-          val quitSignal = stateManager.awaitQuit.attempt
-          (
-            superviseLoop("input loop", stateManager.forceQuit())(
-              inputHandler.eventStream
-                .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
-                .through(inputFunnel)
-                .interruptWhen(quitSignal)
-                .compile
-                .drain
-            ),
-            superviseLoop("render loop", stateManager.forceQuit())(renderLoop.interruptWhen(quitSignal).compile.drain),
-            stateManager.awaitQuit,
-            superviseLoop("interval save loop", stateManager.forceQuit())(
-              stateManager.intervalSaveStream.compile.drain
-            ),
-            superviseLoop("external quit coordinator", stateManager.forceQuit())(
-              coordinateExternalQuit(awaitExternalQuit, stateManager.forceQuit(), stateManager.awaitQuit)
-            ),
-            superviseLoop("input shutdown", stateManager.forceQuit())(
-              shutdownInputAfterQuit(stateManager.awaitQuit, inputHandler.shutdown)
-            ),
-            superviseLoop("LSP loop", stateManager.forceQuit())(
-              LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger, appConfig.lspUserConfig)
-            )
-          ).parMapN((_, _, _, _, _, _, _) => ())
+          runRuntimeLoops(stateManager, inputHandler, inputFunnel, renderLoop, awaitExternalQuit, appConfig)
         _ <- logger.info("Serenity editor shutdown complete")
       yield ()
     }
+
+  private def runRuntimeLoops(
+    stateManager: StateManager,
+    inputHandler: InputHandler[IO],
+    inputFunnel: Stream[IO, Event] => Stream[IO, Unit],
+    renderLoop: Stream[IO, Unit],
+    awaitExternalQuit: IO[Unit],
+    appConfig: AppConfig
+  )(using logger: Logger[IO]): IO[Unit] =
+    val quitSignal = stateManager.awaitQuit.attempt
+    (
+      superviseLoop("input loop", stateManager.forceQuit())(
+        inputHandler.eventStream
+          .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
+          .through(inputFunnel)
+          .interruptWhen(quitSignal)
+          .compile
+          .drain
+      ),
+      superviseLoop("render loop", stateManager.forceQuit())(renderLoop.interruptWhen(quitSignal).compile.drain),
+      stateManager.awaitQuit,
+      superviseLoop("interval save loop", stateManager.forceQuit())(stateManager.intervalSaveStream.compile.drain),
+      superviseLoop("external quit coordinator", stateManager.forceQuit())(
+        coordinateExternalQuit(awaitExternalQuit, stateManager.forceQuit(), stateManager.awaitQuit)
+      ),
+      superviseLoop("input shutdown", stateManager.forceQuit())(
+        shutdownInputAfterQuit(stateManager.awaitQuit, inputHandler.shutdown)
+      ),
+      superviseLoop("LSP loop", stateManager.forceQuit())(
+        LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger, appConfig.lspUserConfig)
+      )
+    ).parMapN((_, _, _, _, _, _, _) => ())
 
   private[serenity] def coordinateExternalQuit(
     awaitExternalQuit: IO[Unit],
