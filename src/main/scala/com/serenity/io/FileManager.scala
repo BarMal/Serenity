@@ -27,6 +27,11 @@ class FileManager(using balance: Balance):
   /** Save buffer to file */
   def saveBuffer(buffer: Buffer, path: Path): IO[Buffer] =
     FileUtils.detectFileType(path) match
+      case FileType.Markdown =>
+        for
+          _ <- ensureSupported(path, _.canSave, "save")
+          _ <- FileUtils.writeFileContent(path, markdownContentForSave(buffer))
+        yield savedBuffer(buffer, path, None)
       case FileType.RichText =>
         val document = richTextDocumentForSave(buffer)
         RtfDocumentCodec.write(document, path).as(savedBuffer(buffer, path, Some(document)))
@@ -114,6 +119,28 @@ class FileManager(using balance: Balance):
     buffer.richTextDocument
       .filter(_.matchesPlainText(text))
       .getOrElse(RichTextDocument.fromPlainText(text))
+
+  private def markdownContentForSave(buffer: Buffer): String =
+    richTextDocumentForSave(buffer).paragraphs
+      .map { paragraph =>
+        val prefix = paragraph.role match
+          case com.serenity.richtext.ParagraphRole.Heading(level) => "#" * level.max(1).min(6) + " "
+          case _                                                  => ""
+        prefix + paragraph.runs.map(markdownRun).mkString
+      }
+      .mkString("\n")
+
+  private def markdownRun(run: com.serenity.richtext.RichTextRun): String =
+    val marks = run.style.marks
+    val marked =
+      if marks.contains(com.serenity.richtext.InlineMark.Bold) && marks.contains(
+            com.serenity.richtext.InlineMark.Italic
+          )
+      then s"***${run.text}***"
+      else if marks.contains(com.serenity.richtext.InlineMark.Bold) then s"**${run.text}**"
+      else if marks.contains(com.serenity.richtext.InlineMark.Italic) then s"*${run.text}*"
+      else run.text
+    if marks.contains(com.serenity.richtext.InlineMark.Underline) then s"<u>$marked</u>" else marked
 
   private def languageFromPath(path: Path): Option[LanguageId] =
     Option(path.getFileName)
