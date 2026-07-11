@@ -11,6 +11,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.{FontConfig, TextScaleMode}
+import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -121,6 +122,23 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     fontConfig.textScaleMode shouldBe TextScaleMode.Auto
     fontConfig.textScaleMultiplier shouldBe 2.0
     observed.get() should not be empty
+    observed.get().last.textScaleMultiplier shouldBe 2.0
+  }
+
+  it should "refresh auto text scale when the viewport moves to a scaled display" in {
+    val deviceScale = AtomicReference(1.0)
+    val observed    = AtomicReference[List[FontConfig]](Nil)
+    val stateManager =
+      createStateManager(
+        "StateManagerFontConfigSpec",
+        config => IO(observed.updateAndGet(_ :+ config)),
+        IO(deviceScale.get())
+      )
+
+    deviceScale.set(2.0)
+    stateManager.handleViewportResize(ViewportSize(120, 40)).unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().config.fontConfig.textScaleMultiplier shouldBe 2.0
     observed.get().last.textScaleMultiplier shouldBe 2.0
   }
 
