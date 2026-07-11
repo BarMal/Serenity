@@ -216,7 +216,7 @@ object AppRuntime:
       )
 
   private[serenity] def inputEventPhase(
-    stateManager: StateManager,
+    stateManager: StateReader & StateUpdater & EventApplier,
     inputRouter: InputRouter[IO, Event],
     systemClipboard: SystemClipboard[IO],
     checkResizeAndHandle: IO[Unit],
