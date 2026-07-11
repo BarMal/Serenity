@@ -54,8 +54,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
     groupById(groups, "settings-document-defaults").children.map(_.id) shouldBe List(
       "default-document-mode",
-      "markdown-view",
-      "spellcheck-enabled"
+      "markdown-view"
     )
     groupById(groups, "settings-language").label shouldBe "Current Buffer Language"
     groupById(groups, "settings-language").children.map(_.id) should contain("lang-plain-text")
