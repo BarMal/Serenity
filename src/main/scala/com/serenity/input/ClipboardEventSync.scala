@@ -2,13 +2,13 @@ package com.serenity.input
 
 import cats.effect.IO
 import com.serenity.keystroke.events.*
-import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.{StateReader, StateUpdater}
 
 object ClipboardEventSync:
 
   def beforeEvent(
     event: Event,
-    stateManager: StateManager,
+    stateManager: StateUpdater,
     systemClipboard: SystemClipboard[IO]
   ): IO[Unit] =
     event match
@@ -22,7 +22,7 @@ object ClipboardEventSync:
 
   def afterEvent(
     event: Event,
-    stateManager: StateManager,
+    stateManager: StateReader,
     systemClipboard: SystemClipboard[IO]
   ): IO[Unit] =
     event match

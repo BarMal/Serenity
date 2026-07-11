@@ -28,6 +28,10 @@ trait EventApplier:
 trait StateReader:
   def getCurrentState: IO[AppState]
 
+/** Applies an atomic transformation to application state. */
+trait StateUpdater:
+  def updateState(update: AppState => AppState): IO[Unit]
+
 /** Advances renderer-visible animation state. */
 trait AnimationTicker:
   def advanceAnimationFrames(): IO[Unit]
@@ -43,13 +47,12 @@ trait RuntimeLifecycle:
 trait LspEffectSource:
   def lspEffectStream: Stream[IO, LspEffect]
 
-trait StateManager extends EventApplier, StateReader, AnimationTicker, RuntimeLifecycle, LspEffectSource:
+trait StateManager extends EventApplier, StateReader, StateUpdater, AnimationTicker, RuntimeLifecycle, LspEffectSource:
   def executeCommand(command: Command): IO[Unit]
   def getCurrentFocus: IO[Focus]
   def switchFocus(newFocus: Focus): IO[Unit]
   def getActiveBuffer: IO[Option[Buffer]]
   def getActivePane: IO[Option[EditorPane]]
-  def updateState(update: AppState => AppState): IO[Unit]
   def handleViewportResize(newSize: ViewportSize): IO[Unit]
 
   // Buffer operations
