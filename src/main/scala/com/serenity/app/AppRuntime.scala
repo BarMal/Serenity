@@ -13,7 +13,7 @@ import com.serenity.input.*
 import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
-import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.{AnimationTicker, StateManager, StateReader}
 import com.serenity.state.models.{AppState, Focus}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
@@ -236,7 +236,7 @@ object AppRuntime:
     }.drain
 
   private def fastRenderPhase(
-    stateManager: StateManager,
+    stateManager: StateReader & AnimationTicker,
     fastMode: SignallingRef[IO, Boolean],
     fastRenderRequestEpoch: Ref[IO, Long],
     animationTickCadence: Ref[IO, AnimationTickCadence],
@@ -382,7 +382,7 @@ object AppRuntime:
         signalResize.handleErrorWith(error => logger.error(error)("[RUNTIME] resize callback failed"))
       )
 
-  private def advanceAnimationsForCadence(ticks: Int, stateManager: StateManager): IO[Boolean] =
+  private def advanceAnimationsForCadence(ticks: Int, stateManager: StateReader & AnimationTicker): IO[Boolean] =
     if ticks <= 0 then stateManager.getCurrentState.map(hasActiveAnimations)
     else
       (0 until ticks).toList.foldLeft(IO.pure(false)) { (previous, _) =>
