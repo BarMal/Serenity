@@ -458,6 +458,9 @@ object SurfaceContentResolver:
     val windowItems           = itemWindow.slice(items)
     val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(selectedIndex)
     val rows = windowItems.zipWithIndex.map {
+      case (option: CommandSurfaceItem.OptionItem, index)
+          if groupId == "settings-preset-select" && option.id == "ui-preset-select" =>
+        presetCarouselRow(option, !previewOnly && index == adjustedSelectedIndex)
       case (option: CommandSurfaceItem.OptionItem, index) =>
         optionRow(option, !previewOnly && index == adjustedSelectedIndex)
       case (item: CommandSurfaceItem.InputItem, index) =>
@@ -608,6 +611,16 @@ object SurfaceContentResolver:
         OverlaySegment(option.selectedOption, selected = true)
       ),
       layout = OverlayRowLayout.Columns
+    )
+
+  private def presetCarouselRow(option: CommandSurfaceItem.OptionItem, selected: Boolean): OverlayRow =
+    OverlayRow(
+      plainText = option.options.map(_.label).mkString(" "),
+      selected = selected,
+      segments = option.options.zipWithIndex.map { (preset, index) =>
+        OverlaySegment(preset.label, selected = index == option.selectedIndex)
+      },
+      layout = OverlayRowLayout.Distributed
     )
 
   private def inputRow(

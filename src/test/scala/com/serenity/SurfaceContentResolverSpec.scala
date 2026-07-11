@@ -217,7 +217,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "resolve option rows with selected option preview hints" in {
+  it should "render preset selection as a horizontal carousel" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
@@ -240,9 +240,9 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .find(_.selected)
       .getOrElse(fail("Expected preset option row"))
 
-    row.plainText should include(
-      "rich text default; dark; subtle motion; typed text reveal; frosted material; frosted background; spacious density; Serif 18pt prose; 1 editor pane; Left outline 28"
-    )
+    row.layout shouldBe OverlayRowLayout.Distributed
+    row.segments.map(_.text) shouldBe List("Writing", "Documentation", "Code", "Review")
+    row.segments.filter(_.selected).map(_.text) shouldBe List("Writing")
   }
 
   it should "resolve option rows into label, hint, and selected value columns" in {
