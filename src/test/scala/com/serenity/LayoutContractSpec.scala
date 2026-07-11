@@ -803,6 +803,34 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "report inactive panes outside the editor panel" in {
+    val firstPane  = EditorPane.empty(PaneId(0))
+    val secondPane = EditorPane.empty(PaneId(1))
+    val state = AppState.initial.copy(
+      layout = Layout(
+        editorPanes = Map(PaneId(0) -> firstPane, PaneId(1) -> secondPane),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0), PaneId(1)),
+        splitDirection = PaneSplitDirection.Vertical
+      )
+    )
+    val layout   = LayoutEngine.calculateLayout(state, viewport)
+    val contract = EditorLayoutContract.from(state, viewport, layout)
+    val badSecondPane = contract
+      .paneLayout(PaneId(1))
+      .getOrElse(fail("expected inactive pane layout"))
+      .copy(paneRect = LayoutRect(viewport.width, 0, 1, 1))
+    val badContract = contract.copy(
+      workspace = contract.workspace.copy(
+        paneLayouts = contract.workspace.paneLayouts.updated(PaneId(1), badSecondPane)
+      )
+    )
+
+    badContract.violations.map(violation => violation.ownerName -> violation.childName) should contain(
+      "editor panel" -> "pane 1"
+    )
+  }
+
   it should "report stacked below-cursor overlay gap violations with overlay names" in {
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
