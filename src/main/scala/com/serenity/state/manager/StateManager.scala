@@ -47,7 +47,24 @@ trait RuntimeLifecycle:
 trait LspEffectSource:
   def lspEffectStream: Stream[IO, LspEffect]
 
-trait StateManager extends EventApplier, StateReader, StateUpdater, AnimationTicker, RuntimeLifecycle, LspEffectSource:
+/** Reads persisted session metadata needed before startup restoration. */
+trait SessionStartupInfo:
+  def currentSessionThemeName: IO[Option[String]]
+  def sessionExists: IO[Boolean]
+
+/** Opens a file into editor state. */
+trait FileOpener:
+  def openFile(filePath: Path): IO[Unit]
+
+trait StateManager
+    extends EventApplier,
+      StateReader,
+      StateUpdater,
+      AnimationTicker,
+      RuntimeLifecycle,
+      LspEffectSource,
+      SessionStartupInfo,
+      FileOpener:
   def executeCommand(command: Command): IO[Unit]
   def getCurrentFocus: IO[Focus]
   def switchFocus(newFocus: Focus): IO[Unit]
@@ -78,8 +95,6 @@ trait StateManager extends EventApplier, StateReader, StateUpdater, AnimationTic
   // Session persistence operations
   def saveSession(): IO[Unit]
   def loadSession(): IO[Option[AppState]]
-  def currentSessionThemeName: IO[Option[String]]
-  def sessionExists: IO[Boolean]
   def clearSession(): IO[Unit]
 
   // Panel operations
@@ -94,7 +109,6 @@ trait StateManager extends EventApplier, StateReader, StateUpdater, AnimationTic
 
   // File operations
   def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit]
-  def openFile(filePath: Path): IO[Unit]
   def saveBuffer(bufferId: BufferId): IO[Unit]
   def saveBufferAs(bufferId: BufferId, filePath: String): IO[Unit]
   def markBufferSaved(bufferId: BufferId): IO[Unit]

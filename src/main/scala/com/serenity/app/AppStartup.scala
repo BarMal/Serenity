@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import com.serenity.config.AppConfig
-import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
@@ -28,7 +28,7 @@ object AppStartup:
     )
 
   def startPageState(
-    stateManager: StateManager,
+    stateManager: SessionStartupInfo,
     theme: Theme,
     initialViewportSize: ViewportSize,
     appConfig: AppConfig = AppConfig.default
@@ -55,7 +55,7 @@ object AppStartup:
 
   /** Resolve the theme to use for startup before a saved session is restored. */
   def startupTheme(
-    stateManager: StateManager,
+    stateManager: SessionStartupInfo,
     themeManager: AppThemeManager,
     fallbackThemeName: String = "dark"
   ): IO[Theme] =
@@ -66,7 +66,7 @@ object AppStartup:
 
   /** Initialize the application state for first render using the active theme and current viewport size. */
   def initializeState(
-    stateManager: StateManager,
+    stateManager: StateUpdater & StateReader & FileOpener & SessionStartupInfo,
     theme: Theme,
     initialViewportSize: ViewportSize,
     appConfig: AppConfig = AppConfig.default,
