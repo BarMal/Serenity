@@ -400,8 +400,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-document-defaults").label shouldBe "Document Defaults"
     nestedGroup("settings-document-defaults").children.map(_.id) should contain allOf (
       "default-document-mode",
-      "markdown-view",
-      "spellcheck-enabled"
+      "markdown-view"
     )
     nestedGroup("settings-language").label shouldBe "Current Buffer Language"
     nestedGroup("settings-language").children.map(_.id) should contain(

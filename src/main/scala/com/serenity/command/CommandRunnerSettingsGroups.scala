@@ -185,9 +185,9 @@ object CommandRunnerSettingsGroups:
     val documentDefaultsGroup = CommandSurfaceItem.GroupItem(
       id = "settings-document-defaults",
       label = "Document Defaults",
-      children = List(defaultDocumentItem, markdownViewItem, spellCheckItem),
+      children = List(defaultDocumentItem, markdownViewItem),
       category = CommandCategory.Settings,
-      hint = Some("New document mode, previews, spelling")
+      hint = Some("New document mode and previews")
     )
     val languageGroup = CommandSurfaceItem.GroupItem(
       id = "settings-language",
