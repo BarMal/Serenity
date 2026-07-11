@@ -262,18 +262,15 @@ object ContextualToolbar:
     mode: ToolbarDisplayMode
   ): List[List[ContextualToolbarItem]] =
     if items.isEmpty || contentWidth <= 0 then Nil
-    else
-      val (currentRow, rows) =
-        items.foldLeft((List.empty[ContextualToolbarItem], List.empty[List[ContextualToolbarItem]])) {
-          case ((currentRow, acc), item) =>
-            val nextWidth = estimatedRowWidth(currentRow :+ item, mode)
-            if currentRow.nonEmpty && nextWidth > contentWidth then (List(item), acc :+ currentRow)
-            else (currentRow :+ item, acc)
-        }
-      rows :+ currentRow
+    else if proseItemSegments(items).exists(_.length > 1) then
+      packSegments(proseItemSegments(items), contentWidth, mode)
+    else packItems(items, contentWidth, mode)
 
   def compactContentWidth(toolbarState: ContextualToolbarState, state: AppState, maxWidth: Int): Int =
     val items = itemsFor(state)
+    val groupedWidth =
+      val segments = proseItemSegments(items)
+      Option.when(segments.exists(_.length > 1))(segments.map(estimatedRowWidth(_, toolbarState.displayMode)).max)
     val detailWidth = toolbarState.normalized(items).detailState match
       case Some(ContextualToolbarDetailState.Dropdown(itemId, _)) =>
         dropdownItem(itemId, items).map(_.optionItem.options.map(_.label.length + 2).sum).getOrElse(0)
@@ -281,7 +278,11 @@ object ContextualToolbar:
         inputItem(itemId, items).map(item => item.label.length + text.length + 3).getOrElse(0)
       case None =>
         0
-    estimatedRowWidth(items, toolbarState.displayMode).max(detailWidth).max(1).min(maxWidth.max(1))
+    groupedWidth
+      .getOrElse(estimatedRowWidth(items, toolbarState.displayMode))
+      .max(detailWidth)
+      .max(1)
+      .min(maxWidth.max(1))
 
   def rowCount(
     toolbarState: ContextualToolbarState,
@@ -368,6 +369,58 @@ object ContextualToolbar:
 
   def inputItem(itemId: String, items: List[ContextualToolbarItem]): Option[ContextualToolbarItem.Input] =
     items.collectFirst { case item: ContextualToolbarItem.Input if item.id == itemId => item }
+
+  private def proseItemSegments(items: List[ContextualToolbarItem]): List[List[ContextualToolbarItem]] =
+    val proseGroupIds = Map(
+      "bold"             -> 0,
+      "italic"           -> 0,
+      "underline"        -> 0,
+      "font-family"      -> 1,
+      "font-family-text" -> 1,
+      "font-size"        -> 1,
+      "color"            -> 2,
+      "color-hex"        -> 2,
+      "paragraph-role"   -> 3,
+      "align-left"       -> 3,
+      "align-center"     -> 3,
+      "align-right"      -> 3,
+      "align-justify"    -> 3
+    )
+    items.foldLeft(List.empty[List[ContextualToolbarItem]]) { (segments, item) =>
+      val nextGroupId = proseGroupIds.get(item.id)
+      segments match
+        case init :+ last
+            if last.nonEmpty &&
+              proseGroupIds.get(last.head.id) == nextGroupId &&
+              nextGroupId.nonEmpty =>
+          init :+ (last :+ item)
+        case _ =>
+          segments :+ List(item)
+    }
+
+  private def packSegments(
+    segments: List[List[ContextualToolbarItem]],
+    contentWidth: Int,
+    mode: ToolbarDisplayMode
+  ): List[List[ContextualToolbarItem]] =
+    segments.flatMap(segment =>
+      if estimatedRowWidth(segment, mode) > contentWidth then packItems(segment, contentWidth, mode)
+      else List(segment)
+    )
+
+  private def packItems(
+    items: List[ContextualToolbarItem],
+    contentWidth: Int,
+    mode: ToolbarDisplayMode
+  ): List[List[ContextualToolbarItem]] =
+    val (currentRow, rows) =
+      items.foldLeft((List.empty[ContextualToolbarItem], List.empty[List[ContextualToolbarItem]])) {
+        case ((currentRow, acc), item) =>
+          val nextWidth = estimatedRowWidth(currentRow :+ item, mode)
+          if currentRow.nonEmpty && nextWidth > contentWidth then (List(item), acc :+ currentRow)
+          else (currentRow :+ item, acc)
+      }
+    rows :+ currentRow
 
   private def estimatedRowWidth(items: List[ContextualToolbarItem], mode: ToolbarDisplayMode): Int =
     items.map(item => displayText(item, mode).length + 2).sum + items.drop(1).length

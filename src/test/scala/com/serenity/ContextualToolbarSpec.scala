@@ -25,7 +25,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       opened.activeCursorPosition,
       SurfacePlacement.BelowCursor
     )
-    toolbarStateFrom(opened).displayMode shouldBe ToolbarDisplayMode.IconOnly
+    toolbarStateFrom(opened).displayMode shouldBe ToolbarDisplayMode.IconAndText
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
@@ -553,6 +553,28 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "#"
     ContextualToolbar.displayText(input, ToolbarDisplayMode.TextOnly) shouldBe "Size 18"
     ContextualToolbar.displayText(input, ToolbarDisplayMode.IconAndText) shouldBe "# Size 18"
+  }
+
+  it should "keep prose formatting controls in semantic clusters when rows wrap" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-clustered-rows")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+
+    val rowGroups = ContextualToolbar
+      .rowGroups(
+        ContextualToolbar.itemsFor(stateManager.getCurrentState.unsafeRunSync()),
+        20,
+        ToolbarDisplayMode.IconOnly
+      )
+      .map(_.map(_.id))
+
+    rowGroups shouldBe List(
+      List("bold", "italic", "underline"),
+      List("font-family", "font-family-text", "font-size"),
+      List("color", "color-hex"),
+      List("paragraph-role", "align-left", "align-center", "align-right", "align-justify")
+    )
   }
 
   it should "move focus vertically between wrapped toolbar rows" in {
