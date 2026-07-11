@@ -514,8 +514,17 @@ object LayoutEngine:
     topYOverride: Option[Int],
     forcedHeight: Option[Int]
   ): Option[LayoutRect] =
-    val preferredWidth  = calculateFloatingSurfaceWidth(contentRect.width)
-    val preferredHeight = calculateFloatingSurfaceHeight(surface.content, contentRect.width, contentRect.height, state)
+    val borderCells = SurfaceFrameLayout.borderCellsFor(surface.content)
+    val preferredWidth = surface.content match
+      case SurfaceContent.ContextualToolbar(toolbarState) =>
+        ContextualToolbar.compactContentWidth(
+          toolbarState,
+          state,
+          contentRect.width - (borderCells * 2)
+        ) + (borderCells * 2)
+      case _ =>
+        calculateFloatingSurfaceWidth(contentRect.width)
+    val preferredHeight = calculateFloatingSurfaceHeight(surface.content, preferredWidth, contentRect.height, state)
     val finalHeight     = forcedHeight.getOrElse(preferredHeight)
     val gapRows         = floatingCursorGapRows(state)
 
@@ -772,7 +781,8 @@ object LayoutEngine:
 
   private def floatingAnchor(surface: UiSurface, state: AppState): Option[CursorPosition] =
     surface.content match
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) |
+          SurfaceContent.ContextualToolbar(_) =>
         state.activeCursorPosition.orElse(surfaceAnchor(surface))
       case _ =>
         surfaceAnchor(surface).orElse(state.activeCursorPosition)
