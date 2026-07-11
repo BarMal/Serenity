@@ -91,9 +91,7 @@ object DocxDocumentCodec:
       .flatMap(headingRoleFromStyle)
       .getOrElse(ParagraphRole.Body)
     RichTextParagraph(
-      childElements(element)
-        .filter(child => child.getNamespaceURI == WNs && child.getLocalName == "r")
-        .flatMap(runFromElement),
+      childElements(element).flatMap(runsFromNode),
       alignment,
       role
     ).normalized
@@ -125,6 +123,10 @@ object DocxDocumentCodec:
         Nil
     }.mkString
     Option.when(text.nonEmpty)(RichTextRun(text, style))
+
+  private def runsFromNode(element: Element): List[RichTextRun] =
+    if element.getNamespaceURI == WNs && element.getLocalName == "r" then runFromElement(element).toList
+    else childElements(element).flatMap(runsFromNode)
 
   private def styleFromRunProperties(element: Element): RichTextStyle =
     RichTextStyle(

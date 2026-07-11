@@ -58,6 +58,25 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
     marksForText(paragraph, "world") should contain allOf (InlineMark.Bold, InlineMark.Underline)
   }
 
+  it should "read text runs nested inside DOCX hyperlinks" in {
+    val documentXml =
+      """<?xml version="1.0" encoding="UTF-8"?>
+        |<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        |  <w:body>
+        |    <w:p>
+        |      <w:r><w:t>Read </w:t></w:r>
+        |      <w:hyperlink w:anchor="guide"><w:r><w:rPr><w:b/></w:rPr><w:t>the guide</w:t></w:r></w:hyperlink>
+        |      <w:r><w:t>.</w:t></w:r>
+        |    </w:p>
+        |  </w:body>
+        |</w:document>""".stripMargin
+
+    val paragraph = singleParagraph(DocxDocumentCodec.readBytes(docxBytes(documentXml)))
+
+    paragraph.plainText shouldBe "Read the guide."
+    marksForText(paragraph, "the guide") should contain(InlineMark.Bold)
+  }
+
   it should "preserve heading roles and font metadata" in {
     val source = RichTextDocument(
       List(
