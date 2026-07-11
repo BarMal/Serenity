@@ -117,25 +117,16 @@ object AppRuntime:
               requestFastRender
           ).drain
         _ <-
-          def idlePhase: Stream[IO, Unit] =
-            Stream
-              .repeatEval(
-                stateManager.getCurrentState
-                  .map(state => cursorIdleInterval(state.config).getOrElse(DefaultCursorIdleInterval))
-                  .flatMap(IO.sleep)
-              )
-              .interruptWhen(fastMode.discrete)
-              .evalMap(_ =>
-                runIdleRenderStep(
-                  currentStateForDiagnostics = currentStateForDiagnostics,
-                  loadState = stateManager.getCurrentState,
-                  checkResizeAndHandle = checkResizeAndHandle,
-                  cursorVisible = cursorVisible,
-                  breathIndex = breathIndex,
-                  renderCursorOnly = renderCursorOnly,
-                  requestFastRender = requestFastRender
-                )
-              )
+          val idlePhase = idleRenderPhase(
+            loadState = stateManager.getCurrentState,
+            fastMode = fastMode,
+            currentStateForDiagnostics = currentStateForDiagnostics,
+            checkResizeAndHandle = checkResizeAndHandle,
+            cursorVisible = cursorVisible,
+            breathIndex = breathIndex,
+            renderCursorOnly = renderCursorOnly,
+            requestFastRender = requestFastRender
+          )
 
           def fastPhase: Stream[IO, Unit] =
             Stream.eval(fastRenderRequestEpoch.get).flatMap { phaseStartRenderRequest =>
@@ -220,6 +211,35 @@ object AppRuntime:
 
   private[serenity] def shutdownInputAfterQuit(awaitQuit: IO[Unit], shutdownInput: IO[Unit]): IO[Unit] =
     awaitQuit >> shutdownInput
+
+  private[serenity] def idleRenderPhase(
+    loadState: IO[AppState],
+    fastMode: SignallingRef[IO, Boolean],
+    currentStateForDiagnostics: IO[Option[AppState]],
+    checkResizeAndHandle: IO[Unit],
+    cursorVisible: Ref[IO, Boolean],
+    breathIndex: Ref[IO, Int],
+    renderCursorOnly: (AppState, Boolean, Option[Color]) => IO[Unit],
+    requestFastRender: IO[Unit]
+  )(using Logger[IO]): Stream[IO, Unit] =
+    Stream
+      .repeatEval(
+        loadState
+          .map(state => cursorIdleInterval(state.config).getOrElse(DefaultCursorIdleInterval))
+          .flatMap(IO.sleep)
+      )
+      .interruptWhen(fastMode.discrete)
+      .evalMap(_ =>
+        runIdleRenderStep(
+          currentStateForDiagnostics,
+          loadState,
+          checkResizeAndHandle,
+          cursorVisible,
+          breathIndex,
+          renderCursorOnly,
+          requestFastRender
+        )
+      )
 
   private[serenity] def withRuntimeDiagnostics[A](
     loopName: String,
