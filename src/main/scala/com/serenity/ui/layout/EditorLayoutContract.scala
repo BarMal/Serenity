@@ -106,8 +106,12 @@ case class EditorLayoutContract(
       "content area",
       contentAreaRect,
       List(
-        "editor panel" -> Some(workspace.editorPanelRect),
-        "line numbers" -> workspace.lineNumberRect
+        "editor panel"  -> Some(workspace.editorPanelRect),
+        "line numbers"  -> workspace.lineNumberRect,
+        "left spacer"   -> Some(leftSpacerRect),
+        "right spacer"  -> Some(rightSpacerRect),
+        "top spacer"    -> Some(topSpacerRect),
+        "bottom spacer" -> Some(bottomSpacerRect)
       )
     )
 
