@@ -515,58 +515,72 @@ object CommandRunnerSettingsInputItems:
       .distinct
 
   private def buildKeymapInputItems(config: InputConfig): List[CommandSurfaceItem.InputItem] =
-    List(
+    val globalActions = List(HotkeyAction.ToggleCommandRunner, HotkeyAction.FileSearch) ++
+      HotkeyAction.values.toList.filterNot(action =>
+        action == HotkeyAction.ToggleCommandRunner || action == HotkeyAction.FileSearch
+      )
+    val items = globalActions.map(action =>
       bindingInputItem(
-        id = "keymap-global-command_palette",
-        label = "Command Palette",
-        currentValue = config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).headOption.map(_.render),
-        parse = binding => CommandIntent.SetGlobalHotkey(HotkeyAction.ToggleCommandRunner, binding),
-        reset = CommandIntent.ResetGlobalHotkey(HotkeyAction.ToggleCommandRunner)
-      ),
+        s"keymap-global-${action.configKey}",
+        if action == HotkeyAction.OpenFile then "Open Document" else keymapLabel(action.configKey),
+        config.hotkeyConfig.bindingsFor(action).headOption.map(_.render),
+        binding => CommandIntent.SetGlobalHotkey(action, binding),
+        CommandIntent.ResetGlobalHotkey(action)
+      )
+    ) ++ EditorKeyAction.values.toList.map(action =>
       bindingInputItem(
-        id = "keymap-global-file_search",
-        label = "File Search",
-        currentValue = config.hotkeyConfig.bindingsFor(HotkeyAction.FileSearch).headOption.map(_.render),
-        parse = binding => CommandIntent.SetGlobalHotkey(HotkeyAction.FileSearch, binding),
-        reset = CommandIntent.ResetGlobalHotkey(HotkeyAction.FileSearch)
-      ),
+        s"keymap-editor-${action.configKey}",
+        keymapLabel(action.configKey),
+        config.focusedKeymapConfig.editor.bindingsFor(action).headOption.map(_.render),
+        binding => CommandIntent.SetEditorKeyBinding(action, binding),
+        CommandIntent.ResetEditorKeyBinding(action)
+      )
+    ) ++ CommandRunnerKeyAction.values.toList.map(action =>
       bindingInputItem(
-        id = "keymap-editor-page_down",
-        label = "Editor Page Down",
-        currentValue = config.focusedKeymapConfig.editor.bindingsFor(EditorKeyAction.PageDown).headOption.map(_.render),
-        parse = binding => CommandIntent.SetEditorKeyBinding(EditorKeyAction.PageDown, binding),
-        reset = CommandIntent.ResetEditorKeyBinding(EditorKeyAction.PageDown)
-      ),
+        s"keymap-command-runner-${action.configKey}",
+        keymapLabel(action.configKey),
+        config.focusedKeymapConfig.commandRunner.bindingsFor(action).headOption.map(_.render),
+        binding => CommandIntent.SetCommandRunnerKeyBinding(action, binding),
+        CommandIntent.ResetCommandRunnerKeyBinding(action)
+      )
+    ) ++ ModalKeyAction.values.toList.map(action =>
       bindingInputItem(
-        id = "keymap-command-runner-submit",
-        label = "Command Submit",
-        currentValue =
-          config.focusedKeymapConfig.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit).headOption.map(_.render),
-        parse = binding => CommandIntent.SetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit, binding),
-        reset = CommandIntent.ResetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit)
-      ),
+        s"keymap-modal-${action.configKey}",
+        keymapLabel(action.configKey),
+        config.focusedKeymapConfig.modal.bindingsFor(action).headOption.map(_.render),
+        binding => CommandIntent.SetModalKeyBinding(action, binding),
+        CommandIntent.ResetModalKeyBinding(action)
+      )
+    ) ++ PanelKeyAction.values.toList.map(action =>
       bindingInputItem(
-        id = "keymap-modal-dismiss",
-        label = "Modal Dismiss",
-        currentValue = config.focusedKeymapConfig.modal.bindingsFor(ModalKeyAction.Dismiss).headOption.map(_.render),
-        parse = binding => CommandIntent.SetModalKeyBinding(ModalKeyAction.Dismiss, binding),
-        reset = CommandIntent.ResetModalKeyBinding(ModalKeyAction.Dismiss)
-      ),
+        s"keymap-panel-${action.configKey}",
+        keymapLabel(action.configKey),
+        config.focusedKeymapConfig.panel.bindingsFor(action).headOption.map(_.render),
+        binding => CommandIntent.SetPanelKeyBinding(action, binding),
+        CommandIntent.ResetPanelKeyBinding(action)
+      )
+    ) ++ PeekKeyAction.values.toList.map(action =>
       bindingInputItem(
-        id = "keymap-panel-activate",
-        label = "Panel Activate",
-        currentValue = config.focusedKeymapConfig.panel.bindingsFor(PanelKeyAction.Activate).headOption.map(_.render),
-        parse = binding => CommandIntent.SetPanelKeyBinding(PanelKeyAction.Activate, binding),
-        reset = CommandIntent.ResetPanelKeyBinding(PanelKeyAction.Activate)
-      ),
-      bindingInputItem(
-        id = "keymap-peek-accept",
-        label = "Peek Accept",
-        currentValue = config.focusedKeymapConfig.peek.bindingsFor(PeekKeyAction.Accept).headOption.map(_.render),
-        parse = binding => CommandIntent.SetPeekKeyBinding(PeekKeyAction.Accept, binding),
-        reset = CommandIntent.ResetPeekKeyBinding(PeekKeyAction.Accept)
+        s"keymap-peek-${action.configKey}",
+        keymapLabel(action.configKey),
+        config.focusedKeymapConfig.peek.bindingsFor(action).headOption.map(_.render),
+        binding => CommandIntent.SetPeekKeyBinding(action, binding),
+        CommandIntent.ResetPeekKeyBinding(action)
       )
     )
+    val primaryIds = List(
+      "keymap-global-command_palette",
+      "keymap-global-file_search",
+      "keymap-editor-page_down",
+      "keymap-command-runner-submit",
+      "keymap-modal-dismiss",
+      "keymap-panel-activate",
+      "keymap-peek-accept"
+    )
+    primaryIds.flatMap(id => items.find(_.id == id)) ++ items.filterNot(item => primaryIds.contains(item.id))
+
+  private def keymapLabel(configKey: String): String =
+    configKey.split("_").toList.map(_.capitalize).mkString(" ")
 
   private def bindingInputItem(
     id: String,

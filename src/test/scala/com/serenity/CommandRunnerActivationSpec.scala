@@ -85,6 +85,13 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     keymapGroup.children.collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "keymap-command-runner-submit" => item.currentValue
     } shouldBe Some("ctrl+enter")
+    val ids = keymapGroup.children.map(_.id).toSet
+    HotkeyAction.values.foreach(action => ids should contain(s"keymap-global-${action.configKey}"))
+    EditorKeyAction.values.foreach(action => ids should contain(s"keymap-editor-${action.configKey}"))
+    CommandRunnerKeyAction.values.foreach(action => ids should contain(s"keymap-command-runner-${action.configKey}"))
+    ModalKeyAction.values.foreach(action => ids should contain(s"keymap-modal-${action.configKey}"))
+    PanelKeyAction.values.foreach(action => ids should contain(s"keymap-panel-${action.configKey}"))
+    PeekKeyAction.values.foreach(action => ids should contain(s"keymap-peek-${action.configKey}"))
   }
 
   it should "expose interface density in the interface layout settings group" in {
