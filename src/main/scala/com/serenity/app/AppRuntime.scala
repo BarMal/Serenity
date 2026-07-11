@@ -128,47 +128,15 @@ object AppRuntime:
             requestFastRender = requestFastRender
           )
 
-          def fastPhase: Stream[IO, Unit] =
-            Stream.eval(fastRenderRequestEpoch.get).flatMap { phaseStartRenderRequest =>
-              Stream
-                .repeatEval(
-                  stateManager.getCurrentState.map(state => fastFrameInterval(state.config.renderFpsTarget))
-                )
-                .evalMap { interval =>
-                  for
-                    _ <- IO.sleep(interval)
-                    _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(
-                      checkResizeAndHandle
-                    )
-                    animationTicks <- animationTickCadence.modify(_.advance(interval))
-                    active <- withRuntimeDiagnostics(
-                      "render loop",
-                      "fast.animation-tick",
-                      currentStateForDiagnostics
-                    )(advanceAnimationsForCadence(animationTicks, stateManager))
-                    state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
-                      stateManager.getCurrentState
-                    )
-                    _ <- withRuntimeDiagnostics(
-                      "render loop",
-                      "fast.full-render",
-                      IO.pure(Some(state))
-                    )(renderFull(state, true, None))
-                  yield active
-                }
-                .takeWhile(identity)
-                .map(_ => ())
-                .onFinalize {
-                  stateManager.getCurrentState.flatMap { state =>
-                    val stillActive = hasActiveAnimations(state)
-                    fastRenderRequestEpoch.get.flatMap { currentRenderRequest =>
-                      if shouldClearFastMode(stillActive, phaseStartRenderRequest, currentRenderRequest) then
-                        fastMode.set(false)
-                      else IO.unit
-                    }
-                  }
-                }
-            }
+          val fastPhase = fastRenderPhase(
+            stateManager,
+            fastMode,
+            fastRenderRequestEpoch,
+            animationTickCadence,
+            currentStateForDiagnostics,
+            checkResizeAndHandle,
+            renderFull
+          )
 
           val renderLoop: Stream[IO, Unit] =
             Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
@@ -240,6 +208,47 @@ object AppRuntime:
           requestFastRender
         )
       )
+
+  private def fastRenderPhase(
+    stateManager: StateManager,
+    fastMode: SignallingRef[IO, Boolean],
+    fastRenderRequestEpoch: Ref[IO, Long],
+    animationTickCadence: Ref[IO, AnimationTickCadence],
+    currentStateForDiagnostics: IO[Option[AppState]],
+    checkResizeAndHandle: IO[Unit],
+    renderFull: (AppState, Boolean, Option[Color]) => IO[Unit]
+  ): Stream[IO, Unit] =
+    Stream.eval(fastRenderRequestEpoch.get).flatMap { phaseStartRenderRequest =>
+      Stream
+        .repeatEval(stateManager.getCurrentState.map(state => fastFrameInterval(state.config.renderFpsTarget)))
+        .evalMap { interval =>
+          for
+            _ <- IO.sleep(interval)
+            _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(checkResizeAndHandle)
+            animationTicks <- animationTickCadence.modify(_.advance(interval))
+            active <- withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
+              advanceAnimationsForCadence(animationTicks, stateManager)
+            )
+            state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
+              stateManager.getCurrentState
+            )
+            _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(state)))(
+              renderFull(state, true, None)
+            )
+          yield active
+        }
+        .takeWhile(identity)
+        .map(_ => ())
+        .onFinalize {
+          stateManager.getCurrentState.flatMap { state =>
+            fastRenderRequestEpoch.get.flatMap { currentRenderRequest =>
+              if shouldClearFastMode(hasActiveAnimations(state), phaseStartRenderRequest, currentRenderRequest) then
+                fastMode.set(false)
+              else IO.unit
+            }
+          }
+        }
+    }
 
   private[serenity] def withRuntimeDiagnostics[A](
     loopName: String,
