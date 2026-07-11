@@ -6,7 +6,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.io.*
 import com.serenity.keystroke.events.SaveFile
-import com.serenity.richtext.{InlineMark, RichTextParagraph, RtfDocumentCodec}
+import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -397,6 +397,34 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       saved.paragraphs.headOption.map(_.alignment) shouldBe Some(com.serenity.richtext.ParagraphAlignment.Center)
       saved.paragraphs.headOption.map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
       savedBuffer.richTextDocument shouldBe Some(document.normalized)
+    finally Files.deleteIfExists(savedFile)
+  }
+
+  it should "export rich text headings and inline marks to Markdown" in {
+    val fileManager = new FileManager()
+    val savedFile   = Files.createTempFile("serenity-markdown-save", ".md")
+    val document = RichTextDocument(
+      List(
+        RichTextParagraph.plain("Title", role = ParagraphRole.Heading(1)),
+        RichTextParagraph(
+          List(
+            RichTextRun("bold", RichTextStyle(marks = Set(InlineMark.Bold))),
+            RichTextRun(" "),
+            RichTextRun("italic", RichTextStyle(marks = Set(InlineMark.Italic))),
+            RichTextRun(" "),
+            RichTextRun("underlined", RichTextStyle(marks = Set(InlineMark.Underline)))
+          )
+        )
+      )
+    )
+    val buffer = Buffer.fromString(BufferId(107), document.plainText).copy(richTextDocument = Some(document))
+
+    try
+      val saved = fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
+
+      Files.readString(savedFile) shouldBe "# Title\n**bold** *italic* <u>underlined</u>"
+      saved.language shouldBe Some(com.serenity.lsp.config.LanguageId.Markdown)
+      saved.richTextDocument shouldBe None
     finally Files.deleteIfExists(savedFile)
   }
 
