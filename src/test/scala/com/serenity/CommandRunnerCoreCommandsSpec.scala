@@ -128,6 +128,19 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers(com.serenity.state.models.BufferId(1)).isNewEmpty shouldBe true
   }
 
+  it should "navigate between tabs through typed commands" in {
+    val stateManager = createStateManager()
+
+    executeCommandThroughRunner(stateManager, "new", "new")
+    executeCommandThroughRunner(stateManager, "previous-tab", "previous-tab")
+
+    stateManager.getCurrentState.unsafeRunSync().focusedBufferId shouldBe Some(BufferId(0))
+
+    executeCommandThroughRunner(stateManager, "next-tab", "next-tab")
+
+    stateManager.getCurrentState.unsafeRunSync().focusedBufferId shouldBe Some(BufferId(1))
+  }
+
   it should "execute clipboard and select-all editor commands" in {
     val stateManager = createStateManager()
     val bufferId     = stateManager.createBuffer("Hello World").unsafeRunSync()

@@ -316,6 +316,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateState(current =>
           AppEventReducer.reduce(com.serenity.keystroke.events.NewTab, current, registry)(using balance).state
         )
+      case CommandIntent.NextTab =>
+        updateState(EditorState.navigateToNextBuffer)
+      case CommandIntent.PreviousTab =>
+        updateState(EditorState.navigateToPreviousBuffer)
       case CommandIntent.CloseCurrentFile =>
         beginCloseAction(CloseScope.Current, state)
       case CommandIntent.FindInCurrentFile =>

@@ -40,6 +40,8 @@ enum CommandIntent:
   case CloseAll
   case CloseOthers
   case NewFile
+  case NextTab
+  case PreviousTab
   case CloseCurrentFile
   case FindInCurrentFile
   case FindAllInCurrentFile

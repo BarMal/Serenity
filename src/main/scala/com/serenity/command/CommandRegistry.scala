@@ -198,6 +198,20 @@ object CommandRegistry:
       label = "New File"
     ),
     Command.typed(
+      "next-tab",
+      "Switch to the next open file.",
+      CommandIntent.NextTab,
+      CommandCategory.File,
+      label = "Next Tab"
+    ),
+    Command.typed(
+      "previous-tab",
+      "Switch to the previous open file.",
+      CommandIntent.PreviousTab,
+      CommandCategory.File,
+      label = "Previous Tab"
+    ),
+    Command.typed(
       "close",
       "Close the current file.",
       CommandIntent.CloseCurrentFile,
