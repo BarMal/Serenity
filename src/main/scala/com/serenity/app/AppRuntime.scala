@@ -105,17 +105,15 @@ object AppRuntime:
         )
         currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
-        inputFunnel = (s: Stream[IO, Event]) =>
-          s.evalMap(event =>
-            checkResizeAndHandle >>
-              ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
-              stateManager.applyEvent(event) >>
-              ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
-              stateManager.getCurrentState
-                .flatMap(state => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))) >>
-              resetCursorActivity(cursorVisible, breathIndex) >>
-              requestFastRender
-          ).drain
+        inputFunnel = inputEventPhase(
+          stateManager,
+          inputRouter,
+          systemClipboard,
+          checkResizeAndHandle,
+          cursorVisible,
+          breathIndex,
+          requestFastRender
+        )
         _ <-
           val idlePhase = idleRenderPhase(
             loadState = stateManager.getCurrentState,
@@ -208,6 +206,26 @@ object AppRuntime:
           requestFastRender
         )
       )
+
+  private[serenity] def inputEventPhase(
+    stateManager: StateManager,
+    inputRouter: InputRouter[IO, Event],
+    systemClipboard: SystemClipboard[IO],
+    checkResizeAndHandle: IO[Unit],
+    cursorVisible: Ref[IO, Boolean],
+    breathIndex: Ref[IO, Int],
+    requestFastRender: IO[Unit]
+  ): Stream[IO, Event] => Stream[IO, Unit] =
+    _.evalMap { event =>
+      checkResizeAndHandle >>
+        ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
+        stateManager.applyEvent(event) >>
+        ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
+        stateManager.getCurrentState
+          .flatMap(state => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))) >>
+        resetCursorActivity(cursorVisible, breathIndex) >>
+        requestFastRender
+    }.drain
 
   private def fastRenderPhase(
     stateManager: StateManager,
