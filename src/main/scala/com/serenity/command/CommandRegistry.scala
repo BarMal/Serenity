@@ -3,7 +3,6 @@ package com.serenity.command
 import com.serenity.command.CommandSurfaceItem.CommandItem
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{ParagraphAlignment, ParagraphRole}
-import com.serenity.state.manager.StateManager
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.presets.UiPreset
 
@@ -81,10 +80,6 @@ object CommandRegistry:
 
   /** Create registry with default commands plus UI toggle commands */
   def withToggleUI: CommandRegistry = new CommandRegistry(defaultCommands ++ toggleUICommands)
-
-  /** Compatibility alias during the reducer migration. */
-  def withToggleUIStateful(stateManager: StateManager): CommandRegistry =
-    withToggleUI
 
   /** Pure typed UI toggle commands. */
   private def toggleUICommands: List[Command] = List(
