@@ -70,6 +70,29 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     state.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
+  it should "follow the active cursor while it remains open" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-follow-caret")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val bufferId = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
+        val buffer = state
+          .buffers(bufferId)
+          .copy(content = com.serenity.rope.Rope("alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu"))
+        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    val initialRect = toolbarRect(stateManager.getCurrentState.unsafeRunSync())
+    initialRect.width should be < 100
+    stateManager.setCursorPosition(PaneId(0), 0, 48).unsafeRunSync()
+
+    val movedRect = toolbarRect(stateManager.getCurrentState.unsafeRunSync())
+    movedRect.x should be > initialRect.x
+  }
+
   it should "execute the focused formatting command on Enter" in {
     val stateManager = createStateManager("ContextualToolbarSpec-enter")
 
