@@ -789,7 +789,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
   it should "report contract violations with the owning rectangle names" in {
     val badLayout = CalculatedLayout(
       editorPanelRect = LayoutRect(0, 0, viewport.width + 1, viewport.height),
-      leftSpacerRect = LayoutRect(0, 0, 0, viewport.height),
+      leftSpacerRect = LayoutRect(-1, 0, 1, viewport.height),
       rightSpacerRect = LayoutRect(viewport.width, 0, 0, viewport.height),
       gutterRect = Some(LayoutRect(0, viewport.height - 1, viewport.width - 1, 1))
     )
@@ -798,6 +798,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
 
     violations.map(violation => violation.ownerName -> violation.childName) should contain allOf (
       "content area" -> "editor panel",
+      "content area" -> "left spacer",
       "viewport"     -> "gutter"
     )
   }
