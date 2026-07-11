@@ -20,8 +20,11 @@ import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
-trait StateManager:
+/** Applies editor and system events to application state. */
+trait EventApplier:
   def applyEvent(event: Event): IO[Unit]
+
+trait StateManager extends EventApplier:
   def executeCommand(command: Command): IO[Unit]
   def getCurrentState: IO[AppState]
   def getCurrentFocus: IO[Focus]

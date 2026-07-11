@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import cats.effect.IO
 import com.serenity.keystroke.events.ResizeEvent
-import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.EventApplier
 import com.serenity.ui.layout.ViewportSize
 
 object RenderController:
@@ -13,7 +13,7 @@ object RenderController:
     */
   def handleResize(
     newSize: Option[ViewportSize],
-    stateManager: StateManager,
+    stateManager: EventApplier,
     onResized: IO[Unit]
   ): IO[Unit] =
     newSize match
