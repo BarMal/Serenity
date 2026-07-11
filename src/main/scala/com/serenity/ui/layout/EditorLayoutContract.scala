@@ -90,7 +90,7 @@ case class EditorLayoutContract(
   /** Return all currently detectable contract violations. */
   def violations: List[LayoutContractViolation] =
     workspaceViolations ++
-      activePaneViolations ++
+      paneViolations ++
       pinnedPanelViolations ++
       pinnedSurfaceViolations ++
       expandedSurfaceViolations ++
@@ -115,27 +115,35 @@ case class EditorLayoutContract(
       )
     )
 
-  private def activePaneViolations: List[LayoutContractViolation] =
-    activePaneId.flatMap(workspace.paneLayouts.get).toList.flatMap { pane =>
-      containedBy(
-        "editor panel",
-        workspace.editorPanelRect,
-        List("active pane" -> Some(pane.paneRect))
-      ) ++
+  private def paneViolations: List[LayoutContractViolation] =
+    workspace.paneLayouts.toList.flatMap {
+      case (paneId, pane) =>
+        val paneName    = if activePaneId.contains(paneId) then "active pane" else s"pane ${paneId.value}"
+        val contentName = if activePaneId.contains(paneId) then "active content" else s"pane ${paneId.value} content"
+        val topSpacerName =
+          if activePaneId.contains(paneId) then "active top spacer" else s"pane ${paneId.value} top spacer"
+        val bottomSpacerName =
+          if activePaneId.contains(paneId) then "active bottom spacer" else s"pane ${paneId.value} bottom spacer"
+        val headerName = if activePaneId.contains(paneId) then "active header" else s"pane ${paneId.value} header"
         containedBy(
-          "active pane",
-          pane.paneRect,
-          List(
-            "active content"       -> Some(pane.contentRect),
-            "active top spacer"    -> Some(pane.topSpacerRect),
-            "active bottom spacer" -> Some(pane.bottomSpacerRect)
-          )
+          "editor panel",
+          workspace.editorPanelRect,
+          List(paneName -> Some(pane.paneRect))
         ) ++
-        containedBy(
-          "content area",
-          contentAreaRect,
-          List("active header" -> Some(pane.headerRect))
-        )
+          containedBy(
+            paneName,
+            pane.paneRect,
+            List(
+              contentName      -> Some(pane.contentRect),
+              topSpacerName    -> Some(pane.topSpacerRect),
+              bottomSpacerName -> Some(pane.bottomSpacerRect)
+            )
+          ) ++
+          containedBy(
+            "content area",
+            contentAreaRect,
+            List(headerName -> Some(pane.headerRect))
+          )
     }
 
   private def pinnedPanelViolations: List[LayoutContractViolation] =
