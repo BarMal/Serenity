@@ -13,7 +13,7 @@ import com.serenity.input.*
 import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
-import com.serenity.state.manager.{AnimationTicker, StateManager, StateReader}
+import com.serenity.state.manager.*
 import com.serenity.state.models.{AppState, Focus}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
@@ -145,7 +145,7 @@ object AppRuntime:
     }
 
   private def runRuntimeLoops(
-    stateManager: StateManager,
+    stateManager: StateReader & EventApplier & RuntimeLifecycle & LspEffectSource,
     inputHandler: InputHandler[IO],
     inputFunnel: Stream[IO, Event] => Stream[IO, Unit],
     renderLoop: Stream[IO, Unit],
