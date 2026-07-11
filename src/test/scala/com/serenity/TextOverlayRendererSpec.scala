@@ -277,6 +277,28 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
       )
   }
 
+  it should "keep narrow column rows inside their assigned content rect" in {
+    val surface = new MockRenderSurface(20, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 12, 5),
+      contentRect = Some(LayoutRect(3, 2, 4, 1)),
+      rows = List(
+        OverlayRow(
+          plainText = "Label Hint Value",
+          segments = List(OverlaySegment("Label"), OverlaySegment("Hint"), OverlaySegment("Value")),
+          layout = OverlayRowLayout.Columns
+        )
+      )
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.getRow(2).slice(3, 7) shouldBe "L  V"
+    surface.getRow(2).charAt(7) shouldBe ' '
+  }
+
   it should "right-align selected command option values in the value column" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)

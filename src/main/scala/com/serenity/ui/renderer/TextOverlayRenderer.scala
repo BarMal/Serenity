@@ -220,11 +220,9 @@ object TextOverlayRenderer:
   private def columnCursorPlacement(row: OverlayRow, x: Int, width: Int): Option[CursorPlacement] =
     row.segments match
       case _ :: _ :: value :: Nil if value.selected =>
-        val labelWidth = math.min(22, math.max(8, width / 3))
-        val valueWidth = math.min(18, math.max(8, width / 4))
-        val hintWidth  = math.max(0, width - labelWidth - valueWidth - 2)
-        val valueText  = fitCellText(value.text, valueWidth)
-        val valueX     = x + labelWidth + hintWidth + 2 + math.max(0, valueWidth - valueText.length)
+        val (labelWidth, hintWidth, valueWidth) = threeColumnWidths(width)
+        val valueText                           = fitCellText(value.text, valueWidth)
+        val valueX = x + labelWidth + hintWidth + 2 + math.max(0, valueWidth - valueText.length)
         Some(CursorPlacement(valueX, valueText, useMeasured = true))
       case _ =>
         row.cursorColumn.map(cursorColumn =>
@@ -447,9 +445,7 @@ object TextOverlayRenderer:
   ): Unit =
     row.segments match
       case label :: hint :: value :: Nil =>
-        val labelWidth = math.min(22, math.max(8, width / 3))
-        val valueWidth = math.min(18, math.max(8, width / 4))
-        val hintWidth  = math.max(0, width - labelWidth - valueWidth - 2)
+        val (labelWidth, hintWidth, valueWidth) = threeColumnWidths(width)
         renderColumnCell(
           surface,
           x,
@@ -485,8 +481,7 @@ object TextOverlayRenderer:
           alignRight = true
         )
       case label :: hint :: Nil =>
-        val labelWidth = math.min(22, math.max(8, width / 3))
-        val hintWidth  = math.max(0, width - labelWidth - 1)
+        val (labelWidth, hintWidth) = twoColumnWidths(width)
         renderColumnCell(
           surface,
           x,
@@ -511,6 +506,21 @@ object TextOverlayRenderer:
         )
       case _ =>
         CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
+
+  private def threeColumnWidths(width: Int): (Int, Int, Int) =
+    val safeWidth      = math.max(0, width)
+    val preferredLabel = math.min(22, math.max(8, safeWidth / 3))
+    val preferredValue = math.min(18, math.max(8, safeWidth / 4))
+    val (labelWidth, valueWidth) =
+      if preferredLabel + preferredValue + 2 <= safeWidth then (preferredLabel, preferredValue)
+      else (math.min(22, safeWidth / 3), math.min(18, safeWidth / 4))
+    (labelWidth, math.max(0, safeWidth - labelWidth - valueWidth - 2), valueWidth)
+
+  private def twoColumnWidths(width: Int): (Int, Int) =
+    val safeWidth      = math.max(0, width)
+    val preferredLabel = math.min(22, math.max(8, safeWidth / 3))
+    val labelWidth     = if preferredLabel + 1 <= safeWidth then preferredLabel else math.min(22, safeWidth / 3)
+    (labelWidth, math.max(0, safeWidth - labelWidth - 1))
 
   private def renderColumnCell(
     surface: RenderSurface,
