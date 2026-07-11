@@ -180,7 +180,8 @@ case class HotkeyConfig(
     bindings.getOrElse(action, Nil)
 
   def withBinding(action: HotkeyAction, trigger: HotkeyTrigger): HotkeyConfig =
-    copy(bindings = bindings + (action -> List(trigger)))
+    if bindings.exists { case (otherAction, triggers) => otherAction != action && triggers.contains(trigger) } then this
+    else copy(bindings = bindings + (action -> List(trigger)))
 
   def withBinding(action: HotkeyAction, binding: String): HotkeyConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
