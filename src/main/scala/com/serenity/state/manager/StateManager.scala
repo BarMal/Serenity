@@ -24,9 +24,17 @@ import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 trait EventApplier:
   def applyEvent(event: Event): IO[Unit]
 
-trait StateManager extends EventApplier:
-  def executeCommand(command: Command): IO[Unit]
+/** Reads the current immutable application state. */
+trait StateReader:
   def getCurrentState: IO[AppState]
+
+/** Advances renderer-visible animation state. */
+trait AnimationTicker:
+  def advanceAnimationFrames(): IO[Unit]
+  def advanceAnimationsOnTick(): IO[Boolean]
+
+trait StateManager extends EventApplier, StateReader, AnimationTicker:
+  def executeCommand(command: Command): IO[Unit]
   def getCurrentFocus: IO[Focus]
   def switchFocus(newFocus: Focus): IO[Unit]
   def getActiveBuffer: IO[Option[Buffer]]
@@ -36,8 +44,6 @@ trait StateManager extends EventApplier:
   def intervalSaveStream: Stream[IO, Unit]
   def updateState(update: AppState => AppState): IO[Unit]
   def handleViewportResize(newSize: ViewportSize): IO[Unit]
-  def advanceAnimationFrames(): IO[Unit]
-  def advanceAnimationsOnTick(): IO[Boolean]
   def lspEffectStream: Stream[IO, LspEffect]
 
   // Buffer operations
