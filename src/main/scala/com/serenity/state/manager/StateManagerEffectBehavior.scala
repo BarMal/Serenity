@@ -632,17 +632,17 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
                 IO.unit
           case None => IO.unit
       case CommandIntent.SetGlobalHotkey(action, binding) =>
-        updateConfig(_.withHotkeyOverride(action, binding)).void
+        updateKeyBinding(_.withHotkeyOverride(action, binding))
       case CommandIntent.SetEditorKeyBinding(action, binding) =>
-        updateConfig(_.withEditorKeyOverride(action, binding)).void
+        updateKeyBinding(_.withEditorKeyOverride(action, binding))
       case CommandIntent.SetCommandRunnerKeyBinding(action, binding) =>
-        updateConfig(_.withCommandRunnerKeyOverride(action, binding)).void
+        updateKeyBinding(_.withCommandRunnerKeyOverride(action, binding))
       case CommandIntent.SetModalKeyBinding(action, binding) =>
-        updateConfig(_.withModalKeyOverride(action, binding)).void
+        updateKeyBinding(_.withModalKeyOverride(action, binding))
       case CommandIntent.SetPanelKeyBinding(action, binding) =>
-        updateConfig(_.withPanelKeyOverride(action, binding)).void
+        updateKeyBinding(_.withPanelKeyOverride(action, binding))
       case CommandIntent.SetPeekKeyBinding(action, binding) =>
-        updateConfig(_.withPeekKeyOverride(action, binding)).void
+        updateKeyBinding(_.withPeekKeyOverride(action, binding))
       case CommandIntent.ResetGlobalHotkey(action) =>
         updateConfig(_.resetHotkeyOverride(action)).void
       case CommandIntent.ResetEditorKeyBinding(action) =>
@@ -655,6 +655,31 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateConfig(_.resetPanelKeyOverride(action)).void
       case CommandIntent.ResetPeekKeyBinding(action) =>
         updateConfig(_.resetPeekKeyOverride(action)).void
+
+  private def updateKeyBinding(
+    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
+  ): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      val updatedConfig = update(state.config)
+      if updatedConfig == state.config then stateRef.update(withKeymapConflictMessage)
+      else updateConfig(_ => updatedConfig).void
+    }
+
+  private def withKeymapConflictMessage(state: AppState): AppState =
+    state.commandRunnerSurface match
+      case Some(surface) =>
+        surface.content match
+          case SurfaceContent.CommandPalette(runner) =>
+            state.copy(uiSurfaces = state.uiSurfaces.map {
+              case current if current.id == surface.id =>
+                current.copy(content =
+                  SurfaceContent.CommandPalette(runner.copy(statusMessage = Some("Binding is already assigned")))
+                )
+              case current =>
+                current
+            })
+          case _ => state
+      case None => state
 
   private def toggleRichTextMark(
     state: AppState,
