@@ -79,7 +79,11 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
         val bufferId = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
         val buffer = state
           .buffers(bufferId)
-          .copy(content = com.serenity.rope.Rope("alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu"))
+          .copy(
+            content = com.serenity.rope.Rope(
+              "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu\nnu xi omicron pi rho sigma tau"
+            )
+          )
         state.copy(buffers = state.buffers.updated(bufferId, buffer))
       }
       .unsafeRunSync()
@@ -89,8 +93,60 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     initialRect.width should be < 100
     stateManager.setCursorPosition(PaneId(0), 0, 48).unsafeRunSync()
 
-    val movedRect = toolbarRect(stateManager.getCurrentState.unsafeRunSync())
-    movedRect.x should be > initialRect.x
+    val movedHorizontally = toolbarRect(stateManager.getCurrentState.unsafeRunSync())
+    movedHorizontally.x should be > initialRect.x
+
+    stateManager.setCursorPosition(PaneId(0), 1, 12).unsafeRunSync()
+
+    val movedVertically = toolbarRect(stateManager.getCurrentState.unsafeRunSync())
+    movedVertically.y should be > movedHorizontally.y
+  }
+
+  it should "keep the formatted run state when the caret sits on its trailing boundary" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-caret-boundary-style")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val bufferId = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
+        val document = RichTextDocument
+          .fromPlainText("alpha beta gamma")
+          .applyMark(
+            RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 10)),
+            InlineMark.Bold
+          )
+          .setFontFamily(
+            RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 10)),
+            "Serif"
+          )
+          .setFontSize(
+            RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 10)),
+            18.0f
+          )
+          .setColor(
+            RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 10)),
+            "#336699"
+          )
+          .normalized
+        val nextBuffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha beta gamma"),
+            selection = None,
+            cursors = List(CursorPosition(0, 10)),
+            richTextDocument = Some(document)
+          )
+        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    toolbarButton(state, "bold").selected shouldBe true
+    toolbarInput(state, "font-family-text").inputItem.currentValue shouldBe "Serif"
+    toolbarInput(state, "font-size").inputItem.currentValue shouldBe "18"
+    toolbarInput(state, "color-hex").inputItem.currentValue shouldBe "#336699"
   }
 
   it should "execute the focused formatting command on Enter" in {
@@ -661,6 +717,22 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
           case _                                              => None
       }
       .getOrElse(fail("Expected contextual toolbar state"))
+
+  private def toolbarButton(state: AppState, itemId: String): ContextualToolbarItem.Button =
+    ContextualToolbar
+      .itemsFor(state)
+      .collectFirst {
+        case item: ContextualToolbarItem.Button if item.id == itemId => item
+      }
+      .getOrElse(fail(s"Expected toolbar button $itemId"))
+
+  private def toolbarInput(state: AppState, itemId: String): ContextualToolbarItem.Input =
+    ContextualToolbar
+      .itemsFor(state)
+      .collectFirst {
+        case item: ContextualToolbarItem.Input if item.id == itemId => item
+      }
+      .getOrElse(fail(s"Expected toolbar input $itemId"))
 
   private def focusedToolbarItemId(state: AppState): String =
     val items = ContextualToolbar.itemsFor(state)
