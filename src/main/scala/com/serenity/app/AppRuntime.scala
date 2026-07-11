@@ -183,8 +183,6 @@ object AppRuntime:
             Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
 
           val quitSignal = stateManager.awaitQuit.attempt
-          val shutdownInputHandler =
-            stateManager.awaitQuit >> inputHandler.shutdown
           (
             superviseLoop("input loop", stateManager.forceQuit())(
               inputHandler.eventStream
@@ -200,12 +198,11 @@ object AppRuntime:
               stateManager.intervalSaveStream.compile.drain
             ),
             superviseLoop("external quit coordinator", stateManager.forceQuit())(
-              IO.race(
-                awaitExternalQuit >> stateManager.forceQuit(),
-                stateManager.awaitQuit
-              ).void
+              coordinateExternalQuit(awaitExternalQuit, stateManager.forceQuit(), stateManager.awaitQuit)
             ),
-            superviseLoop("input shutdown", stateManager.forceQuit())(shutdownInputHandler),
+            superviseLoop("input shutdown", stateManager.forceQuit())(
+              shutdownInputAfterQuit(stateManager.awaitQuit, inputHandler.shutdown)
+            ),
             superviseLoop("LSP loop", stateManager.forceQuit())(
               LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger, appConfig.lspUserConfig)
             )
@@ -213,6 +210,16 @@ object AppRuntime:
         _ <- logger.info("Serenity editor shutdown complete")
       yield ()
     }
+
+  private[serenity] def coordinateExternalQuit(
+    awaitExternalQuit: IO[Unit],
+    forceQuit: IO[Unit],
+    awaitQuit: IO[Unit]
+  ): IO[Unit] =
+    IO.race(awaitExternalQuit >> forceQuit, awaitQuit).void
+
+  private[serenity] def shutdownInputAfterQuit(awaitQuit: IO[Unit], shutdownInput: IO[Unit]): IO[Unit] =
+    awaitQuit >> shutdownInput
 
   private[serenity] def withRuntimeDiagnostics[A](
     loopName: String,
