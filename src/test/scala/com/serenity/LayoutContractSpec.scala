@@ -426,6 +426,40 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     assertInside(contract.contentAreaRect, contract.pinnedSurfaceContentRects(pinnedPanel.id), "pinned panel content")
   }
 
+  it should "keep markdown preview rows inside the pinned panel content contract" in {
+    val buffer = Buffer.fromString(BufferId(1), "# Title\n\nFirst paragraph\n\nSecond paragraph")
+    val preview = UiSurface(
+      SurfaceId("markdown-preview"),
+      SurfaceContent.MarkdownPreview(buffer.id, "Notes"),
+      SurfacePresentation.Pinned(PanelPosition.Right, 30)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      uiSurfaces = List(preview)
+    )
+
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
+    val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+    val previewView = PinnedPanelViewModel
+      .fromState(state, calculatedLayout)
+      .find(_.surfaceId.contains(preview.id))
+      .getOrElse(fail("expected markdown preview panel"))
+
+    contract.pinnedSurfaceTitleRects(preview.id) shouldBe previewView.titleRect
+    contract.pinnedSurfaceContentRects(preview.id) shouldBe previewView.resolvedContentRect
+    previewView.rows.map(_.plainText) should not be empty
+    contract.pinnedSurfaceRowSlots(preview.id) shouldBe previewView.contentRowSlots
+    previewView.contentRowSlots.foreach(slot =>
+      assertInside(
+        previewView.resolvedContentRect,
+        LayoutRect(previewView.resolvedContentRect.x, slot.y, 1, 1),
+        "markdown preview row"
+      )
+    )
+    contract.violations shouldBe Nil
+  }
+
   it should "expose frame, title, and content rectangles for expanded surfaces" in {
     val expandedPanel = UiSurface(
       SurfaceId("expanded-panel"),
