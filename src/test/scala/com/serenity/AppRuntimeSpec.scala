@@ -134,6 +134,16 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       .shouldBe(false)
   }
 
+  it should "force quit when the external close signal wins runtime coordination" in {
+    val program = for
+      forced <- Ref.of[IO, Boolean](false)
+      _      <- AppRuntime.coordinateExternalQuit(IO.unit, forced.set(true), IO.never)
+      result <- forced.get
+    yield result shouldBe true
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
   it should "terminate the app loop when the external close signal fires" in {
     given org.typelevel.log4cats.Logger[IO] =
       LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeSpec"))
