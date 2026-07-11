@@ -198,6 +198,20 @@ object CommandRegistry:
       label = "New File"
     ),
     Command.typed(
+      "next-tab",
+      "Switch to the next open file.",
+      CommandIntent.NextTab,
+      CommandCategory.File,
+      label = "Next Tab"
+    ),
+    Command.typed(
+      "previous-tab",
+      "Switch to the previous open file.",
+      CommandIntent.PreviousTab,
+      CommandCategory.File,
+      label = "Previous Tab"
+    ),
+    Command.typed(
       "close",
       "Close the current file.",
       CommandIntent.CloseCurrentFile,
@@ -273,6 +287,20 @@ object CommandRegistry:
       CommandIntent.SelectAll,
       CommandCategory.Edit,
       label = "Select All"
+    ),
+    Command.typed(
+      "undo",
+      "Undo the most recent edit.",
+      CommandIntent.Undo,
+      CommandCategory.Edit,
+      label = "Undo"
+    ),
+    Command.typed(
+      "redo",
+      "Redo the most recently undone edit.",
+      CommandIntent.Redo,
+      CommandCategory.Edit,
+      label = "Redo"
     ),
     Command.typed(
       "bold",

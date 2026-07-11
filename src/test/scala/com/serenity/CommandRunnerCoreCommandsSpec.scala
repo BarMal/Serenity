@@ -128,6 +128,19 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers(com.serenity.state.models.BufferId(1)).isNewEmpty shouldBe true
   }
 
+  it should "navigate between tabs through typed commands" in {
+    val stateManager = createStateManager()
+
+    executeCommandThroughRunner(stateManager, "new", "new")
+    executeCommandThroughRunner(stateManager, "previous-tab", "previous-tab")
+
+    stateManager.getCurrentState.unsafeRunSync().focusedBufferId shouldBe Some(BufferId(0))
+
+    executeCommandThroughRunner(stateManager, "next-tab", "next-tab")
+
+    stateManager.getCurrentState.unsafeRunSync().focusedBufferId shouldBe Some(BufferId(1))
+  }
+
   it should "execute clipboard and select-all editor commands" in {
     val stateManager = createStateManager()
     val bufferId     = stateManager.createBuffer("Hello World").unsafeRunSync()
@@ -164,6 +177,25 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.clipboard shouldBe Some("Draft")
     finalState.buffers(bufferId).content.collect() shouldBe ""
+  }
+
+  it should "execute undo and redo editor commands" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager.applyEvent(InsertChar('!')).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('!')).unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "undo", "undo")
+
+    val undone = stateManager.getCurrentState.unsafeRunSync()
+    undone.commandRunnerSurface shouldBe None
+    undone.buffers(bufferId).content.collect() shouldBe ""
+    undone.focus shouldBe Focus.EditorPane(PaneId(0))
+
+    executeCommandThroughRunner(stateManager, "redo", "redo")
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).content.collect() shouldBe "!!"
   }
 
   it should "open the goto-line modal for the goto-line command" in {

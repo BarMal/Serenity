@@ -316,6 +316,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateState(current =>
           AppEventReducer.reduce(com.serenity.keystroke.events.NewTab, current, registry)(using balance).state
         )
+      case CommandIntent.NextTab =>
+        updateState(EditorState.navigateToNextBuffer)
+      case CommandIntent.PreviousTab =>
+        updateState(EditorState.navigateToPreviousBuffer)
       case CommandIntent.CloseCurrentFile =>
         beginCloseAction(CloseScope.Current, state)
       case CommandIntent.FindInCurrentFile =>
@@ -341,6 +345,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         applyEvent(com.serenity.keystroke.events.Paste)
       case CommandIntent.SelectAll =>
         applyEvent(com.serenity.keystroke.events.SelectAll)
+      case CommandIntent.Undo =>
+        applyEvent(com.serenity.keystroke.events.Undo)
+      case CommandIntent.Redo =>
+        applyEvent(com.serenity.keystroke.events.Redo)
       case CommandIntent.ToggleRichTextMark(mark) =>
         updateState(current => toggleRichTextMark(current, mark))
       case CommandIntent.SetRichTextFontFamily(family) =>

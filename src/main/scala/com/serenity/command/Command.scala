@@ -40,6 +40,8 @@ enum CommandIntent:
   case CloseAll
   case CloseOthers
   case NewFile
+  case NextTab
+  case PreviousTab
   case CloseCurrentFile
   case FindInCurrentFile
   case FindAllInCurrentFile
@@ -49,6 +51,8 @@ enum CommandIntent:
   case Cut
   case Paste
   case SelectAll
+  case Undo
+  case Redo
   case ToggleRichTextMark(mark: InlineMark)
   case SetRichTextFontFamily(family: String)
   case SetRichTextFontSize(size: Float)
