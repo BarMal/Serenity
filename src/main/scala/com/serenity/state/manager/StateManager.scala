@@ -33,18 +33,24 @@ trait AnimationTicker:
   def advanceAnimationFrames(): IO[Unit]
   def advanceAnimationsOnTick(): IO[Boolean]
 
-trait StateManager extends EventApplier, StateReader, AnimationTicker:
+/** Owns application shutdown and periodic session persistence. */
+trait RuntimeLifecycle:
+  def awaitQuit: IO[Unit]
+  def forceQuit(): IO[Unit]
+  def intervalSaveStream: Stream[IO, Unit]
+
+/** Supplies effects for the language-server interpreter. */
+trait LspEffectSource:
+  def lspEffectStream: Stream[IO, LspEffect]
+
+trait StateManager extends EventApplier, StateReader, AnimationTicker, RuntimeLifecycle, LspEffectSource:
   def executeCommand(command: Command): IO[Unit]
   def getCurrentFocus: IO[Focus]
   def switchFocus(newFocus: Focus): IO[Unit]
   def getActiveBuffer: IO[Option[Buffer]]
   def getActivePane: IO[Option[EditorPane]]
-  def awaitQuit: IO[Unit]
-  def forceQuit(): IO[Unit]
-  def intervalSaveStream: Stream[IO, Unit]
   def updateState(update: AppState => AppState): IO[Unit]
   def handleViewportResize(newSize: ViewportSize): IO[Unit]
-  def lspEffectStream: Stream[IO, LspEffect]
 
   // Buffer operations
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
