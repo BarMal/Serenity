@@ -166,6 +166,25 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     finalState.buffers(bufferId).content.collect() shouldBe ""
   }
 
+  it should "execute undo and redo editor commands" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager.applyEvent(InsertChar('!')).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('!')).unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "undo", "undo")
+
+    val undone = stateManager.getCurrentState.unsafeRunSync()
+    undone.commandRunnerSurface shouldBe None
+    undone.buffers(bufferId).content.collect() shouldBe ""
+    undone.focus shouldBe Focus.EditorPane(PaneId(0))
+
+    executeCommandThroughRunner(stateManager, "redo", "redo")
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).content.collect() shouldBe "!!"
+  }
+
   it should "open the goto-line modal for the goto-line command" in {
     val stateManager = createStateManager()
 

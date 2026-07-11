@@ -49,6 +49,8 @@ enum CommandIntent:
   case Cut
   case Paste
   case SelectAll
+  case Undo
+  case Redo
   case ToggleRichTextMark(mark: InlineMark)
   case SetRichTextFontFamily(family: String)
   case SetRichTextFontSize(size: Float)

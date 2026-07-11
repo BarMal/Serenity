@@ -275,6 +275,20 @@ object CommandRegistry:
       label = "Select All"
     ),
     Command.typed(
+      "undo",
+      "Undo the most recent edit.",
+      CommandIntent.Undo,
+      CommandCategory.Edit,
+      label = "Undo"
+    ),
+    Command.typed(
+      "redo",
+      "Redo the most recently undone edit.",
+      CommandIntent.Redo,
+      CommandCategory.Edit,
+      label = "Redo"
+    ),
+    Command.typed(
       "bold",
       "Toggle bold formatting on the active selection.",
       CommandIntent.ToggleRichTextMark(com.serenity.richtext.InlineMark.Bold),
