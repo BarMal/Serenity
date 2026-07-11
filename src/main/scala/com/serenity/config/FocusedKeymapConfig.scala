@@ -10,6 +10,13 @@ trait KeymapEventAction[+E <: Event]:
   def configKey: String
   def event: E
 
+private object KeymapBindings:
+
+  def assign[A](bindings: Map[A, List[HotkeyTrigger]], action: A, trigger: HotkeyTrigger): Map[A, List[HotkeyTrigger]] =
+    if bindings.exists { case (otherAction, triggers) => otherAction != action && triggers.contains(trigger) } then
+      bindings
+    else bindings + (action -> List(trigger))
+
 enum EditorKeyAction extends KeymapEventAction[TextEntryEvent]:
   case MoveLeft
   case MoveRight
@@ -236,7 +243,7 @@ case class EditorKeymapConfig(
     bindings.getOrElse(action, Nil)
 
   def withBinding(action: EditorKeyAction, trigger: HotkeyTrigger): EditorKeymapConfig =
-    copy(bindings = bindings + (action -> List(trigger)))
+    copy(bindings = KeymapBindings.assign(bindings, action, trigger))
 
   def withBinding(action: EditorKeyAction, binding: String): EditorKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
@@ -328,7 +335,7 @@ case class CommandRunnerKeymapConfig(
     bindings.getOrElse(action, Nil)
 
   def withBinding(action: CommandRunnerKeyAction, trigger: HotkeyTrigger): CommandRunnerKeymapConfig =
-    copy(bindings = bindings + (action -> List(trigger)))
+    copy(bindings = KeymapBindings.assign(bindings, action, trigger))
 
   def withBinding(action: CommandRunnerKeyAction, binding: String): CommandRunnerKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
@@ -394,7 +401,7 @@ case class ModalKeymapConfig(
     bindings.getOrElse(action, Nil)
 
   def withBinding(action: ModalKeyAction, trigger: HotkeyTrigger): ModalKeymapConfig =
-    copy(bindings = bindings + (action -> List(trigger)))
+    copy(bindings = KeymapBindings.assign(bindings, action, trigger))
 
   def withBinding(action: ModalKeyAction, binding: String): ModalKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
@@ -448,7 +455,7 @@ case class PanelKeymapConfig(
     bindings.getOrElse(action, Nil)
 
   def withBinding(action: PanelKeyAction, trigger: HotkeyTrigger): PanelKeymapConfig =
-    copy(bindings = bindings + (action -> List(trigger)))
+    copy(bindings = KeymapBindings.assign(bindings, action, trigger))
 
   def withBinding(action: PanelKeyAction, binding: String): PanelKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
@@ -498,7 +505,7 @@ case class PeekKeymapConfig(
     bindings.getOrElse(action, Nil)
 
   def withBinding(action: PeekKeyAction, trigger: HotkeyTrigger): PeekKeymapConfig =
-    copy(bindings = bindings + (action -> List(trigger)))
+    copy(bindings = KeymapBindings.assign(bindings, action, trigger))
 
   def withBinding(action: PeekKeyAction, binding: String): PeekKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)

@@ -44,3 +44,10 @@ class InputConfigSpec extends AnyFlatSpec with Matchers:
     config.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render.shouldBe("ctrl+p")
     config.bindingsFor(HotkeyAction.FileSearch).head.render.shouldBe("ctrl+shift+f")
   }
+
+  it should "reject a focused keymap binding already assigned to another action" in {
+    val config = EditorKeymapConfig().withBinding(EditorKeyAction.PageDown, "pageup")
+
+    config.bindingsFor(EditorKeyAction.PageDown).head.render.shouldBe("pagedown")
+    config.bindingsFor(EditorKeyAction.PageUp).head.render.shouldBe("pageup")
+  }
