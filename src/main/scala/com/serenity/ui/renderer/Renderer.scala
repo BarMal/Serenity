@@ -516,6 +516,7 @@ object Renderer:
   ): Unit =
     val visualLines     = snapshot.visualLines
     val xOriginPx       = context.cellMetrics.toPixelX(rect.x).toFloat
+    val contentRightXPx = context.cellMetrics.toPixelX(rect.right).toFloat
     val activeBodyLines = focusedTextBodyLines(buffer, state)
 
     visualLines.zipWithIndex.foreach {
@@ -547,7 +548,8 @@ object Renderer:
                 buffer.animations,
                 state.syntaxHighlightingEnabled,
                 buffer.language,
-                styledSegments
+                styledSegments,
+                clipRightXPx = Some(contentRightXPx)
               )
             else
               CharacterRenderer.renderStringWithAnimation(
@@ -747,16 +749,18 @@ object Renderer:
               val lineOriginPx = context.cellMetrics.toPixelX(rect.x).toFloat
               val startXPx     = lineOriginPx + visualLine.xForColumn(selectionStart).getOrElse(visualLine.widthPx)
               val endXPx       = lineOriginPx + visualLine.xForColumn(selectionEnd).getOrElse(visualLine.widthPx)
-              surface.setForegroundColor(theme.highlighted.foreground)
-              surface.setBackgroundColor(theme.highlighted.background)
-              surface.drawRunPx(
-                startXPx,
-                lineTopPx,
-                endXPx - startXPx,
-                snapshot.lineHeightPx,
-                snapshot.ascentPx,
-                selectedText
-              )
+              measuredRunWidthWithin(rect, context, startXPx, endXPx).foreach { widthPx =>
+                surface.setForegroundColor(theme.highlighted.foreground)
+                surface.setBackgroundColor(theme.highlighted.background)
+                surface.drawRunPx(
+                  startXPx,
+                  lineTopPx,
+                  widthPx,
+                  snapshot.lineHeightPx,
+                  snapshot.ascentPx,
+                  selectedText
+                )
+              }
           else
             (selectionStart until selectionEnd).foreach { bufferColumn =>
               val relativeColumn = bufferColumn - visualLine.startColumn
@@ -842,16 +846,19 @@ object Renderer:
           if rangeStart == rangeEnd - 1 && rangeStart >= visualLine.endColumn then
             startXPx + context.cellMetrics.charWidth
           else lineOriginPx + visualLine.xForColumn(rangeEnd).getOrElse(visualLine.widthPx)
-        surface.setForegroundColor(foreground)
-        surface.setBackgroundColor(background)
-        surface.drawRunPx(
-          startXPx,
-          lineTopPx,
-          math.max(context.cellMetrics.charWidth.toFloat, endXPx - startXPx),
-          snapshot.lineHeightPx,
-          snapshot.ascentPx,
-          rangeText
-        )
+        val desiredWidthPx = math.max(context.cellMetrics.charWidth.toFloat, endXPx - startXPx)
+        measuredRunWidthWithin(rect, context, startXPx, startXPx + desiredWidthPx).foreach { widthPx =>
+          surface.setForegroundColor(foreground)
+          surface.setBackgroundColor(background)
+          surface.drawRunPx(
+            startXPx,
+            lineTopPx,
+            widthPx,
+            snapshot.lineHeightPx,
+            snapshot.ascentPx,
+            rangeText
+          )
+        }
     else
       (rangeStart until rangeEnd).foreach { bufferColumn =>
         val relativeColumn = bufferColumn - visualLine.startColumn
@@ -990,7 +997,8 @@ object Renderer:
                   state.theme.copy(background = state.theme.panel.background),
                   buffer.animations,
                   syntaxHighlightingEnabled = false,
-                  language = None
+                  language = None,
+                  clipRightXPx = Some(context.cellMetrics.toPixelX(rect.right).toFloat)
                 )
               else
                 CharacterRenderer.renderStringWithAnimation(
@@ -1054,13 +1062,15 @@ object Renderer:
                   rowLineHeightPx = context.cellMetrics.lineHeight,
                   usesMeasuredLayout = false
                 ).cursorTopPx(visualLine)
-                context.surface.fillPixelRect(
-                  screenXPx,
-                  screenYPx,
-                  caretWidthPx,
-                  context.cellMetrics.lineHeight,
-                  effectiveCursorColor
-                )
+                caretWithin(rect, context.cellMetrics, screenXPx, caretWidthPx).foreach { (caretXPx, widthPx) =>
+                  context.surface.fillPixelRect(
+                    caretXPx,
+                    screenYPx,
+                    widthPx,
+                    context.cellMetrics.lineHeight,
+                    effectiveCursorColor
+                  )
+                }
             case _ => ()
         }
     }
@@ -1292,13 +1302,15 @@ object Renderer:
             val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
             val screenYPx =
               textRowMetrics(rect, context, snapshot).cursorTopPx(visualLine)
-            context.surface.fillPixelRect(
-              screenXPx,
-              screenYPx,
-              caretWidthPx,
-              snapshot.lineHeightPx,
-              effectiveCursorColor
-            )
+            caretWithin(rect, context.cellMetrics, screenXPx, caretWidthPx).foreach { (caretXPx, widthPx) =>
+              context.surface.fillPixelRect(
+                caretXPx,
+                screenYPx,
+                widthPx,
+                snapshot.lineHeightPx,
+                effectiveCursorColor
+              )
+            }
         case _ => ()
     }
 
@@ -1312,6 +1324,26 @@ object Renderer:
         val xPx = line.xForColumn(cursor.column).getOrElse(line.widthPx)
         (visualIndex, xPx)
     }
+
+  private def measuredRunWidthWithin(
+    rect: LayoutRect,
+    context: RenderContext,
+    startXPx: Float,
+    endXPx: Float
+  ): Option[Float] =
+    val rightXPx = context.cellMetrics.toPixelX(rect.right).toFloat
+    Option.when(startXPx < rightXPx)(math.max(0.0f, math.min(endXPx, rightXPx) - startXPx)).filter(_ > 0.0f)
+
+  private def caretWithin(
+    rect: LayoutRect,
+    cellMetrics: CellMetrics,
+    desiredXPx: Int,
+    desiredWidthPx: Int
+  ): Option[(Int, Int)] =
+    val leftXPx  = cellMetrics.toPixelX(rect.x)
+    val rightXPx = cellMetrics.toPixelX(rect.right)
+    val widthPx  = math.min(math.max(1, desiredWidthPx), rightXPx - leftXPx)
+    Option.when(widthPx > 0)(desiredXPx.max(leftXPx).min(rightXPx - widthPx) -> widthPx)
 
   private def cursorColorFor(
     config: AppConfig,

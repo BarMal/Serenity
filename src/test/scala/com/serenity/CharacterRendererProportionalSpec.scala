@@ -97,3 +97,24 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
     )
     surface.drawRunPxCalls.head.xPx shouldBe 8.0f +- 0.001f
   }
+
+  it should "clip a measured run to an explicit pixel-right boundary" in {
+    val surface = new MockRenderSurface(200, 24)
+
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      surface,
+      xOriginPx = 0.0f,
+      yPx = 0,
+      lineHeightPx = 14,
+      ascentPx = 10,
+      makeVisualLine(),
+      Theme.light,
+      AnimationState.empty,
+      clipRightXPx = Some(15.0f)
+    )
+
+    val calls = surface.drawRunPxCalls
+    calls should have size 1
+    calls.head.xPx shouldBe 0.0f +- 0.001f
+    calls.head.bgWidthPx shouldBe 15.0f +- 0.001f
+  }

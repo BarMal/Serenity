@@ -285,6 +285,48 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     surface.drawRunPxCalls.foreach(c => c.xPx should be >= 0.0f)
   }
 
+  it should "keep measured editor text, selections, and the end-of-line caret inside pane content" in {
+    val paneId     = PaneId(0)
+    val bufferId   = BufferId(1)
+    val viewport   = ViewportSize(12, 4)
+    val codeFont   = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val textFont   = Font(Font.SANS_SERIF, Font.PLAIN, 18)
+    val cellMetric = CellMetrics.fromFont(codeFont)
+    val text       = "W" * 32
+    val buffer = Buffer
+      .fromString(bufferId, text)
+      .copy(
+        language = Some(com.serenity.lsp.config.LanguageId.Markdown),
+        cursors = List(CursorPosition(0, text.length)),
+        selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, text.length)))
+      )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+    )
+    val surface = new MockRenderSurface(viewport.width, viewport.height)
+    val contentRect =
+      LayoutEngine.calculateEditorPaneLayouts(state, LayoutEngine.calculateLayout(state, viewport))(paneId).contentRect
+    val leftPx  = cellMetric.toPixelX(contentRect.x)
+    val rightPx = cellMetric.toPixelX(contentRect.right)
+
+    Renderer.render(state, cursorVisible = true, surface, viewport, codeFont, textFont, cellMetric, None)
+
+    surface.drawRunPxCalls.filter(_.s.contains("W")).foreach { call =>
+      call.xPx should be >= leftPx.toFloat
+      call.xPx + call.bgWidthPx should be <= rightPx.toFloat
+    }
+    val caret = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor).last
+    caret.xPx should be >= leftPx
+    caret.xPx + caret.widthPx should be <= rightPx
+  }
+
   it should "render every active cursor in proportional text layout" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
