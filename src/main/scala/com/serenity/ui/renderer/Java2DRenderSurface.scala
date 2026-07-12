@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import scala.jdk.CollectionConverters.*
 
+import com.serenity.config.PostProcessingEffect
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.TextStyle
 
@@ -162,6 +163,17 @@ class Java2DRenderSurface(
           try rawGraphics.drawImage(blurred, region.xPx, region.yPx, null)
           finally rawGraphics.dispose()
         }
+
+  override def applyPostProcessing(effect: PostProcessingEffect): Unit =
+    effect match
+      case PostProcessingEffect.Off => ()
+      case PostProcessingEffect.Scanlines =>
+        val rawGraphics = image.createGraphics()
+        try
+          rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.16f))
+          rawGraphics.setColor(Color.BLACK)
+          (1 until image.getHeight by 2).foreach(y => rawGraphics.drawLine(0, y, image.getWidth - 1, y))
+        finally rawGraphics.dispose()
 
   override def strokeRoundRect(
     x: Int,

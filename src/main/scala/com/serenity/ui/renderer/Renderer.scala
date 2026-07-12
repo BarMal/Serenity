@@ -229,6 +229,7 @@ object Renderer:
         renderEditorPanes(state, context, editorRenderPlan)
         renderFloatingPanels(state, context)
 
+    surface.applyPostProcessing(state.config.postProcessingEffect)
     surface.flush()
 
   private def renderSpacerColumns(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =

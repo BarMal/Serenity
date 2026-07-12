@@ -7,6 +7,12 @@ import org.scalatest.matchers.should.Matchers
 
 class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
 
+  "PostProcessingEffect" should "parse supported configuration values" in {
+    PostProcessingEffect.fromConfigKey("off") shouldBe Some(PostProcessingEffect.Off)
+    PostProcessingEffect.fromConfigKey("crt") shouldBe Some(PostProcessingEffect.Scanlines)
+    PostProcessingEffect.fromConfigKey("glow") shouldBe None
+  }
+
   "SurfaceConfig" should "own the surface-related schema metadata" in {
     SurfaceConfig.Schema.currentKeys.should(contain("ui.material"))
     SurfaceConfig.Schema.currentKeys.should(contain("ui.motion.cursor.speed_scale"))
