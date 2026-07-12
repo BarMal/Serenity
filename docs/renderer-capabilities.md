@@ -39,7 +39,7 @@ This document describes what Serenity's renderer can do today, where the sharp e
 - Existing Markdown styling recognizes headings, unordered and ordered list markers, blockquotes, inline code, and links.
 - Markdown block-lens rendering keeps the active Markdown block as raw source while surrounding Markdown lines use the existing Markdown presentation styling.
 - The current block detector recognizes paragraphs, list regions with indented continuations, blockquote regions, fenced code blocks, tables, and blank lines.
-- The lens is same-metric: it changes styling decisions, not text layout, line height, heading size, or block spacing.
+- The inline lens is same-metric: its preview image uses the editor row height and removes browser heading offsets so the raw-source lens remains aligned during navigation.
 
 ## Selections And Cursors
 

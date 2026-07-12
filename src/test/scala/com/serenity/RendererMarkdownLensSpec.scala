@@ -105,6 +105,20 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     rows(surface).exists(_.contains("# Two")) shouldBe false
   }
 
+  it should "keep an inactive heading in the first editor row when focus moves to the following blank line" in {
+    val (state, surface, metrics) = renderMarkdownLens(
+      "# Hello world!\n\nParagraph",
+      CursorPosition(1, 0)
+    )
+
+    val image = surface.drawImageCalls.head.image
+    val firstContentRow = (0 until image.getHeight)
+      .find(row => (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.theme.background.getRGB))
+
+    firstContentRow should not be empty
+    firstContentRow.getOrElse(fail("Expected rendered heading pixels")) should be < metrics.lineHeight
+  }
+
   it should "render every active cursor markdown block as raw source" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)

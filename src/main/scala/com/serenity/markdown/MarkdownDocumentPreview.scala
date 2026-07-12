@@ -46,7 +46,8 @@ object MarkdownDocumentPreview:
       theme: Theme,
       font: Font,
       baseUri: Option[String],
-      panelChrome: Boolean
+      panelChrome: Boolean,
+      inlineLineHeightPx: Option[Int]
   )
 
   private case class HtmlFragmentCacheKey(source: SourceFingerprint, title: String, baseUri: Option[String])
@@ -125,7 +126,8 @@ object MarkdownDocumentPreview:
     theme: Theme,
     font: Font,
     baseUri: Option[URI] = None,
-    panelChrome: Boolean = true
+    panelChrome: Boolean = true,
+    inlineLineHeightPx: Option[Int] = None
   ): BufferedImage =
     val safeWidth  = widthPx.max(1)
     val safeHeight = heightPx.max(1)
@@ -137,14 +139,25 @@ object MarkdownDocumentPreview:
       theme = theme,
       font = font,
       baseUri = baseUri.map(_.toString),
-      panelChrome = panelChrome
+      panelChrome = panelChrome,
+      inlineLineHeightPx = inlineLineHeightPx
     )
     imageCache
       .synchronized {
         Option(imageCache.get(key))
       }
       .getOrElse {
-        val rendered = renderImageUncached(source, title, safeWidth, safeHeight, theme, font, baseUri, panelChrome)
+        val rendered = renderImageUncached(
+          source,
+          title,
+          safeWidth,
+          safeHeight,
+          theme,
+          font,
+          baseUri,
+          panelChrome,
+          inlineLineHeightPx
+        )
         imageCache.synchronized {
           val _ = imageCache.put(key, rendered)
         }
@@ -159,11 +172,12 @@ object MarkdownDocumentPreview:
     theme: Theme,
     font: Font,
     baseUri: Option[URI],
-    panelChrome: Boolean
+    panelChrome: Boolean,
+    inlineLineHeightPx: Option[Int]
   ): BufferedImage =
     try
       val renderer = Java2DRenderer(
-        parseXhtml(renderXhtml(source, title, theme, font, baseUri, panelChrome)),
+        parseXhtml(renderXhtml(source, title, theme, font, baseUri, panelChrome, inlineLineHeightPx)),
         safeWidth,
         safeHeight
       )
@@ -367,7 +381,8 @@ object MarkdownDocumentPreview:
     theme: Theme,
     font: Font,
     baseUri: Option[URI],
-    panelChrome: Boolean
+    panelChrome: Boolean,
+    inlineLineHeightPx: Option[Int]
   ): String =
     val fragment = renderHtmlFragment(source, title, baseUri)
     s"""<?xml version="1.0" encoding="UTF-8"?>
@@ -375,7 +390,7 @@ object MarkdownDocumentPreview:
        |  <head>
        |    <title>${escapeXml(title)}</title>
        |    <style type="text/css">
-       |${stylesheet(theme, font, panelChrome)}
+|${stylesheet(theme, font, panelChrome, inlineLineHeightPx)}
        |    </style>
        |  </head>
        |  <body>
@@ -385,9 +400,28 @@ object MarkdownDocumentPreview:
        |  </body>
        |</html>""".stripMargin
 
-  private def stylesheet(theme: Theme, font: Font, panelChrome: Boolean): String =
+  private def stylesheet(
+    theme: Theme,
+    font: Font,
+    panelChrome: Boolean,
+    inlineLineHeightPx: Option[Int]
+  ): String =
     val background = if panelChrome then theme.panel.background else theme.background
     val foreground = if panelChrome then theme.panel.foreground else theme.foreground
+    val inlineLensOverrides = inlineLineHeightPx.fold("") { lineHeight =>
+      s"""      html, body { line-height: ${lineHeight.max(1)}px; }
+         |      .markdown-body { padding: 0; }
+         |      h1, h2, h3, h4, h5, h6 {
+         |        font-size: 1em;
+         |        line-height: ${lineHeight.max(1)}px;
+         |        margin: 0;
+         |        border-bottom: 0;
+         |        padding-bottom: 0;
+         |      }
+         |      p, blockquote, pre, table, ul, ol { margin: 0; }
+         |      li { margin: 0; }
+         |""".stripMargin
+    }
     s"""      html, body {
        |        margin: 0;
        |        padding: 0;
@@ -451,6 +485,7 @@ object MarkdownDocumentPreview:
        |      }
        |      ul, ol { padding-left: 1.5em; }
        |      li { margin: 0.25em 0; }
+       |$inlineLensOverrides
        |""".stripMargin
 
   private def parseXhtml(xhtml: String): Document =
