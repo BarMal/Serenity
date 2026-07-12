@@ -275,3 +275,30 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
       )
     )
   }
+
+  it should "preserve paragraph formatting and inline style when splitting a paragraph" in {
+    val bold = RichTextStyle(marks = Set(InlineMark.Bold))
+    val source = RichTextDocument(
+      List(
+        RichTextParagraph(
+          List(RichTextRun("alpha "), RichTextRun("bold", bold)),
+          ParagraphAlignment.Center,
+          ParagraphRole.Heading(2)
+        )
+      )
+    )
+
+    val updated = source.replaceRange(
+      RichTextRange(RichTextPosition(0, 8), RichTextPosition(0, 8)),
+      "\nnew"
+    )
+
+    updated.paragraphs shouldBe List(
+      RichTextParagraph(
+        List(RichTextRun("alpha "), RichTextRun("bo", bold)),
+        ParagraphAlignment.Center,
+        ParagraphRole.Heading(2)
+      ),
+      RichTextParagraph(List(RichTextRun("newld", bold)), ParagraphAlignment.Center, ParagraphRole.Heading(2))
+    )
+  }
