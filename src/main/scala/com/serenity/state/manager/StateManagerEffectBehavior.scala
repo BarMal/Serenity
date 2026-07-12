@@ -303,6 +303,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         clearSession()
       case CommandIntent.OpenFile =>
         requestOpenFileDialog
+      case CommandIntent.OpenFileSearch =>
+        openFileSearchEffect(state)
       case CommandIntent.ExportCurrentTheme =>
         exportCurrentThemeEffect(state)
       case CommandIntent.QuitApp =>

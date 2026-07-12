@@ -36,6 +36,7 @@ enum CommandIntent:
   case RestoreSession
   case ClearSession
   case OpenFile
+  case OpenFileSearch
   case QuitApp
   case CloseAll
   case CloseOthers

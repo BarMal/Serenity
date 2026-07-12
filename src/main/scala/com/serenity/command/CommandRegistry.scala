@@ -179,6 +179,13 @@ object CommandRegistry:
       label = "Open File"
     ),
     Command.typed(
+      "file-search",
+      "Search for a file to open.",
+      CommandIntent.OpenFileSearch,
+      CommandCategory.File,
+      label = "File Search"
+    ),
+    Command.typed(
       "quit",
       "Quit the application.",
       CommandIntent.QuitApp,
