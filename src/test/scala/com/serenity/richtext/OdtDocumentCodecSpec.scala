@@ -142,6 +142,16 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
     singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
   }
 
+  it should "write repeated spaces as native ODT spacing elements" in {
+    val source = RichTextDocument.oneParagraph("alpha  beta")
+
+    val bytes      = OdtDocumentCodec.writeBytes(source)
+    val contentXml = zipEntryText(bytes, "content.xml")
+
+    contentXml should include("<text:s/>")
+    singleParagraph(OdtDocumentCodec.readBytes(bytes)).plainText shouldBe "alpha  beta"
+  }
+
   it should "read and write ODT files through IO" in {
     val path   = Files.createTempFile("serenity-rich-text", ".odt")
     val source = RichTextDocument.oneParagraph("Saved text")
