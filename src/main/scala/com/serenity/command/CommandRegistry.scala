@@ -480,6 +480,13 @@ object CommandRegistry:
       label = "LSP Hover"
     ),
     Command.typed(
+      "lsp-completion",
+      "Request language-server completion candidates at the cursor.",
+      CommandIntent.RequestLspCompletion,
+      CommandCategory.Edit,
+      label = "LSP Completion"
+    ),
+    Command.typed(
       "lsp-definition",
       "Request the symbol definition from the language server.",
       CommandIntent.RequestLspDefinition,

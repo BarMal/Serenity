@@ -74,6 +74,7 @@ enum CommandIntent:
   case NavigateBack
   case NavigateForward
   case RequestLspHover
+  case RequestLspCompletion
   case RequestLspDefinition
   case ToggleTheme
   case ReloadTheme

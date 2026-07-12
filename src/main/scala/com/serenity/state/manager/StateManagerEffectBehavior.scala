@@ -391,6 +391,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         navigateHistoryForward()
       case CommandIntent.RequestLspHover =>
         requestLspHover(state)
+      case CommandIntent.RequestLspCompletion =>
+        requestLspCompletion(state)
       case CommandIntent.RequestLspDefinition =>
         requestLspDefinition(state)
       case CommandIntent.ToggleTheme =>
@@ -1106,6 +1108,13 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     activeLspRequestTarget(state) match
       case Some((uri, languageId, cursor, _)) =>
         lspQueue.offer(LspEffect.HoverRequested(uri, languageId, cursor.line, cursor.column, cursor))
+      case None =>
+        showLspUnavailablePeek(state)
+
+  private def requestLspCompletion(state: AppState): IO[Unit] =
+    activeLspRequestTarget(state) match
+      case Some((uri, languageId, cursor, _)) =>
+        lspQueue.offer(LspEffect.CompletionRequested(uri, languageId, cursor.line, cursor.column, cursor))
       case None =>
         showLspUnavailablePeek(state)
 
