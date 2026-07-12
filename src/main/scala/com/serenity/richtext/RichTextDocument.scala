@@ -318,7 +318,9 @@ case class RichTextDocument(paragraphs: List[RichTextParagraph]):
         case (paragraph, _)                                                 => paragraph
       })
 
-  private def updateInlineStyle(range: RichTextRange)(transform: RichTextStyle => RichTextStyle): RichTextDocument =
+  private[serenity] def updateInlineStyle(range: RichTextRange)(
+    transform: RichTextStyle => RichTextStyle
+  ): RichTextDocument =
     val normalizedRange = range.normalized
     copy(paragraphs = paragraphs.zipWithIndex.map {
       case (paragraph, index)

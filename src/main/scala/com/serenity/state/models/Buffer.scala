@@ -5,7 +5,7 @@ import java.nio.file.Path
 import cats.Order
 import com.serenity.animation.AnimationState
 import com.serenity.lsp.config.LanguageId
-import com.serenity.richtext.RichTextDocument
+import com.serenity.richtext.{RichTextDocument, RichTextStyle}
 import com.serenity.rope.Rope
 
 case class BufferId(value: Int)
@@ -71,7 +71,8 @@ case class Buffer(
     selections: List[Selection] = Nil,
     bookmarks: List[CursorPosition] = Nil,
     documentComments: List[DocumentComment] = Nil,
-    richTextDocument: Option[RichTextDocument] = None
+    richTextDocument: Option[RichTextDocument] = None,
+    insertionRichTextStyle: Option[RichTextStyle] = None
 ):
 
   def typographyRole: TypographyRole =

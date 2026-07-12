@@ -1105,9 +1105,17 @@ object EditorEventReducer:
     else
       val trackedOffsets = initialOffsets.toArray
       val sortedEdits    = edits.sortBy(edit => (-edit.start, -edit.end))
-      val updatedContent = sortedEdits.foldLeft(buffer.content) { (content, edit) =>
-        val deleted = content.delete(edit.start, edit.end)
-        deleted.insert(edit.start, edit.insertedText)
+      val (updatedContent, updatedRichTextDocument) = sortedEdits.foldLeft((buffer.content, buffer.richTextDocument)) {
+        case ((content, document), edit) =>
+          val deleted     = content.delete(edit.start, edit.end)
+          val nextContent = deleted.insert(edit.start, edit.insertedText)
+          val nextDocument = richTextDocumentAfterEdit(
+            buffer.copy(content = content, richTextDocument = document),
+            edit.start,
+            edit.end,
+            edit.insertedText
+          )
+          (nextContent, nextDocument)
       }
       val finalOffsets = sortedEdits.foldLeft(trackedOffsets) { (offsets, edit) =>
         val delta = edit.insertedText.length - (edit.end - edit.start)
@@ -1135,7 +1143,8 @@ object EditorEventReducer:
         preferredColumn = Some(primaryCursor.column),
         preferredXPx = None,
         multiCursorVerticalStates = Nil,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits)
+        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits),
+        richTextDocument = updatedRichTextDocument
       )
       baseBuffer.copy(viewport = adjustViewportForCursor(baseBuffer, currentState, primaryCursor))
 
@@ -1935,7 +1944,7 @@ object EditorEventReducer:
   ): Option[RichTextDocument] =
     buffer.richTextDocument.flatMap { document =>
       Option.when(document.matchesPlainText(buffer.content.collect())) {
-        document
+        val updatedDocument = document
           .replaceRange(
             RichTextRange(
               richTextPositionForOffset(buffer.content, startOffset),
@@ -1944,6 +1953,20 @@ object EditorEventReducer:
             insertedText
           )
           .normalized
+        buffer.insertionRichTextStyle
+          .filter(_ => insertedText.nonEmpty)
+          .map { style =>
+            val updatedContent = buffer.content.delete(startOffset, endOffset).insert(startOffset, insertedText)
+            updatedDocument
+              .updateInlineStyle(
+                RichTextRange(
+                  richTextPositionForOffset(updatedContent, startOffset),
+                  richTextPositionForOffset(updatedContent, startOffset + insertedText.length)
+                )
+              )(_ => style)
+              .normalized
+          }
+          .getOrElse(updatedDocument)
       }
     }
 

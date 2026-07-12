@@ -688,25 +688,33 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     activeEditorContentBuffer(state) match
       case Some(buffer) =>
         val selections = buffer.allSelections.filter(selection => selection.start != selection.end)
-        if selections.isEmpty then state
-        else
-          val text = buffer.content.collect()
-          val baseDocument = buffer.richTextDocument
-            .filter(_.matchesPlainText(text))
-            .getOrElse(com.serenity.richtext.RichTextDocument.fromPlainText(text))
-          val updatedDocument = selections
-            .foldLeft(baseDocument)((document, selection) => document.toggleMark(richTextRange(selection), mark))
-            .normalized
-          state.copy(
-            buffers = state.buffers.updated(
-              buffer.id,
-              buffer.copy(
-                isDirty = true,
-                isNewEmpty = false,
-                richTextDocument = Some(updatedDocument)
-              )
+        val text       = buffer.content.collect()
+        val baseDocument = buffer.richTextDocument
+          .filter(_.matchesPlainText(text))
+          .getOrElse(com.serenity.richtext.RichTextDocument.fromPlainText(text))
+        val insertionStyle =
+          if selections.isEmpty then
+            buffer.insertionRichTextStyle.getOrElse(RichTextStyle.empty) match
+              case style if style.marks.contains(mark) => style.withoutMark(mark)
+              case style                               => style.withMark(mark)
+          else RichTextStyle.empty
+        val updatedDocument =
+          if selections.isEmpty then baseDocument
+          else
+            selections
+              .foldLeft(baseDocument)((document, selection) => document.toggleMark(richTextRange(selection), mark))
+              .normalized
+        state.copy(
+          buffers = state.buffers.updated(
+            buffer.id,
+            buffer.copy(
+              isDirty = true,
+              isNewEmpty = false,
+              richTextDocument = Some(updatedDocument),
+              insertionRichTextStyle = Some(insertionStyle)
             )
           )
+        )
       case None =>
         state
 
