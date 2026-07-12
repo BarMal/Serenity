@@ -250,3 +250,28 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
       RichTextRun("beXta", RichTextStyle(marks = Set(InlineMark.Italic)))
     )
   }
+
+  it should "preserve surrounding rich text when replacing across paragraphs" in {
+    val bold = RichTextStyle(marks = Set(InlineMark.Bold))
+    val source = RichTextDocument(
+      List(
+        RichTextParagraph(List(RichTextRun("alpha "), RichTextRun("bold", bold)), ParagraphAlignment.Center),
+        RichTextParagraph(
+          List(RichTextRun("italic", RichTextStyle(marks = Set(InlineMark.Italic)))),
+          ParagraphAlignment.Right
+        )
+      )
+    )
+
+    val updated = source.replaceRange(
+      RichTextRange(RichTextPosition(0, 6), RichTextPosition(1, 0)),
+      "plain"
+    )
+
+    updated.paragraphs shouldBe List(
+      RichTextParagraph(
+        List(RichTextRun("alpha plain"), RichTextRun("italic", RichTextStyle(marks = Set(InlineMark.Italic)))),
+        ParagraphAlignment.Center
+      )
+    )
+  }
