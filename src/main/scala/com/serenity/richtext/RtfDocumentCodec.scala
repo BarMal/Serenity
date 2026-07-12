@@ -60,7 +60,7 @@ object RtfDocumentCodec:
         alignment = alignmentFromAttributes(element.getAttributes)
       ).normalized
 
-      Option.when(paragraph.plainText.nonEmpty)(paragraph)
+      Option.when(paragraph.plainText.nonEmpty || index < root.getElementCount - 1)(paragraph)
     }
 
     RichTextDocument(
