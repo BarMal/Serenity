@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.*
 import java.awt.font.{FontRenderContext, TextAttribute}
-import java.awt.image.{BufferedImage, ConvolveOp, Kernel}
+import java.awt.image.*
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.jdk.CollectionConverters.*
@@ -173,6 +173,22 @@ class Java2DRenderSurface(
           rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.16f))
           rawGraphics.setColor(Color.BLACK)
           (1 until image.getHeight by 2).foreach(y => rawGraphics.drawLine(0, y, image.getWidth - 1, y))
+        finally rawGraphics.dispose()
+      case PostProcessingEffect.Glow =>
+        val source         = new BufferedImage(image.getWidth, image.getHeight, BufferedImage.TYPE_INT_ARGB)
+        val sourceGraphics = source.createGraphics()
+        try sourceGraphics.drawImage(image, 0, 0, null)
+        finally sourceGraphics.dispose()
+        val blurred = new ConvolveOp(
+          new Kernel(3, 3, Array(1f, 2f, 1f, 2f, 4f, 2f, 1f, 2f, 1f).map(_ / 16f)),
+          ConvolveOp.EDGE_NO_OP,
+          null
+        ).filter(source, null)
+        val glow        = new RescaleOp(4f, 0f, null).filter(blurred, null)
+        val rawGraphics = image.createGraphics()
+        try
+          rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.35f))
+          val _ = rawGraphics.drawImage(glow, 0, 0, null)
         finally rawGraphics.dispose()
 
   override def strokeRoundRect(

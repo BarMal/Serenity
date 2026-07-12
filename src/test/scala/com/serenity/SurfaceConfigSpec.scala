@@ -10,7 +10,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   "PostProcessingEffect" should "parse supported configuration values" in {
     PostProcessingEffect.fromConfigKey("off") shouldBe Some(PostProcessingEffect.Off)
     PostProcessingEffect.fromConfigKey("crt") shouldBe Some(PostProcessingEffect.Scanlines)
-    PostProcessingEffect.fromConfigKey("glow") shouldBe None
+    PostProcessingEffect.fromConfigKey("glow") shouldBe Some(PostProcessingEffect.Glow)
   }
 
   "SurfaceConfig" should "own the surface-related schema metadata" in {
