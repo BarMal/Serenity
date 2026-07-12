@@ -478,6 +478,19 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.strokeRoundRectCalls.headOption.map(_.strokeWidth) shouldBe Some(4.0f)
   }
 
+  it should "preserve the rounded command runner after its animation has materialised" in {
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val state = stateWithRunner(Theme.light, "op", commands).copy(
+      config = AppConfig.default.withUiCornerRadiusPx(12)
+    )
+    val surface = new MockRenderSurface(100, 30)
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+
+    surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
+    surface.putStringCalls.map(_.s) should not contain "."
+  }
+
   it should "request backdrop blur for the floating overlay using the configured blur radius" in {
     val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
     val state = stateWithRunner(Theme.light, "op", commands).copy(

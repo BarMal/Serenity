@@ -1370,8 +1370,6 @@ object Renderer:
       )
     }
 
-    context.layout.floatingPanelRect.foreach(rect => renderFloatingPanelPlaceholder(rect, state.theme, context))
-
   private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =
     context.surface.setFont(context.uiFont)
     val contract =
@@ -1530,14 +1528,6 @@ object Renderer:
       fallbackTopLine = buffer.viewport.topLine,
       maxSourceLines = markdownPreviewSourceLineLimit(visibleRows)
     )
-
-  private def renderFloatingPanelPlaceholder(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
-    context.surface.setBackgroundColor(theme.panel.background)
-    context.surface.setForegroundColor(theme.border)
-
-    for y <- rect.y until rect.bottom; x <- rect.x until rect.right do
-      if y < context.surface.viewportHeight && x < context.surface.viewportWidth then
-        CharacterRenderer.renderChar(context.surface, x, y, '.')
 
   private def renderLineNumbers(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
     if state.config.showLineNumbers then
