@@ -25,7 +25,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       opened.activeCursorPosition,
       SurfacePlacement.BelowCursor
     )
-    toolbarStateFrom(opened).displayMode shouldBe ToolbarDisplayMode.IconAndText
+    toolbarStateFrom(opened).displayMode shouldBe ToolbarDisplayMode.IconOnly
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
