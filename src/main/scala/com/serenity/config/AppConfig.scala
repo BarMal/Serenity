@@ -40,6 +40,7 @@ enum MaterialPreset(val configKey: String):
 enum PostProcessingEffect(val configKey: String):
   case Off       extends PostProcessingEffect("off")
   case Scanlines extends PostProcessingEffect("scanlines")
+  case Glow      extends PostProcessingEffect("glow")
 
 object PostProcessingEffect:
 
@@ -47,6 +48,7 @@ object PostProcessingEffect:
     value.trim.toLowerCase match
       case "off" | "none" | "disabled"      => Some(PostProcessingEffect.Off)
       case "scanlines" | "scanline" | "crt" => Some(PostProcessingEffect.Scanlines)
+      case "glow"                           => Some(PostProcessingEffect.Glow)
       case _                                => None
 
 enum MotionPreset(val configKey: String):

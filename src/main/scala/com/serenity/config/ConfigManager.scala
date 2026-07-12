@@ -314,7 +314,7 @@ object ConfigManager:
        |
        |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
        |ui.material = ${config.materialPreset.configKey}
-       |# Post-processing: off, scanlines
+       |# Post-processing: off, scanlines, glow
        |ui.post_processing = ${config.postProcessingEffect.configKey}
        |ui.motion = ${config.motionPreset.configKey}
        |ui.motion.speed_scale = ${config.elementTransitionSpeedScale}
