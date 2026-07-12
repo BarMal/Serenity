@@ -154,7 +154,8 @@ object CharacterRenderer:
     animations: AnimationState,
     syntaxHighlightingEnabled: Boolean = false,
     language: Option[LanguageId] = None,
-    styledSegments: Option[List[StyledText]] = None
+    styledSegments: Option[List[StyledText]] = None,
+    clipRightXPx: Option[Float] = None
   ): Unit =
     val text = visualLine.text
     if text.nonEmpty then
@@ -178,13 +179,15 @@ object CharacterRenderer:
       )
 
       def drawRun(run: MeasuredRun): Unit =
-        val endXPx  = xOriginPx + stopXPx(run.endLocalIndex)
-        val widthPx = endXPx - run.startXPx
-        surface.setForegroundColor(run.foreground)
-        surface.setBackgroundColor(run.background)
-        withStyle(surface, run.style) {
-          surface.drawRunPx(run.startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text)
-        }
+        val endXPx        = xOriginPx + stopXPx(run.endLocalIndex)
+        val clippedEndXPx = clipRightXPx.fold(endXPx)(_.min(endXPx))
+        val widthPx       = clippedEndXPx - run.startXPx
+        if widthPx > 0.0f then
+          surface.setForegroundColor(run.foreground)
+          surface.setBackgroundColor(run.background)
+          withStyle(surface, run.style) {
+            surface.drawRunPx(run.startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text)
+          }
 
       val chars = styledSegments0.flatMap(segment =>
         segment.content.map(char => (char, segment.foregroundColor, segment.backgroundColor, segment.style))
