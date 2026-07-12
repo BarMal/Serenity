@@ -22,21 +22,22 @@ case class SurfaceFrameLayout(
   def visibleItemRows(
     hasHeader: Boolean,
     hasFooter: Boolean,
-    reservedContentRows: Int = 0
+    reservedContentRows: Int = 0,
+    itemGapRows: Int = 0
   ): Int =
-    math.max(
-      0,
-      maxContentRows - SurfaceFrameLayout.contentChromeRows(hasHeader, hasFooter, reservedContentRows)
-    )
+    val availableRows = math.max(0, maxContentRows - SurfaceFrameLayout.contentChromeRows(hasHeader, hasFooter, reservedContentRows))
+    val itemHeight = math.max(0, itemGapRows) + 1
+    if availableRows == 0 then 0 else (availableRows + itemHeight - 1) / itemHeight
 
   def itemWindow(
     itemCount: Int,
     selectedIndex: Int,
     hasHeader: Boolean,
     hasFooter: Boolean,
-    reservedContentRows: Int = 0
+    reservedContentRows: Int = 0,
+    itemGapRows: Int = 0
   ): SurfaceItemWindow =
-    val maxRows = math.max(1, visibleItemRows(hasHeader, hasFooter, reservedContentRows))
+    val maxRows = math.max(1, visibleItemRows(hasHeader, hasFooter, reservedContentRows, itemGapRows))
     val offset =
       if itemCount <= maxRows then 0
       else
@@ -50,19 +51,22 @@ case class SurfaceFrameLayout(
     selectedIndex: Int,
     hasHeader: Boolean,
     hasFooter: Boolean,
-    reservedContentRows: Int = 0
+    reservedContentRows: Int = 0,
+    itemGapRows: Int = 0
   ): Option[Int] =
-    val window      = itemWindow(itemCount, selectedIndex, hasHeader, hasFooter, reservedContentRows)
+    val window      = itemWindow(itemCount, selectedIndex, hasHeader, hasFooter, reservedContentRows, itemGapRows)
     val itemRowBase = contentRect.y + (if hasHeader then 1 else 0)
     val itemRow     = row - itemRowBase
-    window.absoluteIndexAt(itemRow)
+    val itemHeight  = math.max(0, itemGapRows) + 1
+    Option.when(itemRow >= 0 && itemRow % itemHeight == 0)(itemRow / itemHeight).flatMap(window.absoluteIndexAt)
 
   def contentRowSlots(
     itemCount: Int,
     hasHeader: Boolean,
-    hasFooter: Boolean
+    hasFooter: Boolean,
+    itemGapRows: Int = 0
   ): List[SurfaceContentRowSlot] =
-    SurfaceFrameLayout.contentRowSlotsFor(contentRect, itemCount, hasHeader, hasFooter)
+    SurfaceFrameLayout.contentRowSlotsFor(contentRect, itemCount, hasHeader, hasFooter, itemGapRows)
 
 case class SurfaceItemWindow(offset: Int, rowCount: Int):
   def slice[A](items: List[A]): List[A] =
@@ -89,16 +93,19 @@ object SurfaceFrameLayout:
     content: LayoutRect,
     itemCount: Int,
     hasHeader: Boolean,
-    hasFooter: Boolean
+    hasFooter: Boolean,
+    itemGapRows: Int = 0
   ): List[SurfaceContentRowSlot] =
     if content.height <= 0 then Nil
     else
       val headerRows = if hasHeader then 1 else 0
       val footerRows = if hasFooter then 1 else 0
       val itemRows   = math.max(0, content.height - headerRows - footerRows)
+      val itemHeight = math.max(0, itemGapRows) + 1
+      val visibleItems = if itemRows == 0 then 0 else (itemRows + itemHeight - 1) / itemHeight
       val itemSlots =
-        (0 until math.min(itemCount, itemRows)).toList.map { index =>
-          SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), content.y + headerRows + index)
+        (0 until math.min(itemCount, visibleItems)).toList.map { index =>
+          SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), content.y + headerRows + (index * itemHeight))
         }
       val headerSlots =
         if hasHeader then List(SurfaceContentRowSlot(SurfaceContentRowKind.Header, content.y))
@@ -140,6 +147,9 @@ object SurfaceFrameLayout:
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
-    borderCells: Int = DefaultBorderCells
+    borderCells: Int = DefaultBorderCells,
+    itemGapRows: Int = 0
   ): Int =
-    math.max(0, itemRows) + frameChromeRows(hasHeader, hasFooter, reservedContentRows, borderCells)
+    val rows = math.max(0, itemRows)
+    val gaps = math.max(0, rows - 1) * math.max(0, itemGapRows)
+    rows + gaps + frameChromeRows(hasHeader, hasFooter, reservedContentRows, borderCells)

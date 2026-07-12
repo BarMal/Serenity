@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.ui.layout.{LayoutRect, SurfaceContentRowKind, SurfaceFrameLayout}
+import com.serenity.ui.layout.{LayoutRect, SurfaceContentRowKind, SurfaceContentRowSlot, SurfaceFrameLayout}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -39,6 +39,29 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
         reservedContentRows = 1
       )
       .shouldBe(9)
+  }
+
+  it should "reserve blank rows between spaced items while keeping header and footer slots fixed" in {
+    val frame = SurfaceFrameLayout(LayoutRect(10, 4, 40, 8), borderCells = 0)
+
+    frame.visibleItemRows(hasHeader = true, hasFooter = true, itemGapRows = 1) shouldBe 3
+    frame.contentRowSlots(itemCount = 5, hasHeader = true, hasFooter = true, itemGapRows = 1) shouldBe List(
+      SurfaceContentRowSlot(SurfaceContentRowKind.Header, 4),
+      SurfaceContentRowSlot(SurfaceContentRowKind.Item(0), 5),
+      SurfaceContentRowSlot(SurfaceContentRowKind.Item(1), 7),
+      SurfaceContentRowSlot(SurfaceContentRowKind.Item(2), 9),
+      SurfaceContentRowSlot(SurfaceContentRowKind.Footer, 11)
+    )
+    frame
+      .itemIndexAt(
+        row = 6,
+        itemCount = 5,
+        selectedIndex = 0,
+        hasHeader = true,
+        hasFooter = true,
+        itemGapRows = 1
+      )
+      .shouldBe(None)
   }
 
   it should "derive a centered item window from the framed surface content contract" in {

@@ -153,6 +153,25 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     rect.y shouldBe contentRect.y + 7
   }
 
+  it should "use the explicit command runner cursor gap instead of the interface gap" in {
+    val state = baseState().copy(
+      config = AppState.initial.config.withUiElementGap(0).withCommandRunnerCursorGapRows(Some(3)),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(CommandRunner(isActive = true, searchTerm = "", selectedIndex = 0, filteredCommands = Nil)),
+          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout      = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val contentRect = LayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
+    val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
+
+    rect.y shouldBe contentRect.y + 10
+  }
+
   it should "place command runner overlays immediately below a top-row cursor" in {
     val cursor = CursorPosition(0, 0)
     val state = baseState(cursor = cursor).copy(

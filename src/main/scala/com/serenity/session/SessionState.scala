@@ -753,6 +753,8 @@ given Encoder[AppConfig] = Encoder.instance { config =>
         "commandRunnerAnimation"            -> config.commandRunnerAnimation.asJson,
         "uiAnimation"                       -> config.uiAnimation.asJson,
         "commandRunnerVisibleRows"          -> config.commandRunnerVisibleRows.asJson,
+        "commandRunnerItemGapRows"          -> config.commandRunnerItemGapRows.asJson,
+        "commandRunnerCursorGapRows"        -> config.commandRunnerCursorGapRows.asJson,
         "renderFpsTarget"                   -> config.renderFpsTarget.asJson,
         "editorInsertionTransitionKind"     -> config.editorInsertionTransitionKind.asJson,
         "commandRunnerTransitionKind"       -> config.commandRunnerTransitionKind.asJson,
@@ -815,6 +817,12 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     commandRunnerVisibleRows <- cursor
       .getOrElse[Option[Int]]("commandRunnerVisibleRows")(None)
       .map(_.map(AppConfig.clampCommandRunnerVisibleRows))
+    commandRunnerItemGapRows <- cursor
+      .getOrElse[Int]("commandRunnerItemGapRows")(defaultConfig.commandRunnerItemGapRows)
+      .map(AppConfig.clampCommandRunnerItemGapRows)
+    commandRunnerCursorGapRows <- cursor
+      .getOrElse[Option[Int]]("commandRunnerCursorGapRows")(defaultConfig.commandRunnerCursorGapRows)
+      .map(_.map(AppConfig.clampCommandRunnerCursorGapRows))
     renderFpsTarget <- cursor.getOrElse[RenderFpsTarget]("renderFpsTarget")(RenderFpsTarget.Fps60)
     editorInsertionTransitionKind <- cursor.getOrElse[TransitionKind]("editorInsertionTransitionKind")(
       TransitionKind.Fade
@@ -851,6 +859,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     commandRunnerAnimation = commandRunnerAnimation,
     uiAnimation = uiAnimation,
     commandRunnerVisibleRows = commandRunnerVisibleRows,
+    commandRunnerItemGapRows = commandRunnerItemGapRows,
+    commandRunnerCursorGapRows = commandRunnerCursorGapRows,
     renderFpsTarget = renderFpsTarget,
     editorInsertionTransitionKind = editorInsertionTransitionKind,
     commandRunnerTransitionKind = commandRunnerTransitionKind,

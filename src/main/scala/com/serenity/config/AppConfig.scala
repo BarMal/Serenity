@@ -906,6 +906,8 @@ case class SurfaceConfig(
     commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     uiAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     commandRunnerVisibleRows: Option[Int] = None,
+    commandRunnerItemGapRows: Int = 0,
+    commandRunnerCursorGapRows: Option[Int] = None,
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
     commandRunnerTransitionKind: Option[TransitionKind] = None,
@@ -925,6 +927,8 @@ case class SurfaceConfig(
       uiTransitionSpeedScale = uiTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
       cursorTransitionSpeedScale = cursorTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
       commandRunnerVisibleRows = commandRunnerVisibleRows.map(AppConfig.clampCommandRunnerVisibleRows),
+      commandRunnerItemGapRows = AppConfig.clampCommandRunnerItemGapRows(commandRunnerItemGapRows),
+      commandRunnerCursorGapRows = commandRunnerCursorGapRows.map(AppConfig.clampCommandRunnerCursorGapRows),
       textAreaInsets = textAreaInsets.normalized,
       viewportSizing = viewportSizing.normalized
     )
@@ -1013,6 +1017,10 @@ object SurfaceConfig:
       "ui.motion.panel.close",
       "command_runner.visible_rows",
       "command.runner.visible.rows",
+      "command_runner.item_gap_rows",
+      "command.runner.item.gap.rows",
+      "command_runner.cursor_gap_rows",
+      "command.runner.cursor.gap.rows",
       "render.fps",
       "ui.render.fps",
       "display.word_wrap",
@@ -1055,6 +1063,8 @@ object SurfaceConfig:
       "ui_motion_panel_open"                 -> "ui.motion.panel_open",
       "ui_motion_panel_close"                -> "ui.motion.panel_close",
       "command_runner_visible_rows"          -> "command_runner.visible_rows",
+      "command_runner_item_gap_rows"         -> "command_runner.item_gap_rows",
+      "command_runner_cursor_gap_rows"       -> "command_runner.cursor_gap_rows",
       "render_fps"                           -> "render.fps",
       "ui_render_fps"                        -> "ui.render.fps",
       "display_word_wrap"                    -> "display.word_wrap",
@@ -1073,6 +1083,12 @@ object SurfaceConfig:
 
     val commandRunnerVisibleRowsKeys: Set[String] =
       Set("command_runner.visible_rows", "command.runner.visible.rows", "command_runner_visible_rows")
+
+    val commandRunnerItemGapRowsKeys: Set[String] =
+      Set("command_runner.item_gap_rows", "command.runner.item.gap.rows", "command_runner_item_gap_rows")
+
+    val commandRunnerCursorGapRowsKeys: Set[String] =
+      Set("command_runner.cursor_gap_rows", "command.runner.cursor.gap.rows", "command_runner_cursor_gap_rows")
 
     val renderFpsKeys: Set[String] = Set("render.fps", "render_fps", "ui.render.fps", "ui_render_fps")
 
@@ -1180,6 +1196,8 @@ object SurfaceConfig:
         panelOpenTransitionKeys ++
         panelCloseTransitionKeys ++
         commandRunnerVisibleRowsKeys ++
+        commandRunnerItemGapRowsKeys ++
+        commandRunnerCursorGapRowsKeys ++
         renderFpsKeys ++
         wordWrapKeys ++
         focusedTextBodyKeys ++
@@ -1228,6 +1246,10 @@ object SurfaceConfig:
         parseTransitionKind(trimmed).map(kind => config.withPanelCloseTransitionKind(Some(kind)))
       else if commandRunnerVisibleRowsKeys.contains(key) then
         parseCommandRunnerVisibleRows(trimmed).map(config.withCommandRunnerVisibleRows)
+      else if commandRunnerItemGapRowsKeys.contains(key) then
+        parseCommandRunnerItemGapRows(trimmed).map(config.withCommandRunnerItemGapRows)
+      else if commandRunnerCursorGapRowsKeys.contains(key) then
+        parseCommandRunnerCursorGapRows(trimmed).map(config.withCommandRunnerCursorGapRows)
       else if renderFpsKeys.contains(key) then RenderFpsTarget.fromConfigKey(trimmed).map(config.withRenderFpsTarget)
       else if wordWrapKeys.contains(key) then parseBoolean(trimmed).map(config.withWordWrap)
       else if focusedTextBodyKeys.contains(key) then parseBoolean(trimmed).map(config.withFocusedTextBody)
@@ -1270,6 +1292,21 @@ object SurfaceConfig:
             .filter(rows =>
               rows >= AppConfig.MinCommandRunnerVisibleRows &&
                 rows <= AppConfig.MaxCommandRunnerVisibleRows
+            )
+            .map(rows => Some(rows))
+
+    private def parseCommandRunnerItemGapRows(value: String): Option[Int] =
+      value.toIntOption.filter(rows =>
+        rows >= AppConfig.MinCommandRunnerItemGapRows && rows <= AppConfig.MaxCommandRunnerItemGapRows
+      )
+
+    private def parseCommandRunnerCursorGapRows(value: String): Option[Option[Int]] =
+      value.toLowerCase match
+        case "auto" | "default" | "" => Some(None)
+        case other =>
+          other.toIntOption
+            .filter(rows =>
+              rows >= AppConfig.MinCommandRunnerCursorGapRows && rows <= AppConfig.MaxCommandRunnerCursorGapRows
             )
             .map(rows => Some(rows))
 
@@ -1361,6 +1398,8 @@ case class AppConfig(
     commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     uiAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     commandRunnerVisibleRows: Option[Int] = None,
+    commandRunnerItemGapRows: Int = 0,
+    commandRunnerCursorGapRows: Option[Int] = None,
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
     commandRunnerTransitionKind: Option[TransitionKind] = None,
@@ -1439,6 +1478,8 @@ case class AppConfig(
       commandRunnerAnimation = commandRunnerAnimation,
       uiAnimation = uiAnimation,
       commandRunnerVisibleRows = commandRunnerVisibleRows,
+      commandRunnerItemGapRows = commandRunnerItemGapRows,
+      commandRunnerCursorGapRows = commandRunnerCursorGapRows,
       renderFpsTarget = renderFpsTarget,
       editorInsertionTransitionKind = editorInsertionTransitionKind,
       commandRunnerTransitionKind = commandRunnerTransitionKind,
@@ -1470,6 +1511,8 @@ case class AppConfig(
       commandRunnerAnimation = normalized.commandRunnerAnimation,
       uiAnimation = normalized.uiAnimation,
       commandRunnerVisibleRows = normalized.commandRunnerVisibleRows,
+      commandRunnerItemGapRows = normalized.commandRunnerItemGapRows,
+      commandRunnerCursorGapRows = normalized.commandRunnerCursorGapRows,
       renderFpsTarget = normalized.renderFpsTarget,
       editorInsertionTransitionKind = normalized.editorInsertionTransitionKind,
       commandRunnerTransitionKind = normalized.commandRunnerTransitionKind,
@@ -1667,6 +1710,12 @@ case class AppConfig(
   def withCommandRunnerVisibleRows(rows: Option[Int]): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(commandRunnerVisibleRows = rows))
 
+  def withCommandRunnerItemGapRows(rows: Int): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerItemGapRows = rows))
+
+  def withCommandRunnerCursorGapRows(rows: Option[Int]): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerCursorGapRows = rows))
+
   def withRenderFpsTarget(target: RenderFpsTarget): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(renderFpsTarget = target))
 
@@ -1818,6 +1867,10 @@ object AppConfig:
   val MaxUiOutlineThicknessPx: Int           = 8
   val MinCommandRunnerVisibleRows: Int       = 1
   val MaxCommandRunnerVisibleRows: Int       = 20
+  val MinCommandRunnerItemGapRows: Int       = 0
+  val MaxCommandRunnerItemGapRows: Int       = 8
+  val MinCommandRunnerCursorGapRows: Int     = 0
+  val MaxCommandRunnerCursorGapRows: Int     = 8
 
   def clampElementTransitionSpeedScale(scale: Double): Double =
     scale.max(MinElementTransitionSpeedScale).min(MaxElementTransitionSpeedScale)
@@ -1833,6 +1886,12 @@ object AppConfig:
 
   def clampCommandRunnerVisibleRows(rows: Int): Int =
     rows.max(MinCommandRunnerVisibleRows).min(MaxCommandRunnerVisibleRows)
+
+  def clampCommandRunnerItemGapRows(rows: Int): Int =
+    rows.max(MinCommandRunnerItemGapRows).min(MaxCommandRunnerItemGapRows)
+
+  def clampCommandRunnerCursorGapRows(rows: Int): Int =
+    rows.max(MinCommandRunnerCursorGapRows).min(MaxCommandRunnerCursorGapRows)
 
   def scaledAnimation(animation: Option[AnimationConfig], speedScale: Double): Option[AnimationConfig] =
     animation.flatMap(_.scaledBy(clampElementTransitionSpeedScale(speedScale)))

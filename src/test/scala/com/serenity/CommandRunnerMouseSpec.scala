@@ -25,6 +25,24 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     runnerFrom(stateManager.getCurrentState.unsafeRunSync()).selectedIndex shouldBe 2
   }
 
+  it should "ignore mouse movement over a configured blank command-item gap" in {
+    val stateManager = createStateManager("CommandRunnerMouseSpec")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(config = state.config.withCommandRunnerItemGapRows(1)))
+      .unsafeRunSync()
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val before    = stateManager.getCurrentState.unsafeRunSync()
+    val itemPoint = commandRunnerItemPoint(before, 0)
+    val selectedBefore = runnerFrom(before).selectedIndex
+
+    stateManager.applyEvent(MouseMove(itemPoint.x, itemPoint.y + 1)).unsafeRunSync()
+
+    runnerFrom(stateManager.getCurrentState.unsafeRunSync()).selectedIndex shouldBe selectedBefore
+  }
+
   it should "execute the command row clicked under the pointer" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 
