@@ -95,6 +95,31 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     surface.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(1, 3)), SurfacePlacement.AboveCursor)
   }
 
+  it should "show LSP completion candidates as a quick-info peek surface" in {
+    given Balance = Balance.default
+    val result = SystemEventReducer.reduce(
+      LspEvent.LspCompletionReceived(List("map", "mapValues"), CursorPosition(2, 4)),
+      AppState.initial
+    )
+
+    val surface = result.state.uiSurfaces.headOption.getOrElse(fail("Expected completion surface"))
+    surface.content shouldBe SurfaceContent.QuickInfo("map\nmapValues")
+    surface.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(2, 4)), SurfacePlacement.AboveCursor)
+    result.state.focus shouldBe Focus.Surface(surface.id)
+  }
+
+  it should "show an explicit empty state when LSP completion returns no candidates" in {
+    given Balance = Balance.default
+    val result = SystemEventReducer.reduce(
+      LspEvent.LspCompletionReceived(Nil, CursorPosition(2, 4)),
+      AppState.initial
+    )
+
+    result.state.uiSurfaces.headOption.map(_.content) shouldBe Some(
+      SurfaceContent.QuickInfo("No completions available.")
+    )
+  }
+
   "Theme" should "have error and warning colors" in {
     val theme = Theme.dark
     theme.error.foreground should not be null

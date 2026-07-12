@@ -123,6 +123,19 @@ object LspProtocol:
       json.hcursor.downField("value").as[String].toOption
     }
 
+  def parseCompletionItems(json: Json): Option[List[String]] =
+    json.hcursor.downField("result").focus.flatMap { result =>
+      result.asArray
+        .orElse(result.hcursor.downField("items").focus.flatMap(_.asArray))
+        .map(_.toList.flatMap(completionLabel))
+    }
+
+  private def completionLabel(json: Json): Option[String] =
+    json.asString
+      .orElse(json.hcursor.downField("label").as[String].toOption)
+      .map(_.trim)
+      .filter(_.nonEmpty)
+
   def parseDefinitionLocation(json: Json): Option[LspLocation] =
     json.hcursor.downField("result").focus.flatMap { result =>
       parseLocation(result).orElse(result.asArray.flatMap(_.toList.view.flatMap(parseLocation).headOption))

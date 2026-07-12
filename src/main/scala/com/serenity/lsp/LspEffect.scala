@@ -8,6 +8,7 @@ enum LspEffect:
   case FileChanged(uri: String, languageId: LanguageId, text: String, version: Int)
   case FileClosed(uri: String, languageId: LanguageId)
   case HoverRequested(uri: String, languageId: LanguageId, line: Int, character: Int, anchor: CursorPosition)
+  case CompletionRequested(uri: String, languageId: LanguageId, line: Int, character: Int, anchor: CursorPosition)
 
   case DefinitionRequested(
       uri: String,

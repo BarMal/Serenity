@@ -19,6 +19,12 @@ object SystemEventReducer:
       case LspEvent.LspHoverReceived(text, anchor) =>
         PeekStateReducer.show(PeekContent.QuickInfo(text), anchor, state)
 
+      case LspEvent.LspCompletionReceived(items, anchor) =>
+        val text = items match
+          case Nil        => "No completions available."
+          case candidates => candidates.mkString("\n")
+        PeekStateReducer.show(PeekContent.QuickInfo(text), anchor, state)
+
       case LspEvent.LspDefinitionReceived(symbol, uri, position, anchor) =>
         PeekStateReducer.show(
           PeekContent.SymbolDefinition(s"$symbol @ $uri", Location(position.line, position.character)),

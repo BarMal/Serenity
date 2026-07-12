@@ -207,3 +207,29 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     LspProtocol.parseDefinitionLocation(arrayResponse).map(_.range.start.line) shouldBe Some(7)
     LspProtocol.parseDefinitionLocation(arrayResponse).map(_.range.start.character) shouldBe Some(4)
   }
+
+  it should "parse completion candidates from completion lists, arrays, and empty results" in {
+    val candidates = Json.arr(
+      Json.obj("label" -> "map".asJson),
+      Json.obj("label" -> "mapValues".asJson)
+    )
+    val completionList = Json.obj(
+      "jsonrpc" -> "2.0".asJson,
+      "id"      -> 6.asJson,
+      "result"  -> Json.obj("isIncomplete" -> false.asJson, "items" -> candidates)
+    )
+    val arrayResponse = Json.obj(
+      "jsonrpc" -> "2.0".asJson,
+      "id"      -> 7.asJson,
+      "result"  -> candidates
+    )
+    val emptyResponse = Json.obj(
+      "jsonrpc" -> "2.0".asJson,
+      "id"      -> 8.asJson,
+      "result"  -> Json.arr()
+    )
+
+    LspProtocol.parseCompletionItems(completionList) shouldBe Some(List("map", "mapValues"))
+    LspProtocol.parseCompletionItems(arrayResponse) shouldBe Some(List("map", "mapValues"))
+    LspProtocol.parseCompletionItems(emptyResponse) shouldBe Some(Nil)
+  }
