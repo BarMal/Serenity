@@ -113,7 +113,9 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
 
     val image = surface.drawImageCalls.head.image
     val firstContentRow = (0 until image.getHeight)
-      .find(row => (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.theme.background.getRGB))
+      .find(row =>
+        (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.theme.background.getRGB)
+      )
 
     firstContentRow should not be empty
     firstContentRow.getOrElse(fail("Expected rendered heading pixels")) should be < metrics.lineHeight
