@@ -15,6 +15,14 @@ import org.scalatest.matchers.should.Matchers
 
 class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
 
+  "SwingWindow application icons" should "load the bundled taskbar icon" in {
+    val icons = SwingWindow.applicationIconImages
+
+    icons should not be empty
+    icons.head.getWidth(null) should be > 0
+    icons.head.getHeight(null) should be > 0
+  }
+
   "SwingWindow.ChromeMetrics" should "scale title chrome from the current UI metrics" in {
     val base   = SwingWindow.ChromeMetrics.fromCellMetrics(CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13))
     val scaled = SwingWindow.ChromeMetrics.fromCellMetrics(CellMetrics(charWidth = 16, lineHeight = 32, ascent = 26))
