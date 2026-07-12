@@ -577,6 +577,20 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     )
   }
 
+  it should "use one compact row when the editor has room for all formatting controls" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-compact-row")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+
+    val state        = stateManager.getCurrentState.unsafeRunSync()
+    val toolbarState = ContextualToolbarState(displayMode = ToolbarDisplayMode.IconOnly)
+    val width        = ContextualToolbar.compactContentWidth(toolbarState, state, maxWidth = 120)
+
+    width shouldBe 51
+    ContextualToolbar.rowCount(toolbarState, state, width) shouldBe 1
+  }
+
   it should "move focus vertically between wrapped toolbar rows" in {
     val stateManager = createStateManager("ContextualToolbarSpec-vertical-top-level")
 
