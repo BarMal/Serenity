@@ -281,6 +281,8 @@ object OdtDocumentCodec:
           (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<text:tab/>")
         case ((chunk, acc), '\n') =>
           (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<text:line-break/>")
+        case ((chunk, acc), ' ') =>
+          (StringBuilder(), acc ++ textChunkXml(chunk) :+ "<text:s/>")
         case ((chunk, acc), char) =>
           chunk.append(char)
           (chunk, acc)
