@@ -720,7 +720,8 @@ object Renderer:
       theme = state.theme,
       font = context.textFont,
       baseUri = baseUri,
-      panelChrome = false
+      panelChrome = false,
+      inlineLineHeightPx = Some(context.cellMetrics.lineHeight)
     )
     context.surface.drawImage(image, rect.x, rect.y, rect.width, rect.height)
 
