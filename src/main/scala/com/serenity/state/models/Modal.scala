@@ -27,6 +27,28 @@ enum ReplaceWorkflowScope:
   case CurrentBuffer
   case Selection
 
+  def resolve(
+    selection: Option[Selection],
+    offsetFor: CursorPosition => Int
+  ): Either[ReplaceScopeError, ReplaceScopeRange] =
+    this match
+      case ReplaceWorkflowScope.CurrentBuffer => Right(ReplaceScopeRange.WholeBuffer)
+      case ReplaceWorkflowScope.Selection =>
+        selection
+          .toRight(ReplaceScopeError.MissingSelection)
+          .map(selected => ReplaceScopeRange.Selection(offsetFor(selected.start), offsetFor(selected.end)))
+
+enum ReplaceScopeRange:
+  case WholeBuffer
+  case Selection(startOffset: Int, endOffset: Int)
+
+enum ReplaceScopeError:
+  case MissingSelection
+
+  def message: String =
+    this match
+      case MissingSelection => "Select text to limit replacement"
+
 enum CloseScope:
   case Current
   case All

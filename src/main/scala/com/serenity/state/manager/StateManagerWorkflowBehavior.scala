@@ -216,11 +216,11 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
       case Some(bufferId) =>
         state.buffers.get(bufferId) match
           case Some(buffer) =>
-            replaceScopeRange(buffer, workflow) match
-              case Left(message) =>
+            workflow.selectedScope.resolve(buffer.primarySelection, offsetForCursor(buffer.content, _)) match
+              case Left(error) =>
                 updateReplaceWorkflowSurface(
                   surfaceId,
-                  workflow.copy(statusMessage = Some(message))
+                  workflow.copy(statusMessage = Some(error.message))
                 )
               case Right(range) =>
                 val matches = scopedReplaceMatches(buffer, workflow.findText, range)
@@ -287,11 +287,11 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
       case Some(bufferId) =>
         state.buffers.get(bufferId) match
           case Some(buffer) =>
-            replaceScopeRange(buffer, workflow) match
-              case Left(message) =>
+            workflow.selectedScope.resolve(buffer.primarySelection, offsetForCursor(buffer.content, _)) match
+              case Left(error) =>
                 updateReplaceWorkflowSurface(
                   surfaceId,
-                  workflow.copy(statusMessage = Some(message))
+                  workflow.copy(statusMessage = Some(error.message))
                 )
               case Right(range) =>
                 val matches = scopedReplaceMatches(buffer, workflow.findText, range)
@@ -624,32 +624,16 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
       .getOrElse(0)
     matches.find(_ >= cursorOffset).getOrElse(matches.head)
 
-  private def replaceScopeRange(
-    buffer: Buffer,
-    workflow: ReplaceWorkflowState
-  ): Either[String, Option[(Int, Int)]] =
-    workflow.selectedScope match
-      case ReplaceWorkflowScope.CurrentBuffer =>
-        Right(None)
-      case ReplaceWorkflowScope.Selection =>
-        buffer.primarySelection match
-          case Some(selection) =>
-            val startOffset = offsetForCursor(buffer.content, selection.start)
-            val endOffset   = offsetForCursor(buffer.content, selection.end)
-            Right(Some((startOffset, endOffset)))
-          case None =>
-            Left("Select text to limit replacement")
-
   private def scopedReplaceMatches(
     buffer: Buffer,
     findText: String,
-    range: Option[(Int, Int)]
+    range: ReplaceScopeRange
   ): List[Int] =
     buffer.content.searchAll(findText).filter { offset =>
       val insideScope = range match
-        case Some((startOffset, endOffset)) =>
+        case ReplaceScopeRange.Selection(startOffset, endOffset) =>
           offset >= startOffset && (offset + findText.length) <= endOffset
-        case None =>
+        case ReplaceScopeRange.WholeBuffer =>
           true
       insideScope && isWholeGraphemeMatch(buffer.content, offset, findText.length)
     }
