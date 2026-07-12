@@ -56,6 +56,85 @@ trait SessionStartupInfo:
 trait FileOpener:
   def openFile(filePath: Path): IO[Unit]
 
+/** Executes editor commands. */
+trait CommandExecutor:
+  def executeCommand(command: Command): IO[Unit]
+
+/** Reads and changes editor focus. */
+trait FocusManager:
+  def getCurrentFocus: IO[Focus]
+  def switchFocus(newFocus: Focus): IO[Unit]
+
+/** Manages editor buffers. */
+trait BufferManager:
+  def getActiveBuffer: IO[Option[Buffer]]
+  def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
+  def createNewEmptyBuffer(): IO[BufferId]
+  def updateBuffer(bufferId: BufferId, content: String): IO[Unit]
+  def closeBuffer(bufferId: BufferId): IO[Unit]
+
+/** Manages editor panes, tabs, and splits. */
+trait PaneManager:
+  def getActivePane: IO[Option[EditorPane]]
+  def handleViewportResize(newSize: ViewportSize): IO[Unit]
+  def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
+  def switchToPane(paneId: PaneId): IO[Unit]
+  def closePane(paneId: PaneId): IO[Unit]
+  def setBufferForPane(paneId: PaneId, bufferId: BufferId): IO[Unit]
+  def setCursorPosition(paneId: PaneId, line: Int, column: Int): IO[Unit]
+  def setViewport(paneId: PaneId, viewport: Viewport): IO[Unit]
+  def setPaneProperties(paneId: PaneId, update: EditorPane => EditorPane): IO[Unit]
+  def createPaneAfter(afterPaneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
+  def getTabOrder(): IO[List[PaneId]]
+  def splitPaneHorizontal(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
+  def splitPaneVertical(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
+
+/** Manages transient peek surfaces. */
+trait PeekManager:
+  def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
+  def dismissPeek(): IO[Unit]
+  def peekToPin(position: PanelPosition): IO[Unit]
+
+/** Manages persisted editor sessions. */
+trait SessionService:
+  def saveSession(): IO[Unit]
+  def loadSession(): IO[Option[AppState]]
+  def clearSession(): IO[Unit]
+
+/** Manages pinned panels and the file explorer. */
+trait PanelManager:
+  def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
+  def unpinPanel(position: PanelPosition): IO[Unit]
+  def expandPinnedPanel(position: PanelPosition): IO[Unit]
+  def collapseExpandedPanel(): IO[Unit]
+  def switchToPinnedPanel(position: PanelPosition): IO[Unit]
+  def loadDirectoryTree(path: String, files: List[String]): IO[Unit]
+  def selectFileInExplorer(filePath: String): IO[Unit]
+  def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
+  def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit]
+
+/** Manages modal surfaces. */
+trait ModalService:
+  def showModal(modal: Modal): IO[Unit]
+  def dismissModal(): IO[Unit]
+
+/** Manages buffer file paths and persistence. */
+trait FileService:
+  def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit]
+  def saveBuffer(bufferId: BufferId): IO[Unit]
+  def saveBufferAs(bufferId: BufferId, filePath: String): IO[Unit]
+  def markBufferSaved(bufferId: BufferId): IO[Unit]
+  def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean]
+  def forceCloseBuffer(bufferId: BufferId): IO[Unit]
+  def getRecentFiles: IO[List[Path]]
+
+/** Controls editor viewport scrolling. */
+trait ScrollManager:
+  def ensureCursorVisible(paneId: PaneId): IO[Unit]
+  def smoothScrollTo(paneId: PaneId, targetLine: Int): IO[Unit]
+  def progressSmoothScroll(paneId: PaneId, progress: Double): IO[Unit]
+  def clickMinimap(paneId: PaneId, targetLine: Int): IO[Unit]
+
 trait StateManager
     extends EventApplier,
       StateReader,
@@ -64,76 +143,17 @@ trait StateManager
       RuntimeLifecycle,
       LspEffectSource,
       SessionStartupInfo,
-      FileOpener:
-  def executeCommand(command: Command): IO[Unit]
-  def getCurrentFocus: IO[Focus]
-  def switchFocus(newFocus: Focus): IO[Unit]
-  def getActiveBuffer: IO[Option[Buffer]]
-  def getActivePane: IO[Option[EditorPane]]
-  def handleViewportResize(newSize: ViewportSize): IO[Unit]
-
-  // Buffer operations
-  def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
-  def createNewEmptyBuffer(): IO[BufferId]
-  def updateBuffer(bufferId: BufferId, content: String): IO[Unit]
-  def closeBuffer(bufferId: BufferId): IO[Unit]
-
-  // Pane operations
-  def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
-  def switchToPane(paneId: PaneId): IO[Unit]
-  def closePane(paneId: PaneId): IO[Unit]
-  def setBufferForPane(paneId: PaneId, bufferId: BufferId): IO[Unit]
-  def setCursorPosition(paneId: PaneId, line: Int, column: Int): IO[Unit]
-  def setViewport(paneId: PaneId, viewport: Viewport): IO[Unit]
-  def setPaneProperties(paneId: PaneId, update: EditorPane => EditorPane): IO[Unit]
-
-  // Peek operations
-  def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
-  def dismissPeek(): IO[Unit]
-  def peekToPin(position: PanelPosition): IO[Unit]
-
-  // Session persistence operations
-  def saveSession(): IO[Unit]
-  def loadSession(): IO[Option[AppState]]
-  def clearSession(): IO[Unit]
-
-  // Panel operations
-  def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
-  def unpinPanel(position: PanelPosition): IO[Unit]
-  def expandPinnedPanel(position: PanelPosition): IO[Unit]
-  def collapseExpandedPanel(): IO[Unit]
-
-  // Modal operations
-  def showModal(modal: Modal): IO[Unit]
-  def dismissModal(): IO[Unit]
-
-  // File operations
-  def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit]
-  def saveBuffer(bufferId: BufferId): IO[Unit]
-  def saveBufferAs(bufferId: BufferId, filePath: String): IO[Unit]
-  def markBufferSaved(bufferId: BufferId): IO[Unit]
-  def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean]
-  def forceCloseBuffer(bufferId: BufferId): IO[Unit]
-  def getRecentFiles: IO[List[java.nio.file.Path]]
-
-  // Tab / pane operations
-  def createPaneAfter(afterPaneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
-  def getTabOrder(): IO[List[PaneId]]
-  def splitPaneHorizontal(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
-  def splitPaneVertical(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
-
-  // Panel operations
-  def switchToPinnedPanel(position: PanelPosition): IO[Unit]
-  def loadDirectoryTree(path: String, files: List[String]): IO[Unit]
-  def selectFileInExplorer(filePath: String): IO[Unit]
-  def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
-  def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit]
-
-  // Scrolling operations
-  def ensureCursorVisible(paneId: PaneId): IO[Unit]
-  def smoothScrollTo(paneId: PaneId, targetLine: Int): IO[Unit]
-  def progressSmoothScroll(paneId: PaneId, progress: Double): IO[Unit]
-  def clickMinimap(paneId: PaneId, targetLine: Int): IO[Unit]
+      FileOpener,
+      CommandExecutor,
+      FocusManager,
+      BufferManager,
+      PaneManager,
+      PeekManager,
+      SessionService,
+      PanelManager,
+      ModalService,
+      FileService,
+      ScrollManager
 
 object StateManager:
 
