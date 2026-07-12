@@ -91,6 +91,12 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
     singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
   }
 
+  it should "preserve empty paragraphs through an RTF round trip" in {
+    val source = RichTextDocument.fromPlainText("First\n\nThird")
+
+    RtfDocumentCodec.readBytes(RtfDocumentCodec.writeBytes(source)).plainText shouldBe "First\n\nThird"
+  }
+
   it should "read and write RTF files through IO" in {
     val path   = Files.createTempFile("serenity-rich-text", ".rtf")
     val source = RichTextDocument.oneParagraph("Saved text")
