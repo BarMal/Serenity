@@ -20,4 +20,14 @@ class ReleaseMetadataSpec extends AnyFlatSpec with Matchers:
   it should "reject release payloads without a tag" in {
     ReleaseMetadata.parse("""{"assets":[]}""").isLeft shouldBe true
   }
+
+  it should "identify a release built from a different commit" in {
+    val release = ReleaseMetadata
+      .parse("""{"tag_name":"desktop-latest","target_commitish":"new-commit","assets":[]}""")
+      .toOption
+      .getOrElse(fail("expected release metadata"))
+
+    release.isNewerThan("old-commit") shouldBe true
+    release.isNewerThan("new-commit") shouldBe false
+  }
 end ReleaseMetadataSpec
