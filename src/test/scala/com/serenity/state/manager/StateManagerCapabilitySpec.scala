@@ -19,6 +19,19 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  "StateManager" should "compose focused façade capabilities" in {
+    summon[StateManager <:< FocusManager]
+    summon[StateManager <:< BufferManager]
+    summon[StateManager <:< PaneManager]
+    summon[StateManager <:< PeekManager]
+    summon[StateManager <:< SessionService]
+    summon[StateManager <:< PanelManager]
+    summon[StateManager <:< ModalService]
+    summon[StateManager <:< FileService]
+    summon[StateManager <:< ScrollManager]
+    succeed
+  }
+
   "RenderController" should "depend only on the event application capability" in {
     val applied = Ref.of[IO, List[ResizeEvent]](Nil).unsafeRunSync()
     val events = new EventApplier:
