@@ -2,11 +2,16 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
-import cats.effect.IO
+import cats.effect.{IO, Ref}
 import com.serenity.state.models.*
 
-private[manager] trait StateManagerFileFacadeBehavior extends StateManagerViewportBehavior:
-  this: StateManager =>
+final private[manager] class StateManagerFileFacade(
+    stateRef: Ref[IO, AppState],
+    loadFile: Path => IO[Unit],
+    save: BufferId => IO[Unit],
+    saveAs: (BufferId, Path) => IO[Unit],
+    close: BufferId => IO[Unit]
+):
 
   def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit] =
     stateRef.update { state =>
@@ -18,13 +23,13 @@ private[manager] trait StateManagerFileFacadeBehavior extends StateManagerViewpo
     }
 
   def openFile(filePath: Path): IO[Unit] =
-    directLoadFileEffect(filePath)
+    loadFile(filePath)
 
   def saveBuffer(bufferId: BufferId): IO[Unit] =
-    saveBufferEffect(bufferId)
+    save(bufferId)
 
-  def saveBufferAs(bufferId: BufferId, filePath: String): IO[Unit] =
-    saveBufferAsEffect(bufferId, Path.of(filePath))
+  def saveBufferAs(bufferId: BufferId, filePath: Path): IO[Unit] =
+    saveAs(bufferId, filePath)
 
   def markBufferSaved(bufferId: BufferId): IO[Unit] =
     stateRef.update { state =>
@@ -35,7 +40,7 @@ private[manager] trait StateManagerFileFacadeBehavior extends StateManagerViewpo
           state
     }
 
-  def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean] =
+  def checkUnsavedChanges(bufferId: Option[BufferId]): IO[Boolean] =
     stateRef.get.map { state =>
       bufferId match
         case Some(id) => state.buffers.get(id).exists(_.hasUnsavedChanges)
@@ -43,7 +48,42 @@ private[manager] trait StateManagerFileFacadeBehavior extends StateManagerViewpo
     }
 
   def forceCloseBuffer(bufferId: BufferId): IO[Unit] =
-    closeBuffer(bufferId)
+    close(bufferId)
+
+  def getRecentFiles: IO[List[Path]] =
+    stateRef.get.map(_.recentFiles)
+
+private[manager] trait StateManagerFileFacadeBehavior extends StateManagerViewportBehavior:
+  this: StateManager =>
+
+  private lazy val fileFacade = new StateManagerFileFacade(
+    stateRef,
+    directLoadFileEffect,
+    saveBufferEffect,
+    saveBufferAsEffect,
+    closeBuffer
+  )
+
+  def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit] =
+    fileFacade.setBufferFilePath(bufferId, filePath)
+
+  def openFile(filePath: Path): IO[Unit] =
+    fileFacade.openFile(filePath)
+
+  def saveBuffer(bufferId: BufferId): IO[Unit] =
+    fileFacade.saveBuffer(bufferId)
+
+  def saveBufferAs(bufferId: BufferId, filePath: String): IO[Unit] =
+    fileFacade.saveBufferAs(bufferId, Path.of(filePath))
+
+  def markBufferSaved(bufferId: BufferId): IO[Unit] =
+    fileFacade.markBufferSaved(bufferId)
+
+  def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean] =
+    fileFacade.checkUnsavedChanges(bufferId)
+
+  def forceCloseBuffer(bufferId: BufferId): IO[Unit] =
+    fileFacade.forceCloseBuffer(bufferId)
 
   def getRecentFiles: IO[List[java.nio.file.Path]] =
-    stateRef.get.map(_.recentFiles)
+    fileFacade.getRecentFiles
