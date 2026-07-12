@@ -262,15 +262,13 @@ object ContextualToolbar:
     mode: ToolbarDisplayMode
   ): List[List[ContextualToolbarItem]] =
     if items.isEmpty || contentWidth <= 0 then Nil
+    else if estimatedRowWidth(items, mode) <= contentWidth then List(items)
     else if proseItemSegments(items).exists(_.length > 1) then
       packSegments(proseItemSegments(items), contentWidth, mode)
     else packItems(items, contentWidth, mode)
 
   def compactContentWidth(toolbarState: ContextualToolbarState, state: AppState, maxWidth: Int): Int =
     val items = itemsFor(state)
-    val groupedWidth =
-      val segments = proseItemSegments(items)
-      Option.when(segments.exists(_.length > 1))(segments.map(estimatedRowWidth(_, toolbarState.displayMode)).max)
     val detailWidth = toolbarState.normalized(items).detailState match
       case Some(ContextualToolbarDetailState.Dropdown(itemId, _)) =>
         dropdownItem(itemId, items).map(_.optionItem.options.map(_.label.length + 2).sum).getOrElse(0)
@@ -278,8 +276,7 @@ object ContextualToolbar:
         inputItem(itemId, items).map(item => item.label.length + text.length + 3).getOrElse(0)
       case None =>
         0
-    groupedWidth
-      .getOrElse(estimatedRowWidth(items, toolbarState.displayMode))
+    estimatedRowWidth(items, toolbarState.displayMode)
       .max(detailWidth)
       .max(1)
       .min(maxWidth.max(1))
