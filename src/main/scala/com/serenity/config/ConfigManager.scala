@@ -314,6 +314,8 @@ object ConfigManager:
        |
        |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
        |ui.material = ${config.materialPreset.configKey}
+       |# Post-processing: off, scanlines
+       |ui.post_processing = ${config.postProcessingEffect.configKey}
        |ui.motion = ${config.motionPreset.configKey}
        |ui.motion.speed_scale = ${config.elementTransitionSpeedScale}
        |ui.motion.editor_text.speed_scale = ${config.effectiveEditorTextTransitionSpeedScale}

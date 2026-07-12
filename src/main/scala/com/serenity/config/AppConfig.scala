@@ -37,6 +37,18 @@ enum MaterialPreset(val configKey: String):
       case Crystal       => 0.65f
       case Custom        => 0.3f
 
+enum PostProcessingEffect(val configKey: String):
+  case Off       extends PostProcessingEffect("off")
+  case Scanlines extends PostProcessingEffect("scanlines")
+
+object PostProcessingEffect:
+
+  def fromConfigKey(value: String): Option[PostProcessingEffect] =
+    value.trim.toLowerCase match
+      case "off" | "none" | "disabled"      => Some(PostProcessingEffect.Off)
+      case "scanlines" | "scanline" | "crt" => Some(PostProcessingEffect.Scanlines)
+      case _                                => None
+
 enum MotionPreset(val configKey: String):
   case Reduced    extends MotionPreset("reduced")
   case Subtle     extends MotionPreset("subtle")
@@ -882,6 +894,7 @@ case class SurfaceConfig(
     blurRadius: Float = 0.0f,
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
+    postProcessingEffect: PostProcessingEffect = PostProcessingEffect.Off,
     motionPreset: MotionPreset = MotionPreset.Reduced,
     elementTransitionSpeedScale: Double = 1.0,
     editorTextTransitionSpeedScale: Option[Double] = None,
@@ -968,6 +981,7 @@ object SurfaceConfig:
     val currentKeys: Set[String] = Set(
       "ui.material",
       "material.preset",
+      "ui.post_processing",
       "ui.motion",
       "motion.preset",
       "ui.motion.speed_scale",
@@ -1062,6 +1076,8 @@ object SurfaceConfig:
 
     val materialPresetKeys: Set[String] = Set("ui.material", "ui_material", "material.preset", "material_preset")
 
+    val postProcessingKeys: Set[String] = Set("ui.post_processing")
+
     val motionPresetKeys: Set[String] = Set("ui.motion", "ui_motion", "motion.preset", "motion_preset")
 
     val elementTransitionSpeedScaleKeys: Set[String] =
@@ -1148,6 +1164,7 @@ object SurfaceConfig:
 
     private val handledKeys: Set[String] =
       materialPresetKeys ++
+        postProcessingKeys ++
         motionPresetKeys ++
         elementTransitionSpeedScaleKeys ++
         editorTextTransitionSpeedScaleKeys ++
@@ -1181,6 +1198,8 @@ object SurfaceConfig:
     def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
       val trimmed = value.trim
       if materialPresetKeys.contains(key) then parseMaterialPreset(trimmed).map(config.withMaterialPreset)
+      else if postProcessingKeys.contains(key) then
+        PostProcessingEffect.fromConfigKey(trimmed).map(config.withPostProcessingEffect)
       else if motionPresetKeys.contains(key) then parseMotionPreset(trimmed).map(config.withMotionPreset)
       else if elementTransitionSpeedScaleKeys.contains(key) then
         parseElementTransitionSpeedScale(trimmed).map(config.withElementTransitionSpeedScale)
@@ -1330,6 +1349,7 @@ case class AppConfig(
     blurRadius: Float = 0.0f,
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
+    postProcessingEffect: PostProcessingEffect = PostProcessingEffect.Off,
     motionPreset: MotionPreset = MotionPreset.Reduced,
     elementTransitionSpeedScale: Double = 1.0,
     editorTextTransitionSpeedScale: Option[Double] = None,
@@ -1407,6 +1427,7 @@ case class AppConfig(
       blurRadius = blurRadius,
       backgroundStyle = backgroundStyle,
       materialPreset = materialPreset,
+      postProcessingEffect = postProcessingEffect,
       motionPreset = motionPreset,
       elementTransitionSpeedScale = elementTransitionSpeedScale,
       editorTextTransitionSpeedScale = editorTextTransitionSpeedScale,
@@ -1437,6 +1458,7 @@ case class AppConfig(
       blurRadius = normalized.blurRadius,
       backgroundStyle = normalized.backgroundStyle,
       materialPreset = normalized.materialPreset,
+      postProcessingEffect = normalized.postProcessingEffect,
       motionPreset = normalized.motionPreset,
       elementTransitionSpeedScale = normalized.elementTransitionSpeedScale,
       editorTextTransitionSpeedScale = normalized.editorTextTransitionSpeedScale,
@@ -1594,6 +1616,9 @@ case class AppConfig(
             blurRadius = preset.blurRadius
           )
         )
+
+  def withPostProcessingEffect(effect: PostProcessingEffect): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(postProcessingEffect = effect))
 
   def withMotionPreset(preset: MotionPreset): AppConfig =
     preset match

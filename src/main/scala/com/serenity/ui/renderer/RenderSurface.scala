@@ -4,6 +4,7 @@ import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 
+import com.serenity.config.PostProcessingEffect
 import com.serenity.ui.theme.TextStyle
 
 trait RenderSurface:
@@ -23,6 +24,7 @@ trait RenderSurface:
   def disableStyle(style: TextStyle): Unit
   def setAlpha(alpha: Float): Unit                                             = ()
   def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit = ()
+  def applyPostProcessing(effect: PostProcessingEffect): Unit                  = ()
   def devicePixelScaleX: Double                                                = 1.0
   def devicePixelScaleY: Double                                                = 1.0
 

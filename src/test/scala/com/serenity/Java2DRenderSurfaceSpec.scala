@@ -4,7 +4,7 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 import javax.swing.JPanel
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, PostProcessingEffect}
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
@@ -121,6 +121,20 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     surface.viewportHeight shouldBe 30
   }
 
+  it should "darken alternating device rows for the scanline post-process" in {
+    val image   = new BufferedImage(8, 8, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(Color.WHITE)
+    surface.applyPostProcessing(PostProcessingEffect.Scanlines)
+    surface.flush()
+
+    new Color(image.getRGB(0, 1), true).getRed should be < new Color(image.getRGB(0, 0), true).getRed
+    new Color(image.getRGB(0, 3), true).getRed should be < new Color(image.getRGB(0, 2), true).getRed
+  }
+
   "Renderer.render" should "clear pixels outside the whole-cell grid to the theme background" in {
     val image   = new BufferedImage(83, 57, BufferedImage.TYPE_INT_ARGB)
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
@@ -134,6 +148,24 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(8, 5), font, font, metrics, None)
 
     new Color(image.getRGB(82, 56), true) shouldBe Theme.light.background
+  }
+
+  it should "apply the configured post-process after rendering the frame" in {
+    val image   = new BufferedImage(83, 57, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+    val state = AppState.initial.copy(
+      theme = Theme.light,
+      config = AppConfig.default
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withPostProcessingEffect(PostProcessingEffect.Scanlines)
+    )
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(8, 5), font, font, metrics, None)
+
+    new Color(image.getRGB(82, 55), true).getRed should be < new Color(image.getRGB(82, 56), true).getRed
   }
 
   private def maxAlpha(image: BufferedImage): Int =
