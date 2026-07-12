@@ -128,6 +128,18 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers(com.serenity.state.models.BufferId(1)).isNewEmpty shouldBe true
   }
 
+  it should "open file search through the typed file-search command" in {
+    val stateManager = createStateManager()
+
+    executeCommandThroughRunner(stateManager, "file-search", "file-search")
+
+    stateManager.getCurrentState.unsafeRunSync().uiSurfaces.exists {
+      _.content match
+        case SurfaceContent.FileSearch(_) => true
+        case _                            => false
+    } shouldBe true
+  }
+
   it should "navigate between tabs through typed commands" in {
     val stateManager = createStateManager()
 
