@@ -77,6 +77,51 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
       .map(_.style.marks) shouldBe Some(Set(InlineMark.Bold))
   }
 
+  it should "use plain formatting for text that replaces a newly formatted selection" in {
+    val (stateManager, bufferId) =
+      selectedStateManager(
+        "alpha beta",
+        Selection(CursorPosition(0, 6), CursorPosition(0, 10))
+      )
+    val command = CommandRegistry.withToggleUI.findCommand("bold").getOrElse(fail("missing bold"))
+
+    stateManager.executeCommand(command).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('X')).unsafeRunSync()
+
+    val buffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.content.collect() shouldBe "alpha X"
+    buffer.richTextDocument.flatMap(_.paragraphs.headOption).map(_.runs) shouldBe Some(
+      List(com.serenity.richtext.RichTextRun("alpha X"))
+    )
+  }
+
+  it should "apply a toggled mark at the cursor to subsequently entered text" in {
+    val stateManager = createStateManager()
+    val bufferId     = stateManager.createBuffer("alpha").unsafeRunSync()
+    stateManager.setBufferForPane(com.serenity.state.models.PaneId(0), bufferId).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        state.copy(
+          buffers = state.buffers.updated(
+            bufferId,
+            state.buffers(bufferId).copy(cursors = List(CursorPosition(0, 5)))
+          )
+        )
+      }
+      .unsafeRunSync()
+    val command = CommandRegistry.withToggleUI.findCommand("italic").getOrElse(fail("missing italic"))
+
+    stateManager.executeCommand(command).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('X')).unsafeRunSync()
+
+    val buffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    buffer.content.collect() shouldBe "alphaX"
+    buffer.richTextDocument
+      .flatMap(_.paragraphs.headOption)
+      .flatMap(_.runs.find(_.text == "X"))
+      .map(_.style.marks) shouldBe Some(Set(InlineMark.Italic))
+  }
+
   it should "toggle bold off when the active selection is already bold" in {
     val (stateManager, bufferId) =
       selectedStateManager(
@@ -185,7 +230,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     betaStyle.flatMap(_.color) shouldBe Some("#336699")
   }
 
-  it should "preserve italic formatting when editing inside the formatted word" in {
+  it should "use plain formatting when editing after formatting a selection" in {
     val (stateManager, bufferId) =
       selectedStateManager(
         "alpha beta",
@@ -209,10 +254,14 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     val buffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
     buffer.content.collect() shouldBe "alpha beXta"
     buffer.richTextDocument.map(_.plainText) shouldBe Some("alpha beXta")
-    buffer.richTextDocument
-      .flatMap(_.paragraphs.headOption)
-      .flatMap(_.runs.find(_.text == "beXta"))
-      .map(_.style.marks) shouldBe Some(Set(InlineMark.Italic))
+    buffer.richTextDocument.flatMap(_.paragraphs.headOption).map(_.runs) shouldBe Some(
+      List(
+        com.serenity.richtext.RichTextRun("alpha "),
+        com.serenity.richtext.RichTextRun("be", com.serenity.richtext.RichTextStyle(Set(InlineMark.Italic))),
+        com.serenity.richtext.RichTextRun("X"),
+        com.serenity.richtext.RichTextRun("ta", com.serenity.richtext.RichTextStyle(Set(InlineMark.Italic)))
+      )
+    )
   }
 
   it should "make formatted rich text headings available to document navigation" in {
