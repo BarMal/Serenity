@@ -19,7 +19,8 @@ case class TextVisualLine(
     text: String,
     widthPx: Float,
     caretStops: Vector[TextCaretStop],
-    xOffsetPx: Float = 0.0f
+    xOffsetPx: Float = 0.0f,
+    isJustified: Boolean = false
 ):
 
   def xForColumn(column: Int): Option[Float] =
@@ -347,7 +348,14 @@ object TextLayoutSnapshot:
       .map(_.alignment)
       .getOrElse(ParagraphAlignment.Left)
 
-    lines.map(line => applyAlignment(line, alignment, panelWidthPx))
+    alignment match
+      case ParagraphAlignment.Justify =>
+        lines.zipWithIndex.map {
+          case (line, index) =>
+            if index < lines.length - 1 then justify(line, panelWidthPx) else line
+        }
+      case _ =>
+        lines.map(line => applyAlignment(line, alignment, panelWidthPx))
 
   private def applyAlignment(
     line: TextVisualLine,
@@ -367,6 +375,21 @@ object TextLayoutSnapshot:
         caretStops = line.caretStops.map(stop => stop.copy(xPx = stop.xPx + offsetPx)),
         xOffsetPx = offsetPx
       )
+
+  private def justify(line: TextVisualLine, panelWidthPx: Int): TextVisualLine =
+    val internalSpaces = line.text.zipWithIndex.collect {
+      case (char, index) if char.isWhitespace && line.text.drop(index + 1).exists(!_.isWhitespace) => index
+    }
+    val extraPx = panelWidthPx.toFloat - line.widthPx
+    if internalSpaces.isEmpty || extraPx <= 0.0f then line
+    else
+      val extraPerSpace = extraPx / internalSpaces.length.toFloat
+      val adjustedStops = line.caretStops.map { stop =>
+        val localColumn  = stop.column - line.startColumn
+        val spacesBefore = internalSpaces.count(_ < localColumn)
+        stop.copy(xPx = stop.xPx + spacesBefore * extraPerSpace)
+      }
+      line.copy(widthPx = panelWidthPx.toFloat, caretStops = adjustedStops, isJustified = true)
 
   private def caretXs(text: String, font: Font, frc: FontRenderContext, measuredLayout: Boolean): Vector[Float] =
     if text.isEmpty then Vector(0.0f)

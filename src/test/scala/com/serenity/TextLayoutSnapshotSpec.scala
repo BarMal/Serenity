@@ -298,6 +298,28 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     line.xForColumn(4) shouldBe Some(expectedOffset + line.widthPx)
   }
 
+  it should "justify non-final wrapped rich text lines without stretching the final line" in {
+    val document = RichTextDocument(
+      List(RichTextParagraph.plain("alpha beta gamma", alignment = ParagraphAlignment.Justify))
+    )
+    val buffer = Buffer
+      .fromString(BufferId(18), document.plainText)
+      .copy(
+        richTextDocument = Some(document),
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 12, visibleLines = 3)
+      )
+    val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
+    val metrics = CellMetrics.fromFont(font)
+
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 12, font)
+
+    snapshot.visualLines.map(_.text) shouldBe Vector("alpha beta ", "gamma")
+    snapshot.visualLines.head.isJustified shouldBe true
+    snapshot.visualLines.head.widthPx shouldBe (metrics.charWidth * 12).toFloat
+    snapshot.visualLines.last.isJustified shouldBe false
+    snapshot.visualLines.last.widthPx should be < (metrics.charWidth * 12).toFloat
+  }
+
   it should "capture non-uniform caret advances for proportional text fonts" in {
     val buffer = Buffer
       .fromString(BufferId(3), "WiWi")

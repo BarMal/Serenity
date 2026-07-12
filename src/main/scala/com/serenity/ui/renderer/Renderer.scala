@@ -534,7 +534,7 @@ object Renderer:
           then
             val lineTheme      = state.theme
             val styledSegments = visualLineStyledSegments(visualLine, lineTheme, snapshot, activeBodyLines)
-            if snapshot.usesMeasuredLayout then
+            if snapshot.usesMeasuredLayout || visualLine.isJustified then
               CharacterRenderer.renderMeasuredLineWithAnimation(
                 context.surface,
                 xOriginPx,

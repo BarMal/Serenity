@@ -209,7 +209,11 @@ object CharacterRenderer:
               )
               (completed, Some(run), localIndex + 1)
 
-            case Some(run) if foreground == run.foreground && background == run.background && style == run.style =>
+            case Some(run)
+                if foreground == run.foreground &&
+                  background == run.background &&
+                  style == run.style &&
+                  (!visualLine.isJustified || !text.charAt(localIndex - 1).isWhitespace) =>
               val updatedRun = run.copy(text = run.text + char, endLocalIndex = localIndex + 1)
               (completed, Some(updatedRun), localIndex + 1)
 
