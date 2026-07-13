@@ -910,7 +910,14 @@ object SurfaceContentResolver:
               val selected = isSelected(item) || offset + index == focused
               normalized.displayMode match
                 case ToolbarDisplayMode.IconOnly if iconFont.nonEmpty =>
-                  OverlaySegment(item.icon, selected = selected, fontFamily = iconFont)
+                  item match
+                    case _: ContextualToolbarItem.Button =>
+                      OverlaySegment(item.icon, selected = selected, fontFamily = iconFont)
+                    case _ =>
+                      OverlaySegment(
+                        ContextualToolbar.displayText(item, ToolbarDisplayMode.IconOnly),
+                        selected = selected
+                      )
                 case ToolbarDisplayMode.IconAndText if iconFont.nonEmpty =>
                   OverlaySegment(
                     ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly),
