@@ -67,6 +67,82 @@ jobs:
           cp package-input/Serenity.jar dist/Serenity.jar
           jpackage "${APP_ARGS[@]}"
 
+      - name: Verify Windows launcher process model
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $launcherPath = (Resolve-Path 'dist/Serenity/Serenity.exe').Path
+          $launcher = Start-Process -FilePath $launcherPath -PassThru
+          $observed = @()
+          $processIds = @()
+          $normalExit = $false
+
+          try {
+            Start-Sleep -Seconds 5
+            $launcher.Refresh()
+            if ($launcher.HasExited) {
+              throw "The Serenity launcher exited before the application was running."
+            }
+
+            $processes = Get-CimInstance Win32_Process
+            $pending = [System.Collections.Generic.Queue[int]]::new()
+            $pending.Enqueue([int]$launcher.Id)
+            $seen = @{}
+            while ($pending.Count -gt 0) {
+              $processId = $pending.Dequeue()
+              if ($seen.ContainsKey($processId)) {
+                continue
+              }
+              $seen[$processId] = $true
+              $current = @($processes | Where-Object { $_.ProcessId -eq $processId })
+              $observed += $current
+              $processes | Where-Object { $_.ParentProcessId -eq $processId } | ForEach-Object {
+                $pending.Enqueue([int]$_.ProcessId)
+              }
+            }
+            $applicationProcesses = @($observed | Where-Object {
+              $_.ParentProcessId -eq $launcher.Id -and $_.Name -ieq 'Serenity.exe' -and $_.ExecutablePath -ieq $launcherPath
+            })
+            if ($observed.Count -ne 2 -or $applicationProcesses.Count -ne 1) {
+              throw "Expected a Serenity.exe launcher with one Serenity.exe child; observed $($observed.Count) processes and $($applicationProcesses.Count) application children."
+            }
+
+            $observed | ForEach-Object {
+              $runtime = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
+              [pscustomobject]@{
+                ProcessId = $_.ProcessId
+                ParentProcessId = $_.ParentProcessId
+                Name = $_.Name
+                ExecutablePath = $_.ExecutablePath
+                CommandLine = $_.CommandLine
+                CpuSeconds = if ($null -eq $runtime) { $null } else { $runtime.CPU }
+                WorkingSetMiB = [math]::Round([double]$_.WorkingSetSize / 1MB, 2)
+              }
+            } | Format-List
+            $processIds = @($observed | ForEach-Object ProcessId | Sort-Object -Descending -Unique)
+            $application = Get-Process -Id $applicationProcesses[0].ProcessId -ErrorAction Stop
+            if (-not $application.CloseMainWindow()) {
+              throw "The Serenity application child did not accept a normal window-close request."
+            }
+            if (-not $application.WaitForExit(15000) -or -not $launcher.WaitForExit(15000)) {
+              throw "Serenity launcher processes did not exit after a normal window-close request."
+            }
+            $remaining = Get-Process -Id $processIds -ErrorAction SilentlyContinue
+            if ($null -ne $remaining) {
+              throw "Serenity launcher processes remained after normal shutdown: $($remaining.Id -join ', ')."
+            }
+            $normalExit = $true
+          }
+          finally {
+            if (-not $normalExit) {
+              $processIds = @($launcher.Id) + $processIds
+              $processIds | ForEach-Object {
+                Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue
+              }
+            }
+          }
+
       - name: Sign macOS app image
         if: runner.os == 'macOS'
         shell: bash
