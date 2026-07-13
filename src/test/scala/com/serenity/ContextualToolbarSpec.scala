@@ -659,12 +659,16 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     )
 
     val renderedText = surface.putStringCalls.map(_.s).mkString
-    ContextualToolbar.itemsFor(state).collect { case button: ContextualToolbarItem.Button => button.icon }.foreach(
-      renderedText should include(_)
-    )
+    ContextualToolbar
+      .itemsFor(state)
+      .collect { case button: ContextualToolbarItem.Button => button.icon }
+      .foreach(
+        renderedText should include(_)
+      )
     val compactControlText = ContextualToolbar.itemsFor(state).collect {
-      case dropdown: ContextualToolbarItem.Dropdown => ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly)
-      case input: ContextualToolbarItem.Input       => ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly)
+      case dropdown: ContextualToolbarItem.Dropdown =>
+        ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly)
+      case input: ContextualToolbarItem.Input => ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly)
     }
     val resolved = SurfaceContentResolver.resolveContextualToolbar(
       toolbarStateFrom(state),
