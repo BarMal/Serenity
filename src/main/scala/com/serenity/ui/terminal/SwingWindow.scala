@@ -757,7 +757,7 @@ object SwingWindow:
   ): Dimension =
     val chromeHeight =
       chromeMode match
-        case WindowChromeMode.Custom => chromeMetrics.titleBarHeight
+        case WindowChromeMode.Custom                                 => chromeMetrics.titleBarHeight
         case WindowChromeMode.Native | WindowChromeMode.NativeThemed => 0
     new Dimension(windowSize.width.max(1), (windowSize.height - chromeHeight).max(1))
 

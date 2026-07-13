@@ -2,11 +2,11 @@ package com.serenity.ui.terminal
 
 import java.awt.{Color, Window}
 
-import com.sun.jna.{Native, NativeLibrary, Pointer}
+import scala.util.control.NonFatal
+
 import com.sun.jna.platform.win32.WinDef
 import com.sun.jna.ptr.IntByReference
-
-import scala.util.control.NonFatal
+import com.sun.jna.{Native, NativeLibrary}
 
 /** Applies optional Windows DWM caption colours without replacing the OS-owned window frame. */
 object WindowsNativeChrome:

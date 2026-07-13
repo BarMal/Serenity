@@ -152,10 +152,10 @@ object WindowChromeMode:
 
   def fromConfigKey(value: String): Option[WindowChromeMode] =
     value.trim.toLowerCase match
-      case "custom" | "themed" | "serenity"                  => Some(WindowChromeMode.Custom)
+      case "custom" | "themed" | "serenity"                    => Some(WindowChromeMode.Custom)
       case "native-themed" | "native_themed" | "system-themed" => Some(WindowChromeMode.NativeThemed)
-      case "native" | "os" | "system"                        => Some(WindowChromeMode.Native)
-      case _                                                     => None
+      case "native" | "os" | "system"                          => Some(WindowChromeMode.Native)
+      case _                                                   => None
 
 enum MarkdownViewMode(val configKey: String):
   case Source       extends MarkdownViewMode("source")
