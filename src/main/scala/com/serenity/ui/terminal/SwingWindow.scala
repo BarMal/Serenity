@@ -6,7 +6,10 @@ import java.awt.geom.RoundRectangle2D
 import java.awt.image.BufferedImage
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import javax.imageio.ImageIO
 import javax.swing.*
+
+import scala.jdk.CollectionConverters.*
 
 import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
@@ -358,6 +361,7 @@ class SwingWindow(
 
   private val frame: JFrame =
     val f = new JFrame("Serenity")
+    f.setIconImages(SwingWindow.applicationIconImages.asJava)
     f.setUndecorated(usesCustomChrome)
     f.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE)
     f.addWindowListener(
@@ -515,6 +519,13 @@ class SwingWindow(
     pendingResize.getAndSet(None)
 
 object SwingWindow:
+  private val ApplicationIconResource = "/icons/serenity.png"
+
+  private[serenity] lazy val applicationIconImages: scala.List[Image] =
+    Option(getClass.getResource(ApplicationIconResource))
+      .flatMap(url => Option(ImageIO.read(url)))
+      .toList
+
   val DefaultMetrics: CellMetrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13)
   val BaseMinWidth: Int           = 400
   val BaseMinHeight: Int          = 300

@@ -61,6 +61,9 @@ jobs:
           if [ "$(uname -s)" = "Darwin" ]; then
             APP_ARGS+=(--mac-package-identifier "com.barmal.serenity")
           fi
+          if [ "${RUNNER_OS:-}" = "Windows" ]; then
+            APP_ARGS+=(--icon "$GITHUB_WORKSPACE/src/main/resources/icons/serenity.ico")
+          fi
           cp package-input/Serenity.jar dist/Serenity.jar
           jpackage "${APP_ARGS[@]}"
 
