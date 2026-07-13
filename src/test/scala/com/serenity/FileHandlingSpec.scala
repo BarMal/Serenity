@@ -87,6 +87,57 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
         )
       )
 
+  "LocalDocumentStorageProvider" should "open, list, save, and copy local documents through the provider boundary" in {
+    val directory   = Files.createTempDirectory("serenity-document-storage")
+    val source      = directory.resolve("source.txt")
+    val destination = directory.resolve("copy.txt")
+    val provider    = new LocalDocumentStorageProvider
+
+    try
+      Files.writeString(source, "initial")
+
+      val opened = provider.open(StorageLocation.Local(source)).unsafeRunSync()
+      opened.map(_.content) shouldBe Right("initial")
+
+      val listed = provider.list(StorageLocation.Local(directory)).compile.toList.unsafeRunSync()
+      listed.collect { case Right(metadata) => metadata.location } should contain(StorageLocation.Local(source))
+
+      val saved =
+        opened.flatMap(document => provider.save(document.location, "updated", document.revision).unsafeRunSync())
+      saved.map(_.content) shouldBe Right("updated")
+
+      val copied = provider.copy(StorageLocation.Local(source), StorageLocation.Local(destination)).unsafeRunSync()
+      copied.map(_.content) shouldBe Right("updated")
+    finally
+      Files.deleteIfExists(destination)
+      Files.deleteIfExists(source)
+      Files.deleteIfExists(directory)
+  }
+
+  it should "reject stale local saves with a conflict at the provider boundary" in {
+    val path     = Files.createTempFile("serenity-document-storage-conflict", ".txt")
+    val provider = new LocalDocumentStorageProvider
+
+    try
+      Files.writeString(path, "initial")
+      val opened = provider.open(StorageLocation.Local(path)).unsafeRunSync()
+      Files.writeString(path, "remote change")
+
+      val result =
+        opened.flatMap(document => provider.save(document.location, "local change", document.revision).unsafeRunSync())
+
+      result shouldBe Left(DocumentStorageError.Conflict(StorageLocation.Local(path)))
+      Files.readString(path) shouldBe "remote change"
+    finally Files.deleteIfExists(path)
+  }
+
+  it should "leave remote locations unsupported until a provider is installed" in {
+    val location = StorageLocation.Remote(java.net.URI.create("https://example.com/documents/notes.txt"))
+    val provider = new LocalDocumentStorageProvider
+
+    provider.open(location).unsafeRunSync() shouldBe Left(DocumentStorageError.UnsupportedLocation(location))
+  }
+
   it should "report only implemented document operation capabilities" in {
     DocumentFormat.capabilities(DocumentFormat.PlainText) shouldBe DocumentFormatCapabilities(
       canOpen = true,
