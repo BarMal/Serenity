@@ -370,6 +370,41 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     after.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
+  it should "restore editor focus when a button is clicked while a toolbar detail is open" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-mouse-button-after-detail")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
+        val selection = Selection(CursorPosition(0, 6), CursorPosition(0, 10))
+        val nextBuffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha beta"),
+            selection = Some(selection),
+            cursors = List(selection.focus)
+          )
+        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    val dropdownPoint = toolbarItemPoint(stateManager.getCurrentState.unsafeRunSync(), "paragraph-role")
+    stateManager.applyEvent(MouseClick(dropdownPoint.x, dropdownPoint.y)).unsafeRunSync()
+
+    val withOpenDetail = stateManager.getCurrentState.unsafeRunSync()
+    withOpenDetail.focus shouldBe Focus.Surface(
+      withOpenDetail.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar")).id
+    )
+
+    val buttonPoint = toolbarItemPoint(withOpenDetail, "bold")
+    stateManager.applyEvent(MouseClick(buttonPoint.x, buttonPoint.y)).unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
   it should "open a paragraph role dropdown and apply the clicked option" in {
     val stateManager = createStateManager("ContextualToolbarSpec-role-dropdown")
 

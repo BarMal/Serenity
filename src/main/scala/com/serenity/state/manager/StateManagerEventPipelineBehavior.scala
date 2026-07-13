@@ -1331,6 +1331,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           focusedItem match
             case Some(_: ContextualToolbarItem.Dropdown) | Some(_: ContextualToolbarItem.Input) =>
               updated.pushFocus(Focus.Surface(surface.id))
+            case Some(_: ContextualToolbarItem.Button) =>
+              updated.copy(focus = editorFocus(current))
             case _ =>
               updated
         } >>
