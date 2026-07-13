@@ -566,14 +566,17 @@ object TextOverlayRenderer:
     defaultBackground: Color,
     font: Font
   ): Unit =
-    val text    = segment.text.take(width)
-    val leftPad = math.max(0, (width - text.length) / 2)
-    val renderX = x + leftPad
+    val iconWidth   = segment.inlineIcon.map(_.length).getOrElse(0).min(width)
+    val iconGap     = if iconWidth > 0 && width > iconWidth && segment.text.nonEmpty then 1 else 0
+    val text        = segment.text.take(math.max(0, width - iconWidth - iconGap))
+    val renderWidth = iconWidth + iconGap + text.length
+    val leftPad     = math.max(0, (width - renderWidth) / 2)
+    val renderX     = x + leftPad
     renderSegmentText(
       surface,
       renderX,
       y,
-      text.length,
+      renderWidth,
       text,
       segment,
       theme,
@@ -614,10 +617,25 @@ object TextOverlayRenderer:
           )
       surface.setForegroundColor(segmentForeground)
       surface.setBackgroundColor(segmentBackground)
+      val inlineIcon = segment.inlineIcon.filter(_ => width > 0)
+      inlineIcon.foreach { icon =>
+        segment.inlineIconFontFamily.foreach(family =>
+          surface.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
+        )
+        CharacterRenderer.renderStringPlain(surface, x, y, icon.take(width))
+        if segment.inlineIconFontFamily.nonEmpty then surface.setFont(font)
+      }
+      val iconWidth = inlineIcon.map(_.length.min(width)).getOrElse(0)
+      val iconGap   = if iconWidth > 0 && width > iconWidth && segmentText.nonEmpty then 1 else 0
       segment.fontFamily.foreach(family =>
         surface.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
       )
-      CharacterRenderer.renderStringPlain(surface, x, y, segmentText.take(width))
+      CharacterRenderer.renderStringPlain(
+        surface,
+        x + iconWidth + iconGap,
+        y,
+        segmentText.take(math.max(0, width - iconWidth - iconGap))
+      )
       if segment.fontFamily.nonEmpty then surface.setFont(font)
 
   private def withAlpha(color: Color, alpha: Int): Color =

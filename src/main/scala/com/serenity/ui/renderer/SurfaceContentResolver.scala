@@ -30,7 +30,9 @@ case class OverlaySegment(
     tone: OverlayTone = OverlayTone.Normal,
     foregroundColor: Option[Color] = None,
     backgroundColor: Option[Color] = None,
-    fontFamily: Option[String] = None
+    fontFamily: Option[String] = None,
+    inlineIcon: Option[String] = None,
+    inlineIconFontFamily: Option[String] = None
 )
 
 case class OverlayRow(
@@ -905,15 +907,19 @@ object SurfaceContentResolver:
         case ((offset, acc), rowItems) =>
           val segments = rowItems.zipWithIndex.map {
             case (item, index) =>
-              val iconOnly = normalized.displayMode == ToolbarDisplayMode.IconOnly && iconFont.nonEmpty
-              val text =
-                if iconOnly then item.icon
-                else ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly)
-              OverlaySegment(
-                text,
-                selected = isSelected(item) || offset + index == focused,
-                fontFamily = Option.when(iconOnly)(iconFont).flatten
-              )
+              val selected = isSelected(item) || offset + index == focused
+              normalized.displayMode match
+                case ToolbarDisplayMode.IconOnly if iconFont.nonEmpty =>
+                  OverlaySegment(item.icon, selected = selected, fontFamily = iconFont)
+                case ToolbarDisplayMode.IconAndText if iconFont.nonEmpty =>
+                  OverlaySegment(
+                    ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly),
+                    selected = selected,
+                    inlineIcon = Some(item.icon),
+                    inlineIconFontFamily = iconFont
+                  )
+                case _ =>
+                  OverlaySegment(ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly), selected = selected)
           }
           (
             offset + rowItems.length,

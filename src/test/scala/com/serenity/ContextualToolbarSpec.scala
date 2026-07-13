@@ -663,6 +663,43 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     surface.setFontCalls.map(_.getFamily) should contain(FontLoader.ToolbarIconFontFamily)
   }
 
+  it should "render icon-font glyphs alongside labels in IconAndText mode" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-rendered-icon-and-text")
+    val viewport     = ViewportSize(120, 30)
+    stateManager
+      .updateState(state =>
+        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText))
+      )
+      .unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state   = stateManager.getCurrentState.unsafeRunSync()
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new MockRenderSurface(viewport.width, viewport.height)
+
+    Renderer.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      font,
+      font,
+      CellMetrics.fromFont(font),
+      None
+    )
+
+    val renderedText = surface.putStringCalls.map(_.s).mkString
+    ContextualToolbar.itemsFor(state).foreach { item =>
+      renderedText should include(item.icon)
+      renderedText should include(ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly))
+    }
+    surface.setFontCalls.map(_.getFamily) should contain(
+      FontLoader.toolbarIconFontFamily.getOrElse(fail("Expected bundled toolbar icon font"))
+    )
+  }
+
   it should "use toolbar glyphs supported by the bundled Material Icons Round font" in {
     val stateManager = createStateManager("ContextualToolbarSpec-font-coverage")
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()

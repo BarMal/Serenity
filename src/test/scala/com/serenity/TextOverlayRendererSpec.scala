@@ -4,6 +4,7 @@ import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{CellMetrics, LayoutRect, SurfaceContentRowKind}
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
@@ -519,6 +520,36 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     surface.setFontCalls.map(_.getFamily) should contain(Font.SERIF)
+    surface.setFontCalls.last.getFamily shouldBe font.getFamily
+  }
+
+  it should "render an inline icon run with its icon font before the label" in {
+    val surface        = new MockRenderSurface(40, 6)
+    val font           = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics        = CellMetrics.fromFont(font)
+    val iconFontFamily = FontLoader.toolbarIconFontFamily.getOrElse(fail("Expected bundled toolbar icon font"))
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 30, 5),
+      rows = List(
+        OverlayRow(
+          plainText = "Bold",
+          segments = List(
+            OverlaySegment(
+              "Bold",
+              inlineIcon = Some("\ue238"),
+              inlineIconFontFamily = Some(iconFontFamily)
+            )
+          ),
+          layout = OverlayRowLayout.Distributed
+        )
+      )
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.putStringCalls.map(_.s) should contain("\ue238")
+    surface.putStringCalls.map(_.s) should contain("Bold")
+    surface.setFontCalls.map(_.getFamily) should contain(iconFontFamily)
     surface.setFontCalls.last.getFamily shouldBe font.getFamily
   }
 
