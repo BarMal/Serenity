@@ -2,7 +2,7 @@ package com.serenity.ui.terminal
 
 import java.awt.*
 import java.awt.event.*
-import java.awt.geom.RoundRectangle2D
+import java.awt.geom.{Area, RoundRectangle2D}
 import java.awt.image.BufferedImage
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
@@ -46,8 +46,12 @@ class SwingWindow(
   private val titleLabelRef          = new AtomicReference[Option[JLabel]](None)
   private val titleSpacerRef         = new AtomicReference[Option[JPanel]](None)
   private val onResizeCallbackRef    = new AtomicReference[Option[() => Unit]](None)
+  private val resizeGlassPaneRef     = new AtomicReference[Option[JComponent]](None)
+  private val roundedCornerMaskRef   = new AtomicReference[Option[Int]](None)
   private val usesCustomChrome       = chromeMode == WindowChromeMode.Custom
   private val usesNativeThemedChrome = chromeMode == WindowChromeMode.NativeThemed
+  private val perPixelTranslucencySupported =
+    SwingWindow.perPixelTranslucencySupported
 
   def setOnResize(cb: () => Unit): Unit = onResizeCallbackRef.set(Some(cb))
 
@@ -96,11 +100,25 @@ class SwingWindow(
         false
 
   private def updateShape(): Unit =
-    if usesCustomChrome && !maximizedRef.get() then
+    val roundedCornerMask = SwingWindow.roundedCornerMask(
+      usesCustomChrome,
+      maximizedRef.get(),
+      perPixelTranslucencySupported,
+      chromeMetricsRef.get().cornerArc
+    )
+    val refreshRoundedCornerMask =
+      SwingWindow.shouldRefreshRoundedCornerMask(roundedCornerMaskRef.get(), roundedCornerMask)
+    roundedCornerMaskRef.set(roundedCornerMask)
+
+    if roundedCornerMask.nonEmpty
+    then frame.setShape(null)
+    else if usesCustomChrome && !maximizedRef.get() then
       val d      = frame.getSize
       val chrome = chromeMetricsRef.get()
       frame.setShape(new RoundRectangle2D.Double(0, 0, d.width, d.height, chrome.cornerArc, chrome.cornerArc))
     else if usesCustomChrome then frame.setShape(null)
+
+    if refreshRoundedCornerMask then resizeGlassPaneRef.get().foreach(_.repaint())
 
   private def toggleMaximize(): Unit =
     if maximizedRef.get() then
@@ -266,6 +284,26 @@ class SwingWindow(
     setOpaque(false)
     setFocusable(false)
 
+    override def paintComponent(g: Graphics): Unit =
+      super.paintComponent(g)
+      if SwingWindow.shouldUsePerPixelRoundedCorners(
+            usesCustomChrome,
+            maximizedRef.get(),
+            perPixelTranslucencySupported
+          )
+      then
+        val g2 = g.create().asInstanceOf[Graphics2D]
+        try
+          val chrome  = chromeMetricsRef.get()
+          val outside = Area(new Rectangle(0, 0, getWidth, getHeight))
+          outside.subtract(
+            Area(new RoundRectangle2D.Double(0, 0, getWidth, getHeight, chrome.cornerArc, chrome.cornerArc))
+          )
+          g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+          g2.setComposite(AlphaComposite.Clear)
+          g2.fill(outside)
+        finally g2.dispose()
+
     private case class ResizeState(
         resizing: Boolean = false,
         resizeDir: Int = 0,
@@ -365,6 +403,7 @@ class SwingWindow(
     val f = new JFrame("Serenity")
     f.setIconImages(SwingWindow.applicationIconImages.asJava)
     f.setUndecorated(usesCustomChrome)
+    if usesCustomChrome && perPixelTranslucencySupported then f.setBackground(SwingWindow.Transparent)
     f.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE)
     f.addWindowListener(
       new WindowAdapter:
@@ -395,6 +434,7 @@ class SwingWindow(
     f.setContentPane(content)
     if usesCustomChrome then
       val glassPane = new ResizeGlassPane
+      resizeGlassPaneRef.set(Some(glassPane))
       f.setGlassPane(glassPane)
       glassPane.setVisible(true)
     f.pack()
@@ -532,6 +572,7 @@ class SwingWindow(
 
 object SwingWindow:
   private val ApplicationIconResource = "/icons/serenity.png"
+  private[serenity] val Transparent   = new Color(0, 0, 0, 0)
 
   private[serenity] lazy val applicationIconImages: scala.List[Image] =
     Option(getClass.getResource(ApplicationIconResource))
@@ -541,6 +582,30 @@ object SwingWindow:
   val DefaultMetrics: CellMetrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13)
   val BaseMinWidth: Int           = 400
   val BaseMinHeight: Int          = 300
+
+  private[serenity] def perPixelTranslucencySupported: Boolean =
+    GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice
+      .isWindowTranslucencySupported(GraphicsDevice.WindowTranslucency.PERPIXEL_TRANSLUCENT)
+
+  private[serenity] def shouldUsePerPixelRoundedCorners(
+    usesCustomChrome: Boolean,
+    maximized: Boolean,
+    perPixelTranslucencySupported: Boolean
+  ): Boolean =
+    usesCustomChrome && !maximized && perPixelTranslucencySupported
+
+  private[serenity] def roundedCornerMask(
+    usesCustomChrome: Boolean,
+    maximized: Boolean,
+    perPixelTranslucencySupported: Boolean,
+    cornerArc: Int
+  ): Option[Int] =
+    Option.when(shouldUsePerPixelRoundedCorners(usesCustomChrome, maximized, perPixelTranslucencySupported))(
+      cornerArc.max(0)
+    )
+
+  private[serenity] def shouldRefreshRoundedCornerMask(previous: Option[Int], current: Option[Int]): Boolean =
+    previous != current
 
   case class ChromeMetrics(
       titleBarHeight: Int,

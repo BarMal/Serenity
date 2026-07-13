@@ -34,6 +34,46 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     scaled.titleFontSize shouldBe base.titleFontSize * 2
   }
 
+  "SwingWindow" should "use per-pixel translucency for non-maximized custom chrome when supported" in {
+    SwingWindow.shouldUsePerPixelRoundedCorners(
+      usesCustomChrome = true,
+      maximized = false,
+      perPixelTranslucencySupported = true
+    ) shouldBe true
+
+    SwingWindow.shouldUsePerPixelRoundedCorners(
+      usesCustomChrome = true,
+      maximized = true,
+      perPixelTranslucencySupported = true
+    ) shouldBe false
+
+    SwingWindow.shouldUsePerPixelRoundedCorners(
+      usesCustomChrome = true,
+      maximized = false,
+      perPixelTranslucencySupported = false
+    ) shouldBe false
+  }
+
+  it should "refresh the per-pixel corner mask when chrome metrics change" in {
+    val base   = SwingWindow.ChromeMetrics.fromCellMetrics(CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13))
+    val scaled = SwingWindow.ChromeMetrics.fromCellMetrics(CellMetrics(charWidth = 16, lineHeight = 32, ascent = 26))
+
+    val before = SwingWindow.roundedCornerMask(
+      usesCustomChrome = true,
+      maximized = false,
+      perPixelTranslucencySupported = true,
+      cornerArc = base.cornerArc
+    )
+    val after = SwingWindow.roundedCornerMask(
+      usesCustomChrome = true,
+      maximized = false,
+      perPixelTranslucencySupported = true,
+      cornerArc = scaled.cornerArc
+    )
+
+    SwingWindow.shouldRefreshRoundedCornerMask(before, after) shouldBe true
+  }
+
   it should "derive viewport size from the live canvas size when available" in {
     val metrics        = CellMetrics(charWidth = 10, lineHeight = 20, ascent = 15)
     val canvasSize     = new Dimension(640, 480)
