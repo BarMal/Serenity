@@ -143,8 +143,6 @@ object TextOverlayRenderer:
         else CharacterRenderer.renderStringPlain(surface, x, y, rowView.row.plainText.take(width))
       case OverlayRowLayout.Distributed =>
         renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
-      case OverlayRowLayout.CompactDistributed =>
-        renderCompactDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
       case OverlayRowLayout.Split =>
         renderSplitRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
       case OverlayRowLayout.Columns =>
@@ -194,8 +192,6 @@ object TextOverlayRenderer:
         columnCursorPlacement(row, x, width)
       case OverlayRowLayout.Distributed =>
         None
-      case OverlayRowLayout.CompactDistributed =>
-        None
 
   private def splitCursorPlacement(
     row: OverlayRow,
@@ -243,7 +239,7 @@ object TextOverlayRenderer:
               math.max(0, math.min(cursorColumn - width + 1, row.plainText.length - width))
             case _ =>
               0
-        case OverlayRowLayout.Columns | OverlayRowLayout.Distributed | OverlayRowLayout.CompactDistributed =>
+        case OverlayRowLayout.Columns | OverlayRowLayout.Distributed =>
           0
 
     if scrollOffset == 0 then OverlayRowView(row, useMeasuredCursor)
@@ -272,6 +268,8 @@ object TextOverlayRenderer:
   ): Unit =
     val segments = row.segments
     if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
+    else if segments.exists(_.allocatedWidth.nonEmpty) then
+      renderCompactDistributedRow(surface, x, y, width, row, theme, defaultForeground, defaultBackground, font)
     else
       val baseCellWidth = width / segments.length
       val remainder     = width % segments.length

@@ -21,7 +21,6 @@ enum OverlayTone:
 enum OverlayRowLayout:
   case Plain
   case Distributed
-  case CompactDistributed
   case Split
   case Columns
 
@@ -953,7 +952,7 @@ object SurfaceContentResolver:
             acc :+ OverlayRow(
               plainText = segments.map(_.text).mkString(" "),
               segments = segments,
-              layout = OverlayRowLayout.CompactDistributed
+              layout = OverlayRowLayout.Distributed
             )
           )
       }
