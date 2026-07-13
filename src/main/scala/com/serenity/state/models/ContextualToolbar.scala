@@ -176,17 +176,17 @@ object ContextualToolbar:
   )
 
   val markdownItems: List[ContextualToolbarItem] = List(
-    ContextualToolbarItem.Button("markdown-preview", "Preview", "markdown-preview", "▶"),
-    ContextualToolbarItem.Button("markdown-view-source", "Source", "markdown-view-source", "≡"),
-    ContextualToolbarItem.Button("markdown-view-split", "Split", "markdown-view-split", "◀"),
-    ContextualToolbarItem.Button("markdown-view-inline-lens", "Lens", "markdown-view-inline-lens", "?")
+    ContextualToolbarItem.Button("markdown-preview", "Preview", "markdown-preview", "\uf1c5"),
+    ContextualToolbarItem.Button("markdown-view-source", "Source", "markdown-view-source", "\ue86f"),
+    ContextualToolbarItem.Button("markdown-view-split", "Split", "markdown-view-split", "\uf06d"),
+    ContextualToolbarItem.Button("markdown-view-inline-lens", "Lens", "markdown-view-inline-lens", "\ue8b6")
   )
 
   val codeItems: List[ContextualToolbarItem] = List(
-    ContextualToolbarItem.Button("project-build", "Build", "project-build", "*"),
-    ContextualToolbarItem.Button("project-test", "Test", "project-test", "v"),
-    ContextualToolbarItem.Button("project-run", "Run", "project-run", "▶"),
-    ContextualToolbarItem.Button("project-debug", "Debug", "project-debug", "?")
+    ContextualToolbarItem.Button("project-build", "Build", "project-build", "\ue869"),
+    ContextualToolbarItem.Button("project-test", "Test", "project-test", "\ue86c"),
+    ContextualToolbarItem.Button("project-run", "Run", "project-run", "\ue037"),
+    ContextualToolbarItem.Button("project-debug", "Debug", "project-debug", "\ue868")
   )
 
   def itemsFor(state: AppState): List[ContextualToolbarItem] =
@@ -544,27 +544,27 @@ object ContextualToolbar:
         "bold",
         "Bold",
         "bold",
-        "B",
+        "\ue238",
         selected = style.marks.contains(InlineMark.Bold)
       ),
       ContextualToolbarItem.Button(
         "italic",
         "Italic",
         "italic",
-        "I",
+        "\ue23f",
         selected = style.marks.contains(InlineMark.Italic)
       ),
       ContextualToolbarItem.Button(
         "underline",
         "Underline",
         "underline",
-        "U",
+        "\ue765",
         selected = style.marks.contains(InlineMark.Underline)
       ),
       ContextualToolbarItem.Dropdown(
         id = "font-family",
         label = "Font",
-        icon = "A",
+        icon = "\ue167",
         optionItem = CommandSurfaceItem.OptionItem(
           id = "font-family",
           label = "Font",
@@ -576,7 +576,7 @@ object ContextualToolbar:
       ContextualToolbarItem.Input(
         id = "font-family-text",
         label = "Family",
-        icon = "F",
+        icon = "\ue262",
         inputItem = CommandSurfaceItem.InputItem(
           id = "font-family-text",
           label = "Family",
@@ -591,7 +591,7 @@ object ContextualToolbar:
       ContextualToolbarItem.Input(
         id = "font-size",
         label = "Size",
-        icon = "↕",
+        icon = "\ue245",
         inputItem = CommandSurfaceItem.InputItem(
           id = "font-size",
           label = "Size",
@@ -608,7 +608,7 @@ object ContextualToolbar:
       ContextualToolbarItem.Dropdown(
         id = "color",
         label = "Color",
-        icon = "•",
+        icon = "\ue40a",
         optionItem = CommandSurfaceItem.OptionItem(
           id = "color",
           label = "Color",
@@ -620,7 +620,7 @@ object ContextualToolbar:
       ContextualToolbarItem.Input(
         id = "color-hex",
         label = "Hex",
-        icon = "#",
+        icon = "\ue9ef",
         inputItem = CommandSurfaceItem.InputItem(
           id = "color-hex",
           label = "Hex",
@@ -635,7 +635,7 @@ object ContextualToolbar:
       ContextualToolbarItem.Dropdown(
         id = "paragraph-role",
         label = "Role",
-        icon = "¶",
+        icon = "\ue264",
         optionItem = CommandSurfaceItem.OptionItem(
           id = "paragraph-role",
           label = "Role",
@@ -648,28 +648,28 @@ object ContextualToolbar:
         "align-left",
         "Left",
         "align-left",
-        "←",
+        "\ue236",
         selected = paragraph.exists(_.alignment == ParagraphAlignment.Left)
       ),
       ContextualToolbarItem.Button(
         "align-center",
         "Center",
         "align-center",
-        "↔",
+        "\ue234",
         selected = paragraph.exists(_.alignment == ParagraphAlignment.Center)
       ),
       ContextualToolbarItem.Button(
         "align-right",
         "Right",
         "align-right",
-        "→",
+        "\ue237",
         selected = paragraph.exists(_.alignment == ParagraphAlignment.Right)
       ),
       ContextualToolbarItem.Button(
         "align-justify",
         "Justify",
         "align-justify",
-        "≡",
+        "\ue235",
         selected = paragraph.exists(_.alignment == ParagraphAlignment.Justify)
       )
     )

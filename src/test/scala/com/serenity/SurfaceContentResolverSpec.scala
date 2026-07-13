@@ -860,12 +860,12 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.rows.foreach(_.layout shouldBe OverlayRowLayout.Distributed)
     val segments = resolved.rows.flatMap(_.segments)
     segments.find(_.text.contains("Bold")).map(_.selected).shouldBe(Some(true))
-    segments.exists(_.text == "A Font Serif").shouldBe(true)
-    segments.exists(_.text == "F Family Serif").shouldBe(true)
-    segments.exists(_.text == "↕ Size 18").shouldBe(true)
-    segments.exists(_.text == "• Color Blue").shouldBe(true)
-    segments.exists(_.text == "# Hex #336699").shouldBe(true)
-    segments.exists(_.text == "¶ Role H1").shouldBe(true)
+    segments.exists(_.text == "Font Serif").shouldBe(true)
+    segments.exists(_.text == "Family Serif").shouldBe(true)
+    segments.exists(_.text == "Size 18").shouldBe(true)
+    segments.exists(_.text == "Color Blue").shouldBe(true)
+    segments.exists(_.text == "Hex #336699").shouldBe(true)
+    segments.exists(_.text == "Role H1").shouldBe(true)
     segments.exists(_.text.contains("Center")).shouldBe(true)
   }
 
@@ -915,7 +915,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       SurfaceRenderMode.Floating
     )
 
-    resolved.rows.flatMap(_.segments).exists(_.text == "¶ Role H4").shouldBe(true)
+    resolved.rows.flatMap(_.segments).exists(_.text == "Role H4").shouldBe(true)
   }
 
   it should "render find result position when the modal carries match results" in {

@@ -3,8 +3,10 @@ package com.serenity.ui.renderer
 import java.awt.Color
 
 import com.serenity.command.{CommandCategory, CommandSurfaceItem}
+import com.serenity.config.ToolbarDisplayMode
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 
 enum SurfaceRenderMode:
@@ -897,14 +899,20 @@ object SurfaceContentResolver:
     val normalized  = toolbarState.normalized(items)
     val rowGroups   = ContextualToolbar.rowGroups(items, contentRect.width.max(1), normalized.displayMode)
     val focused     = normalized.focusedIndex
+    val iconFont    = FontLoader.toolbarIconFontFamily
     val topRows = rowGroups
       .foldLeft((0, List.empty[OverlayRow])) {
         case ((offset, acc), rowItems) =>
           val segments = rowItems.zipWithIndex.map {
             case (item, index) =>
+              val iconOnly = normalized.displayMode == ToolbarDisplayMode.IconOnly && iconFont.nonEmpty
+              val text =
+                if iconOnly then item.icon
+                else ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly)
               OverlaySegment(
-                ContextualToolbar.displayText(item, normalized.displayMode),
-                selected = isSelected(item) || offset + index == focused
+                text,
+                selected = isSelected(item) || offset + index == focused,
+                fontFamily = Option.when(iconOnly)(iconFont).flatten
               )
           }
           (

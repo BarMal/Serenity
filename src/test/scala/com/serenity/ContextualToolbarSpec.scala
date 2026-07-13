@@ -572,7 +572,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val dropdown = ContextualToolbarItem.Dropdown(
       id = "font-family",
       label = "Font",
-      icon = "A",
+      icon = "\ue167",
       optionItem = CommandSurfaceItem.OptionItem(
         id = "font-family",
         label = "Font",
@@ -584,7 +584,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val input = ContextualToolbarItem.Input(
       id = "font-size",
       label = "Size",
-      icon = "↕",
+      icon = "\ue245",
       inputItem = CommandSurfaceItem.InputItem(
         id = "font-size",
         label = "Size",
@@ -596,18 +596,18 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       )
     )
 
-    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly) shouldBe "A"
+    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly) shouldBe "\ue167"
     ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.TextOnly) shouldBe "Font Serif"
-    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconAndText) shouldBe "A Font Serif"
+    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconAndText) shouldBe "\ue167 Font Serif"
 
-    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "↕"
+    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "\ue245"
     ContextualToolbar.displayText(input, ToolbarDisplayMode.TextOnly) shouldBe "Size 18"
-    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconAndText) shouldBe "↕ Size 18"
+    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconAndText) shouldBe "\ue245 Size 18"
   }
 
-  it should "use renderable compact symbols and conventional fallbacks in icon-only mode" in {
-    ContextualToolbar.markdownItems.map(_.icon) shouldBe List("▶", "≡", "◀", "?")
-    ContextualToolbar.codeItems.map(_.icon) shouldBe List("*", "v", "▶", "?")
+  it should "use Material Icons Round code points in icon-only mode" in {
+    ContextualToolbar.markdownItems.map(_.icon) shouldBe List("\uf1c5", "\ue86f", "\uf06d", "\ue8b6")
+    ContextualToolbar.codeItems.map(_.icon) shouldBe List("\ue869", "\ue86c", "\ue037", "\ue868")
 
     val stateManager = createStateManager("ContextualToolbarSpec-glyphs")
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
@@ -620,19 +620,19 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
         .toMap
 
     icons shouldBe Map(
-      "bold"             -> "B",
-      "italic"           -> "I",
-      "underline"        -> "U",
-      "font-family"      -> "A",
-      "font-family-text" -> "F",
-      "font-size"        -> "↕",
-      "color"            -> "•",
-      "color-hex"        -> "#",
-      "paragraph-role"   -> "¶",
-      "align-left"       -> "←",
-      "align-center"     -> "↔",
-      "align-right"      -> "→",
-      "align-justify"    -> "≡"
+      "bold"             -> "\ue238",
+      "italic"           -> "\ue23f",
+      "underline"        -> "\ue765",
+      "font-family"      -> "\ue167",
+      "font-family-text" -> "\ue262",
+      "font-size"        -> "\ue245",
+      "color"            -> "\ue40a",
+      "color-hex"        -> "\ue9ef",
+      "paragraph-role"   -> "\ue264",
+      "align-left"       -> "\ue236",
+      "align-center"     -> "\ue234",
+      "align-right"      -> "\ue237",
+      "align-justify"    -> "\ue235"
     )
   }
 
@@ -660,9 +660,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val renderedText = surface.putStringCalls.map(_.s).mkString
     ContextualToolbar.itemsFor(state).map(_.icon).foreach(renderedText should include(_))
+    surface.setFontCalls.map(_.getFamily) should contain(FontLoader.ToolbarIconFontFamily)
   }
 
-  it should "use toolbar glyphs supported by the shipped default fonts" in {
+  it should "use toolbar glyphs supported by the bundled Material Icons Round font" in {
     val stateManager = createStateManager("ContextualToolbarSpec-font-coverage")
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -671,16 +672,11 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       ContextualToolbar.markdownItems.map(_.icon) ++
         ContextualToolbar.codeItems.map(_.icon) ++
         ContextualToolbar.itemsFor(stateManager.getCurrentState.unsafeRunSync()).map(_.icon)
-    val fonts = List(
-      FontLoader.previewCodeFont(FontLoader.FontConfig()),
-      FontLoader.previewUiFont(FontLoader.FontConfig())
-    )
+    val font = FontLoader.toolbarIconFont(24.0f).getOrElse(fail("Expected bundled Material Icons Round font"))
 
-    fonts.foreach { font =>
-      glyphs.foreach { glyph =>
-        withClue(s"Font '${font.getFontName}' cannot display toolbar glyph '$glyph': ") {
-          font.canDisplayUpTo(glyph) shouldBe -1
-        }
+    glyphs.foreach { glyph =>
+      withClue(s"Font '${font.getFontName}' cannot display toolbar glyph '$glyph': ") {
+        font.canDisplayUpTo(glyph) shouldBe -1
       }
     }
   }

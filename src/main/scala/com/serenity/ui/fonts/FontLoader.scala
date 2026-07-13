@@ -10,6 +10,7 @@ import org.typelevel.log4cats.Logger
 object FontLoader:
 
   val BundledCodeFontFamily = "Monaspace Neon (Bundled)"
+  val ToolbarIconFontFamily = "Material Icons Round"
 
   enum TextScaleMode(val configKey: String):
     case Auto   extends TextScaleMode("auto")
@@ -127,6 +128,14 @@ object FontLoader:
       case TypographyRole.Ui              => previewUiFont(config)
       case TypographyRole.Mixed           => previewTextFont(config)
 
+  /** Loads the bundled toolbar icon font at the requested point size. */
+  def toolbarIconFont(size: Float): Option[Font] =
+    toolbarIconFontBase.map(_.deriveFont(size.max(1.0f)))
+
+  /** Provides the registered toolbar icon font family when its bundled asset is available. */
+  def toolbarIconFontFamily: Option[String] =
+    toolbarIconFontBase.map(_.getFamily)
+
   def isMonospacedFont(font: Font): Boolean =
     isMonospaced(font)
 
@@ -151,6 +160,14 @@ object FontLoader:
     loadBundledFontBase("/fonts/MonaspaceNeonVarVF[wght,wdth,slnt].ttf")
       .orElse(loadBundledFontBase("/fonts/MonaspaceNeon-Regular.otf"))
       .orElse(loadBundledFontBase("/fonts/MonaspaceNeon-Bold.otf"))
+
+  private lazy val toolbarIconFontBase: Option[Font] =
+    loadBundledFontBase("/fonts/MaterialIconsRound-Regular.otf").filter { font =>
+      try
+        val environment = GraphicsEnvironment.getLocalGraphicsEnvironment
+        environment.registerFont(font) || environment.getAvailableFontFamilyNames.contains(font.getFamily)
+      catch case _: Exception => false
+    }
 
   private def loadBundledFontBase(resourcePath: String): Option[Font] =
     Option(getClass.getResourceAsStream(resourcePath)).flatMap { stream =>
