@@ -374,12 +374,8 @@ object ContextualToolbar:
     val topLevelRows = rowGroups(items, contentWidth, toolbarState.displayMode)
     topLevelRows.lift(rowIndex) match
       case Some(rowItems) =>
-        Option.when(rowItems.nonEmpty) {
+        topLevelItemIndexAt(rowItems, columnOffset, contentWidth, toolbarState.displayMode).map { localIndex =>
           val offset = topLevelRows.take(rowIndex).map(_.length).sum
-          val localIndex =
-            ((columnOffset.max(0) * rowItems.length) / contentWidth.max(1))
-              .max(0)
-              .min(rowItems.length - 1)
           ContextualToolbarHit.TopLevelItem(offset + localIndex)
         }
       case None =>
@@ -401,6 +397,26 @@ object ContextualToolbar:
             Some(ContextualToolbarHit.InputDetail(itemId))
           case _ =>
             None
+
+  private def topLevelItemIndexAt(
+    items: List[ContextualToolbarItem],
+    columnOffset: Int,
+    contentWidth: Int,
+    mode: ToolbarDisplayMode
+  ): Option[Int] =
+    val widths = itemCellWidths(items, contentWidth, mode)
+    items
+      .zip(widths)
+      .zipWithIndex
+      .foldLeft((0, Option.empty[Int])) {
+        case ((cursor, found), ((item, width), index)) =>
+          val cellEnd        = cursor + width
+          val hit            = Option.when(columnOffset >= cursor && columnOffset < cellEnd)(index)
+          val separatorWidth = Option.when(hasTrailingGroupSeparator(item, items.lift(index + 1)))(1).getOrElse(0)
+          val gapWidth       = Option.when(index < items.length - 1)(1).getOrElse(0)
+          (cellEnd + separatorWidth + gapWidth, found.orElse(hit))
+      }
+      ._2
 
   def dropdownItem(itemId: String, items: List[ContextualToolbarItem]): Option[ContextualToolbarItem.Dropdown] =
     items.collectFirst { case item: ContextualToolbarItem.Dropdown if item.id == itemId => item }

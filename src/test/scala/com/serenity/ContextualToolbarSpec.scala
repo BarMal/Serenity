@@ -703,6 +703,49 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     )
   }
 
+  it should "map each rendered compact toolbar cell and leave separator gutters inert" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-variable-width-hit-regions")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(78, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state        = stateManager.getCurrentState.unsafeRunSync()
+    val toolbarState = toolbarStateFrom(state)
+    val contentWidth = toolbarContentWidth(state)
+    val rowItems = ContextualToolbar
+      .rowGroups(ContextualToolbar.itemsFor(state), contentWidth, toolbarState.displayMode)
+      .head
+
+    renderedToolbarCellRegions(rowItems, contentWidth, toolbarState.displayMode).zipWithIndex.foreach {
+      case ((start, width), index) =>
+        ContextualToolbar.hitAt(0, start + (width / 2), contentWidth, toolbarState, state) shouldBe
+          Some(ContextualToolbarHit.TopLevelItem(index))
+    }
+
+    renderedToolbarSeparatorOffsets(rowItems, contentWidth, toolbarState.displayMode).foreach { offset =>
+      ContextualToolbar.hitAt(0, offset, contentWidth, toolbarState, state) shouldBe None
+    }
+  }
+
+  it should "ignore hover and clicks on compact toolbar separator gutters" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-separator-pointer")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(78, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val before         = stateManager.getCurrentState.unsafeRunSync()
+    val separatorPoint = toolbarSeparatorPoint(before, separatorIndex = 0)
+
+    stateManager.applyEvent(MouseMove(separatorPoint.x, separatorPoint.y)).unsafeRunSync()
+    val afterHover = stateManager.getCurrentState.unsafeRunSync()
+    toolbarStateFrom(afterHover) shouldBe toolbarStateFrom(before)
+
+    stateManager.applyEvent(MouseClick(separatorPoint.x, separatorPoint.y)).unsafeRunSync()
+    toolbarStateFrom(stateManager.getCurrentState.unsafeRunSync()) shouldBe toolbarStateFrom(before)
+  }
+
   it should "render icon-font glyphs alongside labels in IconAndText mode" in {
     val stateManager = createStateManager("ContextualToolbarSpec-rendered-icon-and-text")
     val viewport     = ViewportSize(120, 30)
@@ -924,11 +967,28 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
           (currentRowIndex, itemIndex - offset)
       }
       .getOrElse(fail(s"Expected toolbar item index $itemIndex"))
-    val rowItems = rowGroups.lift(rowIndex).getOrElse(fail(s"Expected toolbar row $rowIndex"))
+    val rowItems    = rowGroups.lift(rowIndex).getOrElse(fail(s"Expected toolbar row $rowIndex"))
+    val cellRegions = renderedToolbarCellRegions(rowItems, contentRect.width, toolbarState.displayMode)
+    val (cellStart, cellWidth) = cellRegions
+      .lift(localIndex)
+      .getOrElse(fail(s"Expected toolbar cell $localIndex"))
     Point(
-      x = contentRect.x + hitColumnCenter(localIndex, rowItems.length, contentRect.width),
+      x = contentRect.x + cellStart + (cellWidth / 2),
       y = toolbarRowY(state, rowIndex)
     )
+
+  private def toolbarSeparatorPoint(state: AppState, separatorIndex: Int): Point =
+    val rect         = toolbarRect(state)
+    val toolbarState = toolbarStateFrom(state)
+    val contentRect  = SurfaceFrameLayout.forContent(rect, SurfaceContent.ContextualToolbar(toolbarState)).contentRect
+    val rowItems = ContextualToolbar
+      .rowGroups(ContextualToolbar.itemsFor(state), contentRect.width.max(1), toolbarState.displayMode)
+      .headOption
+      .getOrElse(fail("Expected toolbar row"))
+    val separatorOffset = renderedToolbarSeparatorOffsets(rowItems, contentRect.width, toolbarState.displayMode)
+      .lift(separatorIndex)
+      .getOrElse(fail(s"Expected toolbar separator $separatorIndex"))
+    Point(contentRect.x + separatorOffset, toolbarRowY(state, 0))
 
   private def toolbarDetailPoint(state: AppState, itemId: String, optionLabel: String): Point =
     val rect         = toolbarRect(state)
@@ -1037,6 +1097,39 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val start = ((localIndex * contentWidth) + itemCount - 1) / itemCount
     val end   = ((((localIndex + 1) * contentWidth) + itemCount - 1) / itemCount) - 1
     start + math.max(0, (end - start) / 2)
+
+  private def renderedToolbarCellRegions(
+    items: List[ContextualToolbarItem],
+    contentWidth: Int,
+    mode: ToolbarDisplayMode
+  ): List[(Int, Int)] =
+    val widths = ContextualToolbar.itemCellWidths(items, contentWidth, mode)
+    items
+      .zip(widths)
+      .zipWithIndex
+      .foldLeft((0, List.empty[(Int, Int)])) {
+        case ((cursor, regions), ((item, width), index)) =>
+          val separatorWidth = Option
+            .when(ContextualToolbar.hasTrailingGroupSeparator(item, items.lift(index + 1)))(1)
+            .getOrElse(0)
+          val gapWidth = Option.when(index < items.length - 1)(1).getOrElse(0)
+          (cursor + width + separatorWidth + gapWidth, regions :+ (cursor -> width))
+      }
+      ._2
+
+  private def renderedToolbarSeparatorOffsets(
+    items: List[ContextualToolbarItem],
+    contentWidth: Int,
+    mode: ToolbarDisplayMode
+  ): List[Int] =
+    renderedToolbarCellRegions(items, contentWidth, mode)
+      .zip(items)
+      .zipWithIndex
+      .collect {
+        case (((start, width), item), index)
+            if ContextualToolbar.hasTrailingGroupSeparator(item, items.lift(index + 1)) =>
+          start + width
+      }
 
   private def moveToolbarFocusTo(stateManager: com.serenity.state.manager.StateManager, itemId: String): Unit =
     focusToolbar(stateManager)
