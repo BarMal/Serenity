@@ -10,7 +10,7 @@ import com.serenity.richtext.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.{Renderer, SurfaceContentResolver, SurfaceRenderMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -596,11 +596,11 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       )
     )
 
-    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly) shouldBe "\ue167"
+    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly) shouldBe "Serif ▾"
     ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.TextOnly) shouldBe "Font Serif"
     ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconAndText) shouldBe "\ue167 Font Serif"
 
-    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "\ue245"
+    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "18"
     ContextualToolbar.displayText(input, ToolbarDisplayMode.TextOnly) shouldBe "Size 18"
     ContextualToolbar.displayText(input, ToolbarDisplayMode.IconAndText) shouldBe "\ue245 Size 18"
   }
@@ -636,7 +636,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     )
   }
 
-  it should "render icon-only glyphs through the floating overlay renderer" in {
+  it should "render compact toolbar controls alongside icon-only action glyphs" in {
     val stateManager = createStateManager("ContextualToolbarSpec-rendered-glyphs")
     val viewport     = ViewportSize(120, 30)
     stateManager.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
@@ -659,7 +659,21 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     )
 
     val renderedText = surface.putStringCalls.map(_.s).mkString
-    ContextualToolbar.itemsFor(state).map(_.icon).foreach(renderedText should include(_))
+    ContextualToolbar.itemsFor(state).collect { case button: ContextualToolbarItem.Button => button.icon }.foreach(
+      renderedText should include(_)
+    )
+    val compactControlText = ContextualToolbar.itemsFor(state).collect {
+      case dropdown: ContextualToolbarItem.Dropdown => ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly)
+      case input: ContextualToolbarItem.Input       => ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly)
+    }
+    val resolved = SurfaceContentResolver.resolveContextualToolbar(
+      toolbarStateFrom(state),
+      state,
+      LayoutRect(0, 0, 120, 10),
+      SurfaceRenderMode.Floating
+    )
+    val resolvedText = resolved.rows.flatMap(_.segments).map(_.text)
+    compactControlText.foreach(resolvedText should contain(_))
     surface.setFontCalls.map(_.getFamily) should contain(FontLoader.ToolbarIconFontFamily)
   }
 
@@ -727,7 +741,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val rowGroups = ContextualToolbar
       .rowGroups(
         ContextualToolbar.itemsFor(stateManager.getCurrentState.unsafeRunSync()),
-        20,
+        24,
         ToolbarDisplayMode.IconOnly
       )
       .map(_.map(_.id))
@@ -750,7 +764,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val toolbarState = ContextualToolbarState(displayMode = ToolbarDisplayMode.IconOnly)
     val width        = ContextualToolbar.compactContentWidth(toolbarState, state, maxWidth = 120)
 
-    width shouldBe 51
+    width shouldBe 70
     ContextualToolbar.rowCount(toolbarState, state, width) shouldBe 1
   }
 
