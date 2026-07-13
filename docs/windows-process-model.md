@@ -8,7 +8,7 @@ While Serenity is open, Windows Task Manager is therefore expected to show two
 Serenity-related processes:
 
 1. `Serenity.exe` is the native `jpackage` launcher.
-2. `runtime\\bin\\javaw.exe` is its child process and hosts the JVM that runs
+2. `runtime\\bin\\java.exe` is its child process and hosts the JVM that runs
    Serenity.
 
 This is one application with one JVM, not a duplicate editor instance. Both
@@ -18,7 +18,7 @@ process may remain.
 The Windows package-check and publish workflows launch the generated app image,
 record process names, command lines, parentage, CPU time, and working-set memory,
 then enforce the one-launcher/one-JVM relationship and post-exit cleanup.[1]
-Any additional child process, a missing bundled `javaw.exe` child, or a process
+Any additional child process, a missing bundled `java.exe` child, or a process
 that survives shutdown is a packaging or launcher defect.
 
 ## References

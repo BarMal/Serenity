@@ -73,7 +73,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $launcherPath = (Resolve-Path 'dist/Serenity/Serenity.exe').Path
-          $javawPath = (Resolve-Path 'dist/Serenity/runtime/bin/javaw.exe').Path
+          $javaPath = (Resolve-Path 'dist/Serenity/runtime/bin/java.exe').Path
           $launcher = Start-Process -FilePath $launcherPath -PassThru
 
           try {
@@ -85,10 +85,10 @@ jobs:
 
             $processes = Get-CimInstance Win32_Process
             $javaProcesses = @($processes | Where-Object {
-              $_.ParentProcessId -eq $launcher.Id -and $_.ExecutablePath -ieq $javawPath
+              $_.ParentProcessId -eq $launcher.Id -and $_.ExecutablePath -ieq $javaPath
             })
             if ($javaProcesses.Count -ne 1) {
-              throw "Expected one bundled javaw.exe child process; found $($javaProcesses.Count)."
+              throw "Expected one bundled java.exe child process; found $($javaProcesses.Count)."
             }
 
             $observed = @($processes | Where-Object { $_.ProcessId -eq $launcher.Id }) + $javaProcesses
