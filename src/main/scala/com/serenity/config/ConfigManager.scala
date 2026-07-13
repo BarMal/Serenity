@@ -300,7 +300,7 @@ object ConfigManager:
        |
        |# Interface density: compact, comfortable, spacious
        |interface.density = ${config.interfaceDensity.configKey}
-       |# Window chrome: native preserves OS snap/window animations; custom is themed and applies after restart
+       |# Window chrome: native preserves OS snap/window animations; native-themed uses Windows system chrome colours; custom is themed and applies after restart
        |window.chrome = ${config.windowChromeMode.configKey}
        |ui.element_gap = ${config.uiElementGap}
        |ui.corner_radius = ${config.uiCornerRadiusPx}

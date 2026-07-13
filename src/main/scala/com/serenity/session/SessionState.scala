@@ -463,9 +463,10 @@ given Decoder[CursorInfoBarPlacement] = Decoder.decodeString.emap {
 given Encoder[WindowChromeMode] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[WindowChromeMode] = Decoder.decodeString.emap {
-  case "Native" => Right(WindowChromeMode.Native)
-  case "Custom" => Right(WindowChromeMode.Custom)
-  case other    => Left(s"Unknown WindowChromeMode: $other")
+  case "Native"       => Right(WindowChromeMode.Native)
+  case "NativeThemed" => Right(WindowChromeMode.NativeThemed)
+  case "Custom"       => Right(WindowChromeMode.Custom)
+  case other          => Left(s"Unknown WindowChromeMode: $other")
 }
 
 given Encoder[MarkdownViewMode] = Encoder.encodeString.contramap(_.toString)

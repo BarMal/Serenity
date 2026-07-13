@@ -134,6 +134,7 @@ enum CommandIntent:
   case SetSpellCheckDictionaryPaths(paths: List[String])
   case SetSpellCheckWords(words: List[String])
   case SetInterfaceDensity(density: InterfaceDensity)
+  case SetWindowChromeMode(mode: WindowChromeMode)
   case SetTextAreaLeftInset(value: Double)
   case SetTextAreaRightInset(value: Double)
   case SetTextAreaTopInset(value: Double)

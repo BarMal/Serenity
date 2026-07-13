@@ -144,16 +144,18 @@ object CursorInfoBarPlacement:
         None
 
 enum WindowChromeMode(val configKey: String):
-  case Native extends WindowChromeMode("native")
-  case Custom extends WindowChromeMode("custom")
+  case Native       extends WindowChromeMode("native")
+  case NativeThemed extends WindowChromeMode("native-themed")
+  case Custom       extends WindowChromeMode("custom")
 
 object WindowChromeMode:
 
   def fromConfigKey(value: String): Option[WindowChromeMode] =
     value.trim.toLowerCase match
-      case "custom" | "themed" | "serenity" => Some(WindowChromeMode.Custom)
-      case "native" | "os" | "system"       => Some(WindowChromeMode.Native)
-      case _                                => None
+      case "custom" | "themed" | "serenity"                  => Some(WindowChromeMode.Custom)
+      case "native-themed" | "native_themed" | "system-themed" => Some(WindowChromeMode.NativeThemed)
+      case "native" | "os" | "system"                        => Some(WindowChromeMode.Native)
+      case _                                                     => None
 
 enum MarkdownViewMode(val configKey: String):
   case Source       extends MarkdownViewMode("source")

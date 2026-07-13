@@ -8,7 +8,7 @@ import javax.swing.JComponent
 
 import com.serenity.config.WindowChromeMode
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.terminal.SwingWindow
+import com.serenity.ui.terminal.{SwingWindow, WindowsNativeChrome}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -75,6 +75,19 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     val fallback = SwingWindow.canvasFallbackSize(requestedWindow, WindowChromeMode.Native, chrome)
 
     fallback shouldBe requestedWindow
+  }
+
+  it should "use the full fallback canvas size for native-themed chrome" in {
+    val requestedWindow = new Dimension(1200, 900)
+    val chrome = SwingWindow.ChromeMetrics.fromCellMetrics(CellMetrics(charWidth = 10, lineHeight = 20, ascent = 15))
+
+    SwingWindow.canvasFallbackSize(requestedWindow, WindowChromeMode.NativeThemed, chrome) shouldBe requestedWindow
+  }
+
+  "WindowsNativeChrome" should "advertise support only for Windows platform names" in {
+    WindowsNativeChrome.isSupported("Windows 11") shouldBe true
+    WindowsNativeChrome.isSupported("Mac OS X") shouldBe false
+    WindowsNativeChrome.isSupported("Linux") shouldBe false
   }
 
   it should "derive custom chrome fallback viewport from the post-title-bar canvas" in {

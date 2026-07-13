@@ -31,6 +31,7 @@ object CommandRunnerOptionSelections:
       "cursor-info-bar-placement"  -> cursorInfoBarPlacementIndex(cursorConfig.infoBarPlacement),
       "background-style"           -> backgroundStyleIndex(surfaceConfig.backgroundStyle),
       "interface-density"          -> interfaceDensityIndex(interfaceConfig.density),
+      "window-chrome"              -> windowChromeModeIndex(config.windowChromeMode),
       "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
       "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
       "spellcheck-enabled"         -> spellCheckEnabledIndex(languageToolsConfig.spellCheck.enabled),
@@ -84,6 +85,12 @@ object CommandRunnerOptionSelections:
       case InterfaceDensity.Compact     => 0
       case InterfaceDensity.Comfortable => 1
       case InterfaceDensity.Spacious    => 2
+
+  private def windowChromeModeIndex(mode: WindowChromeMode): Int =
+    mode match
+      case WindowChromeMode.Native       => 0
+      case WindowChromeMode.NativeThemed => 1
+      case WindowChromeMode.Custom       => 2
 
   private def materialPresetIndex(preset: MaterialPreset): Int =
     preset match

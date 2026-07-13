@@ -402,7 +402,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     config.windowChromeMode shouldBe WindowChromeMode.Native
     ConfigManager.configToString(config) should include(
-      "# Window chrome: native preserves OS snap/window animations; custom is themed and applies after restart"
+      "# Window chrome: native preserves OS snap/window animations; native-themed uses Windows system chrome colours; custom is themed and applies after restart"
     )
     ConfigManager.configToString(config) should include("window.chrome = native")
   }

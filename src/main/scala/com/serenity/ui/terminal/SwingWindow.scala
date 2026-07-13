@@ -46,6 +46,7 @@ class SwingWindow(
   private val titleSpacerRef         = new AtomicReference[Option[JPanel]](None)
   private val onResizeCallbackRef    = new AtomicReference[Option[() => Unit]](None)
   private val usesCustomChrome       = chromeMode == WindowChromeMode.Custom
+  private val usesNativeThemedChrome = chromeMode == WindowChromeMode.NativeThemed
 
   def setOnResize(cb: () => Unit): Unit = onResizeCallbackRef.set(Some(cb))
 
@@ -409,6 +410,7 @@ class SwingWindow(
     val showWindow: Runnable = () =>
       frame.setVisible(true)
       if usesCustomChrome then updateShape()
+      if usesNativeThemedChrome then applyNativeChromeTheme()
       publishCanvasResize(canvas.getSize())
       val _ = canvas.requestFocusInWindow()
     if SwingUtilities.isEventDispatchThread then showWindow.run()
@@ -463,6 +465,14 @@ class SwingWindow(
       val applyPalette: Runnable = () => applyChromePalette(palette)
       if SwingUtilities.isEventDispatchThread then applyPalette.run()
       else SwingUtilities.invokeLater(applyPalette)
+    else if usesNativeThemedChrome then
+      chromePaletteRef.set(SwingWindow.ChromePalette.fromTheme(theme))
+      val applyPalette: Runnable = () => applyNativeChromeTheme()
+      if SwingUtilities.isEventDispatchThread then applyPalette.run()
+      else SwingUtilities.invokeLater(applyPalette)
+
+  private def applyNativeChromeTheme(): Unit =
+    val _ = WindowsNativeChrome.apply(frame, chromePaletteRef.get())
 
   def detectedDeviceTextScale: Double =
     DisplayScale.forComponent(canvas).textScale
@@ -748,7 +758,7 @@ object SwingWindow:
     val chromeHeight =
       chromeMode match
         case WindowChromeMode.Custom => chromeMetrics.titleBarHeight
-        case WindowChromeMode.Native => 0
+        case WindowChromeMode.Native | WindowChromeMode.NativeThemed => 0
     new Dimension(windowSize.width.max(1), (windowSize.height - chromeHeight).max(1))
 
   def fallbackCanvasResizeSnapshot(
