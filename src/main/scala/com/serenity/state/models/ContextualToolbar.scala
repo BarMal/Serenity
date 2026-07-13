@@ -281,6 +281,22 @@ object ContextualToolbar:
       case (Some(group), Some(nextGroup)) => group != nextGroup
       case _                              => false
 
+  /** Cell widths for a toolbar row, excluding inter-item and group-separator gutters. */
+  def itemCellWidths(
+    items: List[ContextualToolbarItem],
+    contentWidth: Int,
+    mode: ToolbarDisplayMode
+  ): List[Int] =
+    val preferredWidths = items.map(item => displayTextWidth(displayText(item, mode)) + 2)
+    val gutters = items.drop(1).length + items.zip(items.drop(1)).count {
+      case (item, nextItem) =>
+        hasTrailingGroupSeparator(item, Some(nextItem))
+    }
+    val availableWidth = (contentWidth - gutters).max(0)
+    if preferredWidths.sum <= availableWidth then
+      distributeExtraWidth(preferredWidths, availableWidth - preferredWidths.sum)
+    else distributeEvenly(items.length, availableWidth)
+
   def rowGroups(
     items: List[ContextualToolbarItem],
     contentWidth: Int,
@@ -430,7 +446,24 @@ object ContextualToolbar:
     rows :+ currentRow
 
   private def estimatedRowWidth(items: List[ContextualToolbarItem], mode: ToolbarDisplayMode): Int =
-    items.map(item => displayTextWidth(displayText(item, mode)) + 2).sum + items.drop(1).length
+    items.map(item => displayTextWidth(displayText(item, mode)) + 2).sum +
+      items.drop(1).length +
+      items.zip(items.drop(1)).count {
+        case (item, nextItem) =>
+          hasTrailingGroupSeparator(item, Some(nextItem))
+      }
+
+  private def distributeExtraWidth(widths: List[Int], extraWidth: Int): List[Int] =
+    widths.zipWithIndex.map { (width, index) =>
+      width + (extraWidth / widths.length) + Option.when(index < extraWidth % widths.length)(1).getOrElse(0)
+    }
+
+  private def distributeEvenly(itemCount: Int, availableWidth: Int): List[Int] =
+    if itemCount == 0 then Nil
+    else
+      List.tabulate(itemCount) { index =>
+        (availableWidth / itemCount) + Option.when(index < availableWidth % itemCount)(1).getOrElse(0)
+      }
 
   private def displayTextWidth(text: String): Int =
     text.codePoints().toArray.count { codePoint =>

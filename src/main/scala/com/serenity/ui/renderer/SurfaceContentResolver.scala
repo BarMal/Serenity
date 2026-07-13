@@ -21,6 +21,7 @@ enum OverlayTone:
 enum OverlayRowLayout:
   case Plain
   case Distributed
+  case CompactDistributed
   case Split
   case Columns
 
@@ -33,7 +34,8 @@ case class OverlaySegment(
     fontFamily: Option[String] = None,
     inlineIcon: Option[String] = None,
     inlineIconFontFamily: Option[String] = None,
-    trailingSeparator: Boolean = false
+    trailingSeparator: Boolean = false,
+    allocatedWidth: Option[Int] = None
 )
 
 case class OverlayRow(
@@ -906,8 +908,9 @@ object SurfaceContentResolver:
     val topRows = rowGroups
       .foldLeft((0, List.empty[OverlayRow])) {
         case ((offset, acc), rowItems) =>
-          val segments = rowItems.zipWithIndex.map {
-            case (item, index) =>
+          val cellWidths = ContextualToolbar.itemCellWidths(rowItems, contentRect.width.max(1), normalized.displayMode)
+          val segments = rowItems.zip(cellWidths).zipWithIndex.map {
+            case ((item, cellWidth), index) =>
               val selected          = isSelected(item) || offset + index == focused
               val trailingSeparator = ContextualToolbar.hasTrailingGroupSeparator(item, rowItems.lift(index + 1))
               normalized.displayMode match
@@ -918,13 +921,15 @@ object SurfaceContentResolver:
                         item.icon,
                         selected = selected,
                         fontFamily = iconFont,
-                        trailingSeparator = trailingSeparator
+                        trailingSeparator = trailingSeparator,
+                        allocatedWidth = Some(cellWidth)
                       )
                     case _ =>
                       OverlaySegment(
                         ContextualToolbar.displayText(item, ToolbarDisplayMode.IconOnly),
                         selected = selected,
-                        trailingSeparator = trailingSeparator
+                        trailingSeparator = trailingSeparator,
+                        allocatedWidth = Some(cellWidth)
                       )
                 case ToolbarDisplayMode.IconAndText if iconFont.nonEmpty =>
                   OverlaySegment(
@@ -932,13 +937,15 @@ object SurfaceContentResolver:
                     selected = selected,
                     inlineIcon = Some(item.icon),
                     inlineIconFontFamily = iconFont,
-                    trailingSeparator = trailingSeparator
+                    trailingSeparator = trailingSeparator,
+                    allocatedWidth = Some(cellWidth)
                   )
                 case _ =>
                   OverlaySegment(
                     ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly),
                     selected = selected,
-                    trailingSeparator = trailingSeparator
+                    trailingSeparator = trailingSeparator,
+                    allocatedWidth = Some(cellWidth)
                   )
           }
           (
@@ -946,7 +953,7 @@ object SurfaceContentResolver:
             acc :+ OverlayRow(
               plainText = segments.map(_.text).mkString(" "),
               segments = segments,
-              layout = OverlayRowLayout.Distributed
+              layout = OverlayRowLayout.CompactDistributed
             )
           )
       }

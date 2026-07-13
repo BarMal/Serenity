@@ -790,8 +790,42 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val toolbarState = ContextualToolbarState(displayMode = ToolbarDisplayMode.IconOnly)
     val width        = ContextualToolbar.compactContentWidth(toolbarState, state, maxWidth = 120)
 
-    width shouldBe 70
+    width shouldBe 73
     ContextualToolbar.rowCount(toolbarState, state, width) shouldBe 1
+  }
+
+  it should "preserve a selected hex value at the exact compact toolbar width" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-compact-selected-hex")
+    val viewport     = ViewportSize(78, 30)
+
+    stateManager.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    moveToolbarFocusTo(stateManager, "color-hex")
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    toolbarContentWidth(state) shouldBe 73
+
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new MockRenderSurface(viewport.width, viewport.height)
+    Renderer.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      font,
+      font,
+      CellMetrics.fromFont(font),
+      None
+    )
+
+    val row        = surface.getRow(toolbarRowY(state, 0))
+    val hexStart   = row.indexOf("#336699")
+    val separatorX = row.indexOf('│')
+    hexStart should be >= 0
+    separatorX should be >= 0
+    surface.getBg(hexStart, toolbarRowY(state, 0)) shouldBe state.theme.highlighted.background
+    surface.getBg(separatorX, toolbarRowY(state, 0)) shouldBe state.theme.panel.background
   }
 
   it should "move focus vertically between wrapped toolbar rows" in {

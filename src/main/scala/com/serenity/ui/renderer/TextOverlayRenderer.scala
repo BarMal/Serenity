@@ -143,6 +143,8 @@ object TextOverlayRenderer:
         else CharacterRenderer.renderStringPlain(surface, x, y, rowView.row.plainText.take(width))
       case OverlayRowLayout.Distributed =>
         renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+      case OverlayRowLayout.CompactDistributed =>
+        renderCompactDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
       case OverlayRowLayout.Split =>
         renderSplitRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
       case OverlayRowLayout.Columns =>
@@ -192,6 +194,8 @@ object TextOverlayRenderer:
         columnCursorPlacement(row, x, width)
       case OverlayRowLayout.Distributed =>
         None
+      case OverlayRowLayout.CompactDistributed =>
+        None
 
   private def splitCursorPlacement(
     row: OverlayRow,
@@ -239,7 +243,7 @@ object TextOverlayRenderer:
               math.max(0, math.min(cursorColumn - width + 1, row.plainText.length - width))
             case _ =>
               0
-        case OverlayRowLayout.Columns | OverlayRowLayout.Distributed =>
+        case OverlayRowLayout.Columns | OverlayRowLayout.Distributed | OverlayRowLayout.CompactDistributed =>
           0
 
     if scrollOffset == 0 then OverlayRowView(row, useMeasuredCursor)
@@ -284,10 +288,51 @@ object TextOverlayRenderer:
             theme,
             defaultForeground,
             defaultBackground,
-            font,
-            trailingSeparator = segment.trailingSeparator
+            font
           )
           cursorX + cellWidth
+      }
+      ()
+
+  private def renderCompactDistributedRow(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    width: Int,
+    row: OverlayRow,
+    theme: Theme,
+    defaultForeground: Color,
+    defaultBackground: Color,
+    font: Font
+  ): Unit =
+    val segments = row.segments
+    if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
+    else
+      val _ = segments.zipWithIndex.foldLeft(x) {
+        case (cursorX, (segment, index)) =>
+          val remainingWidth = (x + width - cursorX).max(0)
+          val cellWidth      = segment.allocatedWidth.getOrElse(0).min(remainingWidth)
+          renderSegmentCell(
+            surface,
+            cursorX,
+            y,
+            cellWidth,
+            segment,
+            theme,
+            defaultForeground,
+            defaultBackground,
+            font
+          )
+          val afterCell = cursorX + cellWidth
+          val afterSeparator =
+            if segment.trailingSeparator && afterCell < x + width then
+              surface.setForegroundColor(defaultForeground)
+              surface.setBackgroundColor(defaultBackground)
+              CharacterRenderer.renderChar(surface, afterCell, y, '│')
+              afterCell + 1
+            else afterCell
+          if index < segments.length - 1 && afterSeparator < x + width then afterSeparator + 1
+          else afterSeparator
       }
       ()
 
@@ -565,8 +610,7 @@ object TextOverlayRenderer:
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
-    font: Font,
-    trailingSeparator: Boolean = false
+    font: Font
   ): Unit =
     val iconWidth   = segment.inlineIcon.map(_.length).getOrElse(0).min(width)
     val iconGap     = if iconWidth > 0 && width > iconWidth && segment.text.nonEmpty then 1 else 0
@@ -586,10 +630,6 @@ object TextOverlayRenderer:
       defaultBackground,
       font
     )
-    if trailingSeparator && width > 1 then
-      surface.setForegroundColor(defaultForeground)
-      surface.setBackgroundColor(defaultBackground)
-      CharacterRenderer.renderChar(surface, x + width - 1, y, '│')
 
   private def renderSegmentText(
     surface: RenderSurface,
