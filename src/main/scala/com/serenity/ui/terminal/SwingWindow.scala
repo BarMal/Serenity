@@ -46,6 +46,8 @@ class SwingWindow(
   private val titleLabelRef          = new AtomicReference[Option[JLabel]](None)
   private val titleSpacerRef         = new AtomicReference[Option[JPanel]](None)
   private val onResizeCallbackRef    = new AtomicReference[Option[() => Unit]](None)
+  private val resizeGlassPaneRef     = new AtomicReference[Option[JComponent]](None)
+  private val roundedCornerMaskRef   = new AtomicReference[Option[Int]](None)
   private val usesCustomChrome       = chromeMode == WindowChromeMode.Custom
   private val usesNativeThemedChrome = chromeMode == WindowChromeMode.NativeThemed
   private val perPixelTranslucencySupported =
@@ -98,17 +100,25 @@ class SwingWindow(
         false
 
   private def updateShape(): Unit =
-    if SwingWindow.shouldUsePerPixelRoundedCorners(
-          usesCustomChrome,
-          maximizedRef.get(),
-          perPixelTranslucencySupported
-        )
+    val roundedCornerMask = SwingWindow.roundedCornerMask(
+      usesCustomChrome,
+      maximizedRef.get(),
+      perPixelTranslucencySupported,
+      chromeMetricsRef.get().cornerArc
+    )
+    val refreshRoundedCornerMask =
+      SwingWindow.shouldRefreshRoundedCornerMask(roundedCornerMaskRef.get(), roundedCornerMask)
+    roundedCornerMaskRef.set(roundedCornerMask)
+
+    if roundedCornerMask.nonEmpty
     then frame.setShape(null)
     else if usesCustomChrome && !maximizedRef.get() then
       val d      = frame.getSize
       val chrome = chromeMetricsRef.get()
       frame.setShape(new RoundRectangle2D.Double(0, 0, d.width, d.height, chrome.cornerArc, chrome.cornerArc))
     else if usesCustomChrome then frame.setShape(null)
+
+    if refreshRoundedCornerMask then resizeGlassPaneRef.get().foreach(_.repaint())
 
   private def toggleMaximize(): Unit =
     if maximizedRef.get() then
@@ -424,6 +434,7 @@ class SwingWindow(
     f.setContentPane(content)
     if usesCustomChrome then
       val glassPane = new ResizeGlassPane
+      resizeGlassPaneRef.set(Some(glassPane))
       f.setGlassPane(glassPane)
       glassPane.setVisible(true)
     f.pack()
@@ -582,6 +593,19 @@ object SwingWindow:
     perPixelTranslucencySupported: Boolean
   ): Boolean =
     usesCustomChrome && !maximized && perPixelTranslucencySupported
+
+  private[serenity] def roundedCornerMask(
+    usesCustomChrome: Boolean,
+    maximized: Boolean,
+    perPixelTranslucencySupported: Boolean,
+    cornerArc: Int
+  ): Option[Int] =
+    Option.when(shouldUsePerPixelRoundedCorners(usesCustomChrome, maximized, perPixelTranslucencySupported))(
+      cornerArc.max(0)
+    )
+
+  private[serenity] def shouldRefreshRoundedCornerMask(previous: Option[Int], current: Option[Int]): Boolean =
+    previous != current
 
   case class ChromeMetrics(
       titleBarHeight: Int,
