@@ -568,7 +568,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val dropdown = ContextualToolbarItem.Dropdown(
       id = "font-family",
       label = "Font",
-      icon = "A",
+      icon = "𝖠",
       optionItem = CommandSurfaceItem.OptionItem(
         id = "font-family",
         label = "Font",
@@ -580,7 +580,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val input = ContextualToolbarItem.Input(
       id = "font-size",
       label = "Size",
-      icon = "#",
+      icon = "↕",
       inputItem = CommandSurfaceItem.InputItem(
         id = "font-size",
         label = "Size",
@@ -592,13 +592,44 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       )
     )
 
-    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly) shouldBe "A"
+    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly) shouldBe "𝖠"
     ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.TextOnly) shouldBe "Font Serif"
-    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconAndText) shouldBe "A Font Serif"
+    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconAndText) shouldBe "𝖠 Font Serif"
 
-    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "#"
+    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "↕"
     ContextualToolbar.displayText(input, ToolbarDisplayMode.TextOnly) shouldBe "Size 18"
-    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconAndText) shouldBe "# Size 18"
+    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconAndText) shouldBe "↕ Size 18"
+  }
+
+  it should "use recognizable glyphs instead of letter placeholders in icon-only mode" in {
+    ContextualToolbar.markdownItems.map(_.icon) shouldBe List("◉", "≣", "▥", "⌕")
+    ContextualToolbar.codeItems.map(_.icon) shouldBe List("⚙", "✓", "▶", "⌘")
+
+    val stateManager = createStateManager("ContextualToolbarSpec-glyphs")
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+
+    val icons =
+      ContextualToolbar
+        .itemsFor(stateManager.getCurrentState.unsafeRunSync())
+        .map(item => item.id -> item.icon)
+        .toMap
+
+    icons shouldBe Map(
+      "bold"             -> "𝐁",
+      "italic"           -> "𝐼",
+      "underline"        -> "U̲",
+      "font-family"      -> "𝖠",
+      "font-family-text" -> "⌨",
+      "font-size"        -> "↕",
+      "color"            -> "●",
+      "color-hex"        -> "⌗",
+      "paragraph-role"   -> "¶",
+      "align-left"       -> "⇤",
+      "align-center"     -> "↔",
+      "align-right"      -> "⇥",
+      "align-justify"    -> "☰"
+    )
   }
 
   it should "keep prose formatting controls in semantic clusters when rows wrap" in {

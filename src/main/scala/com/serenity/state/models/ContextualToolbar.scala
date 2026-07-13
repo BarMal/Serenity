@@ -176,17 +176,17 @@ object ContextualToolbar:
   )
 
   val markdownItems: List[ContextualToolbarItem] = List(
-    ContextualToolbarItem.Button("markdown-preview", "Preview", "markdown-preview", "P"),
-    ContextualToolbarItem.Button("markdown-view-source", "Source", "markdown-view-source", "S"),
-    ContextualToolbarItem.Button("markdown-view-split", "Split", "markdown-view-split", "V"),
-    ContextualToolbarItem.Button("markdown-view-inline-lens", "Lens", "markdown-view-inline-lens", "L")
+    ContextualToolbarItem.Button("markdown-preview", "Preview", "markdown-preview", "◉"),
+    ContextualToolbarItem.Button("markdown-view-source", "Source", "markdown-view-source", "≣"),
+    ContextualToolbarItem.Button("markdown-view-split", "Split", "markdown-view-split", "▥"),
+    ContextualToolbarItem.Button("markdown-view-inline-lens", "Lens", "markdown-view-inline-lens", "⌕")
   )
 
   val codeItems: List[ContextualToolbarItem] = List(
-    ContextualToolbarItem.Button("project-build", "Build", "project-build", "B"),
-    ContextualToolbarItem.Button("project-test", "Test", "project-test", "T"),
-    ContextualToolbarItem.Button("project-run", "Run", "project-run", "R"),
-    ContextualToolbarItem.Button("project-debug", "Debug", "project-debug", "D")
+    ContextualToolbarItem.Button("project-build", "Build", "project-build", "⚙"),
+    ContextualToolbarItem.Button("project-test", "Test", "project-test", "✓"),
+    ContextualToolbarItem.Button("project-run", "Run", "project-run", "▶"),
+    ContextualToolbarItem.Button("project-debug", "Debug", "project-debug", "⌘")
   )
 
   def itemsFor(state: AppState): List[ContextualToolbarItem] =
@@ -420,7 +420,15 @@ object ContextualToolbar:
     rows :+ currentRow
 
   private def estimatedRowWidth(items: List[ContextualToolbarItem], mode: ToolbarDisplayMode): Int =
-    items.map(item => displayText(item, mode).length + 2).sum + items.drop(1).length
+    items.map(item => displayTextWidth(displayText(item, mode)) + 2).sum + items.drop(1).length
+
+  private def displayTextWidth(text: String): Int =
+    text.codePoints().toArray.count { codePoint =>
+      val category = Character.getType(codePoint)
+      category != Character.NON_SPACING_MARK &&
+      category != Character.COMBINING_SPACING_MARK &&
+      category != Character.ENCLOSING_MARK
+    }
 
   private def optionRowGroups(options: List[CommandOption], contentWidth: Int): List[List[CommandOption]] =
     if options.isEmpty || contentWidth <= 0 then Nil
@@ -536,27 +544,27 @@ object ContextualToolbar:
         "bold",
         "Bold",
         "bold",
-        "B",
+        "𝐁",
         selected = style.marks.contains(InlineMark.Bold)
       ),
       ContextualToolbarItem.Button(
         "italic",
         "Italic",
         "italic",
-        "I",
+        "𝐼",
         selected = style.marks.contains(InlineMark.Italic)
       ),
       ContextualToolbarItem.Button(
         "underline",
         "Underline",
         "underline",
-        "U",
+        "U̲",
         selected = style.marks.contains(InlineMark.Underline)
       ),
       ContextualToolbarItem.Dropdown(
         id = "font-family",
         label = "Font",
-        icon = "A",
+        icon = "𝖠",
         optionItem = CommandSurfaceItem.OptionItem(
           id = "font-family",
           label = "Font",
@@ -568,7 +576,7 @@ object ContextualToolbar:
       ContextualToolbarItem.Input(
         id = "font-family-text",
         label = "Family",
-        icon = "F",
+        icon = "⌨",
         inputItem = CommandSurfaceItem.InputItem(
           id = "font-family-text",
           label = "Family",
@@ -583,7 +591,7 @@ object ContextualToolbar:
       ContextualToolbarItem.Input(
         id = "font-size",
         label = "Size",
-        icon = "#",
+        icon = "↕",
         inputItem = CommandSurfaceItem.InputItem(
           id = "font-size",
           label = "Size",
@@ -600,7 +608,7 @@ object ContextualToolbar:
       ContextualToolbarItem.Dropdown(
         id = "color",
         label = "Color",
-        icon = "C",
+        icon = "●",
         optionItem = CommandSurfaceItem.OptionItem(
           id = "color",
           label = "Color",
@@ -612,7 +620,7 @@ object ContextualToolbar:
       ContextualToolbarItem.Input(
         id = "color-hex",
         label = "Hex",
-        icon = "H",
+        icon = "⌗",
         inputItem = CommandSurfaceItem.InputItem(
           id = "color-hex",
           label = "Hex",
@@ -627,7 +635,7 @@ object ContextualToolbar:
       ContextualToolbarItem.Dropdown(
         id = "paragraph-role",
         label = "Role",
-        icon = "P",
+        icon = "¶",
         optionItem = CommandSurfaceItem.OptionItem(
           id = "paragraph-role",
           label = "Role",
@@ -640,28 +648,28 @@ object ContextualToolbar:
         "align-left",
         "Left",
         "align-left",
-        "L",
+        "⇤",
         selected = paragraph.exists(_.alignment == ParagraphAlignment.Left)
       ),
       ContextualToolbarItem.Button(
         "align-center",
         "Center",
         "align-center",
-        "C",
+        "↔",
         selected = paragraph.exists(_.alignment == ParagraphAlignment.Center)
       ),
       ContextualToolbarItem.Button(
         "align-right",
         "Right",
         "align-right",
-        "R",
+        "⇥",
         selected = paragraph.exists(_.alignment == ParagraphAlignment.Right)
       ),
       ContextualToolbarItem.Button(
         "align-justify",
         "Justify",
         "align-justify",
-        "J",
+        "☰",
         selected = paragraph.exists(_.alignment == ParagraphAlignment.Justify)
       )
     )
