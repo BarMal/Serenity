@@ -32,6 +32,7 @@ class SwingWindow(
   private val metricsRef             = new AtomicReference(initialMetrics)
   private val chromeMetricsRef       = new AtomicReference(initialChromeLayoutMetrics)
   private val chromePaletteRef       = new AtomicReference(SwingWindow.ChromePalette.fromTheme(Theme.default))
+  private val nativeChromeThemeCache = new SwingWindow.NativeChromeThemeCache
   private val pendingResize          = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch             = new CountDownLatch(1)
   private val baseImageRef           = new AtomicReference[Option[BufferedImage]](None)
@@ -410,7 +411,7 @@ class SwingWindow(
     val showWindow: Runnable = () =>
       frame.setVisible(true)
       if usesCustomChrome then updateShape()
-      if usesNativeThemedChrome then applyNativeChromeTheme()
+      if usesNativeThemedChrome then updateNativeChromeTheme(chromePaletteRef.get())
       publishCanvasResize(canvas.getSize())
       val _ = canvas.requestFocusInWindow()
     if SwingUtilities.isEventDispatchThread then showWindow.run()
@@ -465,14 +466,15 @@ class SwingWindow(
       val applyPalette: Runnable = () => applyChromePalette(palette)
       if SwingUtilities.isEventDispatchThread then applyPalette.run()
       else SwingUtilities.invokeLater(applyPalette)
-    else if usesNativeThemedChrome then
-      chromePaletteRef.set(SwingWindow.ChromePalette.fromTheme(theme))
-      val applyPalette: Runnable = () => applyNativeChromeTheme()
+    else if usesNativeThemedChrome then updateNativeChromeTheme(SwingWindow.ChromePalette.fromTheme(theme))
+
+  private def updateNativeChromeTheme(palette: SwingWindow.ChromePalette): Unit =
+    if nativeChromeThemeCache.recordIfChanged(palette, WindowsNativeChrome.isSupported()) then
+      chromePaletteRef.set(palette)
+      val applyPalette: Runnable = () =>
+        val _ = WindowsNativeChrome.apply(frame, palette)
       if SwingUtilities.isEventDispatchThread then applyPalette.run()
       else SwingUtilities.invokeLater(applyPalette)
-
-  private def applyNativeChromeTheme(): Unit =
-    val _ = WindowsNativeChrome.apply(frame, chromePaletteRef.get())
 
   def detectedDeviceTextScale: Double =
     DisplayScale.forComponent(canvas).textScale
@@ -717,6 +719,13 @@ object SwingWindow:
       def channel(value: Color => Int): Int =
         math.round(value(foreground) * clampedWeight + value(background) * backgroundWeight).toInt
       new Color(channel(_.getRed), channel(_.getGreen), channel(_.getBlue))
+
+  /** Avoids redundant native DWM updates while preserving applications for palette changes. */
+  final private[serenity] class NativeChromeThemeCache:
+    private val paletteRef = new AtomicReference[Option[ChromePalette]](None)
+
+    def recordIfChanged(palette: ChromePalette, supported: Boolean): Boolean =
+      supported && paletteRef.getAndSet(Some(palette)) != Some(palette)
 
   object ChromeMetrics:
     private val BaseTitleBarHeight = 32

@@ -90,6 +90,25 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     WindowsNativeChrome.isSupported("Linux") shouldBe false
   }
 
+  "SwingWindow.NativeChromeThemeCache" should "avoid reapplying an unchanged supported palette" in {
+    val cache        = new SwingWindow.NativeChromeThemeCache
+    val lightPalette = SwingWindow.ChromePalette.fromTheme(Theme.light)
+    val darkPalette  = SwingWindow.ChromePalette.fromTheme(Theme.dark)
+
+    cache.recordIfChanged(lightPalette, supported = true) shouldBe true
+    cache.recordIfChanged(lightPalette, supported = true) shouldBe false
+    cache.recordIfChanged(darkPalette, supported = true) shouldBe true
+    cache.recordIfChanged(darkPalette, supported = true) shouldBe false
+  }
+
+  it should "leave the palette uncached when native chrome is unsupported" in {
+    val cache   = new SwingWindow.NativeChromeThemeCache
+    val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
+
+    cache.recordIfChanged(palette, supported = false) shouldBe false
+    cache.recordIfChanged(palette, supported = true) shouldBe true
+  }
+
   it should "derive custom chrome fallback viewport from the post-title-bar canvas" in {
     val metrics         = CellMetrics(charWidth = 10, lineHeight = 20, ascent = 15)
     val requestedWindow = new Dimension(1200, 900)
