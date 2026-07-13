@@ -109,7 +109,7 @@ Priority labels used in this archived snapshot:
 ## 10. Window Interactions
 
 - `[x]` Serenity handles resize events and recomputes viewport size from the Swing canvas.[14][28]
-- `[x]` Custom window chrome exists with drag, manual edge resize, minimise, maximise/restore, and close controls when `WindowChromeMode.Custom` is enabled.[16][28]
+- `[x]` Native OS window chrome is the default; `WindowChromeMode.NativeThemed` applies Windows DWM caption colours while preserving the OS frame, and `WindowChromeMode.Custom` remains an opt-in undecorated fallback.[16][28]
 - `[x]` Graceful quit and dirty-buffer close workflow are covered by dedicated tests.[29]
 - `[~][P1]` Window behavior is solid in Swing, but there is still no evident cross-platform abstraction for more advanced window management beyond the current desktop implementation.[28][29]
 

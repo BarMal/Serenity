@@ -94,18 +94,21 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     PeekKeyAction.values.foreach(action => ids should contain(s"keymap-peek-${action.configKey}"))
   }
 
-  it should "expose interface density in the interface layout settings group" in {
+  it should "expose interface density and restart-only window chrome in the interface layout settings group" in {
     val config = AppConfig.default
       .withInterfaceDensity(InterfaceDensity.Compact)
+      .withWindowChromeMode(WindowChromeMode.NativeThemed)
       .withUiElementGap(2)
       .withUiCornerRadiusPx(6)
       .withUiOutlineThicknessPx(3)
     val runner = CommandRunner.empty.activate(registry, config)
 
     runner.optionSelections.get("interface-density") shouldBe Some(0)
+    runner.optionSelections.get("window-chrome") shouldBe Some(1)
     settingsGroup(runner, "settings-interface-layout").map(_.children.map(_.id)) should contain(
       List(
         "interface-density",
+        "window-chrome",
         "ui-element-gap",
         "ui-corner-radius",
         "ui-outline-thickness",
@@ -114,6 +117,12 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "command-runner-cursor-gap-rows"
       )
     )
+    settingsGroup(runner, "settings-interface-layout")
+      .flatMap(
+        _.children.collectFirst { case item: CommandSurfaceItem.OptionItem if item.id == "window-chrome" => item }
+      )
+      .map(item => (item.selectedIndex, item.hint)) shouldBe
+      Some((1, Some("Applies after restart; native-themed falls back to native outside Windows")))
     settingsGroup(runner, "settings-interface-layout")
       .flatMap(
         _.children.collectFirst {

@@ -35,6 +35,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
         defaultMode = DefaultDocumentMode.RichText
       ),
       interfaceConfig = InterfaceConfig(density = InterfaceDensity.Compact),
+      windowConfig = WindowConfig(chromeMode = WindowChromeMode.NativeThemed),
       contextualToolbarDisplayMode = ToolbarDisplayMode.TextOnly,
       spellCheck = SpellCheckConfig(enabled = true),
       showLineNumbers = false,
@@ -68,6 +69,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("cursor-info-bar-placement") shouldBe 1
     selections("background-style") shouldBe 3
     selections("interface-density") shouldBe 0
+    selections("window-chrome") shouldBe 1
     selections("markdown-view") shouldBe 2
     selections("default-document-mode") shouldBe 2
     selections("contextual-toolbar-display") shouldBe 1

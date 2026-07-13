@@ -28,6 +28,7 @@ class WindowChromeModeSpec extends AnyFlatSpec with Matchers:
 
   it should "parse window chrome config values centrally" in {
     WindowChromeMode.fromConfigKey("serenity").shouldBe(Some(WindowChromeMode.Custom))
+    WindowChromeMode.fromConfigKey("native-themed").shouldBe(Some(WindowChromeMode.NativeThemed))
     WindowChromeMode.fromConfigKey("os").shouldBe(Some(WindowChromeMode.Native))
     WindowChromeMode.fromConfigKey("unknown").shouldBe(None)
   }
@@ -71,6 +72,11 @@ class WindowChromeModeSpec extends AnyFlatSpec with Matchers:
     config.blurRadius shouldBe 0.55f
     config.backgroundStyle shouldBe AppConfig.default.backgroundStyle
     config.cursorMode shouldBe AppConfig.default.cursorMode
+  }
+
+  it should "retain native-themed chrome in window configuration" in {
+    AppConfig.default.withWindowChromeMode(WindowChromeMode.NativeThemed).windowChromeMode shouldBe
+      WindowChromeMode.NativeThemed
   }
 
   it should "store preferred window size inside the window sub-config" in {

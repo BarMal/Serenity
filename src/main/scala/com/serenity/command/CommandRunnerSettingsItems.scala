@@ -214,6 +214,22 @@ object CommandRunnerSettingsItems:
       hint = Some("Compact, comfortable, or spacious")
     )
 
+  private[command] def windowChromeOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "window-chrome",
+      label = "Window Chrome",
+      options = List(
+        CommandOption("Native", CommandIntent.SetWindowChromeMode(WindowChromeMode.Native)),
+        CommandOption("Native Themed (Windows)", CommandIntent.SetWindowChromeMode(WindowChromeMode.NativeThemed)),
+        CommandOption("Custom", CommandIntent.SetWindowChromeMode(WindowChromeMode.Custom))
+      ),
+      selectedIndex = optionSelections.getOrElse("window-chrome", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Applies after restart; native-themed falls back to native outside Windows")
+    )
+
   private[command] def materialPresetOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =

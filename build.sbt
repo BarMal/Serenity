@@ -70,7 +70,8 @@ val log4CatsVersion = "2.7.0"
 libraryDependencies ++= Seq(
   "org.typelevel" %% "log4cats-core"   % log4CatsVersion,
   "org.typelevel" %% "log4cats-slf4j"  % log4CatsVersion,
-  "ch.qos.logback" % "logback-classic" % "1.5.18"
+  "ch.qos.logback" % "logback-classic" % "1.5.18",
+  "net.java.dev.jna" % "jna-platform"  % "5.12.0"
 )
 
 val commonMarkVersion = "0.27.0"

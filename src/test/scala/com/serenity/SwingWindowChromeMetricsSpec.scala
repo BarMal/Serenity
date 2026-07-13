@@ -8,7 +8,7 @@ import javax.swing.JComponent
 
 import com.serenity.config.WindowChromeMode
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.terminal.SwingWindow
+import com.serenity.ui.terminal.{SwingWindow, WindowsNativeChrome}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -75,6 +75,38 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     val fallback = SwingWindow.canvasFallbackSize(requestedWindow, WindowChromeMode.Native, chrome)
 
     fallback shouldBe requestedWindow
+  }
+
+  it should "use the full fallback canvas size for native-themed chrome" in {
+    val requestedWindow = new Dimension(1200, 900)
+    val chrome = SwingWindow.ChromeMetrics.fromCellMetrics(CellMetrics(charWidth = 10, lineHeight = 20, ascent = 15))
+
+    SwingWindow.canvasFallbackSize(requestedWindow, WindowChromeMode.NativeThemed, chrome) shouldBe requestedWindow
+  }
+
+  "WindowsNativeChrome" should "advertise support only for Windows platform names" in {
+    WindowsNativeChrome.isSupported("Windows 11") shouldBe true
+    WindowsNativeChrome.isSupported("Mac OS X") shouldBe false
+    WindowsNativeChrome.isSupported("Linux") shouldBe false
+  }
+
+  "SwingWindow.NativeChromeThemeCache" should "avoid reapplying an unchanged supported palette" in {
+    val cache        = new SwingWindow.NativeChromeThemeCache
+    val lightPalette = SwingWindow.ChromePalette.fromTheme(Theme.light)
+    val darkPalette  = SwingWindow.ChromePalette.fromTheme(Theme.dark)
+
+    cache.recordIfChanged(lightPalette, supported = true) shouldBe true
+    cache.recordIfChanged(lightPalette, supported = true) shouldBe false
+    cache.recordIfChanged(darkPalette, supported = true) shouldBe true
+    cache.recordIfChanged(darkPalette, supported = true) shouldBe false
+  }
+
+  it should "leave the palette uncached when native chrome is unsupported" in {
+    val cache   = new SwingWindow.NativeChromeThemeCache
+    val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
+
+    cache.recordIfChanged(palette, supported = false) shouldBe false
+    cache.recordIfChanged(palette, supported = true) shouldBe true
   }
 
   it should "derive custom chrome fallback viewport from the post-title-bar canvas" in {

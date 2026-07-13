@@ -435,6 +435,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateSpellCheckConfig(_.copy(additionalWords = words))
       case CommandIntent.SetInterfaceDensity(density) =>
         updateAppearanceConfig(_.withInterfaceDensity(density)).void
+      case CommandIntent.SetWindowChromeMode(mode) =>
+        updateAppearanceConfig(_.withWindowChromeMode(mode)).void
       case CommandIntent.FocusPanel(position) =>
         switchToPinnedPanel(position)
       case CommandIntent.UnpinPanel(position) =>

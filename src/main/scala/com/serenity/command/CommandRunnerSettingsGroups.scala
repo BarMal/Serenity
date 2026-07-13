@@ -18,6 +18,7 @@ object CommandRunnerSettingsGroups:
     val cursorInfoPlacement   = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
     val backgroundStyleItem   = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
     val interfaceDensityItem  = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
+    val windowChromeItem      = CommandRunnerSettingsItems.windowChromeOptionItem(optionSelections)
     val materialPresetItem    = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
     val motionPresetItem      = CommandRunnerSettingsItems.motionPresetOptionItem(optionSelections)
     val commandRunnerFade     = CommandRunnerSettingsItems.commandRunnerFadeOptionItem(optionSelections)
@@ -110,7 +111,7 @@ object CommandRunnerSettingsGroups:
     val interfaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-interface-layout",
       label = "Interface Layout",
-      children = List(interfaceDensityItem) ++ inputItems.filter(item =>
+      children = List(interfaceDensityItem, windowChromeItem) ++ inputItems.filter(item =>
         item.id == "ui-element-gap" ||
           item.id == "ui-corner-radius" ||
           item.id == "ui-outline-thickness" ||
@@ -119,7 +120,7 @@ object CommandRunnerSettingsGroups:
           item.id == "command-runner-cursor-gap-rows"
       ),
       category = CommandCategory.Settings,
-      hint = Some("Density, spacing, command rows")
+      hint = Some("Density, spacing, window chrome, command rows")
     )
     val textAreaGroup = CommandSurfaceItem.GroupItem(
       id = "settings-text-area",
