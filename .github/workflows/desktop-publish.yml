@@ -82,6 +82,8 @@ jobs:
           $launcherPath = (Resolve-Path 'dist/Serenity/Serenity.exe').Path
           $launcher = Start-Process -FilePath $launcherPath -PassThru
           $observed = @()
+          $processIds = @()
+          $normalExit = $false
 
           try {
             Start-Sleep -Seconds 5
@@ -106,6 +108,12 @@ jobs:
                 $pending.Enqueue([int]$_.ProcessId)
               }
             }
+            $applicationProcesses = @($observed | Where-Object {
+              $_.ParentProcessId -eq $launcher.Id -and $_.Name -ieq 'Serenity.exe' -and $_.ExecutablePath -ieq $launcherPath
+            })
+            if ($observed.Count -ne 2 -or $applicationProcesses.Count -ne 1) {
+              throw "Expected a Serenity.exe launcher with one Serenity.exe child; observed $($observed.Count) processes and $($applicationProcesses.Count) application children."
+            }
 
             $observed | ForEach-Object {
               $runtime = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
@@ -119,16 +127,26 @@ jobs:
                 WorkingSetMiB = [math]::Round([double]$_.WorkingSetSize / 1MB, 2)
               }
             } | Format-List
-          }
-          finally {
-            $processIds = @($launcher.Id) + @($observed | ForEach-Object ProcessId | Sort-Object -Descending -Unique)
-            $processIds | ForEach-Object {
-              Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue
+            $processIds = @($observed | ForEach-Object ProcessId | Sort-Object -Descending -Unique)
+            $application = Get-Process -Id $applicationProcesses[0].ProcessId -ErrorAction Stop
+            if (-not $application.CloseMainWindow()) {
+              throw "The Serenity application child did not accept a normal window-close request."
             }
-            Start-Sleep -Seconds 2
+            if (-not $application.WaitForExit(15000) -or -not $launcher.WaitForExit(15000)) {
+              throw "Serenity launcher processes did not exit after a normal window-close request."
+            }
             $remaining = Get-Process -Id $processIds -ErrorAction SilentlyContinue
             if ($null -ne $remaining) {
-              throw "Serenity launcher processes remained after shutdown: $($remaining.Id -join ', ')."
+              throw "Serenity launcher processes remained after normal shutdown: $($remaining.Id -join ', ')."
+            }
+            $normalExit = $true
+          }
+          finally {
+            if (-not $normalExit) {
+              $processIds = @($launcher.Id) + $processIds
+              $processIds | ForEach-Object {
+                Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue
+              }
             }
           }
 
