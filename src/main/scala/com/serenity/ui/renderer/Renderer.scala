@@ -710,18 +710,24 @@ object Renderer:
       scaledImagePixelDimension(rect.width * context.cellMetrics.charWidth, context.surface.devicePixelScaleX)
     val heightPx =
       scaledImagePixelDimension(rect.height * context.cellMetrics.lineHeight, context.surface.devicePixelScaleY)
-    val baseUri = buffer.filePath.flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
-    val title   = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
+    val previewFont = MarkdownDocumentPreview.fontForDeviceScale(context.textFont, context.surface.devicePixelScaleY)
+    val baseUri     = buffer.filePath.flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
+    val title       = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
     val image = MarkdownDocumentPreview.renderImage(
       source = previewWindow.source,
       title = title,
       widthPx = widthPx,
       heightPx = heightPx,
       theme = state.theme,
-      font = context.textFont,
+      font = previewFont,
       baseUri = baseUri,
       panelChrome = false,
-      inlineLineHeightPx = Some(context.cellMetrics.lineHeight)
+      inlineLineHeightPx = Some(
+        MarkdownDocumentPreview.lineHeightForDeviceScale(
+          context.cellMetrics.lineHeight,
+          context.surface.devicePixelScaleY
+        )
+      )
     )
     context.surface.drawImage(image, rect.x, rect.y, rect.width, rect.height)
 
@@ -973,10 +979,10 @@ object Renderer:
         context.surface.setBackgroundColor(state.theme.panel.background)
         context.surface.fillRect(rect.x, lensY, rect.width, placement.height, ' ')
         context.surface.strokeRoundRect(
-          context.cellMetrics.toPixelX(rect.x),
-          context.cellMetrics.toPixelY(lensY),
-          rect.width * context.cellMetrics.charWidth,
-          placement.height * context.cellMetrics.lineHeight,
+          rect.x,
+          lensY,
+          rect.width,
+          placement.height,
           arcPx = 0,
           state.theme.panelBorder
         )

@@ -257,8 +257,9 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     border.color shouldBe state.theme.border
     val paneRect =
       LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(paneId)
-    border.w shouldBe paneRect.width * CellMetrics.fromFont(font).charWidth
-    border.h shouldBe 2 * CellMetrics.fromFont(font).lineHeight
+    border.x shouldBe paneRect.x
+    border.w shouldBe paneRect.width
+    border.h shouldBe 2
   }
 
   it should "size an active table lens to cover the rendered preview table" in {
@@ -309,7 +310,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     )
 
     surface.strokeRoundRectCalls should not be empty
-    surface.strokeRoundRectCalls.head.h shouldBe 5 * metrics.lineHeight
+    surface.strokeRoundRectCalls.head.h shouldBe 5
   }
 
   it should "align the raw source lens to the scrolled preview window" in {
@@ -367,7 +368,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val paneRect =
       LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(paneId)
     surface.strokeRoundRectCalls should not be empty
-    surface.strokeRoundRectCalls.head.y shouldBe (paneRect.y + 1) * metrics.lineHeight
+    surface.strokeRoundRectCalls.head.y shouldBe paneRect.y + 1
   }
 
   it should "align heading paragraph list and table lenses to the active preview block" in {
@@ -409,8 +410,8 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
         withClue(s"$name lens: ") {
           surface.strokeRoundRectCalls should not be empty
           val border = surface.strokeRoundRectCalls.head
-          border.y shouldBe (paneRect.y + 1) * metrics.lineHeight
-          border.h shouldBe expectedHeightRows * metrics.lineHeight
+          border.y shouldBe paneRect.y + 1
+          border.h shouldBe expectedHeightRows
         }
     }
   }
@@ -431,8 +432,8 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val border = surface.strokeRoundRectCalls.head
     renderedRows.exists(_.contains("Active paragraph")) shouldBe true
     renderedRows.exists(_.contains("continued")) shouldBe true
-    border.y should be > (paneRect.y + 1) * metrics.lineHeight
-    border.h shouldBe 2 * metrics.lineHeight
+    border.y should be > paneRect.y + 1
+    border.h shouldBe 2
   }
 
   it should "align the active lens after expanded preview context" in {
@@ -459,8 +460,8 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
 
     surface.strokeRoundRectCalls should not be empty
     val border = surface.strokeRoundRectCalls.head
-    border.y shouldBe (paneRect.y + 1 + expectedTopRows) * metrics.lineHeight
-    border.h shouldBe 2 * metrics.lineHeight
+    border.y shouldBe paneRect.y + 1 + expectedTopRows
+    border.h shouldBe 2
   }
 
   private def renderMarkdownLens(

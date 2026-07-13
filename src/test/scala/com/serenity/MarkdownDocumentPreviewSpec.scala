@@ -272,6 +272,13 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     Color(image.getRGB(1, 1), true) shouldBe theme.background
   }
 
+  it should "scale inline preview typography to the rendered device size" in {
+    val font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+
+    MarkdownDocumentPreview.fontForDeviceScale(font, 2.0).getSize2D shouldBe 28.0f
+    MarkdownDocumentPreview.lineHeightForDeviceScale(18, 2.0) shouldBe 36
+  }
+
   it should "fill the full split preview image with the panel background" in {
     val theme = Theme.default.copy(
       background = Color(10, 20, 30),
