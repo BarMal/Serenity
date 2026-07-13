@@ -8,6 +8,7 @@ import com.serenity.config.ToolbarDisplayMode
 import com.serenity.keystroke.events.*
 import com.serenity.richtext.*
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
@@ -571,7 +572,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val dropdown = ContextualToolbarItem.Dropdown(
       id = "font-family",
       label = "Font",
-      icon = "𝖠",
+      icon = "A",
       optionItem = CommandSurfaceItem.OptionItem(
         id = "font-family",
         label = "Font",
@@ -595,18 +596,18 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       )
     )
 
-    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly) shouldBe "𝖠"
+    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly) shouldBe "A"
     ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.TextOnly) shouldBe "Font Serif"
-    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconAndText) shouldBe "𝖠 Font Serif"
+    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconAndText) shouldBe "A Font Serif"
 
     ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "↕"
     ContextualToolbar.displayText(input, ToolbarDisplayMode.TextOnly) shouldBe "Size 18"
     ContextualToolbar.displayText(input, ToolbarDisplayMode.IconAndText) shouldBe "↕ Size 18"
   }
 
-  it should "use recognizable glyphs instead of letter placeholders in icon-only mode" in {
-    ContextualToolbar.markdownItems.map(_.icon) shouldBe List("◉", "≣", "▥", "⌕")
-    ContextualToolbar.codeItems.map(_.icon) shouldBe List("⚙", "✓", "▶", "⌘")
+  it should "use renderable compact symbols and conventional fallbacks in icon-only mode" in {
+    ContextualToolbar.markdownItems.map(_.icon) shouldBe List("▶", "≡", "◀", "?")
+    ContextualToolbar.codeItems.map(_.icon) shouldBe List("*", "v", "▶", "?")
 
     val stateManager = createStateManager("ContextualToolbarSpec-glyphs")
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
@@ -619,19 +620,19 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
         .toMap
 
     icons shouldBe Map(
-      "bold"             -> "𝐁",
-      "italic"           -> "𝐼",
-      "underline"        -> "U̲",
-      "font-family"      -> "𝖠",
-      "font-family-text" -> "⌨",
+      "bold"             -> "B",
+      "italic"           -> "I",
+      "underline"        -> "U",
+      "font-family"      -> "A",
+      "font-family-text" -> "F",
       "font-size"        -> "↕",
-      "color"            -> "●",
-      "color-hex"        -> "⌗",
+      "color"            -> "•",
+      "color-hex"        -> "#",
       "paragraph-role"   -> "¶",
-      "align-left"       -> "⇤",
+      "align-left"       -> "←",
       "align-center"     -> "↔",
-      "align-right"      -> "⇥",
-      "align-justify"    -> "☰"
+      "align-right"      -> "→",
+      "align-justify"    -> "≡"
     )
   }
 
@@ -659,6 +660,29 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val renderedText = surface.putStringCalls.map(_.s).mkString
     ContextualToolbar.itemsFor(state).map(_.icon).foreach(renderedText should include(_))
+  }
+
+  it should "use toolbar glyphs supported by the shipped default fonts" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-font-coverage")
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+
+    val glyphs =
+      ContextualToolbar.markdownItems.map(_.icon) ++
+        ContextualToolbar.codeItems.map(_.icon) ++
+        ContextualToolbar.itemsFor(stateManager.getCurrentState.unsafeRunSync()).map(_.icon)
+    val fonts = List(
+      FontLoader.previewCodeFont(FontLoader.FontConfig()),
+      FontLoader.previewUiFont(FontLoader.FontConfig())
+    )
+
+    fonts.foreach { font =>
+      glyphs.foreach { glyph =>
+        withClue(s"Font '${font.getFontName}' cannot display toolbar glyph '$glyph': ") {
+          font.canDisplayUpTo(glyph) shouldBe -1
+        }
+      }
+    }
   }
 
   it should "keep prose formatting controls in semantic clusters when rows wrap" in {
