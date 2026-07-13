@@ -688,7 +688,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
 
-    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val state = stateManager.getCurrentState.unsafeRunSync()
     val resolved = SurfaceContentResolver.resolveContextualToolbar(
       ContextualToolbarState(displayMode = ToolbarDisplayMode.IconOnly),
       state,

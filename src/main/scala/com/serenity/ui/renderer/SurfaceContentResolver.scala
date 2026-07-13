@@ -908,7 +908,7 @@ object SurfaceContentResolver:
         case ((offset, acc), rowItems) =>
           val segments = rowItems.zipWithIndex.map {
             case (item, index) =>
-              val selected = isSelected(item) || offset + index == focused
+              val selected          = isSelected(item) || offset + index == focused
               val trailingSeparator = ContextualToolbar.hasTrailingGroupSeparator(item, rowItems.lift(index + 1))
               normalized.displayMode match
                 case ToolbarDisplayMode.IconOnly if iconFont.nonEmpty =>
