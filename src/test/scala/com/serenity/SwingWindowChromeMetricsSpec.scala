@@ -34,6 +34,26 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     scaled.titleFontSize shouldBe base.titleFontSize * 2
   }
 
+  "SwingWindow" should "use per-pixel translucency for non-maximized custom chrome when supported" in {
+    SwingWindow.shouldUsePerPixelRoundedCorners(
+      usesCustomChrome = true,
+      maximized = false,
+      perPixelTranslucencySupported = true
+    ) shouldBe true
+
+    SwingWindow.shouldUsePerPixelRoundedCorners(
+      usesCustomChrome = true,
+      maximized = true,
+      perPixelTranslucencySupported = true
+    ) shouldBe false
+
+    SwingWindow.shouldUsePerPixelRoundedCorners(
+      usesCustomChrome = true,
+      maximized = false,
+      perPixelTranslucencySupported = false
+    ) shouldBe false
+  }
+
   it should "derive viewport size from the live canvas size when available" in {
     val metrics        = CellMetrics(charWidth = 10, lineHeight = 20, ascent = 15)
     val canvasSize     = new Dimension(640, 480)
