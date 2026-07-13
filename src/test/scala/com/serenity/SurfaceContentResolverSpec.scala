@@ -3,7 +3,7 @@ package com.serenity
 import java.nio.file.Paths
 
 import com.serenity.command.*
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, ToolbarDisplayMode}
 import com.serenity.document.RenderedComment
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
@@ -860,13 +860,37 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.rows.foreach(_.layout shouldBe OverlayRowLayout.Distributed)
     val segments = resolved.rows.flatMap(_.segments)
     segments.find(_.text.contains("Bold")).map(_.selected).shouldBe(Some(true))
-    segments.exists(_.text == "A Font Serif").shouldBe(true)
-    segments.exists(_.text == "F Family Serif").shouldBe(true)
-    segments.exists(_.text == "# Size 18").shouldBe(true)
-    segments.exists(_.text == "C Color Blue").shouldBe(true)
-    segments.exists(_.text == "H Hex #336699").shouldBe(true)
-    segments.exists(_.text == "P Role H1").shouldBe(true)
+    segments.exists(_.text == "Font Serif").shouldBe(true)
+    segments.exists(_.text == "Family Serif").shouldBe(true)
+    segments.exists(_.text == "Size 18").shouldBe(true)
+    segments.exists(_.text == "Color Blue").shouldBe(true)
+    segments.exists(_.text == "Hex #336699").shouldBe(true)
+    segments.exists(_.text == "Role H1").shouldBe(true)
     segments.exists(_.text.contains("Center")).shouldBe(true)
+  }
+
+  it should "retain icon-font runs alongside labels in IconAndText toolbars" in {
+    val state = AppState.initial.copy(
+      config = AppConfig.default.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText)
+    )
+
+    val resolved = SurfaceContentResolver.resolveContextualToolbar(
+      ContextualToolbarState(displayMode = ToolbarDisplayMode.IconAndText),
+      state,
+      LayoutRect(0, 0, 80, 8),
+      SurfaceRenderMode.Floating
+    )
+
+    val toolbarItems = ContextualToolbar.itemsFor(state)
+    val segments     = resolved.rows.flatMap(_.segments)
+    segments.map(_.text) shouldBe toolbarItems.map(item =>
+      ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly)
+    )
+    segments.zip(toolbarItems).foreach {
+      case (segment, item) =>
+        segment.inlineIcon.shouldBe(Some(item.icon))
+        segment.inlineIconFontFamily.shouldBe(Some(FontLoader.ToolbarIconFontFamily))
+    }
   }
 
   it should "show heading level 4 in the contextual toolbar role control" in {
@@ -915,7 +939,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       SurfaceRenderMode.Floating
     )
 
-    resolved.rows.flatMap(_.segments).exists(_.text == "P Role H4").shouldBe(true)
+    resolved.rows.flatMap(_.segments).exists(_.text == "Role H4").shouldBe(true)
   }
 
   it should "render find result position when the modal carries match results" in {

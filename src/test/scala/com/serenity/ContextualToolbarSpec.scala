@@ -1,12 +1,16 @@
 package com.serenity
 
+import java.awt.Font
+
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.ToolbarDisplayMode
 import com.serenity.keystroke.events.*
 import com.serenity.richtext.*
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
+import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -568,7 +572,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val dropdown = ContextualToolbarItem.Dropdown(
       id = "font-family",
       label = "Font",
-      icon = "A",
+      icon = "\ue167",
       optionItem = CommandSurfaceItem.OptionItem(
         id = "font-family",
         label = "Font",
@@ -580,7 +584,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val input = ContextualToolbarItem.Input(
       id = "font-size",
       label = "Size",
-      icon = "#",
+      icon = "\ue245",
       inputItem = CommandSurfaceItem.InputItem(
         id = "font-size",
         label = "Size",
@@ -592,13 +596,126 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       )
     )
 
-    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly) shouldBe "A"
+    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly) shouldBe "\ue167"
     ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.TextOnly) shouldBe "Font Serif"
-    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconAndText) shouldBe "A Font Serif"
+    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconAndText) shouldBe "\ue167 Font Serif"
 
-    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "#"
+    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "\ue245"
     ContextualToolbar.displayText(input, ToolbarDisplayMode.TextOnly) shouldBe "Size 18"
-    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconAndText) shouldBe "# Size 18"
+    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconAndText) shouldBe "\ue245 Size 18"
+  }
+
+  it should "use Material Icons Round code points in icon-only mode" in {
+    ContextualToolbar.markdownItems.map(_.icon) shouldBe List("\uf1c5", "\ue86f", "\uf06d", "\ue8b6")
+    ContextualToolbar.codeItems.map(_.icon) shouldBe List("\ue869", "\ue86c", "\ue037", "\ue868")
+
+    val stateManager = createStateManager("ContextualToolbarSpec-glyphs")
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+
+    val icons =
+      ContextualToolbar
+        .itemsFor(stateManager.getCurrentState.unsafeRunSync())
+        .map(item => item.id -> item.icon)
+        .toMap
+
+    icons shouldBe Map(
+      "bold"             -> "\ue238",
+      "italic"           -> "\ue23f",
+      "underline"        -> "\ue765",
+      "font-family"      -> "\ue167",
+      "font-family-text" -> "\ue262",
+      "font-size"        -> "\ue245",
+      "color"            -> "\ue40a",
+      "color-hex"        -> "\ue9ef",
+      "paragraph-role"   -> "\ue264",
+      "align-left"       -> "\ue236",
+      "align-center"     -> "\ue234",
+      "align-right"      -> "\ue237",
+      "align-justify"    -> "\ue235"
+    )
+  }
+
+  it should "render icon-only glyphs through the floating overlay renderer" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-rendered-glyphs")
+    val viewport     = ViewportSize(120, 30)
+    stateManager.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state   = stateManager.getCurrentState.unsafeRunSync()
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new MockRenderSurface(viewport.width, viewport.height)
+
+    Renderer.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      font,
+      font,
+      CellMetrics.fromFont(font),
+      None
+    )
+
+    val renderedText = surface.putStringCalls.map(_.s).mkString
+    ContextualToolbar.itemsFor(state).map(_.icon).foreach(renderedText should include(_))
+    surface.setFontCalls.map(_.getFamily) should contain(FontLoader.ToolbarIconFontFamily)
+  }
+
+  it should "render icon-font glyphs alongside labels in IconAndText mode" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-rendered-icon-and-text")
+    val viewport     = ViewportSize(120, 30)
+    stateManager
+      .updateState(state =>
+        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText))
+      )
+      .unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state   = stateManager.getCurrentState.unsafeRunSync()
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new MockRenderSurface(viewport.width, viewport.height)
+
+    Renderer.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      font,
+      font,
+      CellMetrics.fromFont(font),
+      None
+    )
+
+    val renderedText = surface.putStringCalls.map(_.s).mkString
+    ContextualToolbar.itemsFor(state).foreach { item =>
+      renderedText should include(item.icon)
+      renderedText should include(ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly))
+    }
+    surface.setFontCalls.map(_.getFamily) should contain(
+      FontLoader.toolbarIconFontFamily.getOrElse(fail("Expected bundled toolbar icon font"))
+    )
+  }
+
+  it should "use toolbar glyphs supported by the bundled Material Icons Round font" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-font-coverage")
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+
+    val glyphs =
+      ContextualToolbar.markdownItems.map(_.icon) ++
+        ContextualToolbar.codeItems.map(_.icon) ++
+        ContextualToolbar.itemsFor(stateManager.getCurrentState.unsafeRunSync()).map(_.icon)
+    val font = FontLoader.toolbarIconFont(24.0f).getOrElse(fail("Expected bundled Material Icons Round font"))
+
+    glyphs.foreach { glyph =>
+      withClue(s"Font '${font.getFontName}' cannot display toolbar glyph '$glyph': ") {
+        font.canDisplayUpTo(glyph) shouldBe -1
+      }
+    }
   }
 
   it should "keep prose formatting controls in semantic clusters when rows wrap" in {

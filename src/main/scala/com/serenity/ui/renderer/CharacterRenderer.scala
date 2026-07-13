@@ -44,11 +44,7 @@ object CharacterRenderer:
     surface.putString(x, y, displayChar.toString)
 
   def isVisibleChar(char: Char): Boolean =
-    char match
-      case c if c >= 32 && c <= 126 => true
-      case '_'                      => true
-      case '\t'                     => true
-      case _                        => false
+    isVisibleCodePoint(char.toInt)
 
   def renderCharWithOpacity(
     surface: RenderSurface,
@@ -284,6 +280,8 @@ object CharacterRenderer:
 
     val initial = PlainRunState(Nil, "", startX, startX)
     val finalState = content
+      .codePoints()
+      .toArray
       .foldLeft(initial) {
         case (state, '\t') =>
           val flushed     = state.flush
@@ -294,12 +292,12 @@ object CharacterRenderer:
             currentStartX = flushed.currentX + spacesToAdd,
             currentX = flushed.currentX + spacesToAdd
           )
-        case (state, char) if isVisibleChar(char) =>
+        case (state, codePoint) if isVisibleCodePoint(codePoint) =>
           val start = if state.currentText.isEmpty then state.currentX else state.currentStartX
           state.copy(
-            currentText = state.currentText + char,
+            currentText = state.currentText + new String(Character.toChars(codePoint)),
             currentStartX = start,
-            currentX = state.currentX + 1
+            currentX = state.currentX + displayWidth(codePoint)
           )
         case (state, _) =>
           val flushed = state.flush
@@ -308,6 +306,17 @@ object CharacterRenderer:
       .flush
 
     CollectedRuns(finalState.completed.reverse, finalState.currentX)
+
+  private def isVisibleCodePoint(codePoint: Int): Boolean =
+    !Character.isISOControl(codePoint)
+
+  private def displayWidth(codePoint: Int): Int =
+    val category = Character.getType(codePoint)
+    if category == Character.NON_SPACING_MARK ||
+        category == Character.COMBINING_SPACING_MARK ||
+        category == Character.ENCLOSING_MARK
+    then 0
+    else 1
 
   private def flushPlainRuns(surface: RenderSurface, y: Int, runs: List[TextRun]): Unit =
     runs.foreach(run => surface.putString(run.startX, y, run.content))

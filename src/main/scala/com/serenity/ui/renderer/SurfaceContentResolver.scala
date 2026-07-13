@@ -3,8 +3,10 @@ package com.serenity.ui.renderer
 import java.awt.Color
 
 import com.serenity.command.{CommandCategory, CommandSurfaceItem}
+import com.serenity.config.ToolbarDisplayMode
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 
 enum SurfaceRenderMode:
@@ -28,7 +30,9 @@ case class OverlaySegment(
     tone: OverlayTone = OverlayTone.Normal,
     foregroundColor: Option[Color] = None,
     backgroundColor: Option[Color] = None,
-    fontFamily: Option[String] = None
+    fontFamily: Option[String] = None,
+    inlineIcon: Option[String] = None,
+    inlineIconFontFamily: Option[String] = None
 )
 
 case class OverlayRow(
@@ -897,15 +901,25 @@ object SurfaceContentResolver:
     val normalized  = toolbarState.normalized(items)
     val rowGroups   = ContextualToolbar.rowGroups(items, contentRect.width.max(1), normalized.displayMode)
     val focused     = normalized.focusedIndex
+    val iconFont    = FontLoader.toolbarIconFontFamily
     val topRows = rowGroups
       .foldLeft((0, List.empty[OverlayRow])) {
         case ((offset, acc), rowItems) =>
           val segments = rowItems.zipWithIndex.map {
             case (item, index) =>
-              OverlaySegment(
-                ContextualToolbar.displayText(item, normalized.displayMode),
-                selected = isSelected(item) || offset + index == focused
-              )
+              val selected = isSelected(item) || offset + index == focused
+              normalized.displayMode match
+                case ToolbarDisplayMode.IconOnly if iconFont.nonEmpty =>
+                  OverlaySegment(item.icon, selected = selected, fontFamily = iconFont)
+                case ToolbarDisplayMode.IconAndText if iconFont.nonEmpty =>
+                  OverlaySegment(
+                    ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly),
+                    selected = selected,
+                    inlineIcon = Some(item.icon),
+                    inlineIconFontFamily = iconFont
+                  )
+                case _ =>
+                  OverlaySegment(ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly), selected = selected)
           }
           (
             offset + rowItems.length,
