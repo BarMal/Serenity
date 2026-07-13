@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.awt.Font
+
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.ToolbarDisplayMode
@@ -7,6 +9,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.richtext.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -630,6 +633,32 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       "align-right"      -> "⇥",
       "align-justify"    -> "☰"
     )
+  }
+
+  it should "render icon-only glyphs through the floating overlay renderer" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-rendered-glyphs")
+    val viewport     = ViewportSize(120, 30)
+    stateManager.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state   = stateManager.getCurrentState.unsafeRunSync()
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new MockRenderSurface(viewport.width, viewport.height)
+
+    Renderer.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      font,
+      font,
+      CellMetrics.fromFont(font),
+      None
+    )
+
+    val renderedText = surface.putStringCalls.map(_.s).mkString
+    ContextualToolbar.itemsFor(state).map(_.icon).foreach(renderedText should include(_))
   }
 
   it should "keep prose formatting controls in semantic clusters when rows wrap" in {

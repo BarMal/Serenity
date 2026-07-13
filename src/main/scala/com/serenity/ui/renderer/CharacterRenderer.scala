@@ -44,11 +44,7 @@ object CharacterRenderer:
     surface.putString(x, y, displayChar.toString)
 
   def isVisibleChar(char: Char): Boolean =
-    char match
-      case c if c >= 32 && c <= 126 => true
-      case '_'                      => true
-      case '\t'                     => true
-      case _                        => false
+    isVisibleCodePoint(char.toInt)
 
   def renderCharWithOpacity(
     surface: RenderSurface,
@@ -282,10 +278,14 @@ object CharacterRenderer:
           copy(completed = TextRun(currentStartX, currentText) :: completed, currentText = "")
         else this
 
-    val initial = PlainRunState(Nil, "", startX, startX)
-    val finalState = content
-      .foldLeft(initial) {
-        case (state, '\t') =>
+    val initial    = PlainRunState(Nil, "", startX, startX)
+    val codePoints = content.codePoints().iterator()
+    var finalState = initial
+
+    while codePoints.hasNext do
+      finalState = codePoints.nextInt() match
+        case '\t' =>
+          val state       = finalState
           val flushed     = state.flush
           val spacesToAdd = tabWidth - (flushed.currentX % tabWidth)
           val tabSpaces   = " " * spacesToAdd
@@ -294,20 +294,34 @@ object CharacterRenderer:
             currentStartX = flushed.currentX + spacesToAdd,
             currentX = flushed.currentX + spacesToAdd
           )
-        case (state, char) if isVisibleChar(char) =>
+        case codePoint if isVisibleCodePoint(codePoint) =>
+          val state = finalState
           val start = if state.currentText.isEmpty then state.currentX else state.currentStartX
           state.copy(
-            currentText = state.currentText + char,
+            currentText = state.currentText + new String(Character.toChars(codePoint)),
             currentStartX = start,
-            currentX = state.currentX + 1
+            currentX = state.currentX + displayWidth(codePoint)
           )
-        case (state, _) =>
+        case _ =>
+          val state   = finalState
           val flushed = state.flush
           flushed.copy(currentStartX = flushed.currentX)
-      }
-      .flush
+
+    finalState = finalState.flush
 
     CollectedRuns(finalState.completed.reverse, finalState.currentX)
+
+  private def isVisibleCodePoint(codePoint: Int): Boolean =
+    !Character.isISOControl(codePoint)
+
+  private def displayWidth(codePoint: Int): Int =
+    val category = Character.getType(codePoint)
+    if
+      category == Character.NON_SPACING_MARK ||
+        category == Character.COMBINING_SPACING_MARK ||
+        category == Character.ENCLOSING_MARK
+    then 0
+    else 1
 
   private def flushPlainRuns(surface: RenderSurface, y: Int, runs: List[TextRun]): Unit =
     runs.foreach(run => surface.putString(run.startX, y, run.content))
