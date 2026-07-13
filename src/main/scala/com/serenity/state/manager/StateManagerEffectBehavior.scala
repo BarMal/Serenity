@@ -473,6 +473,10 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         updateCustomMotionConfig(_.withUiAnimation(animation)).void
       case CommandIntent.SetCommandRunnerVisibleRows(rows) =>
         updateAppearanceConfig(_.withCommandRunnerVisibleRows(rows)).void
+      case CommandIntent.SetCommandRunnerItemGapRows(rows) =>
+        updateAppearanceConfig(_.withCommandRunnerItemGapRows(rows)).void
+      case CommandIntent.SetCommandRunnerCursorGapRows(rows) =>
+        updateAppearanceConfig(_.withCommandRunnerCursorGapRows(rows)).void
       case CommandIntent.SetRenderFpsTarget(target) =>
         updateAppearanceConfig(_.withRenderFpsTarget(target)).void
       case CommandIntent.SetEditorInsertionTransitionKind(kind) =>

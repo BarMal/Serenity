@@ -93,6 +93,37 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlay.rect shouldBe layout.belowCursorOverlayRect.get
   }
 
+  it should "space command palette item slots without spacing other overlay content" in {
+    val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(cursors = List(CursorPosition(1, 2)))
+    val pane   = EditorPane.withBuffer(paneId, bufferId)
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    val state = AppState.initial.copy(
+      config = AppConfig.default.withCommandRunnerItemGapRows(1),
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(editorPanes = Map(paneId -> pane), activeEditorPaneId = Some(paneId)),
+      focus = Focus.Surface(SurfaceId("command-runner")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
+    val overlay = OverlayViewModel.fromState(state, layout).belowCursor.getOrElse(fail("Expected command overlay"))
+
+    overlay.itemGapRows shouldBe 1
+    overlay.contentRowSlots
+      .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), y) => y }
+      .sliding(2)
+      .foreach {
+        case List(first, second) => second - first shouldBe 2
+        case _                   => ()
+      }
+  }
+
   it should "derive a focused find overlay view beneath the active cursor" in {
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")

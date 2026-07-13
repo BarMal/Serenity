@@ -1465,7 +1465,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           case _ =>
             List(state.commandRunnerSubmenuSurface, state.commandRunnerSurface).flatten
       surfaces.view
-        .flatMap(surface => commandRunnerSelectionForSurface(event, surface, contract))
+        .flatMap(surface => commandRunnerSelectionForSurface(event, surface, contract, state))
         .headOption
     }
 
@@ -1532,7 +1532,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
   private def commandRunnerSelectionForSurface(
     event: MouseInputEvent,
     surface: UiSurface,
-    contract: EditorLayoutContract
+    contract: EditorLayoutContract,
+    state: AppState
   ): Option[CommandRunnerEvent] =
     contract.overlayContentRect(surface.id).flatMap { contentRect =>
       val rowSlots = contract.overlayRowSlots(surface.id)
@@ -1545,7 +1546,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
             runner.visibleItems.length,
             runner.selectedIndex,
             hasHeader = true,
-            hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty
+            hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
+            itemGapRows = state.config.commandRunnerItemGapRows
           )
             .map(RunnerSelectVisibleItem(_))
         case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
@@ -1564,7 +1566,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
             selectedIndex,
             hasHeader = group.nonEmpty,
             hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-            reservedContentRows = detailRows
+            reservedContentRows = detailRows,
+            itemGapRows = state.config.commandRunnerItemGapRows
           ).map { index =>
             if previewOnly then RunnerSelectPreviewSubmenuItem(groupId, index)
             else RunnerSelectSubmenuItem(index)
@@ -1581,14 +1584,16 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     selectedIndex: Int,
     hasHeader: Boolean,
     hasFooter: Boolean,
-    reservedContentRows: Int = 0
+    reservedContentRows: Int = 0,
+    itemGapRows: Int = 0
   ): Option[Int] =
     val itemWindow = SurfaceFrameLayout(contentRect, borderCells = 0).itemWindow(
       itemCount,
       selectedIndex,
       hasHeader,
       hasFooter,
-      reservedContentRows
+      reservedContentRows,
+      itemGapRows
     )
     overlayDisplayedRowIndexAt(event, contentRect, rowSlots)
       .flatMap(itemWindow.absoluteIndexAt)

@@ -110,6 +110,14 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
       .parse(AppConfig.default, "command_runner.visible_rows", "auto")
       .map(_.surfaceConfig.commandRunnerVisibleRows)
       .shouldBe(Some(None))
+    SurfaceConfig.Schema
+      .parse(AppConfig.default, "command_runner.item_gap_rows", "1")
+      .map(_.surfaceConfig.commandRunnerItemGapRows)
+      .shouldBe(Some(1))
+    SurfaceConfig.Schema
+      .parse(AppConfig.default, "command_runner.cursor_gap_rows", "3")
+      .map(_.surfaceConfig.commandRunnerCursorGapRows)
+      .shouldBe(Some(Some(3)))
     renderFpsConfig.surfaceConfig.renderFpsTarget.shouldBe(RenderFpsTarget.Uncapped)
     wordWrapConfig.surfaceConfig.wordWrapEnabled.shouldBe(false)
     focusedTextBodyConfig.surfaceConfig.focusedTextBodyEnabled.shouldBe(true)

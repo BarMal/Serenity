@@ -53,7 +53,8 @@ object SurfaceContentResolver:
   def resolve(
     content: SurfaceContent,
     rect: LayoutRect,
-    mode: SurfaceRenderMode
+    mode: SurfaceRenderMode,
+    itemGapRows: Int = 0
   ): ResolvedSurfaceContent =
     content match
       case SurfaceContent.StartPage(_) =>
@@ -91,9 +92,9 @@ object SurfaceContentResolver:
       case SurfaceContent.DirectoryTree(tree, selectedPath) =>
         resolveDirectoryTree(rect, mode, tree, selectedPath)
       case SurfaceContent.CommandPalette(runner) =>
-        resolveCommandPalette(runner, rect, mode)
+        resolveCommandPalette(runner, rect, mode, itemGapRows)
       case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
-        resolveCommandPaletteSubmenu(runner, groupId, previewOnly, rect, mode)
+        resolveCommandPaletteSubmenu(runner, groupId, previewOnly, rect, mode, itemGapRows)
       case SurfaceContent.ModalWorkflow(modal) =>
         resolveModalWorkflow(modal, rect, mode)
       case SurfaceContent.Terminal(buffer, cursor) =>
@@ -121,7 +122,7 @@ object SurfaceContentResolver:
       case SurfaceContent.MarkdownPreview(_, title) =>
         ResolvedSurfaceContent(title = titleFor(mode, s"Preview: $title"))
       case SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
-        resolve(originalContent, cachedRect, mode)
+        resolve(originalContent, cachedRect, mode, itemGapRows)
 
   private def resolveModalWorkflow(
     modal: Modal,
@@ -369,7 +370,8 @@ object SurfaceContentResolver:
   private def resolveCommandPalette(
     runner: com.serenity.command.CommandRunner,
     rect: LayoutRect,
-    mode: SurfaceRenderMode
+    mode: SurfaceRenderMode,
+    itemGapRows: Int
   ): ResolvedSurfaceContent =
     if !runner.isActive then ResolvedSurfaceContent(titleFor(mode, "commands"))
     else
@@ -391,7 +393,8 @@ object SurfaceContentResolver:
           itemCount = allItems.size,
           selectedIndex = runner.selectedIndex,
           hasHeader = true,
-          hasFooter = allItems.nonEmpty || runner.statusMessage.nonEmpty
+          hasFooter = allItems.nonEmpty || runner.statusMessage.nonEmpty,
+          itemGapRows = itemGapRows
         )
       val windowItems           = itemWindow.slice(allItems)
       val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(runner.selectedIndex)
@@ -438,7 +441,8 @@ object SurfaceContentResolver:
     groupId: String,
     previewOnly: Boolean,
     rect: LayoutRect,
-    mode: SurfaceRenderMode
+    mode: SurfaceRenderMode,
+    itemGapRows: Int
   ): ResolvedSurfaceContent =
     val group         = runner.submenuGroup(groupId)
     val submenuState  = runner.activeSubmenu.filter(_.groupId == groupId)
@@ -453,7 +457,8 @@ object SurfaceContentResolver:
         selectedIndex = selectedIndex,
         hasHeader = group.nonEmpty,
         hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-        reservedContentRows = detailRows.size
+        reservedContentRows = detailRows.size,
+        itemGapRows = itemGapRows
       )
     val windowItems           = itemWindow.slice(items)
     val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(selectedIndex)

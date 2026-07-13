@@ -90,6 +90,8 @@ enum CommandIntent:
   case SetCommandRunnerAnimation(animation: Option[AnimationConfig])
   case SetUiAnimation(animation: Option[AnimationConfig])
   case SetCommandRunnerVisibleRows(rows: Option[Int])
+  case SetCommandRunnerItemGapRows(rows: Int)
+  case SetCommandRunnerCursorGapRows(rows: Option[Int])
   case SetRenderFpsTarget(target: RenderFpsTarget)
   case SetEditorInsertionTransitionKind(kind: TransitionKind)
   case SetCommandRunnerTransitionKind(kind: TransitionKind)

@@ -1417,6 +1417,35 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().config.commandRunnerVisibleRows shouldBe None
   }
 
+  it should "set command runner item and cursor gaps from typed settings commands" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "command-runner-item-gap-rows",
+          "Set command runner item gaps.",
+          CommandIntent.SetCommandRunnerItemGapRows(1),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "command-runner-cursor-gap-rows",
+          "Set command runner cursor gap.",
+          CommandIntent.SetCommandRunnerCursorGapRows(Some(3)),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    val config = stateManager.getCurrentState.unsafeRunSync().config
+    config.commandRunnerItemGapRows shouldBe 1
+    config.commandRunnerCursorGapRows shouldBe Some(3)
+  }
+
   it should "apply a built-in writing preset from a searchable command" in {
     val stateManager = createStateManager()
 

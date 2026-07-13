@@ -77,7 +77,9 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "ui-element-gap",
       "ui-corner-radius",
       "ui-outline-thickness",
-      "command-runner-visible-rows"
+      "command-runner-visible-rows",
+      "command-runner-item-gap-rows",
+      "command-runner-cursor-gap-rows"
     )
     groupById(groups, "settings-surface-appearance").children.map(_.id) shouldBe List(
       "background-style",

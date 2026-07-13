@@ -34,13 +34,15 @@ object CommandRunnerSettingsInputItems:
       f"${config.effectiveEditorTextTransitionSpeedScale}%.2f"
     val commandRunnerSpeedScaleValue =
       f"${config.effectiveCommandRunnerTransitionSpeedScale}%.2f"
-    val uiSpeedScaleValue     = f"${config.effectiveUiTransitionSpeedScale}%.2f"
-    val cursorSpeedScaleValue = f"${config.effectiveCursorTransitionSpeedScale}%.2f"
-    val elementGapValue       = interfaceConfig.elementGap.toString
-    val cornerRadiusValue     = interfaceConfig.cornerRadiusPx.toString
-    val outlineThicknessValue = interfaceConfig.outlineThicknessPx.toString
-    val commandRowsValue      = surfaceConfig.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
-    val spellCheck            = languageToolsConfig.spellCheck.normalized
+    val uiSpeedScaleValue         = f"${config.effectiveUiTransitionSpeedScale}%.2f"
+    val cursorSpeedScaleValue     = f"${config.effectiveCursorTransitionSpeedScale}%.2f"
+    val elementGapValue           = interfaceConfig.elementGap.toString
+    val cornerRadiusValue         = interfaceConfig.cornerRadiusPx.toString
+    val outlineThicknessValue     = interfaceConfig.outlineThicknessPx.toString
+    val commandRowsValue          = surfaceConfig.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
+    val commandItemGapRowsValue   = surfaceConfig.commandRunnerItemGapRows.toString
+    val commandCursorGapRowsValue = surfaceConfig.commandRunnerCursorGapRows.map(_.toString).getOrElse("auto")
+    val spellCheck                = languageToolsConfig.spellCheck.normalized
 
     val commentItems = List(
       CommandSurfaceItem.InputItem(
@@ -412,6 +414,41 @@ object CommandRunnerSettingsInputItems:
                   value <= AppConfig.MaxCommandRunnerVisibleRows
               )
               .map(value => CommandIntent.SetCommandRunnerVisibleRows(Some(value)))
+        ,
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "command-runner-item-gap-rows",
+        label = "Command Item Spacing",
+        hint = s"Rows (${AppConfig.MinCommandRunnerItemGapRows}-${AppConfig.MaxCommandRunnerItemGapRows})",
+        currentValue = commandItemGapRowsValue,
+        isDecimal = false,
+        parse = text =>
+          text.trim.toIntOption
+            .filter(value =>
+              value >= AppConfig.MinCommandRunnerItemGapRows &&
+                value <= AppConfig.MaxCommandRunnerItemGapRows
+            )
+            .map(CommandIntent.SetCommandRunnerItemGapRows(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "command-runner-cursor-gap-rows",
+        label = "Command Cursor Spacing",
+        hint = s"Rows (${AppConfig.MinCommandRunnerCursorGapRows}-${AppConfig.MaxCommandRunnerCursorGapRows}) or auto",
+        currentValue = commandCursorGapRowsValue,
+        isDecimal = false,
+        parse = text =>
+          val normalized = text.trim.toLowerCase
+          if normalized == "auto" then Some(CommandIntent.SetCommandRunnerCursorGapRows(None))
+          else
+            normalized.toIntOption
+              .filter(value =>
+                value >= AppConfig.MinCommandRunnerCursorGapRows &&
+                  value <= AppConfig.MaxCommandRunnerCursorGapRows
+              )
+              .map(value => CommandIntent.SetCommandRunnerCursorGapRows(Some(value)))
         ,
         category = CommandCategory.Settings,
         acceptsFreeText = true

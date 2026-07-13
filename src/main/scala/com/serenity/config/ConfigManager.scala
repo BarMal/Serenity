@@ -306,6 +306,8 @@ object ConfigManager:
        |ui.corner_radius = ${config.uiCornerRadiusPx}
        |ui.outline_thickness = ${config.uiOutlineThicknessPx}
        |command_runner.visible_rows = ${config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")}
+       |command_runner.item_gap_rows = ${config.commandRunnerItemGapRows}
+       |command_runner.cursor_gap_rows = ${config.commandRunnerCursorGapRows.map(_.toString).getOrElse("auto")}
        |render.fps = ${config.renderFpsTarget.configKey}
        |display.word_wrap = ${config.wordWrapEnabled}
        |display.focused_text_body = ${config.focusedTextBodyEnabled}

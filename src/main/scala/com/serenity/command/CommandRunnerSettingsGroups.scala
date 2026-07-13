@@ -114,7 +114,9 @@ object CommandRunnerSettingsGroups:
         item.id == "ui-element-gap" ||
           item.id == "ui-corner-radius" ||
           item.id == "ui-outline-thickness" ||
-          item.id == "command-runner-visible-rows"
+          item.id == "command-runner-visible-rows" ||
+          item.id == "command-runner-item-gap-rows" ||
+          item.id == "command-runner-cursor-gap-rows"
       ),
       category = CommandCategory.Settings,
       hint = Some("Density, spacing, command rows")

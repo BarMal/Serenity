@@ -86,13 +86,6 @@ object LayoutEngine:
   private val EditorPaneHeaderHeight          = 1
   private val PinnedPanelDragWorkspaceReach   = 1
 
-  private val CommandSurfaceChromeRows =
-    SurfaceFrameLayout.frameChromeRows(
-      hasHeader = true,
-      hasFooter = true,
-      borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells
-    )
-
   def calculateLayout(
     state: AppState,
     viewportSize: ViewportSize,
@@ -526,7 +519,7 @@ object LayoutEngine:
         calculateFloatingSurfaceWidth(contentRect.width)
     val preferredHeight = calculateFloatingSurfaceHeight(surface.content, preferredWidth, contentRect.height, state)
     val finalHeight     = forcedHeight.getOrElse(preferredHeight)
-    val gapRows         = floatingCursorGapRows(state)
+    val gapRows         = floatingCursorGapRows(state, surface.content)
 
     for
       anchor <- floatingAnchor(surface, state)
@@ -645,7 +638,7 @@ object LayoutEngine:
           (mainRectOpt, submenuBaseRectOpt, anchorFrameOpt) match
             case (Some(mainRect), Some(submenuRect), Some(anchorFrame)) =>
               val collapsedHeight = 3
-              val gapRows         = floatingCursorGapRows(state)
+              val gapRows         = floatingCursorGapRows(state, main.content)
               val stackGapRows    = floatingStackGapRows(state)
               val availableBottom = anchorFrame.contentRect.bottom
               val totalHeight     = mainRect.height + stackGapRows + submenuRect.height
@@ -686,8 +679,11 @@ object LayoutEngine:
   private def calculateFloatingSurfaceWidth(maxWidth: Int): Int =
     maxWidth
 
-  private def floatingCursorGapRows(state: AppState): Int =
-    floatingStackGapRows(state)
+  private def floatingCursorGapRows(state: AppState, content: SurfaceContent): Int =
+    content match
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
+        state.config.commandRunnerCursorGapRows.getOrElse(floatingStackGapRows(state))
+      case _ => floatingStackGapRows(state)
 
   private def floatingStackGapRows(state: AppState): Int =
     math.max(
@@ -704,7 +700,15 @@ object LayoutEngine:
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
     val commandMaxHeight =
       state.config.commandRunnerVisibleRows
-        .map(rows => AppConfig.clampCommandRunnerVisibleRows(rows) + CommandSurfaceChromeRows)
+        .map(rows =>
+          SurfaceFrameLayout.frameHeightForItemRows(
+            AppConfig.clampCommandRunnerVisibleRows(rows),
+            hasHeader = true,
+            hasFooter = true,
+            borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
+            itemGapRows = state.config.commandRunnerItemGapRows
+          )
+        )
         .getOrElse(densityMetrics.commandSurfaceMaxHeight)
     val preferredHeight = content match
       case SurfaceContent.StartPage(_)            => maxHeight
@@ -752,7 +756,16 @@ object LayoutEngine:
           .getOrElse(allItems.size)
         math.min(
           commandMaxHeight,
-          math.max(densityMetrics.commandSurfaceMinHeight, itemCount + densityMetrics.commandSurfaceVerticalPadding)
+          math.max(
+            densityMetrics.commandSurfaceMinHeight,
+            SurfaceFrameLayout.frameHeightForItemRows(
+              itemCount,
+              hasHeader = true,
+              hasFooter = true,
+              borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
+              itemGapRows = state.config.commandRunnerItemGapRows
+            )
+          )
         )
       case SurfaceContent.ModalWorkflow(modal) =>
         modal match
@@ -807,7 +820,7 @@ object LayoutEngine:
       case Some(_) if baseRects.isEmpty =>
         BelowOverlayLayout(Nil, Set.empty)
       case Some(anchorFrame) =>
-        val gapRows         = floatingCursorGapRows(state)
+        val gapRows = surfaces.headOption.map(surface => floatingCursorGapRows(state, surface.content)).getOrElse(0)
         val stackGapRows    = floatingStackGapRows(state)
         val availableBottom = anchorFrame.contentRect.bottom
         val totalHeight     = baseRects.map(_._2.height).sum + (stackGapRows * (baseRects.length - 1).max(0))

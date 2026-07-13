@@ -566,6 +566,27 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.footer shouldBe defined
   }
 
+  it should "reduce command palette capacity when item gaps reserve blank content rows" in {
+    val commands =
+      (1 to 8).toList.map(index => Command.typed(s"cmd-$index", s"Command number $index", CommandIntent.ToggleTheme))
+    val runner = CommandRunner.empty.activate(CommandRegistry(commands), AppConfig.default)
+    val rect   = LayoutRect(0, 0, 80, 8)
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      rect,
+      SurfaceRenderMode.Floating,
+      itemGapRows = 1
+    )
+
+    floating.rows should have size 3
+    floating.rows.map(_.plainText) shouldBe List(
+      "Cmd 1 - Command number 1",
+      "Cmd 2 - Command number 2",
+      "Cmd 3 - Command number 3"
+    )
+  }
+
   it should "reserve submenu detail rows without clipping available submenu items or footer" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
