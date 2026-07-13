@@ -28,6 +28,14 @@ object MarkdownDocumentPreview:
   case class InlinePreviewLine(sourceLine: Option[Int], text: String)
   case class PreviewWindow(firstSourceLine: Int, firstPreviewRow: Int, source: String)
 
+  /** Scales preview typography to match a device-scaled preview image. */
+  private[serenity] def fontForDeviceScale(font: Font, deviceScale: Double): Font =
+    font.deriveFont((font.getSize2D * deviceScale.max(1.0)).max(1.0).toFloat)
+
+  /** Converts an editor line height into the corresponding preview-image pixel height. */
+  private[serenity] def lineHeightForDeviceScale(lineHeightPx: Int, deviceScale: Double): Int =
+    math.ceil(lineHeightPx.max(1).toDouble * deviceScale.max(1.0)).toInt.max(1)
+
   private val MaxCachedImages          = 24
   private val MaxCachedHtmlFragments   = 48
   private val MaxCachedInlineDocuments = 32
