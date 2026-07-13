@@ -175,6 +175,22 @@ object ContextualToolbar:
     "Blue" -> "#336699"
   )
 
+  private val proseGroupIds = Map(
+    "bold"             -> 0,
+    "italic"           -> 0,
+    "underline"        -> 0,
+    "font-family"      -> 1,
+    "font-family-text" -> 1,
+    "font-size"        -> 1,
+    "color"            -> 2,
+    "color-hex"        -> 2,
+    "paragraph-role"   -> 3,
+    "align-left"       -> 3,
+    "align-center"     -> 3,
+    "align-right"      -> 3,
+    "align-justify"    -> 3
+  )
+
   val markdownItems: List[ContextualToolbarItem] = List(
     ContextualToolbarItem.Button("markdown-preview", "Preview", "markdown-preview", "\uf1c5"),
     ContextualToolbarItem.Button("markdown-view-source", "Source", "markdown-view-source", "\ue86f"),
@@ -255,6 +271,15 @@ object ContextualToolbar:
           case ToolbarDisplayMode.IconOnly    => inputItem.currentValue
           case ToolbarDisplayMode.TextOnly    => text
           case ToolbarDisplayMode.IconAndText => s"$icon $text"
+
+  /** Whether adjacent formatting controls belong to different visual groups. */
+  def hasTrailingGroupSeparator(
+    item: ContextualToolbarItem,
+    nextItem: Option[ContextualToolbarItem]
+  ): Boolean =
+    (proseGroupIds.get(item.id), nextItem.flatMap(next => proseGroupIds.get(next.id))) match
+      case (Some(group), Some(nextGroup)) => group != nextGroup
+      case _                              => false
 
   def rowGroups(
     items: List[ContextualToolbarItem],
@@ -368,21 +393,6 @@ object ContextualToolbar:
     items.collectFirst { case item: ContextualToolbarItem.Input if item.id == itemId => item }
 
   private def proseItemSegments(items: List[ContextualToolbarItem]): List[List[ContextualToolbarItem]] =
-    val proseGroupIds = Map(
-      "bold"             -> 0,
-      "italic"           -> 0,
-      "underline"        -> 0,
-      "font-family"      -> 1,
-      "font-family-text" -> 1,
-      "font-size"        -> 1,
-      "color"            -> 2,
-      "color-hex"        -> 2,
-      "paragraph-role"   -> 3,
-      "align-left"       -> 3,
-      "align-center"     -> 3,
-      "align-right"      -> 3,
-      "align-justify"    -> 3
-    )
     items.foldLeft(List.empty[List[ContextualToolbarItem]]) { (segments, item) =>
       val nextGroupId = proseGroupIds.get(item.id)
       segments match

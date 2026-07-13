@@ -284,7 +284,8 @@ object TextOverlayRenderer:
             theme,
             defaultForeground,
             defaultBackground,
-            font
+            font,
+            trailingSeparator = segment.trailingSeparator
           )
           cursorX + cellWidth
       }
@@ -564,7 +565,8 @@ object TextOverlayRenderer:
     theme: Theme,
     defaultForeground: Color,
     defaultBackground: Color,
-    font: Font
+    font: Font,
+    trailingSeparator: Boolean = false
   ): Unit =
     val iconWidth   = segment.inlineIcon.map(_.length).getOrElse(0).min(width)
     val iconGap     = if iconWidth > 0 && width > iconWidth && segment.text.nonEmpty then 1 else 0
@@ -584,6 +586,10 @@ object TextOverlayRenderer:
       defaultBackground,
       font
     )
+    if trailingSeparator && width > 1 then
+      surface.setForegroundColor(defaultForeground)
+      surface.setBackgroundColor(defaultBackground)
+      CharacterRenderer.renderChar(surface, x + width - 1, y, '│')
 
   private def renderSegmentText(
     surface: RenderSurface,

@@ -659,6 +659,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     )
 
     val renderedText = surface.putStringCalls.map(_.s).mkString
+    renderedText should include("│")
     ContextualToolbar
       .itemsFor(state)
       .collect { case button: ContextualToolbarItem.Button => button.icon }
@@ -679,6 +680,27 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val resolvedText = resolved.rows.flatMap(_.segments).map(_.text)
     compactControlText.foreach(resolvedText should contain(_))
     surface.setFontCalls.map(_.getFamily) should contain(FontLoader.ToolbarIconFontFamily)
+  }
+
+  it should "visually separate semantic formatting control groups" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-group-separators")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val resolved = SurfaceContentResolver.resolveContextualToolbar(
+      ContextualToolbarState(displayMode = ToolbarDisplayMode.IconOnly),
+      state,
+      LayoutRect(0, 0, 120, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.head.segments.filter(_.trailingSeparator).map(_.text) shouldBe List(
+      ContextualToolbar.displayText(toolbarButton(state, "underline"), ToolbarDisplayMode.IconOnly),
+      ContextualToolbar.displayText(toolbarInput(state, "font-size"), ToolbarDisplayMode.IconOnly),
+      ContextualToolbar.displayText(toolbarInput(state, "color-hex"), ToolbarDisplayMode.IconOnly)
+    )
   }
 
   it should "render icon-font glyphs alongside labels in IconAndText mode" in {

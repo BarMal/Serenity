@@ -32,7 +32,8 @@ case class OverlaySegment(
     backgroundColor: Option[Color] = None,
     fontFamily: Option[String] = None,
     inlineIcon: Option[String] = None,
-    inlineIconFontFamily: Option[String] = None
+    inlineIconFontFamily: Option[String] = None,
+    trailingSeparator: Boolean = false
 )
 
 case class OverlayRow(
@@ -908,25 +909,37 @@ object SurfaceContentResolver:
           val segments = rowItems.zipWithIndex.map {
             case (item, index) =>
               val selected = isSelected(item) || offset + index == focused
+              val trailingSeparator = ContextualToolbar.hasTrailingGroupSeparator(item, rowItems.lift(index + 1))
               normalized.displayMode match
                 case ToolbarDisplayMode.IconOnly if iconFont.nonEmpty =>
                   item match
                     case _: ContextualToolbarItem.Button =>
-                      OverlaySegment(item.icon, selected = selected, fontFamily = iconFont)
+                      OverlaySegment(
+                        item.icon,
+                        selected = selected,
+                        fontFamily = iconFont,
+                        trailingSeparator = trailingSeparator
+                      )
                     case _ =>
                       OverlaySegment(
                         ContextualToolbar.displayText(item, ToolbarDisplayMode.IconOnly),
-                        selected = selected
+                        selected = selected,
+                        trailingSeparator = trailingSeparator
                       )
                 case ToolbarDisplayMode.IconAndText if iconFont.nonEmpty =>
                   OverlaySegment(
                     ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly),
                     selected = selected,
                     inlineIcon = Some(item.icon),
-                    inlineIconFontFamily = iconFont
+                    inlineIconFontFamily = iconFont,
+                    trailingSeparator = trailingSeparator
                   )
                 case _ =>
-                  OverlaySegment(ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly), selected = selected)
+                  OverlaySegment(
+                    ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly),
+                    selected = selected,
+                    trailingSeparator = trailingSeparator
+                  )
           }
           (
             offset + rowItems.length,
