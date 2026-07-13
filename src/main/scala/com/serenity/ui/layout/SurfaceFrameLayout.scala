@@ -25,7 +25,8 @@ case class SurfaceFrameLayout(
     reservedContentRows: Int = 0,
     itemGapRows: Int = 0
   ): Int =
-    val availableRows = math.max(0, maxContentRows - SurfaceFrameLayout.contentChromeRows(hasHeader, hasFooter, reservedContentRows))
+    val availableRows =
+      math.max(0, maxContentRows - SurfaceFrameLayout.contentChromeRows(hasHeader, hasFooter, reservedContentRows))
     val itemHeight = math.max(0, itemGapRows) + 1
     if availableRows == 0 then 0 else (availableRows + itemHeight - 1) / itemHeight
 
@@ -98,10 +99,10 @@ object SurfaceFrameLayout:
   ): List[SurfaceContentRowSlot] =
     if content.height <= 0 then Nil
     else
-      val headerRows = if hasHeader then 1 else 0
-      val footerRows = if hasFooter then 1 else 0
-      val itemRows   = math.max(0, content.height - headerRows - footerRows)
-      val itemHeight = math.max(0, itemGapRows) + 1
+      val headerRows   = if hasHeader then 1 else 0
+      val footerRows   = if hasFooter then 1 else 0
+      val itemRows     = math.max(0, content.height - headerRows - footerRows)
+      val itemHeight   = math.max(0, itemGapRows) + 1
       val visibleItems = if itemRows == 0 then 0 else (itemRows + itemHeight - 1) / itemHeight
       val itemSlots =
         (0 until math.min(itemCount, visibleItems)).toList.map { index =>

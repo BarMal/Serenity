@@ -172,7 +172,8 @@ object OverlayViewModel:
   private def itemGapRowsFor(content: com.serenity.state.models.SurfaceContent, state: AppState): Int =
     content match
       case com.serenity.state.models.SurfaceContent.CommandPalette(_) |
-          com.serenity.state.models.SurfaceContent.CommandPaletteSubmenu(_, _, _) => state.config.commandRunnerItemGapRows
+          com.serenity.state.models.SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
+        state.config.commandRunnerItemGapRows
       case _ => 0
 
   private def alphaMultiplierFor(surface: com.serenity.state.models.UiSurface, state: AppState): Float =

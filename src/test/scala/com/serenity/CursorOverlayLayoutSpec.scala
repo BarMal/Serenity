@@ -159,7 +159,9 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       uiSurfaces = List(
         UiSurface(
           SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(CommandRunner(isActive = true, searchTerm = "", selectedIndex = 0, filteredCommands = Nil)),
+          SurfaceContent.CommandPalette(
+            CommandRunner(isActive = true, searchTerm = "", selectedIndex = 0, filteredCommands = Nil)
+          ),
           SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
         )
       )

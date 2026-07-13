@@ -820,7 +820,7 @@ object LayoutEngine:
       case Some(_) if baseRects.isEmpty =>
         BelowOverlayLayout(Nil, Set.empty)
       case Some(anchorFrame) =>
-        val gapRows         = surfaces.headOption.map(surface => floatingCursorGapRows(state, surface.content)).getOrElse(0)
+        val gapRows = surfaces.headOption.map(surface => floatingCursorGapRows(state, surface.content)).getOrElse(0)
         val stackGapRows    = floatingStackGapRows(state)
         val availableBottom = anchorFrame.contentRect.bottom
         val totalHeight     = baseRects.map(_._2.height).sum + (stackGapRows * (baseRects.length - 1).max(0))

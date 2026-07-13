@@ -115,10 +115,13 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val overlay = OverlayViewModel.fromState(state, layout).belowCursor.getOrElse(fail("Expected command overlay"))
 
     overlay.itemGapRows shouldBe 1
-    overlay.contentRowSlots.collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), y) => y }.sliding(2).foreach {
-      case List(first, second) => second - first shouldBe 2
-      case _                   => ()
-    }
+    overlay.contentRowSlots
+      .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), y) => y }
+      .sliding(2)
+      .foreach {
+        case List(first, second) => second - first shouldBe 2
+        case _                   => ()
+      }
   }
 
   it should "derive a focused find overlay view beneath the active cursor" in {

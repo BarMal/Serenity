@@ -567,9 +567,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reduce command palette capacity when item gaps reserve blank content rows" in {
-    val commands = (1 to 8).toList.map(index =>
-      Command.typed(s"cmd-$index", s"Command number $index", CommandIntent.ToggleTheme)
-    )
+    val commands =
+      (1 to 8).toList.map(index => Command.typed(s"cmd-$index", s"Command number $index", CommandIntent.ToggleTheme))
     val runner = CommandRunner.empty.activate(CommandRegistry(commands), AppConfig.default)
     val rect   = LayoutRect(0, 0, 80, 8)
 
@@ -582,9 +581,9 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
     floating.rows should have size 3
     floating.rows.map(_.plainText) shouldBe List(
-      "Command number 1 - Command number 1",
-      "Command number 2 - Command number 2",
-      "Command number 3 - Command number 3"
+      "Cmd 1 - Command number 1",
+      "Cmd 2 - Command number 2",
+      "Cmd 3 - Command number 3"
     )
   }
 

@@ -34,15 +34,15 @@ object CommandRunnerSettingsInputItems:
       f"${config.effectiveEditorTextTransitionSpeedScale}%.2f"
     val commandRunnerSpeedScaleValue =
       f"${config.effectiveCommandRunnerTransitionSpeedScale}%.2f"
-    val uiSpeedScaleValue     = f"${config.effectiveUiTransitionSpeedScale}%.2f"
-    val cursorSpeedScaleValue = f"${config.effectiveCursorTransitionSpeedScale}%.2f"
-    val elementGapValue       = interfaceConfig.elementGap.toString
-    val cornerRadiusValue     = interfaceConfig.cornerRadiusPx.toString
-    val outlineThicknessValue = interfaceConfig.outlineThicknessPx.toString
-    val commandRowsValue      = surfaceConfig.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
-    val commandItemGapRowsValue = surfaceConfig.commandRunnerItemGapRows.toString
+    val uiSpeedScaleValue         = f"${config.effectiveUiTransitionSpeedScale}%.2f"
+    val cursorSpeedScaleValue     = f"${config.effectiveCursorTransitionSpeedScale}%.2f"
+    val elementGapValue           = interfaceConfig.elementGap.toString
+    val cornerRadiusValue         = interfaceConfig.cornerRadiusPx.toString
+    val outlineThicknessValue     = interfaceConfig.outlineThicknessPx.toString
+    val commandRowsValue          = surfaceConfig.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
+    val commandItemGapRowsValue   = surfaceConfig.commandRunnerItemGapRows.toString
     val commandCursorGapRowsValue = surfaceConfig.commandRunnerCursorGapRows.map(_.toString).getOrElse("auto")
-    val spellCheck            = languageToolsConfig.spellCheck.normalized
+    val spellCheck                = languageToolsConfig.spellCheck.normalized
 
     val commentItems = List(
       CommandSurfaceItem.InputItem(
@@ -448,7 +448,8 @@ object CommandRunnerSettingsInputItems:
                 value >= AppConfig.MinCommandRunnerCursorGapRows &&
                   value <= AppConfig.MaxCommandRunnerCursorGapRows
               )
-              .map(value => CommandIntent.SetCommandRunnerCursorGapRows(Some(value))),
+              .map(value => CommandIntent.SetCommandRunnerCursorGapRows(Some(value)))
+        ,
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),

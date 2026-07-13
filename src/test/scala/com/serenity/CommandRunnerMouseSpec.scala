@@ -34,8 +34,8 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
       .unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
-    val before    = stateManager.getCurrentState.unsafeRunSync()
-    val itemPoint = commandRunnerItemPoint(before, 0)
+    val before         = stateManager.getCurrentState.unsafeRunSync()
+    val itemPoint      = commandRunnerItemPoint(before, 0)
     val selectedBefore = runnerFrom(before).selectedIndex
 
     stateManager.applyEvent(MouseMove(itemPoint.x, itemPoint.y + 1)).unsafeRunSync()

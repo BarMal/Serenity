@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.ui.layout.{LayoutRect, SurfaceContentRowKind, SurfaceContentRowSlot, SurfaceFrameLayout}
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
