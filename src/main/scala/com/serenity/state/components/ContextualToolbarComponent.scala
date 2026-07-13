@@ -85,7 +85,8 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
           case Some(command) =>
             ComponentResult.composite(
               updateToolbarState(surface, toolbarState.closeDetail),
-              ComponentResult.executeCommand(command)
+              ComponentResult.executeCommand(command),
+              ComponentResult.transferFocus(editorFocus(state))
             )
           case None =>
             ComponentResult.noChange
@@ -94,7 +95,12 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
           case Some(_: ContextualToolbarItem.Button) =>
             ContextualToolbar
               .focusedCommand(toolbarState, state, registry)
-              .map(ComponentResult.executeCommand)
+              .map(command =>
+                ComponentResult.composite(
+                  ComponentResult.executeCommand(command),
+                  ComponentResult.transferFocus(editorFocus(state))
+                )
+              )
               .getOrElse(ComponentResult.noChange)
           case Some(_: ContextualToolbarItem.Dropdown) | Some(_: ContextualToolbarItem.Input) =>
             updateToolbarState(surface, toolbarState.openFocusedDetail(items))
@@ -157,3 +163,8 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
         state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id)).popFocus
       case None =>
         state
+
+  private def editorFocus(state: AppState): Focus =
+    state.layout.activeEditorPaneId
+      .map(Focus.EditorPane.apply)
+      .getOrElse(Focus.EditorPane(PaneId(0)))

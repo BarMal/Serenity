@@ -180,6 +180,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .flatMap(_.runs.find(_.text == "beta"))
       .map(_.style.marks)
       .shouldBe(Some(Set(InlineMark.Bold)))
+    state.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "dismiss on Escape and restore editor focus" in {
@@ -244,6 +245,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .flatMap(_.runs.find(_.text == "beta"))
       .flatMap(_.style.fontSize)
       .shouldBe(Some(20.0f))
+    state.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "open a focused font family field with the current value prefilled, accept edits, and apply them on Enter" in {
@@ -324,7 +326,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     afterSecondEscape.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
-  it should "highlight and execute toolbar items with the mouse" in {
+  it should "select and execute toolbar items on click without stealing editor focus" in {
     val stateManager = createStateManager("ContextualToolbarSpec-mouse")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
@@ -350,7 +352,9 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
 
-    toolbarStateFrom(stateManager.getCurrentState.unsafeRunSync()).focusedIndex shouldBe 1
+    val afterHover = stateManager.getCurrentState.unsafeRunSync()
+    toolbarStateFrom(afterHover).focusedIndex shouldBe toolbarStateFrom(before).focusedIndex
+    afterHover.focus shouldBe before.focus
 
     stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
 
@@ -363,6 +367,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .flatMap(_.runs.find(_.text == "beta"))
       .map(_.style.marks)
       .shouldBe(Some(Set(InlineMark.Italic)))
+    after.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "open a paragraph role dropdown and apply the clicked option" in {
@@ -389,8 +394,13 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val triggerPoint = toolbarItemPoint(stateManager.getCurrentState.unsafeRunSync(), "paragraph-role")
     stateManager.applyEvent(MouseClick(triggerPoint.x, triggerPoint.y)).unsafeRunSync()
 
+    val openedDropdown = stateManager.getCurrentState.unsafeRunSync()
+    openedDropdown.focus shouldBe Focus.Surface(
+      openedDropdown.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar")).id
+    )
+
     val optionPoint = toolbarDetailPoint(
-      stateManager.getCurrentState.unsafeRunSync(),
+      openedDropdown,
       itemId = "paragraph-role",
       optionLabel = "H1"
     )
@@ -404,6 +414,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .flatMap(_.paragraphs.headOption)
       .map(_.role)
       .shouldBe(Some(ParagraphRole.Heading(1)))
+    state.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "open a paragraph role dropdown and apply heading level 4" in {

@@ -1311,28 +1311,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       case _                             => false
 
   private def handleContextualToolbarMouseHover(event: MouseInputEvent, state: AppState): cats.effect.IO[Boolean] =
-    contextualToolbarSelectionAt(event, state) match
-      case Some((surface, toolbarState, ContextualToolbarHit.TopLevelItem(index))) =>
-        stateRef
-          .update { current =>
-            val items        = ContextualToolbar.itemsFor(current)
-            val updatedState = toolbarState.withFocusedIndex(index, items).closeDetail
-            replaceContextualToolbar(current, surface, updatedState)
-          }
-          .as(true)
-      case Some((surface, toolbarState, ContextualToolbarHit.DropdownOption(itemId, optionIndex))) =>
-        stateRef
-          .update { current =>
-            val updatedState = toolbarState.copy(
-              detailState = Some(ContextualToolbarDetailState.Dropdown(itemId, optionIndex))
-            )
-            replaceContextualToolbar(current, surface, updatedState)
-          }
-          .as(true)
-      case None =>
-        cats.effect.IO.pure(false)
-      case _ =>
-        cats.effect.IO.pure(false)
+    cats.effect.IO.pure(contextualToolbarSelectionAt(event, state).isDefined)
 
   private def handleContextualToolbarMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =
     contextualToolbarSelectionAt(click, state) match
@@ -1348,7 +1327,12 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
               case Some(_: ContextualToolbarItem.Dropdown) => focusedState.openFocusedDetail(items)
               case Some(_: ContextualToolbarItem.Input)    => focusedState.openFocusedDetail(items)
               case None                                    => focusedState
-          replaceContextualToolbar(current, surface, nextState).copy(focus = Focus.Surface(surface.id))
+          val updated = replaceContextualToolbar(current, surface, nextState)
+          focusedItem match
+            case Some(_: ContextualToolbarItem.Dropdown) | Some(_: ContextualToolbarItem.Input) =>
+              updated.pushFocus(Focus.Surface(surface.id))
+            case _ =>
+              updated
         } >>
           stateRef.get.flatMap { current =>
             focusedItem match
@@ -1364,7 +1348,9 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       case Some((surface, toolbarState, ContextualToolbarHit.DropdownOption(itemId, optionIndex))) =>
         val detailState =
           toolbarState.copy(detailState = Some(ContextualToolbarDetailState.Dropdown(itemId, optionIndex)))
-        stateRef.update(current => replaceContextualToolbar(current, surface, detailState.closeDetail)) >>
+        stateRef.update(current =>
+          replaceContextualToolbar(current, surface, detailState.closeDetail).copy(focus = editorFocus(current))
+        ) >>
           stateRef.get.flatMap { current =>
             ContextualToolbar.detailCommand(detailState, current) match
               case Some(command) => executeCommand(command).as(true)
@@ -1373,7 +1359,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       case Some((surface, toolbarState, ContextualToolbarHit.InputDetail(_))) =>
         stateRef
           .update(current =>
-            replaceContextualToolbar(current, surface, toolbarState).copy(focus = Focus.Surface(surface.id))
+            replaceContextualToolbar(current, surface, toolbarState).pushFocus(Focus.Surface(surface.id))
           )
           .as(true)
       case None =>
@@ -1429,6 +1415,11 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       case existing =>
         existing
     })
+
+  private def editorFocus(state: AppState): Focus =
+    state.layout.activeEditorPaneId
+      .map(Focus.EditorPane.apply)
+      .getOrElse(Focus.EditorPane(PaneId(0)))
 
   private def handleCommandRunnerMouseHover(event: MouseInputEvent, state: AppState): cats.effect.IO[Boolean] =
     commandRunnerSelectionAt(event, state) match
