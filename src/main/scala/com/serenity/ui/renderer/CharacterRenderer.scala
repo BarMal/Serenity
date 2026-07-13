@@ -278,14 +278,12 @@ object CharacterRenderer:
           copy(completed = TextRun(currentStartX, currentText) :: completed, currentText = "")
         else this
 
-    val initial    = PlainRunState(Nil, "", startX, startX)
-    val codePoints = content.codePoints().iterator()
-    var finalState = initial
-
-    while codePoints.hasNext do
-      finalState = codePoints.nextInt() match
-        case '\t' =>
-          val state       = finalState
+    val initial = PlainRunState(Nil, "", startX, startX)
+    val finalState = content
+      .codePoints()
+      .toArray
+      .foldLeft(initial) {
+        case (state, '\t') =>
           val flushed     = state.flush
           val spacesToAdd = tabWidth - (flushed.currentX % tabWidth)
           val tabSpaces   = " " * spacesToAdd
@@ -294,20 +292,18 @@ object CharacterRenderer:
             currentStartX = flushed.currentX + spacesToAdd,
             currentX = flushed.currentX + spacesToAdd
           )
-        case codePoint if isVisibleCodePoint(codePoint) =>
-          val state = finalState
+        case (state, codePoint) if isVisibleCodePoint(codePoint) =>
           val start = if state.currentText.isEmpty then state.currentX else state.currentStartX
           state.copy(
             currentText = state.currentText + new String(Character.toChars(codePoint)),
             currentStartX = start,
             currentX = state.currentX + displayWidth(codePoint)
           )
-        case _ =>
-          val state   = finalState
+        case (state, _) =>
           val flushed = state.flush
           flushed.copy(currentStartX = flushed.currentX)
-
-    finalState = finalState.flush
+      }
+      .flush
 
     CollectedRuns(finalState.completed.reverse, finalState.currentX)
 
@@ -316,8 +312,7 @@ object CharacterRenderer:
 
   private def displayWidth(codePoint: Int): Int =
     val category = Character.getType(codePoint)
-    if
-      category == Character.NON_SPACING_MARK ||
+    if category == Character.NON_SPACING_MARK ||
         category == Character.COMBINING_SPACING_MARK ||
         category == Character.ENCLOSING_MARK
     then 0
