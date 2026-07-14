@@ -744,7 +744,8 @@ object LayoutEngine:
           itemRows = menu.items.length,
           hasHeader = true,
           hasFooter = menu.items.nonEmpty,
-          borderCells = SurfaceFrameLayout.borderCellsFor(content)
+          borderCells = SurfaceFrameLayout.borderCellsFor(content),
+          itemGapRows = state.config.commandRunnerItemGapRows
         )
       case SurfaceContent.CommentLens(lens) =>
         math.max(4, math.min(8, lens.draft.split("\n", -1).length + 3))
