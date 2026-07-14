@@ -118,7 +118,7 @@ object SurfaceContentResolver:
       case SurfaceContent.ContextualToolbar(_) =>
         ResolvedSurfaceContent()
       case SurfaceContent.ContextMenu(menu) =>
-        resolveContextMenu(menu, rect, mode)
+        resolveContextMenu(menu, rect, mode, itemGapRows)
       case SurfaceContent.CommentLens(lens) =>
         ResolvedSurfaceContent(
           title = titleFor(mode, "comment"),
@@ -1000,13 +1000,15 @@ object SurfaceContentResolver:
   private def resolveContextMenu(
     menu: ContextMenu,
     rect: LayoutRect,
-    mode: SurfaceRenderMode
+    mode: SurfaceRenderMode,
+    itemGapRows: Int
   ): ResolvedSurfaceContent =
     val itemWindow = SurfaceFrameLayout(rect).itemWindow(
       itemCount = menu.items.size,
       selectedIndex = menu.selectedIndex,
       hasHeader = true,
-      hasFooter = menu.items.nonEmpty
+      hasFooter = menu.items.nonEmpty,
+      itemGapRows = itemGapRows
     )
     val visibleItems = itemWindow.slice(menu.items)
     val rows = visibleItems.zipWithIndex.map {

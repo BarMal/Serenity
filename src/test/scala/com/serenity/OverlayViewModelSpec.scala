@@ -160,12 +160,16 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlay.rect shouldBe layout.belowCursorOverlayRect.get
   }
 
-  it should "allocate enough framed rows for a one-item context menu at compact density" in {
+  it should "allocate spaced framed rows for a context menu at compact density" in {
     val save = Command.typed("save", "Save file", CommandIntent.SaveCurrentFile, label = "Save")
+    val find = Command.typed("find", "Find text", CommandIntent.FindInCurrentFile, label = "Find")
     val menu = ContextMenu(
       title = "editor",
       targetFocus = Focus.EditorPane(paneId),
-      items = List(ContextMenuItem(save.name, save.label, save)),
+      items = List(
+        ContextMenuItem(save.name, save.label, save),
+        ContextMenuItem(find.name, find.label, find)
+      ),
       selectedIndex = 0
     )
     val buffer = Buffer
@@ -175,7 +179,9 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      config = AppConfig.default.withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact),
+      config = AppConfig.default
+        .withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact)
+        .withCommandRunnerItemGapRows(1),
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
       layout = Layout(
@@ -197,13 +203,15 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val overlay  = overlays.belowCursor.getOrElse(fail("Expected context menu overlay"))
 
     overlay.rect.height shouldBe SurfaceFrameLayout.frameHeightForItemRows(
-      itemRows = 1,
+      itemRows = 2,
       hasHeader = true,
-      hasFooter = true
+      hasFooter = true,
+      itemGapRows = 1
     )
     overlay.contentRowSlots.map(_.kind) shouldBe List(
       SurfaceContentRowKind.Header,
       SurfaceContentRowKind.Item(0),
+      SurfaceContentRowKind.Item(1),
       SurfaceContentRowKind.Footer
     )
   }

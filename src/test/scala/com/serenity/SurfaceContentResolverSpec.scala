@@ -136,6 +136,28 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.footer.map(_.plainText) shouldBe Some("2/2")
   }
 
+  it should "reserve configured gap rows between context menu items" in {
+    val save = Command.typed("save", "Save file", CommandIntent.SaveCurrentFile, label = "Save")
+    val find = Command.typed("find", "Find text", CommandIntent.FindInCurrentFile, label = "Find")
+    val menu = ContextMenu(
+      title = "editor",
+      targetFocus = Focus.EditorPane(PaneId(0)),
+      items = List(
+        ContextMenuItem(save.name, save.label, save),
+        ContextMenuItem(find.name, find.label, find)
+      )
+    )
+
+    val floating = SurfaceContentResolver.resolve(
+      SurfaceContent.ContextMenu(menu),
+      LayoutRect(0, 0, 28, 6),
+      SurfaceRenderMode.Floating,
+      itemGapRows = 1
+    )
+
+    floating.rows.map(_.plainText) shouldBe List("Save")
+  }
+
   it should "resolve multiline comment lenses into editable draft rows" in {
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.CommentLens(

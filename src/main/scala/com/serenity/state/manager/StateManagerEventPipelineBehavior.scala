@@ -1262,6 +1262,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
               executeCommand(item.command).as(true)
           case None =>
             cats.effect.IO.pure(false)
+      case None if isContextMenuItemGap(click, state) =>
+        cats.effect.IO.pure(true)
       case None if state.contextMenuSurface.isDefined =>
         stateRef.update(dismissContextMenu).as(true)
       case None =>
@@ -1287,9 +1289,22 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         menu.items.length,
         menu.selectedIndex,
         hasHeader = true,
-        hasFooter = menu.items.nonEmpty
+        hasFooter = menu.items.nonEmpty,
+        itemGapRows = state.config.commandRunnerItemGapRows
       )
     yield (surface, menu, index)
+
+  private def isContextMenuItemGap(event: MouseInputEvent, state: AppState): Boolean =
+    (for
+      viewportSize <- state.viewportSize
+      surface      <- state.contextMenuSurface
+      layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      contract = EditorLayoutContract.from(state, viewportSize, layout)
+      contentRect <- contract.overlayContentRect(surface.id)
+    yield
+      contentRect.contains(event.col, event.row) &&
+        !contract.overlayRowSlots(surface.id).exists(_.y == event.row)
+    ).getOrElse(false)
 
   private def editorContextMenu(targetFocus: Focus): Option[ContextMenu] =
     val registry = CommandRegistry.withToggleUI

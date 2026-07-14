@@ -243,6 +243,33 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     after.clipboard shouldBe Some("hello")
   }
 
+  it should "not select a context menu item when clicking a configured item gap" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState(state => state.copy(config = state.config.withCommandRunnerItemGapRows(1))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+    sm.applyEvent(MouseClick(18, 2, button = MouseButton.Secondary)).unsafeRunSync()
+
+    val openedState = sm.getCurrentState.unsafeRunSync()
+    val viewport    = openedState.viewportSize.getOrElse(fail("Expected viewport size"))
+    val surface     = openedState.contextMenuSurface.getOrElse(fail("Expected context menu surface"))
+    val layout      = LayoutEngine.calculateLayoutWithUI(openedState, viewport)
+    val contract    = EditorLayoutContract.from(openedState, viewport, layout)
+    val contentRect = contract
+      .overlayContentRect(surface.id)
+      .getOrElse(fail("Expected context menu overlay content rect"))
+    val firstItemRow = contract
+      .overlayRowSlots(surface.id)
+      .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(0), y) => y }
+      .getOrElse(fail("Expected first context menu item row"))
+
+    sm.applyEvent(MouseClick(contentRect.x + 1, firstItemRow + 1)).unsafeRunSync()
+
+    val after = sm.getCurrentState.unsafeRunSync()
+    after.contextMenuSurface shouldBe Some(surface)
+  }
+
   it should "dismiss the context menu on Escape" in {
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
