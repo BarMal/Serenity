@@ -359,6 +359,12 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val before = stateManager.getCurrentState.unsafeRunSync()
     val point  = toolbarItemPoint(before, itemId = "italic")
 
+    stateManager.applyEvent(MousePress(point.x, point.y)).unsafeRunSync()
+
+    val afterPress = stateManager.getCurrentState.unsafeRunSync()
+    toolbarStateFrom(afterPress).focusedIndex shouldBe toolbarStateFrom(before).focusedIndex
+    afterPress.focus shouldBe before.focus
+
     stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
 
     val afterHover = stateManager.getCurrentState.unsafeRunSync()
