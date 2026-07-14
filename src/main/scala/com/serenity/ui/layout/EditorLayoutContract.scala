@@ -36,6 +36,7 @@ case class EditorLayoutContract(
     belowCursorOverlayRects: List[(SurfaceId, LayoutRect)],
     floatingOverlayRects: List[(SurfaceId, LayoutRect)],
     floatingOverlayContentRects: List[(SurfaceId, LayoutRect)],
+    floatingOverlayHeaderRects: Map[SurfaceId, LayoutRect],
     floatingOverlayRowSlots: Map[SurfaceId, List[SurfaceContentRowSlot]]
 ):
 
@@ -84,6 +85,9 @@ case class EditorLayoutContract(
   def overlayContentRect(surfaceId: SurfaceId): Option[LayoutRect] =
     floatingOverlayContentRects.collectFirst { case (`surfaceId`, rect) => rect }
 
+  def overlayHeaderRect(surfaceId: SurfaceId): Option[LayoutRect] =
+    floatingOverlayHeaderRects.get(surfaceId)
+
   def overlayRowSlots(surfaceId: SurfaceId): List[SurfaceContentRowSlot] =
     floatingOverlayRowSlots.getOrElse(surfaceId, Nil)
 
@@ -97,6 +101,7 @@ case class EditorLayoutContract(
       pinnedSurfaceRowSlotViolations ++
       expandedSurfaceRowSlotViolations ++
       floatingOverlayViolations ++
+      floatingOverlayHeaderViolations ++
       floatingOverlayRowSlotViolations ++
       floatingOverlayStackViolations ++
       gutterViolations
@@ -222,6 +227,22 @@ case class EditorLayoutContract(
 
   private def floatingOverlayRowSlotViolations: List[LayoutContractViolation] =
     rowSlotViolations("floating overlay", floatingOverlayContentRects.toMap, floatingOverlayRowSlots)
+
+  private def floatingOverlayHeaderViolations: List[LayoutContractViolation] =
+    floatingOverlayHeaderRects.toList.flatMap {
+      case (surfaceId, headerRect) =>
+        floatingOverlayContentRects.collectFirst { case (`surfaceId`, contentRect) => contentRect }.toList.flatMap {
+          contentRect =>
+            Option.when(!contentRect.containsRect(headerRect))(
+              LayoutContractViolation(
+                s"floating overlay ${surfaceId.value} content",
+                s"floating overlay ${surfaceId.value} header",
+                contentRect,
+                headerRect
+              )
+            )
+        }
+    }
 
   private def floatingOverlayStackViolations: List[LayoutContractViolation] =
     belowCursorOverlayRects.sliding(2).toList.flatMap {
@@ -385,6 +406,18 @@ object EditorLayoutContract:
       case (surfaceId, _) =>
         overlayViewsById.get(surfaceId).map(view => surfaceId -> view.resolvedContentRect)
     }
+    val floatingOverlayHeaderRects = floatingOverlayViews.flatMap { view =>
+      view.surfaceId.flatMap { surfaceId =>
+        Option.when(view.header.nonEmpty && view.resolvedContentRect.height > 0)(
+          surfaceId -> LayoutRect(
+            view.resolvedContentRect.x,
+            view.resolvedContentRect.y,
+            view.resolvedContentRect.width,
+            1
+          )
+        )
+      }
+    }.toMap
     val floatingOverlayRowSlots = floatingOverlayViews
       .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
       .toMap
@@ -411,5 +444,6 @@ object EditorLayoutContract:
       belowCursorOverlayRects = belowCursorOverlayRects,
       floatingOverlayRects = floatingOverlayRects,
       floatingOverlayContentRects = floatingOverlayContentRects,
+      floatingOverlayHeaderRects = floatingOverlayHeaderRects,
       floatingOverlayRowSlots = floatingOverlayRowSlots
     )

@@ -612,11 +612,36 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
 
     contract.overlayRect(commandRunner.id) shouldBe Some(overlayRects(commandRunner.id))
     contract.overlayContentRect(commandRunner.id) shouldBe Some(overlaysById(commandRunner.id).resolvedContentRect)
+    contract.overlayHeaderRect(commandRunner.id) shouldBe Some(
+      LayoutRect(
+        overlaysById(commandRunner.id).resolvedContentRect.x,
+        overlaysById(commandRunner.id).resolvedContentRect.y,
+        overlaysById(commandRunner.id).resolvedContentRect.width,
+        1
+      )
+    )
     contract.overlayRowSlots(commandRunner.id) shouldBe overlaysById(commandRunner.id).contentRowSlots
+    assertInside(
+      contract.overlayContentRect(commandRunner.id).getOrElse(fail("expected command runner content")),
+      contract.overlayHeaderRect(commandRunner.id).getOrElse(fail("expected command runner header")),
+      "command runner overlay header"
+    )
 
     contract.overlayRect(SurfaceId("missing")) shouldBe None
     contract.overlayContentRect(SurfaceId("missing")) shouldBe None
+    contract.overlayHeaderRect(SurfaceId("missing")) shouldBe None
     contract.overlayRowSlots(SurfaceId("missing")) shouldBe Nil
+
+    val malformed = contract.copy(
+      floatingOverlayHeaderRects = contract.floatingOverlayHeaderRects.updated(
+        commandRunner.id,
+        LayoutRect(0, contract.overlayContentRect(commandRunner.id).getOrElse(fail("expected content")).bottom, 1, 1)
+      )
+    )
+
+    malformed.violations.map(violation => violation.ownerName -> violation.childName) should contain(
+      s"floating overlay ${commandRunner.id.value} content" -> s"floating overlay ${commandRunner.id.value} header"
+    )
   }
 
   it should "provide shared pane header, title, and gutter lookups" in {
