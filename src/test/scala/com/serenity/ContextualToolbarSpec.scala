@@ -78,7 +78,9 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val stateManager = createStateManager("ContextualToolbarSpec-follow-caret")
 
     stateManager
-      .updateState(state => state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)))
+      .updateState(state =>
+        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+      )
       .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     stateManager
@@ -643,7 +645,9 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val stateManager = createStateManager("ContextualToolbarSpec-rendered-glyphs")
     val viewport     = ViewportSize(120, 30)
     stateManager
-      .updateState(state => state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)))
+      .updateState(state =>
+        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+      )
       .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -738,7 +742,9 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val stateManager = createStateManager("ContextualToolbarSpec-separator-pointer")
 
     stateManager
-      .updateState(state => state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)))
+      .updateState(state =>
+        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+      )
       .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(ViewportSize(78, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -851,7 +857,9 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val viewport     = ViewportSize(78, 30)
 
     stateManager
-      .updateState(state => state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)))
+      .updateState(state =>
+        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+      )
       .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
     seedToolbarDocument(stateManager)
