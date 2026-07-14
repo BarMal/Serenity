@@ -8,13 +8,15 @@ import com.sun.jna.platform.win32.WinDef
 import com.sun.jna.ptr.IntByReference
 import com.sun.jna.{Native, NativeLibrary}
 
-/** Applies optional Windows DWM caption colours without replacing the OS-owned window frame. */
+/** Applies optional Windows DWM chrome attributes without replacing the OS-owned window frame. */
 object WindowsNativeChrome:
 
-  private val UseImmersiveDarkMode = 20
-  private val BorderColor          = 34
-  private val CaptionColor         = 35
-  private val TextColor            = 36
+  private val UseImmersiveDarkMode              = 20
+  private[serenity] val WindowCornerPreference  = 33
+  private val BorderColor                       = 34
+  private val CaptionColor                      = 35
+  private val TextColor                         = 36
+  private[serenity] val RoundedCornerPreference = 2
 
   private lazy val setWindowAttribute =
     NativeLibrary.getInstance("dwmapi").getFunction("DwmSetWindowAttribute")
@@ -30,10 +32,13 @@ object WindowsNativeChrome:
       try
         val hwnd = new WinDef.HWND(Native.getComponentPointer(window))
         val dark = luminance(palette.titleBackground) < 0.5
-        setAttribute(hwnd, UseImmersiveDarkMode, if dark then 1 else 0) &&
-        setAttribute(hwnd, BorderColor, colorRef(palette.border)) &&
-        setAttribute(hwnd, CaptionColor, colorRef(palette.titleBackground)) &&
-        setAttribute(hwnd, TextColor, colorRef(palette.titleForeground))
+        val colorsApplied =
+          setAttribute(hwnd, UseImmersiveDarkMode, if dark then 1 else 0) &&
+            setAttribute(hwnd, BorderColor, colorRef(palette.border)) &&
+            setAttribute(hwnd, CaptionColor, colorRef(palette.titleBackground)) &&
+            setAttribute(hwnd, TextColor, colorRef(palette.titleForeground))
+        val _ = setAttribute(hwnd, WindowCornerPreference, RoundedCornerPreference)
+        colorsApplied
       catch case NonFatal(_) => false
 
   private def setAttribute(hwnd: WinDef.HWND, attribute: Int, value: Int): Boolean =
