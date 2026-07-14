@@ -426,6 +426,25 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     assertInside(contract.contentAreaRect, contract.pinnedSurfaceContentRects(pinnedPanel.id), "pinned panel content")
   }
 
+  it should "report overlapping pinned surface title and content rectangles" in {
+    val panel = UiSurface(
+      SurfaceId("left-panel"),
+      SurfaceContent.Outline(Nil),
+      SurfacePresentation.Pinned(PanelPosition.Left, 16)
+    )
+    val state            = AppState.initial.copy(uiSurfaces = List(panel))
+    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
+    val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+    val titleRect        = contract.pinnedSurfaceTitleRects(panel.id)
+    val malformed = contract.copy(
+      pinnedSurfaceContentRects = contract.pinnedSurfaceContentRects.updated(panel.id, titleRect)
+    )
+
+    malformed.violations.map(violation => violation.ownerName -> violation.childName) should contain(
+      s"pinned surface ${panel.id.value} title" -> s"pinned surface ${panel.id.value} content"
+    )
+  }
+
   it should "keep markdown preview rows inside the pinned panel content contract" in {
     val buffer = Buffer.fromString(BufferId(1), "# Title\n\nFirst paragraph\n\nSecond paragraph")
     val preview = UiSurface(

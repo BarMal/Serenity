@@ -168,7 +168,12 @@ case class EditorLayoutContract(
               s"pinned surface ${surfaceId.value} title"   -> pinnedSurfaceTitleRects.get(surfaceId),
               s"pinned surface ${surfaceId.value} content" -> pinnedSurfaceContentRects.get(surfaceId)
             )
-          )
+          ) ++
+            titleContentOverlapViolations(
+              s"pinned surface ${surfaceId.value}",
+              pinnedSurfaceTitleRects.get(surfaceId),
+              pinnedSurfaceContentRects.get(surfaceId)
+            )
       }
 
   private def expandedSurfaceViolations: List[LayoutContractViolation] =
@@ -186,7 +191,12 @@ case class EditorLayoutContract(
               s"expanded surface ${surfaceId.value} title"   -> expandedSurfaceTitleRects.get(surfaceId),
               s"expanded surface ${surfaceId.value} content" -> expandedSurfaceContentRects.get(surfaceId)
             )
-          )
+          ) ++
+            titleContentOverlapViolations(
+              s"expanded surface ${surfaceId.value}",
+              expandedSurfaceTitleRects.get(surfaceId),
+              expandedSurfaceContentRects.get(surfaceId)
+            )
       }
 
   private def floatingOverlayViolations: List[LayoutContractViolation] =
@@ -280,6 +290,20 @@ case class EditorLayoutContract(
           }
         }
     }
+
+  private def titleContentOverlapViolations(
+    surfaceName: String,
+    titleRect: Option[LayoutRect],
+    contentRect: Option[LayoutRect]
+  ): List[LayoutContractViolation] =
+    (titleRect, contentRect) match
+      case (Some(title), Some(content)) if rectanglesOverlap(title, content) =>
+        List(LayoutContractViolation(s"$surfaceName title", s"$surfaceName content", title, content))
+      case _ =>
+        Nil
+
+  private def rectanglesOverlap(first: LayoutRect, second: LayoutRect): Boolean =
+    first.x < second.right && second.x < first.right && first.y < second.bottom && second.y < first.bottom
 
 object EditorLayoutContract:
 
