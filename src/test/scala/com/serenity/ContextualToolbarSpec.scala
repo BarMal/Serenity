@@ -282,6 +282,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .flatMap(_.runs.find(_.text == "beta"))
       .flatMap(_.style.fontFamily)
       .shouldBe(Some("Serif"))
+    state.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "open a focused color field with the current value prefilled, accept hex edits, and apply them on Enter" in {
@@ -309,6 +310,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .flatMap(_.runs.find(_.text == "beta"))
       .flatMap(_.style.color)
       .shouldBe(Some("#ff6600"))
+    state.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "close an open toolbar control on Escape before dismissing the toolbar" in {
