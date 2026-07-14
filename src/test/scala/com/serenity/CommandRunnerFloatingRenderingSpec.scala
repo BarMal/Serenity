@@ -491,6 +491,32 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.putStringCalls.map(_.s) should not contain "."
   }
 
+  it should "preserve rounded context menus after their animation has materialised" in {
+    val copyCommand = Command.typed("copy", "Copy", CommandIntent.Copy, label = "Copy")
+    val menu = ContextMenu(
+      title = "editor",
+      targetFocus = Focus.EditorPane(paneId),
+      items = List(ContextMenuItem("copy", "Copy", copyCommand))
+    )
+    val state = stateWithRunner(Theme.light, "", Nil).copy(
+      config = AppConfig.default.withUiCornerRadiusPx(12),
+      focus = Focus.Surface(SurfaceId("context-menu")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("context-menu"),
+          SurfaceContent.ContextMenu(menu),
+          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val surface = new MockRenderSurface(100, 30)
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+
+    surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
+    surface.putStringCalls.map(_.s) should not contain "."
+  }
+
   it should "request backdrop blur for the floating overlay using the configured blur radius" in {
     val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
     val state = stateWithRunner(Theme.light, "op", commands).copy(
