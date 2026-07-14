@@ -14,6 +14,8 @@ This is one application with one JVM, not a duplicate editor instance. The
 generated runtime does not expose a separate `java.exe` or `javaw.exe` process.
 After normal window close, the launcher and child must both be gone.
 
+This expected topology was verified by [PR #709](https://github.com/BarMal/Serenity/pull/709).
+
 The Windows package-check and publish workflows launch the generated app image,
 record process names, command lines, parentage, CPU time, and working-set memory,
 then assert the launcher/child topology. The child receives a normal window-close
