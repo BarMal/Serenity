@@ -102,8 +102,8 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     val resizedArc   = cache.acquire(width = 800, height = 480, cornerArc = 24)
 
     sameGeometry should be theSameInstanceAs initial
-    resized should not be theSameInstanceAs (initial)
-    resizedArc should not be theSameInstanceAs (resized)
+    resized should not be theSameInstanceAs(initial)
+    resizedArc should not be theSameInstanceAs(resized)
   }
 
   it should "derive viewport size from the live canvas size when available" in {
