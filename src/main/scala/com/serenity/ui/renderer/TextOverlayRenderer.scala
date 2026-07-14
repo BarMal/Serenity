@@ -268,6 +268,8 @@ object TextOverlayRenderer:
   ): Unit =
     val segments = row.segments
     if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
+    else if segments.exists(_.allocatedWidth.nonEmpty) then
+      renderCompactDistributedRow(surface, x, y, width, row, theme, defaultForeground, defaultBackground, font)
     else
       val baseCellWidth = width / segments.length
       val remainder     = width % segments.length
@@ -287,6 +289,48 @@ object TextOverlayRenderer:
             font
           )
           cursorX + cellWidth
+      }
+      ()
+
+  private def renderCompactDistributedRow(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    width: Int,
+    row: OverlayRow,
+    theme: Theme,
+    defaultForeground: Color,
+    defaultBackground: Color,
+    font: Font
+  ): Unit =
+    val segments = row.segments
+    if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
+    else
+      val _ = segments.zipWithIndex.foldLeft(x) {
+        case (cursorX, (segment, index)) =>
+          val remainingWidth = (x + width - cursorX).max(0)
+          val cellWidth      = segment.allocatedWidth.getOrElse(0).min(remainingWidth)
+          renderSegmentCell(
+            surface,
+            cursorX,
+            y,
+            cellWidth,
+            segment,
+            theme,
+            defaultForeground,
+            defaultBackground,
+            font
+          )
+          val afterCell = cursorX + cellWidth
+          val afterSeparator =
+            if segment.trailingSeparator && afterCell < x + width then
+              surface.setForegroundColor(defaultForeground)
+              surface.setBackgroundColor(defaultBackground)
+              CharacterRenderer.renderChar(surface, afterCell, y, '│')
+              afterCell + 1
+            else afterCell
+          if index < segments.length - 1 && afterSeparator < x + width then afterSeparator + 1
+          else afterSeparator
       }
       ()
 

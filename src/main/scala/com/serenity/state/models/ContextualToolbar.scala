@@ -175,6 +175,22 @@ object ContextualToolbar:
     "Blue" -> "#336699"
   )
 
+  private val proseGroupIds = Map(
+    "bold"             -> 0,
+    "italic"           -> 0,
+    "underline"        -> 0,
+    "font-family"      -> 1,
+    "font-family-text" -> 1,
+    "font-size"        -> 1,
+    "color"            -> 2,
+    "color-hex"        -> 2,
+    "paragraph-role"   -> 3,
+    "align-left"       -> 3,
+    "align-center"     -> 3,
+    "align-right"      -> 3,
+    "align-justify"    -> 3
+  )
+
   val markdownItems: List[ContextualToolbarItem] = List(
     ContextualToolbarItem.Button("markdown-preview", "Preview", "markdown-preview", "\uf1c5"),
     ContextualToolbarItem.Button("markdown-view-source", "Source", "markdown-view-source", "\ue86f"),
@@ -256,6 +272,31 @@ object ContextualToolbar:
           case ToolbarDisplayMode.TextOnly    => text
           case ToolbarDisplayMode.IconAndText => s"$icon $text"
 
+  /** Whether adjacent formatting controls belong to different visual groups. */
+  def hasTrailingGroupSeparator(
+    item: ContextualToolbarItem,
+    nextItem: Option[ContextualToolbarItem]
+  ): Boolean =
+    (proseGroupIds.get(item.id), nextItem.flatMap(next => proseGroupIds.get(next.id))) match
+      case (Some(group), Some(nextGroup)) => group != nextGroup
+      case _                              => false
+
+  /** Cell widths for a toolbar row, excluding inter-item and group-separator gutters. */
+  def itemCellWidths(
+    items: List[ContextualToolbarItem],
+    contentWidth: Int,
+    mode: ToolbarDisplayMode
+  ): List[Int] =
+    val preferredWidths = items.map(item => displayTextWidth(displayText(item, mode)) + 2)
+    val gutters = items.drop(1).length + items.zip(items.drop(1)).count {
+      case (item, nextItem) =>
+        hasTrailingGroupSeparator(item, Some(nextItem))
+    }
+    val availableWidth = (contentWidth - gutters).max(0)
+    if preferredWidths.sum <= availableWidth then
+      distributeExtraWidth(preferredWidths, availableWidth - preferredWidths.sum)
+    else distributeEvenly(items.length, availableWidth)
+
   def rowGroups(
     items: List[ContextualToolbarItem],
     contentWidth: Int,
@@ -333,12 +374,8 @@ object ContextualToolbar:
     val topLevelRows = rowGroups(items, contentWidth, toolbarState.displayMode)
     topLevelRows.lift(rowIndex) match
       case Some(rowItems) =>
-        Option.when(rowItems.nonEmpty) {
+        topLevelItemIndexAt(rowItems, columnOffset, contentWidth, toolbarState.displayMode).map { localIndex =>
           val offset = topLevelRows.take(rowIndex).map(_.length).sum
-          val localIndex =
-            ((columnOffset.max(0) * rowItems.length) / contentWidth.max(1))
-              .max(0)
-              .min(rowItems.length - 1)
           ContextualToolbarHit.TopLevelItem(offset + localIndex)
         }
       case None =>
@@ -361,6 +398,26 @@ object ContextualToolbar:
           case _ =>
             None
 
+  private def topLevelItemIndexAt(
+    items: List[ContextualToolbarItem],
+    columnOffset: Int,
+    contentWidth: Int,
+    mode: ToolbarDisplayMode
+  ): Option[Int] =
+    val widths = itemCellWidths(items, contentWidth, mode)
+    items
+      .zip(widths)
+      .zipWithIndex
+      .foldLeft((0, Option.empty[Int])) {
+        case ((cursor, found), ((item, width), index)) =>
+          val cellEnd        = cursor + width
+          val hit            = Option.when(columnOffset >= cursor && columnOffset < cellEnd)(index)
+          val separatorWidth = Option.when(hasTrailingGroupSeparator(item, items.lift(index + 1)))(1).getOrElse(0)
+          val gapWidth       = Option.when(index < items.length - 1)(1).getOrElse(0)
+          (cellEnd + separatorWidth + gapWidth, found.orElse(hit))
+      }
+      ._2
+
   def dropdownItem(itemId: String, items: List[ContextualToolbarItem]): Option[ContextualToolbarItem.Dropdown] =
     items.collectFirst { case item: ContextualToolbarItem.Dropdown if item.id == itemId => item }
 
@@ -368,21 +425,6 @@ object ContextualToolbar:
     items.collectFirst { case item: ContextualToolbarItem.Input if item.id == itemId => item }
 
   private def proseItemSegments(items: List[ContextualToolbarItem]): List[List[ContextualToolbarItem]] =
-    val proseGroupIds = Map(
-      "bold"             -> 0,
-      "italic"           -> 0,
-      "underline"        -> 0,
-      "font-family"      -> 1,
-      "font-family-text" -> 1,
-      "font-size"        -> 1,
-      "color"            -> 2,
-      "color-hex"        -> 2,
-      "paragraph-role"   -> 3,
-      "align-left"       -> 3,
-      "align-center"     -> 3,
-      "align-right"      -> 3,
-      "align-justify"    -> 3
-    )
     items.foldLeft(List.empty[List[ContextualToolbarItem]]) { (segments, item) =>
       val nextGroupId = proseGroupIds.get(item.id)
       segments match
@@ -420,7 +462,24 @@ object ContextualToolbar:
     rows :+ currentRow
 
   private def estimatedRowWidth(items: List[ContextualToolbarItem], mode: ToolbarDisplayMode): Int =
-    items.map(item => displayTextWidth(displayText(item, mode)) + 2).sum + items.drop(1).length
+    items.map(item => displayTextWidth(displayText(item, mode)) + 2).sum +
+      items.drop(1).length +
+      items.zip(items.drop(1)).count {
+        case (item, nextItem) =>
+          hasTrailingGroupSeparator(item, Some(nextItem))
+      }
+
+  private def distributeExtraWidth(widths: List[Int], extraWidth: Int): List[Int] =
+    widths.zipWithIndex.map { (width, index) =>
+      width + (extraWidth / widths.length) + Option.when(index < extraWidth % widths.length)(1).getOrElse(0)
+    }
+
+  private def distributeEvenly(itemCount: Int, availableWidth: Int): List[Int] =
+    if itemCount == 0 then Nil
+    else
+      List.tabulate(itemCount) { index =>
+        (availableWidth / itemCount) + Option.when(index < availableWidth % itemCount)(1).getOrElse(0)
+      }
 
   private def displayTextWidth(text: String): Int =
     text.codePoints().toArray.count { codePoint =>
