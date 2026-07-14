@@ -2,7 +2,7 @@ package com.serenity.ui.terminal
 
 import java.awt.*
 import java.awt.event.*
-import java.awt.geom.{Area, RoundRectangle2D}
+import java.awt.geom.RoundRectangle2D
 import java.awt.image.BufferedImage
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
@@ -284,26 +284,6 @@ class SwingWindow(
     setOpaque(false)
     setFocusable(false)
 
-    override def paintComponent(g: Graphics): Unit =
-      super.paintComponent(g)
-      if SwingWindow.shouldUsePerPixelRoundedCorners(
-            usesCustomChrome,
-            maximizedRef.get(),
-            perPixelTranslucencySupported
-          )
-      then
-        val g2 = g.create().asInstanceOf[Graphics2D]
-        try
-          val chrome  = chromeMetricsRef.get()
-          val outside = Area(new Rectangle(0, 0, getWidth, getHeight))
-          outside.subtract(
-            Area(new RoundRectangle2D.Double(0, 0, getWidth, getHeight, chrome.cornerArc, chrome.cornerArc))
-          )
-          g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-          g2.setComposite(AlphaComposite.Clear)
-          g2.fill(outside)
-        finally g2.dispose()
-
     private case class ResizeState(
         resizing: Boolean = false,
         resizeDir: Int = 0,
@@ -399,6 +379,24 @@ class SwingWindow(
     addMouseListener(adapter)
     addMouseMotionListener(adapter)
 
+  private class RoundedContentPane(layout: LayoutManager) extends JPanel(layout):
+    setOpaque(false)
+
+    override def paint(g: Graphics): Unit =
+      if SwingWindow.shouldUsePerPixelRoundedCorners(
+            usesCustomChrome,
+            maximizedRef.get(),
+            perPixelTranslucencySupported
+          ) && getWidth > 0 && getHeight > 0
+      then
+        val contents         = new BufferedImage(getWidth, getHeight, BufferedImage.TYPE_INT_ARGB)
+        val contentsGraphics = contents.createGraphics()
+        try super.paint(contentsGraphics)
+        finally contentsGraphics.dispose()
+
+        val _ = g.drawImage(SwingWindow.applyRoundedCornerMask(contents, chromeMetricsRef.get().cornerArc), 0, 0, null)
+      else super.paint(g)
+
   private val frame: JFrame =
     val f = new JFrame("Serenity")
     f.setIconImages(SwingWindow.applicationIconImages.asJava)
@@ -427,7 +425,7 @@ class SwingWindow(
         override def componentResized(e: ComponentEvent): Unit =
           if usesCustomChrome then SwingUtilities.invokeLater(() => updateShape())
     )
-    val content = new JPanel(new BorderLayout):
+    val content = new RoundedContentPane(new BorderLayout):
       setBackground(Color.BLACK)
     if usesCustomChrome then content.add(titleBar, BorderLayout.NORTH)
     content.add(canvas, BorderLayout.CENTER)
@@ -593,6 +591,25 @@ object SwingWindow:
     perPixelTranslucencySupported: Boolean
   ): Boolean =
     usesCustomChrome && !maximized && perPixelTranslucencySupported
+
+  private[serenity] def applyRoundedCornerMask(contents: BufferedImage, cornerArc: Int): BufferedImage =
+    val mask         = new BufferedImage(contents.getWidth, contents.getHeight, BufferedImage.TYPE_INT_ARGB)
+    val masked       = new BufferedImage(contents.getWidth, contents.getHeight, BufferedImage.TYPE_INT_ARGB)
+    val maskGraphics = mask.createGraphics()
+    try
+      maskGraphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+      maskGraphics.setColor(Color.WHITE)
+      val arc = cornerArc.max(0)
+      maskGraphics.fill(new RoundRectangle2D.Double(0, 0, contents.getWidth, contents.getHeight, arc, arc))
+    finally maskGraphics.dispose()
+
+    val maskedGraphics = masked.createGraphics()
+    try
+      maskedGraphics.drawImage(contents, 0, 0, null)
+      maskedGraphics.setComposite(AlphaComposite.DstIn)
+      maskedGraphics.drawImage(mask, 0, 0, null)
+      masked
+    finally maskedGraphics.dispose()
 
   private[serenity] def roundedCornerMask(
     usesCustomChrome: Boolean,
