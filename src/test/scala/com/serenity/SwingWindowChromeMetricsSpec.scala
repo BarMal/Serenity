@@ -106,6 +106,22 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     resizedArc should not be theSameInstanceAs(resized)
   }
 
+  it should "clear prior frame pixels before masking a reused rounded buffer" in {
+    val buffers = new SwingWindow.RoundedCornerMaskBufferCache().acquire(width = 32, height = 32, cornerArc = 16)
+
+    buffers.render { graphics =>
+      graphics.setColor(Color.RED)
+      graphics.fillRect(0, 0, 32, 32)
+    }
+    val refreshed = buffers.render { graphics =>
+      graphics.setColor(Color.BLUE)
+      graphics.fillRect(16, 1, 1, 1)
+    }
+
+    ((refreshed.getRGB(16, 16) >>> 24) & 0xff) shouldBe 0
+    refreshed.getRGB(16, 1) shouldBe Color.BLUE.getRGB
+  }
+
   it should "derive viewport size from the live canvas size when available" in {
     val metrics        = CellMetrics(charWidth = 10, lineHeight = 20, ascent = 15)
     val canvasSize     = new Dimension(640, 480)
