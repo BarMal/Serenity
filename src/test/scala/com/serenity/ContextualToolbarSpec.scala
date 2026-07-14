@@ -387,6 +387,27 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     after.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
+  it should "retain toolbar focus for a clicked text-entry control, then restore editor focus on submit" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-mouse-input-focus")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val inputPoint = toolbarItemPoint(stateManager.getCurrentState.unsafeRunSync(), "font-size")
+    stateManager.applyEvent(MouseClick(inputPoint.x, inputPoint.y)).unsafeRunSync()
+
+    val editing = stateManager.getCurrentState.unsafeRunSync()
+    editing.focus shouldBe Focus.Surface(
+      editing.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar")).id
+    )
+    toolbarStateFrom(editing).detailState shouldBe Some(ContextualToolbarDetailState.Input("font-size", "18"))
+
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
   it should "restore editor focus when a button is clicked while a toolbar detail is open" in {
     val stateManager = createStateManager("ContextualToolbarSpec-mouse-button-after-detail")
 
