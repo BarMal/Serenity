@@ -1301,10 +1301,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       contract = EditorLayoutContract.from(state, viewportSize, layout)
       contentRect <- contract.overlayContentRect(surface.id)
-    yield
-      contentRect.contains(event.col, event.row) &&
-        !contract.overlayRowSlots(surface.id).exists(_.y == event.row)
-    ).getOrElse(false)
+    yield contentRect.contains(event.col, event.row) &&
+      !contract.overlayRowSlots(surface.id).exists(_.y == event.row)).getOrElse(false)
 
   private def editorContextMenu(targetFocus: Focus): Option[ContextMenu] =
     val registry = CommandRegistry.withToggleUI
