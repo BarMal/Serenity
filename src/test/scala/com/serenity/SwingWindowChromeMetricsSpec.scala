@@ -181,6 +181,11 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     WindowsNativeChrome.isSupported("Linux") shouldBe false
   }
 
+  it should "request compositor-rounded corners for native themed windows" in {
+    WindowsNativeChrome.WindowCornerPreference shouldBe 33
+    WindowsNativeChrome.RoundedCornerPreference shouldBe 2
+  }
+
   "SwingWindow.NativeChromeThemeCache" should "avoid reapplying an unchanged supported palette" in {
     val cache        = new SwingWindow.NativeChromeThemeCache
     val lightPalette = SwingWindow.ChromePalette.fromTheme(Theme.light)
