@@ -74,6 +74,38 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     SwingWindow.shouldRefreshRoundedCornerMask(before, after) shouldBe true
   }
 
+  it should "antialias a per-pixel rounded-corner mask over the composed window contents" in {
+    val contents = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB)
+    val graphics = contents.createGraphics()
+    try
+      graphics.setColor(new Color(0x22, 0x44, 0x66))
+      graphics.fillRect(0, 0, contents.getWidth, contents.getHeight)
+    finally graphics.dispose()
+
+    val masked = new SwingWindow.RoundedCornerMaskBufferCache().acquire(32, 32, cornerArc = 16).mask(contents)
+    val alphas =
+      for
+        x <- 0 until masked.getWidth
+        y <- 0 until masked.getHeight
+      yield (masked.getRGB(x, y) >>> 24) & 0xff
+
+    ((masked.getRGB(0, 0) >>> 24) & 0xff) shouldBe 0
+    ((masked.getRGB(16, 0) >>> 24) & 0xff) shouldBe 255
+    alphas.exists(alpha => alpha > 0 && alpha < 255) shouldBe true
+  }
+
+  "SwingWindow.RoundedCornerMaskBufferCache" should "reuse buffers until their size or corner arc changes" in {
+    val cache        = new SwingWindow.RoundedCornerMaskBufferCache
+    val initial      = cache.acquire(width = 640, height = 480, cornerArc = 12)
+    val sameGeometry = cache.acquire(width = 640, height = 480, cornerArc = 12)
+    val resized      = cache.acquire(width = 800, height = 480, cornerArc = 12)
+    val resizedArc   = cache.acquire(width = 800, height = 480, cornerArc = 24)
+
+    sameGeometry should be theSameInstanceAs initial
+    resized should not be theSameInstanceAs(initial)
+    resizedArc should not be theSameInstanceAs(resized)
+  }
+
   it should "derive viewport size from the live canvas size when available" in {
     val metrics        = CellMetrics(charWidth = 10, lineHeight = 20, ascent = 15)
     val canvasSize     = new Dimension(640, 480)

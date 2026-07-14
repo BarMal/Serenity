@@ -2,7 +2,7 @@ package com.serenity.ui.terminal
 
 import java.awt.*
 import java.awt.event.*
-import java.awt.geom.{Area, RoundRectangle2D}
+import java.awt.geom.RoundRectangle2D
 import java.awt.image.BufferedImage
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
@@ -48,6 +48,7 @@ class SwingWindow(
   private val onResizeCallbackRef    = new AtomicReference[Option[() => Unit]](None)
   private val resizeGlassPaneRef     = new AtomicReference[Option[JComponent]](None)
   private val roundedCornerMaskRef   = new AtomicReference[Option[Int]](None)
+  private val roundedContentBuffers  = new SwingWindow.RoundedCornerMaskBufferCache
   private val usesCustomChrome       = chromeMode == WindowChromeMode.Custom
   private val usesNativeThemedChrome = chromeMode == WindowChromeMode.NativeThemed
   private val perPixelTranslucencySupported =
@@ -284,26 +285,6 @@ class SwingWindow(
     setOpaque(false)
     setFocusable(false)
 
-    override def paintComponent(g: Graphics): Unit =
-      super.paintComponent(g)
-      if SwingWindow.shouldUsePerPixelRoundedCorners(
-            usesCustomChrome,
-            maximizedRef.get(),
-            perPixelTranslucencySupported
-          )
-      then
-        val g2 = g.create().asInstanceOf[Graphics2D]
-        try
-          val chrome  = chromeMetricsRef.get()
-          val outside = Area(new Rectangle(0, 0, getWidth, getHeight))
-          outside.subtract(
-            Area(new RoundRectangle2D.Double(0, 0, getWidth, getHeight, chrome.cornerArc, chrome.cornerArc))
-          )
-          g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-          g2.setComposite(AlphaComposite.Clear)
-          g2.fill(outside)
-        finally g2.dispose()
-
     private case class ResizeState(
         resizing: Boolean = false,
         resizeDir: Int = 0,
@@ -399,6 +380,20 @@ class SwingWindow(
     addMouseListener(adapter)
     addMouseMotionListener(adapter)
 
+  private class RoundedContentPane(layout: LayoutManager) extends JPanel(layout):
+    setOpaque(false)
+
+    override def paint(g: Graphics): Unit =
+      if SwingWindow.shouldUsePerPixelRoundedCorners(
+            usesCustomChrome,
+            maximizedRef.get(),
+            perPixelTranslucencySupported
+          ) && getWidth > 0 && getHeight > 0
+      then
+        val buffers = roundedContentBuffers.acquire(getWidth, getHeight, chromeMetricsRef.get().cornerArc)
+        val _       = g.drawImage(buffers.render(contentsGraphics => super.paint(contentsGraphics)), 0, 0, null)
+      else super.paint(g)
+
   private val frame: JFrame =
     val f = new JFrame("Serenity")
     f.setIconImages(SwingWindow.applicationIconImages.asJava)
@@ -427,7 +422,7 @@ class SwingWindow(
         override def componentResized(e: ComponentEvent): Unit =
           if usesCustomChrome then SwingUtilities.invokeLater(() => updateShape())
     )
-    val content = new JPanel(new BorderLayout):
+    val content = new RoundedContentPane(new BorderLayout):
       setBackground(Color.BLACK)
     if usesCustomChrome then content.add(titleBar, BorderLayout.NORTH)
     content.add(canvas, BorderLayout.CENTER)
@@ -593,6 +588,75 @@ object SwingWindow:
     perPixelTranslucencySupported: Boolean
   ): Boolean =
     usesCustomChrome && !maximized && perPixelTranslucencySupported
+
+  final private[serenity] class RoundedCornerMaskBufferCache:
+    private val buffersRef = new AtomicReference[Option[RoundedCornerMaskBuffers]](None)
+
+    @annotation.tailrec
+    final def acquire(width: Int, height: Int, cornerArc: Int): RoundedCornerMaskBuffers =
+      buffersRef.get() match
+        case Some(buffers) if buffers.matches(width, height, cornerArc) => buffers
+        case current =>
+          val replacement = RoundedCornerMaskBuffers.create(width, height, cornerArc)
+          if buffersRef.compareAndSet(current, Some(replacement)) then replacement
+          else acquire(width, height, cornerArc)
+
+  final private[serenity] class RoundedCornerMaskBuffers private (
+      val width: Int,
+      val height: Int,
+      val cornerArc: Int,
+      private val contents: BufferedImage,
+      private val maskImage: BufferedImage,
+      private val masked: BufferedImage
+  ):
+
+    def matches(otherWidth: Int, otherHeight: Int, otherCornerArc: Int): Boolean =
+      width == otherWidth && height == otherHeight && cornerArc == otherCornerArc.max(0)
+
+    def render(paintContents: Graphics => Unit): BufferedImage =
+      val contentsGraphics = contents.createGraphics()
+      try
+        contentsGraphics.setComposite(AlphaComposite.Clear)
+        contentsGraphics.fillRect(0, 0, width, height)
+        contentsGraphics.setComposite(AlphaComposite.SrcOver)
+        paintContents(contentsGraphics)
+      finally contentsGraphics.dispose()
+      mask(contents)
+
+    def mask(source: BufferedImage): BufferedImage =
+      val maskedGraphics = masked.createGraphics()
+      try
+        maskedGraphics.setComposite(AlphaComposite.Src)
+        maskedGraphics.drawImage(source, 0, 0, null)
+        maskedGraphics.setComposite(AlphaComposite.DstIn)
+        maskedGraphics.drawImage(maskImage, 0, 0, null)
+        masked
+      finally maskedGraphics.dispose()
+
+  private[serenity] object RoundedCornerMaskBuffers:
+
+    def create(width: Int, height: Int, cornerArc: Int): RoundedCornerMaskBuffers =
+      val normalizedWidth  = width.max(1)
+      val normalizedHeight = height.max(1)
+      val normalizedArc    = cornerArc.max(0)
+      val mask             = new BufferedImage(normalizedWidth, normalizedHeight, BufferedImage.TYPE_INT_ARGB)
+      val maskGraphics     = mask.createGraphics()
+      try
+        maskGraphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        maskGraphics.setColor(Color.WHITE)
+        maskGraphics.fill(
+          new RoundRectangle2D.Double(0, 0, normalizedWidth, normalizedHeight, normalizedArc, normalizedArc)
+        )
+      finally maskGraphics.dispose()
+
+      new RoundedCornerMaskBuffers(
+        normalizedWidth,
+        normalizedHeight,
+        normalizedArc,
+        new BufferedImage(normalizedWidth, normalizedHeight, BufferedImage.TYPE_INT_ARGB),
+        mask,
+        new BufferedImage(normalizedWidth, normalizedHeight, BufferedImage.TYPE_INT_ARGB)
+      )
 
   private[serenity] def roundedCornerMask(
     usesCustomChrome: Boolean,
