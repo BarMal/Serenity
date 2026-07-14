@@ -567,6 +567,7 @@ class SwingWindow(
 
 object SwingWindow:
   private val ApplicationIconResource = "/icons/serenity.png"
+  private val RoundedCornerMaskScale  = 2
   private[serenity] val Transparent   = new Color(0, 0, 0, 0)
 
   private[serenity] lazy val applicationIconImages: scala.List[Image] =
@@ -636,18 +637,37 @@ object SwingWindow:
   private[serenity] object RoundedCornerMaskBuffers:
 
     def create(width: Int, height: Int, cornerArc: Int): RoundedCornerMaskBuffers =
-      val normalizedWidth  = width.max(1)
-      val normalizedHeight = height.max(1)
-      val normalizedArc    = cornerArc.max(0)
-      val mask             = new BufferedImage(normalizedWidth, normalizedHeight, BufferedImage.TYPE_INT_ARGB)
-      val maskGraphics     = mask.createGraphics()
+      val normalizedWidth    = width.max(1)
+      val normalizedHeight   = height.max(1)
+      val normalizedArc      = cornerArc.max(0)
+      val supersampledWidth  = normalizedWidth * RoundedCornerMaskScale
+      val supersampledHeight = normalizedHeight * RoundedCornerMaskScale
+      val supersampledArc    = normalizedArc * RoundedCornerMaskScale
+      val supersampledMask = new BufferedImage(
+        supersampledWidth,
+        supersampledHeight,
+        BufferedImage.TYPE_INT_ARGB
+      )
+      val maskGraphics = supersampledMask.createGraphics()
       try
         maskGraphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        maskGraphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
         maskGraphics.setColor(Color.WHITE)
         maskGraphics.fill(
-          new RoundRectangle2D.Double(0, 0, normalizedWidth, normalizedHeight, normalizedArc, normalizedArc)
+          new RoundRectangle2D.Double(0, 0, supersampledWidth, supersampledHeight, supersampledArc, supersampledArc)
         )
       finally maskGraphics.dispose()
+
+      val mask               = new BufferedImage(normalizedWidth, normalizedHeight, BufferedImage.TYPE_INT_ARGB)
+      val downsampleGraphics = mask.createGraphics()
+      try
+        downsampleGraphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+        downsampleGraphics.setRenderingHint(
+          RenderingHints.KEY_INTERPOLATION,
+          RenderingHints.VALUE_INTERPOLATION_BICUBIC
+        )
+        downsampleGraphics.drawImage(supersampledMask, 0, 0, normalizedWidth, normalizedHeight, null)
+      finally downsampleGraphics.dispose()
 
       new RoundedCornerMaskBuffers(
         normalizedWidth,

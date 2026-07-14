@@ -92,6 +92,9 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     ((masked.getRGB(0, 0) >>> 24) & 0xff) shouldBe 0
     ((masked.getRGB(16, 0) >>> 24) & 0xff) shouldBe 255
     alphas.exists(alpha => alpha > 0 && alpha < 255) shouldBe true
+    val topCornerEdgeAlpha = (masked.getRGB(4, 0) >>> 24) & 0xff
+    topCornerEdgeAlpha should be > 0
+    topCornerEdgeAlpha should be < 40
   }
 
   "SwingWindow.RoundedCornerMaskBufferCache" should "reuse buffers until their size or corner arc changes" in {
