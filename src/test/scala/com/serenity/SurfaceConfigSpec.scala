@@ -59,8 +59,8 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     config.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.TextOnly)
   }
 
-  it should "default the contextual toolbar display mode to icon only" in
-    AppConfig.default.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.IconOnly)
+  it should "default the contextual toolbar display mode to icons and text" in
+    AppConfig.default.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.IconAndText)
 
   it should "leave interface settings owned by InterfaceConfig" in {
     val config = AppConfig.default

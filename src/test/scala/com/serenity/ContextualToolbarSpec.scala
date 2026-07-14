@@ -29,7 +29,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       opened.activeCursorPosition,
       SurfacePlacement.BelowCursor
     )
-    toolbarStateFrom(opened).displayMode shouldBe ToolbarDisplayMode.IconOnly
+    toolbarStateFrom(opened).displayMode shouldBe ToolbarDisplayMode.IconAndText
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
@@ -77,6 +77,11 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
   it should "follow the active cursor while it remains open" in {
     val stateManager = createStateManager("ContextualToolbarSpec-follow-caret")
 
+    stateManager
+      .updateState(state =>
+        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+      )
+      .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     stateManager
       .updateState { state =>
@@ -639,6 +644,11 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
   it should "render compact toolbar controls alongside icon-only action glyphs" in {
     val stateManager = createStateManager("ContextualToolbarSpec-rendered-glyphs")
     val viewport     = ViewportSize(120, 30)
+    stateManager
+      .updateState(state =>
+        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+      )
+      .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
     seedToolbarDocument(stateManager)
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
@@ -731,6 +741,11 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
   it should "ignore hover and clicks on compact toolbar separator gutters" in {
     val stateManager = createStateManager("ContextualToolbarSpec-separator-pointer")
 
+    stateManager
+      .updateState(state =>
+        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+      )
+      .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(ViewportSize(78, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
@@ -841,6 +856,11 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val stateManager = createStateManager("ContextualToolbarSpec-compact-selected-hex")
     val viewport     = ViewportSize(78, 30)
 
+    stateManager
+      .updateState(state =>
+        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+      )
+      .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
     seedToolbarDocument(stateManager)
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
