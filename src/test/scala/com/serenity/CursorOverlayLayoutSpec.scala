@@ -382,6 +382,41 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     runnerRect.y shouldBe toolbarRect.bottom + 2
   }
 
+  it should "keep command runner cursor and submenu stack gaps independent" in {
+    val registry                               = com.serenity.command.CommandRegistry.default
+    given com.serenity.command.CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(com.serenity.command.CommandCategory.Settings)
+      .enterSelectedGroup
+    val cursor = CursorPosition(1, 2)
+    val state = baseState(cursor = cursor).copy(
+      config = AppState.initial.config.withUiElementGap(1).withCommandRunnerCursorGapRows(Some(3)),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner-submenu"),
+          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout      = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val contentRect = LayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
+    val stack       = layout.belowCursorOverlayStack.toMap
+
+    val runnerRect  = stack.getOrElse(SurfaceId("command-runner"), fail("Expected command runner overlay"))
+    val submenuRect = stack.getOrElse(SurfaceId("command-runner-submenu"), fail("Expected submenu overlay"))
+
+    runnerRect.y shouldBe contentRect.y + cursor.line + 4
+    submenuRect.y shouldBe runnerRect.bottom + 1
+  }
+
   it should "move a command runner stack above the cursor as one unit when it cannot fit below" in {
     val registry                               = com.serenity.command.CommandRegistry.default
     given com.serenity.command.CommandRegistry = registry
