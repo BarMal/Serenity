@@ -60,3 +60,10 @@ class CellMetricsSpec extends AnyFlatSpec with Matchers:
     val metrics = CellMetrics(8, 16, 13)
     metrics.viewportSize(800, 640) shouldBe ViewportSize(100, 40)
   }
+
+  it should "convert fractional logical rows without applying device scale" in {
+    val metrics = CellMetrics(8, 16, 13)
+
+    metrics.toPixelY(0.25) shouldBe 4.0
+    metrics.toPixelX(1.5) shouldBe 12.0
+  }

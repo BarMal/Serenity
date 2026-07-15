@@ -484,6 +484,26 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("command_runner.cursor_gap_rows = 3")
   }
 
+  it should "load and write fractional command runner and interface spacing" in {
+    val configFile = Files.createTempFile("serenity-fractional-spacing-config", ".conf")
+    Files.writeString(
+      configFile,
+      """command_runner.item_gap_rows = 0.25
+        |command_runner.cursor_gap_rows = 0.5
+        |ui.element_gap = 0.75
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.commandRunnerItemGapRows shouldBe 0.25
+    config.commandRunnerCursorGapRows shouldBe Some(0.5)
+    config.uiElementGap shouldBe 0.75
+    ConfigManager.configToString(config) should include("command_runner.item_gap_rows = 0.25")
+    ConfigManager.configToString(config) should include("command_runner.cursor_gap_rows = 0.5")
+    ConfigManager.configToString(config) should include("ui.element_gap = 0.75")
+  }
+
   it should "load and write render FPS targets" in {
     val configFile = Files.createTempFile("serenity-render-fps-config", ".conf")
     Files.writeString(

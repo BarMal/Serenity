@@ -12,7 +12,9 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
 
   "CommandRunnerSettingsInputItems" should "build config-backed settings input rows independently of runner state" in {
     val config = AppConfig.default
-      .withInterfaceConfig(InterfaceConfig(elementGap = 3, outlineThicknessPx = 4))
+      .withInterfaceConfig(InterfaceConfig(elementGap = 0.75, outlineThicknessPx = 4))
+      .withCommandRunnerItemGapRows(0.25)
+      .withCommandRunnerCursorGapRows(Some(0.5))
       .withCommandRunnerVisibleRows(Some(9))
       .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20, top = 0.15, bottom = 0.25))
       .withSpellCheck(
@@ -26,8 +28,9 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
 
     val items = CommandRunnerSettingsInputItems.build(config)
 
-    inputById(items, "ui-element-gap").currentValue shouldBe "3"
-    inputById(items, "ui-element-gap").parse("4") shouldBe Some(CommandIntent.SetUiElementGap(4))
+    inputById(items, "ui-element-gap").currentValue shouldBe "0.75"
+    inputById(items, "ui-element-gap").isDecimal shouldBe true
+    inputById(items, "ui-element-gap").parse("0.5") shouldBe Some(CommandIntent.SetUiElementGap(0.5))
     inputById(items, "ui-element-gap").parse("9") shouldBe None
     inputById(items, "ui-outline-thickness").currentValue shouldBe "4"
     inputById(items, "ui-outline-thickness").parse("5") shouldBe Some(CommandIntent.SetUiOutlineThicknessPx(5))
@@ -36,6 +39,12 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
     inputById(items, "command-runner-visible-rows").searchText.toLowerCase should include("visible commands")
     inputById(items, "command-runner-visible-rows").parse("auto") shouldBe
       Some(CommandIntent.SetCommandRunnerVisibleRows(None))
+    inputById(items, "command-runner-item-gap-rows").isDecimal shouldBe true
+    inputById(items, "command-runner-item-gap-rows").parse("0.25") shouldBe
+      Some(CommandIntent.SetCommandRunnerItemGapRows(0.25))
+    inputById(items, "command-runner-cursor-gap-rows").isDecimal shouldBe true
+    inputById(items, "command-runner-cursor-gap-rows").parse("0.5") shouldBe
+      Some(CommandIntent.SetCommandRunnerCursorGapRows(Some(0.5)))
     inputById(items, "text-area-top").currentValue shouldBe "15.0"
     inputById(items, "text-area-top").parse("12.5") shouldBe Some(CommandIntent.SetTextAreaTopInset(0.125))
     inputById(items, "text-area-bottom").currentValue shouldBe "25.0"

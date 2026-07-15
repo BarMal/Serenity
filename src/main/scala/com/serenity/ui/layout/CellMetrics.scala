@@ -7,6 +7,8 @@ case class CellMetrics(charWidth: Int, lineHeight: Int, ascent: Int):
   def isValid: Boolean        = charWidth > 0 && lineHeight > 0
   def toPixelX(col: Int): Int = col * charWidth
   def toPixelY(row: Int): Int = row * lineHeight
+  def toPixelX(col: Double): Double = col * charWidth
+  def toPixelY(row: Double): Double = row * lineHeight
   def toCol(pixelX: Int): Int = if charWidth > 0 then pixelX / charWidth else 0
   def toRow(pixelY: Int): Int = if lineHeight > 0 then pixelY / lineHeight else 0
 

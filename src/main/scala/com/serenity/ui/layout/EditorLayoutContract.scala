@@ -363,10 +363,10 @@ object EditorLayoutContract:
       case Some(gutter) => LayoutRect(0, 0, viewportSize.width, gutter.y)
       case None         => viewportRect
     val workspace = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
-    val minimumFloatingOverlayGapRows = math.max(
+    val minimumFloatingOverlayGapRows = math.ceil(math.max(
       InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows,
       math.max(0, state.config.uiElementGap)
-    )
+    )).toInt
     val panelViews = PinnedPanelViewModel.fromState(state, calculatedLayout)
     val panelViewsById = panelViews
       .flatMap(view => view.surfaceId.map(_ -> view))

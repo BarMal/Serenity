@@ -1435,7 +1435,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-cursor-gap-rows",
           "Set command runner cursor gap.",
-          CommandIntent.SetCommandRunnerCursorGapRows(Some(3)),
+          CommandIntent.SetCommandRunnerCursorGapRows(Some(3.0)),
           CommandCategory.Settings
         )
       )

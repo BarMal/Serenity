@@ -21,6 +21,21 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  it should "round-trip fractional floating-surface spacing" in {
+    val configured = AppState.initial.copy(
+      config = AppConfig.default
+        .withUiElementGap(0.75)
+        .withCommandRunnerItemGapRows(0.25)
+        .withCommandRunnerCursorGapRows(Some(0.5))
+    )
+
+    val restored = SessionState.toAppState(SessionState.fromAppState(configured), Theme.default)
+
+    restored.config.uiElementGap shouldBe 0.75
+    restored.config.commandRunnerItemGapRows shouldBe 0.25
+    restored.config.commandRunnerCursorGapRows shouldBe Some(0.5)
+  }
+
   "SessionState" should "restore clean file-backed buffers from disk content" in {
     val tempFile = Files.createTempFile("session-state-clean", ".txt")
     Files.writeString(tempFile, "content from disk")
