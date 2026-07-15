@@ -503,7 +503,7 @@ object Renderer:
     context.surface.setFont(context.fontForBuffer(buffer))
     if isInlineMarkdownLens(buffer, state) then
       val frame = markdownLensFrame.getOrElse(markdownLensFrameFor(buffer))
-      renderInlineMarkdownPreview(buffer, rect, state, context, frame.previewWindow)
+      renderInlineMarkdownPreview(buffer, rect, state, context, frame)
       renderMarkdownRawLenses(buffer, rect, state, context, snapshot, frame)
     else renderPlainBufferContent(buffer, rect, state, context, snapshot)
 
@@ -704,29 +704,31 @@ object Renderer:
     rect: LayoutRect,
     state: AppState,
     context: RenderContext,
-    previewWindow: MarkdownDocumentPreview.PreviewWindow
+    frame: MarkdownLensFrame
   ): Unit =
+    val previewWindow = frame.previewWindow
     val widthPx =
       scaledImagePixelDimension(rect.width * context.cellMetrics.charWidth, context.surface.devicePixelScaleX)
     val heightPx =
       scaledImagePixelDimension(rect.height * context.cellMetrics.lineHeight, context.surface.devicePixelScaleY)
-    val previewFont = MarkdownDocumentPreview.fontForDeviceScale(context.textFont, context.surface.devicePixelScaleY)
-    val baseUri     = buffer.filePath.flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
-    val title       = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
-    val image = MarkdownDocumentPreview.renderImage(
-      source = previewWindow.source,
+    val previewFont = MarkdownDocumentPreview.inlineLensFont(
+      context.textFont,
+      context.cellMetrics.lineHeight,
+      context.surface.devicePixelScaleY
+    )
+    val title = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
+    val image = MarkdownDocumentPreview.renderInlineImage(
+      sourceLines = frame.lines,
+      firstSourceLine = previewWindow.firstSourceLine,
+      maxSourceLines = previewWindow.source.count(_ == '\n') + 1,
       title = title,
       widthPx = widthPx,
       heightPx = heightPx,
       theme = state.theme,
       font = previewFont,
-      baseUri = baseUri,
-      panelChrome = false,
-      inlineLineHeightPx = Some(
-        MarkdownDocumentPreview.lineHeightForDeviceScale(
-          context.cellMetrics.lineHeight,
-          context.surface.devicePixelScaleY
-        )
+      inlineLineHeightPx = MarkdownDocumentPreview.lineHeightForDeviceScale(
+        context.cellMetrics.lineHeight,
+        context.surface.devicePixelScaleY
       )
     )
     context.surface.drawImage(image, rect.x, rect.y, rect.width, rect.height)
@@ -917,17 +919,20 @@ object Renderer:
   ): MarkdownDocumentPreview.PreviewWindow =
     if lines.isEmpty then MarkdownDocumentPreview.PreviewWindow(0, 0, "")
     else
-      val activeBlock = buffer.cursors.headOption
+      val activeLine = buffer.cursors.headOption
         .map(_.line)
         .filter(line => line >= 0 && line < lines.length)
-        .map(line => MarkdownBlockLens.currentBlock(lines, line))
+      val activeBlock         = activeLine.map(line => MarkdownBlockLens.currentBlock(lines, line))
       val baseSourceLineLimit = markdownPreviewSourceLineLimit(visibleRows)
       val maxSourceLines = activeBlock
         .map(blockRange => math.max(baseSourceLineLimit, blockRange.end - blockRange.start + 1))
         .getOrElse(baseSourceLineLimit)
       val viewportTopLine = buffer.viewport.topLine.max(0).min(lines.length - 1)
-      val preferredTopLine = activeBlock
-        .map(blockRange => blockRange.start.min(viewportTopLine))
+      val precedingHeading = activeLine
+        .filter(line => line > 0 && lines(line).trim.isEmpty && lines(line - 1).trim.matches("^#{1,6}\\s+.*"))
+        .map(_ - 1)
+      val preferredTopLine = precedingHeading
+        .orElse(activeBlock.map(blockRange => blockRange.start.min(viewportTopLine)))
         .getOrElse(viewportTopLine)
       val firstSourceLine = activeBlock
         .map { blockRange =>
@@ -939,7 +944,7 @@ object Renderer:
         firstSourceLine = firstSourceLine,
         firstPreviewRow =
           MarkdownDocumentPreview.previewRowForSourceLine(lines, firstSourceLine).getOrElse(firstSourceLine),
-        source = lines.slice(firstSourceLine, (firstSourceLine + maxSourceLines).min(lines.length)).mkString("\n")
+        source = lines.slice(firstSourceLine, firstSourceLine + maxSourceLines).mkString("\n")
       )
 
   private def markdownPreviewSourceLineLimit(visibleRows: Int): Int =
@@ -978,14 +983,6 @@ object Renderer:
         val lensY = rect.y + placement.top
         context.surface.setBackgroundColor(state.theme.panel.background)
         context.surface.fillRect(rect.x, lensY, rect.width, placement.height, ' ')
-        context.surface.strokeRoundRect(
-          rect.x,
-          lensY,
-          rect.width,
-          placement.height,
-          arcPx = 0,
-          state.theme.panelBorder
-        )
         blockVisualLines.zipWithIndex.foreach {
           case (visualLine, index) =>
             val screenY = lensY + index

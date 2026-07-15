@@ -26,6 +26,7 @@ import org.xml.sax.InputSource
 object MarkdownDocumentPreview:
 
   case class InlinePreviewLine(sourceLine: Option[Int], text: String)
+
   case class PreviewWindow(firstSourceLine: Int, firstPreviewRow: Int, source: String)
 
   /** Scales preview typography to match a device-scaled preview image. */
@@ -35,6 +36,11 @@ object MarkdownDocumentPreview:
   /** Converts an editor line height into the corresponding preview-image pixel height. */
   private[serenity] def lineHeightForDeviceScale(lineHeightPx: Int, deviceScale: Double): Int =
     math.ceil(lineHeightPx.max(1).toDouble * deviceScale.max(1.0)).toInt.max(1)
+
+  /** Sizes inline lens text to remain readable within an editor row before rendering at device scale. */
+  private[serenity] def inlineLensFont(font: Font, lineHeightPx: Int, deviceScale: Double): Font =
+    val readableFontSize = math.max(font.getSize2D.toDouble, lineHeightPx.max(1).toDouble * 0.8).toFloat
+    fontForDeviceScale(font.deriveFont(readableFontSize), deviceScale)
 
   private val MaxCachedImages          = 24
   private val MaxCachedHtmlFragments   = 48
@@ -55,7 +61,8 @@ object MarkdownDocumentPreview:
       font: Font,
       baseUri: Option[String],
       panelChrome: Boolean,
-      inlineLineHeightPx: Option[Int]
+      inlineLineHeightPx: Option[Int],
+      inlineRows: Boolean
   )
 
   private case class HtmlFragmentCacheKey(source: SourceFingerprint, title: String, baseUri: Option[String])
@@ -148,7 +155,8 @@ object MarkdownDocumentPreview:
       font = font,
       baseUri = baseUri.map(_.toString),
       panelChrome = panelChrome,
-      inlineLineHeightPx = inlineLineHeightPx
+      inlineLineHeightPx = inlineLineHeightPx,
+      inlineRows = false
     )
     imageCache
       .synchronized {
@@ -172,6 +180,54 @@ object MarkdownDocumentPreview:
         rendered
       }
 
+  /** Renders the inline lens directly from its preview rows without reparsing them as Markdown. */
+  private[serenity] def renderInlineImage(
+    sourceLines: Vector[String],
+    firstSourceLine: Int,
+    maxSourceLines: Int,
+    title: String,
+    widthPx: Int,
+    heightPx: Int,
+    theme: Theme,
+    font: Font,
+    inlineLineHeightPx: Int
+  ): BufferedImage =
+    val rows       = inlinePreviewRows(sourceLines, firstSourceLine, maxSourceLines)
+    val safeWidth  = widthPx.max(1)
+    val safeHeight = heightPx.max(1)
+    val key = ImageCacheKey(
+      source = SourceFingerprint.from(rows.map(row => s"${row.sourceLine}:${row.text}").mkString("\u0000")),
+      title = title,
+      widthPx = safeWidth,
+      heightPx = safeHeight,
+      theme = theme,
+      font = font,
+      baseUri = None,
+      panelChrome = false,
+      inlineLineHeightPx = Some(inlineLineHeightPx.max(1)),
+      inlineRows = true
+    )
+    imageCache
+      .synchronized {
+        Option(imageCache.get(key))
+      }
+      .getOrElse {
+        val rendered = renderInlineImageUncached(
+          rows,
+          sourceLines,
+          title,
+          safeWidth,
+          safeHeight,
+          theme,
+          font,
+          inlineLineHeightPx.max(1)
+        )
+        imageCache.synchronized {
+          val _ = imageCache.put(key, rendered)
+        }
+        rendered
+      }
+
   private def renderImageUncached(
     source: String,
     title: String,
@@ -186,6 +242,27 @@ object MarkdownDocumentPreview:
     try
       val renderer = Java2DRenderer(
         parseXhtml(renderXhtml(source, title, theme, font, baseUri, panelChrome, inlineLineHeightPx)),
+        safeWidth,
+        safeHeight
+      )
+      renderer.getImage()
+    catch
+      case NonFatal(error) =>
+        fallbackImage(safeWidth, safeHeight, theme, font, error.getMessage)
+
+  private def renderInlineImageUncached(
+    rows: Vector[InlinePreviewLine],
+    sourceLines: Vector[String],
+    title: String,
+    safeWidth: Int,
+    safeHeight: Int,
+    theme: Theme,
+    font: Font,
+    inlineLineHeightPx: Int
+  ): BufferedImage =
+    try
+      val renderer = Java2DRenderer(
+        parseXhtml(renderInlineXhtml(rows, sourceLines, title, theme, font, inlineLineHeightPx)),
         safeWidth,
         safeHeight
       )
@@ -252,6 +329,23 @@ object MarkdownDocumentPreview:
         Some(first to last)
       case _ =>
         None
+
+  /** Produces the inline preview rows corresponding to a source window.
+    *
+    * The lens image and raw-source placement both use this row representation, including expanded table chrome.
+    */
+  private[serenity] def inlinePreviewRows(
+    sourceLines: Vector[String],
+    firstSourceLine: Int,
+    maxSourceLines: Int
+  ): Vector[InlinePreviewLine] =
+    if sourceLines.isEmpty then Vector.empty
+    else
+      val start       = firstSourceLine.max(0).min(sourceLines.length - 1)
+      val end         = (start + maxSourceLines.max(1) - 1).min(sourceLines.length - 1)
+      val sourceRange = start to end
+      val previewRows = previewRowsForSourceRange(sourceLines, sourceRange).getOrElse(sourceRange)
+      renderInlineDocument(sourceLines).slice(previewRows.start, previewRows.end + 1)
 
   private def inlinePreviewIndex(sourceLines: Vector[String]): InlinePreviewIndex =
     val key = InlineDocumentCacheKey(SourceLinesFingerprint.from(sourceLines))
@@ -393,6 +487,28 @@ object MarkdownDocumentPreview:
     inlineLineHeightPx: Option[Int]
   ): String =
     val fragment = renderHtmlFragment(source, title, baseUri)
+    renderXhtmlFragment(fragment, title, theme, font, panelChrome, inlineLineHeightPx)
+
+  private def renderInlineXhtml(
+    rows: Vector[InlinePreviewLine],
+    sourceLines: Vector[String],
+    title: String,
+    theme: Theme,
+    font: Font,
+    inlineLineHeightPx: Int
+  ): String =
+    val fragment =
+      s"<table class=\"inline-rows\"><tbody>${rows.map(inlineRowHtml(_, sourceLines)).mkString}</tbody></table>"
+    renderXhtmlFragment(fragment, title, theme, font, panelChrome = false, Some(inlineLineHeightPx))
+
+  private def renderXhtmlFragment(
+    fragment: String,
+    title: String,
+    theme: Theme,
+    font: Font,
+    panelChrome: Boolean,
+    inlineLineHeightPx: Option[Int]
+  ): String =
     s"""<?xml version="1.0" encoding="UTF-8"?>
        |<html xmlns="http://www.w3.org/1999/xhtml">
        |  <head>
@@ -407,6 +523,13 @@ object MarkdownDocumentPreview:
        |    </div>
        |  </body>
        |</html>""".stripMargin
+
+  private def inlineRowHtml(row: InlinePreviewLine, sourceLines: Vector[String]): String =
+    val headingClass = row.sourceLine
+      .flatMap(sourceLines.lift)
+      .filter(_.matches("^\\s*#{1,6}\\s+.+$"))
+      .fold("")(_ => " inline-heading")
+    s"<tr><td class=\"inline-row$headingClass\">${escapeXml(row.text)}</td></tr>"
 
   private def stylesheet(
     theme: Theme,
@@ -428,6 +551,21 @@ object MarkdownDocumentPreview:
          |      }
          |      p, blockquote, pre, table, ul, ol { margin: 0; }
          |      li { margin: 0; }
+         |      .inline-rows {
+         |        border: 0;
+         |        border-collapse: collapse;
+         |        margin: 0;
+         |        width: 100%;
+         |      }
+         |      .inline-rows .inline-row {
+         |        border: 0;
+         |        height: ${lineHeight.max(1)}px;
+         |        line-height: ${lineHeight.max(1)}px;
+         |        margin: 0;
+         |        padding: 0;
+         |        white-space: pre;
+         |      }
+         |      .inline-heading { font-weight: 700; }
          |""".stripMargin
     }
     s"""      html, body {
@@ -438,7 +576,7 @@ object MarkdownDocumentPreview:
        |        background: ${css(background)};
        |        color: ${css(foreground)};
        |        font-family: ${cssString(font.getFamily)}, sans-serif;
-       |        font-size: ${font.getSize.max(10)}px;
+       |        font-size: ${font.getSize2D.max(10.0f)}px;
        |        line-height: 1.45;
        |      }
        |      .markdown-body {
