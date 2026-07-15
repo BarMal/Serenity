@@ -323,7 +323,10 @@ object ContextualToolbar:
       .getOrElse(1)
     val balancedWidth =
       if intrinsicWidth <= maxWidth then intrinsicWidth
-      else ((intrinsicWidth + 1) / 2).max(largestGroupWidth)
+      else
+        balancedTwoRowWidth(proseItemSegments(items), toolbarState.displayMode)
+          .getOrElse((intrinsicWidth + 1) / 2)
+          .max(largestGroupWidth)
     balancedWidth
       .max(detailWidth)
       .max(1)
@@ -461,6 +464,17 @@ object ContextualToolbar:
           else (nextRow, acc)
       }
     if currentRow.nonEmpty then rows :+ currentRow else rows
+
+  private def balancedTwoRowWidth(
+    segments: List[List[ContextualToolbarItem]],
+    mode: ToolbarDisplayMode
+  ): Option[Int] =
+    (1 until segments.length).iterator
+      .map { splitIndex =>
+        estimatedRowWidth(segments.take(splitIndex).flatten, mode)
+          .max(estimatedRowWidth(segments.drop(splitIndex).flatten, mode))
+      }
+      .minOption
 
   private def packItems(
     items: List[ContextualToolbarItem],
