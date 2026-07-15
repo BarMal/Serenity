@@ -1,8 +1,8 @@
 package com.serenity.state.manager
 
-import cats.effect.{Fiber, IO, Ref}
 import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
+import cats.effect.{Fiber, IO, Ref}
 import com.serenity.command.Command
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.ResizeEvent
