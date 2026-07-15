@@ -38,6 +38,15 @@ trait RenderSurface:
     strokeWidth: Float = 1.5f
   ): Unit = ()
 
+  /** Restrict drawing performed by `render` to a rounded rectangle in cell coordinates. */
+  def withRoundRectClip(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    arcPx: Int
+  )(render: => Unit): Unit
+
   def fillPixelRect(
     xPx: Int,
     yPx: Int,

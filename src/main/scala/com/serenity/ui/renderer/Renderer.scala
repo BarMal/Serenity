@@ -1366,13 +1366,21 @@ object Renderer:
     overlays.aboveCursor.foreach { overlay =>
       val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
       if blurRadius > 0f then
-        context.surface.blurRegion(
+        context.surface.withRoundRectClip(
           overlay.rect.x,
           overlay.rect.y,
           overlay.rect.width,
           overlay.rect.height,
-          blurRadius
-        )
+          state.config.uiCornerRadiusPx
+        ) {
+          context.surface.blurRegion(
+            overlay.rect.x,
+            overlay.rect.y,
+            overlay.rect.width,
+            overlay.rect.height,
+            blurRadius
+          )
+        }
       TextOverlayRenderer.render(
         context.surface,
         overlay,
@@ -1388,13 +1396,21 @@ object Renderer:
     belowOverlays.foreach { overlay =>
       val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
       if blurRadius > 0f then
-        context.surface.blurRegion(
+        context.surface.withRoundRectClip(
           overlay.rect.x,
           overlay.rect.y,
           overlay.rect.width,
           overlay.rect.height,
-          blurRadius
-        )
+          state.config.uiCornerRadiusPx
+        ) {
+          context.surface.blurRegion(
+            overlay.rect.x,
+            overlay.rect.y,
+            overlay.rect.width,
+            overlay.rect.height,
+            blurRadius
+          )
+        }
       TextOverlayRenderer.render(
         context.surface,
         overlay,

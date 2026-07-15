@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.*
 import java.awt.font.{FontRenderContext, TextAttribute}
+import java.awt.geom.RoundRectangle2D
 import java.awt.image.*
 import java.util.concurrent.atomic.AtomicReference
 
@@ -136,10 +137,11 @@ class Java2DRenderSurface(
 
   override def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
     if radius > 0f then
-      val px = metrics.toPixelX(x)
-      val py = metrics.toPixelY(y)
-      val pw = width * metrics.charWidth
-      val ph = height * metrics.lineHeight
+      val px         = metrics.toPixelX(x)
+      val py         = metrics.toPixelY(y)
+      val pw         = width * metrics.charWidth
+      val ph         = height * metrics.lineHeight
+      val activeClip = Option(g.getClip).map(g.getTransform.createTransformedShape)
       Java2DRenderSurface
         .deviceRegionFor(
           logicalX = px,
@@ -160,7 +162,9 @@ class Java2DRenderSurface(
           val src         = image.getSubimage(region.xPx, region.yPx, region.widthPx, region.heightPx)
           val blurred     = op.filter(src, null)
           val rawGraphics = image.createGraphics()
-          try rawGraphics.drawImage(blurred, region.xPx, region.yPx, null)
+          try
+            activeClip.foreach(rawGraphics.clip)
+            rawGraphics.drawImage(blurred, region.xPx, region.yPx, null)
           finally rawGraphics.dispose()
         }
 
@@ -211,6 +215,23 @@ class Java2DRenderSurface(
     g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
     g.drawRoundRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset, arcPx * 2, arcPx * 2)
     g.setStroke(savedStroke)
+
+  override def withRoundRectClip(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    arcPx: Int
+  )(render: => Unit): Unit =
+    val px        = metrics.toPixelX(x)
+    val py        = metrics.toPixelY(y)
+    val pw        = width * metrics.charWidth
+    val ph        = height * metrics.lineHeight
+    val savedClip = g.getClip
+    try
+      g.clip(new RoundRectangle2D.Double(px, py, pw, ph, arcPx * 2.0, arcPx * 2.0))
+      render
+    finally g.setClip(savedClip)
 
   override def fillPixelRect(
     xPx: Int,

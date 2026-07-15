@@ -38,6 +38,22 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     maxAlpha(lowAlphaImage) should be < maxAlpha(fullAlphaImage)
   }
 
+  "Java2DRenderSurface.blurRegion" should "respect an active rounded clip" in {
+    val image   = new BufferedImage(120, 120, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(Color.WHITE)
+    surface.fillPixelRect(25, 25, 10, 10, Color.BLACK)
+    surface.withRoundRectClip(x = 1, y = 1, width = 10, height = 10, arcPx = 50) {
+      surface.blurRegion(x = 1, y = 1, width = 10, height = 10, radius = 1.0f)
+    }
+    surface.flush()
+
+    new Color(image.getRGB(20, 20), true) shouldBe Color.WHITE
+  }
+
   "Java2DRenderSurface.deviceImageDimension" should "scale logical pixels up to device pixels" in {
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 1024, deviceScale = 2.0) shouldBe 2048
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 801, deviceScale = 1.5) shouldBe 1202

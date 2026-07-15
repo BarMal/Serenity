@@ -1,6 +1,7 @@
 package com.serenity
 
-import java.awt.Font
+import java.awt.image.BufferedImage
+import java.awt.{Color, Font}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -11,7 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{Renderer, SurfaceMaterials}
+import com.serenity.ui.renderer.{Java2DRenderSurface, Renderer, SurfaceMaterials}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -489,6 +490,85 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
     surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
     surface.putStringCalls.map(_.s) should not contain "."
+  }
+
+  it should "leave the rounded command runner's fully materialised corner unpainted" in {
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val state = stateWithRunner(Theme.light, "op", commands).copy(
+      config = AppConfig.default
+        .withBackgroundStyle(BackgroundStyle.Solid)
+        .withUiCornerRadiusPx(12)
+    )
+    val viewport = ViewportSize(100, 30)
+    val layout   = LayoutEngine.calculateLayout(state, viewport)
+    val overlay  = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+    val widthPx  = viewport.width * cellMetrics.charWidth
+    val heightPx = viewport.height * cellMetrics.lineHeight
+
+    def renderedImage(renderState: AppState): BufferedImage =
+      val image   = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_ARGB)
+      val surface = new Java2DRenderSurface(image, cellMetrics, codeFont, _ => ())
+      Renderer.render(
+        renderState,
+        cursorVisible = true,
+        surface,
+        viewport,
+        codeFont,
+        Font(Font.SANS_SERIF, Font.PLAIN, 12),
+        cellMetrics,
+        None
+      )
+      image
+
+    val withoutRunner = renderedImage(state.copy(uiSurfaces = Nil, focus = Focus.EditorPane(paneId)))
+    val withRunner    = renderedImage(state)
+    val cornerX       = cellMetrics.toPixelX(overlay.x)
+    val cornerY       = cellMetrics.toPixelY(overlay.y)
+
+    new Color(withRunner.getRGB(cornerX, cornerY), true) shouldBe new Color(
+      withoutRunner.getRGB(cornerX, cornerY),
+      true
+    )
+  }
+
+  it should "leave the rounded command runner's frosted corner unblurred" in {
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val state = stateWithRunner(Theme.light, "op", commands).copy(
+      config = AppConfig.default
+        .withBackgroundStyle(BackgroundStyle.GlassLike)
+        .withBlurRadius(0.6f)
+        .withUiCornerRadiusPx(12)
+    )
+    val viewport = ViewportSize(100, 30)
+    val layout   = LayoutEngine.calculateLayout(state, viewport)
+    val overlay  = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+    val widthPx  = viewport.width * cellMetrics.charWidth
+    val heightPx = viewport.height * cellMetrics.lineHeight
+
+    def renderedImage(renderState: AppState): BufferedImage =
+      val image   = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_ARGB)
+      val surface = new Java2DRenderSurface(image, cellMetrics, codeFont, _ => ())
+      Renderer.render(
+        renderState,
+        cursorVisible = true,
+        surface,
+        viewport,
+        codeFont,
+        Font(Font.SANS_SERIF, Font.PLAIN, 12),
+        cellMetrics,
+        None
+      )
+      image
+
+    val withoutRunner = renderedImage(state.copy(uiSurfaces = Nil, focus = Focus.EditorPane(paneId)))
+    val withRunner    = renderedImage(state)
+    val cornerX       = cellMetrics.toPixelX(overlay.x)
+    val cornerY       = cellMetrics.toPixelY(overlay.y)
+
+    new Color(withRunner.getRGB(cornerX, cornerY), true) shouldBe new Color(
+      withoutRunner.getRGB(cornerX, cornerY),
+      true
+    )
   }
 
   it should "preserve rounded context menus after their animation has materialised" in {

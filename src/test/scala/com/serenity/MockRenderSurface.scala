@@ -130,6 +130,14 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
 
   def strokeRoundRectCalls: List[StrokeRoundRectCall] = strokeRoundRectCallsBuffer.toList
 
+  override def withRoundRectClip(
+    _x: Int,
+    _y: Int,
+    _width: Int,
+    _height: Int,
+    _arcPx: Int
+  )(render: => Unit): Unit = render
+
   override def setAlpha(alpha: Float): Unit =
     currentAlpha.set(alpha)
     alphaCallsBuffer += alpha
