@@ -56,7 +56,7 @@ final private[manager] class StateManagerFileFacade(
 final private[manager] class StateManagerFileFacadeBehavior(
     stateRef: Ref[IO, AppState],
     dependencies: FileCapabilityPort
-)(using protected val balance: com.serenity.rope.Balance):
+)(using balance: com.serenity.rope.Balance):
 
   import dependencies.*
 

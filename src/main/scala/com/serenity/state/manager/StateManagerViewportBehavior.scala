@@ -12,7 +12,7 @@ final private[manager] class StateManagerViewportBehavior(
     logger: org.typelevel.log4cats.Logger[IO],
     deviceTextScaleProvider: IO[Double],
     dependencies: ViewportCapabilityPort
-)(using protected val balance: com.serenity.rope.Balance):
+)(using balance: com.serenity.rope.Balance):
 
   import dependencies.*
 

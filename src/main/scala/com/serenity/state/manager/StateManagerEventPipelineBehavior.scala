@@ -36,7 +36,7 @@ final private[manager] class StateManagerEventPipelineBehavior(
     effects: EventEffectPort,
     workflow: EventWorkflowPort,
     ui: EventUiPort
-)(using protected val balance: com.serenity.rope.Balance):
+)(using balance: com.serenity.rope.Balance):
 
   import effects.*
   import state.*

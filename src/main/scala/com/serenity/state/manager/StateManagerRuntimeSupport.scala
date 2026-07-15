@@ -201,8 +201,6 @@ private[manager] class StateManagerBehavior(
     val sessionPersistence: SessionPersistence
 )(using providedBalance: Balance):
 
-  protected val balance: Balance = providedBalance
-
   private lazy val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
     val stateRef                = StateManagerBehavior.this.stateRef
     val themeNamesRef           = StateManagerBehavior.this.themeNamesRef

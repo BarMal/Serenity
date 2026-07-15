@@ -11,7 +11,7 @@ final private[manager] class StateManagerSurfaceFacadeBehavior(
     stateRef: cats.effect.Ref[IO, AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     dependencies: SurfaceCapabilityPort
-)(using protected val balance: com.serenity.rope.Balance):
+)(using balance: com.serenity.rope.Balance):
 
   import dependencies.*
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =

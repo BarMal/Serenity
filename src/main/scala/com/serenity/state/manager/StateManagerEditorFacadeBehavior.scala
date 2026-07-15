@@ -11,7 +11,7 @@ import com.serenity.ui.layout.{LayoutEngine, PaneSplitDirection, ViewportSize}
 
 final private[manager] class StateManagerEditorFacadeBehavior(
     dependencies: EditorCapabilityPort
-)(using protected val balance: com.serenity.rope.Balance):
+)(using balance: com.serenity.rope.Balance):
 
   import dependencies.*
   def getCurrentState: IO[AppState] = stateRef.get

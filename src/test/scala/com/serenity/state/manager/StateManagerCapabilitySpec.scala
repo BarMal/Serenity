@@ -89,6 +89,16 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     sources.mkString("\n") should not include "StateManagerRuntime,"
   }
 
+  it should "keep Balance capability-local rather than protected" in {
+    val sources = Files
+      .list(Path.of("src/main/scala/com/serenity/state/manager"))
+      .toArray
+      .collect { case path: Path if path.getFileName.toString.endsWith(".scala") => Files.readString(path) }
+      .mkString("\n")
+
+    sources should not include "protected val balance"
+  }
+
   "CommandEffectInterpreter" should "preserve declared effect order and propagate required failures" in {
     val program = for
       observed <- Ref.of[IO, List[String]](Nil)

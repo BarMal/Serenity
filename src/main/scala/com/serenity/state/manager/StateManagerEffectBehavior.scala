@@ -62,7 +62,7 @@ final private[manager] class StateManagerEffectHandlers(
     files: EffectFilePort,
     sessions: EffectSessionPort,
     workflow: EffectModalWorkflowPort
-)(using protected val balance: com.serenity.rope.Balance):
+)(using balance: com.serenity.rope.Balance):
 
   import editor.*
   import files.*

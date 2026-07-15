@@ -13,7 +13,7 @@ import com.serenity.ui.layout.LayoutEngine
 
 final private[manager] class StateManagerWorkflowBehavior(
     dependencies: WorkflowCapabilityPort
-)(using protected val balance: com.serenity.rope.Balance):
+)(using balance: com.serenity.rope.Balance):
 
   import dependencies.*
 
