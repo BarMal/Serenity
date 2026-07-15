@@ -285,7 +285,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     MarkdownDocumentPreview.inlineLensFont(font, lineHeightPx = 18, deviceScale = 2.0).getSize2D shouldBe 28.8f
   }
 
-  it should "render inline lens source from the same preview rows used for source alignment" in {
+  it should "render inline lens rows from the same preview rows used for source alignment" in {
     val lines = Vector(
       "Before",
       "| Task | Owner |",
@@ -295,9 +295,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     )
 
     MarkdownDocumentPreview
-      .inlinePreviewSource(lines, firstSourceLine = 1, maxSourceLines = 3)
-      .split("\\n")
-      .toVector shouldBe Vector(
+      .inlinePreviewRows(lines, firstSourceLine = 1, maxSourceLines = 3)
+      .map(_.text) shouldBe Vector(
       "┌──────┬───────┐",
       "│ Task │ Owner │",
       "├──────┼───────┤",

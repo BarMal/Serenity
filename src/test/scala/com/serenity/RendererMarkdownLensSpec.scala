@@ -121,6 +121,27 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     firstContentRow.getOrElse(fail("Expected rendered heading pixels")) should be < metrics.lineHeight
   }
 
+  it should "render adjacent heading and paragraph preview rows separately" in {
+    val (state, surface, metrics) = renderMarkdownLens(
+      "# Heading\nParagraph immediately after the heading",
+      CursorPosition(10, 0),
+      topLine = Some(0)
+    )
+
+    val image = surface.drawImageCalls.head.image
+    val contentRows = (0 until image.getHeight).filter(row =>
+      (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.theme.background.getRGB)
+    )
+    val contentBands = contentRows.foldLeft(Vector.empty[Vector[Int]]) { (bands, row) =>
+      bands.lastOption match
+        case Some(lastBand) if row == lastBand.last + 1 => bands.init :+ (lastBand :+ row)
+        case _                                          => bands :+ Vector(row)
+    }
+
+    contentBands should have size 2
+    contentBands(1).head should be >= metrics.lineHeight
+  }
+
   it should "render every active cursor markdown block as raw source" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
