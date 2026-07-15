@@ -14,12 +14,21 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "UI preset scenario" should "save a visible draft and render its applied state" in {
-    val store = UiPresetStore(Files.createTempDirectory("ui-scenario-preset").resolve("presets.json"))
+    val store  = UiPresetStore(Files.createTempDirectory("ui-scenario-preset").resolve("presets.json"))
     val driver = UiScenarioDriver.create("ui-preset", uiPresetStore = Some(store)).unsafeRunSync()
-    driver.updateState(state => state.copy(config = state.config.withBackgroundStyle(BackgroundStyle.Solid))).unsafeRunSync()
-    driver.stateManager.executeCommand(
-      Command.typed("save-scenario-preset", "Save scenario preset", CommandIntent.SaveUiPreset("Scenario"), CommandCategory.Settings)
-    ).unsafeRunSync()
+    driver
+      .updateState(state => state.copy(config = state.config.withBackgroundStyle(BackgroundStyle.Solid)))
+      .unsafeRunSync()
+    driver.stateManager
+      .executeCommand(
+        Command.typed(
+          "save-scenario-preset",
+          "Save scenario preset",
+          CommandIntent.SaveUiPreset("Scenario"),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
     val saved = store.find("Scenario").unsafeRunSync()
     val frame = driver.renderFrame("saved").unsafeRunSync()
 

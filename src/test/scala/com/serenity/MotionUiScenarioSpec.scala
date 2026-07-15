@@ -16,7 +16,7 @@ class MotionUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     val opening = driver.renderFrame("opening").unsafeRunSync()
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
-    val settled = driver.advanceToSettled().unsafeRunSync()
+    val settled    = driver.advanceToSettled().unsafeRunSync()
     val finalFrame = driver.renderFrame("settled").unsafeRunSync()
 
     opening.evidence.layoutViolations shouldBe empty

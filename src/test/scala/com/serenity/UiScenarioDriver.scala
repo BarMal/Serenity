@@ -119,8 +119,12 @@ final class UiScenarioDriver private (
         }
       surfaceId -> rects
     }.toMap
-    val mappings = state.buffers.map { case (bufferId, buffer) =>
-      bufferId -> MarkdownBlockLens.activeBlockLineSet(buffer.content.toString.linesIterator.toVector, buffer.cursors.headOption.map(_.line))
+    val mappings = state.buffers.map {
+      case (bufferId, buffer) =>
+        bufferId -> MarkdownBlockLens.activeBlockLineSet(
+          buffer.content.toString.linesIterator.toVector,
+          buffer.cursors.headOption.map(_.line)
+        )
     }
     val visibleText = state.focusedBufferId.toList.flatMap { bufferId =>
       state.buffers.get(bufferId).toList.flatMap { buffer =>
@@ -148,7 +152,7 @@ object UiScenarioDriver:
     uiPresetStore: Option[UiPresetStore] = None
   )(using Balance): IO[UiScenarioDriver] =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger = LoggerFactory[IO].getLogger
+    val logger              = LoggerFactory[IO].getLogger
     for
       sessionRoot <- IO.blocking(Files.createTempDirectory(s"$name-ui-scenario"))
       manager <- StateManager(

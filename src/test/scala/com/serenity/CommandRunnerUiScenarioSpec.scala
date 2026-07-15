@@ -13,7 +13,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver = UiScenarioDriver.create("command-runner").unsafeRunSync()
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     "line".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
-    val searched = driver.renderFrame("searched").unsafeRunSync()
+    val searched  = driver.renderFrame("searched").unsafeRunSync()
     val surfaceId = searched.evidence.surfaceRects.keys.headOption.getOrElse(fail("Expected command runner"))
 
     searched.evidence.itemRects.getOrElse(surfaceId, Nil) should not be empty

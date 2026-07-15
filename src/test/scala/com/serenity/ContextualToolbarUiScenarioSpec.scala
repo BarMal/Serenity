@@ -11,11 +11,13 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "Contextual toolbar UI scenario" should "summon, follow the caret, and return focus on close" in {
-    val driver = UiScenarioDriver.create("contextual-toolbar", UiScenarioEnvironment(viewport = com.serenity.ui.layout.ViewportSize(60, 18))).unsafeRunSync()
+    val driver = UiScenarioDriver
+      .create("contextual-toolbar", UiScenarioEnvironment(viewport = com.serenity.ui.layout.ViewportSize(60, 18)))
+      .unsafeRunSync()
     driver.dispatch(ToggleContextualToolbar).unsafeRunSync()
-    val opened = driver.renderFrame("opened").unsafeRunSync()
+    val opened    = driver.renderFrame("opened").unsafeRunSync()
     val surfaceId = opened.evidence.surfaceRects.keys.headOption.getOrElse(fail("Expected toolbar rectangle"))
-    val initial = opened.evidence.surfaceRects(surfaceId)
+    val initial   = opened.evidence.surfaceRects(surfaceId)
     initial.width should be < driver.environment.viewport.width
     opened.evidence.focus shouldBe Focus.EditorPane(PaneId(0))
 
