@@ -53,7 +53,13 @@ final private[manager] class StateManagerFileFacade(
   def getRecentFiles: IO[List[Path]] =
     stateRef.get.map(_.recentFiles)
 
-private[manager] trait StateManagerFileFacadeBehavior extends StateManagerViewportBehavior:
+final private[manager] class StateManagerFileFacadeBehavior(
+    protected val runtime: StateManagerRuntime,
+    dependencies: StateManagerBehaviorDependencies
+)(using protected val balance: com.serenity.rope.Balance)
+    extends StateManagerRuntimeSupport:
+
+  import dependencies.*
 
   private lazy val fileFacade = new StateManagerFileFacade(
     stateRef,

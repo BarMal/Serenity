@@ -23,11 +23,17 @@ import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.config.{ThemeConfigWriter, ThemeCreatorState}
 
-private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBehavior:
+final private[manager] class StateManagerEffectBehavior(
+    protected val runtime: StateManagerRuntime,
+    dependencies: StateManagerBehaviorDependencies
+)(using protected val balance: com.serenity.rope.Balance)
+    extends StateManagerRuntimeSupport:
+
+  import dependencies.*
   private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
   private val UnsavedPresetCopySuffix       = " (modified, unsaved)"
 
-  protected def interpretEffect(effect: AppEffect): IO[Unit] =
+  private[manager] def interpretEffect(effect: AppEffect): IO[Unit] =
     effect match
       case AppEffect.Lifecycle(effect)      => interpretLifecycleEffect(effect)
       case AppEffect.CommandRequest(effect) => interpretCommandEffect(effect)
@@ -133,7 +139,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     }
     state.copy(uiSurfaces = updatedSurfaces)
 
-  protected def updateConfig(
+  private[manager] def updateConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
     updateConfigWithEditedPresetDraft(update, markEditedUiPresetDraftFromCommandRunner)
@@ -235,7 +241,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     if trimmed.endsWith(UnsavedPresetCopySuffix) then trimmed.dropRight(UnsavedPresetCopySuffix.length).trim
     else trimmed
 
-  protected def updateFontConfig(
+  private[manager] def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
   ): IO[Unit] =
     deviceTextScaleProvider.flatMap { deviceTextScale =>
@@ -258,7 +264,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   protected def clampFontSize(size: Float): Float =
     size.max(8.0f).min(48.0f)
 
-  protected def interpretCommand(command: Command, state: AppState): IO[Unit] =
+  private[manager] def interpretCommand(command: Command, state: AppState): IO[Unit] =
     command.intent match
       case CommandIntent.ToggleLineNumbers =>
         updateTextDisplayConfig(config => config.withLineNumbers(!config.showLineNumbers)).void
@@ -1785,7 +1791,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   private def toDirEntries(entries: List[FileEntry]): List[DirEntry] =
     entries.map(entry => DirEntry(entry.path, entry.name, entry.isDirectory))
 
-  protected def directLoadFileEffect(path: Path): IO[Unit] =
+  private[manager] def directLoadFileEffect(path: Path): IO[Unit] =
     IO.blocking(FileUtils.isReadableFile(path)).flatMap {
       case false => logger.debug(s"[FILE] DirectLoad: file not readable: $path")
       case true =>
@@ -1824,7 +1830,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           .void
     }
 
-  protected def saveBufferEffect(bufferId: BufferId): IO[Unit] =
+  private[manager] def saveBufferEffect(bufferId: BufferId): IO[Unit] =
     stateRef.get.flatMap { state =>
       state.buffers.get(bufferId) match
         case Some(buffer) if buffer.filePath.isDefined =>
@@ -1872,7 +1878,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       }
       .handleErrorWith(ex => logger.error(ex)(s"[THEMES] Failed to export current theme '${config.name}'"))
 
-  protected def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
+  private[manager] def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
     stateRef.get.flatMap { state =>
       state.buffers.get(bufferId) match
         case Some(buffer) =>

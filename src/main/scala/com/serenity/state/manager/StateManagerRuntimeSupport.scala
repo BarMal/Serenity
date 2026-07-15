@@ -25,6 +25,7 @@ private[manager] trait StateManagerBehaviorDependencies:
   def applyEvent(event: Event): IO[Unit]
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
   def createNewEmptyBuffer(): IO[BufferId]
+  def closeBuffer(bufferId: BufferId): IO[Unit]
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
   def switchToPane(paneId: PaneId): IO[Unit]
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
@@ -38,8 +39,35 @@ private[manager] trait StateManagerBehaviorDependencies:
   def loadSession(): IO[Option[AppState]]
   def clearSession(): IO[Unit]
   def executeCommand(command: com.serenity.command.Command): IO[Unit]
+  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
+  def scheduleDocumentAnalysis(): IO[Unit]
+  def ensureCommandRunnerSurface(state: AppState): AppState
+  def applyAnimationHooks(previousState: AppState): IO[Unit]
+  def advanceSurfaceAnimations(state: AppState): AppState
+  def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit]
+  def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit]
+  def directLoadFileEffect(path: Path): IO[Unit]
+  def saveBufferEffect(bufferId: BufferId): IO[Unit]
+  def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit]
+  def clearCloseActions(state: AppState): AppState
+  def updateFontConfig(update: FontConfig => FontConfig): IO[Unit]
 
-private[manager] trait StateManagerRuntimeSupport extends StateManagerBehaviorDependencies:
+  def updateConfig(
+    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
+  ): IO[com.serenity.config.AppConfig]
+
+  def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]
+  def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit]
+  def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
+  def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
+  def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
+  def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
+  def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState
+  def createStartupSession(): IO[Unit]
+  def restoreStartupSession(): IO[Unit]
+  def activeEditorBufferId(state: AppState): Option[BufferId]
+
+private[manager] trait StateManagerRuntimeSupport:
   protected def runtime: StateManagerRuntime
   protected def balance: Balance
 
@@ -67,20 +95,31 @@ private[manager] trait StateManagerRuntimeSupport extends StateManagerBehaviorDe
   protected def sessionManager: SessionManager         = runtime.sessionManager
   protected def sessionPersistence: SessionPersistence = runtime.sessionPersistence
 
-  protected def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
-  protected def scheduleDocumentAnalysis(): IO[Unit]
-  protected def ensureCommandRunnerSurface(state: AppState): AppState
-  protected def saveBufferEffect(bufferId: BufferId): IO[Unit]
-  protected def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit]
-
   protected def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)
 
 /** Internal behavior implementation with explicit runtime dependencies. */
 private[manager] class StateManagerBehavior(protected val runtime: StateManagerRuntime)(using providedBalance: Balance)
-    extends StateManagerFileFacadeBehavior:
+    extends StateManagerRuntimeSupport,
+      StateManagerBehaviorDependencies:
 
   protected val balance: Balance = providedBalance
+
+  private val dependencies: StateManagerBehaviorDependencies = this
+
+  private lazy val workflow = new StateManagerWorkflowBehavior(runtime, dependencies)
+  private lazy val effects  = new StateManagerEffectBehavior(runtime, dependencies)
+  private lazy val events   = new StateManagerEventPipelineBehavior(runtime, dependencies)
+  private lazy val editor   = new StateManagerEditorFacadeBehavior(runtime, dependencies)
+  private lazy val surfaces = new StateManagerSurfaceFacadeBehavior(runtime, dependencies)
+  private lazy val viewport = new StateManagerViewportBehavior(runtime, dependencies)
+  private lazy val files    = new StateManagerFileFacadeBehavior(runtime, dependencies)
+
+  export editor.*
+  export events.applyEvent
+  export files.*
+  export surfaces.*
+  export viewport.*
 
   def lspEffectStream: Stream[IO, LspEffect] =
     Stream
@@ -88,7 +127,48 @@ private[manager] class StateManagerBehavior(protected val runtime: StateManagerR
       .interruptWhen(Stream.eval(quitSignal.get).as(true))
 
   def executeCommand(command: com.serenity.command.Command): IO[Unit] =
-    stateRef.get.flatMap(state => interpretCommand(command, state))
+    stateRef.get.flatMap(state => effects.interpretCommand(command, state))
+
+  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+    events.validateAndUpdateState(newState, fallbackState)
+
+  def scheduleDocumentAnalysis(): IO[Unit]                  = events.scheduleDocumentAnalysis()
+  def ensureCommandRunnerSurface(state: AppState): AppState = events.ensureCommandRunnerSurface(state)
+  def applyAnimationHooks(previousState: AppState): IO[Unit] =
+    events.applyAnimationHooks(previousState)
+  def advanceSurfaceAnimations(state: AppState): AppState = events.advanceSurfaceAnimations(state)
+  def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit] =
+    effects.interpretEffect(effect)
+  def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =
+    effects.interpretCommand(command, state)
+  def directLoadFileEffect(path: Path): IO[Unit]     = effects.directLoadFileEffect(path)
+  def saveBufferEffect(bufferId: BufferId): IO[Unit] = effects.saveBufferEffect(bufferId)
+  def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
+    effects.saveBufferAsEffect(bufferId, path)
+  def clearCloseActions(state: AppState): AppState                 = workflow.clearCloseActions(state)
+  def updateFontConfig(update: FontConfig => FontConfig): IO[Unit] = effects.updateFontConfig(update)
+
+  def updateConfig(
+    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
+  ): IO[com.serenity.config.AppConfig] = effects.updateConfig(update)
+
+  def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
+    workflow.beginCloseAction(scope, state)
+  def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
+    workflow.requestSaveAsFileDialog(state, bufferIdOverride)
+  def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+    workflow.refreshFileWorkflowEffect(surfaceId)
+  def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+    workflow.submitFileWorkflowEffect(surfaceId)
+  def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+    workflow.submitReplaceWorkflowEffect(surfaceId)
+  def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+    workflow.submitCloseWorkflowEffect(surfaceId)
+  def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
+    workflow.restoreSessionIntoCurrentViewport(restoredState, currentState)
+  def createStartupSession(): IO[Unit]                        = workflow.createStartupSession()
+  def restoreStartupSession(): IO[Unit]                       = workflow.restoreStartupSession()
+  def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
 
   def saveSession(): IO[Unit] =
     getCurrentState.flatMap { state =>

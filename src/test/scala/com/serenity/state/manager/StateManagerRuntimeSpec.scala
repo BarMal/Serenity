@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 
 import cats.effect.*
 import cats.effect.std.Queue
@@ -10,7 +10,7 @@ import com.serenity.io.FileDialog
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
-import com.serenity.state.models.AppState
+import com.serenity.state.models.{AppState, BufferId}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
@@ -69,9 +69,34 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.fileDialog shouldBe FileDialog.unavailable
       runtime.sessionPersistence should not be null
 
-      val behavior = StateManagerBehavior(runtime)
-      behavior.getCurrentState.unsafeRunSync() shouldBe AppState.initial
-      behavior.sessionExists.unsafeRunSync() shouldBe false
+    program.unsafeRunSync()
+  }
+
+  "StateManagerFileFacade" should "be testable with injected file operations only" in {
+    val bufferId = BufferId(7)
+    val path     = Path.of("isolated.txt")
+
+    val program = for
+      stateRef <- Ref.of[IO, AppState](AppState.initial)
+      calls    <- Ref.of[IO, List[String]](Nil)
+      facade = new StateManagerFileFacade(
+        stateRef,
+        opened => calls.update(_ :+ s"open:$opened"),
+        saved => calls.update(_ :+ s"save:$saved"),
+        (saved, savedPath) => calls.update(_ :+ s"saveAs:$saved:$savedPath"),
+        closed => calls.update(_ :+ s"close:$closed")
+      )
+      _        <- facade.openFile(path)
+      _        <- facade.saveBuffer(bufferId)
+      _        <- facade.saveBufferAs(bufferId, path)
+      _        <- facade.forceCloseBuffer(bufferId)
+      observed <- calls.get
+    yield observed shouldBe List(
+      s"open:$path",
+      s"save:$bufferId",
+      s"saveAs:$bufferId:$path",
+      s"close:$bufferId"
+    )
 
     program.unsafeRunSync()
   }

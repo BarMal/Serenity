@@ -19,7 +19,13 @@ import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 
-private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEffectBehavior:
+final private[manager] class StateManagerEventPipelineBehavior(
+    protected val runtime: StateManagerRuntime,
+    dependencies: StateManagerBehaviorDependencies
+)(using protected val balance: com.serenity.rope.Balance)
+    extends StateManagerRuntimeSupport:
+
+  import dependencies.*
   private val DocumentAnalysisDebounce = 150.millis
 
   private val ContextMenuSurfaceId = SurfaceId("context-menu")
@@ -212,7 +218,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         layout = state.layout.copy(activeEditorPaneId = Some(paneId))
       )
 
-  protected def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
+  private[manager] def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
     normalizeCommandRunnerFocus(newState).validated match
       case Right(validState) =>
         val modalTransitionLog =
@@ -229,7 +235,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         logger.error(s"State validation failed: ${errors.mkString(", ")}") >>
           stateRef.set(fallbackState)
 
-  protected def scheduleDocumentAnalysis(): cats.effect.IO[Unit] =
+  private[manager] def scheduleDocumentAnalysis(): cats.effect.IO[Unit] =
     for
       previous <- documentAnalysisFiberRef.getAndSet(None)
       _        <- previous.traverse_(_.cancel)
@@ -346,7 +352,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         case None           => cats.effect.IO.unit
     }
 
-  protected def applyAnimationHooks(prevState: AppState): cats.effect.IO[Unit] =
+  private[manager] def applyAnimationHooks(prevState: AppState): cats.effect.IO[Unit] =
     stateRef.get.flatMap { currentState =>
       val prevSurfaces    = animatedCommandSurfaces(prevState)
       val currentSurfaces = animatedCommandSurfaces(currentState)
@@ -670,7 +676,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       case SurfacePresentation.Expanded(position, _) => Some(position)
       case _                                         => None
 
-  protected def advanceSurfaceAnimations(state: AppState): AppState =
+  private[manager] def advanceSurfaceAnimations(state: AppState): AppState =
     state.surfaceAnimations.foldLeft(state) {
       case (s, (surfaceId, surfAnim)) =>
         surfAnim.phase match
@@ -766,7 +772,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         case _                                     => None
     }
 
-  protected def ensureCommandRunnerSurface(state: AppState): AppState =
+  private[manager] def ensureCommandRunnerSurface(state: AppState): AppState =
     val registry        = CommandRegistry.default
     val activatedRunner = CommandRunner.empty.activate(registry, state.config)
     val runner = activatedRunner.copy(
