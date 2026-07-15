@@ -18,6 +18,7 @@ object CommandRunnerOptionSelections:
     Map(
       "animation-mode"             -> animationModeIndex(editorConfig.characterAnimation),
       "material-preset"            -> materialPresetIndex(surfaceConfig.materialPreset),
+      "post-processing"            -> postProcessingEffectIndex(surfaceConfig.postProcessingEffect),
       "motion-preset"              -> motionPresetIndex(surfaceConfig.motionPreset),
       "command-runner-fade"        -> commandRunnerFadeIndex(surfaceConfig.commandRunnerAnimation),
       "ui-animation"               -> animationPresetIndex(surfaceConfig.uiAnimation),
@@ -99,6 +100,12 @@ object CommandRunnerOptionSelections:
       case MaterialPreset.Frosted => 2
       case MaterialPreset.Crystal => 3
       case MaterialPreset.Custom  => 4
+
+  private def postProcessingEffectIndex(effect: PostProcessingEffect): Int =
+    effect match
+      case PostProcessingEffect.Off       => 0
+      case PostProcessingEffect.Scanlines => 1
+      case PostProcessingEffect.Glow      => 2
 
   private def motionPresetIndex(preset: MotionPreset): Int =
     preset match

@@ -240,7 +240,12 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val appearanceGroup = groupByIdRecursive(runner.settingsGroups, "settings-surface-appearance")
 
     appearanceGroup.label shouldBe "Surface Appearance"
-    appearanceGroup.children.map(_.id) shouldBe List("background-style", "material-preset", "blur-radius")
+    appearanceGroup.children.map(_.id) shouldBe List(
+      "background-style",
+      "material-preset",
+      "post-processing",
+      "blur-radius"
+    )
   }
 
   it should "group related settings into expandable submenu rows" in {
@@ -315,6 +320,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-surface-appearance").children.map(_.id) shouldBe List(
       "background-style",
       "material-preset",
+      "post-processing",
       "blur-radius"
     )
     nestedGroup("settings-interface-layout").label shouldBe "Interface Layout"
