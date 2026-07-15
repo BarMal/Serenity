@@ -506,9 +506,18 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val heightPx = viewport.height * cellMetrics.lineHeight
 
     def renderedImage(renderState: AppState): BufferedImage =
-      val image = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_ARGB)
+      val image   = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_ARGB)
       val surface = new Java2DRenderSurface(image, cellMetrics, codeFont, _ => ())
-      Renderer.render(renderState, cursorVisible = true, surface, viewport, codeFont, Font(Font.SANS_SERIF, Font.PLAIN, 12), cellMetrics, None)
+      Renderer.render(
+        renderState,
+        cursorVisible = true,
+        surface,
+        viewport,
+        codeFont,
+        Font(Font.SANS_SERIF, Font.PLAIN, 12),
+        cellMetrics,
+        None
+      )
       image
 
     val withoutRunner = renderedImage(state.copy(uiSurfaces = Nil, focus = Focus.EditorPane(paneId)))
@@ -516,7 +525,10 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val cornerX       = cellMetrics.toPixelX(overlay.x)
     val cornerY       = cellMetrics.toPixelY(overlay.y)
 
-    new Color(withRunner.getRGB(cornerX, cornerY), true) shouldBe new Color(withoutRunner.getRGB(cornerX, cornerY), true)
+    new Color(withRunner.getRGB(cornerX, cornerY), true) shouldBe new Color(
+      withoutRunner.getRGB(cornerX, cornerY),
+      true
+    )
   }
 
   it should "preserve rounded context menus after their animation has materialised" in {
