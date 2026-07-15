@@ -39,7 +39,8 @@ object FloatingSurfaceGeometry:
     metrics: CellMetrics,
     itemCount: Int,
     itemGapRows: Double,
-    borderCells: Int = 0
+    borderCells: Int = 0,
+    headerRows: Int = 0
   ): FloatingSurfaceGeometry =
     val framePx = PixelRect(
       metrics.toPixelX(frame.x).toDouble,
@@ -57,8 +58,9 @@ object FloatingSurfaceGeometry:
     )
     val itemHeight = metrics.lineHeight.toDouble.max(0.0)
     val itemStride = itemHeight + (itemHeight * itemGapRows.max(0.0))
+    val firstItemY = content.y + (itemHeight * headerRows.max(0))
     val items =
       (0 until itemCount.max(0)).toList.map(index =>
-        PixelRect(content.x, content.y + (index * itemStride), content.width, itemHeight)
+        PixelRect(content.x, firstItemY + (index * itemStride), content.width, itemHeight)
       )
     FloatingSurfaceGeometry(framePx, content, items, metrics)

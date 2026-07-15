@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import java.awt.Color
+import java.awt.{Color, Font}
 
 import scala.concurrent.duration.*
 
@@ -1290,7 +1290,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         menu.selectedIndex,
         hasHeader = true,
         hasFooter = menu.items.nonEmpty,
-        itemGapRows = math.ceil(state.config.commandRunnerItemGapRows).toInt
+        itemGapRows = state.config.commandRunnerItemGapRows,
+        state = state
       )
     yield (surface, menu, index)
 
@@ -1553,7 +1554,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
             runner.selectedIndex,
             hasHeader = true,
             hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
-            itemGapRows = math.ceil(state.config.commandRunnerItemGapRows).toInt
+            itemGapRows = state.config.commandRunnerItemGapRows,
+            state = state
           )
             .map(RunnerSelectVisibleItem(_))
         case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
@@ -1573,7 +1575,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
             hasHeader = group.nonEmpty,
             hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
             reservedContentRows = detailRows,
-            itemGapRows = math.ceil(state.config.commandRunnerItemGapRows).toInt
+            itemGapRows = state.config.commandRunnerItemGapRows,
+            state = state
           ).map { index =>
             if previewOnly then RunnerSelectPreviewSubmenuItem(groupId, index)
             else RunnerSelectSubmenuItem(index)
@@ -1591,18 +1594,24 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0,
+    state: AppState
   ): Option[Int] =
-    val itemWindow = SurfaceFrameLayout(contentRect, borderCells = 0).itemWindow(
-      itemCount,
-      selectedIndex,
-      hasHeader,
-      hasFooter,
-      reservedContentRows,
-      itemGapRows
+    val metrics = CellMetrics.fromFont(
+      Font(state.config.fontConfig.uiFontFamily, Font.PLAIN, state.config.fontConfig.uiFontSize.toInt.max(1))
     )
-    overlayDisplayedRowIndexAt(event, contentRect, rowSlots)
-      .flatMap(itemWindow.absoluteIndexAt)
+    val geometry = FloatingSurfaceGeometry.forItems(
+      frame = contentRect,
+      metrics = metrics,
+      itemCount = itemCount,
+      itemGapRows = itemGapRows,
+      headerRows = if hasHeader then 1 else 0
+    )
+    val x = event.pixelX.fold(metrics.toPixelX(event.col).toDouble)(_.toDouble)
+    val y = event.pixelY.fold(metrics.toPixelY(event.row).toDouble)(_.toDouble)
+    Option.when(geometry.content.contains(x, y))(
+      geometry.itemIndexAt(event.pixelX, event.pixelY, event.col, event.row)
+    ).flatten
 
   private def overlayDisplayedRowIndexAt(
     event: MouseInputEvent,
