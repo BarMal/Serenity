@@ -137,10 +137,11 @@ class Java2DRenderSurface(
 
   override def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
     if radius > 0f then
-      val px = metrics.toPixelX(x)
-      val py = metrics.toPixelY(y)
-      val pw = width * metrics.charWidth
-      val ph = height * metrics.lineHeight
+      val px         = metrics.toPixelX(x)
+      val py         = metrics.toPixelY(y)
+      val pw         = width * metrics.charWidth
+      val ph         = height * metrics.lineHeight
+      val activeClip = Option(g.getClip).map(g.getTransform.createTransformedShape)
       Java2DRenderSurface
         .deviceRegionFor(
           logicalX = px,
@@ -161,7 +162,9 @@ class Java2DRenderSurface(
           val src         = image.getSubimage(region.xPx, region.yPx, region.widthPx, region.heightPx)
           val blurred     = op.filter(src, null)
           val rawGraphics = image.createGraphics()
-          try rawGraphics.drawImage(blurred, region.xPx, region.yPx, null)
+          try
+            activeClip.foreach(rawGraphics.clip)
+            rawGraphics.drawImage(blurred, region.xPx, region.yPx, null)
           finally rawGraphics.dispose()
         }
 

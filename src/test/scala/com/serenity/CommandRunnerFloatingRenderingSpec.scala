@@ -531,6 +531,46 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "leave the rounded command runner's frosted corner unblurred" in {
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val state = stateWithRunner(Theme.light, "op", commands).copy(
+      config = AppConfig.default
+        .withBackgroundStyle(BackgroundStyle.GlassLike)
+        .withBlurRadius(0.6f)
+        .withUiCornerRadiusPx(12)
+    )
+    val viewport = ViewportSize(100, 30)
+    val layout   = LayoutEngine.calculateLayout(state, viewport)
+    val overlay  = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+    val widthPx  = viewport.width * cellMetrics.charWidth
+    val heightPx = viewport.height * cellMetrics.lineHeight
+
+    def renderedImage(renderState: AppState): BufferedImage =
+      val image   = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_ARGB)
+      val surface = new Java2DRenderSurface(image, cellMetrics, codeFont, _ => ())
+      Renderer.render(
+        renderState,
+        cursorVisible = true,
+        surface,
+        viewport,
+        codeFont,
+        Font(Font.SANS_SERIF, Font.PLAIN, 12),
+        cellMetrics,
+        None
+      )
+      image
+
+    val withoutRunner = renderedImage(state.copy(uiSurfaces = Nil, focus = Focus.EditorPane(paneId)))
+    val withRunner    = renderedImage(state)
+    val cornerX       = cellMetrics.toPixelX(overlay.x)
+    val cornerY       = cellMetrics.toPixelY(overlay.y)
+
+    new Color(withRunner.getRGB(cornerX, cornerY), true) shouldBe new Color(
+      withoutRunner.getRGB(cornerX, cornerY),
+      true
+    )
+  }
+
   it should "preserve rounded context menus after their animation has materialised" in {
     val copyCommand = Command.typed("copy", "Copy", CommandIntent.Copy, label = "Copy")
     val menu = ContextMenu(
