@@ -67,6 +67,28 @@ private[manager] trait StateManagerBehaviorDependencies:
   def restoreStartupSession(): IO[Unit]
   def activeEditorBufferId(state: AppState): Option[BufferId]
 
+/** Dependencies used by event processing, excluding file, session, and theme services. */
+private[manager] trait StateManagerEventPipelineDependencies:
+  def stateRef: Ref[IO, AppState]
+  def undoRef: Ref[IO, UndoState]
+  def logger: Logger[IO]
+  def lspQueue: Queue[IO, LspEffect]
+  def documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]]
+  def mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]]
+  def uiPresetStore: UiPresetStore
+  def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]
+  def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit]
+  def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit]
+  def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
+  def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
+
+  def updateConfig(
+    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
+  ): IO[com.serenity.config.AppConfig]
+
+  def executeCommand(command: com.serenity.command.Command): IO[Unit]
+  def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
+
 private[manager] trait StateManagerRuntimeSupport:
   protected def runtime: StateManagerRuntime
   protected def balance: Balance
@@ -107,9 +129,36 @@ private[manager] class StateManagerBehavior(protected val runtime: StateManagerR
 
   private val dependencies: StateManagerBehaviorDependencies = this
 
+  private lazy val eventPipelineDependencies: StateManagerEventPipelineDependencies =
+    new StateManagerEventPipelineDependencies:
+      val stateRef                 = StateManagerBehavior.this.stateRef
+      val undoRef                  = StateManagerBehavior.this.undoRef
+      val logger                   = StateManagerBehavior.this.logger
+      val lspQueue                 = StateManagerBehavior.this.lspQueue
+      val documentAnalysisFiberRef = StateManagerBehavior.this.documentAnalysisFiberRef
+      val mouseTargetCacheRef      = StateManagerBehavior.this.mouseTargetCacheRef
+      val uiPresetStore            = StateManagerBehavior.this.uiPresetStore
+      def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
+        StateManagerBehavior.this.beginCloseAction(scope, state)
+      def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit] =
+        StateManagerBehavior.this.interpretEffect(effect)
+      def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =
+        StateManagerBehavior.this.interpretCommand(command, state)
+      def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
+        StateManagerBehavior.this.createBuffer(content, filePath)
+      def createPane(bufferId: Option[BufferId]): IO[PaneId] = StateManagerBehavior.this.createPane(bufferId)
+      def updateConfig(
+        update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
+      ): IO[com.serenity.config.AppConfig] =
+        StateManagerBehavior.this.updateConfig(update)
+      def executeCommand(command: com.serenity.command.Command): IO[Unit] =
+        StateManagerBehavior.this.executeCommand(command)
+      def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
+        StateManagerBehavior.this.resizePinnedPanel(position, newSize)
+
   private lazy val workflow = new StateManagerWorkflowBehavior(runtime, dependencies)
   private lazy val effects  = new StateManagerEffectBehavior(runtime, dependencies)
-  private lazy val events   = new StateManagerEventPipelineBehavior(runtime, dependencies)
+  private lazy val events   = new StateManagerEventPipelineBehavior(eventPipelineDependencies)
   private lazy val editor   = new StateManagerEditorFacadeBehavior(runtime, dependencies)
   private lazy val surfaces = new StateManagerSurfaceFacadeBehavior(runtime, dependencies)
   private lazy val viewport = new StateManagerViewportBehavior(runtime, dependencies)

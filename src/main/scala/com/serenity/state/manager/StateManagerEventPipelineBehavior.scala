@@ -20,13 +20,15 @@ import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 
 final private[manager] class StateManagerEventPipelineBehavior(
-    protected val runtime: StateManagerRuntime,
-    dependencies: StateManagerBehaviorDependencies
-)(using protected val balance: com.serenity.rope.Balance)
-    extends StateManagerRuntimeSupport:
+    dependencies: StateManagerEventPipelineDependencies
+)(using protected val balance: com.serenity.rope.Balance):
 
   import dependencies.*
   private val DocumentAnalysisDebounce = 150.millis
+
+  private val reducerEffectPipeline = new StateManagerReducerEffectPipeline(
+    StateManagerReducerEffectPipeline.Dependencies(validateAndUpdateState, interpretEffect)
+  )
 
   private val ContextMenuSurfaceId = SurfaceId("context-menu")
 
@@ -289,10 +291,7 @@ final private[manager] class StateManagerEventPipelineBehavior(
             NoOpLocalEventHandler
 
   private def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
-    for
-      _ <- validateAndUpdateState(result.state, fallbackState)
-      _ <- result.effects.traverse_(interpretEffect)
-    yield ()
+    reducerEffectPipeline.apply(result, fallbackState)
 
   private def hydrateCommandRunnerUiPresets: cats.effect.IO[Unit] =
     uiPresetStore
