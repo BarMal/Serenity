@@ -183,26 +183,26 @@ private[manager] class StateManagerBehavior(
     runtime: StateManagerRuntime
 )(using providedBalance: Balance):
 
-  private val stateRef                     = runtime.stateRef
-  private val undoRef                      = runtime.undoRef
-  private val themeNamesRef                = runtime.themeNamesRef
-  private val quitSignal                   = runtime.quitSignal
-  private val logger                       = runtime.logger
-  private val policy                       = runtime.policy
-  private val themeManager                 = runtime.themeManager
-  private val lspQueue                     = runtime.lspQueue
-  private val mouseTargetCacheRef          = runtime.mouseTargetCacheRef
-  private val documentAnalysisFiberRef     = runtime.documentAnalysisFiberRef
-  private val onFontConfigChanged          = runtime.onFontConfigChanged
-  private val deviceTextScaleProvider      = runtime.deviceTextScaleProvider
-  private val configPersistencePath        = runtime.configPersistencePath
-  private val uiPresetStore                = runtime.uiPresetStore
-  private val windowSizeProvider           = runtime.windowSizeProvider
+  private val stateRef                 = runtime.stateRef
+  private val undoRef                  = runtime.undoRef
+  private val themeNamesRef            = runtime.themeNamesRef
+  private val quitSignal               = runtime.quitSignal
+  private val logger                   = runtime.logger
+  private val policy                   = runtime.policy
+  private val themeManager             = runtime.themeManager
+  private val lspQueue                 = runtime.lspQueue
+  private val mouseTargetCacheRef      = runtime.mouseTargetCacheRef
+  private val documentAnalysisFiberRef = runtime.documentAnalysisFiberRef
+  private val onFontConfigChanged      = runtime.onFontConfigChanged
+  private val deviceTextScaleProvider  = runtime.deviceTextScaleProvider
+  private val configPersistencePath    = runtime.configPersistencePath
+  private val uiPresetStore            = runtime.uiPresetStore
+  private val windowSizeProvider       = runtime.windowSizeProvider
   runtime.onPreferredWindowSizeChanged
-  private val fileDialog                   = runtime.fileDialog
-  private val fileManager                  = runtime.fileManager
-  private val sessionManager               = runtime.sessionManager
-  private val sessionPersistence           = runtime.sessionPersistence
+  private val fileDialog         = runtime.fileDialog
+  private val fileManager        = runtime.fileManager
+  private val sessionManager     = runtime.sessionManager
+  private val sessionPersistence = runtime.sessionPersistence
 
   protected val balance: Balance = providedBalance
 
