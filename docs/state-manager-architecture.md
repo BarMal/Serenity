@@ -8,12 +8,12 @@ forwarding.
 The composition root owns concrete infrastructure construction and is the only place where ports
 are wired together. The former behavior stack is now assigned as follows:
 
-- `StateManagerEditorFacadeBehavior`: editor state and pane operations;
-- `StateManagerSurfaceFacadeBehavior` and `StateManagerViewportBehavior`: visible surfaces,
+- `StateManagerEditorCapability`: editor state and pane operations;
+- `StateManagerSurfaceCapability` and `StateManagerViewportCapability`: visible surfaces,
   panels, mouse targets, and viewport state;
-- `StateManagerFileFacadeBehavior`: file façade operations;
-- `StateManagerWorkflowBehavior`: file/session/config workflow decisions;
-- `StateManagerEventPipelineBehavior`: reducer event routing and document-analysis scheduling;
+- `StateManagerFileCapability`: file façade operations;
+- `StateManagerWorkflowCapability`: file/session/config workflow decisions;
+- `StateManagerEventPipeline`: reducer event routing and document-analysis scheduling;
 - `StateManagerEffectHandlers` plus `CommandEffectInterpreter`: effect-family dispatch and
   ordered I/O interpretation.
 

@@ -9,7 +9,7 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, PaneSplitDirection, ViewportSize}
 
-final private[manager] class StateManagerEditorFacadeBehavior(
+final private[manager] class StateManagerEditorCapability(
     dependencies: EditorCapabilityPort
 )(using balance: com.serenity.rope.Balance):
 

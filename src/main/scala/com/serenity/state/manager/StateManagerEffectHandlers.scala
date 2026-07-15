@@ -55,6 +55,7 @@ final private[manager] class LifecycleEffectHandler(port: LifecycleEffectPort):
     effect match
       case LifecycleEffect.CompleteQuit => port.completeQuit
 
+/** Owns ordered I/O interpretation for reducer effects. */
 final private[manager] class StateManagerEffectHandlers(
     runtime: EffectRuntimePort,
     editor: EffectEditorPort,

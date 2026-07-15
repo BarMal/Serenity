@@ -7,7 +7,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalStateReducer, PanelStateReducer, PeekStateReducer}
 import com.serenity.ui.layout.*
 
-final private[manager] class StateManagerSurfaceFacadeBehavior(
+final private[manager] class StateManagerSurfaceCapability(
     stateRef: cats.effect.Ref[IO, AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     dependencies: SurfaceCapabilityPort

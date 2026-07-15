@@ -53,7 +53,7 @@ final private[manager] class StateManagerFileFacade(
   def getRecentFiles: IO[List[Path]] =
     stateRef.get.map(_.recentFiles)
 
-final private[manager] class StateManagerFileFacadeBehavior(
+final private[manager] class StateManagerFileCapability(
     stateRef: Ref[IO, AppState],
     dependencies: FileCapabilityPort
 )(using balance: com.serenity.rope.Balance):

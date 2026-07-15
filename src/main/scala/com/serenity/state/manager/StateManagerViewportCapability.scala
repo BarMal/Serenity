@@ -7,7 +7,7 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, ViewportSize}
 
-final private[manager] class StateManagerViewportBehavior(
+final private[manager] class StateManagerViewportCapability(
     stateRef: cats.effect.Ref[IO, AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     deviceTextScaleProvider: IO[Double],

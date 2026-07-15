@@ -179,7 +179,7 @@ private[manager] trait EventUiPort:
   def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
 
 /** Explicit composition boundary for the StateManager capabilities. */
-private[manager] class StateManagerBehavior(
+private[manager] class StateManagerComposition(
     val stateRef: Ref[IO, AppState],
     val undoRef: Ref[IO, UndoState],
     val themeNamesRef: Ref[IO, List[String]],
@@ -402,7 +402,7 @@ private[manager] class StateManagerBehavior(
       def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
         surfaces.resizePinnedPanel(position, newSize)
 
-  private lazy val workflow = new StateManagerWorkflowBehavior(workflowPort)
+  private lazy val workflow = new StateManagerWorkflowCapability(workflowPort)
 
   private lazy val effects = new StateManagerEffectHandlers(
     effectRuntimePort,
@@ -414,11 +414,11 @@ private[manager] class StateManagerBehavior(
   )
 
   private lazy val events =
-    new StateManagerEventPipelineBehavior(eventStatePort, eventEffectPort, eventWorkflowPort, eventUiPort)
-  private lazy val editor   = new StateManagerEditorFacadeBehavior(editorPort)
-  private lazy val surfaces = new StateManagerSurfaceFacadeBehavior(stateRef, logger, surfacePort)
-  private lazy val viewport = new StateManagerViewportBehavior(stateRef, logger, deviceTextScaleProvider, viewportPort)
-  private lazy val files    = new StateManagerFileFacadeBehavior(stateRef, filePort)
+    new StateManagerEventPipeline(eventStatePort, eventEffectPort, eventWorkflowPort, eventUiPort)
+  private lazy val editor   = new StateManagerEditorCapability(editorPort)
+  private lazy val surfaces = new StateManagerSurfaceCapability(stateRef, logger, surfacePort)
+  private lazy val viewport = new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, viewportPort)
+  private lazy val files    = new StateManagerFileCapability(stateRef, filePort)
 
   export editor.*
   export events.applyEvent

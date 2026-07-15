@@ -73,20 +73,32 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     applied.get.unsafeRunSync() shouldBe List(ResizeEvent(ViewportSize(120, 40)))
   }
 
-  "StateManager composition" should "exclude the retired runtime forwarding and dependency hub" in {
+  "StateManager composition" should "exclude retired behavior implementations and dependency hubs" in {
     val sources = List(
-      "StateManagerEditorFacadeBehavior.scala",
-      "StateManagerEffectBehavior.scala",
-      "StateManagerFileFacadeBehavior.scala",
-      "StateManagerSurfaceFacadeBehavior.scala",
-      "StateManagerViewportBehavior.scala",
-      "StateManagerWorkflowBehavior.scala"
+      "StateManagerEditorCapability.scala",
+      "StateManagerEffectHandlers.scala",
+      "StateManagerFileCapability.scala",
+      "StateManagerSurfaceCapability.scala",
+      "StateManagerViewportCapability.scala",
+      "StateManagerWorkflowCapability.scala"
     ).map(name => Files.readString(Path.of("src/main/scala/com/serenity/state/manager", name)))
 
     sources.mkString("\n") should not include "StateManagerRuntimeSupport"
     sources.mkString("\n") should not include "StateManagerBehaviorDependencies"
     sources.mkString("\n") should not include "EffectCapabilityPort"
     sources.mkString("\n") should not include "StateManagerRuntime,"
+  }
+
+  it should "name production components by their explicit ownership rather than behavior" in {
+    val managerDirectory = Path.of("src/main/scala/com/serenity/state/manager")
+    val sourcePaths = Files
+      .list(managerDirectory)
+      .toArray
+      .collect { case path: Path if path.getFileName.toString.endsWith(".scala") => path }
+
+    sourcePaths.map(_.getFileName.toString) should not contain "StateManagerRuntimeSupport.scala"
+    sourcePaths.map(_.getFileName.toString).exists(_.contains("Behavior")) shouldBe false
+    sourcePaths.map(Files.readString).mkString("\n") should not include "StateManagerBehavior"
   }
 
   it should "keep Balance capability-local rather than protected" in {
@@ -101,7 +113,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
   it should "wire capability ports directly to their owning components" in {
     val compositionRoot = Files.readString(
-      Path.of("src/main/scala/com/serenity/state/manager/StateManagerRuntimeSupport.scala")
+      Path.of("src/main/scala/com/serenity/state/manager/StateManagerComposition.scala")
     )
 
     compositionRoot should not include "StateManagerBehavior.this"

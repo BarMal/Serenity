@@ -31,7 +31,7 @@ final private[manager] class ResizeEventHandler(port: ResizeEventPort):
     port.applyReducerResult(SystemEventReducer.reduce(event, previousState), previousState) >>
       port.rebalancePanes()
 
-final private[manager] class StateManagerEventPipelineBehavior(
+final private[manager] class StateManagerEventPipeline(
     state: EventStatePort,
     effects: EventEffectPort,
     workflow: EventWorkflowPort,
@@ -48,7 +48,7 @@ final private[manager] class StateManagerEventPipelineBehavior(
 
   private val resizeEvents = new ResizeEventHandler(new ResizeEventPort:
     def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
-      StateManagerEventPipelineBehavior.this.applyReducerResult(result, fallbackState)
+      StateManagerEventPipeline.this.applyReducerResult(result, fallbackState)
     def rebalancePanes(): cats.effect.IO[Unit] =
       stateRef.update(s => AppEventReducer.rebalancePanes(s, s.focusedBufferId)))
 
