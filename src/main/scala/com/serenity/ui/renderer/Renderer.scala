@@ -978,14 +978,6 @@ object Renderer:
         val lensY = rect.y + placement.top
         context.surface.setBackgroundColor(state.theme.panel.background)
         context.surface.fillRect(rect.x, lensY, rect.width, placement.height, ' ')
-        context.surface.strokeRoundRect(
-          rect.x,
-          lensY,
-          rect.width,
-          placement.height,
-          arcPx = 0,
-          state.theme.panelBorder
-        )
         blockVisualLines.zipWithIndex.foreach {
           case (visualLine, index) =>
             val screenY = lensY + index

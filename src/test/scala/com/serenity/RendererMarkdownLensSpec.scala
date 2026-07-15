@@ -213,7 +213,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     renderedRows.exists(_.contains("Paragraph immediately after the heading")) shouldBe true
   }
 
-  it should "draw a visible border around the raw source lens" in {
+  it should "not draw a border around the raw source lens" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
     val buffer = Buffer
@@ -252,14 +252,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       cursorColor = None
     )
 
-    surface.strokeRoundRectCalls should not be empty
-    val border = surface.strokeRoundRectCalls.head
-    border.color shouldBe state.theme.border
-    val paneRect =
-      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(paneId)
-    border.x shouldBe paneRect.x
-    border.w shouldBe paneRect.width
-    border.h shouldBe 2
+    surface.strokeRoundRectCalls shouldBe empty
   }
 
   it should "size an active table lens to cover the rendered preview table" in {
@@ -309,8 +302,9 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       cursorColor = None
     )
 
-    surface.strokeRoundRectCalls should not be empty
-    surface.strokeRoundRectCalls.head.h shouldBe 5
+    val paneRect =
+      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(paneId)
+    panelRows(surface, state, paneRect) should have size 5
   }
 
   it should "align the raw source lens to the scrolled preview window" in {
@@ -367,8 +361,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
 
     val paneRect =
       LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(paneId)
-    surface.strokeRoundRectCalls should not be empty
-    surface.strokeRoundRectCalls.head.y shouldBe paneRect.y + 1
+    rawSourceRow(surface, "| Task | Owner |") shouldBe paneRect.y + 1
   }
 
   it should "align heading paragraph list and table lenses to the active preview block" in {
@@ -401,23 +394,21 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
 
     cases.foreach {
       case (name, source, cursor, expectedHeightRows) =>
-        val (state, surface, metrics) = renderMarkdownLens(source, cursor)
+        val (state, surface, _) = renderMarkdownLens(source, cursor)
         val paneRect =
           LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
             PaneId(1)
           )
 
         withClue(s"$name lens: ") {
-          surface.strokeRoundRectCalls should not be empty
-          val border = surface.strokeRoundRectCalls.head
-          border.y shouldBe paneRect.y + 1
-          border.h shouldBe expectedHeightRows
+          rawSourceRow(surface, source.linesIterator.toVector(cursor.line)) shouldBe paneRect.y + 1
+          panelRows(surface, state, paneRect) should have size expectedHeightRows
         }
     }
   }
 
   it should "keep visible preview context above the active lens" in {
-    val (state, surface, metrics) = renderMarkdownLens(
+    val (state, surface, _) = renderMarkdownLens(
       "# Intro\n\nOpening paragraph\n\nActive paragraph\ncontinued",
       CursorPosition(4, 0),
       topLine = Some(0)
@@ -428,19 +419,17 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       )
 
     val renderedRows = rows(surface)
-    surface.strokeRoundRectCalls should not be empty
-    val border = surface.strokeRoundRectCalls.head
     renderedRows.exists(_.contains("Active paragraph")) shouldBe true
     renderedRows.exists(_.contains("continued")) shouldBe true
-    border.y should be > paneRect.y + 1
-    border.h shouldBe 2
+    rawSourceRow(surface, "Active paragraph") should be > paneRect.y + 1
+    panelRows(surface, state, paneRect) should have size 2
   }
 
   it should "align the active lens after expanded preview context" in {
     val source =
       "| Task | Owner |\n| ---- | ----- |\n| Ship | Codex |\n\nActive paragraph\ncontinued"
     val cursor                    = CursorPosition(4, 0)
-    val (state, surface, metrics) = renderMarkdownLens(source, cursor, topLine = Some(0))
+    val (state, surface, _) = renderMarkdownLens(source, cursor, topLine = Some(0))
     val paneRect =
       LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
         PaneId(1)
@@ -458,10 +447,8 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
         .map(_.start - previewWindow.firstPreviewRow)
         .getOrElse(cursor.line - previewWindow.firstSourceLine)
 
-    surface.strokeRoundRectCalls should not be empty
-    val border = surface.strokeRoundRectCalls.head
-    border.y shouldBe paneRect.y + 1 + expectedTopRows
-    border.h shouldBe 2
+    rawSourceRow(surface, "Active paragraph") shouldBe paneRect.y + 1 + expectedTopRows
+    panelRows(surface, state, paneRect) should have size 2
   }
 
   private def renderMarkdownLens(
@@ -512,3 +499,12 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
 
   private def rows(surface: MockRenderSurface): List[String] =
     (0 until surface.height).map(surface.getRow).map(_.trim).filter(_.nonEmpty).toList
+
+  private def rawSourceRow(surface: MockRenderSurface, source: String): Int =
+    (0 until surface.height).find(row => surface.getRow(row).contains(source))
+      .getOrElse(fail(s"Expected raw source row for: $source"))
+
+  private def panelRows(surface: MockRenderSurface, state: AppState, paneRect: LayoutRect): Vector[Int] =
+    (paneRect.y until paneRect.bottom)
+      .filter(row => (paneRect.x until paneRect.right).exists(column => surface.getBg(column, row) == state.theme.panel.background))
+      .toVector
