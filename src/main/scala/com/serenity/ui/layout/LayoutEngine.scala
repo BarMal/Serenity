@@ -66,6 +66,7 @@ case class CalculatedLayout(
     aboveCursorOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
     belowCursorOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
     collapsedFloatingSurfaceIds: Set[SurfaceId] = Set.empty,
+    floatingOverlayOffsetRows: Map[SurfaceId, Double] = Map.empty,
     lineNumberRect: Option[LayoutRect] = None,
     gutterRect: Option[LayoutRect] = None
 )
@@ -101,7 +102,7 @@ object LayoutEngine:
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
     val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
     val contentHeight  = math.max(1, viewportSize.height - gutterHeight)
-    val uiElementGap   = math.ceil(state.config.uiElementGap.max(0.0)).toInt
+    val uiElementGap   = math.round(state.config.uiElementGap.max(0.0)).toInt
     val pinnedPanelLayout = calculatePinnedPanelLayout(
       state.pinnedSurfaces,
       viewportSize.width,
@@ -217,13 +218,22 @@ object LayoutEngine:
     val aboveCursorOverlayStack =
       aboveSurfaces.flatMap(surface => calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface.id -> _))
     val belowLayout = calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
+    val floatingOffsets = floatingOverlayOffsets(
+      aboveSurfaces,
+      aboveCursorOverlayStack,
+      belowSurfaces,
+      belowLayout.stack,
+      state,
+      paneLayouts
+    )
 
     baseLayout.copy(
       aboveCursorOverlayRect = aboveCursorOverlayStack.headOption.map(_._2),
       belowCursorOverlayRect = belowLayout.stack.headOption.map(_._2),
       aboveCursorOverlayStack = aboveCursorOverlayStack,
       belowCursorOverlayStack = belowLayout.stack,
-      collapsedFloatingSurfaceIds = belowLayout.collapsedSurfaceIds
+      collapsedFloatingSurfaceIds = belowLayout.collapsedSurfaceIds,
+      floatingOverlayOffsetRows = floatingOffsets
     )
 
   private def usesBottomGutter(state: AppState): Boolean =
@@ -248,7 +258,7 @@ object LayoutEngine:
   ): Option[PinnedPanelDragResize] =
     val layout         = calculateLayoutWithUI(state, viewportSize)
     val contentHeight  = calculateContentHeight(state, viewportSize)
-    val uiElementGap   = math.ceil(state.config.uiElementGap.max(0.0)).toInt
+    val uiElementGap   = math.round(state.config.uiElementGap.max(0.0)).toInt
     val pinnedSurfaces = state.pinnedSurfaces
     val panelSizes = pinnedSurfaces.foldLeft(Map.empty[PanelPosition, Int]) {
       case (acc, UiSurface(_, _, SurfacePresentation.Pinned(position, size), _)) =>
@@ -682,14 +692,56 @@ object LayoutEngine:
   private def floatingCursorGapRows(state: AppState, content: SurfaceContent): Int =
     content match
       case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
-        math.ceil(state.config.commandRunnerCursorGapRows.getOrElse(floatingStackGapRows(state).toDouble)).toInt
+        math.round(state.config.commandRunnerCursorGapRows.getOrElse(floatingStackGapRows(state).toDouble)).toInt
       case _ => floatingStackGapRows(state)
 
   private def floatingStackGapRows(state: AppState): Int =
-    math.max(
-      InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows,
-      math.ceil(state.config.uiElementGap.max(0.0)).toInt
-    )
+    math.round(floatingStackGapValue(state)).toInt
+
+  private def floatingCursorGapValue(state: AppState, content: SurfaceContent): Double =
+    content match
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
+        state.config.commandRunnerCursorGapRows.getOrElse(floatingStackGapValue(state))
+      case _ => floatingStackGapValue(state)
+
+  private def floatingStackGapValue(state: AppState): Double =
+    Option
+      .when(state.config.uiElementGap > 0.0)(state.config.uiElementGap)
+      .getOrElse(InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows.toDouble)
+
+  private def floatingOverlayOffsets(
+    aboveSurfaces: List[UiSurface],
+    aboveRects: List[(SurfaceId, LayoutRect)],
+    belowSurfaces: List[UiSurface],
+    belowRects: List[(SurfaceId, LayoutRect)],
+    state: AppState,
+    paneLayouts: Map[PaneId, EditorPaneLayout]
+  ): Map[SurfaceId, Double] =
+    val aboveById = aboveSurfaces.map(surface => surface.id -> surface).toMap
+    val belowById = belowSurfaces.map(surface => surface.id -> surface).toMap
+    val aboveOffsets = aboveRects.flatMap { (surfaceId, _) =>
+      aboveById.get(surfaceId).map { surface =>
+        val exact   = floatingCursorGapValue(state, surface.content)
+        val rounded = floatingCursorGapRows(state, surface.content).toDouble
+        surfaceId -> (rounded - exact)
+      }
+    }
+    val firstBelowCursorDelta = belowSurfaces.headOption
+      .map(surface => floatingCursorGapValue(state, surface.content) - floatingCursorGapRows(state, surface.content))
+      .getOrElse(0.0)
+    val firstBelowDirection = for
+      surface   <- belowSurfaces.headOption
+      (_, rect) <- belowRects.headOption
+      anchorY   <- calculateFloatingAnchorFrame(surface, state, paneLayouts).map(_.screenPosition.y)
+    yield if rect.y <= anchorY then -1.0 else 1.0
+    val belowOffsets = belowRects.zipWithIndex.flatMap {
+      case ((surfaceId, _), index) =>
+        Option.when(belowById.contains(surfaceId)) {
+          val stackDelta = floatingStackGapValue(state) - floatingStackGapRows(state)
+          surfaceId -> (firstBelowDirection.getOrElse(1.0) * firstBelowCursorDelta + (index * stackDelta))
+        }
+    }
+    (aboveOffsets ++ belowOffsets).toMap
 
   private def calculateFloatingSurfaceHeight(
     content: SurfaceContent,
@@ -706,7 +758,7 @@ object LayoutEngine:
             hasHeader = true,
             hasFooter = true,
             borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-            itemGapRows = math.ceil(state.config.commandRunnerItemGapRows).toInt
+            itemGapRows = state.config.commandRunnerItemGapRows
           )
         )
         .getOrElse(densityMetrics.commandSurfaceMaxHeight)
@@ -745,7 +797,7 @@ object LayoutEngine:
           hasHeader = true,
           hasFooter = menu.items.nonEmpty,
           borderCells = SurfaceFrameLayout.borderCellsFor(content),
-          itemGapRows = math.ceil(state.config.commandRunnerItemGapRows).toInt
+          itemGapRows = state.config.commandRunnerItemGapRows
         )
       case SurfaceContent.CommentLens(lens) =>
         math.max(4, math.min(8, lens.draft.split("\n", -1).length + 3))
@@ -764,7 +816,7 @@ object LayoutEngine:
               hasHeader = true,
               hasFooter = true,
               borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-              itemGapRows = math.ceil(state.config.commandRunnerItemGapRows).toInt
+              itemGapRows = state.config.commandRunnerItemGapRows
             )
           )
         )

@@ -47,6 +47,9 @@ trait RenderSurface:
     arcPx: Int
   )(render: => Unit): Unit
 
+  /** Translate drawing in device-independent logical pixels for fractional-cell floating geometry. */
+  def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit
+
   def fillPixelRect(
     xPx: Int,
     yPx: Int,

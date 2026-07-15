@@ -15,7 +15,22 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  "TextOverlayRenderer" should "scroll a long editable split row horizontally to keep the caret visible" in {
+  "TextOverlayRenderer" should "render fractional row gaps at geometry pixel origins" in {
+    val surface = new MockRenderSurface(20, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics(8, 16, 12)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 10, 5),
+      rows = List(OverlayRow("one"), OverlayRow("two")),
+      itemGapRows = 0.25
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.pixelTranslationCalls.map(_.yPx) should contain allOf (0.0, 4.0)
+  }
+
+  it should "scroll a long editable split row horizontally to keep the caret visible" in {
     val surface = new MockRenderSurface(20, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)

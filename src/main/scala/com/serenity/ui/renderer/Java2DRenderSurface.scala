@@ -233,6 +233,13 @@ class Java2DRenderSurface(
       render
     finally g.setClip(savedClip)
 
+  override def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =
+    val savedTransform = g.getTransform
+    try
+      g.translate(xPx, yPx)
+      render
+    finally g.setTransform(savedTransform)
+
   override def fillPixelRect(
     xPx: Int,
     yPx: Int,

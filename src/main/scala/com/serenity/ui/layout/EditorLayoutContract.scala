@@ -364,7 +364,7 @@ object EditorLayoutContract:
       case None         => viewportRect
     val workspace = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
     val minimumFloatingOverlayGapRows = math
-      .ceil(
+      .round(
         math.max(
           InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows,
           math.max(0, state.config.uiElementGap)

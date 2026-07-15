@@ -23,12 +23,12 @@ case class SurfaceFrameLayout(
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): Int =
     val availableRows =
       math.max(0, maxContentRows - SurfaceFrameLayout.contentChromeRows(hasHeader, hasFooter, reservedContentRows))
-    val itemHeight = math.max(0, itemGapRows) + 1
-    if availableRows == 0 then 0 else (availableRows + itemHeight - 1) / itemHeight
+    val itemHeight = itemGapRows.max(0.0) + 1.0
+    if availableRows == 0 then 0 else math.floor((availableRows + itemHeight - 1.0) / itemHeight).toInt
 
   def itemWindow(
     itemCount: Int,
@@ -36,7 +36,7 @@ case class SurfaceFrameLayout(
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): SurfaceItemWindow =
     val maxRows = math.max(1, visibleItemRows(hasHeader, hasFooter, reservedContentRows, itemGapRows))
     val offset =
@@ -53,19 +53,23 @@ case class SurfaceFrameLayout(
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): Option[Int] =
-    val window      = itemWindow(itemCount, selectedIndex, hasHeader, hasFooter, reservedContentRows, itemGapRows)
-    val itemRowBase = contentRect.y + (if hasHeader then 1 else 0)
-    val itemRow     = row - itemRowBase
-    val itemHeight  = math.max(0, itemGapRows) + 1
-    Option.when(itemRow >= 0 && itemRow % itemHeight == 0)(itemRow / itemHeight).flatMap(window.absoluteIndexAt)
+    val window         = itemWindow(itemCount, selectedIndex, hasHeader, hasFooter, reservedContentRows, itemGapRows)
+    val itemRowBase    = contentRect.y + (if hasHeader then 1 else 0)
+    val itemRow        = row - itemRowBase
+    val itemHeight     = itemGapRows.max(0.0) + 1.0
+    val displayedIndex = math.floor(itemRow / itemHeight).toInt
+    val itemStart      = displayedIndex * itemHeight
+    Option
+      .when(itemRow >= 0 && itemRow >= itemStart && itemRow < itemStart + 1.0)(displayedIndex)
+      .flatMap(window.absoluteIndexAt)
 
   def contentRowSlots(
     itemCount: Int,
     hasHeader: Boolean,
     hasFooter: Boolean,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): List[SurfaceContentRowSlot] =
     SurfaceFrameLayout.contentRowSlotsFor(contentRect, itemCount, hasHeader, hasFooter, itemGapRows)
 
@@ -95,18 +99,21 @@ object SurfaceFrameLayout:
     itemCount: Int,
     hasHeader: Boolean,
     hasFooter: Boolean,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): List[SurfaceContentRowSlot] =
     if content.height <= 0 then Nil
     else
       val headerRows   = if hasHeader then 1 else 0
       val footerRows   = if hasFooter then 1 else 0
       val itemRows     = math.max(0, content.height - headerRows - footerRows)
-      val itemHeight   = math.max(0, itemGapRows) + 1
-      val visibleItems = if itemRows == 0 then 0 else (itemRows + itemHeight - 1) / itemHeight
+      val itemHeight   = itemGapRows.max(0.0) + 1.0
+      val visibleItems = if itemRows == 0 then 0 else math.floor((itemRows + itemHeight - 1.0) / itemHeight).toInt
       val itemSlots =
         (0 until math.min(itemCount, visibleItems)).toList.map { index =>
-          SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), content.y + headerRows + (index * itemHeight))
+          SurfaceContentRowSlot(
+            SurfaceContentRowKind.Item(index),
+            content.y + headerRows + math.round(index * itemHeight).toInt
+          )
         }
       val headerSlots =
         if hasHeader then List(SurfaceContentRowSlot(SurfaceContentRowKind.Header, content.y))
@@ -149,8 +156,8 @@ object SurfaceFrameLayout:
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
     borderCells: Int = DefaultBorderCells,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): Int =
     val rows = math.max(0, itemRows)
-    val gaps = math.max(0, rows - 1) * math.max(0, itemGapRows)
-    rows + gaps + frameChromeRows(hasHeader, hasFooter, reservedContentRows, borderCells)
+    val gaps = math.max(0, rows - 1) * itemGapRows.max(0.0)
+    math.round(rows + gaps + frameChromeRows(hasHeader, hasFooter, reservedContentRows, borderCells)).toInt

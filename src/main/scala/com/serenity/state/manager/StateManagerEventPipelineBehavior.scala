@@ -1285,12 +1285,13 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
       index <- overlayItemIndex(
         event,
         contentRect,
-        contract.overlayRowSlots(surface.id),
         menu.items.length,
         menu.selectedIndex,
         hasHeader = true,
         hasFooter = menu.items.nonEmpty,
+        reservedContentRows = 0,
         itemGapRows = state.config.commandRunnerItemGapRows,
+        verticalOffsetRows = layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
         state = state
       )
     yield (surface, menu, index)
@@ -1299,11 +1300,27 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     (for
       viewportSize <- state.viewportSize
       surface      <- state.contextMenuSurface
+      menu <- surface.content match
+        case SurfaceContent.ContextMenu(menu) => Some(menu)
+        case _                                => None
       layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       contract = EditorLayoutContract.from(state, viewportSize, layout)
       contentRect <- contract.overlayContentRect(surface.id)
-    yield contentRect.contains(event.col, event.row) &&
-      !contract.overlayRowSlots(surface.id).exists(_.y == event.row)).getOrElse(false)
+      metrics = floatingSurfaceCellMetrics(state)
+      geometry = FloatingSurfaceGeometry
+        .forItems(
+          frame = contentRect,
+          metrics = metrics,
+          itemCount = menu.items.length,
+          itemGapRows = state.config.commandRunnerItemGapRows,
+          headerRows = 1,
+          footerRows = if menu.items.nonEmpty then 1 else 0,
+          selectedIndex = menu.selectedIndex
+        )
+        .translated(0.0, metrics.toPixelY(layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0)))
+      x = event.pixelX.fold(metrics.toPixelX(event.col).toDouble)(_.toDouble)
+      y = event.pixelY.fold(metrics.toPixelY(event.row).toDouble)(_.toDouble)
+    yield geometry.content.contains(x, y) && geometry.itemIndexAt(x, y).isEmpty).getOrElse(false)
 
   private def editorContextMenu(targetFocus: Focus): Option[ContextMenu] =
     val registry = CommandRegistry.withToggleUI
@@ -1399,7 +1416,8 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
         contentRect,
         state,
         toolbarState,
-        contract.overlayRowSlots(surface.id)
+        contract.overlayRowSlots(surface.id),
+        layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0)
       )
     yield (surface, toolbarState, hit)
 
@@ -1408,12 +1426,26 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     contentRect: LayoutRect,
     state: AppState,
     toolbarState: ContextualToolbarState,
-    rowSlots: List[SurfaceContentRowSlot]
+    rowSlots: List[SurfaceContentRowSlot],
+    verticalOffsetRows: Double
   ): Option[ContextualToolbarHit] =
-    overlayDisplayedRowIndexAt(event, contentRect, rowSlots).flatMap { rowIndex =>
+    val metrics = floatingSurfaceCellMetrics(state)
+    val geometry = FloatingSurfaceGeometry.forItems(
+      frame = contentRect,
+      metrics = metrics,
+      itemCount = rowSlots.count(_.kind match
+        case SurfaceContentRowKind.Item(_) => true
+        case _                             => false),
+      itemGapRows = 0.0
+    )
+    val positionedGeometry = geometry.translated(0.0, metrics.toPixelY(verticalOffsetRows))
+    positionedGeometry.itemIndexAt(event.pixelX, event.pixelY, event.col, event.row).flatMap { rowIndex =>
+      val columnOffset = event.pixelX
+        .map(pixelX => math.floor((pixelX - positionedGeometry.content.x) / metrics.charWidth).toInt)
+        .getOrElse(event.col - contentRect.x)
       ContextualToolbar.hitAt(
         rowIndex = rowIndex,
-        columnOffset = event.col - contentRect.x,
+        columnOffset = columnOffset,
         contentWidth = contentRect.width.max(1),
         toolbarState = toolbarState,
         state = state
@@ -1472,7 +1504,7 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           case _ =>
             List(state.commandRunnerSubmenuSurface, state.commandRunnerSurface).flatten
       surfaces.view
-        .flatMap(surface => commandRunnerSelectionForSurface(event, surface, contract, state))
+        .flatMap(surface => commandRunnerSelectionForSurface(event, surface, contract, layout, state))
         .headOption
     }
 
@@ -1540,21 +1572,22 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     event: MouseInputEvent,
     surface: UiSurface,
     contract: EditorLayoutContract,
+    layout: CalculatedLayout,
     state: AppState
   ): Option[CommandRunnerEvent] =
     contract.overlayContentRect(surface.id).flatMap { contentRect =>
-      val rowSlots = contract.overlayRowSlots(surface.id)
       surface.content match
         case SurfaceContent.CommandPalette(runner) =>
           overlayItemIndex(
             event,
             contentRect,
-            rowSlots,
             runner.visibleItems.length,
             runner.selectedIndex,
             hasHeader = true,
             hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
+            reservedContentRows = 0,
             itemGapRows = state.config.commandRunnerItemGapRows,
+            verticalOffsetRows = layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
             state = state
           )
             .map(RunnerSelectVisibleItem(_))
@@ -1569,13 +1602,13 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
           overlayItemIndex(
             event,
             contentRect,
-            rowSlots,
             items.length,
             selectedIndex,
             hasHeader = group.nonEmpty,
             hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
             reservedContentRows = detailRows,
             itemGapRows = state.config.commandRunnerItemGapRows,
+            verticalOffsetRows = layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
             state = state
           ).map { index =>
             if previewOnly then RunnerSelectPreviewSubmenuItem(groupId, index)
@@ -1588,47 +1621,41 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
   private def overlayItemIndex(
     event: MouseInputEvent,
     contentRect: LayoutRect,
-    rowSlots: List[SurfaceContentRowSlot],
     itemCount: Int,
     selectedIndex: Int,
     hasHeader: Boolean,
     hasFooter: Boolean,
-    reservedContentRows: Int = 0,
-    itemGapRows: Double = 0.0,
+    reservedContentRows: Int,
+    itemGapRows: Double,
+    verticalOffsetRows: Double,
     state: AppState
   ): Option[Int] =
-    val metrics = CellMetrics.fromFont(
-      Font(state.config.fontConfig.uiFontFamily, Font.PLAIN, state.config.fontConfig.uiFontSize.toInt.max(1))
-    )
+    val metrics = floatingSurfaceCellMetrics(state)
     val geometry = FloatingSurfaceGeometry.forItems(
       frame = contentRect,
       metrics = metrics,
       itemCount = itemCount,
       itemGapRows = itemGapRows,
-      headerRows = if hasHeader then 1 else 0
+      headerRows = if hasHeader then 1 else 0,
+      footerRows = if hasFooter then 1 else 0,
+      reservedContentRows = reservedContentRows,
+      selectedIndex = selectedIndex
     )
-    val x = event.pixelX.fold(metrics.toPixelX(event.col).toDouble)(_.toDouble)
-    val y = event.pixelY.fold(metrics.toPixelY(event.row).toDouble)(_.toDouble)
+    val positionedGeometry = geometry.translated(0.0, metrics.toPixelY(verticalOffsetRows))
+    val x                  = event.pixelX.fold(metrics.toPixelX(event.col).toDouble)(_.toDouble)
+    val y                  = event.pixelY.fold(metrics.toPixelY(event.row).toDouble)(_.toDouble)
     Option
-      .when(geometry.content.contains(x, y))(
-        geometry.itemIndexAt(event.pixelX, event.pixelY, event.col, event.row)
+      .when(positionedGeometry.content.contains(x, y))(
+        positionedGeometry
+          .itemIndexAt(event.pixelX, event.pixelY, event.col, event.row)
+          .flatMap(positionedGeometry.itemWindow.absoluteIndexAt)
       )
       .flatten
 
-  private def overlayDisplayedRowIndexAt(
-    event: MouseInputEvent,
-    contentRect: LayoutRect,
-    rowSlots: List[SurfaceContentRowSlot]
-  ): Option[Int] =
-    val insideColumns = event.col >= contentRect.x && event.col < contentRect.right
-    Option
-      .when(insideColumns)(())
-      .flatMap(_ =>
-        rowSlots.collectFirst {
-          case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) if y == event.row =>
-            index
-        }
-      )
+  private def floatingSurfaceCellMetrics(state: AppState): CellMetrics =
+    CellMetrics.fromFont(
+      Font(state.config.fontConfig.uiFontFamily, Font.PLAIN, state.config.fontConfig.uiFontSize.toInt.max(1))
+    )
 
   private def commandRunnerSubmenuDetailRowCount(
     groupId: String,

@@ -18,6 +18,19 @@ object TextOverlayRenderer:
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
+    surface.withPixelTranslation(0.0, cellMetrics.toPixelY(overlay.verticalOffsetRows)) {
+      renderAtGeometry(surface, overlay, theme, config, cursorVisible, font, cellMetrics)
+    }
+
+  private def renderAtGeometry(
+    surface: RenderSurface,
+    overlay: TextOverlayView,
+    theme: Theme,
+    config: AppConfig,
+    cursorVisible: Boolean,
+    font: java.awt.Font,
+    cellMetrics: CellMetrics
+  ): Unit =
     val rect = overlay.rect
 
     def rowColors(rowOffset: Int): (Color, Color) =
@@ -78,31 +91,33 @@ object TextOverlayRenderer:
   ): Unit =
     val contentRect = overlay.resolvedContentRect
     val maxLineSize = contentRect.width
+    val geometry    = overlay.baseGeometry(cellMetrics)
+    val positionedRows =
+      geometry.headerRect.toList.flatMap(rect => overlay.header.map(rect -> _)) ++
+        geometry.itemRects.zip(overlay.rows) ++
+        geometry.footerRect.toList.flatMap(rect => overlay.footer.map(rect -> _))
 
-    overlay.contentRowSlots
-      .foreach { slot =>
-        val row = slot.kind match
-          case SurfaceContentRowKind.Header      => overlay.header
-          case SurfaceContentRowKind.Item(index) => overlay.rows.lift(index)
-          case SurfaceContentRowKind.Footer      => overlay.footer
-        row.foreach { row =>
-          val rowOffset        = slot.y - overlay.rect.y
-          val (animFg, animBg) = rowColors(rowOffset)
-          renderRow(
-            surface,
-            contentRect.x,
-            slot.y,
-            maxLineSize,
-            row,
-            theme,
-            cursorVisible,
-            defaultForeground = Some(animFg),
-            defaultBackground = Some(animBg),
-            font = font,
-            cellMetrics = cellMetrics
-          )
-        }
+    positionedRows.foreach { (pixelRect, row) =>
+      val baseCellY        = math.floor(pixelRect.y / cellMetrics.lineHeight.toDouble).toInt
+      val offsetPx         = pixelRect.y - cellMetrics.toPixelY(baseCellY)
+      val rowOffset        = math.floor((pixelRect.y - geometry.frame.y) / cellMetrics.lineHeight).toInt
+      val (animFg, animBg) = rowColors(rowOffset)
+      surface.withPixelTranslation(0.0, offsetPx) {
+        renderRow(
+          surface,
+          contentRect.x,
+          baseCellY,
+          maxLineSize,
+          row,
+          theme,
+          cursorVisible,
+          defaultForeground = Some(animFg),
+          defaultBackground = Some(animBg),
+          font = font,
+          cellMetrics = cellMetrics
+        )
       }
+    }
 
   private def renderRow(
     surface: RenderSurface,

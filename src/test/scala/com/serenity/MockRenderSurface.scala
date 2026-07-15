@@ -13,6 +13,8 @@ import com.serenity.ui.theme.TextStyle
   * (x, y) position.
   */
 class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
+  case class PixelTranslationCall(xPx: Double, yPx: Double)
+  val pixelTranslationCalls = scala.collection.mutable.ListBuffer.empty[PixelTranslationCall]
   case class PutStringCall(x: Int, y: Int, s: String)
 
   private val chars                = Array.fill(height, width)(' ')
@@ -137,6 +139,10 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
     _height: Int,
     _arcPx: Int
   )(render: => Unit): Unit = render
+
+  override def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =
+    pixelTranslationCalls += PixelTranslationCall(xPx, yPx)
+    render
 
   override def setAlpha(alpha: Float): Unit =
     currentAlpha.set(alpha)

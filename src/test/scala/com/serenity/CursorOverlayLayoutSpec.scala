@@ -382,6 +382,33 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     runnerRect.y shouldBe toolbarRect.bottom + 2
   }
 
+  it should "preserve fractional cursor and contextual-toolbar stack placement in pixel offsets" in {
+    val cursor = CursorPosition(1, 2)
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    val state = baseState(cursor = cursor).copy(
+      config = AppState.initial.config
+        .withUiElementGap(0.25)
+        .withCommandRunnerCursorGapRows(Some(0.5)),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("contextual-toolbar"),
+          SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
+
+    layout.floatingOverlayOffsetRows(SurfaceId("contextual-toolbar")) shouldBe 0.25
+    layout.floatingOverlayOffsetRows(SurfaceId("command-runner")) shouldBe 0.5
+  }
+
   it should "keep command runner cursor and submenu stack gaps independent" in {
     val registry                               = com.serenity.command.CommandRegistry.default
     given com.serenity.command.CommandRegistry = registry
