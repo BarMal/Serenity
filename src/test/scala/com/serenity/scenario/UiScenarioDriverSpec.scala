@@ -7,7 +7,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.{MarkdownViewMode, MotionPreset}
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
-import com.serenity.state.models.{CursorPosition, Focus, PaneId, SurfaceContent}
+import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
