@@ -119,6 +119,24 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     compositionRoot should not include "StateManagerBehavior.this"
   }
 
+  it should "keep owner-local operations out of dependency-port graph edges" in {
+    val compositionRoot = Files.readString(
+      Path.of("src/main/scala/com/serenity/state/manager/StateManagerComposition.scala")
+    )
+
+    val effectFilePort = compositionRoot.slice(
+      compositionRoot.indexOf("private lazy val effectFilePort"),
+      compositionRoot.indexOf("private lazy val effectSessionPort")
+    )
+    val workflowPort = compositionRoot.slice(
+      compositionRoot.indexOf("private lazy val workflowPort"),
+      compositionRoot.indexOf("private lazy val surfacePort")
+    )
+
+    effectFilePort should not include "effects."
+    workflowPort should not include "workflow."
+  }
+
   "CommandEffectInterpreter" should "preserve declared effect order and propagate required failures" in {
     val program = for
       observed <- Ref.of[IO, List[String]](Nil)

@@ -71,13 +71,10 @@ private[manager] trait EffectSurfacePort:
   def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
   def applyAnimationHooks(previousState: AppState): IO[Unit]
 
-/** File capability calls used by command effects. */
+/** File infrastructure used by command effects. */
 private[manager] trait EffectFilePort:
   def fileDialog: com.serenity.io.FileDialog
   def fileManager: FileManager
-  def directLoadFileEffect(path: Path): IO[Unit]
-  def saveBufferEffect(bufferId: BufferId): IO[Unit]
-  def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit]
 
 /** Session persistence operations used by command effects. */
 private[manager] trait EffectSessionPort:
@@ -136,17 +133,6 @@ private[manager] trait WorkflowCapabilityPort:
   def ensureCommandRunnerSurface(state: AppState): AppState
   def saveBufferEffect(bufferId: BufferId): IO[Unit]
   def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit]
-  def clearCloseActions(state: AppState): AppState
-  def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]
-  def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit]
-  def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
-  def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
-  def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
-  def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
-  def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState
-  def createStartupSession(): IO[Unit]
-  def restoreStartupSession(): IO[Unit]
-  def activeEditorBufferId(state: AppState): Option[BufferId]
 
 /** State and analysis ownership required while routing editor events. */
 private[manager] trait EventStatePort:
@@ -261,12 +247,8 @@ private[manager] class StateManagerComposition(
       events.applyAnimationHooks(previousState)
 
   private lazy val effectFilePort: EffectFilePort = new EffectFilePort:
-    val fileDialog                                     = runtimeFileDialog
-    val fileManager                                    = runtimeFileManager
-    def directLoadFileEffect(path: Path): IO[Unit]     = effects.directLoadFileEffect(path)
-    def saveBufferEffect(bufferId: BufferId): IO[Unit] = effects.saveBufferEffect(bufferId)
-    def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
-      effects.saveBufferAsEffect(bufferId, path)
+    val fileDialog  = runtimeFileDialog
+    val fileManager = runtimeFileManager
 
   private lazy val effectSessionPort: EffectSessionPort = new EffectSessionPort:
     val sessionPersistence = runtimeSessionPersistence
@@ -336,24 +318,6 @@ private[manager] class StateManagerComposition(
     def saveBufferEffect(bufferId: BufferId): IO[Unit] = effects.saveBufferEffect(bufferId)
     def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
       effects.saveBufferAsEffect(bufferId, path)
-    def clearCloseActions(state: AppState): AppState = workflow.clearCloseActions(state)
-    def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
-      workflow.beginCloseAction(scope, state)
-    def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
-      workflow.requestSaveAsFileDialog(state, bufferIdOverride)
-    def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
-      workflow.refreshFileWorkflowEffect(surfaceId)
-    def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
-      workflow.submitFileWorkflowEffect(surfaceId)
-    def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
-      workflow.submitReplaceWorkflowEffect(surfaceId)
-    def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
-      workflow.submitCloseWorkflowEffect(surfaceId)
-    def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
-      workflow.restoreSessionIntoCurrentViewport(restoredState, currentState)
-    def createStartupSession(): IO[Unit]                        = workflow.createStartupSession()
-    def restoreStartupSession(): IO[Unit]                       = workflow.restoreStartupSession()
-    def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
 
   private lazy val surfacePort: SurfaceCapabilityPort = new SurfaceCapabilityPort:
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =

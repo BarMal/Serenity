@@ -20,7 +20,8 @@ are wired together. The former behavior stack is now assigned as follows:
 Allowed direction is façade → composition root → capability port → owning capability. Reducers
 remain pure; the event pipeline applies their resulting transition before sending each effect to
 the command-effect interpreter. A port may point only toward the owner of an operation, never back
-through the façade or an inherited sibling implementation.
+through the façade or an inherited sibling implementation. Owner-local operations are invoked
+directly and are never re-exported through the port that constructs their owner.
 
 Event processing applies a reducer result's state before interpreting its effects. Document-analysis
 replacement cancels the previous analysis fiber before starting a replacement. Failures in optional
