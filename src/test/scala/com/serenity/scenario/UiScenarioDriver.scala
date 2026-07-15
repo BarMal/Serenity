@@ -10,7 +10,6 @@ import com.serenity.command.Command
 import com.serenity.config.MarkdownViewMode
 import com.serenity.keystroke.events.{Event, MouseClick, ResizeEvent}
 import com.serenity.lsp.config.LanguageId
-import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -130,10 +129,16 @@ final class UiScenarioDriver private (
       surfaceRects = semantics.surfaceRects,
       itemRects = semantics.itemRects,
       visibleText = semantics.visibleText,
-      markdownMappings = markdownMappings(state),
+      markdownRows = markdownRows(state, contract),
       settled = !state.buffers.values.exists(_.animations.hasActiveAnimations) &&
         state.themeTransition.isEmpty && state.surfaceAnimations.isEmpty,
-      diagnostics = contract.violations.map(_.toString)
+      diagnostics = contract.violations.map(_.toString) ++ semantics.itemRects.toList.flatMap {
+        case (surfaceId, items) =>
+          items.collect {
+            case item if item.renderedRect != item.hitRect =>
+              s"surface=$surfaceId label=${item.label} rendered=${item.renderedRect} hit=${item.hitRect}"
+          }
+      }
     )
 
   private def semanticEvidence(
@@ -141,26 +146,88 @@ final class UiScenarioDriver private (
     layout: CalculatedLayout,
     contract: EditorLayoutContract
   ): SemanticEvidence =
-    state.uiSurfaces.foldLeft(SemanticEvidence.empty) { (evidence, surface) =>
-      surfaceRect(surface, layout)
-        .map { rect =>
-          val mode = surface.presentation match
-            case SurfacePresentation.Floating(_, _) => SurfaceRenderMode.Floating
-            case _                                  => SurfaceRenderMode.Pinned
-          val resolved =
-            SurfaceContentResolver.resolve(surface.content, rect, mode, state.config.commandRunnerItemGapRows)
-          val rows = rowSlots(surface.id, contract).zip(resolved.rows).map {
-            case (slot, row) =>
-              ScenarioItemRect(row.plainText, LayoutRect(rect.x, slot.y, rect.width, 1))
+    val renderedOverlays = OverlayViewModel.fromState(state, layout)
+    val overlays = renderedOverlays.aboveCursor.toList ++
+      (if renderedOverlays.belowCursorStack.nonEmpty then renderedOverlays.belowCursorStack
+       else renderedOverlays.belowCursor.toList)
+    overlays.foldLeft(SemanticEvidence.empty) { (evidence, overlay) =>
+      overlay.surfaceId
+        .map { surfaceId =>
+          val renderedSlots = overlay.contentRowSlots.collect {
+            case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) => index -> y
           }
+          val hitSlots = rowSlots(surfaceId, contract).collect {
+            case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) => index -> y
+          }.toMap
+          val rows = state
+            .surfaceById(surfaceId)
+            .flatMap {
+              _.content match
+                case SurfaceContent.ContextualToolbar(toolbarState) =>
+                  Some(contextualToolbarItemRects(state, toolbarState, overlay))
+                case _ => None
+            }
+            .getOrElse {
+              renderedSlots.flatMap {
+                case (index, y) =>
+                  overlay.rows.lift(index).map { row =>
+                    ScenarioItemRect(
+                      row.plainText,
+                      LayoutRect(overlay.resolvedContentRect.x, y, overlay.resolvedContentRect.width, 1),
+                      LayoutRect(
+                        contract.overlayContentRect(surfaceId).map(_.x).getOrElse(Int.MinValue),
+                        hitSlots.getOrElse(index, Int.MinValue),
+                        contract.overlayContentRect(surfaceId).map(_.width).getOrElse(0),
+                        1
+                      )
+                    )
+                  }
+              }
+            }
           evidence.copy(
-            surfaceRects = evidence.surfaceRects.updated(surface.id, rect),
-            itemRects = evidence.itemRects.updated(surface.id, rows),
-            visibleText = evidence.visibleText ++ resolved.header.toList.map(_.plainText) ++ resolved.rows
-              .map(_.plainText) ++ resolved.footer.toList.map(_.plainText)
+            surfaceRects = evidence.surfaceRects.updated(surfaceId, overlay.rect),
+            itemRects = evidence.itemRects.updated(surfaceId, rows),
+            visibleText = evidence.visibleText ++ overlay.header.toList.map(_.plainText) ++ overlay.rows
+              .map(_.plainText) ++ overlay.footer.toList.map(_.plainText)
           )
         }
         .getOrElse(evidence)
+    }
+
+  private def contextualToolbarItemRects(
+    state: AppState,
+    toolbarState: ContextualToolbarState,
+    overlay: TextOverlayView
+  ): List[ScenarioItemRect] =
+    val contentRect = overlay.resolvedContentRect
+    val items       = ContextualToolbar.itemsFor(state)
+    val groups      = ContextualToolbar.rowGroups(items, contentRect.width, toolbarState.displayMode)
+    groups.zipWithIndex.flatMap {
+      case (group, rowIndex) =>
+        val widths       = ContextualToolbar.itemCellWidths(group, contentRect.width, toolbarState.displayMode)
+        val globalOffset = groups.take(rowIndex).map(_.length).sum
+        group
+          .zip(widths)
+          .zipWithIndex
+          .foldLeft((contentRect.x, List.empty[ScenarioItemRect])) {
+            case ((x, evidence), ((item, width), localIndex)) =>
+              val globalIndex = globalOffset + localIndex
+              val hitColumns = (0 until contentRect.width).filter { column =>
+                ContextualToolbar
+                  .hitAt(rowIndex, column, contentRect.width, toolbarState, state)
+                  .contains(ContextualToolbarHit.TopLevelItem(globalIndex))
+              }
+              val hitRect = hitColumns.headOption
+                .map(first => LayoutRect(contentRect.x + first, contentRect.y + rowIndex, hitColumns.length, 1))
+                .getOrElse(LayoutRect(Int.MinValue, Int.MinValue, 0, 0))
+              val renderedRect = LayoutRect(x, contentRect.y + rowIndex, width, 1)
+              val separator = Option
+                .when(ContextualToolbar.hasTrailingGroupSeparator(item, group.lift(localIndex + 1)))(1)
+                .getOrElse(0)
+              val gap = Option.when(localIndex < group.length - 1)(1).getOrElse(0)
+              x + width + separator + gap -> (evidence :+ ScenarioItemRect(item.id, renderedRect, hitRect))
+          }
+          ._2
     }
 
   private def surfaceRect(surface: UiSurface, layout: CalculatedLayout): Option[LayoutRect] =
@@ -171,17 +238,16 @@ final class UiScenarioDriver private (
       case slot @ SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), _) => slot
     }
 
-  private def markdownMappings(state: AppState): Vector[MarkdownMapping] =
-    state.buffers.values.toVector.flatMap { buffer =>
-      Option
-        .when(buffer.language.contains(LanguageId.Markdown)) {
-          val source = buffer.content.collect().linesIterator.toVector
-          MarkdownDocumentPreview.renderInlineDocument(source).zipWithIndex.flatMap {
-            case (line, previewRow) =>
-              line.sourceLine.map(sourceLine => MarkdownMapping(sourceLine, previewRow, line.text))
-          }
-        }
-        .getOrElse(Vector.empty)
+  private def markdownRows(state: AppState, contract: EditorLayoutContract): Vector[Renderer.MarkdownLensRenderedRow] =
+    state.layout.editorPanes.toVector.flatMap {
+      case (paneId, pane) =>
+        for
+          paneLayout <- contract.workspace.paneLayouts.get(paneId).toVector
+          bufferId   <- pane.bufferId.toVector
+          buffer     <- state.buffers.get(bufferId).toVector
+          if buffer.language.contains(LanguageId.Markdown)
+          row <- Renderer.markdownLensRenderedRows(buffer, paneLayout.contentRect)
+        yield row
     }
 
   private def writeFrame(image: BufferedImage): IO[Option[Path]] =
@@ -194,9 +260,7 @@ final class UiScenarioDriver private (
 
 object UiScenarioDriver:
 
-  case class ScenarioItemRect(label: String, rect: LayoutRect)
-
-  case class MarkdownMapping(sourceLine: Int, previewRow: Int, text: String)
+  case class ScenarioItemRect(label: String, renderedRect: LayoutRect, hitRect: LayoutRect)
 
   case class ScenarioFrame(
       image: BufferedImage,
@@ -204,7 +268,7 @@ object UiScenarioDriver:
       surfaceRects: Map[SurfaceId, LayoutRect],
       itemRects: Map[SurfaceId, List[ScenarioItemRect]],
       visibleText: List[String],
-      markdownMappings: Vector[MarkdownMapping],
+      markdownRows: Vector[Renderer.MarkdownLensRenderedRow],
       settled: Boolean,
       diagnostics: List[String],
       diagnosticPng: Option[Path] = None

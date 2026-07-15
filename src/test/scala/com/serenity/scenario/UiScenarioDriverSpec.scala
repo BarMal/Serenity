@@ -7,7 +7,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.{MarkdownViewMode, MotionPreset}
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
-import com.serenity.state.models.{CursorPosition, Focus, PaneId}
+import com.serenity.state.models.{CursorPosition, Focus, PaneId, SurfaceContent}
 import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -28,7 +28,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     val frame = driver.render().unsafeRunSync()
 
     frame.activeFocus shouldBe Focus.EditorPane(PaneId(0))
-    frame.markdownMappings.find(_.sourceLine == 2).map(_.text) should contain("Paragraph after heading.")
+    frame.markdownRows.find(_.sourceLine == 2).map(_.text) should contain("Paragraph after heading.")
     val firstContentPixelRow = (0 until frame.image.getHeight)
       .find(row => (0 until frame.image.getWidth).exists(column => frame.image.getRGB(column, row) != 0))
       .getOrElse(fail("expected rendered Markdown pixels"))
@@ -48,13 +48,15 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     driver.configureBuffer(bufferId, Some(LanguageId.Markdown), MarkdownViewMode.InlineLens).unsafeRunSync()
     List(0, 2, 4, 7, 11).foreach { line =>
       driver.setCursor(PaneId(0), CursorPosition(line, 0)).unsafeRunSync()
-      val frame = driver.render().unsafeRunSync()
-      frame.markdownMappings.find(_.sourceLine == line) shouldBe defined
+      val frame    = driver.render().unsafeRunSync()
+      val rendered = frame.markdownRows.find(_.sourceLine == line).getOrElse(fail(s"rendered source line $line"))
+      rendered.screenRow should (be >= 0 and be < 12)
       frame.image.getWidth shouldBe driver.cellMetrics.charWidth * 80
     }
     driver.dispatch(ResizeEvent(ViewportSize(80, 8))).unsafeRunSync()
     driver.setCursor(PaneId(0), CursorPosition(11, 0)).unsafeRunSync()
-    driver.render().unsafeRunSync().markdownMappings.find(_.sourceLine == 11) shouldBe defined
+    val scrolled = driver.render().unsafeRunSync().markdownRows.find(_.sourceLine == 11).getOrElse(fail("code row"))
+    scrolled.screenRow should (be >= 0 and be < 8)
   }
 
   it should "expose matching command item geometry for rendered rows and mouse events" in {
@@ -64,12 +66,13 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     driver.dispatch(RunnerInsertChar('t')).unsafeRunSync()
     val frame = driver.render().unsafeRunSync()
     val item  = frame.itemRects.values.flatten.find(_.label.toLowerCase.contains("theme")).getOrElse(fail("theme item"))
+    item.renderedRect shouldBe item.hitRect
     val beforeRunner = driver.snapshot.unsafeRunSync().commandRunnerSurface.map(_.content)
 
-    driver.click(item.rect.x, item.rect.y).unsafeRunSync()
+    driver.click(item.hitRect.x, item.hitRect.y).unsafeRunSync()
     val afterClick = driver.snapshot.unsafeRunSync()
     afterClick.commandRunnerSurface.map(_.content) should not be beforeRunner
-    driver.render().unsafeRunSync().surfaceRects.values.exists(_.contains(item.rect.x, item.rect.y)) shouldBe true
+    driver.render().unsafeRunSync().surfaceRects.values.exists(_.contains(item.hitRect.x, item.hitRect.y)) shouldBe true
   }
 
   it should "settle animation ticks without wall-clock timing and retain diagnostics on request" in {
@@ -85,32 +88,43 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep contextual toolbar geometry compact while returning editor focus after toolbar interaction" in {
-    val driver = UiScenarioDriver.create(viewport = ViewportSize(48, 20)).unsafeRunSync()
-    driver.dispatch(ResizeEvent(ViewportSize(48, 20))).unsafeRunSync()
+    val driver   = UiScenarioDriver.create(viewport = ViewportSize(18, 20)).unsafeRunSync()
+    val bufferId = driver.createBuffer("# Toolbar").unsafeRunSync()
+    driver.configureBuffer(bufferId, Some(LanguageId.Markdown), MarkdownViewMode.Source).unsafeRunSync()
     driver.dispatch(ToggleContextualToolbar).unsafeRunSync()
 
     val state   = driver.snapshot.unsafeRunSync()
     val toolbar = state.contextualToolbarSurface.getOrElse(fail("toolbar surface"))
     state.focus shouldBe Focus.EditorPane(PaneId(0))
     val frame = driver.render().unsafeRunSync()
-    frame.surfaceRects(toolbar.id).width should be < 48
-    driver.dispatch(InsertChar('x')).unsafeRunSync()
-    driver.snapshot.unsafeRunSync().focus shouldBe Focus.EditorPane(PaneId(0))
+    frame.surfaceRects(toolbar.id).width should be < 18
+    val toolbarRows = frame.itemRects(toolbar.id)
+    toolbarRows.map(_.renderedRect.y).distinct.size should be > 1
+    toolbarRows.foreach(item => item.renderedRect shouldBe item.hitRect)
+    val previewRow = toolbarRows.find(_.label == "markdown-preview").getOrElse(fail("preview button"))
+    driver.click(previewRow.hitRect.x, previewRow.hitRect.y).unsafeRunSync()
+    val clickedState = driver.snapshot.unsafeRunSync()
+    clickedState.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.MarkdownPreview]) shouldBe true
+    clickedState.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "settle interrupted motion and honour reduced motion without wall-clock time" in {
     val driver = UiScenarioDriver.create().unsafeRunSync()
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     driver.advanceUntilSettled(1).unsafeRunSync() shouldBe false
+    val openingRect = driver.render().unsafeRunSync().surfaceRects.values.head
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     driver.advanceUntilSettled().unsafeRunSync() shouldBe true
+    driver.render().unsafeRunSync().surfaceRects shouldBe empty
 
     driver
       .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Reduced)))
       .unsafeRunSync()
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     driver.advanceUntilSettled().unsafeRunSync() shouldBe true
-    driver.render().unsafeRunSync().settled shouldBe true
+    val settledFrame = driver.render().unsafeRunSync()
+    settledFrame.settled shouldBe true
+    settledFrame.surfaceRects.values.head shouldBe openingRect
   }
 
   it should "close and reopen the command runner after nested settings navigation" in {

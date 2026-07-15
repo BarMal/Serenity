@@ -37,6 +37,17 @@ case class RenderContext(
 
 object Renderer:
 
+  enum MarkdownLensRowKind:
+    case Preview, SourceLens
+
+  case class MarkdownLensRenderedRow(
+      sourceLine: Int,
+      previewRow: Int,
+      screenRow: Int,
+      text: String,
+      kind: MarkdownLensRowKind
+  )
+
   private case class EditorPaneRenderPlan(
       workspaceLayout: EditorWorkspaceLayout,
       layoutContract: EditorLayoutContract,
@@ -949,6 +960,56 @@ object Renderer:
 
   private def markdownPreviewSourceLineLimit(visibleRows: Int): Int =
     math.max(MinMarkdownPreviewSourceLines, visibleRows.max(1) * MarkdownPreviewOverscanFactor)
+
+  /** Returns the source/preview geometry used by inline-lens rendering for scenario diagnostics. */
+  def markdownLensRenderedRows(buffer: Buffer, contentRect: LayoutRect): Vector[MarkdownLensRenderedRow] =
+    val frame       = markdownLensFrameFor(buffer)
+    val window      = frame.previewWindow
+    val activeRange = buffer.cursors.headOption.map(cursor => MarkdownBlockLens.currentBlock(frame.lines, cursor.line))
+    val previewRows = MarkdownDocumentPreview.renderInlineDocument(frame.lines).zipWithIndex.flatMap {
+      case (line, previewRow) =>
+        line.sourceLine.flatMap { sourceLine =>
+          val screenRow = previewRow - window.firstPreviewRow
+          Option.when(
+            sourceLine >= window.firstSourceLine &&
+              sourceLine < window.firstSourceLine + window.source.linesIterator.length &&
+              screenRow >= 0 && screenRow < contentRect.height &&
+              !activeRange.exists(_.contains(sourceLine))
+          )(
+            MarkdownLensRenderedRow(
+              sourceLine,
+              previewRow,
+              contentRect.y + screenRow,
+              line.text,
+              MarkdownLensRowKind.Preview
+            )
+          )
+        }
+    }
+    val sourceLensRows = activeRange.toVector.flatMap { range =>
+      val visualRows = range.toVector.zipWithIndex
+      val placement = markdownLensPlacement(
+        range,
+        visualRows.map {
+          case (line, _) =>
+            TextVisualLine(line, 0, frame.lines(line).length, frame.lines(line), 0.0f, Vector.empty)
+        },
+        contentRect.height,
+        frame.lines,
+        window
+      )
+      visualRows.map {
+        case (sourceLine, offset) =>
+          MarkdownLensRenderedRow(
+            sourceLine,
+            MarkdownDocumentPreview.previewRowForSourceLine(frame.lines, sourceLine).getOrElse(sourceLine),
+            contentRect.y + placement.top + offset,
+            frame.lines(sourceLine),
+            MarkdownLensRowKind.SourceLens
+          )
+      }
+    }
+    (previewRows ++ sourceLensRows).sortBy(row => (row.screenRow, row.sourceLine))
 
   private def activeMarkdownBlockRanges(lines: Vector[String], cursors: List[CursorPosition]): List[Range.Inclusive] =
     cursors
