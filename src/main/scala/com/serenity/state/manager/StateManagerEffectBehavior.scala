@@ -44,6 +44,17 @@ final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
       case WorkflowEffect.SubmitReplaceWorkflow(id) => port.submitReplace(id)
       case WorkflowEffect.SubmitCloseWorkflow(id)   => port.submitClose(id)
 
+/** Lifecycle operation required by lifecycle effects. */
+private[manager] trait LifecycleEffectPort:
+  def completeQuit: IO[Unit]
+
+/** Interprets lifecycle effects without runtime, editor, or workflow dependencies. */
+final private[manager] class LifecycleEffectHandler(port: LifecycleEffectPort):
+
+  def interpret(effect: LifecycleEffect): IO[Unit] =
+    effect match
+      case LifecycleEffect.CompleteQuit => port.completeQuit
+
 final private[manager] class StateManagerEffectHandlers(
     runtime: EffectRuntimePort,
     editor: EffectEditorPort,
@@ -70,6 +81,11 @@ final private[manager] class StateManagerEffectHandlers(
     def submitReplace(surfaceId: SurfaceId): IO[Unit] = submitReplaceWorkflowEffect(surfaceId)
     def submitClose(surfaceId: SurfaceId): IO[Unit]   = submitCloseWorkflowEffect(surfaceId))
 
+  private val lifecycleEffects = new LifecycleEffectHandler(
+    new LifecycleEffectPort:
+      def completeQuit: IO[Unit] = quitSignal.complete(()).attempt.void
+  )
+
   private[manager] val behavior = new CommandEffectInterpreter(
     CommandEffectInterpreter.Dependencies(
       interpretLifecycleEffect,
@@ -87,9 +103,7 @@ final private[manager] class StateManagerEffectHandlers(
     behavior.interpret(effect)
 
   private def interpretLifecycleEffect(effect: LifecycleEffect): IO[Unit] =
-    effect match
-      case LifecycleEffect.CompleteQuit =>
-        quitSignal.complete(()).attempt.void
+    lifecycleEffects.interpret(effect)
 
   private def interpretCommandEffect(effect: CommandEffect): IO[Unit] =
     effect match
