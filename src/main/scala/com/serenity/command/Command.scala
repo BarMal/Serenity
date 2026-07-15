@@ -163,6 +163,7 @@ enum CommandIntent:
   case SetUiLigatures(enabled: Boolean)
   case SaveUiPreset(name: String)
   case ApplyUiPreset(name: String)
+  case DiscardUiPresetDraft(name: String)
   case DuplicateUiPreset(sourceName: String, targetName: String)
   case RenameUiPreset(sourceName: String, targetName: String)
   case DeleteUiPreset(name: String)

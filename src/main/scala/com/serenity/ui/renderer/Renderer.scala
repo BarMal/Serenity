@@ -54,6 +54,9 @@ object Renderer:
   /** Semantic inline-lens frame evidence used by deterministic scenario assertions. */
   case class MarkdownLensEvidence(rows: Vector[MarkdownLensRenderedRow], lenses: Vector[MarkdownLensRect])
 
+  private object MarkdownLensEvidence:
+    val empty: MarkdownLensEvidence = MarkdownLensEvidence(Vector.empty, Vector.empty)
+
   private case class EditorPaneRenderPlan(
       workspaceLayout: EditorWorkspaceLayout,
       layoutContract: EditorLayoutContract,
@@ -91,7 +94,7 @@ object Renderer:
     val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, codeFont, swingWin.canvas, publishFrame)
     val viewportSize = swingWin.viewportSize
     val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
-    renderFrame(
+    val _ = renderFrame(
       state0,
       cursorVisible,
       surface,
@@ -147,7 +150,7 @@ object Renderer:
     textFont: java.awt.Font,
     cellMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color]
-  ): Unit =
+  ): MarkdownLensEvidence =
     val defaultUiFont = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
     render(
       state,
@@ -173,7 +176,8 @@ object Renderer:
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color]
-  ): Unit =
+  ): MarkdownLensEvidence =
+    // This evidence is derived from and consumed by the same render plan that draws the source lens.
     val state0 = withEffectiveTheme(state)
     val layout = LayoutEngine.calculateLayout(state0, viewportSize)
     renderFrame(
@@ -196,7 +200,7 @@ object Renderer:
     surface: RenderSurface,
     viewportSize: ViewportSize,
     cursorColor: Option[java.awt.Color] = None
-  ): Unit =
+  ): MarkdownLensEvidence =
     val defaultFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
     render(
       state,
@@ -221,11 +225,11 @@ object Renderer:
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color]
-  ): Unit =
+  ): MarkdownLensEvidence =
     surface.hideCursor()
     surface.clearViewport(state.theme.background)
 
-    state.startPageSurface.flatMap {
+    val markdownLensEvidence = state.startPageSurface.flatMap {
       _.content match
         case SurfaceContent.StartPage(page) => Some(page)
         case _                              => None
@@ -235,6 +239,7 @@ object Renderer:
         val floatContext =
           RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
         renderFloatingPanels(state, floatContext)
+        MarkdownLensEvidence.empty
       case None =>
         val context =
           RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
@@ -243,11 +248,13 @@ object Renderer:
         renderLineNumbers(state, context, editorRenderPlan)
         renderGutter(state, context, editorRenderPlan.layoutContract)
         renderPinnedPanels(state, context)
-        renderEditorPanes(state, context, editorRenderPlan)
+        val evidence = renderEditorPanes(state, context, editorRenderPlan)
         renderFloatingPanels(state, context)
+        evidence
 
     surface.applyPostProcessing(state.config.postProcessingEffect)
     surface.flush()
+    markdownLensEvidence
 
   private def renderSpacerColumns(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     val surface = context.surface
@@ -346,26 +353,33 @@ object Renderer:
 
       viewport.leftColumn.max(0).min(maxForCursor).min(maxForLine)
 
-  private def renderEditorPanes(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
+  private def renderEditorPanes(
+    state: AppState,
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan
+  ): MarkdownLensEvidence =
     val activePaneId = state.layout.activeEditorPaneId
     val orderedPanes =
       state.layout.orderedPaneIds
         .flatMap(paneId => state.layout.editorPanes.get(paneId).map(paneId -> _))
         .sortBy((paneId, _) => if activePaneId.contains(paneId) then 1 else 0)
 
-    orderedPanes.foreach { (paneId, pane) =>
+    val evidence = orderedPanes.flatMap { (paneId, pane) =>
       renderPlan.paneLayouts.get(paneId) match
         case Some(paneLayout) =>
-          renderEditorPane(
-            pane,
-            paneLayout,
-            state,
-            context,
-            renderPlan.snapshots.get(paneId),
-            renderPlan.layoutContract
+          Some(
+            renderEditorPane(
+              pane,
+              paneLayout,
+              state,
+              context,
+              renderPlan.snapshots.get(paneId),
+              renderPlan.layoutContract
+            )
           )
-        case None => ()
+        case None => None
     }
+    MarkdownLensEvidence(evidence.flatMap(_.rows).toVector, evidence.flatMap(_.lenses).toVector)
 
   private def renderEditorCursors(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
     val activePaneId = state.layout.activeEditorPaneId
@@ -390,7 +404,7 @@ object Renderer:
     context: RenderContext,
     preparedSnapshot: Option[TextLayoutSnapshot],
     contract: EditorLayoutContract
-  ): Unit =
+  ): MarkdownLensEvidence =
     val buffer = pane.bufferId.flatMap(state.buffers.get)
 
     renderBufferHeader(pane, buffer, paneLayout, state, context, contract)
@@ -404,15 +418,18 @@ object Renderer:
         case buf if isInlineMarkdownLens(buf, state) => markdownLensFrameFor(buf)
       }
 
-    buffer match
+    val markdownLensEvidence = buffer match
       case Some(buf) if buf.content.weight == 0 && buf.isNewEmpty =>
         renderWelcomeText(contentRect, state.theme, context)
+        MarkdownLensEvidence.empty
       case Some(buf) if buf.content.weight == 0 =>
         renderEmptyPane(contentRect, state.theme, context)
+        MarkdownLensEvidence.empty
       case Some(buf) =>
         renderBufferContent(buf, contentRect, state, context, bufferSnapshot.get, markdownLensFrame)
       case None =>
         renderEmptyPane(contentRect, state.theme, context)
+        MarkdownLensEvidence.empty
 
     val cursorContext =
       if state.hasCommandRunnerDomain then context.copy(cursorVisible = true)
@@ -430,6 +447,7 @@ object Renderer:
         )
       else renderCursors(buf, contentRect, state.theme, state.config, cursorContext, bufferSnapshot.get)
     }
+    markdownLensEvidence
 
   private def renderBufferHeader(
     pane: EditorPane,
@@ -516,13 +534,17 @@ object Renderer:
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
     markdownLensFrame: Option[MarkdownLensFrame]
-  ): Unit =
+  ): MarkdownLensEvidence =
     context.surface.setFont(context.fontForBuffer(buffer))
     if isInlineMarkdownLens(buffer, state) then
-      val frame = markdownLensFrame.getOrElse(markdownLensFrameFor(buffer))
+      val frame    = markdownLensFrame.getOrElse(markdownLensFrameFor(buffer))
+      val evidence = markdownLensEvidence(buffer, rect, snapshot, frame)
       renderInlineMarkdownPreview(buffer, rect, state, context, frame)
-      renderMarkdownRawLenses(buffer, rect, state, context, snapshot, frame)
-    else renderPlainBufferContent(buffer, rect, state, context, snapshot)
+      renderMarkdownRawLenses(buffer, rect, state, context, snapshot, evidence)
+      evidence
+    else
+      renderPlainBufferContent(buffer, rect, state, context, snapshot)
+      MarkdownLensEvidence.empty
 
   private def renderPlainBufferContent(
     buffer: Buffer,
@@ -967,15 +989,15 @@ object Renderer:
   private def markdownPreviewSourceLineLimit(visibleRows: Int): Int =
     math.max(MinMarkdownPreviewSourceLines, visibleRows.max(1) * MarkdownPreviewOverscanFactor)
 
-  /** Returns the source/preview geometry used by inline-lens rendering for scenario diagnostics. */
-  def markdownLensEvidence(
+  /** Produces the source/preview geometry consumed by inline-lens rendering. */
+  private def markdownLensEvidence(
     buffer: Buffer,
     contentRect: LayoutRect,
-    snapshot: TextLayoutSnapshot
+    snapshot: TextLayoutSnapshot,
+    frame: MarkdownLensFrame
   ): MarkdownLensEvidence =
-    val frame       = markdownLensFrameFor(buffer)
-    val window      = frame.previewWindow
-    val activeRange = buffer.cursors.headOption.map(cursor => MarkdownBlockLens.currentBlock(frame.lines, cursor.line))
+    val window       = frame.previewWindow
+    val activeRanges = activeMarkdownBlockRanges(frame.lines, buffer.cursors)
     val previewRows = MarkdownDocumentPreview.renderInlineDocument(frame.lines).zipWithIndex.flatMap {
       case (line, previewRow) =>
         line.sourceLine.flatMap { sourceLine =>
@@ -984,7 +1006,7 @@ object Renderer:
             sourceLine >= window.firstSourceLine &&
               sourceLine < window.firstSourceLine + window.source.linesIterator.length &&
               screenRow >= 0 && screenRow < contentRect.height &&
-              !activeRange.exists(_.contains(sourceLine))
+              !activeRanges.exists(_.contains(sourceLine))
           )(
             MarkdownLensRenderedRow(
               sourceLine,
@@ -996,7 +1018,7 @@ object Renderer:
           )
         }
     }
-    val sourceLensRowsAndRects = activeRange.toVector.map { range =>
+    val sourceLensRowsAndRects = activeRanges.map { range =>
       val visualRows = snapshot.visualLines.filter(line => range.contains(line.bufferLine))
       val placement = markdownLensPlacement(
         range,
@@ -1024,7 +1046,7 @@ object Renderer:
     }
     MarkdownLensEvidence(
       (previewRows ++ sourceLensRowsAndRects.flatMap(_._1)).sortBy(row => (row.screenRow, row.sourceLine)),
-      sourceLensRowsAndRects.map(_._2)
+      sourceLensRowsAndRects.map(_._2).toVector
     )
 
   private def activeMarkdownBlockRanges(lines: Vector[String], cursors: List[CursorPosition]): List[Range.Inclusive] =
@@ -1042,24 +1064,14 @@ object Renderer:
     state: AppState,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
-    frame: MarkdownLensFrame
+    evidence: MarkdownLensEvidence
   ): Unit =
-    val lines         = frame.lines
-    val previewWindow = frame.previewWindow
-    activeMarkdownBlockRanges(lines, buffer.cursors).foreach { blockRange =>
-      val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
+    evidence.lenses.foreach { lens =>
+      val blockVisualLines = snapshot.visualLines.filter(line => lens.sourceRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
-        val placement =
-          markdownLensPlacement(
-            blockRange,
-            blockVisualLines,
-            rect.height,
-            lines,
-            previewWindow
-          )
-        val lensY = rect.y + placement.top
+        val lensY = lens.rect.y
         context.surface.setBackgroundColor(state.theme.panel.background)
-        context.surface.fillRect(rect.x, lensY, rect.width, placement.height, ' ')
+        context.surface.fillRect(rect.x, lensY, rect.width, lens.rect.height, ' ')
         blockVisualLines.zipWithIndex.foreach {
           case (visualLine, index) =>
             val screenY = lensY + index

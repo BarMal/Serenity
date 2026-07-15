@@ -133,6 +133,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     groupById(groups, "settings-preset-actions").children.map(_.id) shouldBe List(
       "ui-preset-save",
       "ui-preset-apply",
+      "ui-preset-discard",
       "ui-preset-duplicate",
       "ui-preset-delete",
       "ui-preset-reset"
@@ -144,6 +145,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     editGroup.label shouldBe "Edit Preset: Review"
     presetInputs("ui-preset-save") shouldBe "Review"
     presetInputs("ui-preset-apply") shouldBe "Review"
+    presetInputs("ui-preset-discard") shouldBe "Review"
     presetInputs("ui-preset-duplicate") shouldBe "Review -> "
     presetInputs("ui-preset-rename") shouldBe "Review -> "
     presetInputs("ui-preset-delete") shouldBe "Review"

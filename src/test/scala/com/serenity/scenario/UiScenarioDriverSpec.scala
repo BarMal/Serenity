@@ -204,6 +204,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     val driver  = UiScenarioDriver.create(sessionRootOverride = Some(root)).unsafeRunSync()
     val save    = scenarioCommand("save-preview", CommandIntent.SaveUiPreset("Restartable"))
     val apply   = scenarioCommand("apply-preview", CommandIntent.ApplyUiPreset("Restartable"))
+    val discard = scenarioCommand("discard-draft", CommandIntent.DiscardUiPresetDraft("Restartable"))
     val missing = scenarioCommand("missing-preview", CommandIntent.ApplyUiPreset("Unavailable"))
 
     driver.execute(save).unsafeRunSync()
@@ -213,15 +214,20 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
         case SurfaceContent.CommandPalette(runner) => Some(runner.uiPresetPreviews.map(_.name))
         case _                                     => None
     } should contain(List("Restartable"))
+    val savedLineNumbers = driver.snapshot.unsafeRunSync().config.showLineNumbers
     driver.execute(scenarioCommand("draft-change", CommandIntent.ToggleLineNumbers)).unsafeRunSync()
-    driver.execute(apply).unsafeRunSync()
-    val restored = driver.snapshot.unsafeRunSync().config.showLineNumbers
+    driver.snapshot.unsafeRunSync().config.showLineNumbers should not be savedLineNumbers
+    driver.execute(discard).unsafeRunSync()
+    driver.snapshot.unsafeRunSync().config.showLineNumbers shouldBe savedLineNumbers
     driver.execute(missing).unsafeRunSync()
-    driver.snapshot.unsafeRunSync().config.showLineNumbers shouldBe restored
+    driver.snapshot.unsafeRunSync().config.showLineNumbers shouldBe savedLineNumbers
 
     val restarted = UiScenarioDriver.create(sessionRootOverride = Some(root)).unsafeRunSync()
     restarted.execute(apply).unsafeRunSync()
-    restarted.snapshot.unsafeRunSync().config.showLineNumbers shouldBe restored
+    restarted.execute(scenarioCommand("restart-draft-change", CommandIntent.ToggleLineNumbers)).unsafeRunSync()
+    restarted.snapshot.unsafeRunSync().config.showLineNumbers should not be savedLineNumbers
+    restarted.execute(discard).unsafeRunSync()
+    restarted.snapshot.unsafeRunSync().config.showLineNumbers shouldBe savedLineNumbers
   }
 
   it should "drive toolbar dropdown and decimal input controls before returning focus to the editor" in {
@@ -292,23 +298,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
   it should "edit command spacing through the nested settings runner" in {
     val driver = UiScenarioDriver.create().unsafeRunSync()
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
-    driver
-      .updateState { state =>
-        val runner = state.commandRunnerSurface
-          .flatMap {
-            _.content match
-              case SurfaceContent.CommandPalette(value) =>
-                Some(value.copy(activeCategory = CommandCategory.Settings, selectedIndex = 0))
-              case _ => None
-          }
-          .getOrElse(fail("command runner"))
-        state.copy(uiSurfaces = state.uiSurfaces.map {
-          case surface if state.commandRunnerSurface.exists(_.id == surface.id) =>
-            surface.copy(content = SurfaceContent.CommandPalette(runner))
-          case surface => surface
-        })
-      }
-      .unsafeRunSync()
+    enterRunnerCategory(driver, CommandCategory.Settings)
     moveRunnerTo(driver, "settings-appearance-motion")
     driver.dispatch(RunnerSubmit).unsafeRunSync()
     moveRunnerSubmenuTo(driver, "settings-interface-layout")
@@ -363,6 +353,21 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     (0 until runner.visibleItems.indexWhere(_.id == itemId)).foreach(_ =>
       driver.dispatch(RunnerNavigate(Direction.Down)).unsafeRunSync()
     )
+
+  private def enterRunnerCategory(driver: UiScenarioDriver, category: CommandCategory): Unit =
+    val activeCategory = driver.snapshot
+      .unsafeRunSync()
+      .commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(runner) => Some(runner.activeCategory)
+          case _                                     => None
+      }
+      .getOrElse(fail("command runner"))
+    val categories = CommandCategory.values.toList
+    (0 until ((categories
+      .indexOf(category) - categories.indexOf(activeCategory) + categories.length) % categories.length))
+      .foreach(_ => driver.dispatch(RunnerNextCategory).unsafeRunSync())
 
   private def moveRunnerSubmenuTo(driver: UiScenarioDriver, itemId: String): Unit =
     val runner = driver.snapshot

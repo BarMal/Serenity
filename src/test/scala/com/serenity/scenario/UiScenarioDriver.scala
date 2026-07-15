@@ -108,7 +108,7 @@ final class UiScenarioDriver private (
       deviceScale,
       deviceScale
     )
-    Renderer.render(
+    val markdownFrameEvidence = Renderer.render(
       state,
       cursorVisible = true,
       surface,
@@ -120,10 +120,9 @@ final class UiScenarioDriver private (
       cellMetrics,
       None
     )
-    val layout                = LayoutEngine.calculateLayout(state, viewport)
-    val contract              = EditorLayoutContract.from(state, viewport, layout)
-    val markdownFrameEvidence = markdownEvidence(state, contract)
-    val semantics             = semanticEvidence(state, layout, contract)
+    val layout    = LayoutEngine.calculateLayout(state, viewport)
+    val contract  = EditorLayoutContract.from(state, viewport, layout)
+    val semantics = semanticEvidence(state, layout, contract)
     ScenarioFrame(
       image = image,
       activeFocus = state.focus,
@@ -239,29 +238,6 @@ final class UiScenarioDriver private (
     (contract.panelRowSlots(surfaceId) ++ contract.overlayRowSlots(surfaceId)).collect {
       case slot @ SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), _) => slot
     }
-
-  private def markdownEvidence(state: AppState, contract: EditorLayoutContract): Renderer.MarkdownLensEvidence =
-    val evidence =
-      state.layout.editorPanes.toVector.flatMap {
-        case (paneId, pane) =>
-          for
-            paneLayout <- contract.workspace.paneLayouts.get(paneId).toVector
-            bufferId   <- pane.bufferId.toVector
-            buffer     <- state.buffers.get(bufferId).toVector
-            if buffer.language.contains(LanguageId.Markdown)
-          yield
-            val viewport =
-              LayoutEngine.updateBufferViewportDimensions(buffer, paneLayout.contentRect, state.config.wordWrapEnabled)
-            val snapshot = TextLayoutSnapshot.fromBuffer(
-              buffer.copy(viewport = viewport),
-              paneLayout.contentRect.width * cellMetrics.charWidth,
-              textFont,
-              TextLayoutSnapshot.defaultFontRenderContext(),
-              wordWrapEnabled = state.config.wordWrapEnabled
-            )
-            Renderer.markdownLensEvidence(buffer, paneLayout.contentRect, snapshot)
-      }
-    Renderer.MarkdownLensEvidence(evidence.flatMap(_.rows), evidence.flatMap(_.lenses))
 
   private def writeFrame(image: BufferedImage): IO[Option[Path]] =
     IO.blocking {

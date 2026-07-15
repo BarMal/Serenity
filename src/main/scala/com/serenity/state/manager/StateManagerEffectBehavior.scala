@@ -590,6 +590,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         saveUiPresetEffect(name)
       case CommandIntent.ApplyUiPreset(name) =>
         applyUiPresetEffect(name)
+      case CommandIntent.DiscardUiPresetDraft(name) =>
+        discardUiPresetDraftEffect(name)
       case CommandIntent.DuplicateUiPreset(sourceName, targetName) =>
         duplicateUiPresetEffect(sourceName, targetName)
       case CommandIntent.RenameUiPreset(sourceName, targetName) =>
@@ -881,6 +883,14 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
               yield ()
           }
           .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to apply UI preset $presetName"))
+
+  protected def discardUiPresetDraftEffect(name: String): IO[Unit] =
+    normalizedPresetName(name) match
+      case Some(presetName) =>
+        applyUiPresetEffect(presetName) >>
+          updateCommandRunnerPresetContext(Some(presetName), s"Draft discarded. Restored $presetName.")
+      case None =>
+        logger.warn("[PRESET] Ignoring draft discard request with empty UI preset name")
 
   private def applyPresetDocumentModeToActiveEmptyBuffer(state: AppState, mode: DefaultDocumentMode): AppState =
     state.focusedBufferId.flatMap(state.buffers.get) match

@@ -124,6 +124,16 @@ object CommandRunnerSettingsInputItems:
         acceptsFreeText = true
       ),
       CommandSurfaceItem.InputItem(
+        id = "ui-preset-discard",
+        label = "Discard Preset Draft",
+        hint = "Preset name",
+        currentValue = "",
+        isDecimal = false,
+        parse = text => nonEmptyText(text).map(CommandIntent.DiscardUiPresetDraft(_)),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
         id = "ui-preset-duplicate",
         label = "Duplicate Preset",
         hint = "Source -> Copy",
