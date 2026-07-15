@@ -279,6 +279,33 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     MarkdownDocumentPreview.lineHeightForDeviceScale(18, 2.0) shouldBe 36
   }
 
+  it should "size inline lens typography from the editor row height before device scaling" in {
+    val font = Font(Font.SANS_SERIF, Font.PLAIN, 10)
+
+    MarkdownDocumentPreview.inlineLensFont(font, lineHeightPx = 18, deviceScale = 2.0).getSize2D shouldBe 28.8f
+  }
+
+  it should "render inline lens source from the same preview rows used for source alignment" in {
+    val lines = Vector(
+      "Before",
+      "| Task | Owner |",
+      "| ---- | ----- |",
+      "| Ship | Codex |",
+      "After"
+    )
+
+    MarkdownDocumentPreview
+      .inlinePreviewSource(lines, firstSourceLine = 1, maxSourceLines = 3)
+      .split("\\n")
+      .toVector shouldBe Vector(
+      "┌──────┬───────┐",
+      "│ Task │ Owner │",
+      "├──────┼───────┤",
+      "│ Ship │ Codex │",
+      "└──────┴───────┘"
+    )
+  }
+
   it should "fill the full split preview image with the panel background" in {
     val theme = Theme.default.copy(
       background = Color(10, 20, 30),

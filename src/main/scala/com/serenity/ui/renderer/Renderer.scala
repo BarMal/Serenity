@@ -710,9 +710,13 @@ object Renderer:
       scaledImagePixelDimension(rect.width * context.cellMetrics.charWidth, context.surface.devicePixelScaleX)
     val heightPx =
       scaledImagePixelDimension(rect.height * context.cellMetrics.lineHeight, context.surface.devicePixelScaleY)
-    val previewFont = MarkdownDocumentPreview.fontForDeviceScale(context.textFont, context.surface.devicePixelScaleY)
-    val baseUri     = buffer.filePath.flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
-    val title       = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
+    val previewFont = MarkdownDocumentPreview.inlineLensFont(
+      context.textFont,
+      context.cellMetrics.lineHeight,
+      context.surface.devicePixelScaleY
+    )
+    val baseUri = buffer.filePath.flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
+    val title   = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
     val image = MarkdownDocumentPreview.renderImage(
       source = previewWindow.source,
       title = title,
@@ -939,7 +943,7 @@ object Renderer:
         firstSourceLine = firstSourceLine,
         firstPreviewRow =
           MarkdownDocumentPreview.previewRowForSourceLine(lines, firstSourceLine).getOrElse(firstSourceLine),
-        source = lines.slice(firstSourceLine, (firstSourceLine + maxSourceLines).min(lines.length)).mkString("\n")
+        source = MarkdownDocumentPreview.inlinePreviewSource(lines, firstSourceLine, maxSourceLines)
       )
 
   private def markdownPreviewSourceLineLimit(visibleRows: Int): Int =

@@ -36,6 +36,11 @@ object MarkdownDocumentPreview:
   private[serenity] def lineHeightForDeviceScale(lineHeightPx: Int, deviceScale: Double): Int =
     math.ceil(lineHeightPx.max(1).toDouble * deviceScale.max(1.0)).toInt.max(1)
 
+  /** Sizes inline lens text to remain readable within an editor row before rendering at device scale. */
+  private[serenity] def inlineLensFont(font: Font, lineHeightPx: Int, deviceScale: Double): Font =
+    val readableFontSize = math.max(font.getSize2D.toDouble, lineHeightPx.max(1).toDouble * 0.8).toFloat
+    fontForDeviceScale(font.deriveFont(readableFontSize), deviceScale)
+
   private val MaxCachedImages          = 24
   private val MaxCachedHtmlFragments   = 48
   private val MaxCachedInlineDocuments = 32
@@ -252,6 +257,23 @@ object MarkdownDocumentPreview:
         Some(first to last)
       case _ =>
         None
+
+  /** Produces the inline preview rows corresponding to a source window.
+    *
+    * The lens image and raw-source placement both use this row representation, including expanded table chrome.
+    */
+  private[serenity] def inlinePreviewSource(
+    sourceLines: Vector[String],
+    firstSourceLine: Int,
+    maxSourceLines: Int
+  ): String =
+    if sourceLines.isEmpty then ""
+    else
+      val start       = firstSourceLine.max(0).min(sourceLines.length - 1)
+      val end         = (start + maxSourceLines.max(1) - 1).min(sourceLines.length - 1)
+      val sourceRange = start to end
+      val previewRows = previewRowsForSourceRange(sourceLines, sourceRange).getOrElse(sourceRange)
+      renderInlineDocument(sourceLines).slice(previewRows.start, previewRows.end + 1).map(_.text).mkString("\n")
 
   private def inlinePreviewIndex(sourceLines: Vector[String]): InlinePreviewIndex =
     val key = InlineDocumentCacheKey(SourceLinesFingerprint.from(sourceLines))
