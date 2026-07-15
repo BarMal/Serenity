@@ -205,7 +205,7 @@ private[manager] class StateManagerComposition(
   private val runtimeFileManager              = fileManager
   private val runtimeSessionPersistence       = sessionPersistence
 
-  private lazy val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
+  private val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
     val stateRef                = runtimeStateRef
     val themeNamesRef           = runtimeThemeNamesRef
     val quitSignal              = runtimeQuitSignal
@@ -218,7 +218,7 @@ private[manager] class StateManagerComposition(
     val uiPresetStore           = runtimeUiPresetStore
     val windowSizeProvider      = runtimeWindowSizeProvider
 
-  private lazy val effectEditorPort: EffectEditorPort = new EffectEditorPort:
+  private val effectEditorPort: EffectEditorPort = new EffectEditorPort:
     def updateState(update: AppState => AppState): IO[Unit] = editor.updateState(update)
     def applyEvent(event: Event): IO[Unit]                  = events.applyEvent(event)
     def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
@@ -233,7 +233,7 @@ private[manager] class StateManagerComposition(
       events.ensureCommandRunnerSurface(state)
     def advanceSurfaceAnimations(state: AppState): AppState = events.advanceSurfaceAnimations(state)
 
-  private lazy val effectSurfacePort: EffectSurfacePort = new EffectSurfacePort:
+  private val effectSurfacePort: EffectSurfacePort = new EffectSurfacePort:
     def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = surfaces.showPeek(content, at)
     def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
       surfaces.pinPanel(content, position, size)
@@ -246,11 +246,11 @@ private[manager] class StateManagerComposition(
     def applyAnimationHooks(previousState: AppState): IO[Unit] =
       events.applyAnimationHooks(previousState)
 
-  private lazy val effectFilePort: EffectFilePort = new EffectFilePort:
+  private val effectFilePort: EffectFilePort = new EffectFilePort:
     val fileDialog  = runtimeFileDialog
     val fileManager = runtimeFileManager
 
-  private lazy val effectSessionPort: EffectSessionPort = new EffectSessionPort:
+  private val effectSessionPort: EffectSessionPort = new EffectSessionPort:
     val sessionPersistence = runtimeSessionPersistence
     def saveSession(): IO[Unit] =
       runtimeStateRef.get.flatMap { state =>
@@ -260,7 +260,7 @@ private[manager] class StateManagerComposition(
     def loadSession(): IO[Option[AppState]] = sessionManager.loadSession()
     def clearSession(): IO[Unit]            = sessionManager.clearSession()
 
-  private lazy val effectModalWorkflowPort: EffectModalWorkflowPort = new EffectModalWorkflowPort:
+  private val effectModalWorkflowPort: EffectModalWorkflowPort = new EffectModalWorkflowPort:
     def clearCloseActions(state: AppState): AppState = workflow.clearCloseActions(state)
     def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
       workflow.beginCloseAction(scope, state)
@@ -280,14 +280,14 @@ private[manager] class StateManagerComposition(
     def restoreStartupSession(): IO[Unit]                       = workflow.restoreStartupSession()
     def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
 
-  private lazy val filePort: FileCapabilityPort = new FileCapabilityPort:
+  private val filePort: FileCapabilityPort = new FileCapabilityPort:
     def closeBuffer(bufferId: BufferId): IO[Unit]      = editor.closeBuffer(bufferId)
     def directLoadFileEffect(path: Path): IO[Unit]     = effects.directLoadFileEffect(path)
     def saveBufferEffect(bufferId: BufferId): IO[Unit] = effects.saveBufferEffect(bufferId)
     def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
       effects.saveBufferAsEffect(bufferId, path)
 
-  private lazy val editorPort: EditorCapabilityPort = new EditorCapabilityPort:
+  private val editorPort: EditorCapabilityPort = new EditorCapabilityPort:
     val stateRef = runtimeStateRef
     val lspQueue = runtimeLspQueue
     def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
@@ -300,7 +300,7 @@ private[manager] class StateManagerComposition(
       events.ensureCommandRunnerSurface(state)
     def advanceSurfaceAnimations(state: AppState): AppState = events.advanceSurfaceAnimations(state)
 
-  private lazy val workflowPort: WorkflowCapabilityPort = new WorkflowCapabilityPort:
+  private val workflowPort: WorkflowCapabilityPort = new WorkflowCapabilityPort:
     val stateRef                                            = runtimeStateRef
     val undoRef                                             = runtimeUndoRef
     val quitSignal                                          = runtimeQuitSignal
@@ -319,19 +319,19 @@ private[manager] class StateManagerComposition(
     def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
       effects.saveBufferAsEffect(bufferId, path)
 
-  private lazy val surfacePort: SurfaceCapabilityPort = new SurfaceCapabilityPort:
+  private val surfacePort: SurfaceCapabilityPort = new SurfaceCapabilityPort:
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       events.validateAndUpdateState(newState, fallbackState)
     def applyAnimationHooks(previousState: AppState): IO[Unit] =
       events.applyAnimationHooks(previousState)
 
-  private lazy val viewportPort: ViewportCapabilityPort = new ViewportCapabilityPort:
+  private val viewportPort: ViewportCapabilityPort = new ViewportCapabilityPort:
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       events.validateAndUpdateState(newState, fallbackState)
     def updateFontConfig(update: FontConfig => FontConfig): IO[Unit] =
       effects.updateFontConfig(update)
 
-  private lazy val eventStatePort: EventStatePort =
+  private val eventStatePort: EventStatePort =
     new EventStatePort:
       val stateRef                 = runtimeStateRef
       val undoRef                  = runtimeUndoRef
@@ -339,7 +339,7 @@ private[manager] class StateManagerComposition(
       val documentAnalysisFiberRef = runtimeDocumentAnalysisFiberRef
       val mouseTargetCacheRef      = runtimeMouseTargetCacheRef
 
-  private lazy val eventEffectPort: EventEffectPort =
+  private val eventEffectPort: EventEffectPort =
     new EventEffectPort:
       def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit] =
         effects.interpretEffect(effect)
@@ -348,7 +348,7 @@ private[manager] class StateManagerComposition(
       def executeCommand(command: com.serenity.command.Command): IO[Unit] =
         runtimeStateRef.get.flatMap(state => effects.interpretCommand(command, state))
 
-  private lazy val eventWorkflowPort: EventWorkflowPort =
+  private val eventWorkflowPort: EventWorkflowPort =
     new EventWorkflowPort:
       def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
         workflow.beginCloseAction(scope, state)
@@ -356,7 +356,7 @@ private[manager] class StateManagerComposition(
         editor.createBuffer(content, filePath)
       def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
 
-  private lazy val eventUiPort: EventUiPort =
+  private val eventUiPort: EventUiPort =
     new EventUiPort:
       val uiPresetStore = runtimeUiPresetStore
       def updateConfig(
@@ -366,9 +366,9 @@ private[manager] class StateManagerComposition(
       def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
         surfaces.resizePinnedPanel(position, newSize)
 
-  private lazy val workflow = new StateManagerWorkflowCapability(workflowPort)
+  private val workflow = new StateManagerWorkflowCapability(workflowPort)
 
-  private lazy val effects = new StateManagerEffectHandlers(
+  private val effects = new StateManagerEffectHandlers(
     effectRuntimePort,
     effectEditorPort,
     effectSurfacePort,
@@ -377,13 +377,13 @@ private[manager] class StateManagerComposition(
     effectModalWorkflowPort
   )
 
-  private lazy val events =
+  private val events =
     new StateManagerEventPipeline(eventStatePort, eventEffectPort, eventWorkflowPort, eventUiPort)
-  private lazy val editor   = new StateManagerEditorCapability(editorPort)
-  private lazy val surfaces = new StateManagerSurfaceCapability(stateRef, logger, surfacePort)
-  private lazy val viewport =
+  private val editor   = new StateManagerEditorCapability(editorPort)
+  private val surfaces = new StateManagerSurfaceCapability(stateRef, logger, surfacePort)
+  private val viewport =
     new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, viewportPort)
-  private lazy val files = new StateManagerFileCapability(stateRef, filePort)
+  private val files = new StateManagerFileCapability(stateRef, filePort)
 
   export editor.*
   export events.applyEvent

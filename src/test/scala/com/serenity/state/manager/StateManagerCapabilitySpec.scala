@@ -137,6 +137,14 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     workflowPort should not include "workflow."
   }
 
+  it should "construct every capability port without lazy callback wiring" in {
+    val compositionRoot = Files.readString(
+      Path.of("src/main/scala/com/serenity/state/manager/StateManagerComposition.scala")
+    )
+
+    compositionRoot should not include "private lazy val"
+  }
+
   "CommandEffectInterpreter" should "preserve declared effect order and propagate required failures" in {
     val program = for
       observed <- Ref.of[IO, List[String]](Nil)
