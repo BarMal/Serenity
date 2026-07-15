@@ -2,13 +2,10 @@ package com.serenity.state.manager
 
 import java.awt.Color
 
-import scala.concurrent.duration.*
-
 import cats.syntax.foldable.*
 import com.serenity.animation.*
 import com.serenity.command.{CommandRegistry, CommandRunner, CommandSurfaceItem}
 import com.serenity.keystroke.events.*
-import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.components.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
@@ -35,16 +32,29 @@ final private[manager] class StateManagerEventPipeline(
     state: EventStatePort,
     effects: EventEffectPort,
     workflow: EventWorkflowPort,
-    ui: EventUiPort
+    ui: EventUiPort,
+    operations: StateManagerOperationBoundary
 )(using balance: com.serenity.rope.Balance):
 
-  import effects.*
   import state.*
   import ui.*
   import workflow.*
-  private val DocumentAnalysisDebounce = 150.millis
-
   private val ContextMenuSurfaceId = SurfaceId("context-menu")
+
+  private def drainPendingEvents: cats.effect.IO[Unit] =
+    operations.takeEvents.flatMap {
+      case Nil    => cats.effect.IO.unit
+      case events => events.traverse_(applyEvent) >> drainPendingEvents
+    }
+
+  private def interpretEffect(effect: AppEffect): cats.effect.IO[Unit] =
+    effects.interpretEffect(effect) >> drainPendingEvents
+
+  private def interpretCommand(command: com.serenity.command.Command, state: AppState): cats.effect.IO[Unit] =
+    effects.interpretCommand(command, state) >> drainPendingEvents
+
+  private def executeCommand(command: com.serenity.command.Command): cats.effect.IO[Unit] =
+    effects.executeCommand(command) >> drainPendingEvents
 
   private val resizeEvents = new ResizeEventHandler(new ResizeEventPort:
     def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
@@ -240,38 +250,10 @@ final private[manager] class StateManagerEventPipeline(
       )
 
   private[manager] def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
-    normalizeCommandRunnerFocus(newState).validated match
-      case Right(validState) =>
-        val modalTransitionLog =
-          (fallbackState.modalSurface, validState.modalSurface) match
-            case (before, after) if before != after =>
-              logger.info(
-                s"[STATE MODAL] before=${before.map(_.id).getOrElse("none")} " +
-                  s"after=${after.map(_.id).getOrElse("none")} focus=${validState.focus}"
-              )
-            case _ =>
-              cats.effect.IO.unit
-        modalTransitionLog >> stateRef.set(validState) >> scheduleDocumentAnalysis()
-      case Left(errors) =>
-        logger.error(s"State validation failed: ${errors.mkString(", ")}") >>
-          stateRef.set(fallbackState)
+    operations.validateAndUpdateState(newState, fallbackState)
 
   private[manager] def scheduleDocumentAnalysis(): cats.effect.IO[Unit] =
-    for
-      previous <- documentAnalysisFiberRef.getAndSet(None)
-      _        <- previous.traverse_(_.cancel)
-      fiber    <- documentAnalysisJob.start
-      _        <- documentAnalysisFiberRef.set(Some(fiber))
-    yield ()
-
-  private def documentAnalysisJob: cats.effect.IO[Unit] =
-    (cats.effect.IO.sleep(DocumentAnalysisDebounce) >>
-      stateRef.get.flatMap { snapshot =>
-        val expected = SpellChecker.analysisFingerprints(snapshot)
-        cats.effect.IO
-          .blocking(SpellChecker.refreshDiagnostics(snapshot))
-          .flatMap(analyzed => stateRef.update(current => SpellChecker.applyIfCurrent(current, analyzed, expected)))
-      }).handleErrorWith(error => logger.error(error)("[ANALYSIS] Document analysis refresh failed"))
+    operations.scheduleDocumentAnalysis()
 
   private def getLocalHandlerForFocus(focus: Focus, state: AppState): LocalEventHandler =
     focus match

@@ -7,7 +7,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntime
 import com.serenity.config.AppConfig
 import com.serenity.input.{InputRouter, SystemClipboard}
-import com.serenity.keystroke.events.{Event, Paste, ResizeEvent}
+import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId}
@@ -119,22 +119,37 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     compositionRoot should not include "StateManagerBehavior.this"
   }
 
-  it should "keep owner-local operations out of dependency-port graph edges" in {
+  it should "route effect-triggered events through the shared operation boundary" in {
     val compositionRoot = Files.readString(
       Path.of("src/main/scala/com/serenity/state/manager/StateManagerComposition.scala")
     )
-
-    val effectFilePort = compositionRoot.slice(
-      compositionRoot.indexOf("private lazy val effectFilePort"),
-      compositionRoot.indexOf("private lazy val effectSessionPort")
+    val effectHandlers = Files.readString(
+      Path.of("src/main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala")
     )
-    val workflowPort = compositionRoot.slice(
-      compositionRoot.indexOf("private lazy val workflowPort"),
-      compositionRoot.indexOf("private lazy val surfacePort")
+    val effectEditorPort = compositionRoot.slice(
+      compositionRoot.indexOf("private val effectEditorPort"),
+      compositionRoot.indexOf("private val effectSurfacePort")
     )
 
-    effectFilePort should not include "effects."
-    workflowPort should not include "workflow."
+    compositionRoot should include("StateManagerOperationBoundary")
+    effectEditorPort should not include "events."
+    effectHandlers should include("enqueueEvent")
+    effectHandlers should not include "applyEvent("
+  }
+
+  it should "preserve effect-triggered event order at the operation boundary" in {
+    val stateRef = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
+    val fiberRef = Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None).unsafeRunSync()
+    val operations = StateManagerOperationBoundary.create(
+      stateRef,
+      fiberRef,
+      org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
+    )
+
+    (operations.enqueueEvent(Copy) >>
+      operations.enqueueEvent(Paste) >>
+      operations.takeEvents).unsafeRunSync() shouldBe List(Copy, Paste)
+    operations.takeEvents.unsafeRunSync() shouldBe Nil
   }
 
   it should "construct every capability port without lazy callback wiring" in {

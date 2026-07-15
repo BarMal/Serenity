@@ -2,14 +2,18 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
+import scala.concurrent.duration.*
+
 import cats.effect.*
 import cats.effect.std.Queue
+import cats.syntax.foldable.*
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
+import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -50,15 +54,73 @@ private[manager] trait EffectRuntimePort:
 /** Editor capability calls used by command effects. */
 private[manager] trait EffectEditorPort:
   def updateState(update: AppState => AppState): IO[Unit]
-  def applyEvent(event: Event): IO[Unit]
-  def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
-  def closeBuffer(bufferId: BufferId): IO[Unit]
-  def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
-  def switchToPane(paneId: PaneId): IO[Unit]
+  def enqueueEvent(event: Event): IO[Unit]
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
   def scheduleDocumentAnalysis(): IO[Unit]
-  def ensureCommandRunnerSurface(state: AppState): AppState
-  def advanceSurfaceAnimations(state: AppState): AppState
+
+/** One-directional hand-off for editor operations emitted while interpreting effects. */
+final private[manager] class StateManagerOperationBoundary private (
+    pendingEvents: Ref[IO, List[Event]],
+    stateRef: Ref[IO, AppState],
+    documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
+    logger: Logger[IO]
+):
+  private val DocumentAnalysisDebounce = 150.millis
+
+  def enqueueEvent(event: Event): IO[Unit] = pendingEvents.update(_ :+ event)
+
+  def takeEvents: IO[List[Event]] = pendingEvents.getAndSet(Nil)
+
+  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+    normalizeCommandRunnerFocus(newState).validated match
+      case Right(validState) =>
+        val modalTransitionLog =
+          (fallbackState.modalSurface, validState.modalSurface) match
+            case (before, after) if before != after =>
+              logger.info(
+                s"[STATE MODAL] before=${before.map(_.id).getOrElse("none")} " +
+                  s"after=${after.map(_.id).getOrElse("none")} focus=${validState.focus}"
+              )
+            case _ => IO.unit
+        modalTransitionLog >> stateRef.set(validState) >> scheduleDocumentAnalysis()
+      case Left(errors) =>
+        logger.error(s"State validation failed: ${errors.mkString(", ")}") >>
+          stateRef.set(fallbackState)
+
+  def scheduleDocumentAnalysis(): IO[Unit] =
+    for
+      previous <- documentAnalysisFiberRef.getAndSet(None)
+      _        <- previous.traverse_(_.cancel)
+      fiber    <- documentAnalysisJob.start
+      _        <- documentAnalysisFiberRef.set(Some(fiber))
+    yield ()
+
+  private def documentAnalysisJob: IO[Unit] =
+    (IO.sleep(DocumentAnalysisDebounce) >>
+      stateRef.get.flatMap { snapshot =>
+        val expected = SpellChecker.analysisFingerprints(snapshot)
+        IO.blocking(SpellChecker.refreshDiagnostics(snapshot))
+          .flatMap(analyzed => stateRef.update(current => SpellChecker.applyIfCurrent(current, analyzed, expected)))
+      }).handleErrorWith(error => logger.error(error)("[ANALYSIS] Document analysis refresh failed"))
+
+  private def normalizeCommandRunnerFocus(state: AppState): AppState =
+    if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then
+      state.preferredCommandRunnerFocus.fold(state)(focus => state.copy(focus = focus))
+    else state
+
+private[manager] object StateManagerOperationBoundary:
+
+  def create(
+    stateRef: Ref[IO, AppState],
+    documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
+    logger: Logger[IO]
+  ): StateManagerOperationBoundary =
+    new StateManagerOperationBoundary(
+      Ref.unsafe[IO, List[Event]](Nil),
+      stateRef,
+      documentAnalysisFiberRef,
+      logger
+    )
 
 /** Surface capability calls used by command effects. */
 private[manager] trait EffectSurfacePort:
@@ -69,7 +131,6 @@ private[manager] trait EffectSurfacePort:
   def collapseExpandedPanel(): IO[Unit]
   def switchToPinnedPanel(position: PanelPosition): IO[Unit]
   def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
-  def applyAnimationHooks(previousState: AppState): IO[Unit]
 
 /** File infrastructure used by command effects. */
 private[manager] trait EffectFilePort:
@@ -204,6 +265,8 @@ private[manager] class StateManagerComposition(
   private val runtimeFileDialog               = fileDialog
   private val runtimeFileManager              = fileManager
   private val runtimeSessionPersistence       = sessionPersistence
+  private val operations =
+    StateManagerOperationBoundary.create(runtimeStateRef, runtimeDocumentAnalysisFiberRef, runtimeLogger)
 
   private val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
     val stateRef                = runtimeStateRef
@@ -219,19 +282,11 @@ private[manager] class StateManagerComposition(
     val windowSizeProvider      = runtimeWindowSizeProvider
 
   private val effectEditorPort: EffectEditorPort = new EffectEditorPort:
-    def updateState(update: AppState => AppState): IO[Unit] = editor.updateState(update)
-    def applyEvent(event: Event): IO[Unit]                  = events.applyEvent(event)
-    def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
-      editor.createBuffer(content, filePath)
-    def closeBuffer(bufferId: BufferId): IO[Unit]          = editor.closeBuffer(bufferId)
-    def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
-    def switchToPane(paneId: PaneId): IO[Unit]             = editor.switchToPane(paneId)
+    def updateState(update: AppState => AppState): IO[Unit] = runtimeStateRef.update(update)
+    def enqueueEvent(event: Event): IO[Unit]                = operations.enqueueEvent(event)
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-      events.validateAndUpdateState(newState, fallbackState)
-    def scheduleDocumentAnalysis(): IO[Unit] = events.scheduleDocumentAnalysis()
-    def ensureCommandRunnerSurface(state: AppState): AppState =
-      events.ensureCommandRunnerSurface(state)
-    def advanceSurfaceAnimations(state: AppState): AppState = events.advanceSurfaceAnimations(state)
+      operations.validateAndUpdateState(newState, fallbackState)
+    def scheduleDocumentAnalysis(): IO[Unit] = operations.scheduleDocumentAnalysis()
 
   private val effectSurfacePort: EffectSurfacePort = new EffectSurfacePort:
     def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = surfaces.showPeek(content, at)
@@ -243,8 +298,6 @@ private[manager] class StateManagerComposition(
     def switchToPinnedPanel(position: PanelPosition): IO[Unit] = surfaces.switchToPinnedPanel(position)
     def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
       surfaces.resizePinnedPanel(position, newSize)
-    def applyAnimationHooks(previousState: AppState): IO[Unit] =
-      events.applyAnimationHooks(previousState)
 
   private val effectFilePort: EffectFilePort = new EffectFilePort:
     val fileDialog  = runtimeFileDialog
@@ -378,7 +431,7 @@ private[manager] class StateManagerComposition(
   )
 
   private val events =
-    new StateManagerEventPipeline(eventStatePort, eventEffectPort, eventWorkflowPort, eventUiPort)
+    new StateManagerEventPipeline(eventStatePort, eventEffectPort, eventWorkflowPort, eventUiPort, operations)
   private val editor   = new StateManagerEditorCapability(editorPort)
   private val surfaces = new StateManagerSurfaceCapability(stateRef, logger, surfacePort)
   private val viewport =
@@ -397,7 +450,13 @@ private[manager] class StateManagerComposition(
       .interruptWhen(Stream.eval(quitSignal.get).as(true))
 
   def executeCommand(command: com.serenity.command.Command): IO[Unit] =
-    stateRef.get.flatMap(state => effects.interpretCommand(command, state))
+    stateRef.get.flatMap(state => effects.interpretCommand(command, state)) >> drainPendingEvents
+
+  private def drainPendingEvents: IO[Unit] =
+    operations.takeEvents.flatMap {
+      case Nil           => IO.unit
+      case pendingEvents => pendingEvents.traverse_(events.applyEvent) >> drainPendingEvents
+    }
 
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
     events.validateAndUpdateState(newState, fallbackState)
@@ -410,7 +469,7 @@ private[manager] class StateManagerComposition(
   def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit] =
     effects.interpretEffect(effect)
   def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =
-    effects.interpretCommand(command, state)
+    effects.interpretCommand(command, state) >> drainPendingEvents
   def directLoadFileEffect(path: Path): IO[Unit]     = effects.directLoadFileEffect(path)
   def saveBufferEffect(bufferId: BufferId): IO[Unit] = effects.saveBufferEffect(bufferId)
   def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =

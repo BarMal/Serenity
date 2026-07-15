@@ -320,7 +320,7 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.ToggleFocusedTextBody =>
         updateTextDisplayConfig(config => config.withFocusedTextBody(!config.focusedTextBodyEnabled)).void
       case CommandIntent.ToggleContextualToolbar =>
-        applyEvent(com.serenity.keystroke.events.ToggleContextualToolbar)
+        enqueueEvent(com.serenity.keystroke.events.ToggleContextualToolbar)
       case CommandIntent.SetLineNumbers(enabled) =>
         updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
       case CommandIntent.SetGutter(enabled) =>
@@ -389,17 +389,17 @@ final private[manager] class StateManagerEffectHandlers(
             .state
         )
       case CommandIntent.Copy =>
-        applyEvent(com.serenity.keystroke.events.Copy)
+        enqueueEvent(com.serenity.keystroke.events.Copy)
       case CommandIntent.Cut =>
-        applyEvent(com.serenity.keystroke.events.Cut)
+        enqueueEvent(com.serenity.keystroke.events.Cut)
       case CommandIntent.Paste =>
-        applyEvent(com.serenity.keystroke.events.Paste)
+        enqueueEvent(com.serenity.keystroke.events.Paste)
       case CommandIntent.SelectAll =>
-        applyEvent(com.serenity.keystroke.events.SelectAll)
+        enqueueEvent(com.serenity.keystroke.events.SelectAll)
       case CommandIntent.Undo =>
-        applyEvent(com.serenity.keystroke.events.Undo)
+        enqueueEvent(com.serenity.keystroke.events.Undo)
       case CommandIntent.Redo =>
-        applyEvent(com.serenity.keystroke.events.Redo)
+        enqueueEvent(com.serenity.keystroke.events.Redo)
       case CommandIntent.ToggleRichTextMark(mark) =>
         updateState(current => toggleRichTextMark(current, mark))
       case CommandIntent.SetRichTextFontFamily(family) =>
@@ -1815,7 +1815,7 @@ final private[manager] class StateManagerEffectHandlers(
     for
       fileEntries <- fileManager.getFileBrowser.listDirectory(path)
       dirEntries = toDirEntries(fileEntries)
-      _ <- applyEvent(
+      _ <- enqueueEvent(
         ExplorerEvent.RootDirectoryLoaded(
           position = position,
           rootPath = path,
@@ -1830,7 +1830,7 @@ final private[manager] class StateManagerEffectHandlers(
     (for
       fileEntries <- fileManager.getFileBrowser.listDirectory(path)
       dirEntries = toDirEntries(fileEntries)
-      _ <- applyEvent(ExplorerEvent.DirectoryLoaded(position, path, dirEntries))
+      _ <- enqueueEvent(ExplorerEvent.DirectoryLoaded(position, path, dirEntries))
     yield ()).handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load directory $path"))
 
   private def toDirEntries(entries: List[FileEntry]): List[DirEntry] =
