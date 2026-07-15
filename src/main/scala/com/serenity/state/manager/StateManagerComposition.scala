@@ -417,8 +417,9 @@ private[manager] class StateManagerComposition(
     new StateManagerEventPipeline(eventStatePort, eventEffectPort, eventWorkflowPort, eventUiPort)
   private lazy val editor   = new StateManagerEditorCapability(editorPort)
   private lazy val surfaces = new StateManagerSurfaceCapability(stateRef, logger, surfacePort)
-  private lazy val viewport = new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, viewportPort)
-  private lazy val files    = new StateManagerFileCapability(stateRef, filePort)
+  private lazy val viewport =
+    new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, viewportPort)
+  private lazy val files = new StateManagerFileCapability(stateRef, filePort)
 
   export editor.*
   export events.applyEvent
