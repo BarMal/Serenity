@@ -38,6 +38,25 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     frame.diagnostics shouldBe empty
   }
 
+  it should "preserve Markdown lens source-to-preview geometry through blocks and scrolling" in {
+    val driver = UiScenarioDriver.create(viewport = ViewportSize(80, 12)).unsafeRunSync()
+    val source = Source.fromResource("ui-scenarios/markdown-lens.md")
+    val fixture =
+      try source.mkString
+      finally source.close()
+    val bufferId = driver.createBuffer(fixture).unsafeRunSync()
+    driver.configureBuffer(bufferId, Some(LanguageId.Markdown), MarkdownViewMode.InlineLens).unsafeRunSync()
+    List(0, 2, 4, 7, 11).foreach { line =>
+      driver.setCursor(PaneId(0), CursorPosition(line, 0)).unsafeRunSync()
+      val frame = driver.render().unsafeRunSync()
+      frame.markdownMappings.find(_.sourceLine == line) shouldBe defined
+      frame.image.getWidth shouldBe driver.cellMetrics.charWidth * 80
+    }
+    driver.dispatch(ResizeEvent(ViewportSize(80, 8))).unsafeRunSync()
+    driver.setCursor(PaneId(0), CursorPosition(11, 0)).unsafeRunSync()
+    driver.render().unsafeRunSync().markdownMappings.find(_.sourceLine == 11) shouldBe defined
+  }
+
   it should "expose matching command item geometry for rendered rows and mouse events" in {
     val driver = UiScenarioDriver.create(viewport = ViewportSize(100, 30)).unsafeRunSync()
 
@@ -75,6 +94,8 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     state.focus shouldBe Focus.EditorPane(PaneId(0))
     val frame = driver.render().unsafeRunSync()
     frame.surfaceRects(toolbar.id).width should be < 48
+    driver.dispatch(InsertChar('x')).unsafeRunSync()
+    driver.snapshot.unsafeRunSync().focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "settle interrupted motion and honour reduced motion without wall-clock time" in {
@@ -90,6 +111,17 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     driver.advanceUntilSettled().unsafeRunSync() shouldBe true
     driver.render().unsafeRunSync().settled shouldBe true
+  }
+
+  it should "close and reopen the command runner after nested settings navigation" in {
+    val driver = UiScenarioDriver.create().unsafeRunSync()
+    driver.dispatch(ToggleCommandRunner).unsafeRunSync()
+    driver.dispatch(RunnerInsertChar('s')).unsafeRunSync()
+    driver.dispatch(RunnerNavigate(Direction.Down)).unsafeRunSync()
+    driver.dispatch(RunnerSubmit).unsafeRunSync()
+    driver.dispatch(RunnerDismiss).unsafeRunSync()
+    driver.dispatch(ToggleCommandRunner).unsafeRunSync()
+    driver.render().unsafeRunSync().itemRects should not be empty
   }
 
   it should "show preset save and apply outcomes while recovering from an unavailable preset" in {
