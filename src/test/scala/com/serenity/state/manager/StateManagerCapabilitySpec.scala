@@ -85,6 +85,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
     sources.mkString("\n") should not include "StateManagerRuntimeSupport"
     sources.mkString("\n") should not include "StateManagerBehaviorDependencies"
+    sources.mkString("\n") should not include "EffectCapabilityPort"
     sources.mkString("\n") should not include "StateManagerRuntime,"
   }
 

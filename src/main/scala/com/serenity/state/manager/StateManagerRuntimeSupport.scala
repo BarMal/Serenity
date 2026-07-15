@@ -31,8 +31,8 @@ private[manager] trait SurfaceCapabilityPort:
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
   def applyAnimationHooks(previousState: AppState): IO[Unit]
 
-/** Editor and workflow operations used while handling command effects. */
-private[manager] trait EffectCapabilityPort:
+/** Runtime-owned services used while interpreting command effects. */
+private[manager] trait EffectRuntimePort:
   def stateRef: Ref[IO, AppState]
   def themeNamesRef: Ref[IO, List[String]]
   def quitSignal: Deferred[IO, Unit]
@@ -44,17 +44,24 @@ private[manager] trait EffectCapabilityPort:
   def configPersistencePath: Option[Path]
   def uiPresetStore: UiPresetStore
   def windowSizeProvider: IO[Option[PreferredWindowSize]]
-  def fileDialog: com.serenity.io.FileDialog
-  def fileManager: FileManager
-  def sessionPersistence: SessionPersistence
   def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)
+
+/** Editor capability calls used by command effects. */
+private[manager] trait EffectEditorPort:
   def updateState(update: AppState => AppState): IO[Unit]
   def applyEvent(event: Event): IO[Unit]
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
   def closeBuffer(bufferId: BufferId): IO[Unit]
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
   def switchToPane(paneId: PaneId): IO[Unit]
+  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
+  def scheduleDocumentAnalysis(): IO[Unit]
+  def ensureCommandRunnerSurface(state: AppState): AppState
+  def advanceSurfaceAnimations(state: AppState): AppState
+
+/** Surface capability calls used by command effects. */
+private[manager] trait EffectSurfacePort:
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
   def unpinPanel(position: PanelPosition): IO[Unit]
@@ -62,20 +69,25 @@ private[manager] trait EffectCapabilityPort:
   def collapseExpandedPanel(): IO[Unit]
   def switchToPinnedPanel(position: PanelPosition): IO[Unit]
   def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
+  def applyAnimationHooks(previousState: AppState): IO[Unit]
+
+/** File capability calls used by command effects. */
+private[manager] trait EffectFilePort:
+  def fileDialog: com.serenity.io.FileDialog
+  def fileManager: FileManager
+  def directLoadFileEffect(path: Path): IO[Unit]
+  def saveBufferEffect(bufferId: BufferId): IO[Unit]
+  def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit]
+
+/** Session/config and workflow calls used by command effects. */
+private[manager] trait EffectWorkflowPort:
+  def sessionPersistence: SessionPersistence
   def saveSession(): IO[Unit]
   def loadSession(): IO[Option[AppState]]
   def clearSession(): IO[Unit]
   def executeCommand(command: com.serenity.command.Command): IO[Unit]
-  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
-  def scheduleDocumentAnalysis(): IO[Unit]
-  def ensureCommandRunnerSurface(state: AppState): AppState
-  def applyAnimationHooks(previousState: AppState): IO[Unit]
-  def advanceSurfaceAnimations(state: AppState): AppState
   def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit]
   def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit]
-  def directLoadFileEffect(path: Path): IO[Unit]
-  def saveBufferEffect(bufferId: BufferId): IO[Unit]
-  def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit]
   def clearCloseActions(state: AppState): AppState
   def updateFontConfig(update: FontConfig => FontConfig): IO[Unit]
 
@@ -190,28 +202,35 @@ private[manager] class StateManagerBehavior(
 
   protected val balance: Balance = providedBalance
 
-  private lazy val effectPort: EffectCapabilityPort = new EffectCapabilityPort:
-    val stateRef                                            = StateManagerBehavior.this.stateRef
-    val themeNamesRef                                       = StateManagerBehavior.this.themeNamesRef
-    val quitSignal                                          = StateManagerBehavior.this.quitSignal
-    val logger                                              = StateManagerBehavior.this.logger
-    val themeManager                                        = StateManagerBehavior.this.themeManager
-    val lspQueue                                            = StateManagerBehavior.this.lspQueue
-    val onFontConfigChanged                                 = StateManagerBehavior.this.onFontConfigChanged
-    val deviceTextScaleProvider                             = StateManagerBehavior.this.deviceTextScaleProvider
-    val configPersistencePath                               = StateManagerBehavior.this.configPersistencePath
-    val uiPresetStore                                       = StateManagerBehavior.this.uiPresetStore
-    val windowSizeProvider                                  = StateManagerBehavior.this.windowSizeProvider
-    val fileDialog                                          = StateManagerBehavior.this.fileDialog
-    val fileManager                                         = StateManagerBehavior.this.fileManager
-    val sessionPersistence                                  = StateManagerBehavior.this.sessionPersistence
+  private lazy val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
+    val stateRef                = StateManagerBehavior.this.stateRef
+    val themeNamesRef           = StateManagerBehavior.this.themeNamesRef
+    val quitSignal              = StateManagerBehavior.this.quitSignal
+    val logger                  = StateManagerBehavior.this.logger
+    val themeManager            = StateManagerBehavior.this.themeManager
+    val lspQueue                = StateManagerBehavior.this.lspQueue
+    val onFontConfigChanged     = StateManagerBehavior.this.onFontConfigChanged
+    val deviceTextScaleProvider = StateManagerBehavior.this.deviceTextScaleProvider
+    val configPersistencePath   = StateManagerBehavior.this.configPersistencePath
+    val uiPresetStore           = StateManagerBehavior.this.uiPresetStore
+    val windowSizeProvider      = StateManagerBehavior.this.windowSizeProvider
+
+  private lazy val effectEditorPort: EffectEditorPort = new EffectEditorPort:
     def updateState(update: AppState => AppState): IO[Unit] = StateManagerBehavior.this.updateState(update)
     def applyEvent(event: Event): IO[Unit]                  = StateManagerBehavior.this.applyEvent(event)
     def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
       StateManagerBehavior.this.createBuffer(content, filePath)
-    def closeBuffer(bufferId: BufferId): IO[Unit]                    = StateManagerBehavior.this.closeBuffer(bufferId)
-    def createPane(bufferId: Option[BufferId]): IO[PaneId]           = StateManagerBehavior.this.createPane(bufferId)
-    def switchToPane(paneId: PaneId): IO[Unit]                       = StateManagerBehavior.this.switchToPane(paneId)
+    def closeBuffer(bufferId: BufferId): IO[Unit]          = StateManagerBehavior.this.closeBuffer(bufferId)
+    def createPane(bufferId: Option[BufferId]): IO[PaneId] = StateManagerBehavior.this.createPane(bufferId)
+    def switchToPane(paneId: PaneId): IO[Unit]             = StateManagerBehavior.this.switchToPane(paneId)
+    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      StateManagerBehavior.this.validateAndUpdateState(newState, fallbackState)
+    def scheduleDocumentAnalysis(): IO[Unit] = StateManagerBehavior.this.scheduleDocumentAnalysis()
+    def ensureCommandRunnerSurface(state: AppState): AppState =
+      StateManagerBehavior.this.ensureCommandRunnerSurface(state)
+    def advanceSurfaceAnimations(state: AppState): AppState = StateManagerBehavior.this.advanceSurfaceAnimations(state)
+
+  private lazy val effectSurfacePort: EffectSurfacePort = new EffectSurfacePort:
     def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = StateManagerBehavior.this.showPeek(content, at)
     def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
       StateManagerBehavior.this.pinPanel(content, position, size)
@@ -221,27 +240,28 @@ private[manager] class StateManagerBehavior(
     def switchToPinnedPanel(position: PanelPosition): IO[Unit] = StateManagerBehavior.this.switchToPinnedPanel(position)
     def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
       StateManagerBehavior.this.resizePinnedPanel(position, newSize)
+    def applyAnimationHooks(previousState: AppState): IO[Unit] =
+      StateManagerBehavior.this.applyAnimationHooks(previousState)
+
+  private lazy val effectFilePort: EffectFilePort = new EffectFilePort:
+    val fileDialog                                     = StateManagerBehavior.this.fileDialog
+    val fileManager                                    = StateManagerBehavior.this.fileManager
+    def directLoadFileEffect(path: Path): IO[Unit]     = StateManagerBehavior.this.directLoadFileEffect(path)
+    def saveBufferEffect(bufferId: BufferId): IO[Unit] = StateManagerBehavior.this.saveBufferEffect(bufferId)
+    def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
+      StateManagerBehavior.this.saveBufferAsEffect(bufferId, path)
+
+  private lazy val effectWorkflowPort: EffectWorkflowPort = new EffectWorkflowPort:
+    val sessionPersistence                  = StateManagerBehavior.this.sessionPersistence
     def saveSession(): IO[Unit]             = StateManagerBehavior.this.saveSession()
     def loadSession(): IO[Option[AppState]] = StateManagerBehavior.this.loadSession()
     def clearSession(): IO[Unit]            = StateManagerBehavior.this.clearSession()
     def executeCommand(command: com.serenity.command.Command): IO[Unit] =
       StateManagerBehavior.this.executeCommand(command)
-    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-      StateManagerBehavior.this.validateAndUpdateState(newState, fallbackState)
-    def scheduleDocumentAnalysis(): IO[Unit] = StateManagerBehavior.this.scheduleDocumentAnalysis()
-    def ensureCommandRunnerSurface(state: AppState): AppState =
-      StateManagerBehavior.this.ensureCommandRunnerSurface(state)
-    def applyAnimationHooks(previousState: AppState): IO[Unit] =
-      StateManagerBehavior.this.applyAnimationHooks(previousState)
-    def advanceSurfaceAnimations(state: AppState): AppState = StateManagerBehavior.this.advanceSurfaceAnimations(state)
     def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit] =
       StateManagerBehavior.this.interpretEffect(effect)
     def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =
       StateManagerBehavior.this.interpretCommand(command, state)
-    def directLoadFileEffect(path: Path): IO[Unit]     = StateManagerBehavior.this.directLoadFileEffect(path)
-    def saveBufferEffect(bufferId: BufferId): IO[Unit] = StateManagerBehavior.this.saveBufferEffect(bufferId)
-    def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
-      StateManagerBehavior.this.saveBufferAsEffect(bufferId, path)
     def clearCloseActions(state: AppState): AppState = StateManagerBehavior.this.clearCloseActions(state)
     def updateFontConfig(update: FontConfig => FontConfig): IO[Unit] =
       StateManagerBehavior.this.updateFontConfig(update)
@@ -363,7 +383,15 @@ private[manager] class StateManagerBehavior(
         StateManagerBehavior.this.resizePinnedPanel(position, newSize)
 
   private lazy val workflow = new StateManagerWorkflowBehavior(workflowPort)
-  private lazy val effects  = new StateManagerEffectHandlers(effectPort)
+
+  private lazy val effects = new StateManagerEffectHandlers(
+    effectRuntimePort,
+    effectEditorPort,
+    effectSurfacePort,
+    effectFilePort,
+    effectWorkflowPort
+  )
+
   private lazy val events   = new StateManagerEventPipelineBehavior(eventPipelineDependencies)
   private lazy val editor   = new StateManagerEditorFacadeBehavior(editorPort)
   private lazy val surfaces = new StateManagerSurfaceFacadeBehavior(stateRef, logger, surfacePort)
