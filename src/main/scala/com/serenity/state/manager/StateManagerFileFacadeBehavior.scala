@@ -54,7 +54,6 @@ final private[manager] class StateManagerFileFacade(
     stateRef.get.map(_.recentFiles)
 
 private[manager] trait StateManagerFileFacadeBehavior extends StateManagerViewportBehavior:
-  this: StateManager =>
 
   private lazy val fileFacade = new StateManagerFileFacade(
     stateRef,

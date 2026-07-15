@@ -8,7 +8,6 @@ import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, ViewportSize}
 
 private[manager] trait StateManagerViewportBehavior extends StateManagerSurfaceFacadeBehavior:
-  this: StateManager =>
 
   def ensureCursorVisible(paneId: PaneId): IO[Unit] =
     stateRef.update { state =>

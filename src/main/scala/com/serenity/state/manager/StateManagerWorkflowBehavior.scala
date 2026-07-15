@@ -12,7 +12,6 @@ import com.serenity.text.TextEditing
 import com.serenity.ui.layout.LayoutEngine
 
 private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeSupport:
-  this: StateManager =>
 
   protected def openFileWorkflowModal(
     mode: FileWorkflowMode,

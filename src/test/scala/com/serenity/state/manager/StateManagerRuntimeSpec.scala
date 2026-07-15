@@ -69,5 +69,9 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.fileDialog shouldBe FileDialog.unavailable
       runtime.sessionPersistence should not be null
 
+      val behavior = StateManagerBehavior(runtime)
+      behavior.getCurrentState.unsafeRunSync() shouldBe AppState.initial
+      behavior.sessionExists.unsafeRunSync() shouldBe false
+
     program.unsafeRunSync()
   }

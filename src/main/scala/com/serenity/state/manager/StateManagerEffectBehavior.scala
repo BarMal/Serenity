@@ -24,8 +24,6 @@ import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.config.{ThemeConfigWriter, ThemeCreatorState}
 
 private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBehavior:
-  this: StateManager =>
-
   private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
   private val UnsavedPresetCopySuffix       = " (modified, unsaved)"
 

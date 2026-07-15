@@ -20,8 +20,6 @@ import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 
 private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEffectBehavior:
-  this: StateManager =>
-
   private val DocumentAnalysisDebounce = 150.millis
 
   private val ContextMenuSurfaceId = SurfaceId("context-menu")

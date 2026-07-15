@@ -8,8 +8,6 @@ import com.serenity.state.reducers.{ModalStateReducer, PanelStateReducer, PeekSt
 import com.serenity.ui.layout.*
 
 private[manager] trait StateManagerSurfaceFacadeBehavior extends StateManagerEditorFacadeBehavior:
-  this: StateManager =>
-
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =
     stateRef.get.flatMap(state => validateAndUpdateState(PeekStateReducer.show(content, at, state).state, state))
 
