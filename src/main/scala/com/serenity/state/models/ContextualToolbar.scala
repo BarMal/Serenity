@@ -293,8 +293,7 @@ object ContextualToolbar:
         hasTrailingGroupSeparator(item, Some(nextItem))
     }
     val availableWidth = (contentWidth - gutters).max(0)
-    if preferredWidths.sum <= availableWidth then
-      distributeExtraWidth(preferredWidths, availableWidth - preferredWidths.sum)
+    if preferredWidths.sum <= availableWidth then preferredWidths
     else distributeEvenly(items.length, availableWidth)
 
   def rowGroups(
@@ -317,7 +316,15 @@ object ContextualToolbar:
         inputItem(itemId, items).map(item => item.label.length + text.length + 3).getOrElse(0)
       case None =>
         0
-    estimatedRowWidth(items, toolbarState.displayMode)
+    val intrinsicWidth = estimatedRowWidth(items, toolbarState.displayMode)
+    val largestGroupWidth = proseItemSegments(items)
+      .map(estimatedRowWidth(_, toolbarState.displayMode))
+      .maxOption
+      .getOrElse(1)
+    val balancedWidth =
+      if intrinsicWidth <= maxWidth then intrinsicWidth
+      else ((intrinsicWidth + 1) / 2).max(largestGroupWidth)
+    balancedWidth
       .max(detailWidth)
       .max(1)
       .min(maxWidth.max(1))
@@ -442,10 +449,20 @@ object ContextualToolbar:
     contentWidth: Int,
     mode: ToolbarDisplayMode
   ): List[List[ContextualToolbarItem]] =
-    segments.flatMap(segment =>
+    val packableSegments = segments.flatMap { segment =>
       if estimatedRowWidth(segment, mode) > contentWidth then packItems(segment, contentWidth, mode)
       else List(segment)
-    )
+    }
+    val (currentRow, rows) =
+      packableSegments.foldLeft((List.empty[ContextualToolbarItem], List.empty[List[ContextualToolbarItem]])) {
+        case ((currentRow, acc), segment) =>
+          val nextRow = currentRow ++ segment
+          if currentRow.nonEmpty && estimatedRowWidth(nextRow, mode) > contentWidth then
+            (segment, acc :+ currentRow)
+          else
+            (nextRow, acc)
+      }
+    if currentRow.nonEmpty then rows :+ currentRow else rows
 
   private def packItems(
     items: List[ContextualToolbarItem],

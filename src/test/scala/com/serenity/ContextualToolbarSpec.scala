@@ -111,6 +111,26 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     movedVertically.y should be > movedHorizontally.y
   }
 
+  it should "keep the default formatting toolbar narrower than the editor when it wraps" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-default-compact-width")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val toolbar  = toolbarRect(state)
+    val editorWidth = LayoutEngine
+      .calculateEditorWorkspaceLayout(state, layout)
+      .activeContentRect(state)
+      .map(_.width)
+      .getOrElse(fail("Expected active content rect"))
+
+    toolbar.width should be < (editorWidth * 3 / 4)
+  }
+
   it should "keep the formatted run state when the caret sits on its trailing boundary" in {
     val stateManager = createStateManager("ContextualToolbarSpec-caret-boundary-style")
 
