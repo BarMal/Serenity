@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 
 import cats.effect.*
 import cats.effect.std.Queue
@@ -8,9 +8,11 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileDialog
 import com.serenity.lsp.LspEffect
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
-import com.serenity.state.models.AppState
+import com.serenity.state.models.{AppState, BufferId}
+import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
@@ -68,6 +70,59 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.fileManager should not be null
       runtime.fileDialog shouldBe FileDialog.unavailable
       runtime.sessionPersistence should not be null
+
+    program.unsafeRunSync()
+  }
+
+  "StateManagerFileFacade" should "be testable with injected file operations only" in {
+    val bufferId = BufferId(7)
+    val path     = Path.of("isolated.txt")
+
+    val program = for
+      stateRef <- Ref.of[IO, AppState](AppState.initial)
+      calls    <- Ref.of[IO, List[String]](Nil)
+      facade = new StateManagerFileFacade(
+        stateRef,
+        opened => calls.update(_ :+ s"open:$opened"),
+        saved => calls.update(_ :+ s"save:$saved"),
+        (saved, savedPath) => calls.update(_ :+ s"saveAs:$saved:$savedPath"),
+        closed => calls.update(_ :+ s"close:$closed")
+      )
+      _        <- facade.openFile(path)
+      _        <- facade.saveBuffer(bufferId)
+      _        <- facade.saveBufferAs(bufferId, path)
+      _        <- facade.forceCloseBuffer(bufferId)
+      observed <- calls.get
+    yield observed shouldBe List(
+      s"open:$path",
+      s"save:$bufferId",
+      s"saveAs:$bufferId:$path",
+      s"close:$bufferId"
+    )
+
+    program.unsafeRunSync()
+  }
+
+  "CommandEffectInterpreter" should "dispatch effects without runtime infrastructure" in {
+    val effect = LspEffect.FileClosed("file:///isolated.txt", LanguageId.Scala)
+    val program = for
+      observed <- Ref.of[IO, List[LspEffect]](Nil)
+      behavior = new CommandEffectInterpreter(
+        CommandEffectInterpreter.Dependencies(
+          lifecycle = _ => IO.unit,
+          command = _ => IO.unit,
+          theme = _ => IO.unit,
+          surface = _ => IO.unit,
+          file = _ => IO.unit,
+          explorer = _ => IO.unit,
+          workflow = _ => IO.unit,
+          lspQueue =
+            case LspQueueEffect.Enqueue(value) => observed.update(_ :+ value)
+        )
+      )
+      _       <- behavior.interpret(AppEffect.LspQueue(LspQueueEffect.Enqueue(effect)))
+      effects <- observed.get
+    yield effects shouldBe List(effect)
 
     program.unsafeRunSync()
   }

@@ -11,8 +11,11 @@ import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.LayoutEngine
 
-private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeSupport:
-  this: StateManager =>
+final private[manager] class StateManagerWorkflowBehavior(
+    dependencies: WorkflowCapabilityPort
+)(using balance: com.serenity.rope.Balance):
+
+  import dependencies.*
 
   protected def openFileWorkflowModal(
     mode: FileWorkflowMode,
@@ -46,7 +49,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
         updateState(current => ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state)
     }
 
-  protected def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
+  private[manager] def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
     val targetBufferIds = closeTargets(scope, state)
     val dirtyBufferIds  = targetBufferIds.filter(bufferId => state.buffers.get(bufferId).exists(_.hasUnsavedChanges))
     val cleanBufferIds =
@@ -89,7 +92,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
       ModalStateReducer.show(Modal.CloseWorkflow(workflow), withCloseAction(focusedState, workflow)).state
     stateRef.set(modalState)
 
-  protected def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+  private[manager] def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
       closeWorkflowSurface(state, surfaceId) match
         case Some((_, workflow)) =>
@@ -156,7 +159,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
   protected def withCloseAction(state: AppState, workflow: CloseWorkflowState): AppState =
     state.copy(actionStack = AppAction.CloseWorkflow(workflow) :: clearCloseActions(state).actionStack)
 
-  protected def clearCloseActions(state: AppState): AppState =
+  private[manager] def clearCloseActions(state: AppState): AppState =
     state.copy(actionStack = Nil)
 
   protected def dismissModalSurface(state: AppState): AppState =
@@ -165,7 +168,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
       case _                                                   => false
     })
 
-  protected def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+  private[manager] def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
       fileWorkflowSurface(state, surfaceId) match
         case Some((_, workflow)) =>
@@ -174,7 +177,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
           IO.unit
     }
 
-  protected def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+  private[manager] def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
       fileWorkflowSurface(state, surfaceId) match
         case Some((_, workflow)) =>
@@ -187,7 +190,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
           IO.unit
     }
 
-  protected def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+  private[manager] def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
       replaceWorkflowSurface(state, surfaceId) match
         case Some((_, workflow)) =>
@@ -541,7 +544,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
   private def remoteStorageMessage(remoteTarget: String): String =
     s"Remote storage is not supported yet: $remoteTarget"
 
-  protected def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
+  private[manager] def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
     bufferIdOverride.orElse(state.focusedBufferId) match
       case Some(bufferId) =>
         val focusedPath = state.buffers.get(bufferId).flatMap(_.filePath)
@@ -578,7 +581,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
           IO.unit
     }
 
-  protected def activeEditorBufferId(state: AppState): Option[BufferId] =
+  private[manager] def activeEditorBufferId(state: AppState): Option[BufferId] =
     state.layout.activeEditorPaneId
       .flatMap(state.layout.editorPanes.get)
       .flatMap(_.bufferId)
@@ -767,7 +770,7 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
         case _                                                           => None
     }
 
-  protected def restoreStartupSession(): IO[Unit] =
+  private[manager] def restoreStartupSession(): IO[Unit] =
     logger.info("[CMD] Session restore requested") >>
       loadSession().flatMap {
         case Some(restoredState) =>
@@ -782,14 +785,14 @@ private[manager] trait StateManagerWorkflowBehavior extends StateManagerRuntimeS
             }
       }
 
-  protected def createStartupSession(): IO[Unit] =
+  private[manager] def createStartupSession(): IO[Unit] =
     updateState(_.copy(uiSurfaces = List.empty)) >>
       createNewEmptyBuffer().flatMap { bufferId =>
         updateState(s => s.copy(bufferOrder = s.bufferOrder :+ bufferId)) >>
           createPane(Some(bufferId)).flatMap(paneId => switchToPane(paneId))
       }
 
-  protected def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
+  private[manager] def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
     val restored = restoredState.copy(
       uiSurfaces = List.empty,
       viewportSize = currentState.viewportSize

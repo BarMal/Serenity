@@ -10,7 +10,7 @@ import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
-import com.serenity.session.{SessionManager, SessionSaveTrigger}
+import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -232,54 +232,28 @@ object StateManager:
   def describeCommandExecution(command: Command): String =
     s"command=${command.name} category=${command.category} intent=${command.intent}"
 
-  private class StateManagerImpl(protected val runtime: StateManagerRuntime)(using Balance)
-      extends StateManager,
-        StateManagerBehavior:
+  private class StateManagerImpl(runtime: StateManagerRuntime)(using Balance) extends StateManager:
 
-    protected val balance: Balance = summon[Balance]
+    private val behavior = new StateManagerBehavior(
+      runtime.stateRef,
+      runtime.undoRef,
+      runtime.themeNamesRef,
+      runtime.quitSignal,
+      runtime.logger,
+      runtime.policy,
+      runtime.themeManager,
+      runtime.lspQueue,
+      runtime.mouseTargetCacheRef,
+      runtime.documentAnalysisFiberRef,
+      runtime.onFontConfigChanged,
+      runtime.deviceTextScaleProvider,
+      runtime.configPersistencePath,
+      runtime.uiPresetStore,
+      runtime.windowSizeProvider,
+      runtime.fileDialog,
+      runtime.fileManager,
+      runtime.sessionManager,
+      runtime.sessionPersistence
+    )
 
-    def lspEffectStream: Stream[IO, LspEffect] =
-      Stream
-        .fromQueueUnterminated(lspQueue)
-        .interruptWhen(Stream.eval(quitSignal.get).as(true))
-
-    def executeCommand(command: Command): IO[Unit] =
-      stateRef.get.flatMap(state => interpretCommand(command, state))
-
-    // Session persistence operations
-    def saveSession(): IO[Unit] =
-      getCurrentState.flatMap { state =>
-        sessionManager.saveSession(state, persistUnsavedBuffers = true) >>
-          logger.info("[SESSION] Session saved")
-      }.void
-
-    def loadSession(): IO[Option[AppState]] =
-      sessionManager.loadSession()
-
-    def currentSessionThemeName: IO[Option[String]] =
-      sessionManager.currentSessionThemeName
-
-    def sessionExists: IO[Boolean] =
-      sessionManager.sessionExists
-
-    def clearSession(): IO[Unit] =
-      sessionManager.clearSession()
-
-    def awaitQuit: IO[Unit] = quitSignal.get
-
-    def forceQuit(): IO[Unit] =
-      stateRef.get.flatMap { state =>
-        sessionPersistence
-          .onAppClose(clearCloseActions(state))
-          .handleErrorWith(error => logger.error(error)("[SESSION] Failed to save session during forced quit")) >>
-          quitSignal.complete(()).attempt.void
-      }
-
-    def intervalSaveStream: Stream[IO, Unit] =
-      policy.saveInterval match
-        case None => Stream.empty
-        case Some(interval) =>
-          Stream
-            .fixedRate[IO](interval)
-            .interruptWhen(Stream.eval(quitSignal.get).as(true))
-            .evalMap(_ => stateRef.get.flatMap(sessionPersistence.maybeSaveSession(_, SessionSaveTrigger.Interval)))
+    export behavior.*

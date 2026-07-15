@@ -9,9 +9,11 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, PaneSplitDirection, ViewportSize}
 
-private[manager] trait StateManagerEditorFacadeBehavior extends StateManagerEventPipelineBehavior:
-  this: StateManager =>
+final private[manager] class StateManagerEditorFacadeBehavior(
+    dependencies: EditorCapabilityPort
+)(using balance: com.serenity.rope.Balance):
 
+  import dependencies.*
   def getCurrentState: IO[AppState] = stateRef.get
 
   def getCurrentFocus: IO[Focus] = stateRef.get.map(_.focus)

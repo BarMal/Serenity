@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
@@ -11,6 +11,7 @@ import com.serenity.keystroke.events.{Event, Paste, ResizeEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId}
+import com.serenity.state.reducers.*
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import fs2.Stream
@@ -70,6 +71,65 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     RenderController.handleResize(Some(ViewportSize(120, 40)), events, IO.unit).unsafeRunSync()
 
     applied.get.unsafeRunSync() shouldBe List(ResizeEvent(ViewportSize(120, 40)))
+  }
+
+  "StateManager composition" should "exclude the retired runtime forwarding and dependency hub" in {
+    val sources = List(
+      "StateManagerEditorFacadeBehavior.scala",
+      "StateManagerEffectBehavior.scala",
+      "StateManagerFileFacadeBehavior.scala",
+      "StateManagerSurfaceFacadeBehavior.scala",
+      "StateManagerViewportBehavior.scala",
+      "StateManagerWorkflowBehavior.scala"
+    ).map(name => Files.readString(Path.of("src/main/scala/com/serenity/state/manager", name)))
+
+    sources.mkString("\n") should not include "StateManagerRuntimeSupport"
+    sources.mkString("\n") should not include "StateManagerBehaviorDependencies"
+    sources.mkString("\n") should not include "EffectCapabilityPort"
+    sources.mkString("\n") should not include "StateManagerRuntime,"
+  }
+
+  it should "keep Balance capability-local rather than protected" in {
+    val sources = Files
+      .list(Path.of("src/main/scala/com/serenity/state/manager"))
+      .toArray
+      .collect { case path: Path if path.getFileName.toString.endsWith(".scala") => Files.readString(path) }
+      .mkString("\n")
+
+    sources should not include "protected val balance"
+  }
+
+  it should "wire capability ports directly to their owning components" in {
+    val compositionRoot = Files.readString(
+      Path.of("src/main/scala/com/serenity/state/manager/StateManagerRuntimeSupport.scala")
+    )
+
+    compositionRoot should not include "StateManagerBehavior.this"
+  }
+
+  "CommandEffectInterpreter" should "preserve declared effect order and propagate required failures" in {
+    val program = for
+      observed <- Ref.of[IO, List[String]](Nil)
+      interpreter = new CommandEffectInterpreter(
+        CommandEffectInterpreter.Dependencies(
+          lifecycle = _ => observed.update(_ :+ "lifecycle"),
+          command = _ => observed.update(_ :+ "command"),
+          theme = _ => observed.update(_ :+ "theme"),
+          surface = _ => observed.update(_ :+ "surface"),
+          file = _ => IO.raiseError(new IllegalStateException("file failed")),
+          explorer = _ => observed.update(_ :+ "explorer"),
+          workflow = _ => observed.update(_ :+ "workflow"),
+          lspQueue = _ => observed.update(_ :+ "lsp")
+        )
+      )
+      _       <- interpreter.interpret(AppEffect.Lifecycle(LifecycleEffect.CompleteQuit))
+      failure <- interpreter.interpret(AppEffect.File(FileEffect.DirectLoadFile(Path.of("missing")))).attempt
+      entries <- observed.get
+    yield
+      entries shouldBe List("lifecycle")
+      failure.isLeft shouldBe true
+
+    program.unsafeRunSync()
   }
 
   "AppRuntime input phase" should "depend only on state read, update, and event application capabilities" in {

@@ -7,9 +7,13 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalStateReducer, PanelStateReducer, PeekStateReducer}
 import com.serenity.ui.layout.*
 
-private[manager] trait StateManagerSurfaceFacadeBehavior extends StateManagerEditorFacadeBehavior:
-  this: StateManager =>
+final private[manager] class StateManagerSurfaceFacadeBehavior(
+    stateRef: cats.effect.Ref[IO, AppState],
+    logger: org.typelevel.log4cats.Logger[IO],
+    dependencies: SurfaceCapabilityPort
+)(using balance: com.serenity.rope.Balance):
 
+  import dependencies.*
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =
     stateRef.get.flatMap(state => validateAndUpdateState(PeekStateReducer.show(content, at, state).state, state))
 

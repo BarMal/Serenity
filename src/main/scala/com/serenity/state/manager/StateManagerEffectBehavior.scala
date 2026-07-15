@@ -23,27 +23,87 @@ import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.config.{ThemeConfigWriter, ThemeCreatorState}
 
-private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBehavior:
-  this: StateManager =>
+/** Workflow operations selected by command effects. */
+private[manager] trait WorkflowEffectPort:
+  def requestOpenFile: IO[Unit]
+  def requestSaveAs: IO[Unit]
+  def refresh(surfaceId: SurfaceId): IO[Unit]
+  def submitFile(surfaceId: SurfaceId): IO[Unit]
+  def submitReplace(surfaceId: SurfaceId): IO[Unit]
+  def submitClose(surfaceId: SurfaceId): IO[Unit]
 
+/** Interprets workflow effects without editor, theme, file, or runtime dependencies. */
+final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
+
+  def interpret(effect: WorkflowEffect): IO[Unit] =
+    effect match
+      case WorkflowEffect.RequestOpenFile           => port.requestOpenFile
+      case WorkflowEffect.RequestSaveAs             => port.requestSaveAs
+      case WorkflowEffect.RefreshFileWorkflow(id)   => port.refresh(id)
+      case WorkflowEffect.SubmitFileWorkflow(id)    => port.submitFile(id)
+      case WorkflowEffect.SubmitReplaceWorkflow(id) => port.submitReplace(id)
+      case WorkflowEffect.SubmitCloseWorkflow(id)   => port.submitClose(id)
+
+/** Lifecycle operation required by lifecycle effects. */
+private[manager] trait LifecycleEffectPort:
+  def completeQuit: IO[Unit]
+
+/** Interprets lifecycle effects without runtime, editor, or workflow dependencies. */
+final private[manager] class LifecycleEffectHandler(port: LifecycleEffectPort):
+
+  def interpret(effect: LifecycleEffect): IO[Unit] =
+    effect match
+      case LifecycleEffect.CompleteQuit => port.completeQuit
+
+final private[manager] class StateManagerEffectHandlers(
+    runtime: EffectRuntimePort,
+    editor: EffectEditorPort,
+    surfaces: EffectSurfacePort,
+    files: EffectFilePort,
+    sessions: EffectSessionPort,
+    workflow: EffectModalWorkflowPort
+)(using balance: com.serenity.rope.Balance):
+
+  import editor.*
+  import files.*
+  import runtime.*
+  import surfaces.*
+  import sessions.*
+  import workflow.*
   private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
   private val UnsavedPresetCopySuffix       = " (modified, unsaved)"
 
-  protected def interpretEffect(effect: AppEffect): IO[Unit] =
-    effect match
-      case AppEffect.Lifecycle(effect)      => interpretLifecycleEffect(effect)
-      case AppEffect.CommandRequest(effect) => interpretCommandEffect(effect)
-      case AppEffect.Theme(effect)          => interpretThemeEffect(effect)
-      case AppEffect.Surface(effect)        => interpretSurfaceEffect(effect)
-      case AppEffect.File(effect)           => interpretFileEffect(effect)
-      case AppEffect.Explorer(effect)       => interpretExplorerEffect(effect)
-      case AppEffect.Workflow(effect)       => interpretWorkflowEffect(effect)
-      case AppEffect.LspQueue(effect)       => interpretLspQueueEffect(effect)
+  private val workflowEffects = new WorkflowEffectHandler(new WorkflowEffectPort:
+    def requestOpenFile: IO[Unit] = requestOpenFileDialog
+    def requestSaveAs: IO[Unit]   = stateRef.get.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
+    def refresh(surfaceId: SurfaceId): IO[Unit]       = refreshFileWorkflowEffect(surfaceId)
+    def submitFile(surfaceId: SurfaceId): IO[Unit]    = submitFileWorkflowEffect(surfaceId)
+    def submitReplace(surfaceId: SurfaceId): IO[Unit] = submitReplaceWorkflowEffect(surfaceId)
+    def submitClose(surfaceId: SurfaceId): IO[Unit]   = submitCloseWorkflowEffect(surfaceId))
+
+  private val lifecycleEffects = new LifecycleEffectHandler(
+    new LifecycleEffectPort:
+      def completeQuit: IO[Unit] = quitSignal.complete(()).attempt.void
+  )
+
+  private[manager] val behavior = new CommandEffectInterpreter(
+    CommandEffectInterpreter.Dependencies(
+      interpretLifecycleEffect,
+      interpretCommandEffect,
+      interpretThemeEffect,
+      interpretSurfaceEffect,
+      interpretFileEffect,
+      interpretExplorerEffect,
+      interpretWorkflowEffect,
+      interpretLspQueueEffect
+    )
+  )
+
+  private[manager] def interpretEffect(effect: AppEffect): IO[Unit] =
+    behavior.interpret(effect)
 
   private def interpretLifecycleEffect(effect: LifecycleEffect): IO[Unit] =
-    effect match
-      case LifecycleEffect.CompleteQuit =>
-        quitSignal.complete(()).attempt.void
+    lifecycleEffects.interpret(effect)
 
   private def interpretCommandEffect(effect: CommandEffect): IO[Unit] =
     effect match
@@ -85,19 +145,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         loadPinnedDirectoryEffect(position, path)
 
   private def interpretWorkflowEffect(effect: WorkflowEffect): IO[Unit] =
-    effect match
-      case WorkflowEffect.RequestOpenFile =>
-        requestOpenFileDialog
-      case WorkflowEffect.RequestSaveAs =>
-        stateRef.get.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
-      case WorkflowEffect.RefreshFileWorkflow(surfaceId) =>
-        refreshFileWorkflowEffect(surfaceId)
-      case WorkflowEffect.SubmitFileWorkflow(surfaceId) =>
-        submitFileWorkflowEffect(surfaceId)
-      case WorkflowEffect.SubmitReplaceWorkflow(surfaceId) =>
-        submitReplaceWorkflowEffect(surfaceId)
-      case WorkflowEffect.SubmitCloseWorkflow(surfaceId) =>
-        submitCloseWorkflowEffect(surfaceId)
+    workflowEffects.interpret(effect)
 
   private def interpretLspQueueEffect(effect: LspQueueEffect): IO[Unit] =
     effect match
@@ -135,7 +183,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     }
     state.copy(uiSurfaces = updatedSurfaces)
 
-  protected def updateConfig(
+  private[manager] def updateConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
     updateConfigWithEditedPresetDraft(update, markEditedUiPresetDraftFromCommandRunner)
@@ -237,7 +285,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
     if trimmed.endsWith(UnsavedPresetCopySuffix) then trimmed.dropRight(UnsavedPresetCopySuffix.length).trim
     else trimmed
 
-  protected def updateFontConfig(
+  private[manager] def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
   ): IO[Unit] =
     deviceTextScaleProvider.flatMap { deviceTextScale =>
@@ -260,7 +308,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   protected def clampFontSize(size: Float): Float =
     size.max(8.0f).min(48.0f)
 
-  protected def interpretCommand(command: Command, state: AppState): IO[Unit] =
+  private[manager] def interpretCommand(command: Command, state: AppState): IO[Unit] =
     command.intent match
       case CommandIntent.ToggleLineNumbers =>
         updateTextDisplayConfig(config => config.withLineNumbers(!config.showLineNumbers)).void
@@ -1787,7 +1835,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
   private def toDirEntries(entries: List[FileEntry]): List[DirEntry] =
     entries.map(entry => DirEntry(entry.path, entry.name, entry.isDirectory))
 
-  protected def directLoadFileEffect(path: Path): IO[Unit] =
+  private[manager] def directLoadFileEffect(path: Path): IO[Unit] =
     IO.blocking(FileUtils.isReadableFile(path)).flatMap {
       case false => logger.debug(s"[FILE] DirectLoad: file not readable: $path")
       case true =>
@@ -1826,7 +1874,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
           .void
     }
 
-  protected def saveBufferEffect(bufferId: BufferId): IO[Unit] =
+  private[manager] def saveBufferEffect(bufferId: BufferId): IO[Unit] =
     stateRef.get.flatMap { state =>
       state.buffers.get(bufferId) match
         case Some(buffer) if buffer.filePath.isDefined =>
@@ -1874,7 +1922,7 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
       }
       .handleErrorWith(ex => logger.error(ex)(s"[THEMES] Failed to export current theme '${config.name}'"))
 
-  protected def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
+  private[manager] def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
     stateRef.get.flatMap { state =>
       state.buffers.get(bufferId) match
         case Some(buffer) =>
