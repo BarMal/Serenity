@@ -33,21 +33,16 @@ final private[manager] class StateManagerEffectBehavior(
   private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
   private val UnsavedPresetCopySuffix       = " (modified, unsaved)"
 
-  private val effectInterpreter = new StateManagerEffectInterpreter(
-    StateManagerEffectInterpreter.Dependencies(
-      interpretLifecycleEffect,
-      interpretCommandEffect,
-      interpretThemeEffect,
-      interpretSurfaceEffect,
-      interpretFileEffect,
-      interpretExplorerEffect,
-      interpretWorkflowEffect,
-      interpretLspQueueEffect
-    )
-  )
-
   private[manager] def interpretEffect(effect: AppEffect): IO[Unit] =
-    effectInterpreter.interpret(effect)
+    effect match
+      case AppEffect.Lifecycle(value)      => interpretLifecycleEffect(value)
+      case AppEffect.CommandRequest(value) => interpretCommandEffect(value)
+      case AppEffect.Theme(value)          => interpretThemeEffect(value)
+      case AppEffect.Surface(value)        => interpretSurfaceEffect(value)
+      case AppEffect.File(value)           => interpretFileEffect(value)
+      case AppEffect.Explorer(value)       => interpretExplorerEffect(value)
+      case AppEffect.Workflow(value)       => interpretWorkflowEffect(value)
+      case AppEffect.LspQueue(value)       => interpretLspQueueEffect(value)
 
   private def interpretLifecycleEffect(effect: LifecycleEffect): IO[Unit] =
     effect match

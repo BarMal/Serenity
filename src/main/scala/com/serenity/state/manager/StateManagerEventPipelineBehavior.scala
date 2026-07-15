@@ -26,10 +26,6 @@ final private[manager] class StateManagerEventPipelineBehavior(
   import dependencies.*
   private val DocumentAnalysisDebounce = 150.millis
 
-  private val reducerEffectPipeline = new StateManagerReducerEffectPipeline(
-    StateManagerReducerEffectPipeline.Dependencies(validateAndUpdateState, interpretEffect)
-  )
-
   private val ContextMenuSurfaceId = SurfaceId("context-menu")
 
   private val EditorContextMenuCommands =
@@ -291,7 +287,10 @@ final private[manager] class StateManagerEventPipelineBehavior(
             NoOpLocalEventHandler
 
   private def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
-    reducerEffectPipeline.apply(result, fallbackState)
+    for
+      _ <- validateAndUpdateState(result.state, fallbackState)
+      _ <- result.effects.traverse_(interpretEffect)
+    yield ()
 
   private def hydrateCommandRunnerUiPresets: cats.effect.IO[Unit] =
     uiPresetStore

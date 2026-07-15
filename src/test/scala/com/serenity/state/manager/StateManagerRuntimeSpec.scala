@@ -11,7 +11,6 @@ import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.{AppState, BufferId}
-import com.serenity.state.reducers.{AppEffect, ReducerResult}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
@@ -98,42 +97,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       s"saveAs:$bufferId:$path",
       s"close:$bufferId"
     )
-
-    program.unsafeRunSync()
-  }
-
-  "StateManagerReducerEffectPipeline" should "apply state and effects with only injected collaborators" in {
-    val program = for
-      stateRef <- Ref.of[IO, AppState](AppState.initial)
-      observed <- Ref.of[IO, List[AppEffect]](Nil)
-      interpreter = new StateManagerEffectInterpreter(
-        StateManagerEffectInterpreter.Dependencies(
-          lifecycle = _ => IO.unit,
-          command = _ => IO.unit,
-          theme = _ => IO.unit,
-          surface = _ => IO.unit,
-          file = effect => observed.update(_ :+ AppEffect.File(effect)),
-          explorer = _ => IO.unit,
-          workflow = _ => IO.unit,
-          lspQueue = _ => IO.unit
-        )
-      )
-      pipeline = new StateManagerReducerEffectPipeline(
-        StateManagerReducerEffectPipeline.Dependencies(
-          validateAndUpdateState = (state, _) => stateRef.set(state),
-          interpretEffect = interpreter.interpret
-        )
-      )
-      expected = AppState.initial.copy(recentFiles = List(Path.of("isolated.txt")))
-      _ <- pipeline.apply(
-        ReducerResult.withEffect(expected, AppEffect.DirectLoadFile(Path.of("isolated.txt"))),
-        AppState.initial
-      )
-      state   <- stateRef.get
-      effects <- observed.get
-    yield
-      state shouldBe expected
-      effects shouldBe List(AppEffect.DirectLoadFile(Path.of("isolated.txt")))
 
     program.unsafeRunSync()
   }
