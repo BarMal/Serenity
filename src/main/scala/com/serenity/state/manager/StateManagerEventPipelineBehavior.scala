@@ -1609,9 +1609,11 @@ private[manager] trait StateManagerEventPipelineBehavior extends StateManagerEff
     )
     val x = event.pixelX.fold(metrics.toPixelX(event.col).toDouble)(_.toDouble)
     val y = event.pixelY.fold(metrics.toPixelY(event.row).toDouble)(_.toDouble)
-    Option.when(geometry.content.contains(x, y))(
-      geometry.itemIndexAt(event.pixelX, event.pixelY, event.col, event.row)
-    ).flatten
+    Option
+      .when(geometry.content.contains(x, y))(
+        geometry.itemIndexAt(event.pixelX, event.pixelY, event.col, event.row)
+      )
+      .flatten
 
   private def overlayDisplayedRowIndexAt(
     event: MouseInputEvent,
