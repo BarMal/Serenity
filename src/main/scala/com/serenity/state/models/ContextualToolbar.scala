@@ -457,10 +457,8 @@ object ContextualToolbar:
       packableSegments.foldLeft((List.empty[ContextualToolbarItem], List.empty[List[ContextualToolbarItem]])) {
         case ((currentRow, acc), segment) =>
           val nextRow = currentRow ++ segment
-          if currentRow.nonEmpty && estimatedRowWidth(nextRow, mode) > contentWidth then
-            (segment, acc :+ currentRow)
-          else
-            (nextRow, acc)
+          if currentRow.nonEmpty && estimatedRowWidth(nextRow, mode) > contentWidth then (segment, acc :+ currentRow)
+          else (nextRow, acc)
       }
     if currentRow.nonEmpty then rows :+ currentRow else rows
 
@@ -485,11 +483,6 @@ object ContextualToolbar:
         case (item, nextItem) =>
           hasTrailingGroupSeparator(item, Some(nextItem))
       }
-
-  private def distributeExtraWidth(widths: List[Int], extraWidth: Int): List[Int] =
-    widths.zipWithIndex.map { (width, index) =>
-      width + (extraWidth / widths.length) + Option.when(index < extraWidth % widths.length)(1).getOrElse(0)
-    }
 
   private def distributeEvenly(itemCount: Int, availableWidth: Int): List[Int] =
     if itemCount == 0 then Nil
