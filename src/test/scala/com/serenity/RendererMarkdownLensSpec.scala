@@ -428,7 +428,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
   it should "align the active lens after expanded preview context" in {
     val source =
       "| Task | Owner |\n| ---- | ----- |\n| Ship | Codex |\n\nActive paragraph\ncontinued"
-    val cursor                    = CursorPosition(4, 0)
+    val cursor              = CursorPosition(4, 0)
     val (state, surface, _) = renderMarkdownLens(source, cursor, topLine = Some(0))
     val paneRect =
       LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
@@ -501,10 +501,13 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     (0 until surface.height).map(surface.getRow).map(_.trim).filter(_.nonEmpty).toList
 
   private def rawSourceRow(surface: MockRenderSurface, source: String): Int =
-    (0 until surface.height).find(row => surface.getRow(row).contains(source))
+    (0 until surface.height)
+      .find(row => surface.getRow(row).contains(source))
       .getOrElse(fail(s"Expected raw source row for: $source"))
 
   private def panelRows(surface: MockRenderSurface, state: AppState, paneRect: LayoutRect): Vector[Int] =
     (paneRect.y until paneRect.bottom)
-      .filter(row => (paneRect.x until paneRect.right).exists(column => surface.getBg(column, row) == state.theme.panel.background))
+      .filter(row =>
+        (paneRect.x until paneRect.right).exists(column => surface.getBg(column, row) == state.theme.panel.background)
+      )
       .toVector
