@@ -179,6 +179,7 @@ private[manager] trait EventUiPort:
   def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
 
 /** Explicit composition root for StateManager capabilities. */
+/** Explicit composition boundary for the StateManager capabilities. */
 private[manager] class StateManagerBehavior(
     val stateRef: Ref[IO, AppState],
     val undoRef: Ref[IO, UndoState],

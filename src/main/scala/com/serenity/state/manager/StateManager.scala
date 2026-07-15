@@ -234,7 +234,7 @@ object StateManager:
 
   private class StateManagerImpl(runtime: StateManagerRuntime)(using Balance) extends StateManager:
 
-    private val behavior = new StateManagerBehavior(
+    private val composition = new StateManagerBehavior(
       runtime.stateRef,
       runtime.undoRef,
       runtime.themeNamesRef,
@@ -256,4 +256,4 @@ object StateManager:
       runtime.sessionPersistence
     )
 
-    export behavior.*
+    export composition.*
