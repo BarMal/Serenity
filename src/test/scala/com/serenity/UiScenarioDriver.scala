@@ -31,6 +31,7 @@ case class ScenarioFrameEvidence(
     itemRects: Map[SurfaceId, List[LayoutRect]],
     sourcePreviewMappings: Map[BufferId, Set[Int]],
     visibleText: List[String],
+    renderedContentRows: Set[Int],
     animationComplete: Boolean,
     layoutViolations: List[LayoutContractViolation]
 )
@@ -100,7 +101,7 @@ final class UiScenarioDriver private (
       )
       val layout   = LayoutEngine.calculateLayoutWithUI(current, environment.viewport)
       val contract = EditorLayoutContract.from(current, environment.viewport, layout)
-      val frame    = ScenarioFrame(image, evidenceFor(current, contract))
+      val frame    = ScenarioFrame(image, evidenceFor(current, contract, image))
       artifactDirectory.foreach { directory =>
         Files.createDirectories(directory)
         javax.imageio.ImageIO.write(image, "png", directory.resolve(s"$name.png").toFile)
@@ -108,15 +109,22 @@ final class UiScenarioDriver private (
       frame
     }
 
-  private def evidenceFor(state: AppState, contract: EditorLayoutContract): ScenarioFrameEvidence =
+  private def evidenceFor(
+    state: AppState,
+    contract: EditorLayoutContract,
+    image: BufferedImage
+  ): ScenarioFrameEvidence =
     val surfaceRects =
       (contract.pinnedSurfaceRects ++ contract.expandedSurfaceRects) ++ contract.floatingOverlayRects.toMap
     val itemRects = surfaceRects.keys.map { surfaceId =>
-      val rects = contract.panelRowSlots(surfaceId).map(slot => LayoutRect(0, slot.y, environment.viewport.width, 1)) ++
-        contract.overlayRowSlots(surfaceId).map { slot =>
-          val content = contract.overlayContentRect(surfaceId).getOrElse(LayoutRect(0, slot.y, 0, 1))
-          LayoutRect(content.x, slot.y, content.width, 1)
-        }
+      val rects = contract.panelRowSlots(surfaceId).collect {
+        case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), y) =>
+          LayoutRect(0, y, environment.viewport.width, 1)
+      } ++ contract.overlayRowSlots(surfaceId).collect {
+        case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), y) =>
+          val content = contract.overlayContentRect(surfaceId).getOrElse(LayoutRect(0, y, 0, 1))
+          LayoutRect(content.x, y, content.width, 1)
+      }
       surfaceId -> rects
     }.toMap
     val mappings = state.buffers.map {
@@ -131,12 +139,20 @@ final class UiScenarioDriver private (
         buffer.content.toString.linesIterator.drop(buffer.viewport.topLine).take(buffer.viewport.visibleLines).toList
       }
     }
+    val renderedContentRows =
+      (0 until environment.viewport.height * environment.cellMetrics.lineHeight).collect {
+        case row
+            if (0 until environment.viewport.width * environment.cellMetrics.charWidth)
+              .exists(column => image.getRGB(column, row) != state.theme.background.getRGB) =>
+          row
+      }.toSet
     ScenarioFrameEvidence(
       state.focus,
       surfaceRects,
       itemRects,
       mappings,
       visibleText,
+      renderedContentRows,
       animationComplete = state.surfaceAnimations.values.forall(_.animationState.animations.isEmpty) &&
         state.buffers.values.forall(_.animations.animations.isEmpty),
       contract.violations

@@ -12,11 +12,21 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
   "Command runner UI scenario" should "search, expose matching click targets, and close and reopen" in {
     val driver = UiScenarioDriver.create("command-runner").unsafeRunSync()
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
-    "line".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
+    "toggle-line".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
     val searched  = driver.renderFrame("searched").unsafeRunSync()
     val surfaceId = searched.evidence.surfaceRects.keys.headOption.getOrElse(fail("Expected command runner"))
+    val target =
+      searched.evidence.itemRects.getOrElse(surfaceId, Nil).headOption.getOrElse(fail("Expected item target"))
 
-    searched.evidence.itemRects.getOrElse(surfaceId, Nil) should not be empty
+    driver.dispatch(MouseMove(target.x + 1, target.y)).unsafeRunSync()
+    val hovered = driver.state.unsafeRunSync().commandRunnerSurface.getOrElse(fail("Expected command runner"))
+    val selectedIndex = hovered.content match
+      case com.serenity.state.models.SurfaceContent.CommandPalette(runner) => runner.selectedIndex
+      case _                                                               => fail("Expected command palette")
+    selectedIndex shouldBe 0
+    val beforeClick = driver.state.unsafeRunSync().config.showLineNumbers
+    driver.dispatch(MouseClick(target.x + 1, target.y)).unsafeRunSync()
+    driver.state.unsafeRunSync().config.showLineNumbers shouldBe !beforeClick
     searched.evidence.layoutViolations shouldBe empty
     driver.dispatch(Escape).unsafeRunSync()
     driver.advanceToSettled().unsafeRunSync() shouldBe true
