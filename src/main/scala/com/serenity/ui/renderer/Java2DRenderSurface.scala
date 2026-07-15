@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.*
 import java.awt.font.{FontRenderContext, TextAttribute}
+import java.awt.geom.RoundRectangle2D
 import java.awt.image.*
 import java.util.concurrent.atomic.AtomicReference
 
@@ -211,6 +212,23 @@ class Java2DRenderSurface(
     g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
     g.drawRoundRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset, arcPx * 2, arcPx * 2)
     g.setStroke(savedStroke)
+
+  override def withRoundRectClip(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    arcPx: Int
+  )(render: => Unit): Unit =
+    val px        = metrics.toPixelX(x)
+    val py        = metrics.toPixelY(y)
+    val pw        = width * metrics.charWidth
+    val ph        = height * metrics.lineHeight
+    val savedClip = g.getClip
+    try
+      g.clip(new RoundRectangle2D.Double(px, py, pw, ph, arcPx * 2.0, arcPx * 2.0))
+      render
+    finally g.setClip(savedClip)
 
   override def fillPixelRect(
     xPx: Int,

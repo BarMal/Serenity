@@ -33,16 +33,17 @@ object TextOverlayRenderer:
 
     surface.setAlpha(SurfaceMaterials.panelAlpha(config, theme) * overlay.alphaMultiplier)
 
-    for (y, rowOffset) <- (rect.y until rect.bottom).zipWithIndex do
-      val (fg, bg) = rowColors(rowOffset)
-      surface.setForegroundColor(fg)
-      surface.setBackgroundColor(bg)
-      surface.putString(rect.x, y, " " * rect.width)
+    surface.withRoundRectClip(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx) {
+      for (y, rowOffset) <- (rect.y until rect.bottom).zipWithIndex do
+        val (fg, bg) = rowColors(rowOffset)
+        surface.setForegroundColor(fg)
+        surface.setBackgroundColor(bg)
+        surface.putString(rect.x, y, " " * rect.width)
 
-    applyGlassSheen(surface, overlay, theme, config)
-
+      applyGlassSheen(surface, overlay, theme, config)
+      drawContent(surface, overlay, theme, cursorVisible, rowColors, font, cellMetrics)
+    }
     drawBorder(surface, overlay, theme, config)
-    drawContent(surface, overlay, theme, cursorVisible, rowColors, font, cellMetrics)
 
     surface.setAlpha(1.0f)
     surface.setForegroundColor(theme.foreground)
