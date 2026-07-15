@@ -421,7 +421,8 @@ object CommandRunnerSettingsInputItems:
       CommandSurfaceItem.InputItem(
         id = "command-runner-item-gap-rows",
         label = "Command Item Spacing",
-        hint = s"Rows, decimals supported (${AppConfig.MinCommandRunnerItemGapRows}-${AppConfig.MaxCommandRunnerItemGapRows})",
+        hint =
+          s"Rows, decimals supported (${AppConfig.MinCommandRunnerItemGapRows}-${AppConfig.MaxCommandRunnerItemGapRows})",
         currentValue = commandItemGapRowsValue,
         isDecimal = true,
         parse = text =>
@@ -436,7 +437,8 @@ object CommandRunnerSettingsInputItems:
       CommandSurfaceItem.InputItem(
         id = "command-runner-cursor-gap-rows",
         label = "Command Cursor Spacing",
-        hint = s"Rows, decimals supported (${AppConfig.MinCommandRunnerCursorGapRows}-${AppConfig.MaxCommandRunnerCursorGapRows}) or auto",
+        hint =
+          s"Rows, decimals supported (${AppConfig.MinCommandRunnerCursorGapRows}-${AppConfig.MaxCommandRunnerCursorGapRows}) or auto",
         currentValue = commandCursorGapRowsValue,
         isDecimal = true,
         parse = text =>
@@ -444,8 +446,8 @@ object CommandRunnerSettingsInputItems:
           if normalized == "auto" then Some(CommandIntent.SetCommandRunnerCursorGapRows(None))
           else
             normalized.toDoubleOption
-            .filter(value =>
-              value.isFinite && value >= AppConfig.MinCommandRunnerCursorGapRows &&
+              .filter(value =>
+                value.isFinite && value >= AppConfig.MinCommandRunnerCursorGapRows &&
                   value <= AppConfig.MaxCommandRunnerCursorGapRows
               )
               .map(value => CommandIntent.SetCommandRunnerCursorGapRows(Some(value)))

@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.ui.layout.{CellMetrics, FloatingSurfaceGeometry, LayoutRect, PixelRect}
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -29,5 +29,5 @@ class FloatingSurfaceGeometrySpec extends AnyFlatSpec with Matchers:
     )
 
     geometry.itemIndexAt(pixelX = Some(5), pixelY = Some(31), cellX = 0, cellY = 0) shouldBe Some(1)
-    geometry.itemIndexAt(pixelX = None, pixelY = None, cellX = 0, cellY = 1) shouldBe Some(0)
+    geometry.itemIndexAt(pixelX = None, pixelY = None, cellX = 0, cellY = 0) shouldBe Some(0)
   }

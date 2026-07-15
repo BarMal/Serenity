@@ -2,14 +2,13 @@ package com.serenity.ui.layout
 
 /** A logical-pixel rectangle used at the boundary between cell-based editor layout and floating UI. */
 case class PixelRect(x: Double, y: Double, width: Double, height: Double):
-  def right: Double = x + width
+  def right: Double  = x + width
   def bottom: Double = y + height
 
   def contains(pixelX: Double, pixelY: Double): Boolean =
     pixelX >= x && pixelX < right && pixelY >= y && pixelY < bottom
 
-/**
-  * The authoritative geometry for a floating surface. Editor anchors remain in cells; all spacing and hit targets
+/** The authoritative geometry for a floating surface. Editor anchors remain in cells; all spacing and hit targets
   * within the surface are expressed in logical pixels so fractional rows never alter text cell height.
   */
 case class FloatingSurfaceGeometry(
