@@ -269,7 +269,7 @@ private[manager] class StateManagerBehavior(
       effects.saveBufferAsEffect(bufferId, path)
 
   private lazy val effectSessionPort: EffectSessionPort = new EffectSessionPort:
-    val sessionPersistence                  = runtimeSessionPersistence
+    val sessionPersistence = runtimeSessionPersistence
     def saveSession(): IO[Unit] =
       runtimeStateRef.get.flatMap { state =>
         sessionManager.saveSession(state, persistUnsavedBuffers = true) >>
