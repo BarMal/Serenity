@@ -54,10 +54,9 @@ final private[manager] class StateManagerFileFacade(
     stateRef.get.map(_.recentFiles)
 
 final private[manager] class StateManagerFileFacadeBehavior(
-    protected val runtime: StateManagerRuntime,
-    dependencies: StateManagerBehaviorDependencies
-)(using protected val balance: com.serenity.rope.Balance)
-    extends StateManagerRuntimeSupport:
+    stateRef: Ref[IO, AppState],
+    dependencies: FileCapabilityPort
+)(using protected val balance: com.serenity.rope.Balance):
 
   import dependencies.*
 

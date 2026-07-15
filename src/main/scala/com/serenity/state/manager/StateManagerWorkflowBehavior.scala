@@ -12,10 +12,8 @@ import com.serenity.text.TextEditing
 import com.serenity.ui.layout.LayoutEngine
 
 final private[manager] class StateManagerWorkflowBehavior(
-    protected val runtime: StateManagerRuntime,
-    dependencies: StateManagerBehaviorDependencies
-)(using protected val balance: com.serenity.rope.Balance)
-    extends StateManagerRuntimeSupport:
+    dependencies: WorkflowCapabilityPort
+)(using protected val balance: com.serenity.rope.Balance):
 
   import dependencies.*
 

@@ -103,12 +103,12 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
-  "StateManagerEffectBehavior" should "dispatch effects without runtime infrastructure" in {
+  "CommandEffectInterpreter" should "dispatch effects without runtime infrastructure" in {
     val effect = LspEffect.FileClosed("file:///isolated.txt", LanguageId.Scala)
     val program = for
       observed <- Ref.of[IO, List[LspEffect]](Nil)
-      behavior = new StateManagerEffectBehavior(
-        StateManagerEffectBehavior.Dependencies(
+      behavior = new CommandEffectInterpreter(
+        CommandEffectInterpreter.Dependencies(
           lifecycle = _ => IO.unit,
           command = _ => IO.unit,
           theme = _ => IO.unit,

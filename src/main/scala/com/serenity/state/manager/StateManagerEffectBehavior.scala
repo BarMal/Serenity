@@ -24,17 +24,15 @@ import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.config.{ThemeConfigWriter, ThemeCreatorState}
 
 final private[manager] class StateManagerEffectHandlers(
-    protected val runtime: StateManagerRuntime,
-    dependencies: StateManagerBehaviorDependencies
-)(using protected val balance: com.serenity.rope.Balance)
-    extends StateManagerRuntimeSupport:
+    dependencies: EffectCapabilityPort
+)(using protected val balance: com.serenity.rope.Balance):
 
   import dependencies.*
   private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
   private val UnsavedPresetCopySuffix       = " (modified, unsaved)"
 
-  private[manager] val behavior = new StateManagerEffectBehavior(
-    StateManagerEffectBehavior.Dependencies(
+  private[manager] val behavior = new CommandEffectInterpreter(
+    CommandEffectInterpreter.Dependencies(
       interpretLifecycleEffect,
       interpretCommandEffect,
       interpretThemeEffect,

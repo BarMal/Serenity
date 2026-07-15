@@ -8,10 +8,10 @@ import com.serenity.state.reducers.{ModalStateReducer, PanelStateReducer, PeekSt
 import com.serenity.ui.layout.*
 
 final private[manager] class StateManagerSurfaceFacadeBehavior(
-    protected val runtime: StateManagerRuntime,
-    dependencies: StateManagerBehaviorDependencies
-)(using protected val balance: com.serenity.rope.Balance)
-    extends StateManagerRuntimeSupport:
+    stateRef: cats.effect.Ref[IO, AppState],
+    logger: org.typelevel.log4cats.Logger[IO],
+    dependencies: SurfaceCapabilityPort
+)(using protected val balance: com.serenity.rope.Balance):
 
   import dependencies.*
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =

@@ -19,12 +19,39 @@ import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.Logger
 
-/** Operations required across behavior boundaries without depending on the public manager façade. */
-private[manager] trait StateManagerBehaviorDependencies:
+/** File and close-workflow operations used by the file capability. */
+private[manager] trait FileCapabilityPort:
+  def closeBuffer(bufferId: BufferId): IO[Unit]
+  def directLoadFileEffect(path: Path): IO[Unit]
+  def saveBufferEffect(bufferId: BufferId): IO[Unit]
+  def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit]
+
+/** Surface transitions owned by the surface capability. */
+private[manager] trait SurfaceCapabilityPort:
+  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
+  def applyAnimationHooks(previousState: AppState): IO[Unit]
+
+/** Editor and workflow operations used while handling command effects. */
+private[manager] trait EffectCapabilityPort:
+  def stateRef: Ref[IO, AppState]
+  def themeNamesRef: Ref[IO, List[String]]
+  def quitSignal: Deferred[IO, Unit]
+  def logger: Logger[IO]
+  def themeManager: AppThemeManager
+  def lspQueue: Queue[IO, LspEffect]
+  def onFontConfigChanged: FontConfig => IO[Unit]
+  def deviceTextScaleProvider: IO[Double]
+  def configPersistencePath: Option[Path]
+  def uiPresetStore: UiPresetStore
+  def windowSizeProvider: IO[Option[PreferredWindowSize]]
+  def fileDialog: com.serenity.io.FileDialog
+  def fileManager: FileManager
+  def sessionPersistence: SessionPersistence
+  def trackRecentFile(current: List[Path], path: Path): List[Path] =
+    (path :: current.filterNot(_ == path)).take(20)
   def updateState(update: AppState => AppState): IO[Unit]
   def applyEvent(event: Event): IO[Unit]
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
-  def createNewEmptyBuffer(): IO[BufferId]
   def closeBuffer(bufferId: BufferId): IO[Unit]
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
   def switchToPane(paneId: PaneId): IO[Unit]
@@ -67,6 +94,54 @@ private[manager] trait StateManagerBehaviorDependencies:
   def restoreStartupSession(): IO[Unit]
   def activeEditorBufferId(state: AppState): Option[BufferId]
 
+/** Operations used by editor façade methods. */
+private[manager] trait EditorCapabilityPort:
+  def stateRef: Ref[IO, AppState]
+  def lspQueue: Queue[IO, LspEffect]
+  def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
+  def createNewEmptyBuffer(): IO[BufferId]
+  def closeBuffer(bufferId: BufferId): IO[Unit]
+  def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
+  def switchToPane(paneId: PaneId): IO[Unit]
+  def ensureCommandRunnerSurface(state: AppState): AppState
+  def advanceSurfaceAnimations(state: AppState): AppState
+
+/** Operations used by the viewport capability. */
+private[manager] trait ViewportCapabilityPort:
+  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
+  def updateFontConfig(update: FontConfig => FontConfig): IO[Unit]
+
+/** Operations used by file/session workflow planning. */
+private[manager] trait WorkflowCapabilityPort:
+  def stateRef: Ref[IO, AppState]
+  def undoRef: Ref[IO, UndoState]
+  def quitSignal: Deferred[IO, Unit]
+  def logger: Logger[IO]
+  def fileDialog: com.serenity.io.FileDialog
+  def fileManager: FileManager
+  def sessionPersistence: SessionPersistence
+  def trackRecentFile(current: List[Path], path: Path): List[Path] =
+    (path :: current.filterNot(_ == path)).take(20)
+  def updateState(update: AppState => AppState): IO[Unit]
+  def createNewEmptyBuffer(): IO[BufferId]
+  def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
+  def switchToPane(paneId: PaneId): IO[Unit]
+  def loadSession(): IO[Option[AppState]]
+  def ensureCommandRunnerSurface(state: AppState): AppState
+  def saveBufferEffect(bufferId: BufferId): IO[Unit]
+  def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit]
+  def clearCloseActions(state: AppState): AppState
+  def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]
+  def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit]
+  def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
+  def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
+  def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
+  def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
+  def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState
+  def createStartupSession(): IO[Unit]
+  def restoreStartupSession(): IO[Unit]
+  def activeEditorBufferId(state: AppState): Option[BufferId]
+
 /** Dependencies used by event processing, excluding file, session, and theme services. */
 private[manager] trait StateManagerEventPipelineDependencies:
   def stateRef: Ref[IO, AppState]
@@ -89,45 +164,176 @@ private[manager] trait StateManagerEventPipelineDependencies:
   def executeCommand(command: com.serenity.command.Command): IO[Unit]
   def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
 
-private[manager] trait StateManagerRuntimeSupport:
-  protected def runtime: StateManagerRuntime
-  protected def balance: Balance
-
-  protected def stateRef: Ref[IO, AppState]          = runtime.stateRef
-  protected def undoRef: Ref[IO, UndoState]          = runtime.undoRef
-  protected def themeNamesRef: Ref[IO, List[String]] = runtime.themeNamesRef
-  protected def quitSignal: Deferred[IO, Unit]       = runtime.quitSignal
-  protected def logger: Logger[IO]                   = runtime.logger
-  protected def policy: SessionManager.SessionPolicy = runtime.policy
-  protected def themeManager: AppThemeManager        = runtime.themeManager
-  protected def lspQueue: Queue[IO, LspEffect]       = runtime.lspQueue
-  protected def documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]] =
-    runtime.documentAnalysisFiberRef
-  protected def onFontConfigChanged: FontConfig => IO[Unit]                   = runtime.onFontConfigChanged
-  protected def deviceTextScaleProvider: IO[Double]                           = runtime.deviceTextScaleProvider
-  protected def configPersistencePath: Option[Path]                           = runtime.configPersistencePath
-  protected def uiPresetStore: UiPresetStore                                  = runtime.uiPresetStore
-  protected def windowSizeProvider: IO[Option[PreferredWindowSize]]           = runtime.windowSizeProvider
-  protected def onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit] = runtime.onPreferredWindowSizeChanged
-  protected def fileDialog: com.serenity.io.FileDialog                        = runtime.fileDialog
-
-  protected def mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]] = runtime.mouseTargetCacheRef
-
-  protected def fileManager: FileManager               = runtime.fileManager
-  protected def sessionManager: SessionManager         = runtime.sessionManager
-  protected def sessionPersistence: SessionPersistence = runtime.sessionPersistence
-
-  protected def trackRecentFile(current: List[Path], path: Path): List[Path] =
-    (path :: current.filterNot(_ == path)).take(20)
-
-/** Internal behavior implementation with explicit runtime dependencies. */
-private[manager] class StateManagerBehavior(protected val runtime: StateManagerRuntime)(using providedBalance: Balance)
-    extends StateManagerRuntimeSupport,
-      StateManagerBehaviorDependencies:
+/** Explicit composition root for StateManager capabilities. */
+private[manager] class StateManagerBehavior(
+    val stateRef: Ref[IO, AppState],
+    val undoRef: Ref[IO, UndoState],
+    val themeNamesRef: Ref[IO, List[String]],
+    val quitSignal: Deferred[IO, Unit],
+    val logger: Logger[IO],
+    val policy: SessionManager.SessionPolicy,
+    val themeManager: AppThemeManager,
+    val lspQueue: Queue[IO, LspEffect],
+    val mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
+    val documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
+    val onFontConfigChanged: FontConfig => IO[Unit],
+    val deviceTextScaleProvider: IO[Double],
+    val configPersistencePath: Option[Path],
+    val uiPresetStore: UiPresetStore,
+    val windowSizeProvider: IO[Option[PreferredWindowSize]],
+    val onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit],
+    val fileDialog: com.serenity.io.FileDialog,
+    val fileManager: FileManager,
+    val sessionManager: SessionManager,
+    val sessionPersistence: SessionPersistence
+)(using providedBalance: Balance):
 
   protected val balance: Balance = providedBalance
 
-  private val dependencies: StateManagerBehaviorDependencies = this
+  private lazy val effectPort: EffectCapabilityPort = new EffectCapabilityPort:
+    val stateRef                                            = StateManagerBehavior.this.stateRef
+    val themeNamesRef                                       = StateManagerBehavior.this.themeNamesRef
+    val quitSignal                                          = StateManagerBehavior.this.quitSignal
+    val logger                                              = StateManagerBehavior.this.logger
+    val themeManager                                        = StateManagerBehavior.this.themeManager
+    val lspQueue                                            = StateManagerBehavior.this.lspQueue
+    val onFontConfigChanged                                 = StateManagerBehavior.this.onFontConfigChanged
+    val deviceTextScaleProvider                             = StateManagerBehavior.this.deviceTextScaleProvider
+    val configPersistencePath                               = StateManagerBehavior.this.configPersistencePath
+    val uiPresetStore                                       = StateManagerBehavior.this.uiPresetStore
+    val windowSizeProvider                                  = StateManagerBehavior.this.windowSizeProvider
+    val fileDialog                                          = StateManagerBehavior.this.fileDialog
+    val fileManager                                         = StateManagerBehavior.this.fileManager
+    val sessionPersistence                                  = StateManagerBehavior.this.sessionPersistence
+    def updateState(update: AppState => AppState): IO[Unit] = StateManagerBehavior.this.updateState(update)
+    def applyEvent(event: Event): IO[Unit]                  = StateManagerBehavior.this.applyEvent(event)
+    def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
+      StateManagerBehavior.this.createBuffer(content, filePath)
+    def closeBuffer(bufferId: BufferId): IO[Unit]                    = StateManagerBehavior.this.closeBuffer(bufferId)
+    def createPane(bufferId: Option[BufferId]): IO[PaneId]           = StateManagerBehavior.this.createPane(bufferId)
+    def switchToPane(paneId: PaneId): IO[Unit]                       = StateManagerBehavior.this.switchToPane(paneId)
+    def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = StateManagerBehavior.this.showPeek(content, at)
+    def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
+      StateManagerBehavior.this.pinPanel(content, position, size)
+    def unpinPanel(position: PanelPosition): IO[Unit]          = StateManagerBehavior.this.unpinPanel(position)
+    def expandPinnedPanel(position: PanelPosition): IO[Unit]   = StateManagerBehavior.this.expandPinnedPanel(position)
+    def collapseExpandedPanel(): IO[Unit]                      = StateManagerBehavior.this.collapseExpandedPanel()
+    def switchToPinnedPanel(position: PanelPosition): IO[Unit] = StateManagerBehavior.this.switchToPinnedPanel(position)
+    def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
+      StateManagerBehavior.this.resizePinnedPanel(position, newSize)
+    def saveSession(): IO[Unit]             = StateManagerBehavior.this.saveSession()
+    def loadSession(): IO[Option[AppState]] = StateManagerBehavior.this.loadSession()
+    def clearSession(): IO[Unit]            = StateManagerBehavior.this.clearSession()
+    def executeCommand(command: com.serenity.command.Command): IO[Unit] =
+      StateManagerBehavior.this.executeCommand(command)
+    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      StateManagerBehavior.this.validateAndUpdateState(newState, fallbackState)
+    def scheduleDocumentAnalysis(): IO[Unit] = StateManagerBehavior.this.scheduleDocumentAnalysis()
+    def ensureCommandRunnerSurface(state: AppState): AppState =
+      StateManagerBehavior.this.ensureCommandRunnerSurface(state)
+    def applyAnimationHooks(previousState: AppState): IO[Unit] =
+      StateManagerBehavior.this.applyAnimationHooks(previousState)
+    def advanceSurfaceAnimations(state: AppState): AppState = StateManagerBehavior.this.advanceSurfaceAnimations(state)
+    def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit] =
+      StateManagerBehavior.this.interpretEffect(effect)
+    def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =
+      StateManagerBehavior.this.interpretCommand(command, state)
+    def directLoadFileEffect(path: Path): IO[Unit]     = StateManagerBehavior.this.directLoadFileEffect(path)
+    def saveBufferEffect(bufferId: BufferId): IO[Unit] = StateManagerBehavior.this.saveBufferEffect(bufferId)
+    def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
+      StateManagerBehavior.this.saveBufferAsEffect(bufferId, path)
+    def clearCloseActions(state: AppState): AppState = StateManagerBehavior.this.clearCloseActions(state)
+    def updateFontConfig(update: FontConfig => FontConfig): IO[Unit] =
+      StateManagerBehavior.this.updateFontConfig(update)
+    def updateConfig(
+      update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
+    ): IO[com.serenity.config.AppConfig] = StateManagerBehavior.this.updateConfig(update)
+    def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
+      StateManagerBehavior.this.beginCloseAction(scope, state)
+    def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
+      StateManagerBehavior.this.requestSaveAsFileDialog(state, bufferIdOverride)
+    def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+      StateManagerBehavior.this.refreshFileWorkflowEffect(surfaceId)
+    def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+      StateManagerBehavior.this.submitFileWorkflowEffect(surfaceId)
+    def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+      StateManagerBehavior.this.submitReplaceWorkflowEffect(surfaceId)
+    def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+      StateManagerBehavior.this.submitCloseWorkflowEffect(surfaceId)
+    def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
+      StateManagerBehavior.this.restoreSessionIntoCurrentViewport(restoredState, currentState)
+    def createStartupSession(): IO[Unit]                        = StateManagerBehavior.this.createStartupSession()
+    def restoreStartupSession(): IO[Unit]                       = StateManagerBehavior.this.restoreStartupSession()
+    def activeEditorBufferId(state: AppState): Option[BufferId] = StateManagerBehavior.this.activeEditorBufferId(state)
+
+  private lazy val filePort: FileCapabilityPort = new FileCapabilityPort:
+    def closeBuffer(bufferId: BufferId): IO[Unit]      = StateManagerBehavior.this.closeBuffer(bufferId)
+    def directLoadFileEffect(path: Path): IO[Unit]     = StateManagerBehavior.this.directLoadFileEffect(path)
+    def saveBufferEffect(bufferId: BufferId): IO[Unit] = StateManagerBehavior.this.saveBufferEffect(bufferId)
+    def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
+      StateManagerBehavior.this.saveBufferAsEffect(bufferId, path)
+
+  private lazy val editorPort: EditorCapabilityPort = new EditorCapabilityPort:
+    val stateRef = StateManagerBehavior.this.stateRef
+    val lspQueue = StateManagerBehavior.this.lspQueue
+    def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
+      StateManagerBehavior.this.createBuffer(content, filePath)
+    def createNewEmptyBuffer(): IO[BufferId]               = StateManagerBehavior.this.createNewEmptyBuffer()
+    def closeBuffer(bufferId: BufferId): IO[Unit]          = StateManagerBehavior.this.closeBuffer(bufferId)
+    def createPane(bufferId: Option[BufferId]): IO[PaneId] = StateManagerBehavior.this.createPane(bufferId)
+    def switchToPane(paneId: PaneId): IO[Unit]             = StateManagerBehavior.this.switchToPane(paneId)
+    def ensureCommandRunnerSurface(state: AppState): AppState =
+      StateManagerBehavior.this.ensureCommandRunnerSurface(state)
+    def advanceSurfaceAnimations(state: AppState): AppState = StateManagerBehavior.this.advanceSurfaceAnimations(state)
+
+  private lazy val workflowPort: WorkflowCapabilityPort = new WorkflowCapabilityPort:
+    val stateRef                                            = StateManagerBehavior.this.stateRef
+    val undoRef                                             = StateManagerBehavior.this.undoRef
+    val quitSignal                                          = StateManagerBehavior.this.quitSignal
+    val logger                                              = StateManagerBehavior.this.logger
+    val fileDialog                                          = StateManagerBehavior.this.fileDialog
+    val fileManager                                         = StateManagerBehavior.this.fileManager
+    val sessionPersistence                                  = StateManagerBehavior.this.sessionPersistence
+    def updateState(update: AppState => AppState): IO[Unit] = StateManagerBehavior.this.updateState(update)
+    def createNewEmptyBuffer(): IO[BufferId]                = StateManagerBehavior.this.createNewEmptyBuffer()
+    def createPane(bufferId: Option[BufferId]): IO[PaneId]  = StateManagerBehavior.this.createPane(bufferId)
+    def switchToPane(paneId: PaneId): IO[Unit]              = StateManagerBehavior.this.switchToPane(paneId)
+    def loadSession(): IO[Option[AppState]]                 = StateManagerBehavior.this.loadSession()
+    def ensureCommandRunnerSurface(state: AppState): AppState =
+      StateManagerBehavior.this.ensureCommandRunnerSurface(state)
+    def saveBufferEffect(bufferId: BufferId): IO[Unit] = StateManagerBehavior.this.saveBufferEffect(bufferId)
+    def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
+      StateManagerBehavior.this.saveBufferAsEffect(bufferId, path)
+    def clearCloseActions(state: AppState): AppState = StateManagerBehavior.this.clearCloseActions(state)
+    def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
+      StateManagerBehavior.this.beginCloseAction(scope, state)
+    def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
+      StateManagerBehavior.this.requestSaveAsFileDialog(state, bufferIdOverride)
+    def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+      StateManagerBehavior.this.refreshFileWorkflowEffect(surfaceId)
+    def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+      StateManagerBehavior.this.submitFileWorkflowEffect(surfaceId)
+    def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+      StateManagerBehavior.this.submitReplaceWorkflowEffect(surfaceId)
+    def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+      StateManagerBehavior.this.submitCloseWorkflowEffect(surfaceId)
+    def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
+      StateManagerBehavior.this.restoreSessionIntoCurrentViewport(restoredState, currentState)
+    def createStartupSession(): IO[Unit]                        = StateManagerBehavior.this.createStartupSession()
+    def restoreStartupSession(): IO[Unit]                       = StateManagerBehavior.this.restoreStartupSession()
+    def activeEditorBufferId(state: AppState): Option[BufferId] = StateManagerBehavior.this.activeEditorBufferId(state)
+
+  private lazy val surfacePort: SurfaceCapabilityPort = new SurfaceCapabilityPort:
+    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      StateManagerBehavior.this.validateAndUpdateState(newState, fallbackState)
+    def applyAnimationHooks(previousState: AppState): IO[Unit] =
+      StateManagerBehavior.this.applyAnimationHooks(previousState)
+
+  private lazy val viewportPort: ViewportCapabilityPort = new ViewportCapabilityPort:
+    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      StateManagerBehavior.this.validateAndUpdateState(newState, fallbackState)
+    def updateFontConfig(update: FontConfig => FontConfig): IO[Unit] =
+      StateManagerBehavior.this.updateFontConfig(update)
 
   private lazy val eventPipelineDependencies: StateManagerEventPipelineDependencies =
     new StateManagerEventPipelineDependencies:
@@ -156,13 +362,13 @@ private[manager] class StateManagerBehavior(protected val runtime: StateManagerR
       def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
         StateManagerBehavior.this.resizePinnedPanel(position, newSize)
 
-  private lazy val workflow = new StateManagerWorkflowBehavior(runtime, dependencies)
-  private lazy val effects  = new StateManagerEffectHandlers(runtime, dependencies)
+  private lazy val workflow = new StateManagerWorkflowBehavior(workflowPort)
+  private lazy val effects  = new StateManagerEffectHandlers(effectPort)
   private lazy val events   = new StateManagerEventPipelineBehavior(eventPipelineDependencies)
-  private lazy val editor   = new StateManagerEditorFacadeBehavior(runtime, dependencies)
-  private lazy val surfaces = new StateManagerSurfaceFacadeBehavior(runtime, dependencies)
-  private lazy val viewport = new StateManagerViewportBehavior(runtime, dependencies)
-  private lazy val files    = new StateManagerFileFacadeBehavior(runtime, dependencies)
+  private lazy val editor   = new StateManagerEditorFacadeBehavior(editorPort)
+  private lazy val surfaces = new StateManagerSurfaceFacadeBehavior(stateRef, logger, surfacePort)
+  private lazy val viewport = new StateManagerViewportBehavior(stateRef, logger, deviceTextScaleProvider, viewportPort)
+  private lazy val files    = new StateManagerFileFacadeBehavior(stateRef, filePort)
 
   export editor.*
   export events.applyEvent
@@ -259,7 +465,3 @@ private[manager] class StateManagerBehavior(protected val runtime: StateManagerR
               sessionPersistence.maybeSaveSession(_, com.serenity.session.SessionSaveTrigger.Interval)
             )
           )
-
-private[manager] object StateManagerBehavior:
-  def apply(runtime: StateManagerRuntime)(using Balance): StateManagerBehavior =
-    new StateManagerBehavior(runtime)

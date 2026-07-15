@@ -8,10 +8,11 @@ import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, ViewportSize}
 
 final private[manager] class StateManagerViewportBehavior(
-    protected val runtime: StateManagerRuntime,
-    dependencies: StateManagerBehaviorDependencies
-)(using protected val balance: com.serenity.rope.Balance)
-    extends StateManagerRuntimeSupport:
+    stateRef: cats.effect.Ref[IO, AppState],
+    logger: org.typelevel.log4cats.Logger[IO],
+    deviceTextScaleProvider: IO[Double],
+    dependencies: ViewportCapabilityPort
+)(using protected val balance: com.serenity.rope.Balance):
 
   import dependencies.*
 

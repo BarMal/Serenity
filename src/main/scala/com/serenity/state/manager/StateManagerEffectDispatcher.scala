@@ -4,8 +4,8 @@ import cats.effect.IO
 import com.serenity.state.reducers.*
 
 /** Interprets reducer effects through the focused handlers supplied by the composition root. */
-final private[manager] class StateManagerEffectBehavior(
-    dependencies: StateManagerEffectBehavior.Dependencies
+final private[manager] class CommandEffectInterpreter(
+    dependencies: CommandEffectInterpreter.Dependencies
 ):
 
   def interpret(effect: AppEffect): IO[Unit] =
@@ -19,7 +19,7 @@ final private[manager] class StateManagerEffectBehavior(
       case AppEffect.Workflow(value)       => dependencies.workflow(value)
       case AppEffect.LspQueue(value)       => dependencies.lspQueue(value)
 
-private[manager] object StateManagerEffectBehavior:
+private[manager] object CommandEffectInterpreter:
 
   final case class Dependencies(
       lifecycle: LifecycleEffect => IO[Unit],
