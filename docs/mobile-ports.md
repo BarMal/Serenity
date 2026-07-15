@@ -1,5 +1,7 @@
 # Mobile Port Exploration
 
+This exploration records the outcome for [GitHub issue #179](https://github.com/BarMal/Serenity/issues/179): mobile work remains deferred until a text-editing-only proof of concept demonstrates a viable Android and iOS interaction model.
+
 ## Decision
 
 Caution, here be imagine dragons: the recommendation not to start a mobile
