@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path}
 import javax.imageio.ImageIO
 
 import cats.effect.{IO, Ref}
+import com.serenity.command.Command
 import com.serenity.config.MarkdownViewMode
 import com.serenity.keystroke.events.{Event, MouseClick, ResizeEvent}
 import com.serenity.lsp.config.LanguageId
@@ -14,6 +15,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.renderer.*
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
@@ -51,6 +53,15 @@ final class UiScenarioDriver private (
 
   def setCursor(paneId: PaneId, cursor: CursorPosition): IO[Unit] =
     stateManager.setCursorPosition(paneId, cursor.line, cursor.column)
+
+  /** Reads the public immutable app state for assertions that cannot be rendered as geometry. */
+  def snapshot: IO[AppState] = stateManager.getCurrentState
+
+  /** Applies a public state setup used by a scenario fixture. */
+  def updateState(update: AppState => AppState): IO[Unit] = stateManager.updateState(update)
+
+  /** Executes a command through the real command interpreter. */
+  def execute(command: Command): IO[Unit] = stateManager.executeCommand(command)
 
   /** Routes an input event through the real application event pipeline. */
   def dispatch(event: Event): IO[Unit] =
@@ -156,7 +167,9 @@ final class UiScenarioDriver private (
     EditorLayoutContract.panelRectFor(surface, layout).orElse(EditorLayoutContract.overlayRectFor(surface.id, layout))
 
   private def rowSlots(surfaceId: SurfaceId, contract: EditorLayoutContract): List[SurfaceContentRowSlot] =
-    contract.panelRowSlots(surfaceId) ++ contract.overlayRowSlots(surfaceId)
+    (contract.panelRowSlots(surfaceId) ++ contract.overlayRowSlots(surfaceId)).collect {
+      case slot @ SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), _) => slot
+    }
 
   private def markdownMappings(state: AppState): Vector[MarkdownMapping] =
     state.buffers.values.toVector.flatMap { buffer =>
@@ -217,10 +230,13 @@ object UiScenarioDriver:
     for
       sessionRoot <- IO.blocking(Files.createTempDirectory("ui-scenario-session"))
       viewportRef <- Ref.of[IO, ViewportSize](viewport)
-      logger = LoggerFactory[IO].getLogger(using LoggerName("UiScenarioDriver"))
+      logger      = LoggerFactory[IO].getLogger(using LoggerName("UiScenarioDriver"))
+      presetStore = UiPresetStore(sessionRoot.resolve("ui-presets.json"))
       stateManager <- StateManager.apply(
         logger,
         deviceTextScaleProvider = IO.pure(deviceScale),
-        sessionRootOverride = Some(sessionRoot)
+        sessionRootOverride = Some(sessionRoot),
+        uiPresetStore = presetStore
       )
+      _ <- stateManager.handleViewportResize(viewport)
     yield UiScenarioDriver(stateManager, viewportRef, metrics, deviceScale.max(1.0), diagnosticDirectory)
