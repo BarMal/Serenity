@@ -234,6 +234,26 @@ object StateManager:
 
   private class StateManagerImpl(runtime: StateManagerRuntime)(using Balance) extends StateManager:
 
-    private val behavior = new StateManagerBehavior(runtime)
+    private val behavior = new StateManagerBehavior(
+      runtime.stateRef,
+      runtime.undoRef,
+      runtime.themeNamesRef,
+      runtime.quitSignal,
+      runtime.logger,
+      runtime.policy,
+      runtime.themeManager,
+      runtime.lspQueue,
+      runtime.mouseTargetCacheRef,
+      runtime.documentAnalysisFiberRef,
+      runtime.onFontConfigChanged,
+      runtime.deviceTextScaleProvider,
+      runtime.configPersistencePath,
+      runtime.uiPresetStore,
+      runtime.windowSizeProvider,
+      runtime.fileDialog,
+      runtime.fileManager,
+      runtime.sessionManager,
+      runtime.sessionPersistence
+    )
 
     export behavior.*
