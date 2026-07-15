@@ -99,6 +99,14 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     sources should not include "protected val balance"
   }
 
+  it should "wire capability ports directly to their owning components" in {
+    val compositionRoot = Files.readString(
+      Path.of("src/main/scala/com/serenity/state/manager/StateManagerRuntimeSupport.scala")
+    )
+
+    compositionRoot should not include "StateManagerBehavior.this"
+  }
+
   "CommandEffectInterpreter" should "preserve declared effect order and propagate required failures" in {
     val program = for
       observed <- Ref.of[IO, List[String]](Nil)
