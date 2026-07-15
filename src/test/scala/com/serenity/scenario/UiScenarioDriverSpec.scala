@@ -1,7 +1,8 @@
 package com.serenity.scenario
 
-import cats.effect.unsafe.implicits.global
 import scala.io.Source
+
+import cats.effect.unsafe.implicits.global
 import com.serenity.config.MarkdownViewMode
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
