@@ -145,6 +145,14 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     sm.getCurrentState.unsafeRunSync().config.backgroundStyle shouldBe BackgroundStyle.GlassLike
   }
 
+  "SetPostProcessingEffect" should "update the effect via command runner navigation" in {
+    val sm = makeStateManager()
+    openSettingsGroup(sm, "post-processing")
+    sm.applyEvent(MoveRight).unsafeRunSync()
+
+    sm.getCurrentState.unsafeRunSync().config.postProcessingEffect shouldBe PostProcessingEffect.Scanlines
+  }
+
   // ── SessionState JSON round-trip ──────────────────────────────────────────
 
   "AppConfig JSON decoder" should "default cursorMode to Blink when key is missing" in {

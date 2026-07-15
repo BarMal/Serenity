@@ -81,6 +81,7 @@ enum CommandIntent:
   case FormatCurrentFile
   case SetAnimationMode(mode: AnimationMode)
   case SetMaterialPreset(preset: MaterialPreset)
+  case SetPostProcessingEffect(effect: PostProcessingEffect)
   case SetMotionPreset(preset: MotionPreset)
   case SetElementTransitionSpeedScale(scale: Double)
   case SetEditorTextTransitionSpeedScale(scale: Double)

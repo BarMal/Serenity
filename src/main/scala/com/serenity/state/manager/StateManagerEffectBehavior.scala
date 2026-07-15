@@ -457,6 +457,8 @@ private[manager] trait StateManagerEffectBehavior extends StateManagerWorkflowBe
         }.void
       case CommandIntent.SetMaterialPreset(preset) =>
         updateAppearanceConfig(_.withMaterialPreset(preset)).void
+      case CommandIntent.SetPostProcessingEffect(effect) =>
+        updateAppearanceConfig(_.withPostProcessingEffect(effect)).void
       case CommandIntent.SetMotionPreset(preset) =>
         updateMotionConfig(_.withMotionPreset(preset)).void
       case CommandIntent.SetElementTransitionSpeedScale(scale) =>

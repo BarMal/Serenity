@@ -248,6 +248,22 @@ object CommandRunnerSettingsItems:
       hint = Some("Material baseline for panels and overlays")
     )
 
+  private[command] def postProcessingOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "post-processing",
+      label = "Post-processing",
+      options = List(
+        CommandOption("Off", CommandIntent.SetPostProcessingEffect(PostProcessingEffect.Off)),
+        CommandOption("Scanlines", CommandIntent.SetPostProcessingEffect(PostProcessingEffect.Scanlines)),
+        CommandOption("Glow", CommandIntent.SetPostProcessingEffect(PostProcessingEffect.Glow))
+      ),
+      selectedIndex = optionSelections.getOrElse("post-processing", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Frame-wide scanlines or glow")
+    )
+
   private[command] def motionPresetOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "motion-preset",

@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.BackgroundStyle
+import com.serenity.config.{BackgroundStyle, PostProcessingEffect}
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.presets.UiPreset
 import org.scalatest.flatspec.AnyFlatSpec
@@ -16,6 +16,12 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     background.selectedOption shouldBe "Glass"
     background.selectedIntent shouldBe Some(CommandIntent.SetBackgroundStyle(BackgroundStyle.GlassLike))
     background.options.map(_.label) shouldBe List("Solid", "Transparent", "Frosted", "Glass")
+
+    val postProcessing = CommandRunnerSettingsItems.postProcessingOptionItem(Map("post-processing" -> 2))
+    postProcessing.label shouldBe "Post-processing"
+    postProcessing.selectedOption shouldBe "Glow"
+    postProcessing.selectedIntent shouldBe Some(CommandIntent.SetPostProcessingEffect(PostProcessingEffect.Glow))
+    postProcessing.options.map(_.label) shouldBe List("Off", "Scanlines", "Glow")
 
     cursor.label shouldBe "Cursor Style"
     cursor.selectedOption shouldBe "Breathe"

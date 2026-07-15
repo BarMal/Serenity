@@ -85,6 +85,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     groupById(groups, "settings-surface-appearance").children.map(_.id) shouldBe List(
       "background-style",
       "material-preset",
+      "post-processing",
       "blur-radius"
     )
     groupById(groups, "settings-animation").children.map(_.id) should contain allOf (
@@ -241,6 +242,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     groupById(groups, "settings-preset-surface-material").children.map(_.id) shouldBe List(
       "background-style",
       "material-preset",
+      "post-processing",
       "blur-radius"
     )
   }
