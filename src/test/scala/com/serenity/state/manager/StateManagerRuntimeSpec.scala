@@ -8,9 +8,11 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileDialog
 import com.serenity.lsp.LspEffect
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.{AppState, BufferId}
+import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
@@ -97,6 +99,30 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       s"saveAs:$bufferId:$path",
       s"close:$bufferId"
     )
+
+    program.unsafeRunSync()
+  }
+
+  "StateManagerEffectBehavior" should "dispatch effects without runtime infrastructure" in {
+    val effect = LspEffect.FileClosed("file:///isolated.txt", LanguageId.Scala)
+    val program = for
+      observed <- Ref.of[IO, List[LspEffect]](Nil)
+      behavior = new StateManagerEffectBehavior(
+        StateManagerEffectBehavior.Dependencies(
+          lifecycle = _ => IO.unit,
+          command = _ => IO.unit,
+          theme = _ => IO.unit,
+          surface = _ => IO.unit,
+          file = _ => IO.unit,
+          explorer = _ => IO.unit,
+          workflow = _ => IO.unit,
+          lspQueue =
+            case LspQueueEffect.Enqueue(value) => observed.update(_ :+ value)
+        )
+      )
+      _       <- behavior.interpret(AppEffect.LspQueue(LspQueueEffect.Enqueue(effect)))
+      effects <- observed.get
+    yield effects shouldBe List(effect)
 
     program.unsafeRunSync()
   }

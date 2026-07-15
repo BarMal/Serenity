@@ -23,7 +23,7 @@ import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.config.{ThemeConfigWriter, ThemeCreatorState}
 
-final private[manager] class StateManagerEffectBehavior(
+final private[manager] class StateManagerEffectHandlers(
     protected val runtime: StateManagerRuntime,
     dependencies: StateManagerBehaviorDependencies
 )(using protected val balance: com.serenity.rope.Balance)
@@ -33,16 +33,21 @@ final private[manager] class StateManagerEffectBehavior(
   private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
   private val UnsavedPresetCopySuffix       = " (modified, unsaved)"
 
+  private[manager] val behavior = new StateManagerEffectBehavior(
+    StateManagerEffectBehavior.Dependencies(
+      interpretLifecycleEffect,
+      interpretCommandEffect,
+      interpretThemeEffect,
+      interpretSurfaceEffect,
+      interpretFileEffect,
+      interpretExplorerEffect,
+      interpretWorkflowEffect,
+      interpretLspQueueEffect
+    )
+  )
+
   private[manager] def interpretEffect(effect: AppEffect): IO[Unit] =
-    effect match
-      case AppEffect.Lifecycle(value)      => interpretLifecycleEffect(value)
-      case AppEffect.CommandRequest(value) => interpretCommandEffect(value)
-      case AppEffect.Theme(value)          => interpretThemeEffect(value)
-      case AppEffect.Surface(value)        => interpretSurfaceEffect(value)
-      case AppEffect.File(value)           => interpretFileEffect(value)
-      case AppEffect.Explorer(value)       => interpretExplorerEffect(value)
-      case AppEffect.Workflow(value)       => interpretWorkflowEffect(value)
-      case AppEffect.LspQueue(value)       => interpretLspQueueEffect(value)
+    behavior.interpret(effect)
 
   private def interpretLifecycleEffect(effect: LifecycleEffect): IO[Unit] =
     effect match

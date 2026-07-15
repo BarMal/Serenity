@@ -157,7 +157,7 @@ private[manager] class StateManagerBehavior(protected val runtime: StateManagerR
         StateManagerBehavior.this.resizePinnedPanel(position, newSize)
 
   private lazy val workflow = new StateManagerWorkflowBehavior(runtime, dependencies)
-  private lazy val effects  = new StateManagerEffectBehavior(runtime, dependencies)
+  private lazy val effects  = new StateManagerEffectHandlers(runtime, dependencies)
   private lazy val events   = new StateManagerEventPipelineBehavior(eventPipelineDependencies)
   private lazy val editor   = new StateManagerEditorFacadeBehavior(runtime, dependencies)
   private lazy val surfaces = new StateManagerSurfaceFacadeBehavior(runtime, dependencies)
