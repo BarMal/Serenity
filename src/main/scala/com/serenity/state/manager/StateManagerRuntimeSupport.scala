@@ -79,22 +79,16 @@ private[manager] trait EffectFilePort:
   def saveBufferEffect(bufferId: BufferId): IO[Unit]
   def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit]
 
-/** Session/config and workflow calls used by command effects. */
-private[manager] trait EffectWorkflowPort:
+/** Session persistence operations used by command effects. */
+private[manager] trait EffectSessionPort:
   def sessionPersistence: SessionPersistence
   def saveSession(): IO[Unit]
   def loadSession(): IO[Option[AppState]]
   def clearSession(): IO[Unit]
-  def executeCommand(command: com.serenity.command.Command): IO[Unit]
-  def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit]
-  def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit]
+
+/** Modal file workflow operations used by command effects. */
+private[manager] trait EffectModalWorkflowPort:
   def clearCloseActions(state: AppState): AppState
-  def updateFontConfig(update: FontConfig => FontConfig): IO[Unit]
-
-  def updateConfig(
-    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
-  ): IO[com.serenity.config.AppConfig]
-
   def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]
   def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit]
   def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
@@ -251,23 +245,14 @@ private[manager] class StateManagerBehavior(
     def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
       StateManagerBehavior.this.saveBufferAsEffect(bufferId, path)
 
-  private lazy val effectWorkflowPort: EffectWorkflowPort = new EffectWorkflowPort:
+  private lazy val effectSessionPort: EffectSessionPort = new EffectSessionPort:
     val sessionPersistence                  = StateManagerBehavior.this.sessionPersistence
     def saveSession(): IO[Unit]             = StateManagerBehavior.this.saveSession()
     def loadSession(): IO[Option[AppState]] = StateManagerBehavior.this.loadSession()
     def clearSession(): IO[Unit]            = StateManagerBehavior.this.clearSession()
-    def executeCommand(command: com.serenity.command.Command): IO[Unit] =
-      StateManagerBehavior.this.executeCommand(command)
-    def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit] =
-      StateManagerBehavior.this.interpretEffect(effect)
-    def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =
-      StateManagerBehavior.this.interpretCommand(command, state)
+
+  private lazy val effectModalWorkflowPort: EffectModalWorkflowPort = new EffectModalWorkflowPort:
     def clearCloseActions(state: AppState): AppState = StateManagerBehavior.this.clearCloseActions(state)
-    def updateFontConfig(update: FontConfig => FontConfig): IO[Unit] =
-      StateManagerBehavior.this.updateFontConfig(update)
-    def updateConfig(
-      update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
-    ): IO[com.serenity.config.AppConfig] = StateManagerBehavior.this.updateConfig(update)
     def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
       StateManagerBehavior.this.beginCloseAction(scope, state)
     def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
@@ -389,7 +374,8 @@ private[manager] class StateManagerBehavior(
     effectEditorPort,
     effectSurfacePort,
     effectFilePort,
-    effectWorkflowPort
+    effectSessionPort,
+    effectModalWorkflowPort
   )
 
   private lazy val events   = new StateManagerEventPipelineBehavior(eventPipelineDependencies)

@@ -28,13 +28,15 @@ final private[manager] class StateManagerEffectHandlers(
     editor: EffectEditorPort,
     surfaces: EffectSurfacePort,
     files: EffectFilePort,
-    workflow: EffectWorkflowPort
+    sessions: EffectSessionPort,
+    workflow: EffectModalWorkflowPort
 )(using protected val balance: com.serenity.rope.Balance):
 
   import editor.*
   import files.*
   import runtime.*
   import surfaces.*
+  import sessions.*
   import workflow.*
   private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
   private val UnsavedPresetCopySuffix       = " (modified, unsaved)"
