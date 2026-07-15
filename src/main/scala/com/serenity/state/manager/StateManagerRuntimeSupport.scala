@@ -9,7 +9,7 @@ import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
-import com.serenity.session.{SessionManager, SessionPersistence}
+import com.serenity.session.SessionPersistence
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -180,27 +180,29 @@ private[manager] trait EventUiPort:
 
 /** Explicit composition root for StateManager capabilities. */
 private[manager] class StateManagerBehavior(
-    val stateRef: Ref[IO, AppState],
-    val undoRef: Ref[IO, UndoState],
-    val themeNamesRef: Ref[IO, List[String]],
-    val quitSignal: Deferred[IO, Unit],
-    val logger: Logger[IO],
-    val policy: SessionManager.SessionPolicy,
-    val themeManager: AppThemeManager,
-    val lspQueue: Queue[IO, LspEffect],
-    val mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
-    val documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
-    val onFontConfigChanged: FontConfig => IO[Unit],
-    val deviceTextScaleProvider: IO[Double],
-    val configPersistencePath: Option[Path],
-    val uiPresetStore: UiPresetStore,
-    val windowSizeProvider: IO[Option[PreferredWindowSize]],
-    val onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit],
-    val fileDialog: com.serenity.io.FileDialog,
-    val fileManager: FileManager,
-    val sessionManager: SessionManager,
-    val sessionPersistence: SessionPersistence
+    runtime: StateManagerRuntime
 )(using providedBalance: Balance):
+
+  private val stateRef                     = runtime.stateRef
+  private val undoRef                      = runtime.undoRef
+  private val themeNamesRef                = runtime.themeNamesRef
+  private val quitSignal                   = runtime.quitSignal
+  private val logger                       = runtime.logger
+  private val policy                       = runtime.policy
+  private val themeManager                 = runtime.themeManager
+  private val lspQueue                     = runtime.lspQueue
+  private val mouseTargetCacheRef          = runtime.mouseTargetCacheRef
+  private val documentAnalysisFiberRef     = runtime.documentAnalysisFiberRef
+  private val onFontConfigChanged          = runtime.onFontConfigChanged
+  private val deviceTextScaleProvider      = runtime.deviceTextScaleProvider
+  private val configPersistencePath        = runtime.configPersistencePath
+  private val uiPresetStore                = runtime.uiPresetStore
+  private val windowSizeProvider           = runtime.windowSizeProvider
+  runtime.onPreferredWindowSizeChanged
+  private val fileDialog                   = runtime.fileDialog
+  private val fileManager                  = runtime.fileManager
+  private val sessionManager               = runtime.sessionManager
+  private val sessionPersistence           = runtime.sessionPersistence
 
   protected val balance: Balance = providedBalance
 
