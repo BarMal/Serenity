@@ -23,6 +23,27 @@ import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.config.{ThemeConfigWriter, ThemeCreatorState}
 
+/** Workflow operations selected by command effects. */
+private[manager] trait WorkflowEffectPort:
+  def requestOpenFile: IO[Unit]
+  def requestSaveAs: IO[Unit]
+  def refresh(surfaceId: SurfaceId): IO[Unit]
+  def submitFile(surfaceId: SurfaceId): IO[Unit]
+  def submitReplace(surfaceId: SurfaceId): IO[Unit]
+  def submitClose(surfaceId: SurfaceId): IO[Unit]
+
+/** Interprets workflow effects without editor, theme, file, or runtime dependencies. */
+final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
+
+  def interpret(effect: WorkflowEffect): IO[Unit] =
+    effect match
+      case WorkflowEffect.RequestOpenFile           => port.requestOpenFile
+      case WorkflowEffect.RequestSaveAs             => port.requestSaveAs
+      case WorkflowEffect.RefreshFileWorkflow(id)   => port.refresh(id)
+      case WorkflowEffect.SubmitFileWorkflow(id)    => port.submitFile(id)
+      case WorkflowEffect.SubmitReplaceWorkflow(id) => port.submitReplace(id)
+      case WorkflowEffect.SubmitCloseWorkflow(id)   => port.submitClose(id)
+
 final private[manager] class StateManagerEffectHandlers(
     runtime: EffectRuntimePort,
     editor: EffectEditorPort,
@@ -40,6 +61,14 @@ final private[manager] class StateManagerEffectHandlers(
   import workflow.*
   private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
   private val UnsavedPresetCopySuffix       = " (modified, unsaved)"
+
+  private val workflowEffects = new WorkflowEffectHandler(new WorkflowEffectPort:
+    def requestOpenFile: IO[Unit] = requestOpenFileDialog
+    def requestSaveAs: IO[Unit]   = stateRef.get.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
+    def refresh(surfaceId: SurfaceId): IO[Unit]       = refreshFileWorkflowEffect(surfaceId)
+    def submitFile(surfaceId: SurfaceId): IO[Unit]    = submitFileWorkflowEffect(surfaceId)
+    def submitReplace(surfaceId: SurfaceId): IO[Unit] = submitReplaceWorkflowEffect(surfaceId)
+    def submitClose(surfaceId: SurfaceId): IO[Unit]   = submitCloseWorkflowEffect(surfaceId))
 
   private[manager] val behavior = new CommandEffectInterpreter(
     CommandEffectInterpreter.Dependencies(
@@ -102,19 +131,7 @@ final private[manager] class StateManagerEffectHandlers(
         loadPinnedDirectoryEffect(position, path)
 
   private def interpretWorkflowEffect(effect: WorkflowEffect): IO[Unit] =
-    effect match
-      case WorkflowEffect.RequestOpenFile =>
-        requestOpenFileDialog
-      case WorkflowEffect.RequestSaveAs =>
-        stateRef.get.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
-      case WorkflowEffect.RefreshFileWorkflow(surfaceId) =>
-        refreshFileWorkflowEffect(surfaceId)
-      case WorkflowEffect.SubmitFileWorkflow(surfaceId) =>
-        submitFileWorkflowEffect(surfaceId)
-      case WorkflowEffect.SubmitReplaceWorkflow(surfaceId) =>
-        submitReplaceWorkflowEffect(surfaceId)
-      case WorkflowEffect.SubmitCloseWorkflow(surfaceId) =>
-        submitCloseWorkflowEffect(surfaceId)
+    workflowEffects.interpret(effect)
 
   private def interpretLspQueueEffect(effect: LspQueueEffect): IO[Unit] =
     effect match
