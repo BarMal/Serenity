@@ -120,16 +120,18 @@ final class UiScenarioDriver private (
       cellMetrics,
       None
     )
-    val layout    = LayoutEngine.calculateLayout(state, viewport)
-    val contract  = EditorLayoutContract.from(state, viewport, layout)
-    val semantics = semanticEvidence(state, layout, contract)
+    val layout                = LayoutEngine.calculateLayout(state, viewport)
+    val contract              = EditorLayoutContract.from(state, viewport, layout)
+    val markdownFrameEvidence = markdownEvidence(state, contract)
+    val semantics             = semanticEvidence(state, layout, contract)
     ScenarioFrame(
       image = image,
       activeFocus = state.focus,
       surfaceRects = semantics.surfaceRects,
       itemRects = semantics.itemRects,
       visibleText = semantics.visibleText,
-      markdownRows = markdownRows(state, contract),
+      markdownRows = markdownFrameEvidence.rows,
+      markdownLenses = markdownFrameEvidence.lenses,
       settled = !state.buffers.values.exists(_.animations.hasActiveAnimations) &&
         state.themeTransition.isEmpty && state.surfaceAnimations.isEmpty,
       diagnostics = contract.violations.map(_.toString) ++ semantics.itemRects.toList.flatMap {
@@ -238,17 +240,28 @@ final class UiScenarioDriver private (
       case slot @ SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), _) => slot
     }
 
-  private def markdownRows(state: AppState, contract: EditorLayoutContract): Vector[Renderer.MarkdownLensRenderedRow] =
-    state.layout.editorPanes.toVector.flatMap {
-      case (paneId, pane) =>
-        for
-          paneLayout <- contract.workspace.paneLayouts.get(paneId).toVector
-          bufferId   <- pane.bufferId.toVector
-          buffer     <- state.buffers.get(bufferId).toVector
-          if buffer.language.contains(LanguageId.Markdown)
-          row <- Renderer.markdownLensRenderedRows(buffer, paneLayout.contentRect)
-        yield row
-    }
+  private def markdownEvidence(state: AppState, contract: EditorLayoutContract): Renderer.MarkdownLensEvidence =
+    val evidence =
+      state.layout.editorPanes.toVector.flatMap {
+        case (paneId, pane) =>
+          for
+            paneLayout <- contract.workspace.paneLayouts.get(paneId).toVector
+            bufferId   <- pane.bufferId.toVector
+            buffer     <- state.buffers.get(bufferId).toVector
+            if buffer.language.contains(LanguageId.Markdown)
+          yield
+            val viewport =
+              LayoutEngine.updateBufferViewportDimensions(buffer, paneLayout.contentRect, state.config.wordWrapEnabled)
+            val snapshot = TextLayoutSnapshot.fromBuffer(
+              buffer.copy(viewport = viewport),
+              paneLayout.contentRect.width * cellMetrics.charWidth,
+              textFont,
+              TextLayoutSnapshot.defaultFontRenderContext(),
+              wordWrapEnabled = state.config.wordWrapEnabled
+            )
+            Renderer.markdownLensEvidence(buffer, paneLayout.contentRect, snapshot)
+      }
+    Renderer.MarkdownLensEvidence(evidence.flatMap(_.rows), evidence.flatMap(_.lenses))
 
   private def writeFrame(image: BufferedImage): IO[Option[Path]] =
     IO.blocking {
@@ -269,6 +282,7 @@ object UiScenarioDriver:
       itemRects: Map[SurfaceId, List[ScenarioItemRect]],
       visibleText: List[String],
       markdownRows: Vector[Renderer.MarkdownLensRenderedRow],
+      markdownLenses: Vector[Renderer.MarkdownLensRect],
       settled: Boolean,
       diagnostics: List[String],
       diagnosticPng: Option[Path] = None
@@ -286,13 +300,14 @@ object UiScenarioDriver:
   def create(
     viewport: ViewportSize = ViewportSize(120, 36),
     deviceScale: Double = 1.0,
-    diagnosticDirectory: Path = Path.of("test-results", "ui-scenarios")
+    diagnosticDirectory: Path = Path.of("test-results", "ui-scenarios"),
+    sessionRootOverride: Option[Path] = None
   ): IO[UiScenarioDriver] =
     given Balance           = Balance.default
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val metrics             = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 12)
     for
-      sessionRoot <- IO.blocking(Files.createTempDirectory("ui-scenario-session"))
+      sessionRoot <- sessionRootOverride.fold(IO.blocking(Files.createTempDirectory("ui-scenario-session")))(IO.pure)
       viewportRef <- Ref.of[IO, ViewportSize](viewport)
       logger      = LoggerFactory[IO].getLogger(using LoggerName("UiScenarioDriver"))
       presetStore = UiPresetStore(sessionRoot.resolve("ui-presets.json"))

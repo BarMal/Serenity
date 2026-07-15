@@ -48,6 +48,12 @@ object Renderer:
       kind: MarkdownLensRowKind
   )
 
+  /** Captures the viewport-clipped rectangle occupied by an active inline Markdown source lens. */
+  case class MarkdownLensRect(sourceRange: Range.Inclusive, rect: LayoutRect)
+
+  /** Semantic inline-lens frame evidence used by deterministic scenario assertions. */
+  case class MarkdownLensEvidence(rows: Vector[MarkdownLensRenderedRow], lenses: Vector[MarkdownLensRect])
+
   private case class EditorPaneRenderPlan(
       workspaceLayout: EditorWorkspaceLayout,
       layoutContract: EditorLayoutContract,
@@ -962,7 +968,11 @@ object Renderer:
     math.max(MinMarkdownPreviewSourceLines, visibleRows.max(1) * MarkdownPreviewOverscanFactor)
 
   /** Returns the source/preview geometry used by inline-lens rendering for scenario diagnostics. */
-  def markdownLensRenderedRows(buffer: Buffer, contentRect: LayoutRect): Vector[MarkdownLensRenderedRow] =
+  def markdownLensEvidence(
+    buffer: Buffer,
+    contentRect: LayoutRect,
+    snapshot: TextLayoutSnapshot
+  ): MarkdownLensEvidence =
     val frame       = markdownLensFrameFor(buffer)
     val window      = frame.previewWindow
     val activeRange = buffer.cursors.headOption.map(cursor => MarkdownBlockLens.currentBlock(frame.lines, cursor.line))
@@ -986,30 +996,36 @@ object Renderer:
           )
         }
     }
-    val sourceLensRows = activeRange.toVector.flatMap { range =>
-      val visualRows = range.toVector.zipWithIndex
+    val sourceLensRowsAndRects = activeRange.toVector.map { range =>
+      val visualRows = snapshot.visualLines.filter(line => range.contains(line.bufferLine))
       val placement = markdownLensPlacement(
         range,
-        visualRows.map {
-          case (line, _) =>
-            TextVisualLine(line, 0, frame.lines(line).length, frame.lines(line), 0.0f, Vector.empty)
-        },
+        visualRows,
         contentRect.height,
         frame.lines,
         window
       )
-      visualRows.map {
-        case (sourceLine, offset) =>
+      val rows = visualRows.zipWithIndex.map {
+        case (visualLine, offset) =>
           MarkdownLensRenderedRow(
-            sourceLine,
-            MarkdownDocumentPreview.previewRowForSourceLine(frame.lines, sourceLine).getOrElse(sourceLine),
+            visualLine.bufferLine,
+            MarkdownDocumentPreview
+              .previewRowForSourceLine(frame.lines, visualLine.bufferLine)
+              .getOrElse(visualLine.bufferLine),
             contentRect.y + placement.top + offset,
-            frame.lines(sourceLine),
+            visualLine.text,
             MarkdownLensRowKind.SourceLens
           )
       }
+      rows -> MarkdownLensRect(
+        range,
+        LayoutRect(contentRect.x, contentRect.y + placement.top, contentRect.width, placement.height)
+      )
     }
-    (previewRows ++ sourceLensRows).sortBy(row => (row.screenRow, row.sourceLine))
+    MarkdownLensEvidence(
+      (previewRows ++ sourceLensRowsAndRects.flatMap(_._1)).sortBy(row => (row.screenRow, row.sourceLine)),
+      sourceLensRowsAndRects.map(_._2)
+    )
 
   private def activeMarkdownBlockRanges(lines: Vector[String], cursors: List[CursorPosition]): List[Range.Inclusive] =
     cursors
