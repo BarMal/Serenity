@@ -19,14 +19,38 @@ import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 
+/** Minimal state boundary for resize routing. */
+private[manager] trait ResizeEventPort:
+  def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit]
+  def rebalancePanes(): cats.effect.IO[Unit]
+
+/** Routes resize transitions without depending on command, workflow, or runtime services. */
+final private[manager] class ResizeEventHandler(port: ResizeEventPort):
+
+  def apply(event: ResizeEvent, previousState: AppState): cats.effect.IO[Unit] =
+    port.applyReducerResult(SystemEventReducer.reduce(event, previousState), previousState) >>
+      port.rebalancePanes()
+
 final private[manager] class StateManagerEventPipelineBehavior(
-    dependencies: StateManagerEventPipelineDependencies
+    state: EventStatePort,
+    effects: EventEffectPort,
+    workflow: EventWorkflowPort,
+    ui: EventUiPort
 )(using protected val balance: com.serenity.rope.Balance):
 
-  import dependencies.*
+  import effects.*
+  import state.*
+  import ui.*
+  import workflow.*
   private val DocumentAnalysisDebounce = 150.millis
 
   private val ContextMenuSurfaceId = SurfaceId("context-menu")
+
+  private val resizeEvents = new ResizeEventHandler(new ResizeEventPort:
+    def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
+      StateManagerEventPipelineBehavior.this.applyReducerResult(result, fallbackState)
+    def rebalancePanes(): cats.effect.IO[Unit] =
+      stateRef.update(s => AppEventReducer.rebalancePanes(s, s.focusedBufferId)))
 
   private val EditorContextMenuCommands =
     List(
@@ -73,8 +97,7 @@ final private[manager] class StateManagerEventPipelineBehavior(
         case Undo => applyUndo(prevState)
         case Redo => applyRedo(prevState)
         case resize: com.serenity.keystroke.events.ResizeEvent =>
-          applyReducerResult(SystemEventReducer.reduce(resize, prevState), prevState) >>
-            stateRef.update(s => AppEventReducer.rebalancePanes(s, s.focusedBufferId))
+          resizeEvents.apply(resize, prevState)
         case systemEvent: SystemEvent =>
           applyReducerResult(SystemEventReducer.reduce(systemEvent, prevState), prevState)
         case com.serenity.keystroke.events.CloseTab =>

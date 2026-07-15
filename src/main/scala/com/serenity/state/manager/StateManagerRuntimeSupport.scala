@@ -148,26 +148,34 @@ private[manager] trait WorkflowCapabilityPort:
   def restoreStartupSession(): IO[Unit]
   def activeEditorBufferId(state: AppState): Option[BufferId]
 
-/** Dependencies used by event processing, excluding file, session, and theme services. */
-private[manager] trait StateManagerEventPipelineDependencies:
+/** State and analysis ownership required while routing editor events. */
+private[manager] trait EventStatePort:
   def stateRef: Ref[IO, AppState]
   def undoRef: Ref[IO, UndoState]
   def logger: Logger[IO]
-  def lspQueue: Queue[IO, LspEffect]
   def documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]]
   def mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]]
-  def uiPresetStore: UiPresetStore
-  def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]
+
+/** Effects and commands triggered by event routing. */
+private[manager] trait EventEffectPort:
   def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit]
   def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit]
+  def executeCommand(command: com.serenity.command.Command): IO[Unit]
+
+/** Workflow operations requested by event routing. */
+private[manager] trait EventWorkflowPort:
+  def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
+
+/** UI configuration operations requested by event routing. */
+private[manager] trait EventUiPort:
+  def uiPresetStore: UiPresetStore
 
   def updateConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig]
 
-  def executeCommand(command: com.serenity.command.Command): IO[Unit]
   def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
 
 /** Explicit composition root for StateManager capabilities. */
@@ -340,30 +348,38 @@ private[manager] class StateManagerBehavior(
     def updateFontConfig(update: FontConfig => FontConfig): IO[Unit] =
       StateManagerBehavior.this.updateFontConfig(update)
 
-  private lazy val eventPipelineDependencies: StateManagerEventPipelineDependencies =
-    new StateManagerEventPipelineDependencies:
+  private lazy val eventStatePort: EventStatePort =
+    new EventStatePort:
       val stateRef                 = StateManagerBehavior.this.stateRef
       val undoRef                  = StateManagerBehavior.this.undoRef
       val logger                   = StateManagerBehavior.this.logger
-      val lspQueue                 = StateManagerBehavior.this.lspQueue
       val documentAnalysisFiberRef = StateManagerBehavior.this.documentAnalysisFiberRef
       val mouseTargetCacheRef      = StateManagerBehavior.this.mouseTargetCacheRef
-      val uiPresetStore            = StateManagerBehavior.this.uiPresetStore
-      def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
-        StateManagerBehavior.this.beginCloseAction(scope, state)
+
+  private lazy val eventEffectPort: EventEffectPort =
+    new EventEffectPort:
       def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit] =
         StateManagerBehavior.this.interpretEffect(effect)
       def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =
         StateManagerBehavior.this.interpretCommand(command, state)
+      def executeCommand(command: com.serenity.command.Command): IO[Unit] =
+        StateManagerBehavior.this.executeCommand(command)
+
+  private lazy val eventWorkflowPort: EventWorkflowPort =
+    new EventWorkflowPort:
+      def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
+        StateManagerBehavior.this.beginCloseAction(scope, state)
       def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
         StateManagerBehavior.this.createBuffer(content, filePath)
       def createPane(bufferId: Option[BufferId]): IO[PaneId] = StateManagerBehavior.this.createPane(bufferId)
+
+  private lazy val eventUiPort: EventUiPort =
+    new EventUiPort:
+      val uiPresetStore = StateManagerBehavior.this.uiPresetStore
       def updateConfig(
         update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
       ): IO[com.serenity.config.AppConfig] =
         StateManagerBehavior.this.updateConfig(update)
-      def executeCommand(command: com.serenity.command.Command): IO[Unit] =
-        StateManagerBehavior.this.executeCommand(command)
       def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
         StateManagerBehavior.this.resizePinnedPanel(position, newSize)
 
@@ -378,7 +394,8 @@ private[manager] class StateManagerBehavior(
     effectModalWorkflowPort
   )
 
-  private lazy val events   = new StateManagerEventPipelineBehavior(eventPipelineDependencies)
+  private lazy val events =
+    new StateManagerEventPipelineBehavior(eventStatePort, eventEffectPort, eventWorkflowPort, eventUiPort)
   private lazy val editor   = new StateManagerEditorFacadeBehavior(editorPort)
   private lazy val surfaces = new StateManagerSurfaceFacadeBehavior(stateRef, logger, surfacePort)
   private lazy val viewport = new StateManagerViewportBehavior(stateRef, logger, deviceTextScaleProvider, viewportPort)
