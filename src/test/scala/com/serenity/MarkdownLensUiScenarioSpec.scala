@@ -1,8 +1,8 @@
 package com.serenity
 
-import cats.effect.unsafe.implicits.global
 import java.nio.file.Paths
 
+import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.MarkdownViewMode
 import com.serenity.keystroke.events.MoveDown
