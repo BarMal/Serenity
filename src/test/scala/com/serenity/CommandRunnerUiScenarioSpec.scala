@@ -49,17 +49,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver = UiScenarioDriver.create("command-runner-settings", initialConfig = config).unsafeRunSync()
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     "blur radius".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
-    driver
-      .updateState { state =>
-        updateRunner(state) { runner =>
-          val index = runner.visibleItems.indexWhere {
-            case group: CommandSurfaceItem.GroupItem => group.id == "settings-surface-appearance"
-            case _                                   => false
-          }
-          runner.copy(selectedIndex = index)
-        }
-      }
-      .unsafeRunSync()
+    selectVisibleItem(driver, "settings-surface-appearance")
     driver.dispatch(Enter).unsafeRunSync()
     driver.dispatch(Enter).unsafeRunSync()
     (1 to 12).foreach(_ => driver.dispatch(DeleteBackward).unsafeRunSync())
@@ -93,17 +83,13 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
       case SurfaceContent.CommandPaletteSubmenu(runner, _, _) => runner
       case _                                                  => fail("Expected command runner content")
 
-  private def updateRunner(
-    state: AppState
-  )(update: com.serenity.command.CommandRunner => com.serenity.command.CommandRunner): AppState =
-    val surface = state.commandRunnerSurface.getOrElse(fail("Expected command runner"))
-    state.copy(uiSurfaces = state.uiSurfaces.map {
-      case current if current.id == surface.id =>
-        current.content match
-          case SurfaceContent.CommandPalette(runner) =>
-            current.copy(content = SurfaceContent.CommandPalette(update(runner)))
-          case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
-            current.copy(content = SurfaceContent.CommandPaletteSubmenu(update(runner), groupId, previewOnly))
-          case _ => current
-      case current => current
-    })
+  private def selectVisibleItem(driver: UiScenarioDriver, itemId: String): Unit =
+    val runner = runnerFrom(driver.state.unsafeRunSync())
+    val targetIndex = runner.visibleItems.indexWhere {
+      case group: CommandSurfaceItem.GroupItem => group.id == itemId
+      case _                                   => false
+    }
+    targetIndex should be >= 0
+    val moveCount = (targetIndex - runner.selectedIndex + runner.visibleItems.length) % runner.visibleItems.length
+    (0 until moveCount).foreach(_ => driver.dispatch(MoveDown).unsafeRunSync())
+    runnerFrom(driver.state.unsafeRunSync()).selectedItem.map(_.id) shouldBe Some(itemId)
