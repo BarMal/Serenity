@@ -46,7 +46,13 @@ object Renderer:
 
   private case class MarkdownLensFrame(
       lines: Vector[String],
-      previewWindow: MarkdownDocumentPreview.PreviewWindow
+      previewWindow: MarkdownDocumentPreview.PreviewWindow,
+      previewSourceLineCount: Int
+  )
+
+  private case class MarkdownLensPreviewWindow(
+      window: MarkdownDocumentPreview.PreviewWindow,
+      sourceLineCount: Int
   )
 
   private val MinMarkdownPreviewSourceLines = 32
@@ -720,7 +726,7 @@ object Renderer:
     val image = MarkdownDocumentPreview.renderInlineImage(
       sourceLines = frame.lines,
       firstSourceLine = previewWindow.firstSourceLine,
-      maxSourceLines = previewWindow.source.count(_ == '\n') + 1,
+      maxSourceLines = frame.previewSourceLineCount,
       title = title,
       widthPx = widthPx,
       heightPx = heightPx,
@@ -909,15 +915,16 @@ object Renderer:
     buffer.content.linesFrom(0, buffer.content.lineCount)
 
   private def markdownLensFrameFor(buffer: Buffer): MarkdownLensFrame =
-    val lines = markdownSourceLines(buffer)
-    MarkdownLensFrame(lines, markdownPreviewWindow(buffer, lines, buffer.viewport.visibleLines))
+    val lines         = markdownSourceLines(buffer)
+    val previewWindow = markdownPreviewWindow(buffer, lines, buffer.viewport.visibleLines)
+    MarkdownLensFrame(lines, previewWindow.window, previewWindow.sourceLineCount)
 
   private def markdownPreviewWindow(
     buffer: Buffer,
     lines: Vector[String],
     visibleRows: Int
-  ): MarkdownDocumentPreview.PreviewWindow =
-    if lines.isEmpty then MarkdownDocumentPreview.PreviewWindow(0, 0, "")
+  ): MarkdownLensPreviewWindow =
+    if lines.isEmpty then MarkdownLensPreviewWindow(MarkdownDocumentPreview.PreviewWindow(0, 0, ""), 0)
     else
       val activeLine = buffer.cursors.headOption
         .map(_.line)
@@ -934,14 +941,19 @@ object Renderer:
         .map(_.start)
         .getOrElse(windowTopLine)
       val baseSourceLineLimit = markdownPreviewSourceLineLimit(visibleRows)
+      val windowEndLine       = firstSourceLine + baseSourceLineLimit - 1
       val maxSourceLines = activeBlock
+        .filter(_ => activeLine.exists(_ <= windowEndLine))
         .map(blockRange => math.max(baseSourceLineLimit, blockRange.end - firstSourceLine + baseSourceLineLimit))
         .getOrElse(baseSourceLineLimit)
-      MarkdownDocumentPreview.PreviewWindow(
-        firstSourceLine = firstSourceLine,
-        firstPreviewRow =
-          MarkdownDocumentPreview.previewRowForSourceLine(lines, firstSourceLine).getOrElse(firstSourceLine),
-        source = lines.slice(firstSourceLine, firstSourceLine + maxSourceLines).mkString("\n")
+      MarkdownLensPreviewWindow(
+        window = MarkdownDocumentPreview.PreviewWindow(
+          firstSourceLine = firstSourceLine,
+          firstPreviewRow =
+            MarkdownDocumentPreview.previewRowForSourceLine(lines, firstSourceLine).getOrElse(firstSourceLine),
+          source = ""
+        ),
+        sourceLineCount = math.min(maxSourceLines, lines.length - firstSourceLine)
       )
 
   private def markdownPreviewSourceLineLimit(visibleRows: Int): Int =

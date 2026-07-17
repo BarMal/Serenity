@@ -507,6 +507,34 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     samePixels(actual, expected) shouldBe true
   }
 
+  it should "keep the preview window bounded when the active cursor is far below the viewport" in {
+    val sourceLines = Vector.tabulate(120)(index => s"Document line $index")
+    val (state, surface, metrics) = renderMarkdownLens(
+      sourceLines.mkString("\n"),
+      CursorPosition(119, 0),
+      topLine = Some(0),
+      viewportHeight = 60
+    )
+    val actual = surface.drawImageCalls.head.image
+    val expected = MarkdownDocumentPreview.renderInlineImage(
+      sourceLines = sourceLines,
+      firstSourceLine = 0,
+      maxSourceLines = 40,
+      title = "Untitled",
+      widthPx = actual.getWidth,
+      heightPx = actual.getHeight,
+      theme = state.theme,
+      font = MarkdownDocumentPreview.inlineLensFont(
+        Font(Font.MONOSPACED, Font.PLAIN, 12),
+        metrics.lineHeight,
+        deviceScale = 1.0
+      ),
+      inlineLineHeightPx = metrics.lineHeight
+    )
+
+    samePixels(actual, expected) shouldBe true
+  }
+
   it should "reveal every markdown source unit touched by a selection" in {
     val source =
       """# First heading
