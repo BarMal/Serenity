@@ -1,8 +1,10 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.command.CommandSurfaceItem
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
+import com.serenity.state.models.{AppState, SurfaceContent}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -41,3 +43,67 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     driver.renderFrame("reopened").unsafeRunSync().evidence.surfaceRects should not be empty
   }
+
+  it should "navigate nested settings, edit a decimal, and preserve configured row spacing" in {
+    val config = com.serenity.config.AppConfig.default.withCommandRunnerItemGapRows(1)
+    val driver = UiScenarioDriver.create("command-runner-settings", initialConfig = config).unsafeRunSync()
+    driver.dispatch(ToggleCommandRunner).unsafeRunSync()
+    "blur radius".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
+    driver
+      .updateState { state =>
+        updateRunner(state) { runner =>
+          val index = runner.visibleItems.indexWhere {
+            case group: CommandSurfaceItem.GroupItem => group.id == "settings-surface-appearance"
+            case _                                   => false
+          }
+          runner.copy(selectedIndex = index)
+        }
+      }
+      .unsafeRunSync()
+    driver.dispatch(Enter).unsafeRunSync()
+    driver.dispatch(Enter).unsafeRunSync()
+    (1 to 12).foreach(_ => driver.dispatch(DeleteBackward).unsafeRunSync())
+    driver.dispatch(InsertChar('0')).unsafeRunSync()
+    driver.dispatch(InsertChar('.')).unsafeRunSync()
+    driver.dispatch(InsertChar('5')).unsafeRunSync()
+    val editing = runnerFrom(driver.state.unsafeRunSync())
+    editing.activeSubmenu.map(_.editingText) shouldBe Some(".5")
+
+    val frame     = driver.renderFrame("nested-decimal").unsafeRunSync()
+    val surfaceId = frame.evidence.surfaceRects.keys.head
+    val rows      = frame.evidence.itemRects(surfaceId)
+    rows.sliding(2).foreach {
+      case List(first, second) => second.y - first.y should be >= 2
+      case _                   => ()
+    }
+    frame.evidence.drawnItems(surfaceId).foreach { item =>
+      item.textBounds.foreach(text => item.hitTarget.containsRect(text.bounds) shouldBe true)
+    }
+    frame.evidence.visibleText.mkString(" ") should not include "/home/"
+    driver.dispatch(Enter).unsafeRunSync()
+    driver.state.unsafeRunSync().config.blurRadius shouldBe 0.5f
+  }
+
+  private def runnerFrom(state: AppState): com.serenity.command.CommandRunner =
+    state.commandRunnerSurface
+      .orElse(state.commandRunnerSubmenuSurface)
+      .getOrElse(fail("Expected command runner"))
+      .content match
+      case SurfaceContent.CommandPalette(runner)              => runner
+      case SurfaceContent.CommandPaletteSubmenu(runner, _, _) => runner
+      case _                                                  => fail("Expected command runner content")
+
+  private def updateRunner(
+    state: AppState
+  )(update: com.serenity.command.CommandRunner => com.serenity.command.CommandRunner): AppState =
+    val surface = state.commandRunnerSurface.getOrElse(fail("Expected command runner"))
+    state.copy(uiSurfaces = state.uiSurfaces.map {
+      case current if current.id == surface.id =>
+        current.content match
+          case SurfaceContent.CommandPalette(runner) =>
+            current.copy(content = SurfaceContent.CommandPalette(update(runner)))
+          case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
+            current.copy(content = SurfaceContent.CommandPaletteSubmenu(update(runner), groupId, previewOnly))
+          case _ => current
+      case current => current
+    })

@@ -37,6 +37,7 @@ case class ScenarioFrameEvidence(
     visibleText: List[String],
     drawnText: List[ScenarioDrawnText],
     drawnItems: Map[SurfaceId, List[ScenarioDrawnItem]],
+    drawnImageRects: List[LayoutRect],
     renderedContentRows: Set[Int],
     animationComplete: Boolean,
     layoutViolations: List[LayoutContractViolation]
@@ -125,6 +126,19 @@ final class UiScenarioDriver private (
       frame
     }
 
+  /** Assert a semantic frame contract and retain a diagnostic PNG on failure when configured. */
+  def verifyFrame(name: String)(contract: ScenarioFrameEvidence => Either[String, Unit]): IO[ScenarioFrame] =
+    renderFrame(name).flatMap { frame =>
+      contract(frame.evidence) match
+        case Right(_) => IO.pure(frame)
+        case Left(reason) =>
+          val diagnostic =
+            s"$reason; focus=${frame.evidence.focus}; surfaces=${frame.evidence.surfaceRects}; " +
+              s"items=${frame.evidence.itemRects}; previews=${frame.evidence.previewPlacements}; " +
+              s"violations=${frame.evidence.layoutViolations}"
+          IO.raiseError(new AssertionError(diagnostic))
+    }
+
   private def evidenceFor(
     state: AppState,
     contract: EditorLayoutContract,
@@ -151,10 +165,16 @@ final class UiScenarioDriver private (
           buffer.cursors.headOption.map(_.line)
         )
     }
-    val previewPlacements = state.buffers.flatMap {
-      case (bufferId, buffer) =>
-        previewPlacementFor(buffer, recordingSurface.drawnImages.headOption).map(bufferId -> _)
-    }
+    val previewPlacements = contract.workspace.paneLayouts.toList.flatMap {
+      case (paneId, paneLayout) =>
+        for
+          pane       <- state.layout.editorPanes.get(paneId).toList
+          bufferId   <- pane.bufferId.toList
+          buffer     <- state.buffers.get(bufferId).toList
+          drawnImage <- recordingSurface.drawnImages.find(_.bounds == paneLayout.contentRect).toList
+          placement  <- previewPlacementFor(buffer, Some(drawnImage)).toList
+        yield bufferId -> placement
+    }.toMap
     val visiblePreviewSourceLines = previewPlacements.map {
       case (bufferId, placement) =>
         val buffer = state.buffers(bufferId)
@@ -190,6 +210,7 @@ final class UiScenarioDriver private (
       visibleText,
       recordingSurface.drawnText,
       drawnItems,
+      recordingSurface.drawnImages.map(_.bounds),
       renderedContentRows,
       animationComplete = state.surfaceAnimations.values.forall(_.animationState.animations.isEmpty) &&
         state.buffers.values.forall(_.animations.animations.isEmpty),
@@ -355,4 +376,9 @@ object UiScenarioDriver:
         uiPresetStore = uiPresetStore.getOrElse(UiPresetStore.default)
       )
       _ <- manager.handleViewportResize(environment.viewport)
+      _ <- manager.updateState(_.copy(theme = themeFor(environment.themeName)))
     yield new UiScenarioDriver(manager, environment, artifactDirectory)
+
+  private def themeFor(name: String): com.serenity.ui.theme.Theme =
+    if name.equalsIgnoreCase("light") then com.serenity.ui.theme.Theme.light
+    else com.serenity.ui.theme.Theme.dark
