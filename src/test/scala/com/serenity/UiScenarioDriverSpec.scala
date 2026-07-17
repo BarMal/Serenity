@@ -3,6 +3,7 @@ package com.serenity
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.{MarkdownViewMode, MotionPreset}
 import com.serenity.rope.Balance
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -41,4 +42,13 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     Files.exists(artifacts.resolve("red.png")) shouldBe true
 
     noException should be thrownBy driver.verifyFrame("green")(_ => Right(())).unsafeRunSync()
+  }
+
+  it should "load the isolated scenario configuration fixture" in {
+    val driver = UiScenarioDriver.create("isolated-config", isolatedConfig = true).unsafeRunSync()
+    val config = driver.state.unsafeRunSync().config
+
+    config.motionPreset shouldBe MotionPreset.Reduced
+    config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
+    config.commandRunnerItemGapRows shouldBe 0
   }

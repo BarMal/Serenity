@@ -6,6 +6,7 @@ import java.awt.{Color, Font}
 import java.nio.file.{Files, Path}
 
 import cats.effect.IO
+import com.serenity.config.ConfigManager
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -361,18 +362,22 @@ object UiScenarioDriver:
     environment: UiScenarioEnvironment = UiScenarioEnvironment(),
     artifactDirectory: Option[Path] = None,
     initialConfig: com.serenity.config.AppConfig = com.serenity.config.AppConfig.default,
-    uiPresetStore: Option[UiPresetStore] = None
+    uiPresetStore: Option[UiPresetStore] = None,
+    isolatedConfig: Boolean = false
   )(using Balance): IO[UiScenarioDriver] =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger
     for
       sessionRoot <- IO.blocking(Files.createTempDirectory(s"$name-ui-scenario"))
+      configuredInitialConfig <-
+        if isolatedConfig then IO.blocking(ConfigManager.loadConfig(Some(isolatedConfigPath.toString)))
+        else IO.pure(initialConfig)
       manager <- StateManager(
         logger,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(environment.deviceScale),
         sessionRootOverride = Some(sessionRoot),
-        initialConfig = initialConfig,
+        initialConfig = configuredInitialConfig,
         uiPresetStore = uiPresetStore.getOrElse(UiPresetStore.default)
       )
       _ <- manager.handleViewportResize(environment.viewport)
@@ -382,3 +387,6 @@ object UiScenarioDriver:
   private def themeFor(name: String): com.serenity.ui.theme.Theme =
     if name.equalsIgnoreCase("light") then com.serenity.ui.theme.Theme.light
     else com.serenity.ui.theme.Theme.dark
+
+  private def isolatedConfigPath: Path =
+    Path.of(getClass.getResource("/ui-scenarios/isolated-ui.conf").toURI)

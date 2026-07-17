@@ -4,6 +4,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -54,22 +55,36 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.dispatch(ToggleContextualToolbar).unsafeRunSync()
     val opened    = driver.renderFrame("wrapped").unsafeRunSync()
     val surfaceId = opened.evidence.surfaceRects.keys.headOption.getOrElse(fail("Expected toolbar"))
+    val rowGroups = toolbarRows(driver)
+    val content   = toolbarContentRect(driver)
     opened.evidence.surfaceRects(surfaceId).width should be < driver.environment.viewport.width
+    rowGroups.length should be > 1
+    opened.evidence.itemRects(surfaceId) should have size rowGroups.length
+    opened.evidence.surfaceRects(surfaceId).height should be > content.height
 
-    focusItem(driver, "bold")
+    val dropdownPoint = toolbarItemPoint(driver, "paragraph-role")
+    driver.dispatch(MouseClick(dropdownPoint._1, dropdownPoint._2)).unsafeRunSync()
+    driver.dispatch(Escape).unsafeRunSync()
+    val beforeVertical = toolbarState(driver).focusedIndex
+    val beforeRow      = toolbarRowOf(driver, beforeVertical)
+    driver.dispatch(MoveUp).unsafeRunSync()
+    val afterVertical = toolbarState(driver).focusedIndex
+    toolbarRowOf(driver, afterVertical) should not be beforeRow
+
+    moveToToolbarItem(driver, "bold")
     driver.dispatch(Enter).unsafeRunSync()
     driver.state.unsafeRunSync().buffers.values.flatMap(_.richTextDocument).toList should not be empty
 
-    focusItem(driver, "paragraph-role")
-    driver.dispatch(Enter).unsafeRunSync()
+    val dropdownAfterButton = toolbarItemPoint(driver, "paragraph-role")
+    driver.dispatch(MouseClick(dropdownAfterButton._1, dropdownAfterButton._2)).unsafeRunSync()
     toolbarState(driver).detailState.getOrElse(fail("Expected dropdown detail")) shouldBe
       a[ContextualToolbarDetailState.Dropdown]
     driver.dispatch(MoveRight).unsafeRunSync()
     driver.dispatch(Enter).unsafeRunSync()
     driver.state.unsafeRunSync().focus shouldBe Focus.EditorPane(PaneId(0))
 
-    focusItem(driver, "font-size")
-    driver.dispatch(Enter).unsafeRunSync()
+    val inputPoint = toolbarItemPoint(driver, "font-size")
+    driver.dispatch(MouseClick(inputPoint._1, inputPoint._2)).unsafeRunSync()
     toolbarState(driver).detailState.getOrElse(fail("Expected input detail")) shouldBe
       a[ContextualToolbarDetailState.Input]
     driver.dispatch(DeleteBackward).unsafeRunSync()
@@ -80,24 +95,83 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.state.unsafeRunSync().focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
-  private def focusItem(driver: UiScenarioDriver, itemId: String): Unit =
-    driver
-      .updateState { state =>
-        val surface = state.contextualToolbarSurface.getOrElse(fail("Expected toolbar"))
-        val items   = ContextualToolbar.itemsFor(state)
-        val index   = items.indexWhere(_.id == itemId)
-        val toolbar = surface.content match
-          case SurfaceContent.ContextualToolbar(value) => value.copy(focusedIndex = index, detailState = None)
-          case _                                       => fail("Expected toolbar content")
-        state.copy(
-          uiSurfaces = state.uiSurfaces.map(current =>
-            if current.id == surface.id then current.copy(content = SurfaceContent.ContextualToolbar(toolbar))
-            else current
-          ),
-          focus = Focus.Surface(surface.id)
-        )
+  private def moveToToolbarItem(driver: UiScenarioDriver, itemId: String): Unit =
+    val state  = driver.state.unsafeRunSync()
+    val items  = ContextualToolbar.itemsFor(state)
+    val target = items.indexWhere(_.id == itemId)
+    val delta  = (target - toolbarState(driver).focusedIndex + items.length) % items.length
+    (0 until delta).foreach(_ => driver.dispatch(MoveRight).unsafeRunSync())
+
+  private def toolbarItemPoint(driver: UiScenarioDriver, itemId: String): (Int, Int) =
+    val state       = driver.state.unsafeRunSync()
+    val items       = ContextualToolbar.itemsFor(state)
+    val itemIndex   = items.indexWhere(_.id == itemId)
+    val rowGroups   = toolbarRows(driver)
+    val contentRect = toolbarContentRect(driver)
+    val (rowIndex, localIndex) = rowGroups.zipWithIndex
+      .collectFirst {
+        case (row, currentRowIndex) if itemIndex < row.length + rowGroups.take(currentRowIndex).map(_.length).sum =>
+          val precedingItemCount = rowGroups.take(currentRowIndex).map(_.length).sum
+          currentRowIndex -> (itemIndex - precedingItemCount)
       }
-      .unsafeRunSync()
+      .getOrElse(fail(s"Expected toolbar item $itemId"))
+    val regions = renderedToolbarCellRegions(
+      rowGroups(rowIndex),
+      contentRect.width,
+      toolbarState(driver).displayMode
+    )
+    val (start, width) = regions.lift(localIndex).getOrElse(fail(s"Expected toolbar cell $itemId"))
+    val surface        = state.contextualToolbarSurface.getOrElse(fail("Expected toolbar"))
+    val viewport       = state.viewportSize.getOrElse(fail("Expected viewport"))
+    val contract       = EditorLayoutContract.from(state, viewport, LayoutEngine.calculateLayoutWithUI(state, viewport))
+    val y = contract
+      .overlayRowSlots(surface.id)
+      .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(`rowIndex`), rowY) => rowY }
+      .getOrElse(fail(s"Expected toolbar row $rowIndex"))
+    contentRect.x + start + width / 2 -> y
+
+  private def toolbarRows(driver: UiScenarioDriver): List[List[ContextualToolbarItem]] =
+    val state = driver.state.unsafeRunSync()
+    ContextualToolbar.rowGroups(
+      ContextualToolbar.itemsFor(state),
+      toolbarContentRect(driver).width.max(1),
+      toolbarState(driver).displayMode
+    )
+
+  private def toolbarContentRect(driver: UiScenarioDriver): LayoutRect =
+    val state    = driver.state.unsafeRunSync()
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport"))
+    val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected toolbar"))
+    val contract = EditorLayoutContract.from(state, viewport, LayoutEngine.calculateLayoutWithUI(state, viewport))
+    val rect     = contract.overlayRect(surface.id).getOrElse(fail("Expected toolbar rectangle"))
+    SurfaceFrameLayout.forContent(rect, surface.content).contentRect
+
+  private def toolbarRowOf(driver: UiScenarioDriver, itemIndex: Int): Int =
+    toolbarRows(driver).zipWithIndex
+      .collectFirst {
+        case (row, rowIndex) if itemIndex < row.length + toolbarRows(driver).take(rowIndex).map(_.length).sum =>
+          rowIndex
+      }
+      .getOrElse(fail(s"Expected toolbar row for item $itemIndex"))
+
+  private def renderedToolbarCellRegions(
+    items: List[ContextualToolbarItem],
+    contentWidth: Int,
+    mode: com.serenity.config.ToolbarDisplayMode
+  ): List[(Int, Int)] =
+    val widths = ContextualToolbar.itemCellWidths(items, contentWidth, mode)
+    items
+      .zip(widths)
+      .zipWithIndex
+      .foldLeft((0, List.empty[(Int, Int)])) {
+        case ((cursor, regions), ((item, width), index)) =>
+          val separatorWidth = Option
+            .when(ContextualToolbar.hasTrailingGroupSeparator(item, items.lift(index + 1)))(1)
+            .getOrElse(0)
+          val gapWidth = Option.when(index < items.length - 1)(1).getOrElse(0)
+          (cursor + width + separatorWidth + gapWidth, regions :+ (cursor -> width))
+      }
+      ._2
 
   private def toolbarState(driver: UiScenarioDriver): ContextualToolbarState =
     driver.state.unsafeRunSync().contextualToolbarSurface.getOrElse(fail("Expected toolbar")).content match
