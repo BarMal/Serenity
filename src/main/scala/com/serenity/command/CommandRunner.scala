@@ -53,10 +53,13 @@ case class CommandRunner(
     else
       val (strongCommandMatches, remainingCommandMatches) =
         commandItems.partition(item => CommandRunner.isStrongCommandMatch(item.command, searchTerm))
+      val (exactCommandMatches, remainingStrongCommandMatches) =
+        strongCommandMatches.partition(item => CommandRunner.isExactCommandMatch(item.command, searchTerm))
       val settingsMatches = matchingSettingsResults(searchTerm)
       val (exactSettingsMatches, remainingSettingsMatches) =
         settingsMatches.partition(item => CommandRunner.isExactSettingsTarget(item, searchTerm))
-      exactSettingsMatches ++ strongCommandMatches ++ remainingSettingsMatches ++ remainingCommandMatches
+      exactCommandMatches ++ exactSettingsMatches ++ remainingStrongCommandMatches ++ remainingSettingsMatches ++
+        remainingCommandMatches
 
   def selectedItem: Option[CommandSurfaceItem] =
     visibleItems.lift(selectedIndex)
@@ -610,6 +613,11 @@ object CommandRunner:
     labelLower.startsWith(lowerTerm) ||
     descriptionLower == lowerTerm ||
     descriptionLower.startsWith(lowerTerm)
+
+  private def isExactCommandMatch(command: Command, term: String): Boolean =
+    val normalizedTerm = normalizedSearchTerm(term)
+    normalizedSearchTerm(command.name) == normalizedTerm ||
+    normalizedSearchTerm(command.label) == normalizedTerm
 
   private[command] def directGroupSearchText(group: CommandSurfaceItem.GroupItem): String =
     normalizedSearchTerm(s"${group.id} ${group.label} ${group.hint.getOrElse("")}")
