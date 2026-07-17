@@ -295,7 +295,7 @@ final private[manager] class StateManagerEventPipeline(
           case None =>
             NoOpLocalEventHandler
 
-  private def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
+  private[manager] def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
     for
       _ <- validateAndUpdateState(result.state, fallbackState)
       _ <- result.effects.traverse_(interpretEffect)
