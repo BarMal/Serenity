@@ -487,9 +487,11 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val paneRect =
       LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(PaneId(1))
 
-    rawSourceRow(surface, "# First heading") should be >= paneRect.y
+    val firstHeadingRow = rawSourceRow(surface, "# First heading")
+    firstHeadingRow should be >= paneRect.y
     rawSourceRow(surface, "First paragraph.") should be >= paneRect.y
     rawSourceRow(surface, "# Second heading") should be >= paneRect.y
+    surface.getBg(paneRect.x + 1, firstHeadingRow) shouldBe state.theme.highlighted.background
     panelRows(surface, state, paneRect) should have size 5
   }
 

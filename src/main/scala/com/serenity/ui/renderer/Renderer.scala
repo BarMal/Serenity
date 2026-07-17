@@ -1035,6 +1035,17 @@ object Renderer:
                   bufferLine = visualLine.bufferLine,
                   bufferStartColumn = visualLine.startColumn
                 )
+              renderSelectionHighlights(
+                context.surface,
+                buffer,
+                visualLine,
+                rect,
+                screenY,
+                context.cellMetrics.toPixelY(screenY),
+                state.theme,
+                context,
+                snapshot
+              )
         }
     }
 
