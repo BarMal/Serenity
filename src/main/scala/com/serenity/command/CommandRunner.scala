@@ -522,7 +522,8 @@ case class CommandRunner(
       if ancestorIds.contains("settings-ui-presets") || group.id == "settings-ui-presets" then Nil
       else
         group.children.flatMap {
-          case child: CommandSurfaceItem.GroupItem => loop(child, ancestorIds :+ group.id, ancestorLabels :+ group.label)
+          case child: CommandSurfaceItem.GroupItem =>
+            loop(child, ancestorIds :+ group.id, ancestorLabels :+ group.label)
           case child =>
             List(
               SettingLeaf(
