@@ -156,9 +156,9 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(ResizeEvent(ViewportSize(intrinsicWidth + 20, 30))).unsafeRunSync()
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
 
-    val state       = stateManager.getCurrentState.unsafeRunSync()
-    val viewport    = state.viewportSize.getOrElse(fail("Expected viewport size"))
-    val layout      = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val editorWidth = LayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
       .activeContentRect(state)
