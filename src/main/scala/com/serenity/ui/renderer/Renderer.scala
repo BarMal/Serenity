@@ -922,11 +922,7 @@ object Renderer:
       val activeLine = buffer.cursors.headOption
         .map(_.line)
         .filter(line => line >= 0 && line < lines.length)
-      val activeBlock         = activeLine.map(line => MarkdownBlockLens.currentBlock(lines, line))
-      val baseSourceLineLimit = markdownPreviewSourceLineLimit(visibleRows)
-      val maxSourceLines = activeBlock
-        .map(blockRange => math.max(baseSourceLineLimit, blockRange.end - blockRange.start + 1))
-        .getOrElse(baseSourceLineLimit)
+      val activeBlock     = activeLine.map(line => MarkdownBlockLens.currentBlock(lines, line))
       val viewportTopLine = buffer.viewport.topLine.max(0).min(lines.length - 1)
       val windowTopLine = activeLine
         .filter(line => line == viewportTopLine && line > 0 && lines(line).trim.isEmpty)
@@ -934,12 +930,13 @@ object Renderer:
         .map(_ - 1)
         .getOrElse(viewportTopLine)
       val firstSourceLine = activeBlock
-        .map { blockRange =>
-          if blockRange.start < windowTopLine && blockRange.end >= windowTopLine then blockRange.start
-          else if blockRange.end >= windowTopLine + maxSourceLines then (blockRange.end - maxSourceLines + 1).max(0)
-          else windowTopLine
-        }
+        .filter(blockRange => blockRange.start < windowTopLine && blockRange.end >= windowTopLine)
+        .map(_.start)
         .getOrElse(windowTopLine)
+      val baseSourceLineLimit = markdownPreviewSourceLineLimit(visibleRows)
+      val maxSourceLines = activeBlock
+        .map(blockRange => math.max(baseSourceLineLimit, blockRange.end - firstSourceLine + baseSourceLineLimit))
+        .getOrElse(baseSourceLineLimit)
       MarkdownDocumentPreview.PreviewWindow(
         firstSourceLine = firstSourceLine,
         firstPreviewRow =
