@@ -16,18 +16,20 @@ case class FloatingSurfaceGeometry(
     frame: LogicalPixelRect,
     cellWidthPx: Double,
     lineHeightPx: Double,
-    borderPx: Double = 0.0,
+    borderXPx: Double = 0.0,
+    borderYPx: Double = 0.0,
     itemGapRows: Double = 0.0
 ):
-  private val normalizedBorderPx = borderPx.max(0.0)
-  private val normalizedGapPx    = itemGapRows.max(0.0) * lineHeightPx.max(0.0)
+  private val normalizedBorderXPx = borderXPx.max(0.0)
+  private val normalizedBorderYPx = borderYPx.max(0.0)
+  private val normalizedGapPx     = itemGapRows.max(0.0) * lineHeightPx.max(0.0)
 
   def contentRect: LogicalPixelRect =
     LogicalPixelRect(
-      frame.x + normalizedBorderPx,
-      frame.y + normalizedBorderPx,
-      (frame.width - normalizedBorderPx * 2).max(0.0),
-      (frame.height - normalizedBorderPx * 2).max(0.0)
+      frame.x + normalizedBorderXPx,
+      frame.y + normalizedBorderYPx,
+      (frame.width - normalizedBorderXPx * 2).max(0.0),
+      (frame.height - normalizedBorderYPx * 2).max(0.0)
     )
 
   def itemRect(index: Int, headerRows: Int = 0): LogicalPixelRect =
@@ -59,6 +61,7 @@ object FloatingSurfaceGeometry:
       ),
       cellWidthPx = metrics.charWidth.toDouble,
       lineHeightPx = metrics.lineHeight.toDouble,
-      borderPx = borderCells.max(0) * metrics.lineHeight.toDouble,
+      borderXPx = borderCells.max(0) * metrics.charWidth.toDouble,
+      borderYPx = borderCells.max(0) * metrics.lineHeight.toDouble,
       itemGapRows = itemGapRows
     )

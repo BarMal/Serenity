@@ -11,7 +11,8 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
       frame = LogicalPixelRect(80.0, 40.0, 320.0, 240.0),
       cellWidthPx = 8.0,
       lineHeightPx = 20.0,
-      borderPx = 2.0,
+      borderXPx = 2.0,
+      borderYPx = 2.0,
       itemGapRows = 0.25
     )
 
@@ -30,6 +31,16 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
 
     geometry.frame shouldBe LogicalPixelRect(36.0, 54.0, 180.0, 144.0)
     geometry.itemRect(index = 1) shouldBe LogicalPixelRect(36.0, 81.0, 180.0, 18.0)
+  }
+
+  it should "apply non-square cell border insets on their matching axes" in {
+    val geometry = FloatingSurfaceGeometry.fromCells(
+      LayoutRect(2, 1, 10, 6),
+      CellMetrics(charWidth = 7, lineHeight = 19, ascent = 14),
+      borderCells = 1
+    )
+
+    geometry.contentRect shouldBe LogicalPixelRect(21.0, 38.0, 56.0, 76.0)
   }
 
   "SurfaceFrameLayout" should "derive content bounds from a framed overlay rectangle" in {
