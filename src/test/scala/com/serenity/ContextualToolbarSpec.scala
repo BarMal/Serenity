@@ -111,6 +111,40 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     movedVertically.y should be > movedHorizontally.y
   }
 
+  it should "compact and balance the default formatting toolbar when its intrinsic width exceeds the pane" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-default-constrained-pane")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(140, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state        = stateManager.getCurrentState.unsafeRunSync()
+    val toolbarState = toolbarStateFrom(state)
+    val items        = ContextualToolbar.itemsFor(state)
+    val viewport     = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout       = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val toolbar      = toolbarRect(state)
+    val editorWidth = LayoutEngine
+      .calculateEditorWorkspaceLayout(state, layout)
+      .activeContentRect(state)
+      .map(_.width)
+      .getOrElse(fail("Expected active content rect"))
+    val intrinsicWidth = ContextualToolbar.compactContentWidth(toolbarState, state, Int.MaxValue)
+    val rowGroups = ContextualToolbar.rowGroups(
+      items,
+      toolbarContentWidth(state),
+      toolbarState.displayMode
+    )
+
+    toolbarState.displayMode shouldBe ToolbarDisplayMode.IconAndText
+    intrinsicWidth should be > editorWidth
+    toolbar.width should be < (editorWidth * 3 / 4)
+    rowGroups.map(_.map(_.id)) shouldBe List(
+      List("bold", "italic", "underline", "font-family", "font-family-text", "font-size"),
+      List("color", "color-hex", "paragraph-role", "align-left", "align-center", "align-right", "align-justify")
+    )
+  }
+
   it should "keep the formatted run state when the caret sits on its trailing boundary" in {
     val stateManager = createStateManager("ContextualToolbarSpec-caret-boundary-style")
 

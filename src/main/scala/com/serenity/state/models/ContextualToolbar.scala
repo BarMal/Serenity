@@ -293,8 +293,7 @@ object ContextualToolbar:
         hasTrailingGroupSeparator(item, Some(nextItem))
     }
     val availableWidth = (contentWidth - gutters).max(0)
-    if preferredWidths.sum <= availableWidth then
-      distributeExtraWidth(preferredWidths, availableWidth - preferredWidths.sum)
+    if preferredWidths.sum <= availableWidth then preferredWidths
     else distributeEvenly(items.length, availableWidth)
 
   def rowGroups(
@@ -317,7 +316,18 @@ object ContextualToolbar:
         inputItem(itemId, items).map(item => item.label.length + text.length + 3).getOrElse(0)
       case None =>
         0
-    estimatedRowWidth(items, toolbarState.displayMode)
+    val intrinsicWidth = estimatedRowWidth(items, toolbarState.displayMode)
+    val largestGroupWidth = proseItemSegments(items)
+      .map(estimatedRowWidth(_, toolbarState.displayMode))
+      .maxOption
+      .getOrElse(1)
+    val balancedWidth =
+      if intrinsicWidth <= maxWidth then intrinsicWidth
+      else
+        balancedTwoRowWidth(proseItemSegments(items), toolbarState.displayMode)
+          .getOrElse((intrinsicWidth + 1) / 2)
+          .max(largestGroupWidth)
+    balancedWidth
       .max(detailWidth)
       .max(1)
       .min(maxWidth.max(1))
@@ -442,10 +452,27 @@ object ContextualToolbar:
     contentWidth: Int,
     mode: ToolbarDisplayMode
   ): List[List[ContextualToolbarItem]] =
-    segments.flatMap(segment =>
+    val packableSegments = segments.flatMap { segment =>
       if estimatedRowWidth(segment, mode) > contentWidth then packItems(segment, contentWidth, mode)
       else List(segment)
-    )
+    }
+    val (currentRow, rows) =
+      packableSegments.foldLeft((List.empty[ContextualToolbarItem], List.empty[List[ContextualToolbarItem]])) {
+        case ((currentRow, acc), segment) =>
+          val nextRow = currentRow ++ segment
+          if currentRow.nonEmpty && estimatedRowWidth(nextRow, mode) > contentWidth then (segment, acc :+ currentRow)
+          else (nextRow, acc)
+      }
+    if currentRow.nonEmpty then rows :+ currentRow else rows
+
+  private def balancedTwoRowWidth(
+    segments: List[List[ContextualToolbarItem]],
+    mode: ToolbarDisplayMode
+  ): Option[Int] =
+    (1 until segments.length).iterator.map { splitIndex =>
+      estimatedRowWidth(segments.take(splitIndex).flatten, mode)
+        .max(estimatedRowWidth(segments.drop(splitIndex).flatten, mode))
+    }.minOption
 
   private def packItems(
     items: List[ContextualToolbarItem],
@@ -468,11 +495,6 @@ object ContextualToolbar:
         case (item, nextItem) =>
           hasTrailingGroupSeparator(item, Some(nextItem))
       }
-
-  private def distributeExtraWidth(widths: List[Int], extraWidth: Int): List[Int] =
-    widths.zipWithIndex.map { (width, index) =>
-      width + (extraWidth / widths.length) + Option.when(index < extraWidth % widths.length)(1).getOrElse(0)
-    }
 
   private def distributeEvenly(itemCount: Int, availableWidth: Int): List[Int] =
     if itemCount == 0 then Nil
