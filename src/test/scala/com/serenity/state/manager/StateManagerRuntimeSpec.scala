@@ -84,9 +84,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       analysisCancelled        <- Deferred[IO, Unit]
-      analysisStarted          <- Deferred[IO, Unit]
       pendingAnalysis <- IO
-        .defer(analysisStarted.complete(()).void >> IO.never[Unit])
+        .never[Unit]
         .onCancel(analysisCancelled.complete(()).void)
         .start
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
@@ -111,7 +110,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
         fileDialog = FileDialog.unavailable
       )
-      _ <- analysisStarted.get
       operations <- StateManagerOperationBoundary.create(
         stateRef,
         documentAnalysisFiberRef,
