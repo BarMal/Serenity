@@ -242,6 +242,27 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       List("settings-animation")
   }
 
+  it should "return a unique leaf result with its breadcrumb for an exact settings search" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+      .updateSearchTerm("\"ANIMATION-duration\"")
+
+    runner.visibleItems.collect {
+      case item: CommandSurfaceItem.SettingSearchItem =>
+        (item.targetGroupId, item.targetItemId, item.label, item.breadcrumb)
+    } shouldBe List(
+      (
+        "settings-animation",
+        "animation-duration",
+        "Animation Duration",
+        "Settings > Appearance & Motion > Motion & Animation"
+      )
+    )
+  }
+
   it should "surface visual appearance settings as an expandable group in settings browsing" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
@@ -828,9 +849,9 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .updateSearchTerm("lang-markdown")
 
-    runner.visibleItems.collectFirst { case group: CommandSurfaceItem.GroupItem => group.id } shouldBe Some(
-      "settings-language"
-    )
+    runner.visibleItems.collectFirst {
+      case item: CommandSurfaceItem.SettingSearchItem => (item.targetGroupId, item.targetItemId)
+    } shouldBe Some(("settings-language", "lang-markdown"))
   }
 
   it should "preserve selected built-in and custom UI presets in the settings submenu" in {

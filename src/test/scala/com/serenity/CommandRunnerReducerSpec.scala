@@ -173,6 +173,21 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runnerAfterLeft.activeCategory shouldBe CommandCategory.All
   }
 
+  it should "open the exact settings leaf selected from search" in {
+    val registry = CommandRegistry.default
+    val searched = List('a', 'n', 'i', 'm', 'a', 't', 'i', 'o', 'n', ' ', 'd', 'u', 'r', 'a', 't', 'i', 'o', 'n')
+      .foldLeft(activeState(registry)) { (state, char) =>
+        CommandRunnerReducer.reduce(RunnerInsertChar(char), state, registry).state
+      }
+
+    val opened = CommandRunnerReducer.reduce(RunnerSubmit, searched, registry).state
+    val runner = runnerFrom(opened)
+
+    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-animation")
+    runner.activeSubmenu.flatMap(submenu => runner.submenuItems(submenu.groupId).lift(submenu.selectedIndex)).map(_.id) shouldBe
+      Some("animation-duration")
+  }
+
   it should "search globally even when opened on a narrower category" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
@@ -542,7 +557,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "carry root search into a matched settings submenu" in {
+  it should "open the matched settings leaf without filtering away its context" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val searchedRunner = CommandRunner.empty
@@ -560,14 +575,14 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       uiSurfaces = List(surface)
     )
 
-    searchedRunner.selectedItem.map(_.id) shouldBe Some("settings-interface-layout")
+    searchedRunner.selectedItem.map(_.id) shouldBe Some("settings-search:ui-outline-thickness")
 
     val entered = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val runner  = runnerFrom(entered.state)
 
     runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-interface-layout")
-    runner.activeSubmenu.map(_.searchTerm) shouldBe Some("UI Outline Thickness")
-    runner.focusedSubmenuItems.map(_.id) shouldBe List("ui-outline-thickness")
+    runner.activeSubmenu.map(_.searchTerm) shouldBe Some("")
+    runner.searchTerm shouldBe "UI Outline Thickness"
     runner.activeSubmenu.flatMap(
       _.selectedItemFromAll(runner.submenuItems("settings-interface-layout")).map(_.id)
     ) shouldBe

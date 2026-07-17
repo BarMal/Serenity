@@ -3,6 +3,8 @@ package com.serenity.command
 import com.serenity.config.*
 import com.serenity.ui.presets.UiPreset
 
+import java.util.Locale
+
 case class CommandRunnerSubmenuState(
     groupId: String,
     selectedIndex: Int = 0,
@@ -51,7 +53,7 @@ case class CommandRunner(
     else
       val (strongCommandMatches, remainingCommandMatches) =
         commandItems.partition(item => CommandRunner.isStrongCommandMatch(item.command, searchTerm))
-      strongCommandMatches ++ matchingSettingsGroups(searchTerm) ++ remainingCommandMatches
+      strongCommandMatches ++ matchingSettingsResults(searchTerm) ++ remainingCommandMatches
 
   def selectedItem: Option[CommandSurfaceItem] =
     visibleItems.lift(selectedIndex)
@@ -99,6 +101,21 @@ case class CommandRunner(
 
   def enterSelectedGroup: CommandRunner =
     selectedItem match
+      case Some(setting: CommandSurfaceItem.SettingSearchItem) =>
+        val items = submenuItems(setting.targetGroupId)
+        val selectedIndex = items.indexWhere(_.id == setting.targetItemId).max(0)
+        val ancestorIds   = preferredAncestorGroupIds(setting.targetGroupId)
+        copy(
+          previewedGroupId = Some(setting.targetGroupId),
+          activeSubmenu = Some(
+            CommandRunnerSubmenuState(
+              setting.targetGroupId,
+              selectedIndex = selectedIndex,
+              parentGroupId = ancestorIds.lastOption,
+              ancestorGroupIds = ancestorIds
+            )
+          )
+        )
       case Some(group: CommandSurfaceItem.GroupItem) =>
         val carriedSearchTerm = submenuSearchTermFor(group)
         val rememberedIndex   = if carriedSearchTerm.nonEmpty then 0 else submenuSelections.getOrElse(group.id, 0)
@@ -413,8 +430,15 @@ case class CommandRunner(
   /** Check if there are more commands beyond visible ones */
   def hasMoreCommands: Boolean = visibleItems.length > 5
 
-  private def matchingSettingsGroups(term: String): List[CommandSurfaceItem.GroupItem] =
-    val lowerTerm = term.trim.toLowerCase
+  private def matchingSettingsResults(term: String): List[CommandSurfaceItem] =
+    val lowerTerm = CommandRunner.normalizedSearchTerm(term)
+    if lowerTerm.length < 3 then Nil
+    else
+      val leafResults = matchingSettingLeaves(lowerTerm)
+      if CommandRunner.isSpecificSettingQuery(lowerTerm) && leafResults.nonEmpty then leafResults
+      else matchingSettingsGroups(lowerTerm)
+
+  private def matchingSettingsGroups(lowerTerm: String): List[CommandSurfaceItem.GroupItem] =
     if lowerTerm.length < 3 then Nil
     else
       val matchingGroups = allSettingsGroups.zipWithIndex
@@ -438,6 +462,41 @@ case class CommandRunner(
       if directGlobalGroups.size == 1 then directGlobalGroups
       else directGlobalGroups ++ matchingGroups.map(_._1).filterNot(group => directGlobalGroups.contains(group))
 
+  private def matchingSettingLeaves(term: String): List[CommandSurfaceItem.SettingSearchItem] =
+    settingLeaves
+      .flatMap { case (group, item, breadcrumb) =>
+        CommandRunner.settingSearchRank(item, breadcrumb, term).map { rank =>
+          (
+            CommandSurfaceItem.SettingSearchItem(
+              id = s"settings-search:${item.id}",
+              targetGroupId = group.id,
+              targetItemId = item.id,
+              label = CommandRunner.itemLabel(item),
+              breadcrumb = breadcrumb,
+              category = CommandCategory.Settings,
+              hint = CommandRunner.itemHint(item)
+            ),
+            rank
+          )
+        }
+      }
+      .sortBy { case (item, rank) => (rank, item.breadcrumb, item.targetItemId) }
+      .map(_._1)
+      .distinctBy(_.targetItemId)
+      .take(CommandRunner.MaximumSettingSearchResults)
+
+  private def settingLeaves: List[(CommandSurfaceItem.GroupItem, CommandSurfaceItem, String)] =
+    def loop(
+      group: CommandSurfaceItem.GroupItem,
+      ancestors: List[String]
+    ): List[(CommandSurfaceItem.GroupItem, CommandSurfaceItem, String)] =
+      group.children.flatMap {
+        case child: CommandSurfaceItem.GroupItem => loop(child, ancestors :+ group.label)
+        case child => List((group, child, (("Settings" :: ancestors) :+ group.label).mkString(" > ")))
+      }
+
+    settingsGroups.flatMap(group => loop(group, Nil))
+
   private def settingsSearchRank(
     group: CommandSurfaceItem.GroupItem,
     term: String,
@@ -450,7 +509,7 @@ case class CommandRunner(
     else 3
 
   private def submenuSearchTermFor(group: CommandSurfaceItem.GroupItem): String =
-    val lowerTerm = searchTerm.trim.toLowerCase
+    val lowerTerm = CommandRunner.normalizedSearchTerm(searchTerm)
     if lowerTerm.length < 3 then ""
     else if CommandRunner.directGroupSearchText(group).contains(lowerTerm) then ""
     else if group.children.exists(child => CommandRunner.directItemSearchText(child).contains(lowerTerm)) then
@@ -476,6 +535,47 @@ case class CommandRunner(
 
 object CommandRunner:
 
+  private val MaximumSettingSearchResults = 10
+
+  private def normalizedSearchTerm(term: String): String =
+    term
+      .trim
+      .stripPrefix("\"")
+      .stripSuffix("\"")
+      .toLowerCase(Locale.ROOT)
+      .replaceAll("[^\\p{L}\\p{N}]+", " ")
+      .trim
+
+  private def isSpecificSettingQuery(term: String): Boolean =
+    term.split(" ").count(_.nonEmpty) > 1
+
+  private def settingSearchRank(item: CommandSurfaceItem, breadcrumb: String, term: String): Option[Int] =
+    val label = normalizedSearchTerm(itemLabel(item))
+    val id    = normalizedSearchTerm(item.id)
+    val scope = normalizedSearchTerm(breadcrumb)
+    val terms = term.split(" ").filter(_.nonEmpty).toList
+    val allTermsMatch = terms.nonEmpty && terms.forall(token => s"$label $id $scope".contains(token))
+    if label == term || id == term then Some(0)
+    else if label.startsWith(term) || id.startsWith(term) then Some(1)
+    else if allTermsMatch then Some(2)
+    else None
+
+  private def itemLabel(item: CommandSurfaceItem): String =
+    item match
+      case CommandSurfaceItem.CommandItem(command) => command.label
+      case item: CommandSurfaceItem.OptionItem     => item.label
+      case item: CommandSurfaceItem.InputItem      => item.label
+      case item: CommandSurfaceItem.SettingSearchItem => item.label
+      case item: CommandSurfaceItem.GroupItem      => item.label
+
+  private def itemHint(item: CommandSurfaceItem): Option[String] =
+    item match
+      case item: CommandSurfaceItem.OptionItem        => item.hint
+      case item: CommandSurfaceItem.InputItem         => Some(item.hint)
+      case item: CommandSurfaceItem.SettingSearchItem => item.hint
+      case item: CommandSurfaceItem.GroupItem         => item.hint
+      case _: CommandSurfaceItem.CommandItem           => None
+
   private def isStrongCommandMatch(command: Command, term: String): Boolean =
     val lowerTerm  = term.toLowerCase
     val nameLower  = command.name.toLowerCase
@@ -483,14 +583,14 @@ object CommandRunner:
     nameLower.startsWith(lowerTerm) || labelLower.startsWith(lowerTerm)
 
   private[command] def directGroupSearchText(group: CommandSurfaceItem.GroupItem): String =
-    s"${group.id} ${group.label} ${group.hint.getOrElse("")}".toLowerCase
+    normalizedSearchTerm(s"${group.id} ${group.label} ${group.hint.getOrElse("")}")
 
   private[command] def directItemSearchText(item: CommandSurfaceItem): String =
     item match
       case group: CommandSurfaceItem.GroupItem =>
         CommandRunner.directGroupSearchText(group)
       case other =>
-        s"${other.id} ${other.searchText}".toLowerCase
+        normalizedSearchTerm(s"${other.id} ${other.searchText}")
 
   private[command] def defaultOptionSelections(config: AppConfig): Map[String, Int] =
     CommandRunnerOptionSelections.default(config)
