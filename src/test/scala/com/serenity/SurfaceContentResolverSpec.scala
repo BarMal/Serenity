@@ -104,10 +104,10 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.header.flatMap(_.cursorColumn) shouldBe Some("search: open file".length)
     floating.rows.exists(_.selected) shouldBe true
     floating.rows.map(_.plainText).head should include("[Edit]")
-    floating.rows should have size 1
-    floating.rows.exists(_.plainText.contains("Open")) shouldBe true
-    floating.rows.exists(_.plainText.contains("Open file")) shouldBe true
-    floating.footer.map(_.plainText) shouldBe Some("1/1")
+    floating.rows should have size 2
+    floating.rows.head.plainText should include("Open")
+    floating.rows.head.plainText should include("Open file")
+    floating.footer.map(_.plainText) shouldBe Some("1/2")
   }
 
   it should "resolve context menus into a selected command list" in {
@@ -216,12 +216,12 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     optionRow.segments(1).tone shouldBe OverlayTone.Normal
   }
 
-  it should "render nested settings search result rows with parent breadcrumbs" in {
+  it should "render direct settings search result rows with breadcrumbs" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .updateSearchTerm("new documents")
+      .updateSearchTerm("default document")
 
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),
@@ -230,13 +230,11 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     val row = floating.rows
-      .find(_.plainText.contains("New Documents"))
-      .getOrElse(fail("Expected nested preset new documents result"))
+      .find(_.plainText.contains("Default Document"))
+      .getOrElse(fail("Expected direct document mode result"))
 
-    row.plainText should startWith("UI Presets > Edit Preset: Writing > Document Defaults > New Documents")
-    row.segments.headOption.map(_.text) shouldBe Some(
-      "UI Presets > Edit Preset: Writing > Document Defaults > New Documents"
-    )
+    row.segments.headOption.map(_.text) shouldBe Some("Default Document")
+    row.segments.drop(1).headOption.map(_.text) shouldBe Some("Settings > Document Writing > Document Defaults")
   }
 
   it should "render preset selection as a horizontal carousel" in {

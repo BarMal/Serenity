@@ -33,12 +33,12 @@ object CommandRunnerReducer:
       case RunnerSubmit =>
         if submenuHasFocus(state) then submitSubmenu(state)
         else if currentRunner(state).exists(
-            _.selectedItem.exists(item =>
-              item.isInstanceOf[CommandSurfaceItem.GroupItem] || item.isInstanceOf[CommandSurfaceItem.SettingSearchItem]
+              _.selectedItem.exists(item =>
+                item.isInstanceOf[CommandSurfaceItem.GroupItem] || item
+                  .isInstanceOf[CommandSurfaceItem.SettingSearchItem]
+              )
             )
-          )
-        then
-          ReducerResult.noEffects(replaceRunner(state, _.enterSelectedGroup))
+        then ReducerResult.noEffects(replaceRunner(state, _.enterSelectedGroup))
         else
           currentRunner(state).flatMap(_.editingItemId) match
             case Some(itemId) =>

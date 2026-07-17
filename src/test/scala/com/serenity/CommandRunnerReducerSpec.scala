@@ -184,7 +184,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val runner = runnerFrom(opened)
 
     runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-animation")
-    runner.activeSubmenu.flatMap(submenu => runner.submenuItems(submenu.groupId).lift(submenu.selectedIndex)).map(_.id) shouldBe
+    runner.activeSubmenu
+      .flatMap(submenu => runner.submenuItems(submenu.groupId).lift(submenu.selectedIndex))
+      .map(_.id) shouldBe
       Some("animation-duration")
   }
 

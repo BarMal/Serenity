@@ -1,9 +1,9 @@
 package com.serenity.command
 
+import java.util.Locale
+
 import com.serenity.config.*
 import com.serenity.ui.presets.UiPreset
-
-import java.util.Locale
 
 case class CommandRunnerSubmenuState(
     groupId: String,
@@ -102,7 +102,7 @@ case class CommandRunner(
   def enterSelectedGroup: CommandRunner =
     selectedItem match
       case Some(setting: CommandSurfaceItem.SettingSearchItem) =>
-        val items = submenuItems(setting.targetGroupId)
+        val items         = submenuItems(setting.targetGroupId)
         val selectedIndex = items.indexWhere(_.id == setting.targetItemId).max(0)
         val ancestorIds   = preferredAncestorGroupIds(setting.targetGroupId)
         copy(
@@ -464,21 +464,22 @@ case class CommandRunner(
 
   private def matchingSettingLeaves(term: String): List[CommandSurfaceItem.SettingSearchItem] =
     settingLeaves
-      .flatMap { case (group, item, breadcrumb) =>
-        CommandRunner.settingSearchRank(item, breadcrumb, term).map { rank =>
-          (
-            CommandSurfaceItem.SettingSearchItem(
-              id = s"settings-search:${item.id}",
-              targetGroupId = group.id,
-              targetItemId = item.id,
-              label = CommandRunner.itemLabel(item),
-              breadcrumb = breadcrumb,
-              category = CommandCategory.Settings,
-              hint = CommandRunner.itemHint(item)
-            ),
-            rank
-          )
-        }
+      .flatMap {
+        case (group, item, breadcrumb) =>
+          CommandRunner.settingSearchRank(item, breadcrumb, term).map { rank =>
+            (
+              CommandSurfaceItem.SettingSearchItem(
+                id = s"settings-search:${item.id}",
+                targetGroupId = group.id,
+                targetItemId = item.id,
+                label = CommandRunner.itemLabel(item),
+                breadcrumb = breadcrumb,
+                category = CommandCategory.Settings,
+                hint = CommandRunner.itemHint(item)
+              ),
+              rank
+            )
+          }
       }
       .sortBy { case (item, rank) => (rank, item.breadcrumb, item.targetItemId) }
       .map(_._1)
@@ -538,8 +539,7 @@ object CommandRunner:
   private val MaximumSettingSearchResults = 10
 
   private def normalizedSearchTerm(term: String): String =
-    term
-      .trim
+    term.trim
       .stripPrefix("\"")
       .stripSuffix("\"")
       .toLowerCase(Locale.ROOT)
@@ -550,10 +550,10 @@ object CommandRunner:
     term.split(" ").count(_.nonEmpty) > 1
 
   private def settingSearchRank(item: CommandSurfaceItem, breadcrumb: String, term: String): Option[Int] =
-    val label = normalizedSearchTerm(itemLabel(item))
-    val id    = normalizedSearchTerm(item.id)
-    val scope = normalizedSearchTerm(breadcrumb)
-    val terms = term.split(" ").filter(_.nonEmpty).toList
+    val label         = normalizedSearchTerm(itemLabel(item))
+    val id            = normalizedSearchTerm(item.id)
+    val scope         = normalizedSearchTerm(breadcrumb)
+    val terms         = term.split(" ").filter(_.nonEmpty).toList
     val allTermsMatch = terms.nonEmpty && terms.forall(token => s"$label $id $scope".contains(token))
     if label == term || id == term then Some(0)
     else if label.startsWith(term) || id.startsWith(term) then Some(1)
@@ -562,11 +562,11 @@ object CommandRunner:
 
   private def itemLabel(item: CommandSurfaceItem): String =
     item match
-      case CommandSurfaceItem.CommandItem(command) => command.label
-      case item: CommandSurfaceItem.OptionItem     => item.label
-      case item: CommandSurfaceItem.InputItem      => item.label
+      case CommandSurfaceItem.CommandItem(command)    => command.label
+      case item: CommandSurfaceItem.OptionItem        => item.label
+      case item: CommandSurfaceItem.InputItem         => item.label
       case item: CommandSurfaceItem.SettingSearchItem => item.label
-      case item: CommandSurfaceItem.GroupItem      => item.label
+      case item: CommandSurfaceItem.GroupItem         => item.label
 
   private def itemHint(item: CommandSurfaceItem): Option[String] =
     item match
@@ -574,13 +574,17 @@ object CommandRunner:
       case item: CommandSurfaceItem.InputItem         => Some(item.hint)
       case item: CommandSurfaceItem.SettingSearchItem => item.hint
       case item: CommandSurfaceItem.GroupItem         => item.hint
-      case _: CommandSurfaceItem.CommandItem           => None
+      case _: CommandSurfaceItem.CommandItem          => None
 
   private def isStrongCommandMatch(command: Command, term: String): Boolean =
-    val lowerTerm  = term.toLowerCase
-    val nameLower  = command.name.toLowerCase
-    val labelLower = command.label.toLowerCase
-    nameLower.startsWith(lowerTerm) || labelLower.startsWith(lowerTerm)
+    val lowerTerm        = term.toLowerCase
+    val nameLower        = command.name.toLowerCase
+    val labelLower       = command.label.toLowerCase
+    val descriptionLower = command.description.toLowerCase
+    nameLower.startsWith(lowerTerm) ||
+    labelLower.startsWith(lowerTerm) ||
+    descriptionLower == lowerTerm ||
+    descriptionLower.startsWith(lowerTerm)
 
   private[command] def directGroupSearchText(group: CommandSurfaceItem.GroupItem): String =
     normalizedSearchTerm(s"${group.id} ${group.label} ${group.hint.getOrElse("")}")

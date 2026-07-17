@@ -323,7 +323,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.alphaCalls.filter(_ < baseAlpha) should not be empty
   }
 
-  it should "render carried submenu search while keeping editor cursors steady" in {
+  it should "render a direct settings leaf while keeping editor cursors steady" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
@@ -368,22 +368,17 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val submenuRect = layout.belowCursorOverlayStack
       .collectFirst { case (SurfaceId("command-runner-submenu"), rect) => rect }
       .getOrElse(fail("Expected command-runner submenu overlay"))
-    val codeFont         = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val defaultMetrics   = CellMetrics.fromFont(codeFont)
-    val searchText       = "Current Buffer Language search: lang-markdown"
-    val submenuText      = (submenuRect.y until submenuRect.bottom).map(visibleSurface.getRow).mkString("\n")
-    val submenuCursorYPx = defaultMetrics.toPixelY(submenuRect.y)
+    val submenuText = (submenuRect.y until submenuRect.bottom).map(visibleSurface.getRow).mkString("\n")
 
     val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
     val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
 
-    visibleCursors should have size 5
+    visibleCursors should have size 4
     hiddenCursors should have size 3
     hiddenCursors.map(_.xPx) shouldBe visibleCursors.take(3).map(_.xPx)
-    submenuText should include(searchText)
+    submenuText should include("Current Buffer Language")
+    submenuText should not include "search: lang-markdown"
     submenuText should include("Markdown")
-    visibleCursors.exists(_.yPx == submenuCursorYPx) shouldBe true
-    hiddenCursors.exists(_.yPx == submenuCursorYPx) shouldBe false
   }
 
   it should "fade the selected command highlight with the overlay row animation" in {
