@@ -1299,8 +1299,34 @@ final private[manager] class StateManagerEventPipeline(
       layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       contract = EditorLayoutContract.from(state, viewportSize, layout)
       contentRect <- contract.overlayContentRect(surface.id)
-    yield contentRect.contains(event.col, event.row) &&
-      !contract.overlayRowSlots(surface.id).exists(_.y == event.row)).getOrElse(false)
+    yield
+      val geometry = layout.floatingSurfacePlacements
+        .get(surface.id)
+        .map(
+          _.geometry(
+            CellMetrics.fromFont(FontLoader.previewUiFont(state.config.fontConfig)),
+            SurfaceFrameLayout.borderCellsFor(surface.content),
+            state.config.commandRunnerItemGapRows
+          )
+        )
+      (for
+        pixelX <- event.pixelX
+        pixelY <- event.pixelY
+        value  <- geometry
+      yield value.contentRect.contains(pixelX.toDouble, pixelY.toDouble) &&
+        value
+          .itemIndexAt(
+            pixelX.toDouble,
+            pixelY.toDouble,
+            surface.content.asInstanceOf[SurfaceContent.ContextMenu].menu.items.length,
+            1
+          )
+          .isEmpty)
+        .getOrElse(
+          contentRect.contains(event.col, event.row) &&
+            !contract.overlayRowSlots(surface.id).exists(_.y == event.row)
+        )
+    ).getOrElse(false)
 
   private def editorContextMenu(targetFocus: Focus): Option[ContextMenu] =
     val registry = CommandRegistry.withToggleUI
@@ -1396,7 +1422,9 @@ final private[manager] class StateManagerEventPipeline(
         contentRect,
         state,
         toolbarState,
-        contract.overlayRowSlots(surface.id)
+        contract.overlayRowSlots(surface.id),
+        layout.floatingSurfacePlacements.get(surface.id),
+        SurfaceFrameLayout.borderCellsFor(surface.content)
       )
     yield (surface, toolbarState, hit)
 
@@ -1405,17 +1433,33 @@ final private[manager] class StateManagerEventPipeline(
     contentRect: LayoutRect,
     state: AppState,
     toolbarState: ContextualToolbarState,
-    rowSlots: List[SurfaceContentRowSlot]
+    rowSlots: List[SurfaceContentRowSlot],
+    placement: Option[FloatingSurfaceFramePlacement],
+    borderCells: Int
   ): Option[ContextualToolbarHit] =
-    overlayDisplayedRowIndexAt(event, contentRect, rowSlots).flatMap { rowIndex =>
-      ContextualToolbar.hitAt(
-        rowIndex = rowIndex,
-        columnOffset = event.col - contentRect.x,
-        contentWidth = contentRect.width.max(1),
-        toolbarState = toolbarState,
-        state = state
-      )
-    }
+    val metrics = CellMetrics.fromFont(FontLoader.previewUiFont(state.config.fontConfig))
+    val pixelHit = for
+      pixelX   <- event.pixelX
+      pixelY   <- event.pixelY
+      geometry <- placement.map(_.geometry(metrics, borderCells))
+      rowOffset    = math.floor((pixelY.toDouble - geometry.contentRect.y) / metrics.lineHeight).toInt
+      columnOffset = math.floor((pixelX.toDouble - geometry.contentRect.x) / metrics.charWidth).toInt
+      rowIndex <- rowSlots.collectFirst {
+        case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) if y - contentRect.y == rowOffset => index
+      }
+    yield rowIndex -> columnOffset
+    pixelHit
+      .orElse(overlayDisplayedRowIndexAt(event, contentRect, rowSlots).map(_ -> (event.col - contentRect.x)))
+      .flatMap {
+        case (rowIndex, columnOffset) =>
+          ContextualToolbar.hitAt(
+            rowIndex = rowIndex,
+            columnOffset = columnOffset,
+            contentWidth = contentRect.width.max(1),
+            toolbarState = toolbarState,
+            state = state
+          )
+      }
 
   private def replaceContextualToolbar(
     state: AppState,

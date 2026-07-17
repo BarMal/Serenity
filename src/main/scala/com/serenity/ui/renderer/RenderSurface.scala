@@ -67,6 +67,9 @@ trait RenderSurface:
     _arcPx: Int
   )(render: => Unit): Unit = render
 
+  /** Apply an exact logical-pixel translation while rendering. */
+  def withPixelTranslation(_xPx: Float, _yPx: Float)(render: => Unit): Unit = render
+
   def fillPixelRect(
     xPx: Int,
     yPx: Int,

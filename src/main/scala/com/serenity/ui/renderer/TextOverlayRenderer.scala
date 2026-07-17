@@ -18,8 +18,9 @@ object TextOverlayRenderer:
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
-    val rect  = overlay.rect
-    val frame = overlay.floatingGeometry(cellMetrics).frame
+    val rect      = overlay.rect
+    val frame     = overlay.floatingGeometry(cellMetrics).frame
+    val yOffsetPx = (frame.y - cellMetrics.toPixelY(rect.y).toDouble).toFloat
 
     def rowColors(rowOffset: Int): (Color, Color) =
       overlay.animationState
@@ -50,14 +51,16 @@ object TextOverlayRenderer:
       frame.height.toFloat,
       config.uiCornerRadiusPx
     ) {
-      for (y, rowOffset) <- (rect.y until rect.bottom).zipWithIndex do
-        val (fg, bg) = rowColors(rowOffset)
-        surface.setForegroundColor(fg)
-        surface.setBackgroundColor(bg)
-        surface.putString(rect.x, y, " " * rect.width)
+      surface.withPixelTranslation(0f, yOffsetPx) {
+        for (y, rowOffset) <- (rect.y until rect.bottom).zipWithIndex do
+          val (fg, bg) = rowColors(rowOffset)
+          surface.setForegroundColor(fg)
+          surface.setBackgroundColor(bg)
+          surface.putString(rect.x, y, " " * rect.width)
 
-      applyGlassSheen(surface, overlay, theme, config)
-      drawContent(surface, overlay, theme, cursorVisible, rowColors, font, cellMetrics)
+        applyGlassSheen(surface, overlay, theme, config)
+        drawContent(surface, overlay, theme, cursorVisible, rowColors, font, cellMetrics, yOffsetPx)
+      }
     }
     drawBorder(surface, overlay, theme, config, cellMetrics)
 
@@ -92,7 +95,8 @@ object TextOverlayRenderer:
     cursorVisible: Boolean,
     rowColors: Int => (Color, Color),
     font: java.awt.Font,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    yOffsetPx: Float
   ): Unit =
     val contentRect = overlay.resolvedContentRect
     val maxLineSize = contentRect.width
@@ -111,7 +115,9 @@ object TextOverlayRenderer:
             case SurfaceContentRowKind.Item(index) if overlay.itemGapRows > 0.0 =>
               renderFractionalItemRow(
                 surface,
-                geometry.itemRect(index, if overlay.header.nonEmpty then 1 else 0),
+                geometry
+                  .itemRect(index, if overlay.header.nonEmpty then 1 else 0)
+                  .copy(y = geometry.itemRect(index, if overlay.header.nonEmpty then 1 else 0).y - yOffsetPx),
                 row,
                 theme,
                 animFg,
