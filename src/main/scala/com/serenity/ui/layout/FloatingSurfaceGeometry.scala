@@ -13,7 +13,7 @@ case class LogicalPixelRect(x: Double, y: Double, width: Double, height: Double)
   * The cell rectangle remains available to the editor layout contract, while render and pointer paths use
   * [[logicalFrame]] so a configured sub-row separation is not discarded before pixel conversion.
   */
-case class FloatingSurfacePlacement(cellRect: LayoutRect, yOffsetRows: Double = 0.0):
+case class FloatingSurfaceFramePlacement(cellRect: LayoutRect, yOffsetRows: Double = 0.0):
   private val normalizedYOffsetRows = yOffsetRows.max(0.0)
 
   def logicalFrame(metrics: CellMetrics): LogicalPixelRect =
@@ -38,10 +38,11 @@ case class FloatingSurfacePlacement(cellRect: LayoutRect, yOffsetRows: Double = 
       itemGapRows = itemGapRows
     )
 
-object FloatingSurfacePlacement:
-  def atRow(cellRect: LayoutRect, row: Double): FloatingSurfacePlacement =
+object FloatingSurfaceFramePlacement:
+
+  def atRow(cellRect: LayoutRect, row: Double): FloatingSurfaceFramePlacement =
     val baseRow = math.floor(row).toInt
-    FloatingSurfacePlacement(cellRect.copy(y = baseRow), row - baseRow)
+    FloatingSurfaceFramePlacement(cellRect.copy(y = baseRow), row - baseRow)
 
 /** Authoritative geometry for a floating surface after cell anchors become logical pixels.
   *
@@ -87,4 +88,4 @@ object FloatingSurfaceGeometry:
     borderCells: Int = 0,
     itemGapRows: Double = 0.0
   ): FloatingSurfaceGeometry =
-    FloatingSurfacePlacement(frame).geometry(metrics, borderCells, itemGapRows)
+    FloatingSurfaceFramePlacement(frame).geometry(metrics, borderCells, itemGapRows)

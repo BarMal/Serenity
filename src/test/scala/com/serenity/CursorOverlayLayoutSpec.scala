@@ -174,7 +174,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     rect.y shouldBe contentRect.y + 10
   }
 
-  it should "retain fractional command runner placement separately from its cell fallback" in {
+  it should "retain fractional command runner placement separately from its cell fallback" in
     List(0.25, 0.5, 0.75).foreach { gap =>
       val state = baseState().copy(
         config = AppState.initial.config.withUiElementGap(0).withCommandRunnerCursorGapRows(Some(gap)),
@@ -196,7 +196,6 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       placement.cellRect.y shouldBe contentRect.y + 7
       placement.yOffsetRows shouldBe gap
     }
-  }
 
   it should "place command runner overlays immediately below a top-row cursor" in {
     val cursor = CursorPosition(0, 0)

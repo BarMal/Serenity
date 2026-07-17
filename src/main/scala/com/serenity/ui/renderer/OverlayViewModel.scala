@@ -16,7 +16,7 @@ case class TextOverlayView(
     rows: List[OverlayRow] = Nil,
     footer: Option[OverlayRow] = None,
     itemGapRows: Double = 0.0,
-    placement: Option[FloatingSurfacePlacement] = None,
+    placement: Option[FloatingSurfaceFramePlacement] = None,
     surfaceId: Option[SurfaceId] = None
 ):
 
@@ -33,7 +33,7 @@ case class TextOverlayView(
     )
 
   def floatingGeometry(metrics: CellMetrics): FloatingSurfaceGeometry =
-    placement.getOrElse(FloatingSurfacePlacement(rect)).geometry(metrics, borderCells, itemGapRows)
+    placement.getOrElse(FloatingSurfaceFramePlacement(rect)).geometry(metrics, borderCells, itemGapRows)
 
 case class OverlayViews(
     aboveCursor: Option[TextOverlayView] = None,
@@ -70,7 +70,7 @@ object OverlayViewModel:
     surface: com.serenity.state.models.UiSurface,
     state: AppState,
     layoutRect: Option[LayoutRect],
-    placement: Option[FloatingSurfacePlacement],
+    placement: Option[FloatingSurfaceFramePlacement],
     collapsed: Boolean
   ): Option[TextOverlayView] =
     val animState = state.surfaceAnimations.get(surface.id).map(_.animationState).getOrElse(AnimationState.empty)

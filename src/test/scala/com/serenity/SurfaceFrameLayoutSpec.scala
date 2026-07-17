@@ -34,7 +34,7 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "retain fractional surface placement at non-integer device scale" in {
-    val placement = FloatingSurfacePlacement(LayoutRect(4, 3, 20, 8), yOffsetRows = 0.5)
+    val placement = FloatingSurfaceFramePlacement(LayoutRect(4, 3, 20, 8), yOffsetRows = 0.5)
     val metrics   = CellMetrics(charWidth = 9, lineHeight = 15, ascent = 11)
 
     placement.logicalFrame(metrics) shouldBe LogicalPixelRect(36.0, 52.5, 180.0, 120.0)
