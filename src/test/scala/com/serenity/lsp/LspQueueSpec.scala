@@ -24,11 +24,10 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     val logger = LoggerFactory[IO].getLogger(using LoggerName("LspQueueSpec"))
     StateManager.apply(logger).unsafeRunSync()
 
-  private def setBufferLanguageThroughRunner(stateManager: StateManager, searchTerm: String, submenuIndex: Int): Unit =
+  private def setBufferLanguageThroughRunner(stateManager: StateManager, searchTerm: String): Unit =
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
-    (0 until submenuIndex).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
   "lspEffectStream" should "emit FileOpened when a Scala file is loaded" in {
@@ -128,7 +127,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
       sm.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync() should have size 1
 
-      setBufferLanguageThroughRunner(sm, "lang-markdown", submenuIndex = 13)
+      setBufferLanguageThroughRunner(sm, "lang-markdown")
 
       val effects = sm.lspEffectStream
         .take(2)

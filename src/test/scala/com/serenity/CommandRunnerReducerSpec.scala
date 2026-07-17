@@ -464,6 +464,20 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "open a direct setting search at its exact target" in {
+    val registry = CommandRegistry.default
+    val searched = "lang-markdown".foldLeft(activeState(registry)) { (state, char) =>
+      CommandRunnerReducer.reduce(RunnerInsertChar(char), state, registry).state
+    }
+
+    val opened = CommandRunnerReducer.reduce(RunnerSubmit, searched, registry)
+    val runner = runnerFrom(opened.state)
+
+    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-language")
+    runner.activeSubmenu
+      .flatMap(_.selectedItem(runner.submenuItems("settings-language")).map(_.id)) shouldBe Some("lang-markdown")
+  }
+
   it should "open font family picker submenus and submit UI font choices" in {
     val registry = CommandRegistry.default
     val state    = settingsStateOnItem("settings-ui-font", "ui-font")
