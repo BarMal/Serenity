@@ -41,20 +41,24 @@ final private[manager] class StateManagerEventPipeline(
   import workflow.*
   private val ContextMenuSurfaceId = SurfaceId("context-menu")
 
-  private def drainPendingEvents: cats.effect.IO[Unit] =
-    operations.takeEvents.flatMap {
-      case Nil    => cats.effect.IO.unit
-      case events => events.traverse_(applyEvent) >> drainPendingEvents
+  private def drainPendingOperations: cats.effect.IO[Unit] =
+    operations.takeOperations.flatMap {
+      case Nil => cats.effect.IO.unit
+      case pendingOperations =>
+        pendingOperations.traverse_ {
+          case StateManagerOperation.Event(event)                       => applyEvent(event)
+          case StateManagerOperation.ApplyAnimationHooks(previousState) => applyAnimationHooks(previousState)
+        } >> drainPendingOperations
     }
 
   private def interpretEffect(effect: AppEffect): cats.effect.IO[Unit] =
-    effects.interpretEffect(effect) >> drainPendingEvents
+    effects.interpretEffect(effect) >> drainPendingOperations
 
   private def interpretCommand(command: com.serenity.command.Command, state: AppState): cats.effect.IO[Unit] =
-    effects.interpretCommand(command, state) >> drainPendingEvents
+    effects.interpretCommand(command, state) >> drainPendingOperations
 
   private def executeCommand(command: com.serenity.command.Command): cats.effect.IO[Unit] =
-    effects.executeCommand(command) >> drainPendingEvents
+    effects.executeCommand(command) >> drainPendingOperations
 
   private val resizeEvents = new ResizeEventHandler(new ResizeEventPort:
     def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
@@ -776,23 +780,7 @@ final private[manager] class StateManagerEventPipeline(
     }
 
   private[manager] def ensureCommandRunnerSurface(state: AppState): AppState =
-    val registry        = CommandRegistry.default
-    val activatedRunner = CommandRunner.empty.activate(registry, state.config)
-    val runner = activatedRunner.copy(
-      optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
-    )
-    val (stateWithId, surfaceId) =
-      state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
-    val surface = UiSurface(
-      id = surfaceId,
-      content = SurfaceContent.CommandPalette(runner),
-      presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
-    )
-    stateWithId
-      .copy(
-        uiSurfaces = stateWithId.uiSurfaces.filterNot(_.id == surfaceId) :+ surface
-      )
-      .pushFocus(Focus.Surface(surfaceId))
+    operations.ensureCommandRunnerSurface(state)
 
   private def handleMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Unit] =
     click.button match

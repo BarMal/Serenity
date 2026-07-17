@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.*
 import cats.effect.std.Queue
 import cats.syntax.foldable.*
+import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
@@ -15,6 +16,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
+import com.serenity.state.reducers.CommandRunnerPanelSelections
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PeekContent}
@@ -58,18 +60,44 @@ private[manager] trait EffectEditorPort:
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
   def scheduleDocumentAnalysis(): IO[Unit]
 
-/** One-directional hand-off for editor operations emitted while interpreting effects. */
+/** Operations emitted by capabilities for ordered interpretation at the event boundary. */
+private[manager] enum StateManagerOperation:
+  case Event(event: com.serenity.keystroke.events.Event)
+  case ApplyAnimationHooks(previousState: AppState)
+
+/** One-directional hand-off for operations emitted while interpreting effects. */
 final private[manager] class StateManagerOperationBoundary private (
-    pendingEvents: Ref[IO, List[Event]],
+    pendingOperations: Ref[IO, List[StateManagerOperation]],
     stateRef: Ref[IO, AppState],
     documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     logger: Logger[IO]
 ):
   private val DocumentAnalysisDebounce = 150.millis
 
-  def enqueueEvent(event: Event): IO[Unit] = pendingEvents.update(_ :+ event)
+  def enqueueEvent(event: Event): IO[Unit] =
+    pendingOperations.update(_ :+ StateManagerOperation.Event(event))
 
-  def takeEvents: IO[List[Event]] = pendingEvents.getAndSet(Nil)
+  def enqueueAnimationHooks(previousState: AppState): IO[Unit] =
+    pendingOperations.update(_ :+ StateManagerOperation.ApplyAnimationHooks(previousState))
+
+  def takeOperations: IO[List[StateManagerOperation]] = pendingOperations.getAndSet(Nil)
+
+  def ensureCommandRunnerSurface(state: AppState): AppState =
+    val registry        = CommandRegistry.default
+    val activatedRunner = CommandRunner.empty.activate(registry, state.config)
+    val runner = activatedRunner.copy(
+      optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
+    )
+    val (stateWithId, surfaceId) =
+      state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
+    val surface = UiSurface(
+      id = surfaceId,
+      content = SurfaceContent.CommandPalette(runner),
+      presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+    )
+    stateWithId
+      .copy(uiSurfaces = stateWithId.uiSurfaces.filterNot(_.id == surfaceId) :+ surface)
+      .pushFocus(Focus.Surface(surfaceId))
 
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
     normalizeCommandRunnerFocus(newState).validated match
@@ -116,11 +144,57 @@ private[manager] object StateManagerOperationBoundary:
     logger: Logger[IO]
   ): StateManagerOperationBoundary =
     new StateManagerOperationBoundary(
-      Ref.unsafe[IO, List[Event]](Nil),
+      Ref.unsafe[IO, List[StateManagerOperation]](Nil),
       stateRef,
       documentAnalysisFiberRef,
       logger
     )
+
+/** Owns file persistence state updates shared by command effects and file workflows. */
+final private[manager] class StateManagerFilePersistence(
+    stateRef: Ref[IO, AppState],
+    fileManager: FileManager,
+    sessionPersistence: SessionPersistence,
+    logger: Logger[IO]
+):
+
+  def saveExistingBuffer(bufferId: BufferId): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      state.buffers.get(bufferId).flatMap(_.filePath) match
+        case Some(_) =>
+          state.buffers.get(bufferId).fold(IO.unit) { buffer =>
+            fileManager
+              .saveBuffer(buffer)
+              .flatMap(saved =>
+                stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> saved)))
+              )
+              .flatTap(_ => persistAfterSave)
+              .handleErrorWith(error => logger.error(error)(s"[FILE] Failed to save buffer $bufferId"))
+          }
+        case None => IO.unit
+    }
+
+  def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      state.buffers.get(bufferId).fold(IO.unit) { buffer =>
+        fileManager
+          .saveBuffer(buffer, path)
+          .flatMap(saved => stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> saved))))
+          .flatTap(_ =>
+            stateRef.update(current => current.copy(recentFiles = trackRecentFile(current.recentFiles, path)))
+          )
+          .flatTap(_ => persistAfterSave)
+          .handleErrorWith(error => logger.error(error)(s"[FILE] Failed to save buffer $bufferId as $path"))
+      }
+    }
+
+  private def persistAfterSave: IO[Unit] =
+    stateRef.get
+      .flatMap(sessionPersistence.onBufferChange)
+      .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after file save failed"))
+
+  private def trackRecentFile(current: List[Path], path: Path): List[Path] =
+    (path :: current.filterNot(_ == path)).take(20)
 
 /** Surface capability calls used by command effects. */
 private[manager] trait EffectSurfacePort:
@@ -136,6 +210,8 @@ private[manager] trait EffectSurfacePort:
 private[manager] trait EffectFilePort:
   def fileDialog: com.serenity.io.FileDialog
   def fileManager: FileManager
+  def saveExistingBuffer(bufferId: BufferId): IO[Unit]
+  def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit]
 
 /** Session persistence operations used by command effects. */
 private[manager] trait EffectSessionPort:
@@ -267,6 +343,8 @@ private[manager] class StateManagerComposition(
   private val runtimeSessionPersistence       = sessionPersistence
   private val operations =
     StateManagerOperationBoundary.create(runtimeStateRef, runtimeDocumentAnalysisFiberRef, runtimeLogger)
+  private val filePersistence =
+    new StateManagerFilePersistence(runtimeStateRef, runtimeFileManager, runtimeSessionPersistence, runtimeLogger)
 
   private val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
     val stateRef                = runtimeStateRef
@@ -300,8 +378,10 @@ private[manager] class StateManagerComposition(
       surfaces.resizePinnedPanel(position, newSize)
 
   private val effectFilePort: EffectFilePort = new EffectFilePort:
-    val fileDialog  = runtimeFileDialog
-    val fileManager = runtimeFileManager
+    val fileDialog                                             = runtimeFileDialog
+    val fileManager                                            = runtimeFileManager
+    def saveExistingBuffer(bufferId: BufferId): IO[Unit]       = filePersistence.saveExistingBuffer(bufferId)
+    def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit] = filePersistence.saveBufferAs(bufferId, path)
 
   private val effectSessionPort: EffectSessionPort = new EffectSessionPort:
     val sessionPersistence = runtimeSessionPersistence
@@ -350,7 +430,7 @@ private[manager] class StateManagerComposition(
     def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
     def switchToPane(paneId: PaneId): IO[Unit]             = editor.switchToPane(paneId)
     def ensureCommandRunnerSurface(state: AppState): AppState =
-      events.ensureCommandRunnerSurface(state)
+      operations.ensureCommandRunnerSurface(state)
     def advanceSurfaceAnimations(state: AppState): AppState = events.advanceSurfaceAnimations(state)
 
   private val workflowPort: WorkflowCapabilityPort = new WorkflowCapabilityPort:
@@ -361,22 +441,21 @@ private[manager] class StateManagerComposition(
     val fileDialog                                          = runtimeFileDialog
     val fileManager                                         = runtimeFileManager
     val sessionPersistence                                  = runtimeSessionPersistence
-    def updateState(update: AppState => AppState): IO[Unit] = editor.updateState(update)
+    def updateState(update: AppState => AppState): IO[Unit] = runtimeStateRef.update(update)
     def createNewEmptyBuffer(): IO[BufferId]                = editor.createNewEmptyBuffer()
     def createPane(bufferId: Option[BufferId]): IO[PaneId]  = editor.createPane(bufferId)
     def switchToPane(paneId: PaneId): IO[Unit]              = editor.switchToPane(paneId)
     def loadSession(): IO[Option[AppState]]                 = sessionManager.loadSession()
     def ensureCommandRunnerSurface(state: AppState): AppState =
-      events.ensureCommandRunnerSurface(state)
-    def saveBufferEffect(bufferId: BufferId): IO[Unit] = effects.saveBufferEffect(bufferId)
-    def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
-      effects.saveBufferAsEffect(bufferId, path)
+      operations.ensureCommandRunnerSurface(state)
+    def saveBufferEffect(bufferId: BufferId): IO[Unit]               = filePersistence.saveExistingBuffer(bufferId)
+    def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] = filePersistence.saveBufferAs(bufferId, path)
 
   private val surfacePort: SurfaceCapabilityPort = new SurfaceCapabilityPort:
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-      events.validateAndUpdateState(newState, fallbackState)
+      operations.validateAndUpdateState(newState, fallbackState)
     def applyAnimationHooks(previousState: AppState): IO[Unit] =
-      events.applyAnimationHooks(previousState)
+      operations.enqueueAnimationHooks(previousState)
 
   private val viewportPort: ViewportCapabilityPort = new ViewportCapabilityPort:
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
@@ -441,7 +520,6 @@ private[manager] class StateManagerComposition(
   export editor.*
   export events.applyEvent
   export files.*
-  export surfaces.*
   export viewport.*
 
   def lspEffectStream: Stream[IO, LspEffect] =
@@ -450,26 +528,54 @@ private[manager] class StateManagerComposition(
       .interruptWhen(Stream.eval(quitSignal.get).as(true))
 
   def executeCommand(command: com.serenity.command.Command): IO[Unit] =
-    stateRef.get.flatMap(state => effects.interpretCommand(command, state)) >> drainPendingEvents
+    stateRef.get.flatMap(state => effects.interpretCommand(command, state)) >> drainPendingOperations
 
-  private def drainPendingEvents: IO[Unit] =
-    operations.takeEvents.flatMap {
-      case Nil           => IO.unit
-      case pendingEvents => pendingEvents.traverse_(events.applyEvent) >> drainPendingEvents
+  private def drainPendingOperations: IO[Unit] =
+    operations.takeOperations.flatMap {
+      case Nil => IO.unit
+      case pendingOperations =>
+        pendingOperations.traverse_ {
+          case StateManagerOperation.Event(event)                       => events.applyEvent(event)
+          case StateManagerOperation.ApplyAnimationHooks(previousState) => events.applyAnimationHooks(previousState)
+        } >> drainPendingOperations
     }
+
+  private def runSurfaceOperation(operation: IO[Unit]): IO[Unit] =
+    operation >> drainPendingOperations
+
+  def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =
+    runSurfaceOperation(surfaces.showPeek(content, at))
+  def dismissPeek(): IO[Unit]                      = runSurfaceOperation(surfaces.dismissPeek())
+  def peekToPin(position: PanelPosition): IO[Unit] = runSurfaceOperation(surfaces.peekToPin(position))
+  def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
+    runSurfaceOperation(surfaces.pinPanel(content, position, size))
+  def unpinPanel(position: PanelPosition): IO[Unit]        = runSurfaceOperation(surfaces.unpinPanel(position))
+  def expandPinnedPanel(position: PanelPosition): IO[Unit] = runSurfaceOperation(surfaces.expandPinnedPanel(position))
+  def collapseExpandedPanel(): IO[Unit]                    = runSurfaceOperation(surfaces.collapseExpandedPanel())
+  def showModal(modal: Modal): IO[Unit]                    = runSurfaceOperation(surfaces.showModal(modal))
+  def dismissModal(): IO[Unit]                             = runSurfaceOperation(surfaces.dismissModal())
+  def switchToPinnedPanel(position: PanelPosition): IO[Unit] =
+    runSurfaceOperation(surfaces.switchToPinnedPanel(position))
+  def loadDirectoryTree(path: String, files: List[String]): IO[Unit] =
+    runSurfaceOperation(surfaces.loadDirectoryTree(path, files))
+  def selectFileInExplorer(filePath: String): IO[Unit] = runSurfaceOperation(surfaces.selectFileInExplorer(filePath))
+  def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
+    runSurfaceOperation(surfaces.resizePinnedPanel(position, newSize))
+  def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit] =
+    runSurfaceOperation(surfaces.dragFileToDirectory(sourceFile, targetDir))
 
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
     events.validateAndUpdateState(newState, fallbackState)
 
   def scheduleDocumentAnalysis(): IO[Unit]                  = events.scheduleDocumentAnalysis()
-  def ensureCommandRunnerSurface(state: AppState): AppState = events.ensureCommandRunnerSurface(state)
+  def ensureCommandRunnerSurface(state: AppState): AppState = operations.ensureCommandRunnerSurface(state)
   def applyAnimationHooks(previousState: AppState): IO[Unit] =
     events.applyAnimationHooks(previousState)
   def advanceSurfaceAnimations(state: AppState): AppState = events.advanceSurfaceAnimations(state)
   def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit] =
-    effects.interpretEffect(effect)
+    effects.interpretEffect(effect) >> drainPendingOperations
   def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =
-    effects.interpretCommand(command, state) >> drainPendingEvents
+    effects.interpretCommand(command, state) >> drainPendingOperations
   def directLoadFileEffect(path: Path): IO[Unit]     = effects.directLoadFileEffect(path)
   def saveBufferEffect(bufferId: BufferId): IO[Unit] = effects.saveBufferEffect(bufferId)
   def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =

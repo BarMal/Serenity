@@ -1879,17 +1879,7 @@ final private[manager] class StateManagerEffectHandlers(
     stateRef.get.flatMap { state =>
       state.buffers.get(bufferId) match
         case Some(buffer) if buffer.filePath.isDefined =>
-          fileManager
-            .saveBuffer(buffer)
-            .flatMap(savedBuffer =>
-              stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> savedBuffer)))
-            )
-            .flatTap(_ =>
-              stateRef.get
-                .flatMap(sessionPersistence.onBufferChange)
-                .handleErrorWith(ex => logger.error(ex)("[SESSION] Auto-save after file save failed"))
-            )
-            .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId"))
+          saveExistingBuffer(bufferId)
         case Some(_) =>
           logger.debug(s"[FILE] Buffer $bufferId has no file path; opening native Save As dialog") >>
             requestSaveAsFileDialog(state, Some(bufferId))
@@ -1926,19 +1916,8 @@ final private[manager] class StateManagerEffectHandlers(
   private[manager] def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
     stateRef.get.flatMap { state =>
       state.buffers.get(bufferId) match
-        case Some(buffer) =>
-          fileManager
-            .saveBuffer(buffer, path)
-            .flatMap(savedBuffer =>
-              stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> savedBuffer)))
-            )
-            .flatTap(_ => stateRef.update(s => s.copy(recentFiles = trackRecentFile(s.recentFiles, path))))
-            .flatTap(_ =>
-              stateRef.get
-                .flatMap(sessionPersistence.onBufferChange)
-                .handleErrorWith(ex => logger.error(ex)("[SESSION] Auto-save after file save failed"))
-            )
-            .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId as $path"))
+        case Some(_) =>
+          saveBufferAs(bufferId, path)
         case None =>
           logger.debug(s"[FILE] Buffer $bufferId not found for save as")
     }

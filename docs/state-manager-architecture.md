@@ -23,12 +23,14 @@ the command-effect interpreter. A port may point only toward the owner of an ope
 through the façade or an inherited sibling implementation. Owner-local operations are invoked
 directly and are never re-exported through the port that constructs their owner.
 
-Commands that translate back into editor events enqueue those events through
-`StateManagerOperationBoundary`. The event pipeline drains that boundary after each interpreted
-effect or command, preserving synchronous ordering without giving effect handlers a callback to the
-pipeline. The dependency direction is therefore event pipeline → effect handlers → operation
-boundary, while the event pipeline also consumes the operation boundary; effect handlers never
-depend on the event pipeline.
+Commands that translate back into editor events and surface animation hooks enqueue typed operations
+through `StateManagerOperationBoundary`. The event pipeline drains that boundary after each
+interpreted effect or command, preserving synchronous FIFO ordering without giving effect handlers a
+callback to the pipeline. File persistence is separately owned by `StateManagerFilePersistence` and
+is shared directly by effect interpretation and file workflows. The dependency direction is therefore
+event pipeline → effect handlers → capability port → operation boundary, while the event pipeline
+alone consumes the operation boundary; effect handlers and their surface/workflow capabilities never
+depend on the event pipeline or effect handlers.
 
 Event processing applies a reducer result's state before interpreting its effects. Document-analysis
 replacement cancels the previous analysis fiber before starting a replacement. Failures in optional

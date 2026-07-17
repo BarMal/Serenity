@@ -130,9 +130,25 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       compositionRoot.indexOf("private val effectEditorPort"),
       compositionRoot.indexOf("private val effectSurfacePort")
     )
+    val effectSurfacePort = compositionRoot.slice(
+      compositionRoot.indexOf("private val effectSurfacePort"),
+      compositionRoot.indexOf("private val effectFilePort")
+    )
+    val workflowPort = compositionRoot.slice(
+      compositionRoot.indexOf("private val workflowPort"),
+      compositionRoot.indexOf("private val surfacePort")
+    )
+    val surfacePort = compositionRoot.slice(
+      compositionRoot.indexOf("private val surfacePort"),
+      compositionRoot.indexOf("private val viewportPort")
+    )
 
     compositionRoot should include("StateManagerOperationBoundary")
     effectEditorPort should not include "events."
+    effectSurfacePort should not include "events."
+    workflowPort should not include "effects."
+    workflowPort should not include "events."
+    surfacePort should not include "events."
     effectHandlers should include("enqueueEvent")
     effectHandlers should not include "applyEvent("
   }
@@ -148,8 +164,11 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
     (operations.enqueueEvent(Copy) >>
       operations.enqueueEvent(Paste) >>
-      operations.takeEvents).unsafeRunSync() shouldBe List(Copy, Paste)
-    operations.takeEvents.unsafeRunSync() shouldBe Nil
+      operations.takeOperations).unsafeRunSync() shouldBe List(
+      StateManagerOperation.Event(Copy),
+      StateManagerOperation.Event(Paste)
+    )
+    operations.takeOperations.unsafeRunSync() shouldBe Nil
   }
 
   it should "construct every capability port without lazy callback wiring" in {
