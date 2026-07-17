@@ -1285,7 +1285,8 @@ final private[manager] class StateManagerEventPipeline(
         menu.selectedIndex,
         hasHeader = true,
         hasFooter = menu.items.nonEmpty,
-        itemGapRows = state.config.commandRunnerItemGapRows.toInt
+        itemGapRows = state.config.commandRunnerItemGapRows,
+        state = state
       )
     yield (surface, menu, index)
 
@@ -1548,7 +1549,8 @@ final private[manager] class StateManagerEventPipeline(
             runner.selectedIndex,
             hasHeader = true,
             hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
-            itemGapRows = state.config.commandRunnerItemGapRows.toInt
+            itemGapRows = state.config.commandRunnerItemGapRows,
+            state = state
           )
             .map(RunnerSelectVisibleItem(_))
         case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
@@ -1568,7 +1570,8 @@ final private[manager] class StateManagerEventPipeline(
             hasHeader = group.nonEmpty,
             hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
             reservedContentRows = detailRows,
-            itemGapRows = state.config.commandRunnerItemGapRows.toInt
+            itemGapRows = state.config.commandRunnerItemGapRows,
+            state = state
           ).map { index =>
             if previewOnly then RunnerSelectPreviewSubmenuItem(groupId, index)
             else RunnerSelectSubmenuItem(index)
@@ -1585,8 +1588,9 @@ final private[manager] class StateManagerEventPipeline(
     selectedIndex: Int,
     hasHeader: Boolean,
     hasFooter: Boolean,
-    reservedContentRows: Int = 0,
-    itemGapRows: Int = 0
+    state: AppState,
+    itemGapRows: Double,
+    reservedContentRows: Int = 0
   ): Option[Int] =
     val itemWindow = SurfaceFrameLayout(contentRect, borderCells = 0).itemWindow(
       itemCount,
@@ -1594,9 +1598,22 @@ final private[manager] class StateManagerEventPipeline(
       hasHeader,
       hasFooter,
       reservedContentRows,
-      itemGapRows
+      FloatingSurfaceGeometry.reservedCellRows(itemGapRows)
     )
-    overlayDisplayedRowIndexAt(event, contentRect, rowSlots)
+    (for
+      pixelX <- event.pixelX
+      pixelY <- event.pixelY
+      index <- FloatingSurfaceGeometry
+        .fromCells(
+          contentRect,
+          CellMetrics.fromFont(FontLoader.previewUiFont(state.config.fontConfig)),
+          itemGapRows = itemGapRows
+        )
+        .itemIndexAt(pixelX.toDouble, pixelY.toDouble, itemCount, if hasHeader then 1 else 0)
+    yield index)
+      .orElse {
+        overlayDisplayedRowIndexAt(event, contentRect, rowSlots)
+      }
       .flatMap(itemWindow.absoluteIndexAt)
 
   private def overlayDisplayedRowIndexAt(

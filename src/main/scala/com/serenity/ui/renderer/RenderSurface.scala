@@ -62,6 +62,10 @@ trait RenderSurface:
     */
   def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit = ()
 
+  /** Draw a proportional text run at a fractional logical-pixel vertical position. */
+  def drawRunAtPx(xPx: Float, yPx: Float, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit =
+    drawRunPx(xPx, math.round(yPx), bgWidthPx, lineHeightPx, ascentPx, s)
+
   def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit = ()
 
   def hideCursor(): Unit

@@ -15,7 +15,7 @@ case class TextOverlayView(
     header: Option[OverlayRow] = None,
     rows: List[OverlayRow] = Nil,
     footer: Option[OverlayRow] = None,
-    itemGapRows: Int = 0,
+    itemGapRows: Double = 0.0,
     surfaceId: Option[SurfaceId] = None
 ):
 
@@ -28,8 +28,11 @@ case class TextOverlayView(
       rows.length,
       header.nonEmpty,
       footer.nonEmpty,
-      itemGapRows
+      FloatingSurfaceGeometry.reservedCellRows(itemGapRows)
     )
+
+  def floatingGeometry(metrics: CellMetrics): FloatingSurfaceGeometry =
+    FloatingSurfaceGeometry.fromCells(rect, metrics, borderCells, itemGapRows)
 
 case class OverlayViews(
     aboveCursor: Option[TextOverlayView] = None,
@@ -155,7 +158,12 @@ object OverlayViewModel:
           case SurfaceContent.ContextualToolbar(toolbarState) =>
             SurfaceContentResolver.resolveContextualToolbar(toolbarState, state, rect, SurfaceRenderMode.Floating)
           case _ =>
-            SurfaceContentResolver.resolve(content, rect, SurfaceRenderMode.Floating, itemGapRowsFor(content, state))
+            SurfaceContentResolver.resolve(
+              content,
+              rect,
+              SurfaceRenderMode.Floating,
+              FloatingSurfaceGeometry.reservedCellRows(itemGapRowsFor(content, state))
+            )
     Option.when(resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty)(resolved)
 
   private def collapsedContentView(content: com.serenity.state.models.SurfaceContent): ResolvedSurfaceContent =
@@ -169,13 +177,13 @@ object OverlayViewModel:
       case other =>
         SurfaceContentResolver.resolve(other, LayoutRect(0, 0, 80, 3), SurfaceRenderMode.Floating)
 
-  private def itemGapRowsFor(content: com.serenity.state.models.SurfaceContent, state: AppState): Int =
+  private def itemGapRowsFor(content: com.serenity.state.models.SurfaceContent, state: AppState): Double =
     content match
       case com.serenity.state.models.SurfaceContent.CommandPalette(_) |
           com.serenity.state.models.SurfaceContent.CommandPaletteSubmenu(_, _, _) |
           com.serenity.state.models.SurfaceContent.ContextMenu(_) =>
-        state.config.commandRunnerItemGapRows.toInt
-      case _ => 0
+        state.config.commandRunnerItemGapRows
+      case _ => 0.0
 
   private def alphaMultiplierFor(surface: com.serenity.state.models.UiSurface, state: AppState): Float =
     val focusMultiplier =

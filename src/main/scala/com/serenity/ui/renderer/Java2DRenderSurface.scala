@@ -59,12 +59,23 @@ class Java2DRenderSurface(
   override def fontRenderContext: Option[FontRenderContext] = Some(renderContext)
 
   override def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit =
+    drawRunAtPx(xPx, yPx.toFloat, bgWidthPx, lineHeightPx, ascentPx, s)
+
+  override def drawRunAtPx(
+    xPx: Float,
+    yPx: Float,
+    bgWidthPx: Float,
+    lineHeightPx: Int,
+    ascentPx: Int,
+    s: String
+  ): Unit =
     val clipX         = math.floor(xPx.toDouble).toInt
     val clipRight     = math.ceil((xPx + bgWidthPx).toDouble).toInt
-    val clipBottom    = yPx + lineHeightPx
+    val clipY         = math.floor(yPx.toDouble).toInt
+    val clipBottom    = math.ceil((yPx + lineHeightPx).toDouble).toInt
     val boundedLeft   = clipX.max(0).min(cellGridWidthPx)
     val boundedRight  = clipRight.max(0).min(cellGridWidthPx)
-    val boundedTop    = yPx.max(0).min(cellGridHeightPx)
+    val boundedTop    = clipY.max(0).min(cellGridHeightPx)
     val boundedBottom = clipBottom.max(0).min(cellGridHeightPx)
 
     if boundedLeft < boundedRight && boundedTop < boundedBottom then
@@ -77,7 +88,7 @@ class Java2DRenderSurface(
         g.setColor(fgRef.get())
         try
           g.clipRect(boundedLeft, boundedTop, boundedWidth, boundedHeight)
-          g.drawString(s, xPx, (yPx + ascentPx).toFloat)
+          g.drawString(s, xPx, yPx + ascentPx)
         finally g.setClip(savedClip)
 
   def setForegroundColor(color: Color): Unit = fgRef.set(color)

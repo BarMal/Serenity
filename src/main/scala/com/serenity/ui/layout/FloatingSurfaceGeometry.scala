@@ -37,3 +37,28 @@ case class FloatingSurfaceGeometry(
 
   def itemIndexAt(pixelX: Double, pixelY: Double, itemCount: Int, headerRows: Int = 0): Option[Int] =
     (0 until itemCount.max(0)).find(index => itemRect(index, headerRows).contains(pixelX, pixelY))
+
+object FloatingSurfaceGeometry:
+
+  /** Cell-layout fallback used only to reserve enough integer viewport rows for a pixel surface. */
+  def reservedCellRows(rows: Double): Int =
+    math.ceil(rows.max(0.0)).toInt
+
+  def fromCells(
+    frame: LayoutRect,
+    metrics: CellMetrics,
+    borderCells: Int = 0,
+    itemGapRows: Double = 0.0
+  ): FloatingSurfaceGeometry =
+    FloatingSurfaceGeometry(
+      frame = LogicalPixelRect(
+        metrics.toPixelX(frame.x).toDouble,
+        metrics.toPixelY(frame.y).toDouble,
+        (frame.width * metrics.charWidth).toDouble,
+        (frame.height * metrics.lineHeight).toDouble
+      ),
+      cellWidthPx = metrics.charWidth.toDouble,
+      lineHeightPx = metrics.lineHeight.toDouble,
+      borderPx = borderCells.max(0) * metrics.lineHeight.toDouble,
+      itemGapRows = itemGapRows
+    )

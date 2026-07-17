@@ -21,6 +21,17 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
     geometry.itemIndexAt(100.0, 84.0, itemCount = 3, headerRows = 1) shouldBe None
   }
 
+  it should "convert cell frames once at the floating-surface boundary" in {
+    val geometry = FloatingSurfaceGeometry.fromCells(
+      LayoutRect(4, 3, 20, 8),
+      CellMetrics(charWidth = 9, lineHeight = 18, ascent = 13),
+      itemGapRows = 0.5
+    )
+
+    geometry.frame shouldBe LogicalPixelRect(36.0, 54.0, 180.0, 144.0)
+    geometry.itemRect(index = 1) shouldBe LogicalPixelRect(36.0, 81.0, 180.0, 18.0)
+  }
+
   "SurfaceFrameLayout" should "derive content bounds from a framed overlay rectangle" in {
     val frame = SurfaceFrameLayout(LayoutRect(10, 4, 40, 8))
 

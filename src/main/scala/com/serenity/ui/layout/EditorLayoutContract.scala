@@ -365,7 +365,7 @@ object EditorLayoutContract:
     val workspace = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
     val minimumFloatingOverlayGapRows = math.max(
       InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows,
-      math.max(0, state.config.uiElementGap).toInt
+      FloatingSurfaceGeometry.reservedCellRows(state.config.uiElementGap)
     )
     val panelViews = PinnedPanelViewModel.fromState(state, calculatedLayout)
     val panelViewsById = panelViews

@@ -101,7 +101,7 @@ object LayoutEngine:
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
     val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
     val contentHeight  = math.max(1, viewportSize.height - gutterHeight)
-    val uiElementGap   = math.max(0, state.config.uiElementGap).toInt
+    val uiElementGap   = FloatingSurfaceGeometry.reservedCellRows(state.config.uiElementGap)
     val pinnedPanelLayout = calculatePinnedPanelLayout(
       state.pinnedSurfaces,
       viewportSize.width,
@@ -248,7 +248,7 @@ object LayoutEngine:
   ): Option[PinnedPanelDragResize] =
     val layout         = calculateLayoutWithUI(state, viewportSize)
     val contentHeight  = calculateContentHeight(state, viewportSize)
-    val uiElementGap   = math.max(0, state.config.uiElementGap).toInt
+    val uiElementGap   = FloatingSurfaceGeometry.reservedCellRows(state.config.uiElementGap)
     val pinnedSurfaces = state.pinnedSurfaces
     val panelSizes = pinnedSurfaces.foldLeft(Map.empty[PanelPosition, Int]) {
       case (acc, UiSurface(_, _, SurfacePresentation.Pinned(position, size), _)) =>
@@ -682,13 +682,15 @@ object LayoutEngine:
   private def floatingCursorGapRows(state: AppState, content: SurfaceContent): Int =
     content match
       case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
-        state.config.commandRunnerCursorGapRows.map(_.toInt).getOrElse(floatingStackGapRows(state))
+        state.config.commandRunnerCursorGapRows
+          .map(FloatingSurfaceGeometry.reservedCellRows)
+          .getOrElse(floatingStackGapRows(state))
       case _ => floatingStackGapRows(state)
 
   private def floatingStackGapRows(state: AppState): Int =
     math.max(
       InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows,
-      math.max(0, state.config.uiElementGap).toInt
+      FloatingSurfaceGeometry.reservedCellRows(state.config.uiElementGap)
     )
 
   private def calculateFloatingSurfaceHeight(
@@ -706,7 +708,7 @@ object LayoutEngine:
             hasHeader = true,
             hasFooter = true,
             borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-            itemGapRows = state.config.commandRunnerItemGapRows.toInt
+            itemGapRows = FloatingSurfaceGeometry.reservedCellRows(state.config.commandRunnerItemGapRows)
           )
         )
         .getOrElse(densityMetrics.commandSurfaceMaxHeight)
@@ -745,7 +747,7 @@ object LayoutEngine:
           hasHeader = true,
           hasFooter = menu.items.nonEmpty,
           borderCells = SurfaceFrameLayout.borderCellsFor(content),
-          itemGapRows = state.config.commandRunnerItemGapRows.toInt
+          itemGapRows = FloatingSurfaceGeometry.reservedCellRows(state.config.commandRunnerItemGapRows)
         )
       case SurfaceContent.CommentLens(lens) =>
         math.max(4, math.min(8, lens.draft.split("\n", -1).length + 3))
@@ -764,7 +766,7 @@ object LayoutEngine:
               hasHeader = true,
               hasFooter = true,
               borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-              itemGapRows = state.config.commandRunnerItemGapRows.toInt
+              itemGapRows = FloatingSurfaceGeometry.reservedCellRows(state.config.commandRunnerItemGapRows)
             )
           )
         )
