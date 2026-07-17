@@ -18,7 +18,7 @@ object TextOverlayRenderer:
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
-    val rect = overlay.rect
+    val rect     = overlay.rect
     val geometry = overlay.geometry(cellMetrics)
 
     def rowColors(rowOffset: Int): (Color, Color) =
@@ -100,15 +100,16 @@ object TextOverlayRenderer:
           val itemGeometry = slot.kind match
             case SurfaceContentRowKind.Item(index) => geometry.items.lift(index)
             case _                                 => None
-          itemGeometry.foreach { bounds =>
-            surface.fillPixelRect(
-              bounds.x.round.toInt,
-              bounds.y.round.toInt,
-              bounds.width.round.toInt,
-              bounds.height.round.toInt,
-              animBg
-            )
-          }
+          if overlay.itemGapRows > 0.0 then
+            itemGeometry.foreach { bounds =>
+              surface.fillPixelRect(
+                bounds.x.round.toInt,
+                bounds.y.round.toInt,
+                bounds.width.round.toInt,
+                bounds.height.round.toInt,
+                animBg
+              )
+            }
           renderRow(
             surface,
             contentRect.x,

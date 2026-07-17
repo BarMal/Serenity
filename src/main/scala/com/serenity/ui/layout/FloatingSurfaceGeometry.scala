@@ -37,7 +37,7 @@ object FloatingSurfaceGeometry:
       (framePx.height - border * metrics.lineHeight * 2).max(0.0)
     )
     val itemHeight = metrics.lineHeight.toDouble
-    val itemTop = content.y + math.max(0.0, itemOffsetRows) * itemHeight
+    val itemTop    = content.y + math.max(0.0, itemOffsetRows) * itemHeight
     val items = Vector.tabulate(math.max(0, itemCount)) { index =>
       LogicalPixelRect(content.x, itemTop + index * (itemHeight + gap * itemHeight), content.width, itemHeight)
     }

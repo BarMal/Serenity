@@ -687,7 +687,9 @@ object LayoutEngine:
   private def floatingCursorGapRows(state: AppState, content: SurfaceContent): Int =
     content match
       case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
-        state.config.commandRunnerCursorGapRows.map(FloatingSurfaceGeometry.requiredCellRows).getOrElse(floatingStackGapRows(state))
+        state.config.commandRunnerCursorGapRows
+          .map(FloatingSurfaceGeometry.requiredCellRows)
+          .getOrElse(floatingStackGapRows(state))
       case _ => floatingStackGapRows(state)
 
   private def floatingStackGapRows(state: AppState): Int =

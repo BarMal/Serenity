@@ -1277,7 +1277,7 @@ final private[manager] class StateManagerEventPipeline(
       layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       contract = EditorLayoutContract.from(state, viewportSize, layout)
       contentRect <- contract.overlayContentRect(surface.id)
-      frameRect <- contract.overlayRect(surface.id)
+      frameRect   <- contract.overlayRect(surface.id)
       index <- overlayItemIndex(
         event,
         frameRect,
@@ -1303,7 +1303,7 @@ final private[manager] class StateManagerEventPipeline(
       layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       contract = EditorLayoutContract.from(state, viewportSize, layout)
       contentRect <- contract.overlayContentRect(surface.id)
-      frameRect <- contract.overlayRect(surface.id)
+      frameRect   <- contract.overlayRect(surface.id)
     yield (event.pixelX, event.pixelY) match
       case (Some(pixelX), Some(pixelY)) =>
         val geometry = FloatingSurfaceGeometry.calculate(
@@ -1317,7 +1317,7 @@ final private[manager] class StateManagerEventPipeline(
         geometry.content.contains(pixelX.toDouble, pixelY.toDouble) && geometry.itemAt(pixelX, pixelY).isEmpty
       case _ =>
         contentRect.contains(event.col, event.row) &&
-          !contract.overlayRowSlots(surface.id).exists(_.y == event.row)
+        !contract.overlayRowSlots(surface.id).exists(_.y == event.row)
     ).getOrElse(false)
 
   private def editorContextMenu(targetFocus: Focus): Option[ContextMenu] =
@@ -1409,7 +1409,7 @@ final private[manager] class StateManagerEventPipeline(
       layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       contract = EditorLayoutContract.from(state, viewportSize, layout)
       contentRect <- contract.overlayContentRect(surface.id)
-      frameRect <- contract.overlayRect(surface.id)
+      frameRect   <- contract.overlayRect(surface.id)
       hit <- contextualToolbarItemHit(
         event,
         frameRect,
@@ -1443,7 +1443,7 @@ final private[manager] class StateManagerEventPipeline(
         },
         itemGapRows = state.config.uiElementGap
       )
-      _ <- Option.when(geometry.content.contains(pixelX.toDouble, pixelY.toDouble))(())
+      _        <- Option.when(geometry.content.contains(pixelX.toDouble, pixelY.toDouble))(())
       rowIndex <- geometry.itemAt(pixelX.toDouble, pixelY.toDouble)
     yield rowIndex
     pixelRowIndex.orElse(overlayDisplayedRowIndexAt(event, contentRect, rowSlots)).flatMap { rowIndex =>
@@ -1580,8 +1580,8 @@ final private[manager] class StateManagerEventPipeline(
   ): Option[CommandRunnerEvent] =
     for
       contentRect <- contract.overlayContentRect(surface.id)
-      frameRect <- contract.overlayRect(surface.id)
-      result <- {
+      frameRect   <- contract.overlayRect(surface.id)
+      result <-
         val rowSlots = contract.overlayRowSlots(surface.id)
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
@@ -1625,7 +1625,6 @@ final private[manager] class StateManagerEventPipeline(
               else RunnerSelectSubmenuItem(index)
             }
           case _ => None
-      }
     yield result
 
   private def overlayItemIndex(
@@ -1662,7 +1661,7 @@ final private[manager] class StateManagerEventPipeline(
         itemOffsetRows = if hasHeader then 1.0 else 0.0
       )
       displayedIndex <- geometry.itemAt(pixelX.toDouble, pixelY.toDouble)
-      absoluteIndex <- itemWindow.absoluteIndexAt(displayedIndex)
+      absoluteIndex  <- itemWindow.absoluteIndexAt(displayedIndex)
     yield absoluteIndex
     pixelItemIndex.orElse(
       overlayDisplayedRowIndexAt(event, contentRect, rowSlots)

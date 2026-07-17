@@ -282,8 +282,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val viewport    = openedState.viewportSize.getOrElse(fail("Expected viewport size"))
     val surface     = openedState.contextMenuSurface.getOrElse(fail("Expected context menu surface"))
     val layout      = LayoutEngine.calculateLayoutWithUI(openedState, viewport)
-    val frame       = EditorLayoutContract.from(openedState, viewport, layout).overlayRect(surface.id).getOrElse(fail("Expected frame"))
-    val metrics     = CellMetrics.fromFont(FontLoader.previewUiFont(openedState.config.fontConfig))
+    val frame =
+      EditorLayoutContract.from(openedState, viewport, layout).overlayRect(surface.id).getOrElse(fail("Expected frame"))
+    val metrics = CellMetrics.fromFont(FontLoader.previewUiFont(openedState.config.fontConfig))
     val geometry = FloatingSurfaceGeometry.calculate(
       frame,
       metrics,
