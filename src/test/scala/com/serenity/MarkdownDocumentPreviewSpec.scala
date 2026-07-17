@@ -305,6 +305,26 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "retain table chrome when the inline preview window begins in a table body" in {
+    val lines = Vector(
+      "Before",
+      "| Task | Owner |",
+      "| ---- | ----- |",
+      "| Ship | Codex |",
+      "After"
+    )
+
+    MarkdownDocumentPreview
+      .inlinePreviewRows(lines, firstSourceLine = 3, maxSourceLines = 1)
+      .map(_.text) shouldBe Vector(
+      "┌──────┬───────┐",
+      "│ Task │ Owner │",
+      "├──────┼───────┤",
+      "│ Ship │ Codex │",
+      "└──────┴───────┘"
+    )
+  }
+
   it should "render a bounded inline window without inspecting trailing source lines" in {
     val lines =
       Vector("# Visible heading", "Visible prose", "Visible tail") ++

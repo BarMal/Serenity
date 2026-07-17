@@ -341,11 +341,23 @@ object MarkdownDocumentPreview:
   ): Vector[InlinePreviewLine] =
     if sourceLines.isEmpty then Vector.empty
     else
-      val start = firstSourceLine.max(0).min(sourceLines.length - 1)
-      val end   = (start + maxSourceLines.max(1)).min(sourceLines.length)
+      val requestedStart = firstSourceLine.max(0).min(sourceLines.length - 1)
+      val maxWindowLines = maxSourceLines.max(1)
+      val start          = inlinePreviewWindowStart(sourceLines, requestedStart, maxWindowLines)
+      val end            = (requestedStart + maxWindowLines).min(sourceLines.length)
       renderInlineDocumentUncached(sourceLines.slice(start, end)).map { row =>
         row.copy(sourceLine = row.sourceLine.map(_ + start))
       }
+
+  private def inlinePreviewWindowStart(sourceLines: Vector[String], start: Int, maxWindowLines: Int): Int =
+    val earliestContextLine = (start - maxWindowLines.max(2)).max(0)
+    val tableStart = Iterator
+      .iterate(start)(_ - 1)
+      .takeWhile(index => index >= earliestContextLine && isTableRow(sourceLines(index)))
+      .toVector
+      .lastOption
+      .filter(index => index + 1 <= start && isTableSeparator(sourceLines(index + 1)))
+    tableStart.getOrElse(start)
 
   private def inlinePreviewIndex(sourceLines: Vector[String]): InlinePreviewIndex =
     val key = InlineDocumentCacheKey(SourceLinesFingerprint.from(sourceLines))
