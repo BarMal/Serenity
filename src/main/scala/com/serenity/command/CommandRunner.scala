@@ -494,15 +494,15 @@ case class CommandRunner(
                 label = CommandRunner.itemLabel(item),
                 breadcrumb = breadcrumb,
                 effectiveValue = CommandRunner.itemEffectiveValue(item),
-                sourceScope = leaf.sourceScope,
+                sourceScope = "Global",
                 category = CommandCategory.Settings,
                 hint = CommandRunner.itemHint(item)
               ),
-              (rank, leaf.scopePriority)
+              rank
             )
           }
       }
-      .sortBy { case (item, (rank, scopePriority)) => (rank, scopePriority, item.breadcrumb, item.targetItemId) }
+      .sortBy { case (item, rank) => (rank, item.breadcrumb, item.targetItemId) }
       .map(_._1)
       .distinctBy(_.targetItemId)
       .take(CommandRunner.MaximumSettingSearchResults)
@@ -510,9 +510,7 @@ case class CommandRunner(
   private case class SettingLeaf(
       group: CommandSurfaceItem.GroupItem,
       item: CommandSurfaceItem,
-      breadcrumb: String,
-      sourceScope: String,
-      scopePriority: Int
+      breadcrumb: String
   )
 
   private def settingLeaves: List[SettingLeaf] =
@@ -521,34 +519,21 @@ case class CommandRunner(
       ancestorIds: List[String],
       ancestorLabels: List[String]
     ): List[SettingLeaf] =
-      group.children.flatMap {
-        case child: CommandSurfaceItem.GroupItem => loop(child, ancestorIds :+ group.id, ancestorLabels :+ group.label)
-        case child =>
-          val sourceScope = settingSourceScope(ancestorIds :+ group.id)
-          List(
-            SettingLeaf(
-              group = group,
-              item = child,
-              breadcrumb = (("Settings" :: ancestorLabels) :+ group.label).mkString(" > "),
-              sourceScope = sourceScope,
-              scopePriority = settingScopePriority(sourceScope)
+      if ancestorIds.contains("settings-ui-presets") || group.id == "settings-ui-presets" then Nil
+      else
+        group.children.flatMap {
+          case child: CommandSurfaceItem.GroupItem => loop(child, ancestorIds :+ group.id, ancestorLabels :+ group.label)
+          case child =>
+            List(
+              SettingLeaf(
+                group = group,
+                item = child,
+                breadcrumb = (("Settings" :: ancestorLabels) :+ group.label).mkString(" > ")
+              )
             )
-          )
-      }
+        }
 
     settingsGroups.flatMap(group => loop(group, Nil, Nil))
-
-  private def settingSourceScope(ancestorIds: List[String]): String =
-    if ancestorIds.contains("settings-preset-edit") then
-      editingPresetName.map(name => s"Preset draft: $name").getOrElse("Inherited from Global")
-    else if ancestorIds.contains("settings-preset-create") then "Preset draft"
-    else "Global"
-
-  private def settingScopePriority(sourceScope: String): Int =
-    val editingPreset = editingPresetName.nonEmpty
-    if editingPreset && sourceScope.startsWith("Preset draft:") then 0
-    else if sourceScope == "Global" then 1
-    else 2
 
   private def settingsSearchRank(
     group: CommandSurfaceItem.GroupItem,

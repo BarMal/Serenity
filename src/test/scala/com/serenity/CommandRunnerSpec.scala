@@ -263,7 +263,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "prefer the active preset draft and describe its effective setting value" in {
+  it should "describe duplicate settings as global until preset drafts have independent values and actions" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
@@ -274,7 +274,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     runner.visibleItems.collect {
       case item: CommandSurfaceItem.SettingSearchItem if item.targetItemId == "animation-duration" =>
         (item.targetGroupId, item.effectiveValue, item.sourceScope)
-    } shouldBe List(("settings-preset-ui-surface-motion", Some("200"), "Preset draft: Review"))
+    } shouldBe List(("settings-animation", Some("200"), "Global"))
   }
 
   it should "rank a normalized exact setting ahead of a prefix command" in {

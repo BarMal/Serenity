@@ -190,6 +190,42 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       Some("animation-duration")
   }
 
+  it should "execute the global intent described by a direct setting search result" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(editingPresetName = Some("Review"))
+      .updateSearchTerm("default document")
+    val state = activeState(registry).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    runner.selectedItem.collect {
+      case item: CommandSurfaceItem.SettingSearchItem => (item.targetGroupId, item.sourceScope)
+    } shouldBe Some(("settings-document-defaults", "Global"))
+
+    val opened   = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
+    val executed = CommandRunnerReducer.reduce(RunnerSubmit, opened.state, registry)
+
+    executed.effects shouldBe List(
+      AppEffect.ExecuteCommand(
+        Command.typed(
+          "default-document-mode",
+          "Default Document",
+          CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.PlainText),
+          CommandCategory.Settings
+        )
+      )
+    )
+  }
+
   it should "search globally even when opened on a narrower category" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
