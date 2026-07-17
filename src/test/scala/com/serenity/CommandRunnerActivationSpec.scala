@@ -129,7 +129,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
           case item: CommandSurfaceItem.InputItem if item.id == "ui-element-gap" =>
             (item.currentValue, item.hint, item.parse("3"), item.parse("9"))
         }
-      ) shouldBe Some(("2", "Cells (0-8)", Some(CommandIntent.SetUiElementGap(3)), None))
+      ) shouldBe Some(("2", "Cells, decimals supported (0.0-8.0)", Some(CommandIntent.SetUiElementGap(3)), None))
     settingsGroup(runner, "settings-interface-layout")
       .flatMap(
         _.children.collectFirst {

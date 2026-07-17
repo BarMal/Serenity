@@ -36,12 +36,12 @@ object CommandRunnerSettingsInputItems:
       f"${config.effectiveCommandRunnerTransitionSpeedScale}%.2f"
     val uiSpeedScaleValue         = f"${config.effectiveUiTransitionSpeedScale}%.2f"
     val cursorSpeedScaleValue     = f"${config.effectiveCursorTransitionSpeedScale}%.2f"
-    val elementGapValue           = interfaceConfig.elementGap.toString
+    val elementGapValue           = formatSpacing(interfaceConfig.elementGap)
     val cornerRadiusValue         = interfaceConfig.cornerRadiusPx.toString
     val outlineThicknessValue     = interfaceConfig.outlineThicknessPx.toString
     val commandRowsValue          = surfaceConfig.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
-    val commandItemGapRowsValue   = surfaceConfig.commandRunnerItemGapRows.toString
-    val commandCursorGapRowsValue = surfaceConfig.commandRunnerCursorGapRows.map(_.toString).getOrElse("auto")
+    val commandItemGapRowsValue   = formatSpacing(surfaceConfig.commandRunnerItemGapRows)
+    val commandCursorGapRowsValue = surfaceConfig.commandRunnerCursorGapRows.map(formatSpacing).getOrElse("auto")
     val spellCheck                = languageToolsConfig.spellCheck.normalized
 
     val commentItems = List(
@@ -421,7 +421,8 @@ object CommandRunnerSettingsInputItems:
       CommandSurfaceItem.InputItem(
         id = "command-runner-item-gap-rows",
         label = "Command Item Spacing",
-        hint = s"Rows, decimals supported (${AppConfig.MinCommandRunnerItemGapRows}-${AppConfig.MaxCommandRunnerItemGapRows})",
+        hint =
+          s"Rows, decimals supported (${AppConfig.MinCommandRunnerItemGapRows}-${AppConfig.MaxCommandRunnerItemGapRows})",
         currentValue = commandItemGapRowsValue,
         isDecimal = true,
         parse = text =>
@@ -436,7 +437,8 @@ object CommandRunnerSettingsInputItems:
       CommandSurfaceItem.InputItem(
         id = "command-runner-cursor-gap-rows",
         label = "Command Cursor Spacing",
-        hint = s"Rows, decimals supported (${AppConfig.MinCommandRunnerCursorGapRows}-${AppConfig.MaxCommandRunnerCursorGapRows}) or auto",
+        hint =
+          s"Rows, decimals supported (${AppConfig.MinCommandRunnerCursorGapRows}-${AppConfig.MaxCommandRunnerCursorGapRows}) or auto",
         currentValue = commandCursorGapRowsValue,
         isDecimal = true,
         parse = text =>
@@ -618,6 +620,9 @@ object CommandRunnerSettingsInputItems:
 
   private def keymapLabel(configKey: String): String =
     configKey.split("_").toList.map(_.capitalize).mkString(" ")
+
+  private def formatSpacing(value: Double): String =
+    if value.isWhole then value.toLong.toString else value.toString
 
   private def bindingInputItem(
     id: String,

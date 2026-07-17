@@ -2,7 +2,7 @@ package com.serenity.ui.layout
 
 /** A device-independent pixel rectangle used at the floating-surface boundary. */
 case class LogicalPixelRect(x: Double, y: Double, width: Double, height: Double):
-  def right: Double = x + width
+  def right: Double  = x + width
   def bottom: Double = y + height
 
   def contains(pixelX: Double, pixelY: Double): Boolean =
@@ -20,7 +20,7 @@ case class FloatingSurfaceGeometry(
     itemGapRows: Double = 0.0
 ):
   private val normalizedBorderPx = borderPx.max(0.0)
-  private val normalizedGapPx = itemGapRows.max(0.0) * lineHeightPx.max(0.0)
+  private val normalizedGapPx    = itemGapRows.max(0.0) * lineHeightPx.max(0.0)
 
   def contentRect: LogicalPixelRect =
     LogicalPixelRect(
@@ -32,7 +32,7 @@ case class FloatingSurfaceGeometry(
 
   def itemRect(index: Int, headerRows: Int = 0): LogicalPixelRect =
     val rowHeight = lineHeightPx.max(0.0)
-    val offset = headerRows.max(0) * rowHeight + index.max(0) * (rowHeight + normalizedGapPx)
+    val offset    = headerRows.max(0) * rowHeight + index.max(0) * (rowHeight + normalizedGapPx)
     LogicalPixelRect(contentRect.x, contentRect.y + offset, contentRect.width, rowHeight)
 
   def itemIndexAt(pixelX: Double, pixelY: Double, itemCount: Int, headerRows: Int = 0): Option[Int] =
