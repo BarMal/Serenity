@@ -944,6 +944,7 @@ object Renderer:
       val windowEndLine       = firstSourceLine + baseSourceLineLimit - 1
       val maxSourceLines = activeBlock
         .filter(_ => activeLine.exists(_ <= windowEndLine))
+        .filter(blockRange => blockRange.end - blockRange.start + 1 <= baseSourceLineLimit)
         .map(blockRange => math.max(baseSourceLineLimit, blockRange.end - firstSourceLine + baseSourceLineLimit))
         .getOrElse(baseSourceLineLimit)
       MarkdownLensPreviewWindow(

@@ -535,6 +535,43 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     samePixels(actual, expected) shouldBe true
   }
 
+  it should "keep the preview window bounded for a very tall active block" in {
+    val sourceLines = Vector("```text") ++ Vector.tabulate(100)(index => s"Code line $index") ++ Vector("```")
+    val (state, surface, metrics) = renderMarkdownLens(
+      sourceLines.mkString("\n"),
+      CursorPosition(1, 0),
+      topLine = Some(0),
+      viewportHeight = 60
+    )
+    val actual = surface.drawImageCalls.head.image
+    val expected = MarkdownDocumentPreview.renderInlineImage(
+      sourceLines = sourceLines,
+      firstSourceLine = 0,
+      maxSourceLines = 40,
+      title = "Untitled",
+      widthPx = actual.getWidth,
+      heightPx = actual.getHeight,
+      theme = state.theme,
+      font = MarkdownDocumentPreview.inlineLensFont(
+        Font(Font.MONOSPACED, Font.PLAIN, 12),
+        metrics.lineHeight,
+        deviceScale = 1.0
+      ),
+      inlineLineHeightPx = metrics.lineHeight
+    )
+
+    rawSourceRow(surface, "Code line 0") should be >= 0
+    samePixels(actual, expected) shouldBe true
+
+    val (_, scrolledSurface, _) = renderMarkdownLens(
+      sourceLines.mkString("\n"),
+      CursorPosition(80, 0),
+      topLine = Some(80),
+      viewportHeight = 60
+    )
+    rawSourceRow(scrolledSurface, "Code line 79") should be >= 0
+  }
+
   it should "reveal every markdown source unit touched by a selection" in {
     val source =
       """# First heading
