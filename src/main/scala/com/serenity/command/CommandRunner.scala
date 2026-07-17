@@ -57,7 +57,9 @@ case class CommandRunner(
         strongCommandMatches.partition(item => CommandRunner.isExactCommandMatch(item.command, searchTerm))
       val settingsMatches = matchingSettingsResults(searchTerm)
       val (exactSettingsMatches, remainingSettingsMatches) =
-        settingsMatches.partition(item => CommandRunner.isExactSettingsTarget(item, searchTerm))
+        settingsMatches.partition(item =>
+          CommandRunner.isExactSettingsTarget(item, CommandRunner.normalizedSearchTerm(searchTerm))
+        )
       exactCommandMatches ++ exactSettingsMatches ++ remainingStrongCommandMatches ++ remainingSettingsMatches ++
         remainingCommandMatches
 

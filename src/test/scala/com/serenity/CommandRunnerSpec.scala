@@ -263,6 +263,22 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "rank a normalized exact setting ahead of a prefix command" in {
+    val prefixCommand = Command.typed(
+      name = "quoted-animation-duration",
+      description = "A command whose label begins with the raw query.",
+      intent = CommandIntent.ToggleLineNumbers,
+      label = "\"ANIMATION-duration\" options"
+    )
+    val registry          = CommandRegistry(List(prefixCommand))
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("\"ANIMATION-duration\"")
+
+    runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-search:animation-duration")
+  }
+
   it should "keep an exact settings group query as navigation rather than a leaf edit" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
