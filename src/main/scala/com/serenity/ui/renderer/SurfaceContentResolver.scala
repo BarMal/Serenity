@@ -422,8 +422,10 @@ object SurfaceContentResolver:
             selected = index == adjustedSelectedIndex,
             segments = List(
               OverlaySegment(item.label),
+              OverlaySegment(item.effectiveValue.getOrElse(""), tone = OverlayTone.Normal),
+              OverlaySegment(item.sourceScope, tone = OverlayTone.Normal),
               OverlaySegment(item.breadcrumb, tone = OverlayTone.Normal)
-            ),
+            ).filterNot(_.text.isEmpty),
             layout = OverlayRowLayout.Columns
           )
         case (group: CommandSurfaceItem.GroupItem, index) =>

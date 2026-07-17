@@ -289,10 +289,13 @@ object CommandSurfaceItem:
       targetItemId: String,
       label: String,
       breadcrumb: String,
+      effectiveValue: Option[String],
+      sourceScope: String,
       category: CommandCategory,
       hint: Option[String] = None
   ) extends CommandSurfaceItem:
-    override lazy val searchText: String = s"$label $breadcrumb ${hint.getOrElse("")}".trim
+    override lazy val searchText: String =
+      s"$label ${effectiveValue.getOrElse("")} $sourceScope $breadcrumb ${hint.getOrElse("")}".trim
 
   case class GroupItem(
       id: String,

@@ -216,7 +216,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     optionRow.segments(1).tone shouldBe OverlayTone.Normal
   }
 
-  it should "render direct settings search result rows with breadcrumbs" in {
+  it should "render direct settings search result rows with effective values and source scopes" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
@@ -234,7 +234,12 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected direct document mode result"))
 
     row.segments.headOption.map(_.text) shouldBe Some("Default Document")
-    row.segments.drop(1).headOption.map(_.text) shouldBe Some("Settings > Document Writing > Document Defaults")
+    row.segments.map(_.text) shouldBe List(
+      "Default Document",
+      "Plain Text",
+      "Global",
+      "Settings > Document Writing > Document Defaults"
+    )
   }
 
   it should "render preset selection as a horizontal carousel" in {
