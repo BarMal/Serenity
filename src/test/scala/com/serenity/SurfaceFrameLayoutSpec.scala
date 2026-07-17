@@ -33,6 +33,15 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
     geometry.itemRect(index = 1) shouldBe LogicalPixelRect(36.0, 81.0, 180.0, 18.0)
   }
 
+  it should "retain fractional surface placement at non-integer device scale" in {
+    val placement = FloatingSurfacePlacement(LayoutRect(4, 3, 20, 8), yOffsetRows = 0.5)
+    val metrics   = CellMetrics(charWidth = 9, lineHeight = 15, ascent = 11)
+
+    placement.logicalFrame(metrics) shouldBe LogicalPixelRect(36.0, 52.5, 180.0, 120.0)
+    placement.geometry(metrics, itemGapRows = 0.25).itemRect(1) shouldBe
+      LogicalPixelRect(36.0, 71.25, 180.0, 15.0)
+  }
+
   it should "apply non-square cell border insets on their matching axes" in {
     val geometry = FloatingSurfaceGeometry.fromCells(
       LayoutRect(2, 1, 10, 6),

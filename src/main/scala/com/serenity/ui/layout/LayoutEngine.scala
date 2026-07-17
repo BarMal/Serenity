@@ -65,6 +65,7 @@ case class CalculatedLayout(
     belowCursorOverlayRect: Option[LayoutRect] = None,
     aboveCursorOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
     belowCursorOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
+    floatingSurfacePlacements: Map[SurfaceId, FloatingSurfacePlacement] = Map.empty,
     collapsedFloatingSurfaceIds: Set[SurfaceId] = Set.empty,
     lineNumberRect: Option[LayoutRect] = None,
     gutterRect: Option[LayoutRect] = None
@@ -217,12 +218,28 @@ object LayoutEngine:
     val aboveCursorOverlayStack =
       aboveSurfaces.flatMap(surface => calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface.id -> _))
     val belowLayout = calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
+    val abovePlacements = aboveCursorOverlayStack.map { case (surfaceId, rect) =>
+      surfaceId -> FloatingSurfacePlacement(rect)
+    }.toMap
+    val belowPlacements = belowLayout.stack.zipWithIndex.map { case ((surfaceId, rect), index) =>
+      val surface = state.surfaceById(surfaceId)
+      val cursorGap = surface.map(value => floatingCursorGapRows(state, value.content)).getOrElse(0.0)
+      val stackGap  = floatingStackGapRows(state)
+      val roundedCursorGap = FloatingSurfaceGeometry.reservedCellRows(cursorGap) - cursorGap
+      val roundedStackGap  = FloatingSurfaceGeometry.reservedCellRows(stackGap) - stackGap
+      surfaceId -> FloatingSurfacePlacement.atRow(
+        rect,
+        rect.y.toDouble - roundedCursorGap - (index * roundedStackGap)
+      )
+    }.toMap
+    val floatingSurfacePlacements = abovePlacements ++ belowPlacements
 
     baseLayout.copy(
       aboveCursorOverlayRect = aboveCursorOverlayStack.headOption.map(_._2),
       belowCursorOverlayRect = belowLayout.stack.headOption.map(_._2),
       aboveCursorOverlayStack = aboveCursorOverlayStack,
       belowCursorOverlayStack = belowLayout.stack,
+      floatingSurfacePlacements = floatingSurfacePlacements,
       collapsedFloatingSurfaceIds = belowLayout.collapsedSurfaceIds
     )
 
@@ -519,7 +536,7 @@ object LayoutEngine:
         calculateFloatingSurfaceWidth(contentRect.width)
     val preferredHeight = calculateFloatingSurfaceHeight(surface.content, preferredWidth, contentRect.height, state)
     val finalHeight     = forcedHeight.getOrElse(preferredHeight)
-    val gapRows         = floatingCursorGapRows(state, surface.content)
+    val gapRows = FloatingSurfaceGeometry.reservedCellRows(floatingCursorGapRows(state, surface.content))
 
     for
       anchor <- floatingAnchor(surface, state)
@@ -638,8 +655,8 @@ object LayoutEngine:
           (mainRectOpt, submenuBaseRectOpt, anchorFrameOpt) match
             case (Some(mainRect), Some(submenuRect), Some(anchorFrame)) =>
               val collapsedHeight = 3
-              val gapRows         = floatingCursorGapRows(state, main.content)
-              val stackGapRows    = floatingStackGapRows(state)
+              val gapRows = FloatingSurfaceGeometry.reservedCellRows(floatingCursorGapRows(state, main.content))
+              val stackGapRows    = FloatingSurfaceGeometry.reservedCellRows(floatingStackGapRows(state))
               val availableBottom = anchorFrame.contentRect.bottom
               val totalHeight     = mainRect.height + stackGapRows + submenuRect.height
               val preferredBelowY = anchorFrame.screenPosition.y + 1 + gapRows
@@ -679,18 +696,17 @@ object LayoutEngine:
   private def calculateFloatingSurfaceWidth(maxWidth: Int): Int =
     maxWidth
 
-  private def floatingCursorGapRows(state: AppState, content: SurfaceContent): Int =
+  private def floatingCursorGapRows(state: AppState, content: SurfaceContent): Double =
     content match
       case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
         state.config.commandRunnerCursorGapRows
-          .map(FloatingSurfaceGeometry.reservedCellRows)
           .getOrElse(floatingStackGapRows(state))
       case _ => floatingStackGapRows(state)
 
-  private def floatingStackGapRows(state: AppState): Int =
+  private def floatingStackGapRows(state: AppState): Double =
     math.max(
       InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows,
-      FloatingSurfaceGeometry.reservedCellRows(state.config.uiElementGap)
+      state.config.uiElementGap
     )
 
   private def calculateFloatingSurfaceHeight(
@@ -823,8 +839,10 @@ object LayoutEngine:
       case Some(_) if baseRects.isEmpty =>
         BelowOverlayLayout(Nil, Set.empty)
       case Some(anchorFrame) =>
-        val gapRows = surfaces.headOption.map(surface => floatingCursorGapRows(state, surface.content)).getOrElse(0)
-        val stackGapRows    = floatingStackGapRows(state)
+        val gapRows = surfaces.headOption
+          .map(surface => FloatingSurfaceGeometry.reservedCellRows(floatingCursorGapRows(state, surface.content)))
+          .getOrElse(0)
+        val stackGapRows    = FloatingSurfaceGeometry.reservedCellRows(floatingStackGapRows(state))
         val availableBottom = anchorFrame.contentRect.bottom
         val totalHeight     = baseRects.map(_._2.height).sum + (stackGapRows * (baseRects.length - 1).max(0))
         val preferredBelowY = anchorFrame.screenPosition.y + 1 + gapRows
