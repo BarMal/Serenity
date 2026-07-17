@@ -470,6 +470,108 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "retain rendered context below an active source unit near the preview window boundary" in {
+    val sourceLines =
+      Vector("# Start") ++
+        Vector.tabulate(34)(index => s"Context before $index") ++
+        Vector("# Active heading") ++
+        Vector.tabulate(9)(index => s"Context after $index") ++
+        Vector("Later rendered context")
+    val source = sourceLines.mkString("\n")
+    val (state, surface, metrics) = renderMarkdownLens(
+      source,
+      CursorPosition(35, 0),
+      topLine = Some(0),
+      viewportHeight = 60
+    )
+    val actual = surface.drawImageCalls.head.image
+    val expected = MarkdownDocumentPreview.renderInlineImage(
+      sourceLines = sourceLines,
+      firstSourceLine = 0,
+      maxSourceLines = sourceLines.length,
+      title = "Untitled",
+      widthPx = actual.getWidth,
+      heightPx = actual.getHeight,
+      theme = state.theme,
+      font = MarkdownDocumentPreview.inlineLensFont(
+        Font(Font.MONOSPACED, Font.PLAIN, 12),
+        metrics.lineHeight,
+        deviceScale = 1.0
+      ),
+      inlineLineHeightPx = metrics.lineHeight
+    )
+
+    MarkdownDocumentPreview.inlinePreviewRows(sourceLines, 0, sourceLines.length).map(_.text) should contain(
+      "Later rendered context"
+    )
+    samePixels(actual, expected) shouldBe true
+  }
+
+  it should "keep the preview window bounded when the active cursor is far below the viewport" in {
+    val sourceLines = Vector.tabulate(120)(index => s"Document line $index")
+    val (state, surface, metrics) = renderMarkdownLens(
+      sourceLines.mkString("\n"),
+      CursorPosition(119, 0),
+      topLine = Some(0),
+      viewportHeight = 60
+    )
+    val actual = surface.drawImageCalls.head.image
+    val expected = MarkdownDocumentPreview.renderInlineImage(
+      sourceLines = sourceLines,
+      firstSourceLine = 0,
+      maxSourceLines = 40,
+      title = "Untitled",
+      widthPx = actual.getWidth,
+      heightPx = actual.getHeight,
+      theme = state.theme,
+      font = MarkdownDocumentPreview.inlineLensFont(
+        Font(Font.MONOSPACED, Font.PLAIN, 12),
+        metrics.lineHeight,
+        deviceScale = 1.0
+      ),
+      inlineLineHeightPx = metrics.lineHeight
+    )
+
+    samePixels(actual, expected) shouldBe true
+  }
+
+  it should "keep the preview window bounded for a very tall active block" in {
+    val sourceLines = Vector("```text") ++ Vector.tabulate(100)(index => s"Code line $index") ++ Vector("```")
+    val (state, surface, metrics) = renderMarkdownLens(
+      sourceLines.mkString("\n"),
+      CursorPosition(1, 0),
+      topLine = Some(0),
+      viewportHeight = 60
+    )
+    val actual = surface.drawImageCalls.head.image
+    val expected = MarkdownDocumentPreview.renderInlineImage(
+      sourceLines = sourceLines,
+      firstSourceLine = 0,
+      maxSourceLines = 40,
+      title = "Untitled",
+      widthPx = actual.getWidth,
+      heightPx = actual.getHeight,
+      theme = state.theme,
+      font = MarkdownDocumentPreview.inlineLensFont(
+        Font(Font.MONOSPACED, Font.PLAIN, 12),
+        metrics.lineHeight,
+        deviceScale = 1.0
+      ),
+      inlineLineHeightPx = metrics.lineHeight
+    )
+
+    rawSourceRow(surface, "Code line 0") should be >= 0
+    samePixels(actual, expected) shouldBe true
+
+    val (_, scrolledSurface, _) = renderMarkdownLens(
+      sourceLines.mkString("\n"),
+      CursorPosition(80, 0),
+      topLine = Some(80),
+      viewportHeight = 60
+    )
+    rawSourceRow(scrolledSurface, "Code line 79") should be >= 0
+  }
+
   it should "reveal every markdown source unit touched by a selection" in {
     val source =
       """# First heading
@@ -595,7 +697,8 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     source: String,
     cursor: CursorPosition,
     topLine: Option[Int] = None,
-    selection: Option[Selection] = None
+    selection: Option[Selection] = None,
+    viewportHeight: Int = 24
   ): (AppState, MockRenderSurface, CellMetrics) =
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
@@ -622,7 +725,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
         .withGutter(false)
         .withMarkdownViewMode(MarkdownViewMode.InlineLens)
     )
-    val surface = new MockRenderSurface(80, 24)
+    val surface = new MockRenderSurface(80, viewportHeight)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)
 
@@ -630,7 +733,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       state,
       cursorVisible = true,
       surface,
-      ViewportSize(80, 24),
+      ViewportSize(80, viewportHeight),
       codeFont = font,
       textFont = font,
       cellMetrics = metrics,
