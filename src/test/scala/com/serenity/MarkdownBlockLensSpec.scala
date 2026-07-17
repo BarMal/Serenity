@@ -31,7 +31,7 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines, activeLine = 1) shouldBe (1 to 2)
   }
 
-  it should "treat contiguous list items and indented continuations as one block" in {
+  it should "reveal only the current list item with its continuation lines" in {
     val lines = Vector(
       "Before",
       "",
@@ -42,7 +42,9 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
       "After"
     )
 
-    MarkdownBlockLens.currentBlock(lines, activeLine = 3) shouldBe (2 to 4)
+    MarkdownBlockLens.currentBlock(lines, activeLine = 2) shouldBe (2 to 3)
+    MarkdownBlockLens.currentBlock(lines, activeLine = 3) shouldBe (2 to 3)
+    MarkdownBlockLens.currentBlock(lines, activeLine = 4) shouldBe (4 to 4)
   }
 
   it should "treat blockquotes as one block" in {

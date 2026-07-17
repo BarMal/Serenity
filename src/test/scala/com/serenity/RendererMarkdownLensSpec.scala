@@ -403,7 +403,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
         "list",
         "# Heading\n\n- one\n  detail\n- two",
         CursorPosition(3, 0),
-        3
+        2
       ),
       (
         "table",
@@ -424,6 +424,48 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
         withClue(s"$name lens: ") {
           rawSourceRow(surface, source.linesIterator.toVector(cursor.line)) shouldBe paneRect.y + 1
           panelRows(surface, state, paneRect) should have size expectedHeightRows
+        }
+    }
+  }
+
+  it should "keep the full document previewed while caret movement reveals only each active source unit" in {
+    val source =
+      """# Serenity document preview
+        |
+        |This paragraph should be rendered as readable prose while the cursor is elsewhere.
+        |
+        |## Navigation and alignment
+        |
+        |- The active block should reveal its Markdown source.
+        |- Rendered blocks should remain aligned around it.
+        |- Moving the caret should replace, not displace, the rendered block.
+        |
+        || Area | Expected behaviour |
+        || --- | --- |
+        || Heading | Large and aligned |
+        || Paragraph | Readable prose |
+        || Table | Stable rows and borders |
+        |
+        |Final paragraph after the table.""".stripMargin
+    val cases = List(
+      CursorPosition(0, 0)  -> 1,
+      CursorPosition(2, 0)  -> 2,
+      CursorPosition(6, 0)  -> 1,
+      CursorPosition(10, 0) -> 7,
+      CursorPosition(15, 0) -> 2
+    )
+
+    cases.foreach {
+      case (cursor, expectedLensHeight) =>
+        val (state, surface, _) = renderMarkdownLens(source, cursor, topLine = Some(0))
+        val paneRect =
+          LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
+            PaneId(1)
+          )
+
+        withClue(s"cursor at source line ${cursor.line}: ") {
+          rawSourceRow(surface, source.linesIterator.toVector(cursor.line).take(40)) should be >= paneRect.y
+          panelRows(surface, state, paneRect) should have size expectedLensHeight
         }
     }
   }
