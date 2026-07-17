@@ -470,6 +470,29 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "reveal every markdown source unit touched by a selection" in {
+    val source =
+      """# First heading
+        |
+        |First paragraph.
+        |
+        |# Second heading
+        |
+        |Second paragraph.""".stripMargin
+    val (state, surface, _) = renderMarkdownLens(
+      source,
+      CursorPosition(0, 0),
+      selection = Some(Selection(CursorPosition(0, 0), CursorPosition(4, 0)))
+    )
+    val paneRect =
+      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(PaneId(1))
+
+    rawSourceRow(surface, "# First heading") should be >= paneRect.y
+    rawSourceRow(surface, "First paragraph.") should be >= paneRect.y
+    rawSourceRow(surface, "# Second heading") should be >= paneRect.y
+    panelRows(surface, state, paneRect) should have size 5
+  }
+
   it should "render the scrolled document window when the caret remains above it" in {
     val source =
       (Vector.fill(32)("") ++ Vector("# Reached after scrolling", "", "Visible prose at the viewport.")).mkString("\n")
@@ -569,7 +592,8 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
   private def renderMarkdownLens(
     source: String,
     cursor: CursorPosition,
-    topLine: Option[Int] = None
+    topLine: Option[Int] = None,
+    selection: Option[Selection] = None
   ): (AppState, MockRenderSurface, CellMetrics) =
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
@@ -578,6 +602,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       .copy(
         language = Some(LanguageId.Markdown),
         cursors = List(cursor),
+        selection = selection,
         viewport = Viewport.default.copy(topLine = topLine.getOrElse(cursor.line).max(0), visibleLines = 10)
       )
     val state = AppState.empty.copy(

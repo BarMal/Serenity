@@ -950,12 +950,30 @@ object Renderer:
   private def markdownPreviewSourceLineLimit(visibleRows: Int): Int =
     math.max(MinMarkdownPreviewSourceLines, visibleRows.max(1) * MarkdownPreviewOverscanFactor)
 
-  private def activeMarkdownBlockRanges(lines: Vector[String], cursors: List[CursorPosition]): List[Range.Inclusive] =
-    cursors
+  private def activeMarkdownBlockRanges(lines: Vector[String], buffer: Buffer): List[Range.Inclusive] =
+    val cursorRanges = buffer.cursors
       .map(_.line)
       .filter(line => line >= 0 && line < lines.length)
       .map(line => MarkdownBlockLens.currentBlock(lines, line))
-      .distinctBy(range => range.start -> range.end)
+    val selectionRanges = buffer.allSelections.flatMap { selection =>
+      if lines.isEmpty then Nil
+      else
+        val startLine = selection.start.line.max(0).min(lines.length - 1)
+        val endLine   = selection.end.line.max(0).min(lines.length - 1)
+        (startLine to endLine).map(line => MarkdownBlockLens.currentBlock(lines, line)).toList
+    }
+    mergeOverlappingMarkdownRanges(cursorRanges ++ selectionRanges)
+
+  private def mergeOverlappingMarkdownRanges(ranges: List[Range.Inclusive]): List[Range.Inclusive] =
+    ranges
+      .sortBy(range => (range.start, range.end))
+      .foldLeft(List.empty[Range.Inclusive]) {
+        case (last :: rest, range) if range.start <= last.end =>
+          (last.start to last.end.max(range.end)) :: rest
+        case (merged, range) =>
+          range :: merged
+      }
+      .reverse
 
   private case class MarkdownLensPlacement(top: Int, height: Int)
 
@@ -969,7 +987,7 @@ object Renderer:
   ): Unit =
     val lines         = frame.lines
     val previewWindow = frame.previewWindow
-    activeMarkdownBlockRanges(lines, buffer.cursors).foreach { blockRange =>
+    activeMarkdownBlockRanges(lines, buffer).foreach { blockRange =>
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
         val placement =
@@ -1031,7 +1049,7 @@ object Renderer:
   ): Unit =
     val lines         = frame.lines
     val previewWindow = frame.previewWindow
-    activeMarkdownBlockRanges(lines, buffer.cursors).foreach { blockRange =>
+    activeMarkdownBlockRanges(lines, buffer).foreach { blockRange =>
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
         val placement =
