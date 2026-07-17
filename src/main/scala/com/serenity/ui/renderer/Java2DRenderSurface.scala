@@ -227,6 +227,30 @@ class Java2DRenderSurface(
     g.drawRoundRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset, arcPx * 2, arcPx * 2)
     g.setStroke(savedStroke)
 
+  override def strokeRoundRectAtPx(
+    xPx: Float,
+    yPx: Float,
+    widthPx: Float,
+    heightPx: Float,
+    arcPx: Int,
+    color: Color,
+    strokeWidth: Float = 1.5f
+  ): Unit =
+    val inset       = strokeWidth / 2f
+    val savedStroke = g.getStroke
+    g.setColor(color)
+    g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND))
+    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+    g.drawRoundRect(
+      math.round(xPx + inset),
+      math.round(yPx + inset),
+      math.max(0, math.round(widthPx - (2 * inset))),
+      math.max(0, math.round(heightPx - (2 * inset))),
+      arcPx * 2,
+      arcPx * 2
+    )
+    g.setStroke(savedStroke)
+
   override def withRoundRectClip(
     x: Int,
     y: Int,
@@ -244,6 +268,19 @@ class Java2DRenderSurface(
       render
     finally g.setClip(savedClip)
 
+  override def withRoundRectClipAtPx(
+    xPx: Float,
+    yPx: Float,
+    widthPx: Float,
+    heightPx: Float,
+    arcPx: Int
+  )(render: => Unit): Unit =
+    val savedClip = g.getClip
+    try
+      g.clip(new RoundRectangle2D.Float(xPx, yPx, widthPx, heightPx, arcPx * 2f, arcPx * 2f))
+      render
+    finally g.setClip(savedClip)
+
   override def fillPixelRect(
     xPx: Int,
     yPx: Int,
@@ -253,6 +290,16 @@ class Java2DRenderSurface(
   ): Unit =
     g.setColor(color)
     g.fillRect(xPx, yPx, widthPx.max(1), heightPx.max(1))
+
+  override def fillPixelRectAtPx(
+    xPx: Float,
+    yPx: Float,
+    widthPx: Float,
+    heightPx: Float,
+    color: Color
+  ): Unit =
+    g.setColor(color)
+    g.fill(new java.awt.geom.Rectangle2D.Float(xPx, yPx, widthPx.max(0f), heightPx.max(0f)))
 
   override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val px        = metrics.toPixelX(x)

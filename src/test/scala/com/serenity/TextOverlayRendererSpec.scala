@@ -5,13 +5,28 @@ import java.awt.{Color, Font}
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, LayoutRect, SurfaceContentRowKind}
+import com.serenity.ui.layout.{CellMetrics, FloatingSurfaceFramePlacement, LayoutRect, SurfaceContentRowKind}
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
+
+  it should "render fractional floating frame chrome at the placement pixel origin" in {
+    val surface = new MockRenderSurface(80, 24)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics(charWidth = 8, lineHeight = 20, ascent = 15)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(2, 3, 20, 6),
+      placement = Some(FloatingSurfaceFramePlacement(LayoutRect(2, 3, 20, 6), yOffsetRows = 0.5))
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.strokeRoundRectAtPxCalls.headOption.map(_.yPx) shouldBe Some(70.0f)
+    surface.fillPixelRectCalls.headOption.map(_.yPx) shouldBe Some(70)
+  }
 
   given Balance = Balance.default
 

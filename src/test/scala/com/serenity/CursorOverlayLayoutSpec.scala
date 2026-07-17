@@ -91,6 +91,31 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     rect.width shouldBe contentRect.width
   }
 
+  it should "retain fractional above-cursor gaps separately from their cell fallback" in {
+    val state = baseState().copy(
+      config = AppState.initial.config
+        .withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact)
+        .withUiElementGap(0.5),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("peek-fractional-gap"),
+          SurfaceContent.QuickInfo("fractional gap"),
+          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.AboveCursor),
+          dismissOnMove = true
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val placement = layout.floatingSurfacePlacements.getOrElse(
+      SurfaceId("peek-fractional-gap"),
+      fail("Expected above-cursor placement")
+    )
+
+    placement.yOffsetRows shouldBe 0.5
+    placement.cellRect shouldBe layout.aboveCursorOverlayRect.getOrElse(fail("Expected above-cursor rectangle"))
+  }
+
   it should "place an active command runner below the editor cursor when there is room" in {
     val state = baseState().copy(
       uiSurfaces = List(

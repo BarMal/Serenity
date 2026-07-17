@@ -43,6 +43,40 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     runnerFrom(stateManager.getCurrentState.unsafeRunSync()).selectedIndex shouldBe selectedBefore
   }
 
+  it should "use the fractional floating placement for pixel item hits" in {
+    val stateManager = createStateManager("CommandRunnerMouseSpec")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
+    stateManager
+      .updateState(state =>
+        state.copy(
+          config = state.config
+            .withCommandRunnerCursorGapRows(Some(0.5))
+            .withCommandRunnerItemGapRows(0.5)
+        )
+      )
+      .unsafeRunSync()
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val before    = stateManager.getCurrentState.unsafeRunSync()
+    val surface   = before.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
+    val viewport  = before.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout    = LayoutEngine.calculateLayoutWithUI(before, viewport)
+    val placement = layout.floatingSurfacePlacements(surface.id)
+    val geometry = placement.geometry(
+      CellMetrics.fromFont(com.serenity.ui.fonts.FontLoader.previewUiFont(before.config.fontConfig)),
+      SurfaceFrameLayout.borderCellsFor(surface.content),
+      before.config.commandRunnerItemGapRows
+    )
+    val secondItem = geometry.itemRect(index = 1, headerRows = 1)
+    val pixelX     = (secondItem.x + 1).toInt
+    val pixelY     = math.ceil(secondItem.bottom - 1).toInt
+
+    stateManager.applyEvent(MouseMove(col = 0, row = 0, pixelX = Some(pixelX), pixelY = Some(pixelY))).unsafeRunSync()
+
+    runnerFrom(stateManager.getCurrentState.unsafeRunSync()).selectedIndex shouldBe 1
+  }
+
   it should "execute the command row clicked under the pointer" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 

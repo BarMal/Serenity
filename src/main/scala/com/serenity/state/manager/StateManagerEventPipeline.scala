@@ -1281,6 +1281,8 @@ final private[manager] class StateManagerEventPipeline(
         event,
         contentRect,
         contract.overlayRowSlots(surface.id),
+        layout.floatingSurfacePlacements.get(surface.id),
+        SurfaceFrameLayout.borderCellsFor(surface.content),
         menu.items.length,
         menu.selectedIndex,
         hasHeader = true,
@@ -1467,7 +1469,7 @@ final private[manager] class StateManagerEventPipeline(
           case _ =>
             List(state.commandRunnerSubmenuSurface, state.commandRunnerSurface).flatten
       surfaces.view
-        .flatMap(surface => commandRunnerSelectionForSurface(event, surface, contract, state))
+        .flatMap(surface => commandRunnerSelectionForSurface(event, surface, contract, layout, state))
         .headOption
     }
 
@@ -1535,6 +1537,7 @@ final private[manager] class StateManagerEventPipeline(
     event: MouseInputEvent,
     surface: UiSurface,
     contract: EditorLayoutContract,
+    layout: CalculatedLayout,
     state: AppState
   ): Option[CommandRunnerEvent] =
     contract.overlayContentRect(surface.id).flatMap { contentRect =>
@@ -1545,6 +1548,8 @@ final private[manager] class StateManagerEventPipeline(
             event,
             contentRect,
             rowSlots,
+            layout.floatingSurfacePlacements.get(surface.id),
+            SurfaceFrameLayout.borderCellsFor(surface.content),
             runner.visibleItems.length,
             runner.selectedIndex,
             hasHeader = true,
@@ -1565,6 +1570,8 @@ final private[manager] class StateManagerEventPipeline(
             event,
             contentRect,
             rowSlots,
+            layout.floatingSurfacePlacements.get(surface.id),
+            SurfaceFrameLayout.borderCellsFor(surface.content),
             items.length,
             selectedIndex,
             hasHeader = group.nonEmpty,
@@ -1584,6 +1591,8 @@ final private[manager] class StateManagerEventPipeline(
     event: MouseInputEvent,
     contentRect: LayoutRect,
     rowSlots: List[SurfaceContentRowSlot],
+    placement: Option[FloatingSurfaceFramePlacement],
+    borderCells: Int,
     itemCount: Int,
     selectedIndex: Int,
     hasHeader: Boolean,
@@ -1603,11 +1612,16 @@ final private[manager] class StateManagerEventPipeline(
     (for
       pixelX <- event.pixelX
       pixelY <- event.pixelY
-      index <- FloatingSurfaceGeometry
-        .fromCells(
-          contentRect,
-          CellMetrics.fromFont(FontLoader.previewUiFont(state.config.fontConfig)),
-          itemGapRows = itemGapRows
+      index <- placement
+        .map(
+          _.geometry(CellMetrics.fromFont(FontLoader.previewUiFont(state.config.fontConfig)), borderCells, itemGapRows)
+        )
+        .getOrElse(
+          FloatingSurfaceGeometry.fromCells(
+            contentRect,
+            CellMetrics.fromFont(FontLoader.previewUiFont(state.config.fontConfig)),
+            itemGapRows = itemGapRows
+          )
         )
         .itemIndexAt(pixelX.toDouble, pixelY.toDouble, itemCount, if hasHeader then 1 else 0)
     yield index)

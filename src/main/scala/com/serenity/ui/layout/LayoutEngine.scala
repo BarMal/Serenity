@@ -220,7 +220,10 @@ object LayoutEngine:
     val belowLayout = calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
     val abovePlacements = aboveCursorOverlayStack.map {
       case (surfaceId, rect) =>
-        surfaceId -> FloatingSurfaceFramePlacement(rect)
+        val surface    = state.surfaceById(surfaceId)
+        val cursorGap  = surface.map(value => floatingCursorGapRows(state, value.content)).getOrElse(0.0)
+        val roundedGap = FloatingSurfaceGeometry.reservedCellRows(cursorGap) - cursorGap
+        surfaceId -> FloatingSurfaceFramePlacement.atRow(rect, rect.y.toDouble + roundedGap)
     }.toMap
     val belowPlacements = belowLayout.stack.zipWithIndex.map {
       case ((surfaceId, rect), index) =>

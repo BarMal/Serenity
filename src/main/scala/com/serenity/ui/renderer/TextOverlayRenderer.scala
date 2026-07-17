@@ -18,7 +18,8 @@ object TextOverlayRenderer:
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
-    val rect = overlay.rect
+    val rect  = overlay.rect
+    val frame = overlay.floatingGeometry(cellMetrics).frame
 
     def rowColors(rowOffset: Int): (Color, Color) =
       overlay.animationState
@@ -33,7 +34,22 @@ object TextOverlayRenderer:
 
     surface.setAlpha(SurfaceMaterials.panelAlpha(config, theme) * overlay.alphaMultiplier)
 
-    surface.withRoundRectClip(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx) {
+    if overlay.placement.exists(_.yOffsetRows > 0.0) then
+      surface.setBackgroundColor(theme.panel.background)
+      surface.fillPixelRectAtPx(
+        frame.x.toFloat,
+        frame.y.toFloat,
+        frame.width.toFloat,
+        frame.height.toFloat,
+        theme.panel.background
+      )
+    surface.withRoundRectClipAtPx(
+      frame.x.toFloat,
+      frame.y.toFloat,
+      frame.width.toFloat,
+      frame.height.toFloat,
+      config.uiCornerRadiusPx
+    ) {
       for (y, rowOffset) <- (rect.y until rect.bottom).zipWithIndex do
         val (fg, bg) = rowColors(rowOffset)
         surface.setForegroundColor(fg)
@@ -43,7 +59,7 @@ object TextOverlayRenderer:
       applyGlassSheen(surface, overlay, theme, config)
       drawContent(surface, overlay, theme, cursorVisible, rowColors, font, cellMetrics)
     }
-    drawBorder(surface, overlay, theme, config)
+    drawBorder(surface, overlay, theme, config, cellMetrics)
 
     surface.setAlpha(1.0f)
     surface.setForegroundColor(theme.foreground)
@@ -53,15 +69,17 @@ object TextOverlayRenderer:
     surface: RenderSurface,
     overlay: TextOverlayView,
     theme: Theme,
-    config: AppConfig
+    config: AppConfig,
+    cellMetrics: CellMetrics
   ): Unit =
-    val rect = overlay.rect
+    val rect  = overlay.rect
+    val frame = overlay.floatingGeometry(cellMetrics).frame
     if rect.width >= 2 && rect.height >= 2 then
-      surface.strokeRoundRect(
-        rect.x,
-        rect.y,
-        rect.width,
-        rect.height,
+      surface.strokeRoundRectAtPx(
+        frame.x.toFloat,
+        frame.y.toFloat,
+        frame.width.toFloat,
+        frame.height.toFloat,
         config.uiCornerRadiusPx,
         theme.border,
         config.uiOutlineThicknessPx.toFloat

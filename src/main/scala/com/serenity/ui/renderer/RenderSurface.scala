@@ -38,6 +38,17 @@ trait RenderSurface:
     strokeWidth: Float = 1.5f
   ): Unit = ()
 
+  /** Stroke a rounded rectangle at exact logical-pixel coordinates. */
+  def strokeRoundRectAtPx(
+    _xPx: Float,
+    _yPx: Float,
+    _widthPx: Float,
+    _heightPx: Float,
+    _arcPx: Int,
+    _color: Color,
+    _strokeWidth: Float = 1.5f
+  ): Unit = ()
+
   /** Restrict drawing performed by `render` to a rounded rectangle in cell coordinates. */
   def withRoundRectClip(
     x: Int,
@@ -47,6 +58,15 @@ trait RenderSurface:
     arcPx: Int
   )(render: => Unit): Unit
 
+  /** Restrict drawing performed by `render` to a rounded logical-pixel rectangle. */
+  def withRoundRectClipAtPx(
+    _xPx: Float,
+    _yPx: Float,
+    _widthPx: Float,
+    _heightPx: Float,
+    _arcPx: Int
+  )(render: => Unit): Unit = render
+
   def fillPixelRect(
     xPx: Int,
     yPx: Int,
@@ -54,6 +74,22 @@ trait RenderSurface:
     heightPx: Int,
     color: Color
   ): Unit = ()
+
+  /** Fill a rectangle at exact logical-pixel coordinates. */
+  def fillPixelRectAtPx(
+    xPx: Float,
+    yPx: Float,
+    widthPx: Float,
+    heightPx: Float,
+    color: Color
+  ): Unit =
+    fillPixelRect(
+      math.floor(xPx).toInt,
+      math.floor(yPx).toInt,
+      math.ceil(widthPx).toInt,
+      math.ceil(heightPx).toInt,
+      color
+    )
 
   /** Draw a proportional text run at exact pixel coordinates.
     *
