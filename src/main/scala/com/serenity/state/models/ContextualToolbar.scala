@@ -469,12 +469,10 @@ object ContextualToolbar:
     segments: List[List[ContextualToolbarItem]],
     mode: ToolbarDisplayMode
   ): Option[Int] =
-    (1 until segments.length).iterator
-      .map { splitIndex =>
-        estimatedRowWidth(segments.take(splitIndex).flatten, mode)
-          .max(estimatedRowWidth(segments.drop(splitIndex).flatten, mode))
-      }
-      .minOption
+    (1 until segments.length).iterator.map { splitIndex =>
+      estimatedRowWidth(segments.take(splitIndex).flatten, mode)
+        .max(estimatedRowWidth(segments.drop(splitIndex).flatten, mode))
+    }.minOption
 
   private def packItems(
     items: List[ContextualToolbarItem],
