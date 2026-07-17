@@ -173,6 +173,90 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runnerAfterLeft.activeCategory shouldBe CommandCategory.All
   }
 
+  it should "open the exact settings leaf selected from search" in {
+    val registry = CommandRegistry.default
+    val searched = List('a', 'n', 'i', 'm', 'a', 't', 'i', 'o', 'n', ' ', 'd', 'u', 'r', 'a', 't', 'i', 'o', 'n')
+      .foldLeft(activeState(registry)) { (state, char) =>
+        CommandRunnerReducer.reduce(RunnerInsertChar(char), state, registry).state
+      }
+
+    val opened = CommandRunnerReducer.reduce(RunnerSubmit, searched, registry).state
+    val runner = runnerFrom(opened)
+
+    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-animation")
+    runner.activeSubmenu
+      .flatMap(submenu => runner.submenuItems(submenu.groupId).lift(submenu.selectedIndex))
+      .map(_.id) shouldBe
+      Some("animation-duration")
+  }
+
+  it should "execute the global intent described by a direct setting search result" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(editingPresetName = Some("Review"))
+      .updateSearchTerm("default document")
+    val state = activeState(registry).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    runner.selectedItem.collect {
+      case item: CommandSurfaceItem.SettingSearchItem => (item.targetGroupId, item.sourceScope)
+    } shouldBe Some(("settings-document-defaults", "Global"))
+
+    val opened   = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
+    val executed = CommandRunnerReducer.reduce(RunnerSubmit, opened.state, registry)
+
+    executed.effects shouldBe List(
+      AppEffect.ExecuteCommand(
+        Command.typed(
+          "default-document-mode",
+          "Default Document",
+          CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.PlainText),
+          CommandCategory.Settings
+        )
+      )
+    )
+  }
+
+  it should "open a unique preset action selected from direct search" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("save preset")
+    val state = activeState(registry).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    runner.selectedItem.collect {
+      case item: CommandSurfaceItem.SettingSearchItem =>
+        (item.targetGroupId, item.targetItemId, item.sourceScope)
+    } shouldBe Some(("settings-preset-actions", "ui-preset-save", "Preset"))
+
+    val opened       = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
+    val openedRunner = runnerFrom(opened)
+    val selectedItem = openedRunner.activeSubmenu.flatMap { submenu =>
+      openedRunner.submenuItems(submenu.groupId).lift(submenu.selectedIndex)
+    }
+
+    openedRunner.activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-actions")
+    selectedItem.map(_.id) shouldBe Some("ui-preset-save")
+  }
+
   it should "search globally even when opened on a narrower category" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
@@ -447,6 +531,24 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "open an exact single-word setting search at its target" in {
+    val registry = CommandRegistry.default
+    val settingsState = (1 to 5).foldLeft(activeState(registry)) { (state, _) =>
+      CommandRunnerReducer.reduce(RunnerNextCategory, state, registry).state
+    }
+    val searched = "markdown".foldLeft(settingsState) { (state, char) =>
+      CommandRunnerReducer.reduce(RunnerInsertChar(char), state, registry).state
+    }
+
+    val opened = CommandRunnerReducer.reduce(RunnerSubmit, searched, registry)
+    val runner = runnerFrom(opened.state)
+
+    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-language")
+    runner.activeSubmenu
+      .flatMap(_.selectedItem(runner.submenuItems("settings-language")).map(_.id)) shouldBe Some("lang-markdown")
+    runner.activeSubmenu.map(_.searchTerm) shouldBe Some("")
+  }
+
   it should "open font family picker submenus and submit UI font choices" in {
     val registry = CommandRegistry.default
     val state    = settingsStateOnItem("settings-ui-font", "ui-font")
@@ -542,7 +644,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "carry root search into a matched settings submenu" in {
+  it should "open the matched settings leaf without filtering away its context" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val searchedRunner = CommandRunner.empty
@@ -560,14 +662,14 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       uiSurfaces = List(surface)
     )
 
-    searchedRunner.selectedItem.map(_.id) shouldBe Some("settings-interface-layout")
+    searchedRunner.selectedItem.map(_.id) shouldBe Some("settings-search:ui-outline-thickness")
 
     val entered = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val runner  = runnerFrom(entered.state)
 
     runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-interface-layout")
-    runner.activeSubmenu.map(_.searchTerm) shouldBe Some("UI Outline Thickness")
-    runner.focusedSubmenuItems.map(_.id) shouldBe List("ui-outline-thickness")
+    runner.activeSubmenu.map(_.searchTerm) shouldBe Some("")
+    runner.searchTerm shouldBe "UI Outline Thickness"
     runner.activeSubmenu.flatMap(
       _.selectedItemFromAll(runner.submenuItems("settings-interface-layout")).map(_.id)
     ) shouldBe

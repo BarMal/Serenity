@@ -242,6 +242,67 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       List("settings-animation")
   }
 
+  it should "return a unique leaf result with its breadcrumb for an exact settings search" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+      .updateSearchTerm("\"ANIMATION-duration\"")
+
+    runner.visibleItems.collect {
+      case item: CommandSurfaceItem.SettingSearchItem =>
+        (item.targetGroupId, item.targetItemId, item.label, item.breadcrumb)
+    } shouldBe List(
+      (
+        "settings-animation",
+        "animation-duration",
+        "Animation Duration",
+        "Settings > Appearance & Motion > Motion & Animation"
+      )
+    )
+  }
+
+  it should "describe duplicate settings as global until preset drafts have independent values and actions" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(editingPresetName = Some("Review"))
+      .updateSearchTerm("animation duration")
+
+    runner.visibleItems.collect {
+      case item: CommandSurfaceItem.SettingSearchItem if item.targetItemId == "animation-duration" =>
+        (item.targetGroupId, item.effectiveValue, item.sourceScope)
+    } shouldBe List(("settings-animation", Some("200"), "Global"))
+  }
+
+  it should "rank a normalized exact setting ahead of a prefix command" in {
+    val prefixCommand = Command.typed(
+      name = "quoted-animation-duration",
+      description = "A command whose label begins with the raw query.",
+      intent = CommandIntent.ToggleLineNumbers,
+      label = "\"ANIMATION-duration\" options"
+    )
+    val registry          = CommandRegistry(List(prefixCommand))
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("\"ANIMATION-duration\"")
+
+    runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-search:animation-duration")
+  }
+
+  it should "keep an exact settings group query as navigation rather than a leaf edit" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("ui font")
+
+    runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-ui-font")
+  }
+
   it should "surface visual appearance settings as an expandable group in settings browsing" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
@@ -828,9 +889,9 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .updateSearchTerm("lang-markdown")
 
-    runner.visibleItems.collectFirst { case group: CommandSurfaceItem.GroupItem => group.id } shouldBe Some(
-      "settings-language"
-    )
+    runner.visibleItems.collectFirst {
+      case item: CommandSurfaceItem.SettingSearchItem => (item.targetGroupId, item.targetItemId)
+    } shouldBe Some(("settings-language", "lang-markdown"))
   }
 
   it should "preserve selected built-in and custom UI presets in the settings submenu" in {

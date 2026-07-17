@@ -282,6 +282,21 @@ object CommandSurfaceItem:
 
     def withCurrentValue(v: String): InputItem = copy(currentValue = v)
 
+  /** A direct search target for a setting leaf, independent of its rendered label. */
+  case class SettingSearchItem(
+      id: String,
+      targetGroupId: String,
+      targetItemId: String,
+      label: String,
+      breadcrumb: String,
+      effectiveValue: Option[String],
+      sourceScope: String,
+      category: CommandCategory,
+      hint: Option[String] = None
+  ) extends CommandSurfaceItem:
+    override lazy val searchText: String =
+      s"$label ${effectiveValue.getOrElse("")} $sourceScope $breadcrumb ${hint.getOrElse("")}".trim
+
   case class GroupItem(
       id: String,
       label: String,

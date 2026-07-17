@@ -416,6 +416,18 @@ object SurfaceContentResolver:
         case (item: CommandSurfaceItem.InputItem, index) =>
           val editingText = if runner.editingItemId.contains(item.id) then Some(runner.editingText) else None
           inputRow(item, index == adjustedSelectedIndex, editingText)
+        case (item: CommandSurfaceItem.SettingSearchItem, index) =>
+          OverlayRow(
+            plainText = item.label,
+            selected = index == adjustedSelectedIndex,
+            segments = List(
+              OverlaySegment(item.label),
+              OverlaySegment(item.effectiveValue.getOrElse(""), tone = OverlayTone.Normal),
+              OverlaySegment(item.sourceScope, tone = OverlayTone.Normal),
+              OverlaySegment(item.breadcrumb, tone = OverlayTone.Normal)
+            ).filterNot(_.text.isEmpty),
+            layout = OverlayRowLayout.Columns
+          )
         case (group: CommandSurfaceItem.GroupItem, index) =>
           val groupLabel =
             if runner.searchTerm.nonEmpty then runner.settingsGroupBreadcrumbLabels(group.id).mkString(" > ")

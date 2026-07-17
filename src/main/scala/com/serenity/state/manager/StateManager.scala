@@ -226,11 +226,12 @@ object StateManager:
       else s"mode=search query=${runner.searchTerm} category=${runner.activeCategory}"
     val selectedPart =
       runner.selectedItem match
-        case Some(CommandSurfaceItem.CommandItem(command)) => s"selected=command:${command.name}"
-        case Some(option: CommandSurfaceItem.OptionItem)   => s"selected=option:${option.id}"
-        case Some(item: CommandSurfaceItem.InputItem)      => s"selected=input:${item.id}"
-        case Some(group: CommandSurfaceItem.GroupItem)     => s"selected=group:${group.id}"
-        case None                                          => "selected=none"
+        case Some(CommandSurfaceItem.CommandItem(command))    => s"selected=command:${command.name}"
+        case Some(option: CommandSurfaceItem.OptionItem)      => s"selected=option:${option.id}"
+        case Some(item: CommandSurfaceItem.InputItem)         => s"selected=input:${item.id}"
+        case Some(item: CommandSurfaceItem.SettingSearchItem) => s"selected=setting:${item.targetItemId}"
+        case Some(group: CommandSurfaceItem.GroupItem)        => s"selected=group:${group.id}"
+        case None                                             => "selected=none"
 
     s"event=$event $modePart $selectedPart"
 

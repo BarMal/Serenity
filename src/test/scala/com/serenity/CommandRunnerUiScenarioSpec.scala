@@ -1,7 +1,6 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.CommandSurfaceItem
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, SurfaceContent}
@@ -49,15 +48,12 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver = UiScenarioDriver.create("command-runner-settings", initialConfig = config).unsafeRunSync()
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     "blur radius".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
-    selectVisibleItem(driver, "settings-surface-appearance")
     driver.dispatch(Enter).unsafeRunSync()
-    driver.dispatch(Enter).unsafeRunSync()
-    (1 to 12).foreach(_ => driver.dispatch(DeleteBackward).unsafeRunSync())
     driver.dispatch(InsertChar('0')).unsafeRunSync()
     driver.dispatch(InsertChar('.')).unsafeRunSync()
     driver.dispatch(InsertChar('5')).unsafeRunSync()
     val editing = runnerFrom(driver.state.unsafeRunSync())
-    editing.activeSubmenu.map(_.editingText) shouldBe Some(".5")
+    editing.activeSubmenu.map(_.editingText) shouldBe Some("0.5")
 
     val frame     = driver.renderFrame("nested-decimal").unsafeRunSync()
     val surfaceId = frame.evidence.surfaceRects.keys.head
@@ -82,14 +78,3 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
       case SurfaceContent.CommandPalette(runner)              => runner
       case SurfaceContent.CommandPaletteSubmenu(runner, _, _) => runner
       case _                                                  => fail("Expected command runner content")
-
-  private def selectVisibleItem(driver: UiScenarioDriver, itemId: String): Unit =
-    val runner = runnerFrom(driver.state.unsafeRunSync())
-    val targetIndex = runner.visibleItems.indexWhere {
-      case group: CommandSurfaceItem.GroupItem => group.id == itemId
-      case _                                   => false
-    }
-    targetIndex should be >= 0
-    val moveCount = (targetIndex - runner.selectedIndex + runner.visibleItems.length) % runner.visibleItems.length
-    (0 until moveCount).foreach(_ => driver.dispatch(MoveDown).unsafeRunSync())
-    runnerFrom(driver.state.unsafeRunSync()).selectedItem.map(_.id) shouldBe Some(itemId)
