@@ -305,6 +305,16 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "render a bounded inline window without inspecting trailing source lines" in {
+    val lines =
+      Vector("# Visible heading", "Visible prose", "Visible tail") ++
+        Vector.tabulate(100_000)(index => s"Offscreen source line $index")
+
+    MarkdownDocumentPreview
+      .inlinePreviewRows(lines, firstSourceLine = 0, maxSourceLines = 3)
+      .map(_.text) shouldBe Vector("Visible heading", "Visible prose", "Visible tail")
+  }
+
   it should "fill the full split preview image with the panel background" in {
     val theme = Theme.default.copy(
       background = Color(10, 20, 30),
