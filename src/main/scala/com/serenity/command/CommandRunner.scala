@@ -481,7 +481,10 @@ case class CommandRunner(
       else directGlobalGroups ++ matchingGroups.map(_._1).filterNot(group => directGlobalGroups.contains(group))
 
   private def matchingSettingLeaves(term: String): List[CommandSurfaceItem.SettingSearchItem] =
-    settingLeaves
+    val leaves           = settingLeaves
+    val globalTargetIds  = leaves.filterNot(_.isPresetScoped).map(_.item.id).toSet
+    val directSearchable = leaves.filter(leaf => !leaf.isPresetScoped || !globalTargetIds.contains(leaf.item.id))
+    directSearchable
       .flatMap {
         case leaf =>
           val (group, item, breadcrumb) = (leaf.group, leaf.item, leaf.breadcrumb)
@@ -494,7 +497,7 @@ case class CommandRunner(
                 label = CommandRunner.itemLabel(item),
                 breadcrumb = breadcrumb,
                 effectiveValue = CommandRunner.itemEffectiveValue(item),
-                sourceScope = "Global",
+                sourceScope = if leaf.isPresetScoped then "Preset" else "Global",
                 category = CommandCategory.Settings,
                 hint = CommandRunner.itemHint(item)
               ),
@@ -510,7 +513,8 @@ case class CommandRunner(
   private case class SettingLeaf(
       group: CommandSurfaceItem.GroupItem,
       item: CommandSurfaceItem,
-      breadcrumb: String
+      breadcrumb: String,
+      isPresetScoped: Boolean
   )
 
   private def settingLeaves: List[SettingLeaf] =
@@ -519,20 +523,19 @@ case class CommandRunner(
       ancestorIds: List[String],
       ancestorLabels: List[String]
     ): List[SettingLeaf] =
-      if ancestorIds.contains("settings-ui-presets") || group.id == "settings-ui-presets" then Nil
-      else
-        group.children.flatMap {
-          case child: CommandSurfaceItem.GroupItem =>
-            loop(child, ancestorIds :+ group.id, ancestorLabels :+ group.label)
-          case child =>
-            List(
-              SettingLeaf(
-                group = group,
-                item = child,
-                breadcrumb = (("Settings" :: ancestorLabels) :+ group.label).mkString(" > ")
-              )
+      group.children.flatMap {
+        case child: CommandSurfaceItem.GroupItem =>
+          loop(child, ancestorIds :+ group.id, ancestorLabels :+ group.label)
+        case child =>
+          List(
+            SettingLeaf(
+              group = group,
+              item = child,
+              breadcrumb = (("Settings" :: ancestorLabels) :+ group.label).mkString(" > "),
+              isPresetScoped = ancestorIds.contains("settings-ui-presets") || group.id == "settings-ui-presets"
             )
-        }
+          )
+      }
 
     settingsGroups.flatMap(group => loop(group, Nil, Nil))
 
