@@ -322,8 +322,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         panelCloseTransitionKind = Some(TransitionKind.Disabled),
         uiAnimation = AnimationConfig.subtle,
         commandRunnerVisibleRows = Some(9),
-        commandRunnerItemGapRows = 1,
-        commandRunnerCursorGapRows = Some(3),
+        commandRunnerItemGapRows = 0.25,
+        commandRunnerCursorGapRows = Some(0.75),
         renderFpsTarget = RenderFpsTarget.Fps120,
         cursorConfig = CursorConfig(
           mode = CursorMode.Breathe,
@@ -344,7 +344,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         ),
         interfaceConfig = InterfaceConfig(
           density = InterfaceDensity.Spacious,
-          elementGap = 3,
+          elementGap = 0.5,
           cornerRadiusPx = 12,
           outlineThicknessPx = 4
         ),
@@ -386,8 +386,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
     decoded.config.uiAnimation shouldBe AnimationConfig.subtle
     decoded.config.commandRunnerVisibleRows shouldBe Some(9)
-    decoded.config.commandRunnerItemGapRows shouldBe 1
-    decoded.config.commandRunnerCursorGapRows shouldBe Some(3)
+    decoded.config.commandRunnerItemGapRows shouldBe 0.25
+    decoded.config.commandRunnerCursorGapRows shouldBe Some(0.75)
     decoded.config.renderFpsTarget shouldBe RenderFpsTarget.Fps120
     decoded.config.cursorConfig shouldBe CursorConfig(
       mode = CursorMode.Breathe,
@@ -408,7 +408,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     )
     decoded.config.interfaceConfig shouldBe InterfaceConfig(
       density = InterfaceDensity.Spacious,
-      elementGap = 3,
+      elementGap = 0.5,
       cornerRadiusPx = 12,
       outlineThicknessPx = 4
     )

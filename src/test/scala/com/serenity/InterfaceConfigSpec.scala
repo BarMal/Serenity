@@ -59,7 +59,7 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
         .parse(AppConfig.default, "interface_density", "spacious")
         .getOrElse(fail("density parse"))
     val gapConfig =
-      InterfaceConfig.Schema.parse(AppConfig.default, "ui.element_gap", "4").getOrElse(fail("gap parse"))
+      InterfaceConfig.Schema.parse(AppConfig.default, "ui.element_gap", "0.5").getOrElse(fail("gap parse"))
     val radiusConfig =
       InterfaceConfig.Schema.parse(AppConfig.default, "ui_corner_radius", "14").getOrElse(fail("radius parse"))
     val outlineConfig =
@@ -68,7 +68,7 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
         .getOrElse(fail("outline parse"))
 
     densityConfig.interfaceConfig.density.shouldBe(InterfaceDensity.Spacious)
-    gapConfig.interfaceConfig.elementGap.shouldBe(4)
+    gapConfig.interfaceConfig.elementGap.shouldBe(0.5)
     radiusConfig.interfaceConfig.cornerRadiusPx.shouldBe(14)
     outlineConfig.interfaceConfig.outlineThicknessPx.shouldBe(5)
     InterfaceConfig.Schema.parse(AppConfig.default, "interface.density", "unknown").shouldBe(None)
@@ -78,6 +78,8 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
     InterfaceConfig.Schema.invalidValue("interface.density", "compact").shouldBe(false)
     InterfaceConfig.Schema.invalidValue("interface.density", "unknown").shouldBe(true)
     InterfaceConfig.Schema.invalidValue("ui.element_gap", "wide").shouldBe(true)
+    InterfaceConfig.Schema.invalidValue("ui.element_gap", "8.25").shouldBe(true)
+    InterfaceConfig.Schema.invalidValue("ui.element_gap", "NaN").shouldBe(true)
     InterfaceConfig.Schema.invalidValue("ui.corner_radius", "14").shouldBe(false)
     InterfaceConfig.Schema.invalidValue("ui.outline.thickness", "").shouldBe(true)
   }

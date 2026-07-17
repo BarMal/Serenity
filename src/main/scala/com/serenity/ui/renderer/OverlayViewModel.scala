@@ -174,7 +174,7 @@ object OverlayViewModel:
       case com.serenity.state.models.SurfaceContent.CommandPalette(_) |
           com.serenity.state.models.SurfaceContent.CommandPaletteSubmenu(_, _, _) |
           com.serenity.state.models.SurfaceContent.ContextMenu(_) =>
-        state.config.commandRunnerItemGapRows
+        state.config.commandRunnerItemGapRows.ceil.toInt
       case _ => 0
 
   private def alphaMultiplierFor(surface: com.serenity.state.models.UiSurface, state: AppState): Float =

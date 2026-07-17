@@ -471,17 +471,17 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     val configFile = Files.createTempFile("serenity-command-spacing-config", ".conf")
     Files.writeString(
       configFile,
-      """command_runner.item_gap_rows = 1
-        |command_runner.cursor_gap_rows = 3
+      """command_runner.item_gap_rows = 0.25
+        |command_runner.cursor_gap_rows = 0.75
         |""".stripMargin
     )
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.commandRunnerItemGapRows shouldBe 1
-    config.commandRunnerCursorGapRows shouldBe Some(3)
-    ConfigManager.configToString(config) should include("command_runner.item_gap_rows = 1")
-    ConfigManager.configToString(config) should include("command_runner.cursor_gap_rows = 3")
+    config.commandRunnerItemGapRows shouldBe 0.25
+    config.commandRunnerCursorGapRows shouldBe Some(0.75)
+    ConfigManager.configToString(config) should include("command_runner.item_gap_rows = 0.25")
+    ConfigManager.configToString(config) should include("command_runner.cursor_gap_rows = 0.75")
   }
 
   it should "load and write render FPS targets" in {
@@ -568,14 +568,14 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     val configFile = Files.createTempFile("serenity-ui-gap-config", ".conf")
     Files.writeString(
       configFile,
-      """ui.element_gap = 3
+      """ui.element_gap = 0.5
         |""".stripMargin
     )
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.uiElementGap shouldBe 3
-    ConfigManager.configToString(config) should include("ui.element_gap = 3")
+    config.uiElementGap shouldBe 0.5
+    ConfigManager.configToString(config) should include("ui.element_gap = 0.5")
   }
 
   it should "load and write UI corner radius" in {

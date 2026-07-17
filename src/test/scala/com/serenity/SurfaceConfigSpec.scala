@@ -65,14 +65,14 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   it should "leave interface settings owned by InterfaceConfig" in {
     val config = AppConfig.default
       .withInterfaceDensity(InterfaceDensity.Spacious)
-      .withUiElementGap(3)
+      .withUiElementGap(0.5)
       .withUiCornerRadiusPx(12)
       .withUiOutlineThicknessPx(4)
 
     config.interfaceConfig.shouldBe(
       InterfaceConfig(
         density = InterfaceDensity.Spacious,
-        elementGap = 3,
+        elementGap = 0.5,
         cornerRadiusPx = 12,
         outlineThicknessPx = 4
       )
@@ -111,19 +111,21 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
       .map(_.surfaceConfig.commandRunnerVisibleRows)
       .shouldBe(Some(None))
     SurfaceConfig.Schema
-      .parse(AppConfig.default, "command_runner.item_gap_rows", "1")
+      .parse(AppConfig.default, "command_runner.item_gap_rows", "0.25")
       .map(_.surfaceConfig.commandRunnerItemGapRows)
-      .shouldBe(Some(1))
+      .shouldBe(Some(0.25))
     SurfaceConfig.Schema
-      .parse(AppConfig.default, "command_runner.cursor_gap_rows", "3")
+      .parse(AppConfig.default, "command_runner.cursor_gap_rows", "0.75")
       .map(_.surfaceConfig.commandRunnerCursorGapRows)
-      .shouldBe(Some(Some(3)))
+      .shouldBe(Some(Some(0.75)))
     renderFpsConfig.surfaceConfig.renderFpsTarget.shouldBe(RenderFpsTarget.Uncapped)
     wordWrapConfig.surfaceConfig.wordWrapEnabled.shouldBe(false)
     focusedTextBodyConfig.surfaceConfig.focusedTextBodyEnabled.shouldBe(true)
     contextualToolbarConfig.surfaceConfig.contextualToolbarEnabled.shouldBe(false)
     toolbarModeConfig.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.IconAndText)
     SurfaceConfig.Schema.parse(AppConfig.default, "render.fps", "turbo").shouldBe(None)
+    SurfaceConfig.Schema.parse(AppConfig.default, "command_runner.item_gap_rows", "8.25").shouldBe(None)
+    SurfaceConfig.Schema.parse(AppConfig.default, "command_runner.cursor_gap_rows", "NaN").shouldBe(None)
   }
 
   it should "parse surface motion config entries centrally" in {
