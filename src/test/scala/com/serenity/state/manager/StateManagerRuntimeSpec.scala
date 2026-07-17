@@ -110,6 +110,11 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
         fileDialog = FileDialog.unavailable
       )
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        documentAnalysisFiberRef,
+        logger
+      )
       composition = new StateManagerComposition(
         runtime.stateRef,
         runtime.undoRef,
@@ -129,7 +134,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         runtime.fileDialog,
         runtime.fileManager,
         runtime.sessionManager,
-        runtime.sessionPersistence
+        runtime.sessionPersistence,
+        operations
       )
       _         <- documentAnalysisFiberRef.set(Some(pendingAnalysis))
       _         <- composition.forceQuit()

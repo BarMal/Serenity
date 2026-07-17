@@ -191,11 +191,13 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   it should "preserve effect-triggered event order at the operation boundary" in {
     val stateRef = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
     val fiberRef = Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None).unsafeRunSync()
-    val operations = StateManagerOperationBoundary.create(
-      stateRef,
-      fiberRef,
-      org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
-    )
+    val operations = StateManagerOperationBoundary
+      .create(
+        stateRef,
+        fiberRef,
+        org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
+      )
+      .unsafeRunSync()
 
     (operations.enqueueEvent(Copy) >>
       operations.enqueueEvent(Paste) >>
@@ -206,13 +208,45 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     operations.takeOperations.unsafeRunSync() shouldBe Nil
   }
 
+  it should "coordinate document analysis scheduling with shutdown" in {
+    val program = for
+      stateRef           <- Ref.of[IO, AppState](AppState.initial)
+      fiberRef           <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
+      scheduleStarted    <- cats.effect.Deferred[IO, Unit]
+      continueScheduling <- cats.effect.Deferred[IO, Unit]
+      shutdownRequested  <- cats.effect.Deferred[IO, Unit]
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        fiberRef,
+        org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
+        beforeDocumentAnalysisStart = scheduleStarted.complete(()).void >> continueScheduling.get,
+        beforeDocumentAnalysisShutdown = shutdownRequested.complete(()).void
+      )
+      scheduling    <- operations.scheduleDocumentAnalysis().start
+      _             <- scheduleStarted.get
+      shutdown      <- operations.cancelDocumentAnalysis().start
+      _             <- shutdownRequested.get
+      _             <- continueScheduling.complete(())
+      _             <- scheduling.joinWithNever
+      _             <- shutdown.joinWithNever
+      pending       <- fiberRef.get
+      _             <- pending.fold(IO.unit)(_.cancel)
+      _             <- operations.scheduleDocumentAnalysis()
+      afterShutdown <- fiberRef.get
+    yield
+      pending shouldBe None
+      afterShutdown shouldBe None
+
+    program.unsafeRunSync()
+  }
+
   it should "commit a reducer state before interpreting its effect" in {
     val initialState   = AppState.initial
     val committedState = initialState.copy(nextBufferId = BufferId(42))
     val program = for
       stateRef <- Ref.of[IO, AppState](initialState)
       fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
-      operations = StateManagerOperationBoundary.create(
+      operations <- StateManagerOperationBoundary.create(
         stateRef,
         fiberRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
@@ -241,7 +275,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val program = for
       stateRef <- Ref.of[IO, AppState](initialState)
       fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
-      operations = StateManagerOperationBoundary.create(
+      operations <- StateManagerOperationBoundary.create(
         stateRef,
         fiberRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]

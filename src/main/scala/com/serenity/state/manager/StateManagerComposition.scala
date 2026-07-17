@@ -5,7 +5,7 @@ import java.nio.file.Path
 import scala.concurrent.duration.*
 
 import cats.effect.*
-import cats.effect.std.Queue
+import cats.effect.std.{Queue, Semaphore}
 import cats.syntax.foldable.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.PreferredWindowSize
@@ -70,7 +70,11 @@ final private[manager] class StateManagerOperationBoundary private (
     pendingOperations: Ref[IO, List[StateManagerOperation]],
     stateRef: Ref[IO, AppState],
     documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
-    logger: Logger[IO]
+    logger: Logger[IO],
+    analysisLifecycleLock: Semaphore[IO],
+    documentAnalysisShutdownRef: Ref[IO, Boolean],
+    beforeDocumentAnalysisStart: IO[Unit],
+    beforeDocumentAnalysisShutdown: IO[Unit]
 ):
   private val DocumentAnalysisDebounce = 150.millis
 
@@ -116,15 +120,24 @@ final private[manager] class StateManagerOperationBoundary private (
           stateRef.set(fallbackState)
 
   def scheduleDocumentAnalysis(): IO[Unit] =
-    for
-      previous <- documentAnalysisFiberRef.getAndSet(None)
-      _        <- previous.traverse_(_.cancel)
-      fiber    <- documentAnalysisJob.start
-      _        <- documentAnalysisFiberRef.set(Some(fiber))
-    yield ()
+    analysisLifecycleLock.permit.use { _ =>
+      documentAnalysisShutdownRef.get.ifM(
+        IO.unit,
+        for
+          previous <- documentAnalysisFiberRef.getAndSet(None)
+          _        <- previous.traverse_(_.cancel)
+          _        <- beforeDocumentAnalysisStart
+          fiber    <- documentAnalysisJob.start
+          _        <- documentAnalysisFiberRef.set(Some(fiber))
+        yield ()
+      )
+    }
 
   def cancelDocumentAnalysis(): IO[Unit] =
-    documentAnalysisFiberRef.getAndSet(None).flatMap(_.traverse_(_.cancel))
+    beforeDocumentAnalysisShutdown >> analysisLifecycleLock.permit.use { _ =>
+      documentAnalysisShutdownRef.set(true) >>
+        documentAnalysisFiberRef.getAndSet(None).flatMap(_.traverse_(_.cancel))
+    }
 
   private def documentAnalysisJob: IO[Unit] =
     (IO.sleep(DocumentAnalysisDebounce) >>
@@ -144,13 +157,23 @@ private[manager] object StateManagerOperationBoundary:
   def create(
     stateRef: Ref[IO, AppState],
     documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
-    logger: Logger[IO]
-  ): StateManagerOperationBoundary =
-    new StateManagerOperationBoundary(
-      Ref.unsafe[IO, List[StateManagerOperation]](Nil),
+    logger: Logger[IO],
+    beforeDocumentAnalysisStart: IO[Unit] = IO.unit,
+    beforeDocumentAnalysisShutdown: IO[Unit] = IO.unit
+  ): IO[StateManagerOperationBoundary] =
+    for
+      pendingOperations           <- Ref.of[IO, List[StateManagerOperation]](Nil)
+      analysisLifecycleLock       <- Semaphore[IO](1)
+      documentAnalysisShutdownRef <- Ref.of[IO, Boolean](false)
+    yield new StateManagerOperationBoundary(
+      pendingOperations,
       stateRef,
       documentAnalysisFiberRef,
-      logger
+      logger,
+      analysisLifecycleLock,
+      documentAnalysisShutdownRef,
+      beforeDocumentAnalysisStart,
+      beforeDocumentAnalysisShutdown
     )
 
 /** Owns file persistence state updates shared by command effects and file workflows. */
@@ -324,7 +347,8 @@ private[manager] class StateManagerComposition(
     val fileDialog: com.serenity.io.FileDialog,
     val fileManager: FileManager,
     val sessionManager: SessionManager,
-    val sessionPersistence: SessionPersistence
+    val sessionPersistence: SessionPersistence,
+    operations: StateManagerOperationBoundary
 )(using providedBalance: Balance):
 
   private val runtimeStateRef                 = stateRef
@@ -344,8 +368,6 @@ private[manager] class StateManagerComposition(
   private val runtimeFileDialog               = fileDialog
   private val runtimeFileManager              = fileManager
   private val runtimeSessionPersistence       = sessionPersistence
-  private val operations =
-    StateManagerOperationBoundary.create(runtimeStateRef, runtimeDocumentAnalysisFiberRef, runtimeLogger)
   private val filePersistence =
     new StateManagerFilePersistence(runtimeStateRef, runtimeFileManager, runtimeSessionPersistence, runtimeLogger)
 
