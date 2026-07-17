@@ -230,6 +230,18 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "return one unambiguous global motion target for an animation search" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+      .updateSearchTerm("animation")
+
+    runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group.id } shouldBe
+      List("settings-animation")
+  }
+
   it should "surface visual appearance settings as an expandable group in settings browsing" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
