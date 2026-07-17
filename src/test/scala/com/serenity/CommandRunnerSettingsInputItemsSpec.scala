@@ -63,3 +63,13 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
     inputById(items, "keymap-global-command_palette").parse("reset") shouldBe
       Some(CommandIntent.ResetGlobalHotkey(com.serenity.config.HotkeyAction.ToggleCommandRunner))
   }
+
+  it should "accept decimal floating-surface spacing values" in {
+    val items = CommandRunnerSettingsInputItems.build(AppConfig.default)
+
+    inputById(items, "ui-element-gap").parse("0.25") shouldBe Some(CommandIntent.SetUiElementGap(0.25))
+    inputById(items, "command-runner-item-gap-rows").parse("0.5") shouldBe
+      Some(CommandIntent.SetCommandRunnerItemGapRows(0.5))
+    inputById(items, "command-runner-cursor-gap-rows").parse("0.75") shouldBe
+      Some(CommandIntent.SetCommandRunnerCursorGapRows(Some(0.75)))
+  }

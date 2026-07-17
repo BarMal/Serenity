@@ -6,6 +6,21 @@ import org.scalatest.matchers.should.Matchers
 
 class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
 
+  "FloatingSurfaceGeometry" should "retain fractional row gaps in logical pixels" in {
+    val geometry = FloatingSurfaceGeometry(
+      frame = LogicalPixelRect(80.0, 40.0, 320.0, 240.0),
+      cellWidthPx = 8.0,
+      lineHeightPx = 20.0,
+      borderPx = 2.0,
+      itemGapRows = 0.25
+    )
+
+    geometry.contentRect shouldBe LogicalPixelRect(82.0, 42.0, 316.0, 236.0)
+    geometry.itemRect(index = 1, headerRows = 1) shouldBe LogicalPixelRect(82.0, 87.0, 316.0, 20.0)
+    geometry.itemIndexAt(100.0, 70.0, itemCount = 3, headerRows = 1) shouldBe Some(0)
+    geometry.itemIndexAt(100.0, 104.0, itemCount = 3, headerRows = 1) shouldBe None
+  }
+
   "SurfaceFrameLayout" should "derive content bounds from a framed overlay rectangle" in {
     val frame = SurfaceFrameLayout(LayoutRect(10, 4, 40, 8))
 

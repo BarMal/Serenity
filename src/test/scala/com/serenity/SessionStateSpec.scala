@@ -21,6 +21,19 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  "AppConfig session codec" should "preserve decimal floating-surface spacing" in {
+    val config = AppConfig.default
+      .withUiElementGap(0.25)
+      .withCommandRunnerItemGapRows(0.5)
+      .withCommandRunnerCursorGapRows(Some(0.75))
+
+    val decoded = config.asJson.as[AppConfig]
+
+    decoded.map(_.uiElementGap) shouldBe Right(0.25)
+    decoded.map(_.commandRunnerItemGapRows) shouldBe Right(0.5)
+    decoded.map(_.commandRunnerCursorGapRows) shouldBe Right(Some(0.75))
+  }
+
   "SessionState" should "restore clean file-backed buffers from disk content" in {
     val tempFile = Files.createTempFile("session-state-clean", ".txt")
     Files.writeString(tempFile, "content from disk")

@@ -493,8 +493,10 @@ object ConfigManager:
       case TransitionKind.Disabled               => "off"
       case TransitionKind.OutlineThenContent     => "outline"
 
-  private def parseUiElementGap(value: String): Option[Int] =
-    value.toIntOption.filter(gap => gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap)
+  private def parseUiElementGap(value: String): Option[Double] =
+    value.toDoubleOption.filter(gap =>
+      gap.isFinite && gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap
+    )
 
   private def parseUiCornerRadiusPx(value: String): Option[Int] =
     value.toIntOption.filter(radius =>

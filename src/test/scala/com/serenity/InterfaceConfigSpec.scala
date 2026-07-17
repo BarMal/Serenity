@@ -74,6 +74,16 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
     InterfaceConfig.Schema.parse(AppConfig.default, "interface.density", "unknown").shouldBe(None)
   }
 
+  it should "preserve decimal element gaps and reject non-finite values" in {
+    val decimal = InterfaceConfig.Schema
+      .parse(AppConfig.default, "ui.element_gap", "0.25")
+      .getOrElse(fail("decimal gap parse"))
+
+    decimal.interfaceConfig.elementGap shouldBe 0.25
+    InterfaceConfig.Schema.parse(AppConfig.default, "ui.element_gap", "NaN") shouldBe None
+    InterfaceConfig.Schema.parse(AppConfig.default, "ui.element_gap", "Infinity") shouldBe None
+  }
+
   it should "validate interface config entries centrally" in {
     InterfaceConfig.Schema.invalidValue("interface.density", "compact").shouldBe(false)
     InterfaceConfig.Schema.invalidValue("interface.density", "unknown").shouldBe(true)
