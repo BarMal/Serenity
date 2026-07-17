@@ -109,6 +109,7 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
 
   case class StrokeRoundRectCall(x: Int, y: Int, w: Int, h: Int, arcPx: Int, color: Color, strokeWidth: Float)
   private val strokeRoundRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[StrokeRoundRectCall]
+
   case class StrokeRoundRectAtPxCall(
       xPx: Float,
       yPx: Float,
@@ -118,6 +119,7 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
       color: Color,
       strokeWidth: Float
   )
+
   private val strokeRoundRectAtPxCallsBuffer = scala.collection.mutable.ListBuffer.empty[StrokeRoundRectAtPxCall]
   case class BlurRegionCall(x: Int, y: Int, width: Int, height: Int, radius: Float)
   private val blurRegionCallsBuffer = scala.collection.mutable.ListBuffer.empty[BlurRegionCall]
@@ -150,6 +152,15 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
     strokeWidth: Float = 1.5f
   ): Unit =
     strokeRoundRectAtPxCallsBuffer += StrokeRoundRectAtPxCall(xPx, yPx, widthPx, heightPx, arcPx, color, strokeWidth)
+    strokeRoundRectCallsBuffer += StrokeRoundRectCall(
+      math.floor(xPx).toInt,
+      math.floor(yPx).toInt,
+      math.ceil(widthPx).toInt,
+      math.ceil(heightPx).toInt,
+      arcPx,
+      color,
+      strokeWidth
+    )
 
   def strokeRoundRectAtPxCalls: List[StrokeRoundRectAtPxCall] = strokeRoundRectAtPxCallsBuffer.toList
 
