@@ -53,7 +53,10 @@ case class CommandRunner(
     else
       val (strongCommandMatches, remainingCommandMatches) =
         commandItems.partition(item => CommandRunner.isStrongCommandMatch(item.command, searchTerm))
-      strongCommandMatches ++ matchingSettingsResults(searchTerm) ++ remainingCommandMatches
+      val settingsMatches = matchingSettingsResults(searchTerm)
+      val (exactSettingsMatches, remainingSettingsMatches) =
+        settingsMatches.partition(item => CommandRunner.isExactSettingsTarget(item, searchTerm))
+      exactSettingsMatches ++ strongCommandMatches ++ remainingSettingsMatches ++ remainingCommandMatches
 
   def selectedItem: Option[CommandSurfaceItem] =
     visibleItems.lift(selectedIndex)
@@ -437,6 +440,7 @@ case class CommandRunner(
       val leafResults = matchingSettingLeaves(lowerTerm)
       exactSettingsGroup(lowerTerm) match
         case Some(exactGroup)                                                                => List(exactGroup)
+        case None if leafResults.exists(CommandRunner.isExactSettingsTarget(_, lowerTerm))   => leafResults
         case None if CommandRunner.isSpecificSettingQuery(lowerTerm) && leafResults.nonEmpty => leafResults
         case None => matchingSettingsGroups(lowerTerm)
 
@@ -557,6 +561,18 @@ object CommandRunner:
 
   private def isSpecificSettingQuery(term: String): Boolean =
     term.split(" ").count(_.nonEmpty) > 1
+
+  private def isExactSettingsTarget(item: CommandSurfaceItem, term: String): Boolean =
+    item match
+      case item: CommandSurfaceItem.SettingSearchItem =>
+        val label = normalizedSearchTerm(item.label)
+        val id    = normalizedSearchTerm(item.targetItemId)
+        label == term || id == term
+      case item: CommandSurfaceItem.GroupItem =>
+        val label = normalizedSearchTerm(item.label)
+        val id    = normalizedSearchTerm(item.id)
+        label == term || id == term
+      case _ => false
 
   private def settingSearchRank(item: CommandSurfaceItem, breadcrumb: String, term: String): Option[Int] =
     val label         = normalizedSearchTerm(itemLabel(item))
