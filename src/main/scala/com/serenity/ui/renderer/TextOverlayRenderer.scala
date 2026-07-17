@@ -121,7 +121,8 @@ object TextOverlayRenderer:
             defaultForeground = Some(animFg),
             defaultBackground = Some(animBg),
             font = font,
-            cellMetrics = cellMetrics
+            cellMetrics = cellMetrics,
+            pixelY = Option.when(overlay.itemGapRows % 1.0 != 0.0)(itemGeometry.map(_.y.round.toInt)).flatten
           )
         }
       }
@@ -137,11 +138,13 @@ object TextOverlayRenderer:
     defaultForeground: Option[Color],
     defaultBackground: Option[Color],
     font: java.awt.Font,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    pixelY: Option[Int]
   ): Unit =
-    val rowView = scrolledRowView(row, width)
-    val baseFg  = defaultForeground.getOrElse(theme.panel.foreground)
-    val baseBg  = defaultBackground.getOrElse(theme.panel.background)
+    val rowSurface = pixelY.fold(surface)(new PixelAlignedRowSurface(surface, _, cellMetrics))
+    val rowView    = scrolledRowView(row, width)
+    val baseFg     = defaultForeground.getOrElse(theme.panel.foreground)
+    val baseBg     = defaultBackground.getOrElse(theme.panel.background)
     val rowBackground =
       rowView.row.backgroundColor
         .map(color => withAlpha(color, baseBg.getAlpha))
@@ -153,31 +156,31 @@ object TextOverlayRenderer:
     val rowLeftXPx  = cellMetrics.toPixelX(x)
     val rowRightXPx = cellMetrics.toPixelX(x + width)
 
-    surface.setForegroundColor(rowForeground)
-    surface.setBackgroundColor(rowBackground)
-    CharacterRenderer.renderStringPlain(surface, x, y, " " * width)
+    rowSurface.setForegroundColor(rowForeground)
+    rowSurface.setBackgroundColor(rowBackground)
+    CharacterRenderer.renderStringPlain(rowSurface, x, y, " " * width)
 
     rowView.row.layout match
       case OverlayRowLayout.Plain =>
         if rowView.row.segments.nonEmpty then
-          renderInlineSegments(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
-        else if rowView.useMeasuredCursor && shouldUseMeasuredCursor(font, surface) then
-          renderMeasuredPlainRow(surface, x, y, width, rowView.row.plainText, font, cellMetrics, rowRightXPx)
-        else CharacterRenderer.renderStringPlain(surface, x, y, rowView.row.plainText.take(width))
+          renderInlineSegments(rowSurface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+        else if rowView.useMeasuredCursor && shouldUseMeasuredCursor(font, rowSurface) then
+          renderMeasuredPlainRow(rowSurface, x, y, width, rowView.row.plainText, font, cellMetrics, rowRightXPx)
+        else CharacterRenderer.renderStringPlain(rowSurface, x, y, rowView.row.plainText.take(width))
       case OverlayRowLayout.Distributed =>
-        renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+        renderDistributedRow(rowSurface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
       case OverlayRowLayout.Split =>
-        renderSplitRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+        renderSplitRow(rowSurface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
       case OverlayRowLayout.Columns =>
-        renderColumnRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+        renderColumnRow(rowSurface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
 
     if cursorVisible then
       rowView.row.cursorColumn
         .flatMap(cursorColumn => cursorPlacement(rowView.row, x, width, cursorColumn, rowView.useMeasuredCursor))
         .foreach { placement =>
-          if placement.useMeasured && shouldUseMeasuredCursor(font, surface) then
+          if placement.useMeasured && shouldUseMeasuredCursor(font, rowSurface) then
             renderMeasuredCursor(
-              surface,
+              rowSurface,
               placement.x,
               y,
               placement.textBeforeCursor,
@@ -188,10 +191,72 @@ object TextOverlayRenderer:
               rowRightXPx
             )
           else if placement.cellColumn >= 0 && placement.cellColumn < width then
-            surface.setForegroundColor(theme.background)
-            surface.setBackgroundColor(theme.cursor)
-            CharacterRenderer.renderChar(surface, placement.x + placement.cellColumn, y, ' ')
+            rowSurface.setForegroundColor(theme.background)
+            rowSurface.setBackgroundColor(theme.cursor)
+            CharacterRenderer.renderChar(rowSurface, placement.x + placement.cellColumn, y, ' ')
         }
+
+  /** Adapts the cell-based row renderer to one authoritative logical-pixel item top. */
+  private class PixelAlignedRowSurface(delegate: RenderSurface, rowYPx: Int, metrics: CellMetrics)
+      extends RenderSurface:
+    override def setFont(font: Font): Unit              = delegate.setFont(font)
+    override def fontRenderContext                      = delegate.fontRenderContext
+    override def setForegroundColor(color: Color): Unit = delegate.setForegroundColor(color)
+    override def setBackgroundColor(color: Color): Unit = delegate.setBackgroundColor(color)
+    override def getBackgroundColor: Color              = delegate.getBackgroundColor
+
+    override def putString(x: Int, _y: Int, s: String): Unit =
+      delegate.drawRunPx(
+        metrics.toPixelX(x).toFloat,
+        rowYPx,
+        s.length * metrics.charWidth,
+        metrics.lineHeight,
+        metrics.ascent,
+        s
+      )
+
+    override def fillRect(x: Int, _y: Int, width: Int, height: Int, char: Char): Unit =
+      delegate.fillPixelRect(
+        metrics.toPixelX(x),
+        rowYPx,
+        width * metrics.charWidth,
+        height * metrics.lineHeight,
+        delegate.getBackgroundColor
+      )
+
+    override def enableStyle(style: com.serenity.ui.theme.TextStyle): Unit  = delegate.enableStyle(style)
+    override def disableStyle(style: com.serenity.ui.theme.TextStyle): Unit = delegate.disableStyle(style)
+    override def setAlpha(alpha: Float): Unit                               = delegate.setAlpha(alpha)
+    override def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
+      delegate.blurRegion(x, y, width, height, radius)
+    override def applyPostProcessing(effect: com.serenity.config.PostProcessingEffect): Unit =
+      delegate.applyPostProcessing(effect)
+    override def devicePixelScaleX: Double = delegate.devicePixelScaleX
+    override def devicePixelScaleY: Double = delegate.devicePixelScaleY
+
+    override def strokeRoundRect(
+      x: Int,
+      y: Int,
+      width: Int,
+      height: Int,
+      arcPx: Int,
+      color: Color,
+      strokeWidth: Float
+    ): Unit =
+      delegate.strokeRoundRect(x, y, width, height, arcPx, color, strokeWidth)
+
+    override def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, arcPx: Int)(render: => Unit): Unit =
+      delegate.withRoundRectClip(x, y, width, height, arcPx)(render)
+    override def fillPixelRect(xPx: Int, _yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit =
+      delegate.fillPixelRect(xPx, rowYPx, widthPx, heightPx, color)
+    override def drawRunPx(xPx: Float, _yPx: Int, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit =
+      delegate.drawRunPx(xPx, rowYPx, bgWidthPx, lineHeightPx, ascentPx, s)
+    override def drawImage(image: java.awt.image.BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
+      delegate.drawImage(image, x, y, width, height)
+    override def hideCursor(): Unit  = delegate.hideCursor()
+    override def viewportWidth: Int  = delegate.viewportWidth
+    override def viewportHeight: Int = delegate.viewportHeight
+    override def flush(): Unit       = delegate.flush()
 
   private case class OverlayRowView(row: OverlayRow, useMeasuredCursor: Boolean)
 

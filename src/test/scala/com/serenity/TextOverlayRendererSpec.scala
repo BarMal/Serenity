@@ -257,6 +257,34 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     surface.getRow(2).slice(1, 3) shouldBe "  "
   }
 
+  it should "paint fractional-gap item backgrounds and labels at their pixel hit rectangles" in {
+    val surface = new MockRenderSurface(40, 12)
+    val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(1, 1, 20, 6),
+      borderCells = 0,
+      rows = List(OverlayRow("first"), OverlayRow("second")),
+      itemGapRows = 0.25
+    )
+    val geometry = overlay.geometry(metrics)
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    geometry.items.zip(List("first", "second")).zipWithIndex.foreach {
+      case ((bounds, label), index) =>
+        val paintBounds = surface.fillPixelRectCalls.find(call =>
+          call.xPx == bounds.x.round.toInt &&
+            call.yPx == bounds.y.round.toInt &&
+            call.widthPx == bounds.width.round.toInt &&
+            call.heightPx == bounds.height.round.toInt
+        )
+        paintBounds.getOrElse(fail(s"expected painted bounds for item $index"))
+        surface.drawRunPxCalls.find(_.s == label).map(_.yPx) shouldBe Some(bounds.y.round.toInt)
+        geometry.itemAt(bounds.x + 1.0, bounds.y + 1.0) shouldBe Some(index)
+    }
+  }
+
   it should "derive row slots from an explicit overlay content rect" in {
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 10, 6),
