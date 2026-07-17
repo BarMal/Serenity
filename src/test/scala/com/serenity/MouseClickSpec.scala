@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.TextAreaInsets
+import com.serenity.config.{InterfaceDensity, TextAreaInsets}
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
@@ -265,6 +265,46 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected first context menu item row"))
 
     sm.applyEvent(MouseClick(contentRect.x + 1, firstItemRow + 1)).unsafeRunSync()
+
+    val after = sm.getCurrentState.unsafeRunSync()
+    after.contextMenuSurface shouldBe Some(surface)
+  }
+
+  it should "keep a context menu open for a fractional pixel gap click" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm
+      .updateState(state =>
+        state.copy(
+          config = state.config
+            .withInterfaceDensity(InterfaceDensity.Compact)
+            .withCommandRunnerItemGapRows(0.5)
+            .withUiElementGap(0.5)
+        )
+      )
+      .unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+    sm.applyEvent(MouseClick(18, 2, button = MouseButton.Secondary)).unsafeRunSync()
+
+    val openedState = sm.getCurrentState.unsafeRunSync()
+    val viewport    = openedState.viewportSize.getOrElse(fail("Expected viewport size"))
+    val surface     = openedState.contextMenuSurface.getOrElse(fail("Expected context menu surface"))
+    val layout      = LayoutEngine.calculateLayoutWithUI(openedState, viewport)
+    val placement   = layout.floatingSurfacePlacements.getOrElse(surface.id, fail("Expected floating placement"))
+    val metrics     = CellMetrics.fromFont(FontLoader.previewUiFont(openedState.config.fontConfig))
+    val geometry = placement.geometry(
+      metrics,
+      SurfaceFrameLayout.borderCellsFor(surface.content),
+      openedState.config.commandRunnerItemGapRows
+    )
+    val firstItemBottom = geometry.itemRect(0, headerRows = 1).bottom
+    val gapPixelY       = math.ceil(firstItemBottom + 1).toInt
+
+    placement.yOffsetRows shouldBe 0.5
+    sm.applyEvent(
+      MouseClick(0, 0, pixelX = Some(math.ceil(geometry.contentRect.x + 1).toInt), pixelY = Some(gapPixelY))
+    ).unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.contextMenuSurface shouldBe Some(surface)

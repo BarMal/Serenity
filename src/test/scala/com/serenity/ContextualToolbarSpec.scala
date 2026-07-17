@@ -4,7 +4,7 @@ import java.awt.Font
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.ToolbarDisplayMode
+import com.serenity.config.{InterfaceDensity, ToolbarDisplayMode}
 import com.serenity.keystroke.events.*
 import com.serenity.richtext.*
 import com.serenity.state.models.*
@@ -465,6 +465,46 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
+  it should "select the toolbar row drawn at a fractional pixel placement" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-fractional-pixel-click")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
+    stateManager
+      .updateState(state =>
+        state.copy(config = state.config.withInterfaceDensity(InterfaceDensity.Compact).withUiElementGap(0.5))
+      )
+      .unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val before      = stateManager.getCurrentState.unsafeRunSync()
+    val surface     = before.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar"))
+    val viewport    = before.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout      = LayoutEngine.calculateLayoutWithUI(before, viewport)
+    val placement   = layout.floatingSurfacePlacements.getOrElse(surface.id, fail("Expected floating placement"))
+    val metrics     = CellMetrics.fromFont(FontLoader.previewUiFont(before.config.fontConfig))
+    val borderCells = SurfaceFrameLayout.borderCellsFor(surface.content)
+    val geometry    = placement.geometry(metrics, borderCells)
+    val itemPoint   = toolbarItemPoint(before, "bold")
+    val pixelX      = metrics.toPixelX(itemPoint.x) + (metrics.charWidth / 2)
+    val pixelY = (geometry.contentRect.y +
+      ((itemPoint.y - placement.cellRect.y - borderCells) * metrics.lineHeight) +
+      (metrics.lineHeight / 2)).toInt
+
+    placement.yOffsetRows shouldBe 0.5
+    stateManager.applyEvent(MouseClick(0, 0, pixelX = Some(pixelX), pixelY = Some(pixelY))).unsafeRunSync()
+
+    val after    = stateManager.getCurrentState.unsafeRunSync()
+    val bufferId = activeBufferId(after)
+    after
+      .buffers(bufferId)
+      .richTextDocument
+      .flatMap(_.paragraphs.headOption)
+      .flatMap(_.runs.headOption)
+      .map(_.style.marks) shouldBe
+      Some(Set(InlineMark.Bold))
   }
 
   it should "restore editor focus when a button is clicked while a toolbar detail is open" in {

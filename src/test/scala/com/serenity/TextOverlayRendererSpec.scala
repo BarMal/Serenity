@@ -28,6 +28,25 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     surface.fillPixelRectCalls.headOption.map(_.yPx) shouldBe Some(70)
   }
 
+  it should "translate header items footer and caret rows with a fractional frame" in {
+    val surface = new MockRenderSurface(80, 24)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics(charWidth = 8, lineHeight = 20, ascent = 15)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(2, 3, 20, 8),
+      header = Some(OverlayRow("header")),
+      rows = List(OverlayRow("item"), OverlayRow("caret", cursorColumn = Some(2))),
+      footer = Some(OverlayRow("footer")),
+      placement = Some(FloatingSurfaceFramePlacement(LayoutRect(2, 3, 20, 8), yOffsetRows = 0.5))
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
+
+    surface.pixelTranslations should contain(0.0f -> 10.0f)
+    surface.putStringCalls.map(_.s) should contain allOf ("header", "item", "footer")
+    surface.fillPixelRectCalls should not be empty
+  }
+
   given Balance = Balance.default
 
   "TextOverlayRenderer" should "scroll a long editable split row horizontally to keep the caret visible" in {

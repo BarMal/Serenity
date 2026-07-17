@@ -128,6 +128,7 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
   private val fillPixelRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[FillPixelRectCall]
   private val drawImageCallsBuffer     = scala.collection.mutable.ListBuffer.empty[DrawImageCall]
   private val alphaCallsBuffer         = scala.collection.mutable.ListBuffer.empty[Float]
+  private val pixelTranslationsBuffer  = scala.collection.mutable.ListBuffer.empty[(Float, Float)]
 
   override def strokeRoundRect(
     x: Int,
@@ -172,6 +173,10 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
     _arcPx: Int
   )(render: => Unit): Unit = render
 
+  override def withPixelTranslation(xPx: Float, yPx: Float)(render: => Unit): Unit =
+    pixelTranslationsBuffer += xPx -> yPx
+    render
+
   override def setAlpha(alpha: Float): Unit =
     currentAlpha.set(alpha)
     alphaCallsBuffer += alpha
@@ -190,6 +195,7 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
   def fillPixelRectCalls: List[FillPixelRectCall] = fillPixelRectCallsBuffer.toList
   def drawImageCalls: List[DrawImageCall]         = drawImageCallsBuffer.toList
   def alphaCalls: List[Float]                     = alphaCallsBuffer.toList
+  def pixelTranslations: List[(Float, Float)]     = pixelTranslationsBuffer.toList
   def putStringCalls: List[PutStringCall]         = putStringCallsBuffer.toList
 
   def enableStyle(style: TextStyle): Unit  = styleCallsBuffer += StyleCall("enable", style)
@@ -229,6 +235,7 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
     fillPixelRectCallsBuffer.clear()
     drawImageCallsBuffer.clear()
     alphaCallsBuffer.clear()
+    pixelTranslationsBuffer.clear()
     drawRunPxCallsBuffer.clear()
     styleCallsBuffer.clear()
     for y <- 0 until height; x <- 0 until width do
