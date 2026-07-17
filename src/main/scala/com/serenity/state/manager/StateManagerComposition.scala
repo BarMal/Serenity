@@ -123,6 +123,9 @@ final private[manager] class StateManagerOperationBoundary private (
       _        <- documentAnalysisFiberRef.set(Some(fiber))
     yield ()
 
+  def cancelDocumentAnalysis(): IO[Unit] =
+    documentAnalysisFiberRef.getAndSet(None).flatMap(_.traverse_(_.cancel))
+
   private def documentAnalysisJob: IO[Unit] =
     (IO.sleep(DocumentAnalysisDebounce) >>
       stateRef.get.flatMap { snapshot =>
@@ -626,7 +629,7 @@ private[manager] class StateManagerComposition(
   def awaitQuit: IO[Unit] = quitSignal.get
 
   def forceQuit(): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    operations.cancelDocumentAnalysis() >> stateRef.get.flatMap { state =>
       sessionPersistence
         .onAppClose(clearCloseActions(state))
         .handleErrorWith(error => logger.error(error)("[SESSION] Failed to save session during forced quit")) >>
