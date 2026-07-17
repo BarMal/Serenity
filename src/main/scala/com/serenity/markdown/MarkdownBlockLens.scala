@@ -11,7 +11,7 @@ object MarkdownBlockLens:
         fencedBlock(lines, clampedLine)
           .orElse(tableBlock(lines, clampedLine))
           .orElse(headingBlock(lines, clampedLine))
-          .orElse(contiguousBlock(lines, clampedLine, isListLikeLine))
+          .orElse(listItemBlock(lines, clampedLine))
           .orElse(contiguousBlock(lines, clampedLine, isBlockQuoteLine))
           .getOrElse(paragraphBlock(lines, clampedLine))
 
@@ -36,6 +36,40 @@ object MarkdownBlockLens:
 
   private def headingBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
     Option.when(isHeadingLine(lines(activeLine)))(activeLine to activeLine)
+
+  private def listItemBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
+    listItemStart(lines, activeLine).map { start =>
+      val itemIndent = leadingIndent(lines(start))
+      val end = Iterator
+        .iterate(start + 1)(_ + 1)
+        .takeWhile(index =>
+          index < lines.length &&
+            lines(index).trim.nonEmpty &&
+            !isSiblingListItem(lines(index), itemIndent)
+        )
+        .foldLeft(start)((_, index) => index)
+      start to end
+    }
+
+  private def listItemStart(lines: Vector[String], activeLine: Int): Option[Int] =
+    Option.when(isListItemLine(lines(activeLine)))(activeLine).orElse {
+      val activeIndent = leadingIndent(lines(activeLine))
+      Iterator
+        .iterate(activeLine - 1)(_ - 1)
+        .takeWhile(index => index >= 0 && lines(index).trim.nonEmpty)
+        .collectFirst {
+          case index
+              if isListItemLine(lines(index)) &&
+                leadingIndent(lines(index)) < activeIndent =>
+            index
+        }
+    }
+
+  private def isSiblingListItem(line: String, itemIndent: Int): Boolean =
+    isListItemLine(line) && leadingIndent(line) <= itemIndent
+
+  private def leadingIndent(line: String): Int =
+    line.takeWhile(char => char == ' ' || char == '\t').length
 
   private def contiguousBlock(
     lines: Vector[String],
@@ -80,15 +114,15 @@ object MarkdownBlockLens:
     !isFenceLine(line) &&
     !isTableLine(line) &&
     !isHeadingLine(line) &&
-    !isListLikeLine(line) &&
+    !isListItemLine(line) &&
     !isBlockQuoteLine(line)
 
   private def isHeadingLine(line: String): Boolean =
     line.trim.matches("""^#{1,6}\s+.*""")
 
-  private def isListLikeLine(line: String): Boolean =
+  private def isListItemLine(line: String): Boolean =
     val trimmed = line.trim
-    trimmed.matches("""^([-*+]|\d+\.)\s+.*""") || line.startsWith("  ") || line.startsWith("\t")
+    trimmed.matches("""^([-*+]|\d+\.)\s+.*""")
 
   private def isBlockQuoteLine(line: String): Boolean =
     line.trim.startsWith(">")
