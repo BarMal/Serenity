@@ -145,6 +145,31 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     )
   }
 
+  it should "wrap a fitting toolbar before it consumes most of the active editor pane" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-near-full-width-regression")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(200, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+
+    val unopened       = stateManager.getCurrentState.unsafeRunSync()
+    val intrinsicWidth = ContextualToolbar.compactContentWidth(ContextualToolbarState(), unopened, Int.MaxValue)
+    stateManager.applyEvent(ResizeEvent(ViewportSize(intrinsicWidth + 20, 30))).unsafeRunSync()
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val editorWidth = LayoutEngine
+      .calculateEditorWorkspaceLayout(state, layout)
+      .activeContentRect(state)
+      .map(_.width)
+      .getOrElse(fail("Expected active content rect"))
+    val toolbar = toolbarRect(state)
+
+    intrinsicWidth should be <= editorWidth
+    toolbar.width should be <= (editorWidth * 3 / 4)
+  }
+
   it should "keep the formatted run state when the caret sits on its trailing boundary" in {
     val stateManager = createStateManager("ContextualToolbarSpec-caret-boundary-style")
 
