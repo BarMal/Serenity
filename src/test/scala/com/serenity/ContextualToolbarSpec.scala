@@ -170,6 +170,23 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     toolbar.width should be <= (editorWidth * 3 / 4)
   }
 
+  it should "keep a long font family from widening the compact toolbar to the pane" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-long-font-family")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(160, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager, fontFamily = "A deliberately long font family name for compact toolbar coverage")
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    val width = ContextualToolbar.compactContentWidth(
+      ContextualToolbarState(),
+      state,
+      maxWidth = 120
+    )
+
+    width should be <= 90
+    ContextualToolbar.rowCount(ContextualToolbarState(), state, width) should be > 1
+  }
+
   it should "keep the formatted run state when the caret sits on its trailing boundary" in {
     val stateManager = createStateManager("ContextualToolbarSpec-caret-boundary-style")
 
@@ -1116,7 +1133,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
   private case class Point(x: Int, y: Int)
 
-  private def seedToolbarDocument(stateManager: com.serenity.state.manager.StateManager): Unit =
+  private def seedToolbarDocument(
+    stateManager: com.serenity.state.manager.StateManager,
+    fontFamily: String = "A"
+  ): Unit =
     stateManager
       .updateState { state =>
         val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
@@ -1125,7 +1145,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
         val document = RichTextDocument
           .fromPlainText("alpha beta")
           .applyMark(range, InlineMark.Bold)
-          .setFontFamily(range, "A")
+          .setFontFamily(range, fontFamily)
           .setFontSize(range, 18.0f)
           .setColor(range, "#336699")
           .setParagraphRole(range, ParagraphRole.Body)

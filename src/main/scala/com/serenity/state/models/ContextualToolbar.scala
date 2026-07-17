@@ -170,6 +170,8 @@ case class ContextualToolbarState(
 
 object ContextualToolbar:
 
+  private val maxDisplayTextWidth = 18
+
   private val colorPresets = List(
     "Ink"  -> "#202020",
     "Blue" -> "#336699"
@@ -500,12 +502,16 @@ object ContextualToolbar:
       }
 
   private def displayTextWidth(text: String): Int =
-    text.codePoints().toArray.count { codePoint =>
-      val category = Character.getType(codePoint)
-      category != Character.NON_SPACING_MARK &&
-      category != Character.COMBINING_SPACING_MARK &&
-      category != Character.ENCLOSING_MARK
-    }
+    text
+      .codePoints()
+      .toArray
+      .count { codePoint =>
+        val category = Character.getType(codePoint)
+        category != Character.NON_SPACING_MARK &&
+        category != Character.COMBINING_SPACING_MARK &&
+        category != Character.ENCLOSING_MARK
+      }
+      .min(maxDisplayTextWidth)
 
   private def optionRowGroups(options: List[CommandOption], contentWidth: Int): List[List[CommandOption]] =
     if options.isEmpty || contentWidth <= 0 then Nil
