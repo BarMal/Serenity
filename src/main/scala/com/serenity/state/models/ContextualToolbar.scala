@@ -321,8 +321,9 @@ object ContextualToolbar:
       .map(estimatedRowWidth(_, toolbarState.displayMode))
       .maxOption
       .getOrElse(1)
+    val compactRowLimit = ((maxWidth.max(1).toLong * 3) / 4).toInt
     val balancedWidth =
-      if intrinsicWidth <= maxWidth then intrinsicWidth
+      if intrinsicWidth <= compactRowLimit then intrinsicWidth
       else
         balancedTwoRowWidth(proseItemSegments(items), toolbarState.displayMode)
           .getOrElse((intrinsicWidth + 1) / 2)
