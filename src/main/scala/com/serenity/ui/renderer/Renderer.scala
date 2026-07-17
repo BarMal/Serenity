@@ -928,18 +928,18 @@ object Renderer:
         .map(blockRange => math.max(baseSourceLineLimit, blockRange.end - blockRange.start + 1))
         .getOrElse(baseSourceLineLimit)
       val viewportTopLine = buffer.viewport.topLine.max(0).min(lines.length - 1)
-      val precedingHeading = activeLine
-        .filter(line => line > 0 && lines(line).trim.isEmpty && lines(line - 1).trim.matches("^#{1,6}\\s+.*"))
+      val windowTopLine = activeLine
+        .filter(line => line == viewportTopLine && line > 0 && lines(line).trim.isEmpty)
+        .filter(line => lines(line - 1).trim.matches("^#{1,6}\\s+.*"))
         .map(_ - 1)
-      val preferredTopLine = precedingHeading
-        .orElse(activeBlock.map(blockRange => blockRange.start.min(viewportTopLine)))
         .getOrElse(viewportTopLine)
       val firstSourceLine = activeBlock
         .map { blockRange =>
-          if blockRange.end >= preferredTopLine + maxSourceLines then (blockRange.end - maxSourceLines + 1).max(0)
-          else preferredTopLine
+          if blockRange.start < windowTopLine && blockRange.end >= windowTopLine then blockRange.start
+          else if blockRange.end >= windowTopLine + maxSourceLines then (blockRange.end - maxSourceLines + 1).max(0)
+          else windowTopLine
         }
-        .getOrElse(preferredTopLine)
+        .getOrElse(windowTopLine)
       MarkdownDocumentPreview.PreviewWindow(
         firstSourceLine = firstSourceLine,
         firstPreviewRow =

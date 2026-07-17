@@ -470,6 +470,19 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "render the scrolled document window when the caret remains above it" in {
+    val source =
+      (Vector.fill(32)("") ++ Vector("# Reached after scrolling", "", "Visible prose at the viewport.")).mkString("\n")
+    val (state, surface, _) = renderMarkdownLens(
+      source,
+      CursorPosition(0, 0),
+      topLine = Some(32)
+    )
+
+    surface.drawImageCalls should have size 1
+    imageHasContent(surface.drawImageCalls.head.image, state.theme.background.getRGB) shouldBe true
+  }
+
   it should "keep visible preview context above the active lens" in {
     val (state, surface, _) = renderMarkdownLens(
       "# Intro\n\nOpening paragraph\n\nActive paragraph\ncontinued",
@@ -559,6 +572,11 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     )
 
     (state, surface, metrics)
+
+  private def imageHasContent(image: java.awt.image.BufferedImage, backgroundRgb: Int): Boolean =
+    (0 until image.getHeight).exists { row =>
+      (0 until image.getWidth).exists(column => image.getRGB(column, row) != backgroundRgb)
+    }
 
   private def rows(surface: MockRenderSurface): List[String] =
     (0 until surface.height).map(surface.getRow).map(_.trim).filter(_.nonEmpty).toList
