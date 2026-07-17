@@ -308,14 +308,7 @@ object ContextualToolbar:
     else packItems(items, contentWidth, mode)
 
   def compactContentWidth(toolbarState: ContextualToolbarState, state: AppState, maxWidth: Int): Int =
-    val items = itemsFor(state)
-    val detailWidth = toolbarState.normalized(items).detailState match
-      case Some(ContextualToolbarDetailState.Dropdown(itemId, _)) =>
-        dropdownItem(itemId, items).map(_.optionItem.options.map(_.label.length + 2).sum).getOrElse(0)
-      case Some(ContextualToolbarDetailState.Input(itemId, text)) =>
-        inputItem(itemId, items).map(item => item.label.length + text.length + 3).getOrElse(0)
-      case None =>
-        0
+    val items          = itemsFor(state)
     val intrinsicWidth = estimatedRowWidth(items, toolbarState.displayMode)
     val largestGroupWidth = proseItemSegments(items)
       .map(estimatedRowWidth(_, toolbarState.displayMode))
@@ -332,7 +325,6 @@ object ContextualToolbar:
           .getOrElse((intrinsicWidth + 1) / 2)
           .max(largestGroupWidth)
     balancedWidth
-      .max(detailWidth)
       .max(1)
       .min(maxWidth.max(1))
 

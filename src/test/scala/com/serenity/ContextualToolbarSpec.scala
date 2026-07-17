@@ -381,6 +381,23 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     state.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
+  it should "retain its intrinsic compact width when a font-family detail opens" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-font-family-compact-width")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val beforeWidth = toolbarRect(stateManager.getCurrentState.unsafeRunSync()).width
+    moveToolbarFocusTo(stateManager, "font-family")
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val opened = stateManager.getCurrentState.unsafeRunSync()
+    toolbarStateFrom(opened).detailState.getOrElse(fail("Expected font-family dropdown")) shouldBe
+      a[ContextualToolbarDetailState.Dropdown]
+    toolbarRect(opened).width shouldBe beforeWidth
+  }
+
   it should "open a focused font family field with the current value prefilled, accept edits, and apply them on Enter" in {
     val stateManager = createStateManager("ContextualToolbarSpec-font-family-input")
 
