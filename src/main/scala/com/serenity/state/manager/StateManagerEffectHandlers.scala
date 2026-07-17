@@ -55,6 +55,7 @@ final private[manager] class LifecycleEffectHandler(port: LifecycleEffectPort):
     effect match
       case LifecycleEffect.CompleteQuit => port.completeQuit
 
+/** Owns ordered I/O interpretation for reducer effects. */
 final private[manager] class StateManagerEffectHandlers(
     runtime: EffectRuntimePort,
     editor: EffectEditorPort,
@@ -319,7 +320,7 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.ToggleFocusedTextBody =>
         updateTextDisplayConfig(config => config.withFocusedTextBody(!config.focusedTextBodyEnabled)).void
       case CommandIntent.ToggleContextualToolbar =>
-        applyEvent(com.serenity.keystroke.events.ToggleContextualToolbar)
+        enqueueEvent(com.serenity.keystroke.events.ToggleContextualToolbar)
       case CommandIntent.SetLineNumbers(enabled) =>
         updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
       case CommandIntent.SetGutter(enabled) =>
@@ -388,17 +389,17 @@ final private[manager] class StateManagerEffectHandlers(
             .state
         )
       case CommandIntent.Copy =>
-        applyEvent(com.serenity.keystroke.events.Copy)
+        enqueueEvent(com.serenity.keystroke.events.Copy)
       case CommandIntent.Cut =>
-        applyEvent(com.serenity.keystroke.events.Cut)
+        enqueueEvent(com.serenity.keystroke.events.Cut)
       case CommandIntent.Paste =>
-        applyEvent(com.serenity.keystroke.events.Paste)
+        enqueueEvent(com.serenity.keystroke.events.Paste)
       case CommandIntent.SelectAll =>
-        applyEvent(com.serenity.keystroke.events.SelectAll)
+        enqueueEvent(com.serenity.keystroke.events.SelectAll)
       case CommandIntent.Undo =>
-        applyEvent(com.serenity.keystroke.events.Undo)
+        enqueueEvent(com.serenity.keystroke.events.Undo)
       case CommandIntent.Redo =>
-        applyEvent(com.serenity.keystroke.events.Redo)
+        enqueueEvent(com.serenity.keystroke.events.Redo)
       case CommandIntent.ToggleRichTextMark(mark) =>
         updateState(current => toggleRichTextMark(current, mark))
       case CommandIntent.SetRichTextFontFamily(family) =>
@@ -1814,7 +1815,7 @@ final private[manager] class StateManagerEffectHandlers(
     for
       fileEntries <- fileManager.getFileBrowser.listDirectory(path)
       dirEntries = toDirEntries(fileEntries)
-      _ <- applyEvent(
+      _ <- enqueueEvent(
         ExplorerEvent.RootDirectoryLoaded(
           position = position,
           rootPath = path,
@@ -1829,7 +1830,7 @@ final private[manager] class StateManagerEffectHandlers(
     (for
       fileEntries <- fileManager.getFileBrowser.listDirectory(path)
       dirEntries = toDirEntries(fileEntries)
-      _ <- applyEvent(ExplorerEvent.DirectoryLoaded(position, path, dirEntries))
+      _ <- enqueueEvent(ExplorerEvent.DirectoryLoaded(position, path, dirEntries))
     yield ()).handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load directory $path"))
 
   private def toDirEntries(entries: List[FileEntry]): List[DirEntry] =
@@ -1878,17 +1879,7 @@ final private[manager] class StateManagerEffectHandlers(
     stateRef.get.flatMap { state =>
       state.buffers.get(bufferId) match
         case Some(buffer) if buffer.filePath.isDefined =>
-          fileManager
-            .saveBuffer(buffer)
-            .flatMap(savedBuffer =>
-              stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> savedBuffer)))
-            )
-            .flatTap(_ =>
-              stateRef.get
-                .flatMap(sessionPersistence.onBufferChange)
-                .handleErrorWith(ex => logger.error(ex)("[SESSION] Auto-save after file save failed"))
-            )
-            .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId"))
+          saveExistingBuffer(bufferId)
         case Some(_) =>
           logger.debug(s"[FILE] Buffer $bufferId has no file path; opening native Save As dialog") >>
             requestSaveAsFileDialog(state, Some(bufferId))
@@ -1925,19 +1916,8 @@ final private[manager] class StateManagerEffectHandlers(
   private[manager] def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
     stateRef.get.flatMap { state =>
       state.buffers.get(bufferId) match
-        case Some(buffer) =>
-          fileManager
-            .saveBuffer(buffer, path)
-            .flatMap(savedBuffer =>
-              stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> savedBuffer)))
-            )
-            .flatTap(_ => stateRef.update(s => s.copy(recentFiles = trackRecentFile(s.recentFiles, path))))
-            .flatTap(_ =>
-              stateRef.get
-                .flatMap(sessionPersistence.onBufferChange)
-                .handleErrorWith(ex => logger.error(ex)("[SESSION] Auto-save after file save failed"))
-            )
-            .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to save buffer $bufferId as $path"))
+        case Some(_) =>
+          saveBufferAs(bufferId, path)
         case None =>
           logger.debug(s"[FILE] Buffer $bufferId not found for save as")
     }

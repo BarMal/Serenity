@@ -7,12 +7,14 @@ import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntime
 import com.serenity.config.AppConfig
 import com.serenity.input.{InputRouter, SystemClipboard}
-import com.serenity.keystroke.events.{Event, Paste, ResizeEvent}
+import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, BufferId}
+import com.serenity.state.models.*
 import com.serenity.state.reducers.*
+import com.serenity.state.undo.UndoState
 import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.renderer.RenderController
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -21,6 +23,39 @@ import org.scalatest.matchers.should.Matchers
 class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
+
+  private def composedPipeline(
+    currentStateRef: Ref[IO, AppState],
+    operations: StateManagerOperationBoundary,
+    runEffect: AppEffect => IO[Unit]
+  ): StateManagerEventPipeline =
+    val currentLogger   = org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
+    val currentUndoRef  = Ref.of[IO, UndoState](UndoState()).unsafeRunSync()
+    val currentFiberRef = Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None).unsafeRunSync()
+    val currentCacheRef = Ref.of[IO, Option[MouseTargetCache]](None).unsafeRunSync()
+    val statePort = new EventStatePort:
+      val stateRef                 = currentStateRef
+      val undoRef                  = currentUndoRef
+      val logger                   = currentLogger
+      val documentAnalysisFiberRef = currentFiberRef
+      val mouseTargetCacheRef      = currentCacheRef
+    val effectPort = new EventEffectPort:
+      def interpretEffect(effect: AppEffect): IO[Unit]                                       = runEffect(effect)
+      def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] = IO.unit
+      def executeCommand(command: com.serenity.command.Command): IO[Unit]                    = IO.unit
+    val workflowPort = new EventWorkflowPort:
+      def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]      = IO.unit
+      def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] = IO.pure(BufferId(0))
+      def createPane(bufferId: Option[BufferId]): IO[PaneId]                  = IO.pure(PaneId(0))
+    val uiPort = new EventUiPort:
+      val uiPresetStore = UiPresetStore(Path.of("target", "state-manager-capability-spec.json"))
+      def updateConfig(update: AppConfig => AppConfig): IO[AppConfig] =
+        currentStateRef.modify(state =>
+          val config = update(state.config)
+          (state.copy(config = config), config)
+        )
+      def resizePinnedPanel(position: com.serenity.ui.layout.PanelPosition, newSize: Int): IO[Unit] = IO.unit
+    new StateManagerEventPipeline(statePort, effectPort, workflowPort, uiPort, operations)
 
   "StateManager" should "compose focused façade capabilities" in {
     summon[StateManager <:< FocusManager]
@@ -73,20 +108,32 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     applied.get.unsafeRunSync() shouldBe List(ResizeEvent(ViewportSize(120, 40)))
   }
 
-  "StateManager composition" should "exclude the retired runtime forwarding and dependency hub" in {
+  "StateManager composition" should "exclude retired behavior implementations and dependency hubs" in {
     val sources = List(
-      "StateManagerEditorFacadeBehavior.scala",
-      "StateManagerEffectBehavior.scala",
-      "StateManagerFileFacadeBehavior.scala",
-      "StateManagerSurfaceFacadeBehavior.scala",
-      "StateManagerViewportBehavior.scala",
-      "StateManagerWorkflowBehavior.scala"
+      "StateManagerEditorCapability.scala",
+      "StateManagerEffectHandlers.scala",
+      "StateManagerFileCapability.scala",
+      "StateManagerSurfaceCapability.scala",
+      "StateManagerViewportCapability.scala",
+      "StateManagerWorkflowCapability.scala"
     ).map(name => Files.readString(Path.of("src/main/scala/com/serenity/state/manager", name)))
 
     sources.mkString("\n") should not include "StateManagerRuntimeSupport"
     sources.mkString("\n") should not include "StateManagerBehaviorDependencies"
     sources.mkString("\n") should not include "EffectCapabilityPort"
     sources.mkString("\n") should not include "StateManagerRuntime,"
+  }
+
+  it should "name production components by their explicit ownership rather than behavior" in {
+    val managerDirectory = Path.of("src/main/scala/com/serenity/state/manager")
+    val sourcePaths = Files
+      .list(managerDirectory)
+      .toArray
+      .collect { case path: Path if path.getFileName.toString.endsWith(".scala") => path }
+
+    sourcePaths.map(_.getFileName.toString) should not contain "StateManagerRuntimeSupport.scala"
+    sourcePaths.map(_.getFileName.toString).exists(_.contains("Behavior")) shouldBe false
+    sourcePaths.map(Files.readString).mkString("\n") should not include "StateManagerBehavior"
   }
 
   it should "keep Balance capability-local rather than protected" in {
@@ -101,10 +148,163 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
   it should "wire capability ports directly to their owning components" in {
     val compositionRoot = Files.readString(
-      Path.of("src/main/scala/com/serenity/state/manager/StateManagerRuntimeSupport.scala")
+      Path.of("src/main/scala/com/serenity/state/manager/StateManagerComposition.scala")
     )
 
     compositionRoot should not include "StateManagerBehavior.this"
+  }
+
+  it should "route effect-triggered events through the shared operation boundary" in {
+    val compositionRoot = Files.readString(
+      Path.of("src/main/scala/com/serenity/state/manager/StateManagerComposition.scala")
+    )
+    val effectHandlers = Files.readString(
+      Path.of("src/main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala")
+    )
+    val effectEditorPort = compositionRoot.slice(
+      compositionRoot.indexOf("private val effectEditorPort"),
+      compositionRoot.indexOf("private val effectSurfacePort")
+    )
+    val effectSurfacePort = compositionRoot.slice(
+      compositionRoot.indexOf("private val effectSurfacePort"),
+      compositionRoot.indexOf("private val effectFilePort")
+    )
+    val workflowPort = compositionRoot.slice(
+      compositionRoot.indexOf("private val workflowPort"),
+      compositionRoot.indexOf("private val surfacePort")
+    )
+    val surfacePort = compositionRoot.slice(
+      compositionRoot.indexOf("private val surfacePort"),
+      compositionRoot.indexOf("private val viewportPort")
+    )
+
+    compositionRoot should include("StateManagerOperationBoundary")
+    effectEditorPort should not include "events."
+    effectSurfacePort should not include "events."
+    workflowPort should not include "effects."
+    workflowPort should not include "events."
+    surfacePort should not include "events."
+    effectHandlers should include("enqueueEvent")
+    effectHandlers should not include "applyEvent("
+  }
+
+  it should "preserve effect-triggered event order at the operation boundary" in {
+    val stateRef = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
+    val fiberRef = Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None).unsafeRunSync()
+    val operations = StateManagerOperationBoundary
+      .create(
+        stateRef,
+        fiberRef,
+        org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
+      )
+      .unsafeRunSync()
+
+    (operations.enqueueEvent(Copy) >>
+      operations.enqueueEvent(Paste) >>
+      operations.takeOperations).unsafeRunSync() shouldBe List(
+      StateManagerOperation.Event(Copy),
+      StateManagerOperation.Event(Paste)
+    )
+    operations.takeOperations.unsafeRunSync() shouldBe Nil
+  }
+
+  it should "coordinate document analysis scheduling with shutdown" in {
+    val program = for
+      stateRef           <- Ref.of[IO, AppState](AppState.initial)
+      fiberRef           <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
+      scheduleStarted    <- cats.effect.Deferred[IO, Unit]
+      continueScheduling <- cats.effect.Deferred[IO, Unit]
+      shutdownRequested  <- cats.effect.Deferred[IO, Unit]
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        fiberRef,
+        org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
+        beforeDocumentAnalysisStart = scheduleStarted.complete(()).void >> continueScheduling.get,
+        beforeDocumentAnalysisShutdown = shutdownRequested.complete(()).void
+      )
+      scheduling    <- operations.scheduleDocumentAnalysis().start
+      _             <- scheduleStarted.get
+      shutdown      <- operations.cancelDocumentAnalysis().start
+      _             <- shutdownRequested.get
+      _             <- continueScheduling.complete(())
+      _             <- scheduling.joinWithNever
+      _             <- shutdown.joinWithNever
+      pending       <- fiberRef.get
+      _             <- pending.fold(IO.unit)(_.cancel)
+      _             <- operations.scheduleDocumentAnalysis()
+      afterShutdown <- fiberRef.get
+    yield
+      pending shouldBe None
+      afterShutdown shouldBe None
+
+    program.unsafeRunSync()
+  }
+
+  it should "commit a reducer state before interpreting its effect" in {
+    val initialState   = AppState.initial
+    val committedState = initialState.copy(nextBufferId = BufferId(42))
+    val program = for
+      stateRef <- Ref.of[IO, AppState](initialState)
+      fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        fiberRef,
+        org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
+      )
+      observed <- Ref.of[IO, List[Int]](Nil)
+      pipeline = composedPipeline(
+        stateRef,
+        operations,
+        _ => stateRef.get.flatMap(state => observed.update(_ :+ state.nextBufferId.value))
+      )
+      _ <- pipeline.applyReducerResult(
+        ReducerResult.withEffect(committedState, AppEffect.CompleteQuit()),
+        initialState
+      )
+      observedStates <- observed.get
+      state          <- stateRef.get
+    yield
+      observedStates shouldBe List(42)
+      state.nextBufferId shouldBe BufferId(42)
+
+    program.unsafeRunSync()
+  }
+
+  it should "drain effect-triggered nested events through the pipeline in FIFO order" in {
+    val initialState = AppState.initial
+    val program = for
+      stateRef <- Ref.of[IO, AppState](initialState)
+      fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        fiberRef,
+        org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
+      )
+      pipeline = composedPipeline(
+        stateRef,
+        operations,
+        _ => operations.enqueueEvent(ToggleCommandRunner) >> operations.enqueueEvent(RunnerInsertChar('x'))
+      )
+      _ <- pipeline.applyReducerResult(
+        ReducerResult.withEffect(initialState, AppEffect.CompleteQuit()),
+        initialState
+      )
+      state <- stateRef.get
+    yield state.commandRunnerSurface.flatMap {
+      _.content match
+        case SurfaceContent.CommandPalette(runner) => Some(runner.searchTerm)
+        case _                                     => None
+    } shouldBe Some("x")
+
+    program.unsafeRunSync()
+  }
+
+  it should "construct every capability port without lazy callback wiring" in {
+    val compositionRoot = Files.readString(
+      Path.of("src/main/scala/com/serenity/state/manager/StateManagerComposition.scala")
+    )
+
+    compositionRoot should not include "private lazy val"
   }
 
   "CommandEffectInterpreter" should "preserve declared effect order and propagate required failures" in {

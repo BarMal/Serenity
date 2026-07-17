@@ -74,6 +74,81 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
+  it should "cancel pending document analysis when force quitting" in {
+    val program = for
+      stateRef                 <- Ref.of[IO, AppState](AppState.initial)
+      undoRef                  <- Ref.of[IO, UndoState](UndoState())
+      themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
+      quitSignal               <- Deferred[IO, Unit]
+      lspQueue                 <- Queue.bounded[IO, LspEffect](8)
+      mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
+      documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
+      analysisCancelled        <- Deferred[IO, Unit]
+      pendingAnalysis <- IO
+        .never[Unit]
+        .onCancel(analysisCancelled.complete(()).void)
+        .start
+      logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
+      sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
+      runtime = StateManagerRuntime.create(
+        stateRef = stateRef,
+        undoRef = undoRef,
+        themeNamesRef = themeNamesRef,
+        quitSignal = quitSignal,
+        logger = logger,
+        policy = SessionManager.SessionPolicy(),
+        sessionRootOverride = Some(sessionRoot),
+        themeManager = AppThemeManager.create,
+        lspQueue = lspQueue,
+        mouseTargetCacheRef = mouseTargetCacheRef,
+        documentAnalysisFiberRef = documentAnalysisFiberRef,
+        onFontConfigChanged = (_: FontConfig) => IO.unit,
+        deviceTextScaleProvider = IO.pure(1.0),
+        configPersistencePath = None,
+        uiPresetStore = UiPresetStore.default,
+        windowSizeProvider = IO.pure(Some(PreferredWindowSize(1000, 700))),
+        onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
+        fileDialog = FileDialog.unavailable
+      )
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        documentAnalysisFiberRef,
+        logger
+      )
+      composition = new StateManagerComposition(
+        runtime.stateRef,
+        runtime.undoRef,
+        runtime.themeNamesRef,
+        runtime.quitSignal,
+        runtime.logger,
+        runtime.policy,
+        runtime.themeManager,
+        runtime.lspQueue,
+        runtime.mouseTargetCacheRef,
+        runtime.documentAnalysisFiberRef,
+        runtime.onFontConfigChanged,
+        runtime.deviceTextScaleProvider,
+        runtime.configPersistencePath,
+        runtime.uiPresetStore,
+        runtime.windowSizeProvider,
+        runtime.fileDialog,
+        runtime.fileManager,
+        runtime.sessionManager,
+        runtime.sessionPersistence,
+        operations
+      )
+      _         <- documentAnalysisFiberRef.set(Some(pendingAnalysis))
+      _         <- composition.forceQuit()
+      cancelled <- analysisCancelled.tryGet
+      pending   <- documentAnalysisFiberRef.get
+      _         <- pending.fold(IO.unit)(_.cancel)
+    yield
+      cancelled shouldBe Some(())
+      pending shouldBe None
+
+    program.unsafeRunSync()
+  }
+
   "StateManagerFileFacade" should "be testable with injected file operations only" in {
     val bufferId = BufferId(7)
     val path     = Path.of("isolated.txt")

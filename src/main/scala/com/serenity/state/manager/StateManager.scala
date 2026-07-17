@@ -213,7 +213,12 @@ object StateManager:
         onPreferredWindowSizeChanged = onPreferredWindowSizeChanged,
         fileDialog = fileDialog
       )
-    yield new StateManagerImpl(runtime)
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        documentAnalysisFiberRef,
+        runtime.logger
+      )
+    yield new StateManagerImpl(runtime, operations)
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
     val modePart =
@@ -232,9 +237,10 @@ object StateManager:
   def describeCommandExecution(command: Command): String =
     s"command=${command.name} category=${command.category} intent=${command.intent}"
 
-  private class StateManagerImpl(runtime: StateManagerRuntime)(using Balance) extends StateManager:
+  private class StateManagerImpl(runtime: StateManagerRuntime, operations: StateManagerOperationBoundary)(using Balance)
+      extends StateManager:
 
-    private val behavior = new StateManagerBehavior(
+    private val composition = new StateManagerComposition(
       runtime.stateRef,
       runtime.undoRef,
       runtime.themeNamesRef,
@@ -253,7 +259,8 @@ object StateManager:
       runtime.fileDialog,
       runtime.fileManager,
       runtime.sessionManager,
-      runtime.sessionPersistence
+      runtime.sessionPersistence,
+      operations
     )
 
-    export behavior.*
+    export composition.*

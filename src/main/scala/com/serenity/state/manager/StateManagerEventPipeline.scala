@@ -2,13 +2,10 @@ package com.serenity.state.manager
 
 import java.awt.Color
 
-import scala.concurrent.duration.*
-
 import cats.syntax.foldable.*
 import com.serenity.animation.*
 import com.serenity.command.{CommandRegistry, CommandRunner, CommandSurfaceItem}
 import com.serenity.keystroke.events.*
-import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.components.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
@@ -31,24 +28,41 @@ final private[manager] class ResizeEventHandler(port: ResizeEventPort):
     port.applyReducerResult(SystemEventReducer.reduce(event, previousState), previousState) >>
       port.rebalancePanes()
 
-final private[manager] class StateManagerEventPipelineBehavior(
+final private[manager] class StateManagerEventPipeline(
     state: EventStatePort,
     effects: EventEffectPort,
     workflow: EventWorkflowPort,
-    ui: EventUiPort
+    ui: EventUiPort,
+    operations: StateManagerOperationBoundary
 )(using balance: com.serenity.rope.Balance):
 
-  import effects.*
   import state.*
   import ui.*
   import workflow.*
-  private val DocumentAnalysisDebounce = 150.millis
-
   private val ContextMenuSurfaceId = SurfaceId("context-menu")
+
+  private def drainPendingOperations: cats.effect.IO[Unit] =
+    operations.takeOperations.flatMap {
+      case Nil => cats.effect.IO.unit
+      case pendingOperations =>
+        pendingOperations.traverse_ {
+          case StateManagerOperation.Event(event)                       => applyEvent(event)
+          case StateManagerOperation.ApplyAnimationHooks(previousState) => applyAnimationHooks(previousState)
+        } >> drainPendingOperations
+    }
+
+  private def interpretEffect(effect: AppEffect): cats.effect.IO[Unit] =
+    effects.interpretEffect(effect) >> drainPendingOperations
+
+  private def interpretCommand(command: com.serenity.command.Command, state: AppState): cats.effect.IO[Unit] =
+    effects.interpretCommand(command, state) >> drainPendingOperations
+
+  private def executeCommand(command: com.serenity.command.Command): cats.effect.IO[Unit] =
+    effects.executeCommand(command) >> drainPendingOperations
 
   private val resizeEvents = new ResizeEventHandler(new ResizeEventPort:
     def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
-      StateManagerEventPipelineBehavior.this.applyReducerResult(result, fallbackState)
+      StateManagerEventPipeline.this.applyReducerResult(result, fallbackState)
     def rebalancePanes(): cats.effect.IO[Unit] =
       stateRef.update(s => AppEventReducer.rebalancePanes(s, s.focusedBufferId)))
 
@@ -240,38 +254,10 @@ final private[manager] class StateManagerEventPipelineBehavior(
       )
 
   private[manager] def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
-    normalizeCommandRunnerFocus(newState).validated match
-      case Right(validState) =>
-        val modalTransitionLog =
-          (fallbackState.modalSurface, validState.modalSurface) match
-            case (before, after) if before != after =>
-              logger.info(
-                s"[STATE MODAL] before=${before.map(_.id).getOrElse("none")} " +
-                  s"after=${after.map(_.id).getOrElse("none")} focus=${validState.focus}"
-              )
-            case _ =>
-              cats.effect.IO.unit
-        modalTransitionLog >> stateRef.set(validState) >> scheduleDocumentAnalysis()
-      case Left(errors) =>
-        logger.error(s"State validation failed: ${errors.mkString(", ")}") >>
-          stateRef.set(fallbackState)
+    operations.validateAndUpdateState(newState, fallbackState)
 
   private[manager] def scheduleDocumentAnalysis(): cats.effect.IO[Unit] =
-    for
-      previous <- documentAnalysisFiberRef.getAndSet(None)
-      _        <- previous.traverse_(_.cancel)
-      fiber    <- documentAnalysisJob.start
-      _        <- documentAnalysisFiberRef.set(Some(fiber))
-    yield ()
-
-  private def documentAnalysisJob: cats.effect.IO[Unit] =
-    (cats.effect.IO.sleep(DocumentAnalysisDebounce) >>
-      stateRef.get.flatMap { snapshot =>
-        val expected = SpellChecker.analysisFingerprints(snapshot)
-        cats.effect.IO
-          .blocking(SpellChecker.refreshDiagnostics(snapshot))
-          .flatMap(analyzed => stateRef.update(current => SpellChecker.applyIfCurrent(current, analyzed, expected)))
-      }).handleErrorWith(error => logger.error(error)("[ANALYSIS] Document analysis refresh failed"))
+    operations.scheduleDocumentAnalysis()
 
   private def getLocalHandlerForFocus(focus: Focus, state: AppState): LocalEventHandler =
     focus match
@@ -309,7 +295,7 @@ final private[manager] class StateManagerEventPipelineBehavior(
           case None =>
             NoOpLocalEventHandler
 
-  private def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
+  private[manager] def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
     for
       _ <- validateAndUpdateState(result.state, fallbackState)
       _ <- result.effects.traverse_(interpretEffect)
@@ -794,23 +780,7 @@ final private[manager] class StateManagerEventPipelineBehavior(
     }
 
   private[manager] def ensureCommandRunnerSurface(state: AppState): AppState =
-    val registry        = CommandRegistry.default
-    val activatedRunner = CommandRunner.empty.activate(registry, state.config)
-    val runner = activatedRunner.copy(
-      optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
-    )
-    val (stateWithId, surfaceId) =
-      state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
-    val surface = UiSurface(
-      id = surfaceId,
-      content = SurfaceContent.CommandPalette(runner),
-      presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
-    )
-    stateWithId
-      .copy(
-        uiSurfaces = stateWithId.uiSurfaces.filterNot(_.id == surfaceId) :+ surface
-      )
-      .pushFocus(Focus.Surface(surfaceId))
+    operations.ensureCommandRunnerSurface(state)
 
   private def handleMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Unit] =
     click.button match

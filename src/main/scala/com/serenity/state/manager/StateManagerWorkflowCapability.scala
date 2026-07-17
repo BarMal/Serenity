@@ -11,7 +11,7 @@ import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.LayoutEngine
 
-final private[manager] class StateManagerWorkflowBehavior(
+final private[manager] class StateManagerWorkflowCapability(
     dependencies: WorkflowCapabilityPort
 )(using balance: com.serenity.rope.Balance):
 
