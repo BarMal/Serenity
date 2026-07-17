@@ -124,6 +124,41 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       }
   }
 
+  it should "preserve fractional pixel gaps for palette, submenu, context menu, and toolbar at DPI-scaled metrics" in {
+    val metrics = List(CellMetrics(8, 20, 15), CellMetrics(12, 30, 22))
+    val command = Command.typed("save", "Save", CommandIntent.SaveCurrentFile, label = "Save")
+    val menu = ContextMenu("editor", Focus.EditorPane(paneId), List(ContextMenuItem(command.name, command.label, command)))
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    val surfaces = List(
+      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+      SurfaceContent.ContextMenu(menu),
+      SurfaceContent.ContextualToolbar(ContextualToolbarState())
+    )
+    surfaces.zipWithIndex.foreach { (content, index) =>
+      val state = stateWithQuickInfo("geometry").copy(
+        config = AppConfig.default.withCommandRunnerItemGapRows(0.25).withUiElementGap(0.25),
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId(s"fractional-$index"),
+            content,
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
+        ),
+        focus = Focus.Surface(SurfaceId(s"fractional-$index"))
+      )
+      val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
+      val overlay = OverlayViewModel.fromState(state, layout).belowCursor.getOrElse(fail(s"Expected $content overlay"))
+      metrics.foreach { metric =>
+        val geometry = overlay.geometry(metric)
+        geometry.items.sliding(2).foreach {
+          case Vector(first, second) => second.y - first.y shouldBe metric.lineHeight * 1.25
+          case _                     => ()
+        }
+      }
+    }
+  }
+
   it should "derive a focused find overlay view beneath the active cursor" in {
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")

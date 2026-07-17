@@ -19,6 +19,7 @@ object TextOverlayRenderer:
     cellMetrics: CellMetrics
   ): Unit =
     val rect = overlay.rect
+    val geometry = overlay.geometry(cellMetrics)
 
     def rowColors(rowOffset: Int): (Color, Color) =
       overlay.animationState
@@ -41,9 +42,9 @@ object TextOverlayRenderer:
         surface.putString(rect.x, y, " " * rect.width)
 
       applyGlassSheen(surface, overlay, theme, config)
-      drawContent(surface, overlay, theme, cursorVisible, rowColors, font, cellMetrics)
+      drawContent(surface, overlay, geometry, theme, cursorVisible, rowColors, font, cellMetrics)
     }
-    drawBorder(surface, overlay, theme, config)
+    drawBorder(surface, overlay, geometry, theme, config)
 
     surface.setAlpha(1.0f)
     surface.setForegroundColor(theme.foreground)
@@ -52,11 +53,12 @@ object TextOverlayRenderer:
   private def drawBorder(
     surface: RenderSurface,
     overlay: TextOverlayView,
+    geometry: FloatingSurfaceGeometry,
     theme: Theme,
     config: AppConfig
   ): Unit =
     val rect = overlay.rect
-    if rect.width >= 2 && rect.height >= 2 then
+    if geometry.frame.width >= 2 && geometry.frame.height >= 2 then
       surface.strokeRoundRect(
         rect.x,
         rect.y,
@@ -70,6 +72,7 @@ object TextOverlayRenderer:
   private def drawContent(
     surface: RenderSurface,
     overlay: TextOverlayView,
+    geometry: FloatingSurfaceGeometry,
     theme: Theme,
     cursorVisible: Boolean,
     rowColors: Int => (Color, Color),
@@ -86,8 +89,26 @@ object TextOverlayRenderer:
           case SurfaceContentRowKind.Item(index) => overlay.rows.lift(index)
           case SurfaceContentRowKind.Footer      => overlay.footer
         row.foreach { row =>
-          val rowOffset        = slot.y - overlay.rect.y
+          val rowOffset = slot.kind match
+            case SurfaceContentRowKind.Item(index) =>
+              geometry.items
+                .lift(index)
+                .map(bounds => math.round((bounds.y - geometry.frame.y) / cellMetrics.lineHeight).toInt)
+                .getOrElse(slot.y - overlay.rect.y)
+            case _ => slot.y - overlay.rect.y
           val (animFg, animBg) = rowColors(rowOffset)
+          val itemGeometry = slot.kind match
+            case SurfaceContentRowKind.Item(index) => geometry.items.lift(index)
+            case _                                 => None
+          itemGeometry.foreach { bounds =>
+            surface.fillPixelRect(
+              bounds.x.round.toInt,
+              bounds.y.round.toInt,
+              bounds.width.round.toInt,
+              bounds.height.round.toInt,
+              animBg
+            )
+          }
           renderRow(
             surface,
             contentRect.x,

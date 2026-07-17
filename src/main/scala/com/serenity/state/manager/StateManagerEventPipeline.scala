@@ -1277,15 +1277,19 @@ final private[manager] class StateManagerEventPipeline(
       layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       contract = EditorLayoutContract.from(state, viewportSize, layout)
       contentRect <- contract.overlayContentRect(surface.id)
+      frameRect <- contract.overlayRect(surface.id)
       index <- overlayItemIndex(
         event,
+        frameRect,
+        surface,
         contentRect,
         contract.overlayRowSlots(surface.id),
         menu.items.length,
         menu.selectedIndex,
         hasHeader = true,
         hasFooter = menu.items.nonEmpty,
-        itemGapRows = state.config.commandRunnerItemGapRows.ceil.toInt
+        itemGapRows = state.config.commandRunnerItemGapRows,
+        state = state
       )
     yield (surface, menu, index)
 
@@ -1293,11 +1297,28 @@ final private[manager] class StateManagerEventPipeline(
     (for
       viewportSize <- state.viewportSize
       surface      <- state.contextMenuSurface
+      menu <- surface.content match
+        case SurfaceContent.ContextMenu(menu) => Some(menu)
+        case _                                => None
       layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       contract = EditorLayoutContract.from(state, viewportSize, layout)
       contentRect <- contract.overlayContentRect(surface.id)
-    yield contentRect.contains(event.col, event.row) &&
-      !contract.overlayRowSlots(surface.id).exists(_.y == event.row)).getOrElse(false)
+      frameRect <- contract.overlayRect(surface.id)
+    yield (event.pixelX, event.pixelY) match
+      case (Some(pixelX), Some(pixelY)) =>
+        val geometry = FloatingSurfaceGeometry.calculate(
+          frame = frameRect,
+          metrics = CellMetrics.fromFont(FontLoader.previewUiFont(state.config.fontConfig)),
+          borderCells = SurfaceFrameLayout.borderCellsFor(surface.content),
+          itemCount = menu.items.length,
+          itemGapRows = state.config.commandRunnerItemGapRows,
+          itemOffsetRows = 1.0
+        )
+        geometry.content.contains(pixelX.toDouble, pixelY.toDouble) && geometry.itemAt(pixelX, pixelY).isEmpty
+      case _ =>
+        contentRect.contains(event.col, event.row) &&
+          !contract.overlayRowSlots(surface.id).exists(_.y == event.row)
+    ).getOrElse(false)
 
   private def editorContextMenu(targetFocus: Focus): Option[ContextMenu] =
     val registry = CommandRegistry.withToggleUI
@@ -1388,8 +1409,11 @@ final private[manager] class StateManagerEventPipeline(
       layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       contract = EditorLayoutContract.from(state, viewportSize, layout)
       contentRect <- contract.overlayContentRect(surface.id)
+      frameRect <- contract.overlayRect(surface.id)
       hit <- contextualToolbarItemHit(
         event,
+        frameRect,
+        surface,
         contentRect,
         state,
         toolbarState,
@@ -1399,12 +1423,30 @@ final private[manager] class StateManagerEventPipeline(
 
   private def contextualToolbarItemHit(
     event: MouseInputEvent,
+    frameRect: LayoutRect,
+    surface: UiSurface,
     contentRect: LayoutRect,
     state: AppState,
     toolbarState: ContextualToolbarState,
     rowSlots: List[SurfaceContentRowSlot]
   ): Option[ContextualToolbarHit] =
-    overlayDisplayedRowIndexAt(event, contentRect, rowSlots).flatMap { rowIndex =>
+    val pixelRowIndex = for
+      pixelX <- event.pixelX
+      pixelY <- event.pixelY
+      geometry = FloatingSurfaceGeometry.calculate(
+        frame = frameRect,
+        metrics = CellMetrics.fromFont(FontLoader.previewUiFont(state.config.fontConfig)),
+        borderCells = SurfaceFrameLayout.borderCellsFor(surface.content),
+        itemCount = rowSlots.count {
+          case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), _) => true
+          case _                                                       => false
+        },
+        itemGapRows = state.config.uiElementGap
+      )
+      _ <- Option.when(geometry.content.contains(pixelX.toDouble, pixelY.toDouble))(())
+      rowIndex <- geometry.itemAt(pixelX.toDouble, pixelY.toDouble)
+    yield rowIndex
+    pixelRowIndex.orElse(overlayDisplayedRowIndexAt(event, contentRect, rowSlots)).flatMap { rowIndex =>
       ContextualToolbar.hitAt(
         rowIndex = rowIndex,
         columnOffset = event.col - contentRect.x,
@@ -1536,49 +1578,60 @@ final private[manager] class StateManagerEventPipeline(
     contract: EditorLayoutContract,
     state: AppState
   ): Option[CommandRunnerEvent] =
-    contract.overlayContentRect(surface.id).flatMap { contentRect =>
-      val rowSlots = contract.overlayRowSlots(surface.id)
-      surface.content match
-        case SurfaceContent.CommandPalette(runner) =>
-          overlayItemIndex(
-            event,
-            contentRect,
-            rowSlots,
-            runner.visibleItems.length,
-            runner.selectedIndex,
-            hasHeader = true,
-            hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
-            itemGapRows = state.config.commandRunnerItemGapRows.ceil.toInt
-          )
-            .map(RunnerSelectVisibleItem(_))
-        case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
-          val submenuState = runner.activeSubmenu.filter(_.groupId == groupId)
-          val items = submenuState
-            .map(_.filteredItems(runner.submenuItems(groupId)))
-            .getOrElse(runner.submenuItems(groupId))
-          val selectedIndex = submenuState.map(_.selectedIndex).getOrElse(0)
-          val group         = runner.submenuGroup(groupId)
-          val detailRows    = commandRunnerSubmenuDetailRowCount(groupId, items.lift(selectedIndex))
-          overlayItemIndex(
-            event,
-            contentRect,
-            rowSlots,
-            items.length,
-            selectedIndex,
-            hasHeader = group.nonEmpty,
-            hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-            reservedContentRows = detailRows,
-            itemGapRows = state.config.commandRunnerItemGapRows.ceil.toInt
-          ).map { index =>
-            if previewOnly then RunnerSelectPreviewSubmenuItem(groupId, index)
-            else RunnerSelectSubmenuItem(index)
-          }
-        case _ =>
-          None
-    }
+    for
+      contentRect <- contract.overlayContentRect(surface.id)
+      frameRect <- contract.overlayRect(surface.id)
+      result <- {
+        val rowSlots = contract.overlayRowSlots(surface.id)
+        surface.content match
+          case SurfaceContent.CommandPalette(runner) =>
+            overlayItemIndex(
+              event,
+              frameRect,
+              surface,
+              contentRect,
+              rowSlots,
+              runner.visibleItems.length,
+              runner.selectedIndex,
+              hasHeader = true,
+              hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
+              itemGapRows = state.config.commandRunnerItemGapRows,
+              state = state
+            )
+              .map(RunnerSelectVisibleItem(_))
+          case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
+            val submenuState = runner.activeSubmenu.filter(_.groupId == groupId)
+            val items = submenuState
+              .map(_.filteredItems(runner.submenuItems(groupId)))
+              .getOrElse(runner.submenuItems(groupId))
+            val selectedIndex = submenuState.map(_.selectedIndex).getOrElse(0)
+            val group         = runner.submenuGroup(groupId)
+            val detailRows    = commandRunnerSubmenuDetailRowCount(groupId, items.lift(selectedIndex))
+            overlayItemIndex(
+              event,
+              frameRect,
+              surface,
+              contentRect,
+              rowSlots,
+              items.length,
+              selectedIndex,
+              hasHeader = group.nonEmpty,
+              hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
+              reservedContentRows = detailRows,
+              itemGapRows = state.config.commandRunnerItemGapRows,
+              state = state
+            ).map { index =>
+              if previewOnly then RunnerSelectPreviewSubmenuItem(groupId, index)
+              else RunnerSelectSubmenuItem(index)
+            }
+          case _ => None
+      }
+    yield result
 
   private def overlayItemIndex(
     event: MouseInputEvent,
+    frameRect: LayoutRect,
+    surface: UiSurface,
     contentRect: LayoutRect,
     rowSlots: List[SurfaceContentRowSlot],
     itemCount: Int,
@@ -1586,7 +1639,8 @@ final private[manager] class StateManagerEventPipeline(
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
-    itemGapRows: Int = 0
+    itemGapRows: Double,
+    state: AppState
   ): Option[Int] =
     val itemWindow = SurfaceFrameLayout(contentRect, borderCells = 0).itemWindow(
       itemCount,
@@ -1594,10 +1648,26 @@ final private[manager] class StateManagerEventPipeline(
       hasHeader,
       hasFooter,
       reservedContentRows,
-      itemGapRows
+      FloatingSurfaceGeometry.requiredCellRows(itemGapRows)
     )
-    overlayDisplayedRowIndexAt(event, contentRect, rowSlots)
-      .flatMap(itemWindow.absoluteIndexAt)
+    val pixelItemIndex = for
+      pixelX <- event.pixelX
+      pixelY <- event.pixelY
+      geometry = FloatingSurfaceGeometry.calculate(
+        frame = frameRect,
+        metrics = CellMetrics.fromFont(FontLoader.previewUiFont(state.config.fontConfig)),
+        borderCells = SurfaceFrameLayout.borderCellsFor(surface.content),
+        itemCount = itemWindow.rowCount,
+        itemGapRows = itemGapRows,
+        itemOffsetRows = if hasHeader then 1.0 else 0.0
+      )
+      displayedIndex <- geometry.itemAt(pixelX.toDouble, pixelY.toDouble)
+      absoluteIndex <- itemWindow.absoluteIndexAt(displayedIndex)
+    yield absoluteIndex
+    pixelItemIndex.orElse(
+      overlayDisplayedRowIndexAt(event, contentRect, rowSlots)
+        .flatMap(itemWindow.absoluteIndexAt)
+    )
 
   private def overlayDisplayedRowIndexAt(
     event: MouseInputEvent,

@@ -270,6 +270,46 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     after.contextMenuSurface shouldBe Some(surface)
   }
 
+  it should "use fractional pixel geometry before grid rows when hovering a context menu" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.updateState(state => state.copy(config = state.config.withCommandRunnerItemGapRows(0.25))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+    sm.applyEvent(MouseClick(18, 2, button = MouseButton.Secondary)).unsafeRunSync()
+
+    val openedState = sm.getCurrentState.unsafeRunSync()
+    val viewport    = openedState.viewportSize.getOrElse(fail("Expected viewport size"))
+    val surface     = openedState.contextMenuSurface.getOrElse(fail("Expected context menu surface"))
+    val layout      = LayoutEngine.calculateLayoutWithUI(openedState, viewport)
+    val frame       = EditorLayoutContract.from(openedState, viewport, layout).overlayRect(surface.id).getOrElse(fail("Expected frame"))
+    val metrics     = CellMetrics.fromFont(FontLoader.previewUiFont(openedState.config.fontConfig))
+    val geometry = FloatingSurfaceGeometry.calculate(
+      frame,
+      metrics,
+      SurfaceFrameLayout.borderCellsFor(surface.content),
+      itemCount = 2,
+      itemGapRows = 0.25,
+      itemOffsetRows = 1.0
+    )
+    val secondItem = geometry.items(1)
+
+    sm.applyEvent(
+      MouseMove(
+        col = metrics.toCol(geometry.items.head.x.toInt),
+        row = metrics.toRow(geometry.items.head.y.toInt),
+        pixelX = Some((secondItem.x + 1).toInt),
+        pixelY = Some((secondItem.y + 1).toInt)
+      )
+    ).unsafeRunSync()
+
+    sm.getCurrentState.unsafeRunSync().contextMenuSurface.flatMap {
+      _.content match
+        case SurfaceContent.ContextMenu(menu) => Some(menu.selectedIndex)
+        case _                                => None
+    } shouldBe Some(1)
+  }
+
   it should "dismiss the context menu on Escape" in {
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()

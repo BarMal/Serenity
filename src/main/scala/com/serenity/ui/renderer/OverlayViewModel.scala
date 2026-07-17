@@ -15,7 +15,7 @@ case class TextOverlayView(
     header: Option[OverlayRow] = None,
     rows: List[OverlayRow] = Nil,
     footer: Option[OverlayRow] = None,
-    itemGapRows: Int = 0,
+    itemGapRows: Double = 0.0,
     surfaceId: Option[SurfaceId] = None
 ):
 
@@ -28,7 +28,18 @@ case class TextOverlayView(
       rows.length,
       header.nonEmpty,
       footer.nonEmpty,
-      itemGapRows
+      FloatingSurfaceGeometry.requiredCellRows(itemGapRows)
+    )
+
+  /** Pixel geometry is the source of truth for floating-surface paint and pointer targeting. */
+  def geometry(metrics: CellMetrics): FloatingSurfaceGeometry =
+    FloatingSurfaceGeometry.calculate(
+      frame = rect,
+      metrics = metrics,
+      borderCells = borderCells,
+      itemCount = rows.length,
+      itemGapRows = itemGapRows,
+      itemOffsetRows = if header.nonEmpty then 1.0 else 0.0
     )
 
 case class OverlayViews(
@@ -169,13 +180,15 @@ object OverlayViewModel:
       case other =>
         SurfaceContentResolver.resolve(other, LayoutRect(0, 0, 80, 3), SurfaceRenderMode.Floating)
 
-  private def itemGapRowsFor(content: com.serenity.state.models.SurfaceContent, state: AppState): Int =
+  private def itemGapRowsFor(content: com.serenity.state.models.SurfaceContent, state: AppState): Double =
     content match
       case com.serenity.state.models.SurfaceContent.CommandPalette(_) |
           com.serenity.state.models.SurfaceContent.CommandPaletteSubmenu(_, _, _) |
           com.serenity.state.models.SurfaceContent.ContextMenu(_) =>
-        state.config.commandRunnerItemGapRows.ceil.toInt
-      case _ => 0
+        state.config.commandRunnerItemGapRows
+      case com.serenity.state.models.SurfaceContent.ContextualToolbar(_) =>
+        state.config.uiElementGap
+      case _ => 0.0
 
   private def alphaMultiplierFor(surface: com.serenity.state.models.UiSurface, state: AppState): Float =
     val focusMultiplier =

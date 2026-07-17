@@ -19,7 +19,8 @@ object FloatingSurfaceGeometry:
     metrics: CellMetrics,
     borderCells: Int,
     itemCount: Int,
-    itemGapRows: Double
+    itemGapRows: Double,
+    itemOffsetRows: Double = 0.0
   ): FloatingSurfaceGeometry =
     val border = math.max(0, borderCells)
     val gap    = itemGapRows.max(0.0).min(8.0)
@@ -36,10 +37,15 @@ object FloatingSurfaceGeometry:
       (framePx.height - border * metrics.lineHeight * 2).max(0.0)
     )
     val itemHeight = metrics.lineHeight.toDouble
+    val itemTop = content.y + math.max(0.0, itemOffsetRows) * itemHeight
     val items = Vector.tabulate(math.max(0, itemCount)) { index =>
-      LogicalPixelRect(content.x, content.y + index * (itemHeight + gap * itemHeight), content.width, itemHeight)
+      LogicalPixelRect(content.x, itemTop + index * (itemHeight + gap * itemHeight), content.width, itemHeight)
     }
     FloatingSurfaceGeometry(framePx, content, items)
+
+  /** Number of whole terminal rows required to contain a fractional logical-row gap. */
+  def requiredCellRows(gapRows: Double): Int =
+    math.ceil(gapRows.max(0.0)).toInt
 
   def interpolate(
     from: FloatingSurfaceGeometry,

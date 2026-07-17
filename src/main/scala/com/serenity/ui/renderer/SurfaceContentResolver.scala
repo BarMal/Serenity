@@ -60,7 +60,7 @@ object SurfaceContentResolver:
     content: SurfaceContent,
     rect: LayoutRect,
     mode: SurfaceRenderMode,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): ResolvedSurfaceContent =
     content match
       case SurfaceContent.StartPage(_) =>
@@ -377,7 +377,7 @@ object SurfaceContentResolver:
     runner: com.serenity.command.CommandRunner,
     rect: LayoutRect,
     mode: SurfaceRenderMode,
-    itemGapRows: Int
+    itemGapRows: Double
   ): ResolvedSurfaceContent =
     if !runner.isActive then ResolvedSurfaceContent(titleFor(mode, "commands"))
     else
@@ -400,7 +400,7 @@ object SurfaceContentResolver:
           selectedIndex = runner.selectedIndex,
           hasHeader = true,
           hasFooter = allItems.nonEmpty || runner.statusMessage.nonEmpty,
-          itemGapRows = itemGapRows
+          itemGapRows = FloatingSurfaceGeometry.requiredCellRows(itemGapRows)
         )
       val windowItems           = itemWindow.slice(allItems)
       val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(runner.selectedIndex)
@@ -460,7 +460,7 @@ object SurfaceContentResolver:
     previewOnly: Boolean,
     rect: LayoutRect,
     mode: SurfaceRenderMode,
-    itemGapRows: Int
+    itemGapRows: Double
   ): ResolvedSurfaceContent =
     val group         = runner.submenuGroup(groupId)
     val submenuState  = runner.activeSubmenu.filter(_.groupId == groupId)
@@ -476,7 +476,7 @@ object SurfaceContentResolver:
         hasHeader = group.nonEmpty,
         hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
         reservedContentRows = detailRows.size,
-        itemGapRows = itemGapRows
+        itemGapRows = FloatingSurfaceGeometry.requiredCellRows(itemGapRows)
       )
     val windowItems           = itemWindow.slice(items)
     val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(selectedIndex)
@@ -1013,14 +1013,14 @@ object SurfaceContentResolver:
     menu: ContextMenu,
     rect: LayoutRect,
     mode: SurfaceRenderMode,
-    itemGapRows: Int
+    itemGapRows: Double
   ): ResolvedSurfaceContent =
     val itemWindow = SurfaceFrameLayout(rect).itemWindow(
       itemCount = menu.items.size,
       selectedIndex = menu.selectedIndex,
       hasHeader = true,
       hasFooter = menu.items.nonEmpty,
-      itemGapRows = itemGapRows
+      itemGapRows = FloatingSurfaceGeometry.requiredCellRows(itemGapRows)
     )
     val visibleItems = itemWindow.slice(menu.items)
     val rows = visibleItems.zipWithIndex.map {
