@@ -111,7 +111,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
         fileDialog = FileDialog.unavailable
       )
-      _         <- analysisStarted.get
+      _ <- analysisStarted.get
       operations <- StateManagerOperationBoundary.create(
         stateRef,
         documentAnalysisFiberRef,
