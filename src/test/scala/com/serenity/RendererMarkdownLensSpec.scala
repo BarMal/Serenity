@@ -473,14 +473,53 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
   it should "render the scrolled document window when the caret remains above it" in {
     val source =
       (Vector.fill(32)("") ++ Vector("# Reached after scrolling", "", "Visible prose at the viewport.")).mkString("\n")
-    val (state, surface, _) = renderMarkdownLens(
+    val (state, surface, metrics) = renderMarkdownLens(
       source,
       CursorPosition(0, 0),
       topLine = Some(32)
     )
+    val sourceLines = source.linesIterator.toVector
+    val expectedRows = MarkdownDocumentPreview.inlinePreviewRows(
+      sourceLines,
+      firstSourceLine = 32,
+      maxSourceLines = sourceLines.length - 32
+    )
+    val actual = surface.drawImageCalls.head.image
+    val expected = MarkdownDocumentPreview.renderInlineImage(
+      sourceLines = sourceLines,
+      firstSourceLine = 32,
+      maxSourceLines = sourceLines.length - 32,
+      title = "Untitled",
+      widthPx = actual.getWidth,
+      heightPx = actual.getHeight,
+      theme = state.theme,
+      font = MarkdownDocumentPreview.inlineLensFont(
+        Font(Font.MONOSPACED, Font.PLAIN, 12),
+        metrics.lineHeight,
+        deviceScale = 1.0
+      ),
+      inlineLineHeightPx = metrics.lineHeight
+    )
+    val offscreenCaretWindow = MarkdownDocumentPreview.renderInlineImage(
+      sourceLines = sourceLines,
+      firstSourceLine = 0,
+      maxSourceLines = 32,
+      title = "Untitled",
+      widthPx = actual.getWidth,
+      heightPx = actual.getHeight,
+      theme = state.theme,
+      font = MarkdownDocumentPreview.inlineLensFont(
+        Font(Font.MONOSPACED, Font.PLAIN, 12),
+        metrics.lineHeight,
+        deviceScale = 1.0
+      ),
+      inlineLineHeightPx = metrics.lineHeight
+    )
 
     surface.drawImageCalls should have size 1
-    imageHasContent(surface.drawImageCalls.head.image, state.theme.background.getRGB) shouldBe true
+    expectedRows.map(_.text) should contain allOf ("Reached after scrolling", "Visible prose at the viewport.")
+    samePixels(actual, expected) shouldBe true
+    samePixels(actual, offscreenCaretWindow) shouldBe false
   }
 
   it should "keep visible preview context above the active lens" in {
@@ -573,10 +612,12 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
 
     (state, surface, metrics)
 
-  private def imageHasContent(image: java.awt.image.BufferedImage, backgroundRgb: Int): Boolean =
-    (0 until image.getHeight).exists { row =>
-      (0 until image.getWidth).exists(column => image.getRGB(column, row) != backgroundRgb)
-    }
+  private def samePixels(left: java.awt.image.BufferedImage, right: java.awt.image.BufferedImage): Boolean =
+    left.getWidth == right.getWidth &&
+      left.getHeight == right.getHeight &&
+      (0 until left.getHeight).forall { row =>
+        (0 until left.getWidth).forall(column => left.getRGB(column, row) == right.getRGB(column, row))
+      }
 
   private def rows(surface: MockRenderSurface): List[String] =
     (0 until surface.height).map(surface.getRow).map(_.trim).filter(_.nonEmpty).toList
