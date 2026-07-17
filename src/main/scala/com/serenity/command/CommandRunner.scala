@@ -435,8 +435,17 @@ case class CommandRunner(
     if lowerTerm.length < 3 then Nil
     else
       val leafResults = matchingSettingLeaves(lowerTerm)
-      if CommandRunner.isSpecificSettingQuery(lowerTerm) && leafResults.nonEmpty then leafResults
-      else matchingSettingsGroups(lowerTerm)
+      exactSettingsGroup(lowerTerm) match
+        case Some(exactGroup)                                                                => List(exactGroup)
+        case None if CommandRunner.isSpecificSettingQuery(lowerTerm) && leafResults.nonEmpty => leafResults
+        case None => matchingSettingsGroups(lowerTerm)
+
+  private def exactSettingsGroup(term: String): Option[CommandSurfaceItem.GroupItem] =
+    allSettingsGroups.find { group =>
+      val label = CommandRunner.normalizedSearchTerm(group.label)
+      val id    = CommandRunner.normalizedSearchTerm(group.id)
+      label == term || id == term
+    }
 
   private def matchingSettingsGroups(lowerTerm: String): List[CommandSurfaceItem.GroupItem] =
     if lowerTerm.length < 3 then Nil

@@ -263,6 +263,16 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "keep an exact settings group query as navigation rather than a leaf edit" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("ui font")
+
+    runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-ui-font")
+  }
+
   it should "surface visual appearance settings as an expandable group in settings browsing" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
