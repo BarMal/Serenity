@@ -522,7 +522,7 @@ object LayoutEngine:
     val gapRows         = floatingCursorGapRows(state, surface.content)
 
     for
-      anchor <- floatingAnchor(surface, state)
+      anchor <- floatingAnchor(surface, state, buffer)
       screenPosition <- CursorLayout.calculateScreenPositionInContent(
         anchor,
         buffer.content,
@@ -547,8 +547,13 @@ object LayoutEngine:
             case _ =>
               math.max(contentRect.y, preferredAboveY)
         case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) =>
-          if preferredBelowY + preferredHeight <= contentRect.bottom then preferredBelowY
-          else math.max(contentRect.y, screenPosition.y - preferredHeight - gapRows)
+          surface.content match
+            case SurfaceContent.ContextualToolbar(_) if preferredAboveY >= contentRect.y =>
+              preferredAboveY
+            case _ if preferredBelowY + finalHeight <= contentRect.bottom =>
+              preferredBelowY
+            case _ =>
+              math.max(contentRect.y, screenPosition.y - finalHeight - gapRows)
         case _ =>
           contentRect.y)
 
@@ -572,7 +577,7 @@ object LayoutEngine:
       paneLayout <- paneLayouts.get(paneId)
       bufferId   <- pane.bufferId
       buffer     <- state.buffers.get(bufferId)
-      anchor     <- floatingAnchor(surface, state)
+      anchor     <- floatingAnchor(surface, state, buffer)
       screenPosition <- CursorLayout.calculateScreenPositionInContent(
         anchor,
         buffer.content,
@@ -793,10 +798,15 @@ object LayoutEngine:
       case SurfacePresentation.Floating(anchor, _) => anchor
       case _                                       => None
 
-  private def floatingAnchor(surface: UiSurface, state: AppState): Option[CursorPosition] =
+  private def floatingAnchor(
+    surface: UiSurface,
+    state: AppState,
+    activeBuffer: Buffer
+  ): Option[CursorPosition] =
     surface.content match
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) |
-          SurfaceContent.ContextualToolbar(_) =>
+      case SurfaceContent.ContextualToolbar(_) =>
+        activeBuffer.primarySelection.map(_.start).orElse(state.activeCursorPosition).orElse(surfaceAnchor(surface))
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
         state.activeCursorPosition.orElse(surfaceAnchor(surface))
       case _ =>
         surfaceAnchor(surface).orElse(state.activeCursorPosition)
