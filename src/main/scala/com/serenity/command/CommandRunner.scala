@@ -414,17 +414,40 @@ case class CommandRunner(
   def hasMoreCommands: Boolean = visibleItems.length > 5
 
   private def matchingSettingsGroups(term: String): List[CommandSurfaceItem.GroupItem] =
-    val lowerTerm = term.toLowerCase
+    val lowerTerm = term.trim.toLowerCase
     if lowerTerm.length < 3 then Nil
     else
-      val matches = allSettingsGroups.filter(_.searchText.toLowerCase.contains(lowerTerm))
-      val (directMatches, remainingMatches) =
-        matches.partition(group => CommandRunner.directGroupSearchText(group).contains(lowerTerm))
-      val (directChildMatches, nestedMatches) =
-        remainingMatches.partition(group =>
-          group.children.exists(child => CommandRunner.directItemSearchText(child).contains(lowerTerm))
-        )
-      directMatches ++ directChildMatches ++ nestedMatches
+      val matchingGroups = allSettingsGroups.zipWithIndex
+        .flatMap {
+          case (group, index) =>
+            val groupMatch = CommandRunner.directGroupSearchText(group).contains(lowerTerm)
+            val childMatch = group.children.exists {
+              case _: CommandSurfaceItem.GroupItem => false
+              case child                           => CommandRunner.directItemSearchText(child).contains(lowerTerm)
+            }
+            Option.when(groupMatch || childMatch)(group -> (settingsSearchRank(group, lowerTerm, groupMatch), index))
+        }
+        .sortBy { case (group, (rank, index)) => (rank, index, group.id) }
+      val directGlobalGroups = matchingGroups.collect {
+        case (group, _) if !group.id.startsWith("settings-preset-") && group.children.exists {
+              case _: CommandSurfaceItem.GroupItem => false
+              case _                               => true
+            } =>
+          group
+      }
+      if directGlobalGroups.size == 1 then directGlobalGroups
+      else directGlobalGroups ++ matchingGroups.map(_._1).filterNot(group => directGlobalGroups.contains(group))
+
+  private def settingsSearchRank(
+    group: CommandSurfaceItem.GroupItem,
+    term: String,
+    groupMatch: Boolean
+  ): Int =
+    val label = group.label.toLowerCase
+    if groupMatch && label == term then 0
+    else if groupMatch && label.startsWith(term) then 1
+    else if groupMatch then 2
+    else 3
 
   private def submenuSearchTermFor(group: CommandSurfaceItem.GroupItem): String =
     val lowerTerm = searchTerm.trim.toLowerCase
