@@ -1279,6 +1279,7 @@ final private[manager] class StateManagerEventPipeline(
       contentRect <- contract.overlayContentRect(surface.id)
       index <- overlayItemIndex(
         event,
+        state,
         contentRect,
         contract.overlayRowSlots(surface.id),
         menu.items.length,
@@ -1542,6 +1543,7 @@ final private[manager] class StateManagerEventPipeline(
         case SurfaceContent.CommandPalette(runner) =>
           overlayItemIndex(
             event,
+            state,
             contentRect,
             rowSlots,
             runner.visibleItems.length,
@@ -1561,6 +1563,7 @@ final private[manager] class StateManagerEventPipeline(
           val detailRows    = commandRunnerSubmenuDetailRowCount(groupId, items.lift(selectedIndex))
           overlayItemIndex(
             event,
+            state,
             contentRect,
             rowSlots,
             items.length,
@@ -1579,6 +1582,7 @@ final private[manager] class StateManagerEventPipeline(
 
   private def overlayItemIndex(
     event: MouseInputEvent,
+    state: AppState,
     contentRect: LayoutRect,
     rowSlots: List[SurfaceContentRowSlot],
     itemCount: Int,
@@ -1596,8 +1600,24 @@ final private[manager] class StateManagerEventPipeline(
       reservedContentRows,
       itemGapRows
     )
-    overlayDisplayedRowIndexAt(event, contentRect, rowSlots)
-      .flatMap(itemWindow.absoluteIndexAt)
+    val pixelSelection = for
+      pixelX <- event.pixelX
+      pixelY <- event.pixelY
+      geometry = FloatingSurfaceGeometry.fromCells(
+        contentRect,
+        CellMetrics.fromFont(
+          java.awt.Font(state.config.fontConfig.uiFontFamily, java.awt.Font.PLAIN, state.config.fontConfig.uiFontSize.toInt)
+        ),
+        borderCells = 0,
+        itemCount = itemCount,
+        hasHeader = hasHeader,
+        hasFooter = hasFooter,
+        itemGapRows = itemGapRows
+      )
+      displayedIndex <- geometry.itemIndexAt(pixelX, pixelY)
+      absoluteIndex <- itemWindow.absoluteIndexAt(displayedIndex)
+    yield absoluteIndex
+    pixelSelection.orElse(overlayDisplayedRowIndexAt(event, contentRect, rowSlots).flatMap(itemWindow.absoluteIndexAt))
 
   private def overlayDisplayedRowIndexAt(
     event: MouseInputEvent,

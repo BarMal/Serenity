@@ -78,6 +78,15 @@ object TextOverlayRenderer:
   ): Unit =
     val contentRect = overlay.resolvedContentRect
     val maxLineSize = contentRect.width
+    val floatingGeometry = FloatingSurfaceGeometry.fromCells(
+      overlay.rect,
+      cellMetrics,
+      overlay.borderCells,
+      overlay.rows.length,
+      overlay.header.nonEmpty,
+      overlay.footer.nonEmpty,
+      overlay.itemGapRows
+    )
 
     overlay.contentRowSlots
       .foreach { slot =>
@@ -88,21 +97,50 @@ object TextOverlayRenderer:
         row.foreach { row =>
           val rowOffset        = slot.y - overlay.rect.y
           val (animFg, animBg) = rowColors(rowOffset)
-          renderRow(
-            surface,
-            contentRect.x,
-            slot.y,
-            maxLineSize,
-            row,
-            theme,
-            cursorVisible,
-            defaultForeground = Some(animFg),
-            defaultBackground = Some(animBg),
-            font = font,
-            cellMetrics = cellMetrics
-          )
+          slot.kind match
+            case SurfaceContentRowKind.Item(index) if overlay.itemGapRows > 0.0 =>
+              floatingGeometry.itemRects.lift(index).foreach { pixelRect =>
+                renderPixelRow(surface, pixelRect, maxLineSize, row, theme, animFg, animBg, cellMetrics)
+              }
+            case _ =>
+              renderRow(
+                surface,
+                contentRect.x,
+                slot.y,
+                maxLineSize,
+                row,
+                theme,
+                cursorVisible,
+                defaultForeground = Some(animFg),
+                defaultBackground = Some(animBg),
+                font = font,
+                cellMetrics = cellMetrics
+              )
         }
       }
+
+  private def renderPixelRow(
+    surface: RenderSurface,
+    pixelRect: LogicalPixelRect,
+    width: Int,
+    row: OverlayRow,
+    theme: Theme,
+    defaultForeground: Color,
+    defaultBackground: Color,
+    metrics: CellMetrics
+  ): Unit =
+    val foreground = row.foregroundColor.getOrElse(if row.selected then theme.highlighted.foreground else defaultForeground)
+    val background = row.backgroundColor.getOrElse(if row.selected then theme.highlighted.background else defaultBackground)
+    surface.setForegroundColor(foreground)
+    surface.setBackgroundColor(background)
+    surface.drawRunPx(
+      pixelRect.x.toFloat,
+      math.round(pixelRect.y),
+      pixelRect.width.toFloat,
+      math.round(pixelRect.height),
+      metrics.ascent,
+      row.plainText.take(width)
+    )
 
   private def renderRow(
     surface: RenderSurface,
