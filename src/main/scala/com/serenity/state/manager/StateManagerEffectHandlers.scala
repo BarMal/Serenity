@@ -220,7 +220,13 @@ final private[manager] class StateManagerEffectHandlers(
       if accessibility == com.serenity.config.MotionAccessibility.Standard then IO.unit
       else
         stateRef.update(state =>
+          val buffers = state.buffers.view.mapValues { buffer =>
+            val animations = buffer.animations.clearAll()
+            if animations eq buffer.animations then buffer else buffer.copy(animations = animations)
+          }.toMap
           state.copy(
+            buffers = buffers,
+            themeTransition = None,
             uiSurfaces = state.uiSurfaces.filterNot(_.content.isInstanceOf[SurfaceContent.GhostOverlay]),
             surfaceAnimations = Map.empty
           )

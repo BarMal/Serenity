@@ -81,17 +81,21 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     state.surfaceAnimations.get(surfaceId) shouldBe None
   }
 
-  it should "cancel active command-surface animations when motion accessibility is reduced or off" in
+  it should "cancel all active animation state when motion accessibility is reduced or off" in
     List(MotionAccessibility.Reduced, MotionAccessibility.Off).foreach { accessibility =>
       val sm = createStateManager()
+      sm.updateState(_.copy(config = AppConfig.withTestAnimations)).unsafeRunSync()
+      sm.applyEvent(InsertChar('a')).unsafeRunSync()
+      sm.updateState(state => state.copy(themeTransition = Some(ThemeTransition(state.theme, 0, 2)))).unsafeRunSync()
       sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
       advanceToVisible(sm)
       sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
-      sm.getCurrentState.unsafeRunSync().surfaceAnimations should not be empty
-      sm.getCurrentState
-        .unsafeRunSync()
-        .uiSurfaces
+      val activeState = sm.getCurrentState.unsafeRunSync()
+      activeState.buffers.values.exists(_.animations.hasActiveAnimations) shouldBe true
+      activeState.themeTransition shouldBe defined
+      activeState.surfaceAnimations should not be empty
+      activeState.uiSurfaces
         .exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
 
       sm.executeCommand(
@@ -104,8 +108,11 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       ).unsafeRunSync()
 
       val state = sm.getCurrentState.unsafeRunSync()
+      state.buffers.values.foreach(_.animations.animations shouldBe Map.empty)
+      state.themeTransition shouldBe None
       state.surfaceAnimations shouldBe Map.empty
       state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
+      sm.advanceAnimationsOnTick().unsafeRunSync() shouldBe false
     }
 
   it should "scale command runner fade length with the global animation speed" in {
