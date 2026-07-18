@@ -28,6 +28,7 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
 
     inputById(items, "ui-element-gap").currentValue shouldBe "3"
     inputById(items, "ui-element-gap").parse("4") shouldBe Some(CommandIntent.SetUiElementGap(4))
+    inputById(items, "ui-element-gap").parse("0.75") shouldBe Some(CommandIntent.SetUiElementGap(0.75))
     inputById(items, "ui-element-gap").parse("9") shouldBe None
     inputById(items, "ui-outline-thickness").currentValue shouldBe "4"
     inputById(items, "ui-outline-thickness").parse("5") shouldBe Some(CommandIntent.SetUiOutlineThicknessPx(5))

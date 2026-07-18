@@ -179,3 +179,19 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
         )
       )
   }
+
+  it should "calculate fractional item gaps in logical pixels without making the gap clickable" in {
+    val geometry = FloatingSurfaceGeometry.fromCells(
+      frame = LayoutRect(0, 0, 20, 8),
+      metrics = CellMetrics(charWidth = 8, lineHeight = 20, ascent = 15),
+      borderCells = 0,
+      itemCount = 3,
+      hasHeader = true,
+      hasFooter = true,
+      itemGapRows = 0.5
+    )
+
+    geometry.itemRects.map(_.y) shouldBe List(20.0, 50.0, 80.0)
+    geometry.itemIndexAt(10, 45) shouldBe None
+    geometry.itemIndexAt(10, 55) shouldBe Some(1)
+  }

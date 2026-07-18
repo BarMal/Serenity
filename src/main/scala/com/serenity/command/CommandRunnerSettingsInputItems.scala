@@ -364,11 +364,11 @@ object CommandRunnerSettingsInputItems:
       CommandSurfaceItem.InputItem(
         id = "ui-element-gap",
         label = "UI Element Gap",
-        hint = s"Cells (${AppConfig.MinUiElementGap}-${AppConfig.MaxUiElementGap})",
+        hint = s"Cells, decimals supported (${AppConfig.MinUiElementGap}-${AppConfig.MaxUiElementGap})",
         currentValue = elementGapValue,
-        isDecimal = false,
+        isDecimal = true,
         parse = text =>
-          text.toIntOption
+          text.toDoubleOption
             .filter(value => value >= AppConfig.MinUiElementGap && value <= AppConfig.MaxUiElementGap)
             .map(CommandIntent.SetUiElementGap(_)),
         category = CommandCategory.Settings
@@ -421,11 +421,11 @@ object CommandRunnerSettingsInputItems:
       CommandSurfaceItem.InputItem(
         id = "command-runner-item-gap-rows",
         label = "Command Item Spacing",
-        hint = s"Rows (${AppConfig.MinCommandRunnerItemGapRows}-${AppConfig.MaxCommandRunnerItemGapRows})",
+        hint = s"Rows, decimals supported (${AppConfig.MinCommandRunnerItemGapRows}-${AppConfig.MaxCommandRunnerItemGapRows})",
         currentValue = commandItemGapRowsValue,
-        isDecimal = false,
+        isDecimal = true,
         parse = text =>
-          text.trim.toIntOption
+          text.trim.toDoubleOption
             .filter(value =>
               value >= AppConfig.MinCommandRunnerItemGapRows &&
                 value <= AppConfig.MaxCommandRunnerItemGapRows
@@ -436,14 +436,14 @@ object CommandRunnerSettingsInputItems:
       CommandSurfaceItem.InputItem(
         id = "command-runner-cursor-gap-rows",
         label = "Command Cursor Spacing",
-        hint = s"Rows (${AppConfig.MinCommandRunnerCursorGapRows}-${AppConfig.MaxCommandRunnerCursorGapRows}) or auto",
+        hint = s"Rows, decimals supported (${AppConfig.MinCommandRunnerCursorGapRows}-${AppConfig.MaxCommandRunnerCursorGapRows}) or auto",
         currentValue = commandCursorGapRowsValue,
-        isDecimal = false,
+        isDecimal = true,
         parse = text =>
           val normalized = text.trim.toLowerCase
           if normalized == "auto" then Some(CommandIntent.SetCommandRunnerCursorGapRows(None))
           else
-            normalized.toIntOption
+            normalized.toDoubleOption
               .filter(value =>
                 value >= AppConfig.MinCommandRunnerCursorGapRows &&
                   value <= AppConfig.MaxCommandRunnerCursorGapRows

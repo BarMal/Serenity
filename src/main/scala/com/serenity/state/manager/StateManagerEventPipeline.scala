@@ -1586,7 +1586,7 @@ final private[manager] class StateManagerEventPipeline(
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): Option[Int] =
     val itemWindow = SurfaceFrameLayout(contentRect, borderCells = 0).itemWindow(
       itemCount,

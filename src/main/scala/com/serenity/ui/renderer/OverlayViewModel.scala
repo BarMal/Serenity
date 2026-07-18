@@ -15,7 +15,7 @@ case class TextOverlayView(
     header: Option[OverlayRow] = None,
     rows: List[OverlayRow] = Nil,
     footer: Option[OverlayRow] = None,
-    itemGapRows: Int = 0,
+    itemGapRows: Double = 0.0,
     surfaceId: Option[SurfaceId] = None
 ):
 
@@ -169,7 +169,7 @@ object OverlayViewModel:
       case other =>
         SurfaceContentResolver.resolve(other, LayoutRect(0, 0, 80, 3), SurfaceRenderMode.Floating)
 
-  private def itemGapRowsFor(content: com.serenity.state.models.SurfaceContent, state: AppState): Int =
+  private def itemGapRowsFor(content: com.serenity.state.models.SurfaceContent, state: AppState): Double =
     content match
       case com.serenity.state.models.SurfaceContent.CommandPalette(_) |
           com.serenity.state.models.SurfaceContent.CommandPaletteSubmenu(_, _, _) |

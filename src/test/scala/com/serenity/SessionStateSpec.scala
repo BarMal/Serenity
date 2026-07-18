@@ -699,6 +699,21 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.uiElementGap shouldBe 0
   }
 
+  it should "round trip decimal floating-surface spacing" in {
+    val state = AppState.initial.copy(
+      config = AppConfig.default
+        .withUiElementGap(0.75)
+        .withCommandRunnerItemGapRows(0.25)
+        .withCommandRunnerCursorGapRows(Some(0.5))
+    )
+
+    val decoded = SessionState.fromAppState(state).asJson.as[SessionState].toOption.get
+
+    decoded.config.uiElementGap shouldBe 0.75
+    decoded.config.commandRunnerItemGapRows shouldBe 0.25
+    decoded.config.commandRunnerCursorGapRows shouldBe Some(0.5)
+  }
+
   it should "default UI corner radius to the existing panel radius when loading older JSON without the field" in {
     val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
     val configObject =
