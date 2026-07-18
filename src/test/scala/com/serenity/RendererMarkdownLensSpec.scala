@@ -4,7 +4,7 @@ import java.awt.Font
 
 import com.serenity.config.MarkdownViewMode
 import com.serenity.lsp.config.LanguageId
-import com.serenity.markdown.MarkdownDocumentPreview
+import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -521,6 +521,11 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     List(CursorPosition(0, 0), CursorPosition(2, 0)).foreach { cursor =>
       val (state, surface, metrics) = renderMarkdownLens(source, cursor, topLine = Some(0))
       val actual                    = surface.drawImageCalls.head.image
+      val activeRange               = MarkdownBlockLens.currentBlock(sourceLines, cursor.line)
+      val renderedRows = MarkdownDocumentPreview.renderInlineDocument(sourceLines).filter { row =>
+        row.sourceLine.forall(line => !activeRange.contains(line))
+      }
+      val nonActiveBlockLines = List(0, 2, 4, 6, 10, 16).filterNot(activeRange.contains)
       val expected = MarkdownDocumentPreview.renderInlineImage(
         sourceLines = sourceLines,
         firstSourceLine = 0,
@@ -538,6 +543,16 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       )
 
       withClue(s"cursor at source line ${cursor.line}: ") {
+        rawSourceIsVisible(surface, sourceLines(cursor.line)) shouldBe true
+        nonActiveBlockLines.foreach { sourceLine =>
+          renderedRows.exists(_.sourceLine.contains(sourceLine)) shouldBe true
+        }
+        renderedRows.find(_.sourceLine.contains(10)).map(_.text).getOrElse("") should include("Area")
+        renderedRows.find(_.sourceLine.contains(10)).map(_.text).getOrElse("") should include("Expected behaviour")
+        val renderedAnchors = nonActiveBlockLines.map { sourceLine =>
+          renderedRows.indexWhere(_.sourceLine.contains(sourceLine))
+        }
+        renderedAnchors shouldBe renderedAnchors.sorted
         samePixels(actual, expected) shouldBe true
       }
     }
@@ -829,6 +844,10 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     (0 until surface.height)
       .find(row => surface.getRow(row).contains(source))
       .getOrElse(fail(s"Expected raw source row for: $source"))
+
+  private def rawSourceIsVisible(surface: MockRenderSurface, source: String): Boolean =
+    val marker = source.takeWhile(_ != ' ').take(16)
+    rows(surface).exists(_.contains(marker)) || surface.drawRunPxCalls.exists(_.s.contains(marker))
 
   private def panelRows(surface: MockRenderSurface, state: AppState, paneRect: LayoutRect): Vector[Int] =
     (paneRect.y until paneRect.bottom)

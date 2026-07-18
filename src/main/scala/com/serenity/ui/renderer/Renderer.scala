@@ -47,7 +47,8 @@ object Renderer:
   private case class MarkdownLensFrame(
       lines: Vector[String],
       previewWindow: MarkdownDocumentPreview.PreviewWindow,
-      previewSourceLineCount: Int
+      previewSourceLineCount: Int,
+      activeSourceRanges: List[Range.Inclusive]
   )
 
   private case class MarkdownLensPreviewWindow(
@@ -917,7 +918,12 @@ object Renderer:
   private def markdownLensFrameFor(buffer: Buffer): MarkdownLensFrame =
     val lines         = markdownSourceLines(buffer)
     val previewWindow = markdownPreviewWindow(buffer, lines, buffer.viewport.visibleLines)
-    MarkdownLensFrame(lines, previewWindow.window, previewWindow.sourceLineCount)
+    MarkdownLensFrame(
+      lines,
+      previewWindow.window,
+      previewWindow.sourceLineCount,
+      activeMarkdownBlockRanges(lines, buffer)
+    )
 
   private def markdownPreviewWindow(
     buffer: Buffer,
@@ -997,7 +1003,7 @@ object Renderer:
   ): Unit =
     val lines         = frame.lines
     val previewWindow = frame.previewWindow
-    activeMarkdownBlockRanges(lines, buffer).foreach { blockRange =>
+    frame.activeSourceRanges.foreach { blockRange =>
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
         val placement =
@@ -1070,7 +1076,7 @@ object Renderer:
   ): Unit =
     val lines         = frame.lines
     val previewWindow = frame.previewWindow
-    activeMarkdownBlockRanges(lines, buffer).foreach { blockRange =>
+    frame.activeSourceRanges.foreach { blockRange =>
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
         val placement =
