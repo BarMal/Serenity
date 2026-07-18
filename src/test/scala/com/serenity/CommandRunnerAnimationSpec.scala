@@ -3,7 +3,8 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, TransitionKind}
-import com.serenity.config.{AppConfig, MotionPreset}
+import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.config.{AppConfig, MotionAccessibility, MotionPreset}
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -79,6 +80,30 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val surfaceId = state.commandRunnerSurface.get.id
     state.surfaceAnimations.get(surfaceId) shouldBe None
   }
+
+  it should "cancel active command-surface animations when motion accessibility is reduced or off" in
+    List(MotionAccessibility.Reduced, MotionAccessibility.Off).foreach { accessibility =>
+      val sm = createStateManager()
+      sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+      advanceToVisible(sm)
+      sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+      sm.getCurrentState.unsafeRunSync().surfaceAnimations should not be empty
+      sm.getCurrentState.unsafeRunSync().uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
+
+      sm.executeCommand(
+        Command.typed(
+          "motion-accessibility",
+          "Set motion accessibility",
+          CommandIntent.SetMotionAccessibility(accessibility),
+          CommandCategory.Settings
+        )
+      ).unsafeRunSync()
+
+      val state = sm.getCurrentState.unsafeRunSync()
+      state.surfaceAnimations shouldBe Map.empty
+      state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
+    }
 
   it should "scale command runner fade length with the global animation speed" in {
     val sm = createStateManager()

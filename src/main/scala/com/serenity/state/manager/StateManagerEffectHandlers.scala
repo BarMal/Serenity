@@ -216,7 +216,16 @@ final private[manager] class StateManagerEffectHandlers(
   private def updateMotionAccessibility(
     accessibility: com.serenity.config.MotionAccessibility
   ): IO[com.serenity.config.AppConfig] =
-    updateConfigWithEditedPresetDraft(_.withMotionAccessibility(accessibility), IO.unit)
+    updateConfigWithEditedPresetDraft(_.withMotionAccessibility(accessibility), IO.unit).flatTap { _ =>
+      if accessibility == com.serenity.config.MotionAccessibility.Standard then IO.unit
+      else
+        stateRef.update(state =>
+          state.copy(
+            uiSurfaces = state.uiSurfaces.filterNot(_.content.isInstanceOf[SurfaceContent.GhostOverlay]),
+            surfaceAnimations = Map.empty
+          )
+        )
+    }
 
   private def updateCustomMotionConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
