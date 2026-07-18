@@ -767,7 +767,8 @@ object LayoutEngine:
           toolbarRows,
           hasHeader = false,
           hasFooter = false,
-          borderCells = borderCells
+          borderCells = borderCells,
+          itemGapRows = state.config.uiElementGap
         )
       case SurfaceContent.ContextMenu(menu) =>
         SurfaceFrameLayout.frameHeightForItemRows(
