@@ -89,7 +89,10 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
       sm.getCurrentState.unsafeRunSync().surfaceAnimations should not be empty
-      sm.getCurrentState.unsafeRunSync().uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
+      sm.getCurrentState
+        .unsafeRunSync()
+        .uiSurfaces
+        .exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
 
       sm.executeCommand(
         Command.typed(
