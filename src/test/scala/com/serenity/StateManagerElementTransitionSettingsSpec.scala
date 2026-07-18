@@ -183,17 +183,19 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     stateManager
       .updateState { state =>
         val buffer = state.buffers(secondBufferId)
-        state.copy(buffers = state.buffers.updated(
-          secondBufferId,
-          buffer.copy(animations = buffer.animations.addCharacterAnimation('z', 100, 100, Color.BLACK, Color.WHITE, 5))
-        ))
+        state.copy(buffers =
+          state.buffers.updated(
+            secondBufferId,
+            buffer
+              .copy(animations = buffer.animations.addCharacterAnimation('z', 100, 100, Color.BLACK, Color.WHITE, 5))
+          )
+        )
       }
       .unsafeRunSync()
 
     stateManager.applyEvent(NextTab).unsafeRunSync()
 
-    val owners = stateManager
-      .getCurrentState
+    val owners = stateManager.getCurrentState
       .unsafeRunSync()
       .buffers(secondBufferId)
       .animations

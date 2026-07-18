@@ -1682,7 +1682,9 @@ final private[manager] class StateManagerEffectHandlers(
             val uiAnimations =
               animated.view.mapValues(_.copy(owner = com.serenity.animation.AnimationOwner.UiTransitions)).toMap
             val updatedBuffer = buffer.copy(
-              animations = buffer.animations.clear(com.serenity.animation.AnimationOwner.UiTransitions).mergeAnimations(uiAnimations)
+              animations = buffer.animations
+                .clear(com.serenity.animation.AnimationOwner.UiTransitions)
+                .mergeAnimations(uiAnimations)
             )
             state.copy(buffers = state.buffers + (point.bufferId -> updatedBuffer))
           }
