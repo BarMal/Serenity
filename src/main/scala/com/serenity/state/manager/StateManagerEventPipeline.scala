@@ -796,46 +796,50 @@ final private[manager] class StateManagerEventPipeline(
                 handleCommandRunnerMouseClick(click, state).flatMap {
                   case true => cats.effect.IO.unit
                   case false =>
-                    handlePinnedPanelMouseClick(click, state).flatMap {
-                      case true => cats.effect.IO.unit
-                      case false =>
-                        handlePinnedPanelLocationClick(click, state).flatMap {
-                          case true => cats.effect.IO.unit
-                          case false =>
-                            resolveMouseTarget(click, state).flatMap {
-                              _.fold(dismissContextMenuIfOpen(state)) { (paneId, buffer, clickedCursor) =>
-                                stateRef.update { s =>
-                                  s.buffers.get(buffer.id) match
-                                    case Some(current) =>
-                                      val selection =
-                                        if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
-                                        else if click.clickCount >= 3 then lineSelectionAtCursor(current, clickedCursor)
-                                        else if click.clickCount >= 2 then wordSelectionAtCursor(current, clickedCursor)
-                                        else None
-                                      val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
-                                      dismissContextMenu(
-                                        s.copy(
-                                          buffers = s.buffers.updated(
-                                            buffer.id,
-                                            current.copy(
-                                              cursors = List(focusCursor),
-                                              selection = selection,
-                                              selections = Nil,
-                                              preferredColumn = Some(focusCursor.column),
-                                              preferredXPx = None,
-                                              multiCursorVerticalStates = Nil
-                                            )
-                                          ),
-                                          focus = Focus.EditorPane(paneId),
-                                          layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                    if isInsideFloatingSurface(click, state) then cats.effect.IO.unit
+                    else
+                      handlePinnedPanelMouseClick(click, state).flatMap {
+                        case true => cats.effect.IO.unit
+                        case false =>
+                          handlePinnedPanelLocationClick(click, state).flatMap {
+                            case true => cats.effect.IO.unit
+                            case false =>
+                              resolveMouseTarget(click, state).flatMap {
+                                _.fold(dismissContextMenuIfOpen(state)) { (paneId, buffer, clickedCursor) =>
+                                  stateRef.update { s =>
+                                    s.buffers.get(buffer.id) match
+                                      case Some(current) =>
+                                        val selection =
+                                          if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
+                                          else if click.clickCount >= 3 then
+                                            lineSelectionAtCursor(current, clickedCursor)
+                                          else if click.clickCount >= 2 then
+                                            wordSelectionAtCursor(current, clickedCursor)
+                                          else None
+                                        val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
+                                        dismissContextMenu(
+                                          s.copy(
+                                            buffers = s.buffers.updated(
+                                              buffer.id,
+                                              current.copy(
+                                                cursors = List(focusCursor),
+                                                selection = selection,
+                                                selections = Nil,
+                                                preferredColumn = Some(focusCursor.column),
+                                                preferredXPx = None,
+                                                multiCursorVerticalStates = Nil
+                                              )
+                                            ),
+                                            focus = Focus.EditorPane(paneId),
+                                            layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                                          )
                                         )
-                                      )
-                                    case None => dismissContextMenu(s)
+                                      case None => dismissContextMenu(s)
+                                  }
                                 }
                               }
-                            }
-                        }
-                    }
+                          }
+                      }
                 }
             }
         }
@@ -851,37 +855,39 @@ final private[manager] class StateManagerEventPipeline(
           handleCommandRunnerMouseHover(press, state).flatMap {
             case true => cats.effect.IO.unit
             case false =>
-              handlePinnedPanelMouseSelect(press, state, focusPanel = true).flatMap {
-                case true => cats.effect.IO.unit
-                case false =>
-                  resolveMouseTarget(press, state).flatMap {
-                    _.fold(cats.effect.IO.unit) { (paneId, buffer, pressedCursor) =>
-                      stateRef.update { s =>
-                        s.buffers.get(buffer.id) match
-                          case Some(current) =>
-                            val selection =
-                              Option.when(press.shiftDown)(rangeSelectionFromAnchor(current, pressedCursor)).flatten
-                            val focusCursor = selection.map(_.focus).getOrElse(pressedCursor)
-                            s.copy(
-                              buffers = s.buffers.updated(
-                                buffer.id,
-                                current.copy(
-                                  cursors = List(focusCursor),
-                                  selection = selection,
-                                  selections = Nil,
-                                  preferredColumn = Some(focusCursor.column),
-                                  preferredXPx = None,
-                                  multiCursorVerticalStates = Nil
-                                )
-                              ),
-                              focus = Focus.EditorPane(paneId),
-                              layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-                            )
-                          case None => s
+              if isInsideFloatingSurface(press, state) then cats.effect.IO.unit
+              else
+                handlePinnedPanelMouseSelect(press, state, focusPanel = true).flatMap {
+                  case true => cats.effect.IO.unit
+                  case false =>
+                    resolveMouseTarget(press, state).flatMap {
+                      _.fold(cats.effect.IO.unit) { (paneId, buffer, pressedCursor) =>
+                        stateRef.update { s =>
+                          s.buffers.get(buffer.id) match
+                            case Some(current) =>
+                              val selection =
+                                Option.when(press.shiftDown)(rangeSelectionFromAnchor(current, pressedCursor)).flatten
+                              val focusCursor = selection.map(_.focus).getOrElse(pressedCursor)
+                              s.copy(
+                                buffers = s.buffers.updated(
+                                  buffer.id,
+                                  current.copy(
+                                    cursors = List(focusCursor),
+                                    selection = selection,
+                                    selections = Nil,
+                                    preferredColumn = Some(focusCursor.column),
+                                    preferredXPx = None,
+                                    multiCursorVerticalStates = Nil
+                                  )
+                                ),
+                                focus = Focus.EditorPane(paneId),
+                                layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                              )
+                            case None => s
+                        }
                       }
                     }
-                  }
-              }
+                }
           }
       }
 
@@ -938,10 +944,12 @@ final private[manager] class StateManagerEventPipeline(
             handleCommandRunnerMouseHover(move, state).flatMap {
               case true => clearEditorHoverTarget
               case false =>
-                handlePinnedPanelMouseHover(move, state).flatMap {
-                  case true  => clearEditorHoverTarget
-                  case false => updateEditorHoverTarget(move, state)
-                }
+                if isInsideFloatingSurface(move, state) then clearEditorHoverTarget
+                else
+                  handlePinnedPanelMouseHover(move, state).flatMap {
+                    case true  => clearEditorHoverTarget
+                    case false => updateEditorHoverTarget(move, state)
+                  }
             }
         }
     }
@@ -1395,7 +1403,8 @@ final private[manager] class StateManagerEventPipeline(
         contentRect,
         state,
         toolbarState,
-        contract.overlayRowSlots(surface.id)
+        contract.overlayRowSlots(surface.id),
+        layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0)
       )
     yield (surface, toolbarState, hit)
 
@@ -1404,9 +1413,37 @@ final private[manager] class StateManagerEventPipeline(
     contentRect: LayoutRect,
     state: AppState,
     toolbarState: ContextualToolbarState,
-    rowSlots: List[SurfaceContentRowSlot]
+    rowSlots: List[SurfaceContentRowSlot],
+    floatingOffsetRows: Double
   ): Option[ContextualToolbarHit] =
-    overlayDisplayedRowIndexAt(event, contentRect, rowSlots).flatMap { rowIndex =>
+    val rowIndex =
+      if event.pixelX.isDefined && event.pixelY.isDefined then
+        val metrics = CellMetrics.fromFont(
+          java.awt
+            .Font(state.config.fontConfig.uiFontFamily, java.awt.Font.PLAIN, state.config.fontConfig.uiFontSize.toInt)
+        )
+        val rowCount = rowSlots.count {
+          case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), _) => true
+          case _                                                       => false
+        }
+        for
+          pixelX <- event.pixelX
+          pixelY <- event.pixelY
+          geometry = FloatingSurfaceGeometry
+            .fromCells(
+              contentRect,
+              metrics,
+              borderCells = 0,
+              itemCount = rowCount,
+              hasHeader = false,
+              hasFooter = false,
+              itemGapRows = state.config.uiElementGap
+            )
+            .translated(0.0, FloatingSurfaceGeometry.signedRowOffsetPixels(floatingOffsetRows, metrics))
+          index <- geometry.itemIndexAt(pixelX, pixelY)
+        yield index
+      else overlayDisplayedRowIndexAt(event, contentRect, rowSlots)
+    rowIndex.flatMap { rowIndex =>
       ContextualToolbar.hitAt(
         rowIndex = rowIndex,
         columnOffset = event.col - contentRect.x,
@@ -1414,6 +1451,40 @@ final private[manager] class StateManagerEventPipeline(
         toolbarState = toolbarState,
         state = state
       )
+    }
+
+  private def isInsideFloatingSurface(event: MouseInputEvent, state: AppState): Boolean =
+    state.viewportSize.exists { viewportSize =>
+      val layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      val contract = EditorLayoutContract.from(state, viewportSize, layout)
+      val metrics = CellMetrics.fromFont(
+        java.awt
+          .Font(state.config.fontConfig.uiFontFamily, java.awt.Font.PLAIN, state.config.fontConfig.uiFontSize.toInt)
+      )
+      state.floatingSurfaces.exists { surface =>
+        contract.overlayRect(surface.id).exists { rect =>
+          val geometry = FloatingSurfaceGeometry
+            .fromCells(
+              rect,
+              metrics,
+              borderCells = 0,
+              itemCount = 0,
+              hasHeader = false,
+              hasFooter = false,
+              itemGapRows = 0.0
+            )
+            .translated(
+              0.0,
+              FloatingSurfaceGeometry.signedRowOffsetPixels(
+                layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
+                metrics
+              )
+            )
+          (event.pixelX, event.pixelY) match
+            case (Some(pixelX), Some(pixelY)) => geometry.frame.contains(pixelX, pixelY)
+            case _                            => rect.contains(event.col, event.row)
+        }
+      }
     }
 
   private def replaceContextualToolbar(
