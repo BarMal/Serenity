@@ -13,9 +13,9 @@ object MotionAccessibility:
   def fromConfigKey(value: String): Option[MotionAccessibility] =
     value.trim.toLowerCase match
       case "standard" | "system" | "none" => Some(MotionAccessibility.Standard)
-      case "reduced"                        => Some(MotionAccessibility.Reduced)
-      case "off" | "disabled"              => Some(MotionAccessibility.Off)
-      case _                                 => None
+      case "reduced"                      => Some(MotionAccessibility.Reduced)
+      case "off" | "disabled"             => Some(MotionAccessibility.Off)
+      case _                              => None
 
 /** Independently configurable runtime motion families. */
 enum MotionFamily:
@@ -60,9 +60,13 @@ case class MotionConfig(
 
   def effective: EffectiveMotionConfig =
     val normalizedFamilies = normalized.families
-    val disabled = accessibility != MotionAccessibility.Standard || baseline == MotionPreset.Reduced
+    val disabled           = accessibility != MotionAccessibility.Standard || baseline == MotionPreset.Reduced
     EffectiveMotionConfig(
-      normalizedFamilies.view.mapValues(family => if disabled || !family.enabled || family.speedScale <= 0.0 then family.disabled else family).toMap
+      normalizedFamilies.view
+        .mapValues(family =>
+          if disabled || !family.enabled || family.speedScale <= 0.0 then family.disabled else family
+        )
+        .toMap
     )
 
 object MotionConfig:

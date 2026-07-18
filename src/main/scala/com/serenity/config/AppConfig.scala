@@ -964,7 +964,8 @@ case class SurfaceConfig(
 
   def elementTransitionSettings: ElementTransitionSettings =
     val uiMotion = effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
-    val baseSettings = if uiMotion.enabled then motionPreset.elementTransitionSettings else ElementTransitionSettings.disabled
+    val baseSettings =
+      if uiMotion.enabled then motionPreset.elementTransitionSettings else ElementTransitionSettings.disabled
     if !baseSettings.enabled then baseSettings
     else
       val transitionOverrides =
@@ -982,7 +983,8 @@ case class SurfaceConfig(
 
   def editorInsertionTransitionSettings: ElementTransitionSettings =
     val editorMotion = effectiveMotionConfiguration.family(MotionFamily.EditorText)
-    val baseSettings = if editorMotion.enabled then motionPreset.elementTransitionSettings else ElementTransitionSettings.disabled
+    val baseSettings =
+      if editorMotion.enabled then motionPreset.elementTransitionSettings else ElementTransitionSettings.disabled
     if !baseSettings.enabled then baseSettings
     else
       baseSettings.copy(
