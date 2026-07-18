@@ -1,6 +1,6 @@
 package com.serenity.config
 
-import com.serenity.animation.{AnimationConfig, TransitionKind}
+import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 
 /** Global accessibility policy applied after a preset and family configuration are resolved. */
 enum MotionAccessibility(val configKey: String):
@@ -30,14 +30,24 @@ case class MotionFamilyConfig(
     enabled: Boolean,
     transitionKind: TransitionKind,
     animation: Option[AnimationConfig],
-    speedScale: Double
+    speedScale: Double,
+    transitionOverrides: Map[TransitionScope, TransitionKind] = Map.empty
 ):
 
   def normalized: MotionFamilyConfig =
     copy(speedScale = MotionConfig.clampSpeedScale(speedScale))
 
   def disabled: MotionFamilyConfig =
-    copy(enabled = false, transitionKind = TransitionKind.Disabled, animation = None, speedScale = 0.0)
+    copy(
+      enabled = false,
+      transitionKind = TransitionKind.Disabled,
+      animation = None,
+      speedScale = 0.0,
+      transitionOverrides = transitionOverrides.view.mapValues(_ => TransitionKind.Disabled).toMap
+    )
+
+  def transitionKindFor(scope: TransitionScope): TransitionKind =
+    transitionOverrides.getOrElse(scope, transitionKind)
 
 object MotionFamilyConfig:
   val disabled: MotionFamilyConfig = MotionFamilyConfig(false, TransitionKind.Disabled, None, 0.0)
@@ -59,8 +69,19 @@ case class MotionConfig(
     copy(families = families.view.mapValues(_.normalized).toMap)
 
   def withFallback(fallback: MotionConfig): MotionConfig =
-    copy(families =
+    val resolvedFamilies =
       MotionFamily.values.map(family => family -> families.getOrElse(family, fallback.families(family))).toMap
+    val pinnedPanels = resolvedFamilies(MotionFamily.PinnedPanels)
+    copy(families =
+      resolvedFamilies.updated(
+        MotionFamily.PinnedPanels,
+        pinnedPanels.copy(transitionOverrides =
+          Map(
+            TransitionScope.PanelOpen  -> pinnedPanels.transitionKindFor(TransitionScope.PanelOpen),
+            TransitionScope.PanelClose -> pinnedPanels.transitionKindFor(TransitionScope.PanelClose)
+          )
+        )
+      )
     )
 
   def effective: EffectiveMotionConfig =
@@ -125,7 +146,11 @@ object MotionConfig:
           enabled = panelOpenTransition != TransitionKind.Disabled || panelCloseTransition != TransitionKind.Disabled,
           transitionKind = panelOpenTransition,
           animation = uiAnimation,
-          speedScale = config.effectiveUiTransitionSpeedScale
+          speedScale = config.effectiveUiTransitionSpeedScale,
+          transitionOverrides = Map(
+            TransitionScope.PanelOpen  -> panelOpenTransition,
+            TransitionScope.PanelClose -> panelCloseTransition
+          )
         ),
         MotionFamily.UiTransitions -> MotionFamilyConfig(
           enabled = true,

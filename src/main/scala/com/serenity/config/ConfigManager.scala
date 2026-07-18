@@ -7,7 +7,7 @@ import scala.io.Source
 import scala.util.Using
 
 import cats.effect.IO
-import com.serenity.animation.{AnimationConfig, TransitionKind}
+import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
@@ -275,10 +275,16 @@ object ConfigManager:
     val motionFamilySettings = MotionFamily.values
       .map { family =>
         val settings = motionConfiguration.families(family)
+        val scopedTransitions =
+          if family == MotionFamily.PinnedPanels then
+            s"""
+               |ui.motion.family.${family.configKey}.open_transition = ${transitionKindConfigKey(settings.transitionKindFor(TransitionScope.PanelOpen))}
+               |ui.motion.family.${family.configKey}.close_transition = ${transitionKindConfigKey(settings.transitionKindFor(TransitionScope.PanelClose))}""".stripMargin
+          else ""
         s"""ui.motion.family.${family.configKey}.enabled = ${settings.enabled}
          |ui.motion.family.${family.configKey}.transition = ${transitionKindConfigKey(settings.transitionKind)}
          |ui.motion.family.${family.configKey}.animation = ${motionAnimationSetting(settings.animation)}
-         |ui.motion.family.${family.configKey}.speed_scale = ${settings.speedScale}""".stripMargin
+         |ui.motion.family.${family.configKey}.speed_scale = ${settings.speedScale}$scopedTransitions""".stripMargin
       }
       .mkString("\n")
     val lspSettings = lspConfigToString(config.lspUserConfig)

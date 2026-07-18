@@ -966,12 +966,12 @@ case class SurfaceConfig(
 
   def effectivePanelOpenTransitionKind: TransitionKind =
     motionConfiguration.fold(panelOpenTransitionKind.getOrElse(TransitionKind.OutlineThenContent))(_ =>
-      effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).transitionKind
+      effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).transitionKindFor(TransitionScope.PanelOpen)
     )
 
   def effectivePanelCloseTransitionKind: TransitionKind =
     motionConfiguration.fold(panelCloseTransitionKind.getOrElse(TransitionKind.Fade))(_ =>
-      effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).transitionKind
+      effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).transitionKindFor(TransitionScope.PanelClose)
     )
 
   def elementTransitionSettings: ElementTransitionSettings =
@@ -989,8 +989,12 @@ case class SurfaceConfig(
             TransitionScope.CommandRunner -> effectiveMotionConfiguration
               .family(MotionFamily.CommandSurfaces)
               .transitionKind,
-            TransitionScope.PanelOpen  -> effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).transitionKind,
-            TransitionScope.PanelClose -> effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).transitionKind
+            TransitionScope.PanelOpen -> effectiveMotionConfiguration
+              .family(MotionFamily.PinnedPanels)
+              .transitionKindFor(TransitionScope.PanelOpen),
+            TransitionScope.PanelClose -> effectiveMotionConfiguration
+              .family(MotionFamily.PinnedPanels)
+              .transitionKindFor(TransitionScope.PanelClose)
           ).toMap
         case None =>
           List(
@@ -1035,8 +1039,8 @@ case class SurfaceConfig(
             baseTiming = timing,
             speedScale = panelMotion.speedScale,
             overrides = baseSettings.overrides ++ Map(
-              TransitionScope.PanelOpen  -> panelMotion.transitionKind,
-              TransitionScope.PanelClose -> panelMotion.transitionKind
+              TransitionScope.PanelOpen  -> panelMotion.transitionKindFor(TransitionScope.PanelOpen),
+              TransitionScope.PanelClose -> panelMotion.transitionKindFor(TransitionScope.PanelClose)
             )
           )
 
@@ -1107,7 +1111,10 @@ object SurfaceConfig:
       Set("enabled", "transition", "animation", "speed_scale").map(field =>
         s"ui.motion.family.${family.configKey}.$field"
       )
-    }
+    } ++ Set(
+      "ui.motion.family.pinned_panels.open_transition",
+      "ui.motion.family.pinned_panels.close_transition"
+    )
 
     val deprecatedKeys: Map[String, String] = Map(
       "ui_material"                          -> "ui.material",
@@ -1168,7 +1175,10 @@ object SurfaceConfig:
       Set("enabled", "transition", "animation", "speed_scale").map(field =>
         s"$motionFamilyPrefix${family.configKey}.$field"
       )
-    }.toSet
+    }.toSet ++ Set(
+      s"${motionFamilyPrefix}pinned_panels.open_transition",
+      s"${motionFamilyPrefix}pinned_panels.close_transition"
+    )
 
     val elementTransitionSpeedScaleKeys: Set[String] =
       Set("ui.motion.speed_scale", "motion.speed_scale", "ui_motion_speed_scale", "motion_speed_scale")
@@ -1374,7 +1384,17 @@ object SurfaceConfig:
           case "transition"  => parseTransitionKind(value).map(kind => settings.copy(transitionKind = kind))
           case "animation"   => parseAnimationPreset(value).map(animation => settings.copy(animation = animation))
           case "speed_scale" => parseElementTransitionSpeedScale(value).map(scale => settings.copy(speedScale = scale))
-          case _             => None
+          case "open_transition" if family == MotionFamily.PinnedPanels =>
+            parseTransitionKind(value).map(kind =>
+              settings.copy(transitionOverrides = settings.transitionOverrides.updated(TransitionScope.PanelOpen, kind))
+            )
+          case "close_transition" if family == MotionFamily.PinnedPanels =>
+            parseTransitionKind(value).map(kind =>
+              settings.copy(transitionOverrides =
+                settings.transitionOverrides.updated(TransitionScope.PanelClose, kind)
+              )
+            )
+          case _ => None
       yield config.withMotionFamilyConfiguration(family, updated)
 
     private def parseCommandRunnerVisibleRows(value: String): Option[Option[Int]] =

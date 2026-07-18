@@ -750,6 +750,20 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     loaded.surfaceConfig.effectiveMotionBaseline shouldBe MotionPreset.Expressive
   }
 
+  it should "preserve distinct legacy panel transitions when migrating to the authoritative hierarchy" in {
+    val legacy = AppConfig.default
+      .withPanelOpenTransitionKind(Some(TransitionKind.DirectionalSweep))
+      .withPanelCloseTransitionKind(Some(TransitionKind.Disabled))
+    val migrated   = legacy.withMotionConfiguration(MotionConfig.fromLegacy(legacy.surfaceConfig))
+    val configFile = Files.createTempFile("serenity-panel-transition-migration", ".conf")
+    Files.writeString(configFile, ConfigManager.configToString(migrated))
+
+    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    loaded.effectivePanelOpenTransitionKind shouldBe TransitionKind.DirectionalSweep
+    loaded.effectivePanelCloseTransitionKind shouldBe TransitionKind.Disabled
+  }
+
   it should "load and write viewport sizing policy" in {
     val configFile = Files.createTempFile("serenity-viewport-config", ".conf")
     Files.writeString(

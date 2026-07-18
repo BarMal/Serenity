@@ -7,7 +7,7 @@ import scala.concurrent.duration.FiniteDuration
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.serenity.animation.{AnimationConfig, TransitionKind}
+import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.config.*
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
@@ -559,8 +559,44 @@ given Decoder[MotionFamily] = Decoder.decodeString.emap(value =>
   MotionFamily.values.find(_.toString == value).toRight(s"Unknown MotionFamily: $value")
 )
 
-given Encoder[MotionFamilyConfig] = deriveEncoder
-given Decoder[MotionFamilyConfig] = deriveDecoder
+given Encoder[TransitionKind] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[TransitionKind] = Decoder.decodeString.emap {
+  case "Disabled"               => Right(TransitionKind.Disabled)
+  case "Fade"                   => Right(TransitionKind.Fade)
+  case "TypedText"              => Right(TransitionKind.TypedText)
+  case "DirectionalSweep"       => Right(TransitionKind.DirectionalSweep)
+  case "OutlineThenContent"     => Right(TransitionKind.OutlineThenContent)
+  case "LineAndCharacterTandem" => Right(TransitionKind.LineAndCharacterTandem)
+  case other                    => Left(s"Unknown TransitionKind: $other")
+}
+
+given Encoder[MotionFamilyConfig] = Encoder.instance { config =>
+  Json.obj(
+    "enabled"             -> config.enabled.asJson,
+    "transitionKind"      -> config.transitionKind.asJson,
+    "animation"           -> config.animation.asJson,
+    "speedScale"          -> config.speedScale.asJson,
+    "transitionOverrides" -> config.transitionOverrides.map { case (scope, kind) => scope.toString -> kind }.asJson
+  )
+}
+
+given Decoder[MotionFamilyConfig] = Decoder.instance { cursor =>
+  for
+    enabled        <- cursor.get[Boolean]("enabled")
+    transitionKind <- cursor.get[TransitionKind]("transitionKind")
+    animation      <- cursor.get[Option[AnimationConfig]]("animation")
+    speedScale     <- cursor.get[Double]("speedScale")
+    encoded        <- cursor.getOrElse[Map[String, TransitionKind]]("transitionOverrides")(Map.empty)
+    transitionOverrides <- encoded.toList.traverse {
+      case (name, kind) =>
+        TransitionScope.values
+          .find(_.toString == name)
+          .toRight(DecodingFailure(s"Unknown TransitionScope: $name", cursor.history))
+          .map(_ -> kind)
+    }
+  yield MotionFamilyConfig(enabled, transitionKind, animation, speedScale, transitionOverrides.toMap)
+}
 
 given Encoder[MotionConfig] = Encoder.instance { config =>
   Json.obj(
@@ -583,18 +619,6 @@ given Decoder[MotionConfig] = Decoder.instance { cursor =>
           .map(_ -> settings)
     }
   yield MotionConfig(accessibility, baseline, families.toMap)
-}
-
-given Encoder[TransitionKind] = Encoder.encodeString.contramap(_.toString)
-
-given Decoder[TransitionKind] = Decoder.decodeString.emap {
-  case "Disabled"               => Right(TransitionKind.Disabled)
-  case "Fade"                   => Right(TransitionKind.Fade)
-  case "TypedText"              => Right(TransitionKind.TypedText)
-  case "DirectionalSweep"       => Right(TransitionKind.DirectionalSweep)
-  case "OutlineThenContent"     => Right(TransitionKind.OutlineThenContent)
-  case "LineAndCharacterTandem" => Right(TransitionKind.LineAndCharacterTandem)
-  case other                    => Left(s"Unknown TransitionKind: $other")
 }
 
 given Encoder[Color] = Encoder.encodeString.contramap(formatColor)
