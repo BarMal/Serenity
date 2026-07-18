@@ -622,12 +622,25 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     after.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
-  it should "select toolbar items at their fractional floating pixel offset" in {
+  it should "select toolbar items at their fractional code-metric pixel offset when UI fonts differ" in {
     val stateManager = createStateManager("ContextualToolbarSpec-fractional-mouse")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
     stateManager
-      .updateState(state => state.copy(config = state.config.withUiElementGap(0.5)))
+      .updateState(state =>
+        state.copy(
+          config = state.config
+            .withUiElementGap(0.5)
+            .withFontConfig(
+              state.config.fontConfig.copy(
+                codeFontFamily = Font.MONOSPACED,
+                fontSize = 24.0f,
+                uiFontFamily = Font.SANS_SERIF,
+                uiFontSize = 8.0f
+              )
+            )
+        )
+      )
       .unsafeRunSync()
     seedToolbarDocument(stateManager)
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
@@ -1443,9 +1456,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
     val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar surface"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    val metrics = CellMetrics.fromFont(
-      Font(state.config.fontConfig.uiFontFamily, Font.PLAIN, state.config.fontConfig.uiFontSize.toInt)
-    )
+    val metrics  = CellMetrics.fromFont(FontLoader.previewCodeFont(state.config.fontConfig))
     val offsetPx = FloatingSurfaceGeometry.signedRowOffsetPixels(
       layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
       metrics

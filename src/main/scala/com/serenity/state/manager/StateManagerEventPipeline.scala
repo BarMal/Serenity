@@ -1421,10 +1421,7 @@ final private[manager] class StateManagerEventPipeline(
   ): Option[ContextualToolbarHit] =
     val rowIndex =
       if event.pixelX.isDefined && event.pixelY.isDefined then
-        val metrics = CellMetrics.fromFont(
-          java.awt
-            .Font(state.config.fontConfig.uiFontFamily, java.awt.Font.PLAIN, state.config.fontConfig.uiFontSize.toInt)
-        )
+        val metrics = floatingCellMetrics(state)
         val rowCount = rowSlots.count {
           case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), _) => true
           case _                                                       => false
@@ -1460,10 +1457,7 @@ final private[manager] class StateManagerEventPipeline(
     state.viewportSize.exists { viewportSize =>
       val layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       val contract = EditorLayoutContract.from(state, viewportSize, layout)
-      val metrics = CellMetrics.fromFont(
-        java.awt
-          .Font(state.config.fontConfig.uiFontFamily, java.awt.Font.PLAIN, state.config.fontConfig.uiFontSize.toInt)
-      )
+      val metrics  = floatingCellMetrics(state)
       state.floatingSurfaces.exists { surface =>
         contract.overlayRect(surface.id).exists { rect =>
           val geometry = FloatingSurfaceGeometry
@@ -1489,6 +1483,9 @@ final private[manager] class StateManagerEventPipeline(
         }
       }
     }
+
+  private def floatingCellMetrics(state: AppState): CellMetrics =
+    CellMetrics.fromFont(FontLoader.previewCodeFont(state.config.fontConfig))
 
   private def replaceContextualToolbar(
     state: AppState,
@@ -1682,10 +1679,7 @@ final private[manager] class StateManagerEventPipeline(
     val pixelSelection = for
       pixelX <- event.pixelX
       pixelY <- event.pixelY
-      metrics = CellMetrics.fromFont(
-        java.awt
-          .Font(state.config.fontConfig.uiFontFamily, java.awt.Font.PLAIN, state.config.fontConfig.uiFontSize.toInt)
-      )
+      metrics = floatingCellMetrics(state)
       geometry = FloatingSurfaceGeometry
         .fromCells(
           contentRect,
