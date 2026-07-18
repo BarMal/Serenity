@@ -785,7 +785,8 @@ final private[manager] class StateManagerEventPipeline(
   private def handleMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Unit] =
     click.button match
       case MouseButton.Secondary =>
-        openEditorContextMenu(click, state)
+        if isInsideFloatingSurface(click, state) then cats.effect.IO.unit
+        else openEditorContextMenu(click, state)
       case MouseButton.Primary =>
         handleContextMenuMouseClick(click, state).flatMap {
           case true => cats.effect.IO.unit
