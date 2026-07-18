@@ -497,6 +497,52 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "keep every non-active block visibly rendered for the issue 701 fixture" in {
+    val source =
+      """# Serenity document preview
+        |
+        |This paragraph should be rendered as readable prose while the cursor is elsewhere.
+        |
+        |## Navigation and alignment
+        |
+        |- The active block should reveal its Markdown source.
+        |- Rendered blocks should remain aligned around it.
+        |- Moving the caret should replace, not displace, the rendered block.
+        |
+        || Area | Expected behaviour |
+        || --- | --- |
+        || Heading | Large and aligned |
+        || Paragraph | Readable prose |
+        || Table | Stable rows and borders |
+        |
+        |Final paragraph after the table.""".stripMargin
+    val sourceLines = source.linesIterator.toVector
+
+    List(CursorPosition(0, 0), CursorPosition(2, 0)).foreach { cursor =>
+      val (state, surface, metrics) = renderMarkdownLens(source, cursor, topLine = Some(0))
+      val actual                    = surface.drawImageCalls.head.image
+      val expected = MarkdownDocumentPreview.renderInlineImage(
+        sourceLines = sourceLines,
+        firstSourceLine = 0,
+        maxSourceLines = sourceLines.length,
+        title = "Untitled",
+        widthPx = actual.getWidth,
+        heightPx = actual.getHeight,
+        theme = state.theme,
+        font = MarkdownDocumentPreview.inlineLensFont(
+          Font(Font.MONOSPACED, Font.PLAIN, 12),
+          metrics.lineHeight,
+          deviceScale = 1.0
+        ),
+        inlineLineHeightPx = metrics.lineHeight
+      )
+
+      withClue(s"cursor at source line ${cursor.line}: ") {
+        samePixels(actual, expected) shouldBe true
+      }
+    }
+  }
+
   it should "retain rendered context below an active source unit near the preview window boundary" in {
     val sourceLines =
       Vector("# Start") ++
