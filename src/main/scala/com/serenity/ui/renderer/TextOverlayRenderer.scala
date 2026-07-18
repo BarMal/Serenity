@@ -129,8 +129,10 @@ object TextOverlayRenderer:
     defaultBackground: Color,
     metrics: CellMetrics
   ): Unit =
-    val foreground = row.foregroundColor.getOrElse(if row.selected then theme.highlighted.foreground else defaultForeground)
-    val background = row.backgroundColor.getOrElse(if row.selected then theme.highlighted.background else defaultBackground)
+    val foreground =
+      row.foregroundColor.getOrElse(if row.selected then theme.highlighted.foreground else defaultForeground)
+    val background =
+      row.backgroundColor.getOrElse(if row.selected then theme.highlighted.background else defaultBackground)
     surface.setForegroundColor(foreground)
     surface.setBackgroundColor(background)
     surface.drawRunPx(

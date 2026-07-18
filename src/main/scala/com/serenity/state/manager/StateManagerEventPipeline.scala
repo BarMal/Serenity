@@ -1606,7 +1606,8 @@ final private[manager] class StateManagerEventPipeline(
       geometry = FloatingSurfaceGeometry.fromCells(
         contentRect,
         CellMetrics.fromFont(
-          java.awt.Font(state.config.fontConfig.uiFontFamily, java.awt.Font.PLAIN, state.config.fontConfig.uiFontSize.toInt)
+          java.awt
+            .Font(state.config.fontConfig.uiFontFamily, java.awt.Font.PLAIN, state.config.fontConfig.uiFontSize.toInt)
         ),
         borderCells = 0,
         itemCount = itemCount,
@@ -1615,7 +1616,7 @@ final private[manager] class StateManagerEventPipeline(
         itemGapRows = itemGapRows
       )
       displayedIndex <- geometry.itemIndexAt(pixelX, pixelY)
-      absoluteIndex <- itemWindow.absoluteIndexAt(displayedIndex)
+      absoluteIndex  <- itemWindow.absoluteIndexAt(displayedIndex)
     yield absoluteIndex
     pixelSelection.orElse(overlayDisplayedRowIndexAt(event, contentRect, rowSlots).flatMap(itemWindow.absoluteIndexAt))
 
