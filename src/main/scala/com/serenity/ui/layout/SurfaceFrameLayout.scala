@@ -17,14 +17,15 @@ case class FloatingSurfaceGeometry(
     itemRects.zipWithIndex.collectFirst { case (rect, index) if rect.contains(pixelX, pixelY) => index }
 
 object FloatingSurfaceGeometry:
+
   def fromCells(
-      frame: LayoutRect,
-      metrics: CellMetrics,
-      borderCells: Int,
-      itemCount: Int,
-      hasHeader: Boolean,
-      hasFooter: Boolean,
-      itemGapRows: Double
+    frame: LayoutRect,
+    metrics: CellMetrics,
+    borderCells: Int,
+    itemCount: Int,
+    hasHeader: Boolean,
+    hasFooter: Boolean,
+    itemGapRows: Double
   ): FloatingSurfaceGeometry =
     val frameRect = LogicalPixelRect(
       frame.x * metrics.charWidth.toDouble,
@@ -40,7 +41,8 @@ object FloatingSurfaceGeometry:
       math.max(0, frame.height - inset * 2) * metrics.lineHeight.toDouble
     )
     val itemStart = contentRect.y + (if hasHeader then metrics.lineHeight else 0)
-    val usableHeight = contentRect.height - (if hasHeader then metrics.lineHeight else 0) - (if hasFooter then metrics.lineHeight else 0)
+    val usableHeight =
+      contentRect.height - (if hasHeader then metrics.lineHeight else 0) - (if hasFooter then metrics.lineHeight else 0)
     val step = metrics.lineHeight * (1.0 + math.max(0.0, itemGapRows))
     val items =
       (0 until math.max(0, itemCount)).toList
