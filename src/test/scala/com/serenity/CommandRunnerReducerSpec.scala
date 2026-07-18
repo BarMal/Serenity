@@ -505,7 +505,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val reentered = CommandRunnerReducer.reduce(RunnerSubmit, exited.state, registry)
     val runner    = runnerFrom(reentered.state)
 
-    runner.activeSubmenu.map(_.selectedIndex) shouldBe Some(10)
+    runner.activeSubmenu.map(_.selectedIndex) shouldBe Some(9)
     runner.activeSubmenu.flatMap(_.selectedItem(runner.submenuItems("settings-animation")).map(_.id)) shouldBe
       Some("animation-steps")
   }
@@ -703,7 +703,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val reentered      = CommandRunnerReducer.reduce(RunnerSubmit, exited.state, registry)
     val runner         = runnerFrom(reentered.state)
 
-    runner.activeSubmenu.map(_.selectedIndex) shouldBe Some(10)
+    runner.activeSubmenu.map(_.selectedIndex) shouldBe Some(9)
     runner.activeSubmenu.flatMap(_.editingItemId) shouldBe None
     runner.activeSubmenu.map(_.editingText) shouldBe Some("")
   }

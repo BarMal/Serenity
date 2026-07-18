@@ -1807,10 +1807,13 @@ case class AppConfig(
       case MotionPreset.Custom =>
         withSurfaceConfig(surfaceConfig.copy(motionPreset = MotionPreset.Custom))
       case _ =>
+        val accessibility = surfaceConfig.motionConfiguration
+          .map(_.accessibility)
+          .getOrElse(MotionAccessibility.Standard)
         copy(characterAnimation = preset.animationConfig).withSurfaceConfig(
           surfaceConfig.copy(
             motionPreset = preset,
-            motionConfiguration = None,
+            motionConfiguration = Some(MotionConfig.forPreset(preset).copy(accessibility = accessibility)),
             commandRunnerAnimation = preset.animationConfig,
             uiAnimation = preset.animationConfig
           )

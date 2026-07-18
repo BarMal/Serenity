@@ -79,6 +79,32 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     config.editorInsertionTransitionSettings.enabled shouldBe false
   }
 
+  it should "preserve the accessibility override when applying a named motion preset" in {
+    val config = AppConfig.default
+      .withMotionConfiguration(
+        MotionConfig(
+          MotionAccessibility.Off,
+          MotionPreset.Smooth,
+          Map(
+            MotionFamily.EditorText -> MotionFamilyConfig(
+              enabled = true,
+              transitionKind = TransitionKind.TypedText,
+              animation = com.serenity.animation.AnimationConfig.subtle,
+              speedScale = 0.5
+            )
+          )
+        )
+      )
+      .withMotionPreset(MotionPreset.Expressive)
+
+    val motion = config.surfaceConfig.motionConfiguration
+      .getOrElse(fail("Expected authoritative motion configuration"))
+    motion.accessibility shouldBe MotionAccessibility.Off
+    motion.baseline shouldBe MotionPreset.Expressive
+    motion.families(MotionFamily.EditorText).speedScale shouldBe 1.0
+    config.scaledCharacterAnimation shouldBe None
+  }
+
   it should "resolve omitted families from the legacy baseline and use family animation values" in {
     val commandAnimation = com.serenity.animation.AnimationConfig.subtle
     val config = AppConfig.default.withMotionConfiguration(
