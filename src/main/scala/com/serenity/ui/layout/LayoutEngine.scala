@@ -536,7 +536,9 @@ object LayoutEngine:
         math.min(screenPosition.x - (preferredWidth / 2), contentRect.right - preferredWidth)
       )
       val preferredAboveY = screenPosition.y - finalHeight - gapRows
-      val preferredBelowY = screenPosition.y + 1 + gapRows
+      val preferredBelowY = toolbarSelectionEndScreenPosition(surface, buffer, contentRect, state)
+        .map(_.y + 1 + gapRows)
+        .getOrElse(screenPosition.y + 1 + gapRows)
       val overlayY = topYOverride.getOrElse(surface.presentation match
         case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) =>
           surface.content match
@@ -563,6 +565,26 @@ object LayoutEngine:
         width = preferredWidth,
         height = finalHeight
       )
+
+  private def toolbarSelectionEndScreenPosition(
+    surface: UiSurface,
+    buffer: Buffer,
+    contentRect: LayoutRect,
+    state: AppState
+  ): Option[ScreenPosition] =
+    surface.content match
+      case SurfaceContent.ContextualToolbar(_) =>
+        buffer.primarySelection.flatMap(selection =>
+          CursorLayout.calculateScreenPositionInContent(
+            selection.end,
+            buffer.content,
+            contentRect,
+            buffer.viewport,
+            state.config.wordWrapEnabled
+          )
+        )
+      case _ =>
+        None
 
   private case class FloatingAnchorFrame(contentRect: LayoutRect, screenPosition: ScreenPosition)
 

@@ -368,6 +368,37 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     toolbarRect(state).bottom should be <= contentRect.y + 12
   }
 
+  it should "place below a top-edge multi-line selection without covering its selected text" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-top-edge-selection-placement")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 20))).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val bufferId  = activeBufferId(state)
+        val selection = Selection(CursorPosition(0, 1), CursorPosition(5, 4))
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope(List.fill(12)("toolbar selection target").mkString("\n")),
+            selection = Some(selection),
+            cursors = List(selection.focus)
+          )
+        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+      }
+      .unsafeRunSync()
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val contentRect = LayoutEngine
+      .calculateEditorWorkspaceLayout(state, layout)
+      .activeContentRect(state)
+      .getOrElse(fail("Expected active content rect"))
+
+    toolbarRect(state).y should be >= contentRect.y + 6
+  }
+
   it should "open a focused font size field with the current value prefilled, accept edits, and apply them on Enter" in {
     val stateManager = createStateManager("ContextualToolbarSpec-font-size")
 
