@@ -12,7 +12,7 @@ object MarkdownBlockLens:
           .orElse(tableBlock(lines, clampedLine))
           .orElse(headingBlock(lines, clampedLine))
           .orElse(listItemBlock(lines, clampedLine))
-          .orElse(contiguousBlock(lines, clampedLine, isBlockQuoteLine))
+          .orElse(blockQuoteBlock(lines, clampedLine))
           .getOrElse(paragraphBlock(lines, clampedLine))
 
   def activeBlockLineSet(lines: Vector[String], activeLine: Option[Int]): Set[Int] =
@@ -36,6 +36,12 @@ object MarkdownBlockLens:
 
   private def headingBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
     Option.when(isHeadingLine(lines(activeLine)))(activeLine to activeLine)
+
+  private def blockQuoteBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
+    Option.when(isBlockQuoteLine(lines(activeLine))) {
+      if isBlockQuoteSeparator(lines(activeLine)) then activeLine to activeLine
+      else blockSpan(lines, activeLine, isBlockQuoteContentLine)
+    }
 
   private def listItemBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
     listItemStart(lines, activeLine).map { start =>
@@ -126,6 +132,12 @@ object MarkdownBlockLens:
 
   private def isBlockQuoteLine(line: String): Boolean =
     line.trim.startsWith(">")
+
+  private def isBlockQuoteContentLine(line: String): Boolean =
+    isBlockQuoteLine(line) && !isBlockQuoteSeparator(line)
+
+  private def isBlockQuoteSeparator(line: String): Boolean =
+    line.trim.drop(1).trim.isEmpty
 
   private def isFenceLine(line: String): Boolean =
     val trimmed = line.trim

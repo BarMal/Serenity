@@ -61,6 +61,22 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     renderedRows.exists(_.contains("continued")) shouldBe false
   }
 
+  it should "keep inactive blockquote children rendered when editing one child" in {
+    val source =
+      """# Before
+        |
+        |> First quoted paragraph
+        |>
+        |> Second quoted paragraph
+        |
+        |After""".stripMargin
+    val (_, surface, _) = renderMarkdownLens(source, CursorPosition(2, 2), topLine = Some(0))
+
+    val renderedRows = rows(surface)
+    renderedRows.exists(_.contains("> First quoted paragraph")) shouldBe true
+    renderedRows.exists(_.contains("> Second quoted paragraph")) shouldBe false
+  }
+
   it should "render markdown preview as the inline lens base when the cursor is outside the viewport" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
