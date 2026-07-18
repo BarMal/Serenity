@@ -1,12 +1,16 @@
 package com.serenity
 
+import java.awt.Color
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.{AnimationConfig, TransitionKind}
+import com.serenity.animation.{AnimationConfig, AnimationOwner, TransitionKind}
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.{MotionAccessibility, MotionPreset, RenderFpsTarget}
+import com.serenity.keystroke.events.NextTab
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -160,6 +164,44 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().config.editorTextTransitionSpeedScale shouldBe Some(0.5)
+  }
+
+  it should "retain editor text animations while starting a pane UI transition" in {
+    val stateManager = createStateManager()
+    stateManager
+      .updateState(state =>
+        state.copy(
+          config = state.config.withMotionPreset(MotionPreset.Smooth),
+          viewportSize = Some(ViewportSize(80, 24))
+        )
+      )
+      .unsafeRunSync()
+
+    val firstBufferId = stateManager.getCurrentState.unsafeRunSync().bufferOrder.head
+    stateManager.updateBuffer(firstBufferId, "First").unsafeRunSync()
+    val secondBufferId = stateManager.createBuffer("Second").unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val buffer = state.buffers(secondBufferId)
+        state.copy(buffers = state.buffers.updated(
+          secondBufferId,
+          buffer.copy(animations = buffer.animations.addCharacterAnimation('z', 100, 100, Color.BLACK, Color.WHITE, 5))
+        ))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(NextTab).unsafeRunSync()
+
+    val owners = stateManager
+      .getCurrentState
+      .unsafeRunSync()
+      .buffers(secondBufferId)
+      .animations
+      .animations
+      .values
+      .map(_.owner)
+      .toSet
+    owners should contain allOf (AnimationOwner.EditorText, AnimationOwner.UiTransitions)
   }
 
   it should "update the command runner transition speed scale config" in {

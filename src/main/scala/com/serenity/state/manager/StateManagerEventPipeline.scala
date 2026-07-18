@@ -354,7 +354,7 @@ final private[manager] class StateManagerEventPipeline(
         val animated = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, sweep, config.steps)
         val uiAnimations =
           animated.view.mapValues(_.copy(owner = com.serenity.animation.AnimationOwner.UiTransitions)).toMap
-        val newAnims = buffer.animations.clearAll().mergeAnimations(uiAnimations)
+        val newAnims = buffer.animations.clear(com.serenity.animation.AnimationOwner.UiTransitions).mergeAnimations(uiAnimations)
         state.copy(buffers = state.buffers.updated(buffId, buffer.copy(animations = newAnims)))
       animOpt match
         case Some(newState) => stateRef.set(newState)
