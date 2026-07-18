@@ -18,6 +18,10 @@ case class FloatingSurfaceGeometry(
 
 object FloatingSurfaceGeometry:
 
+  /** Convert logical row spacing to the pixel coordinate space shared by layout, rendering, and hit testing. */
+  def rowOffsetPixels(rows: Double, metrics: CellMetrics): Double =
+    math.max(0.0, rows) * metrics.lineHeight
+
   /** Count only rows whose complete interactive rectangle fits in the available height. */
   def visibleItemCount(availableHeight: Double, itemHeight: Double, itemGapRows: Double): Int =
     val safeItemHeight = math.max(0.0, itemHeight)

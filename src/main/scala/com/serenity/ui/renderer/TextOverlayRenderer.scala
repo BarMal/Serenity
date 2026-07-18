@@ -18,6 +18,21 @@ object TextOverlayRenderer:
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
+    val offsetMagnitudePx = FloatingSurfaceGeometry.rowOffsetPixels(math.abs(overlay.verticalOffsetRows), cellMetrics)
+    val offsetPx          = math.copySign(offsetMagnitudePx, overlay.verticalOffsetRows)
+    surface.withPixelTranslation(0.0, offsetPx) {
+      renderAtLogicalPixelOrigin(surface, overlay, theme, config, cursorVisible, font, cellMetrics)
+    }
+
+  private def renderAtLogicalPixelOrigin(
+    surface: RenderSurface,
+    overlay: TextOverlayView,
+    theme: Theme,
+    config: AppConfig,
+    cursorVisible: Boolean,
+    font: java.awt.Font,
+    cellMetrics: CellMetrics
+  ): Unit =
     val rect = overlay.rect
 
     def rowColors(rowOffset: Int): (Color, Color) =

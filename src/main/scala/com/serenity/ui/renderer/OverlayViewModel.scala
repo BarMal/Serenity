@@ -16,6 +16,7 @@ case class TextOverlayView(
     rows: List[OverlayRow] = Nil,
     footer: Option[OverlayRow] = None,
     itemGapRows: Double = 0.0,
+    verticalOffsetRows: Double = 0.0,
     surfaceId: Option[SurfaceId] = None
 ):
 
@@ -44,7 +45,13 @@ object OverlayViewModel:
   def fromState(state: AppState, layout: CalculatedLayout): OverlayViews =
     val aboveCursor = preferredFloatingSurface(state, SurfacePlacement.AboveCursor)
       .flatMap(surface =>
-        buildView(surface, state, EditorLayoutContract.overlayRectFor(surface.id, layout), collapsed = false)
+        buildView(
+          surface,
+          state,
+          EditorLayoutContract.overlayRectFor(surface.id, layout),
+          collapsed = false,
+          verticalOffsetRows = layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0)
+        )
       )
 
     val belowCursorStack = preferredBelowCursorSurfaces(state, layout)
@@ -60,7 +67,8 @@ object OverlayViewModel:
     surface: com.serenity.state.models.UiSurface,
     state: AppState,
     layoutRect: Option[LayoutRect],
-    collapsed: Boolean
+    collapsed: Boolean,
+    verticalOffsetRows: Double
   ): Option[TextOverlayView] =
     val animState = state.surfaceAnimations.get(surface.id).map(_.animationState).getOrElse(AnimationState.empty)
     surface.content match
@@ -78,6 +86,7 @@ object OverlayViewModel:
             rows = content.rows,
             footer = content.footer,
             itemGapRows = itemGapRowsFor(originalContent, state),
+            verticalOffsetRows = verticalOffsetRows,
             surfaceId = Some(surface.id)
           )
         }
@@ -95,6 +104,7 @@ object OverlayViewModel:
               rows = resolved.rows,
               footer = resolved.footer,
               itemGapRows = itemGapRowsFor(content, state),
+              verticalOffsetRows = verticalOffsetRows,
               surfaceId = Some(surface.id)
             )
           }
@@ -137,7 +147,8 @@ object OverlayViewModel:
             surface,
             state,
             EditorLayoutContract.overlayRectFor(surfaceId, layout),
-            collapsed = layout.collapsedFloatingSurfaceIds.contains(surfaceId)
+            collapsed = layout.collapsedFloatingSurfaceIds.contains(surfaceId),
+            verticalOffsetRows = layout.floatingOverlayOffsetRows.getOrElse(surfaceId, 0.0)
           )
         )
     }

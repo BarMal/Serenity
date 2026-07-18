@@ -121,6 +121,13 @@ class Java2DRenderSurface(
     try render
     finally logicalPixelRowOverride.set(previous)
 
+  override def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =
+    val savedTransform = g.getTransform
+    try
+      g.translate(xPx, yPx)
+      render
+    finally g.setTransform(savedTransform)
+
   private def pixelYForRow(row: Int): Int =
     logicalPixelRowOverride
       .get()

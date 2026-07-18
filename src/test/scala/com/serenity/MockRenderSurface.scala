@@ -13,6 +13,8 @@ import com.serenity.ui.theme.TextStyle
   * (x, y) position.
   */
 class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
+  case class PixelTranslationCall(xPx: Double, yPx: Double)
+  private val pixelTranslationCallsBuffer = scala.collection.mutable.ListBuffer.empty[PixelTranslationCall]
   case class PutStringCall(x: Int, y: Int, s: String)
   case class PutStringPixelYCall(x: Int, y: Int, pixelY: Int, text: String)
 
@@ -117,6 +119,10 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
     try render
     finally pixelRowOverride.set(previous)
 
+  override def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =
+    pixelTranslationCallsBuffer += PixelTranslationCall(xPx, yPx)
+    render
+
   private def pixelYForRow(row: Int): Int =
     pixelRowOverride.get().collect { case (cellRow, pixelY) if cellRow == row => pixelY }.getOrElse {
       CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12)).toPixelY(row)
@@ -166,13 +172,14 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
   override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
     drawImageCallsBuffer += DrawImageCall(image, x, y, width, height)
 
-  def currentAlphaValue: Float                        = currentAlpha.get()
-  def blurRegionCalls: List[BlurRegionCall]           = blurRegionCallsBuffer.toList
-  def fillPixelRectCalls: List[FillPixelRectCall]     = fillPixelRectCallsBuffer.toList
-  def drawImageCalls: List[DrawImageCall]             = drawImageCallsBuffer.toList
-  def alphaCalls: List[Float]                         = alphaCallsBuffer.toList
-  def putStringCalls: List[PutStringCall]             = putStringCallsBuffer.toList
-  def putStringPixelYCalls: List[PutStringPixelYCall] = putStringPixelYCallsBuffer.toList
+  def currentAlphaValue: Float                          = currentAlpha.get()
+  def blurRegionCalls: List[BlurRegionCall]             = blurRegionCallsBuffer.toList
+  def fillPixelRectCalls: List[FillPixelRectCall]       = fillPixelRectCallsBuffer.toList
+  def drawImageCalls: List[DrawImageCall]               = drawImageCallsBuffer.toList
+  def alphaCalls: List[Float]                           = alphaCallsBuffer.toList
+  def putStringCalls: List[PutStringCall]               = putStringCallsBuffer.toList
+  def putStringPixelYCalls: List[PutStringPixelYCall]   = putStringPixelYCallsBuffer.toList
+  def pixelTranslationCalls: List[PixelTranslationCall] = pixelTranslationCallsBuffer.toList
 
   def enableStyle(style: TextStyle): Unit  = styleCallsBuffer += StyleCall("enable", style)
   def disableStyle(style: TextStyle): Unit = styleCallsBuffer += StyleCall("disable", style)
@@ -206,6 +213,7 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
   def clear(): Unit =
     putStringCallsBuffer.clear()
     putStringPixelYCallsBuffer.clear()
+    pixelTranslationCallsBuffer.clear()
     strokeRoundRectCallsBuffer.clear()
     blurRegionCallsBuffer.clear()
     fillPixelRectCallsBuffer.clear()

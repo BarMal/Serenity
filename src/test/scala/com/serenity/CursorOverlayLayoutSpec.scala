@@ -66,6 +66,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
   it should "clamp an above-cursor peek overlay into the active pane when the cursor is near the top" in {
     val state = baseState(cursor = CursorPosition(0, 5)).copy(
+      config = AppState.initial.config.withUiElementGap(0.5),
       uiSurfaces = List(
         UiSurface(
           SurfaceId("peek-top"),
@@ -89,6 +90,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     rect.bottom should be <= paneRect.bottom
     rect.x shouldBe contentRect.x
     rect.width shouldBe contentRect.width
+    layout.floatingOverlayOffsetRows(SurfaceId("peek-top")) shouldBe 0.0
   }
 
   it should "place an active command runner below the editor cursor when there is room" in {
@@ -380,6 +382,33 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     toolbarRect.y shouldBe contentRect.y + cursor.line + 3
     runnerRect.y shouldBe toolbarRect.bottom + 2
+  }
+
+  it should "preserve fractional cursor and nested-surface gaps as logical-pixel offsets" in {
+    val cursor = CursorPosition(1, 2)
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    val state = baseState(cursor = cursor).copy(
+      config = AppState.initial.config
+        .withUiElementGap(0.25)
+        .withCommandRunnerCursorGapRows(Some(0.5)),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("contextual-toolbar"),
+          SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
+
+    layout.floatingOverlayOffsetRows(SurfaceId("contextual-toolbar")) shouldBe 0.25
+    layout.floatingOverlayOffsetRows(SurfaceId("command-runner")) shouldBe 0.5
   }
 
   it should "keep command runner cursor and submenu stack gaps independent" in {

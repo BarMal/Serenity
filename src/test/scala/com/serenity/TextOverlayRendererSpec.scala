@@ -15,6 +15,21 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  "TextOverlayRenderer" should "position a fractional cursor gap at its logical-pixel origin" in {
+    val surface = new MockRenderSurface(20, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics(charWidth = 8, lineHeight = 20, ascent = 15)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 1, 10, 3),
+      rows = List(OverlayRow("row")),
+      verticalOffsetRows = 0.5
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.pixelTranslationCalls.map(_.yPx) should contain(10.0)
+  }
+
   it should "use fractional logical-pixel row positions for every overlay row layout" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
