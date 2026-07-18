@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.*
 import java.awt.font.{FontRenderContext, TextAttribute}
-import java.awt.geom.RoundRectangle2D
+import java.awt.geom.{Rectangle2D, RoundRectangle2D}
 import java.awt.image.*
 import java.util.concurrent.atomic.AtomicReference
 
@@ -160,17 +160,25 @@ class Java2DRenderSurface(
       val py         = metrics.toPixelY(y)
       val pw         = width * metrics.charWidth
       val ph         = height * metrics.lineHeight
-      val activeClip = Option(g.getClip).map(g.getTransform.createTransformedShape)
+      val transform  = g.getTransform
+      val activeClip = Option(g.getClip).map(transform.createTransformedShape)
+      val bounds = transform
+        .createTransformedShape(new Rectangle2D.Double(px, py, pw, ph))
+        .getBounds2D
+      val left   = math.floor(bounds.getMinX).toInt
+      val top    = math.floor(bounds.getMinY).toInt
+      val right  = math.ceil(bounds.getMaxX).toInt
+      val bottom = math.ceil(bounds.getMaxY).toInt
       Java2DRenderSurface
         .deviceRegionFor(
-          logicalX = px,
-          logicalY = py,
-          logicalWidth = pw,
-          logicalHeight = ph,
+          logicalX = left,
+          logicalY = top,
+          logicalWidth = right - left,
+          logicalHeight = bottom - top,
           imageWidth = image.getWidth,
           imageHeight = image.getHeight,
-          deviceScaleX = deviceScaleX,
-          deviceScaleY = deviceScaleY
+          deviceScaleX = 1.0,
+          deviceScaleY = 1.0
         )
         .foreach { region =>
           val size        = (radius * 10).toInt.max(1) * 2 + 1

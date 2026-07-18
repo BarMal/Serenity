@@ -54,6 +54,25 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     new Color(image.getRGB(20, 20), true) shouldBe Color.WHITE
   }
 
+  it should "blur the translated device region for fractional floating offsets" in {
+    val image   = new BufferedImage(12, 14, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(Color.GREEN)
+    (5 to 10).foreach(y => image.setRGB(6, y, Color.BLUE.getRGB))
+    image.setRGB(6, 7, Color.RED.getRGB)
+
+    surface.withPixelTranslation(0.0, 5.5) {
+      surface.blurRegion(x = 0, y = 0, width = 12, height = 5, radius = 0.1f)
+    }
+    surface.flush()
+
+    new Color(image.getRGB(6, 7), true) should not be Color.RED
+    new Color(image.getRGB(6, 2), true) shouldBe Color.GREEN
+  }
+
   "Java2DRenderSurface.deviceImageDimension" should "scale logical pixels up to device pixels" in {
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 1024, deviceScale = 2.0) shouldBe 2048
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 801, deviceScale = 1.5) shouldBe 1202
