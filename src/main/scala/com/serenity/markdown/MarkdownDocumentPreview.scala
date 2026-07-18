@@ -192,7 +192,20 @@ object MarkdownDocumentPreview:
     font: Font,
     inlineLineHeightPx: Int
   ): BufferedImage =
-    val rows       = inlinePreviewRows(sourceLines, firstSourceLine, maxSourceLines)
+    val rows = inlinePreviewRows(sourceLines, firstSourceLine, maxSourceLines)
+    renderInlineRowsImage(rows, sourceLines, title, widthPx, heightPx, theme, font, inlineLineHeightPx)
+
+  /** Renders a caller-composed inline Lens row sequence. */
+  private[serenity] def renderInlineRowsImage(
+    rows: Vector[InlinePreviewLine],
+    sourceLines: Vector[String],
+    title: String,
+    widthPx: Int,
+    heightPx: Int,
+    theme: Theme,
+    font: Font,
+    inlineLineHeightPx: Int
+  ): BufferedImage =
     val safeWidth  = widthPx.max(1)
     val safeHeight = heightPx.max(1)
     val key = ImageCacheKey(
