@@ -98,7 +98,8 @@ object TextOverlayRenderer:
           val rowOffset        = slot.y - overlay.rect.y
           val (animFg, animBg) = rowColors(rowOffset)
           slot.kind match
-            case SurfaceContentRowKind.Item(index) if overlay.itemGapRows > 0.0 =>
+            case SurfaceContentRowKind.Item(index)
+                if overlay.itemGapRows > 0.0 && row.layout == OverlayRowLayout.Plain =>
               floatingGeometry.itemRects.lift(index).foreach { pixelRect =>
                 renderPixelRow(surface, pixelRect, maxLineSize, row, theme, animFg, animBg, cellMetrics)
               }

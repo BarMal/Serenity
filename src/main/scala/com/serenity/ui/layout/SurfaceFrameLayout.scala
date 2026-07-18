@@ -75,8 +75,8 @@ case class SurfaceFrameLayout(
   ): Int =
     val availableRows =
       math.max(0, maxContentRows - SurfaceFrameLayout.contentChromeRows(hasHeader, hasFooter, reservedContentRows))
-    val itemHeight = math.ceil(math.max(0.0, itemGapRows)).toInt + 1
-    if availableRows == 0 then 0 else (availableRows + itemHeight - 1) / itemHeight
+    val itemHeight = 1.0 + math.max(0.0, itemGapRows)
+    math.floor(availableRows.toDouble / itemHeight).toInt
 
   def itemWindow(
     itemCount: Int,
@@ -106,8 +106,11 @@ case class SurfaceFrameLayout(
     val window      = itemWindow(itemCount, selectedIndex, hasHeader, hasFooter, reservedContentRows, itemGapRows)
     val itemRowBase = contentRect.y + (if hasHeader then 1 else 0)
     val itemRow     = row - itemRowBase
-    val itemHeight  = math.ceil(math.max(0.0, itemGapRows)).toInt + 1
-    Option.when(itemRow >= 0 && itemRow % itemHeight == 0)(itemRow / itemHeight).flatMap(window.absoluteIndexAt)
+    val itemHeight  = 1.0 + math.max(0.0, itemGapRows)
+    Option
+      .when(itemRow >= 0)(math.floor(itemRow.toDouble / itemHeight).toInt)
+      .filter(index => math.floor(index * itemHeight).toInt == itemRow)
+      .flatMap(window.absoluteIndexAt)
 
   def contentRowSlots(
     itemCount: Int,
@@ -150,11 +153,14 @@ object SurfaceFrameLayout:
       val headerRows   = if hasHeader then 1 else 0
       val footerRows   = if hasFooter then 1 else 0
       val itemRows     = math.max(0, content.height - headerRows - footerRows)
-      val itemHeight   = math.ceil(math.max(0.0, itemGapRows)).toInt + 1
-      val visibleItems = if itemRows == 0 then 0 else (itemRows + itemHeight - 1) / itemHeight
+      val itemHeight   = 1.0 + math.max(0.0, itemGapRows)
+      val visibleItems = math.floor(itemRows.toDouble / itemHeight).toInt
       val itemSlots =
         (0 until math.min(itemCount, visibleItems)).toList.map { index =>
-          SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), content.y + headerRows + (index * itemHeight))
+          SurfaceContentRowSlot(
+            SurfaceContentRowKind.Item(index),
+            content.y + headerRows + math.floor(index * itemHeight).toInt
+          )
         }
       val headerSlots =
         if hasHeader then List(SurfaceContentRowSlot(SurfaceContentRowKind.Header, content.y))
