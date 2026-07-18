@@ -925,11 +925,11 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       )
     )
 
-    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly) shouldBe "Serif ▾"
+    ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly) shouldBe "\ue167"
     ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.TextOnly) shouldBe "Font Serif"
     ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconAndText) shouldBe "\ue167 Font Serif"
 
-    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "18"
+    ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "\ue245"
     ContextualToolbar.displayText(input, ToolbarDisplayMode.TextOnly) shouldBe "Size 18"
     ContextualToolbar.displayText(input, ToolbarDisplayMode.IconAndText) shouldBe "\ue245 Size 18"
   }
@@ -965,7 +965,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     )
   }
 
-  it should "render compact toolbar controls alongside icon-only action glyphs" in {
+  it should "render every compact toolbar control as an icon-only glyph" in {
     val stateManager = createStateManager("ContextualToolbarSpec-rendered-glyphs")
     val viewport     = ViewportSize(120, 30)
     stateManager
@@ -994,25 +994,14 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val renderedText = surface.putStringCalls.map(_.s).mkString
     renderedText should include("│")
-    ContextualToolbar
-      .itemsFor(state)
-      .collect { case button: ContextualToolbarItem.Button => button.icon }
-      .foreach(
-        renderedText should include(_)
-      )
-    val compactControlText = ContextualToolbar.itemsFor(state).collect {
-      case dropdown: ContextualToolbarItem.Dropdown =>
-        ContextualToolbar.displayText(dropdown, ToolbarDisplayMode.IconOnly)
-      case input: ContextualToolbarItem.Input => ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly)
-    }
+    ContextualToolbar.itemsFor(state).map(_.icon).foreach(renderedText should include(_))
     val resolved = SurfaceContentResolver.resolveContextualToolbar(
       toolbarStateFrom(state),
       state,
       LayoutRect(0, 0, 120, 10),
       SurfaceRenderMode.Floating
     )
-    val resolvedText = resolved.rows.flatMap(_.segments).map(_.text)
-    compactControlText.foreach(resolvedText should contain(_))
+    resolved.rows.flatMap(_.segments).map(_.text) shouldBe ContextualToolbar.itemsFor(state).map(_.icon)
     surface.setFontCalls.map(_.getFamily) should contain(FontLoader.ToolbarIconFontFamily)
   }
 
@@ -1253,8 +1242,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .map(_.map(_.id))
 
     rowGroups shouldBe List(
-      List("bold", "italic", "underline"),
-      List("font-family", "font-family-text", "font-size"),
+      List("bold", "italic", "underline", "font-family", "font-family-text", "font-size"),
       List("color", "color-hex"),
       List("paragraph-role", "align-left", "align-center", "align-right", "align-justify")
     )
@@ -1270,7 +1258,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val toolbarState = ContextualToolbarState(displayMode = ToolbarDisplayMode.IconOnly)
     val width        = ContextualToolbar.compactContentWidth(toolbarState, state, maxWidth = 120)
 
-    width shouldBe 73
+    width shouldBe 54
     ContextualToolbar.rowCount(toolbarState, state, width) shouldBe 1
   }
 
@@ -1289,7 +1277,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     moveToolbarFocusTo(stateManager, "color-hex")
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    toolbarContentWidth(state) shouldBe 73
+    toolbarContentWidth(state) shouldBe 54
 
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new MockRenderSurface(viewport.width, viewport.height)
@@ -1305,7 +1293,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     )
 
     val row        = surface.getRow(toolbarRowY(state, 0))
-    val hexStart   = row.indexOf("#336699")
+    val hexStart   = row.indexOf(toolbarInput(state, "color-hex").icon)
     val separatorX = row.indexOf('│')
     hexStart should be >= 0
     separatorX should be >= 0

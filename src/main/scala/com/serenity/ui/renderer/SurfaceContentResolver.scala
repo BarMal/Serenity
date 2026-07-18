@@ -926,22 +926,13 @@ object SurfaceContentResolver:
               val trailingSeparator = ContextualToolbar.hasTrailingGroupSeparator(item, rowItems.lift(index + 1))
               normalized.displayMode match
                 case ToolbarDisplayMode.IconOnly if iconFont.nonEmpty =>
-                  item match
-                    case _: ContextualToolbarItem.Button =>
-                      OverlaySegment(
-                        item.icon,
-                        selected = selected,
-                        fontFamily = iconFont,
-                        trailingSeparator = trailingSeparator,
-                        allocatedWidth = Some(cellWidth)
-                      )
-                    case _ =>
-                      OverlaySegment(
-                        ContextualToolbar.displayText(item, ToolbarDisplayMode.IconOnly),
-                        selected = selected,
-                        trailingSeparator = trailingSeparator,
-                        allocatedWidth = Some(cellWidth)
-                      )
+                  OverlaySegment(
+                    item.icon,
+                    selected = selected,
+                    fontFamily = iconFont,
+                    trailingSeparator = trailingSeparator,
+                    allocatedWidth = Some(cellWidth)
+                  )
                 case ToolbarDisplayMode.IconAndText if iconFont.nonEmpty =>
                   OverlaySegment(
                     ContextualToolbar.displayText(item, ToolbarDisplayMode.TextOnly),
