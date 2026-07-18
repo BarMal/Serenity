@@ -170,6 +170,25 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     toolbar.width should be <= (editorWidth * 3 / 4)
   }
 
+  it should "wrap a nearly three-quarter-width toolbar into a compact palette" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-wide-palette-regression")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(215, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val editorWidth = LayoutEngine
+      .calculateEditorWorkspaceLayout(state, layout)
+      .activeContentRect(state)
+      .map(_.width)
+      .getOrElse(fail("Expected active content rect"))
+
+    toolbarRect(state).width should be <= (editorWidth * 2 / 3)
+  }
+
   it should "keep a long font family from widening the compact toolbar to the pane" in {
     val stateManager = createStateManager("ContextualToolbarSpec-long-font-family")
 

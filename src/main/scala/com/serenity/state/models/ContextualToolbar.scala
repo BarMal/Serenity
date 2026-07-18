@@ -319,7 +319,7 @@ object ContextualToolbar:
     val compactRowLimit =
       toolbarState.displayMode match
         case ToolbarDisplayMode.IconOnly => maxWidth.max(1)
-        case _                           => ((maxWidth.max(1).toLong * 3) / 4).toInt
+        case _                           => ((maxWidth.max(1).toLong * 2) / 3).toInt
     val balancedWidth =
       if intrinsicWidth <= compactRowLimit then intrinsicWidth
       else
