@@ -68,7 +68,8 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
     val frame = SurfaceFrameLayout(LayoutRect(0, 0, 40, 8), borderCells = 0)
 
     frame.visibleItemRows(hasHeader = true, hasFooter = true, itemGapRows = 0.5) shouldBe 4
-    frame.itemWindow(itemCount = 8, selectedIndex = 0, hasHeader = true, hasFooter = true, itemGapRows = 0.5)
+    frame
+      .itemWindow(itemCount = 8, selectedIndex = 0, hasHeader = true, hasFooter = true, itemGapRows = 0.5)
       .rowCount shouldBe 4
   }
 
