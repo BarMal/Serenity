@@ -135,9 +135,9 @@ object TextOverlayRenderer:
     surface.setBackgroundColor(background)
     surface.drawRunPx(
       pixelRect.x.toFloat,
-      math.round(pixelRect.y),
+      math.round(pixelRect.y.toFloat),
       pixelRect.width.toFloat,
-      math.round(pixelRect.height),
+      math.round(pixelRect.height.toFloat),
       metrics.ascent,
       row.plainText.take(width)
     )
