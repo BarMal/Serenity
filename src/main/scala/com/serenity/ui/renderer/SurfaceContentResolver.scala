@@ -60,7 +60,7 @@ object SurfaceContentResolver:
     content: SurfaceContent,
     rect: LayoutRect,
     mode: SurfaceRenderMode,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): ResolvedSurfaceContent =
     content match
       case SurfaceContent.StartPage(_) =>
@@ -377,7 +377,7 @@ object SurfaceContentResolver:
     runner: com.serenity.command.CommandRunner,
     rect: LayoutRect,
     mode: SurfaceRenderMode,
-    itemGapRows: Int
+    itemGapRows: Double
   ): ResolvedSurfaceContent =
     if !runner.isActive then ResolvedSurfaceContent(titleFor(mode, "commands"))
     else
@@ -460,7 +460,7 @@ object SurfaceContentResolver:
     previewOnly: Boolean,
     rect: LayoutRect,
     mode: SurfaceRenderMode,
-    itemGapRows: Int
+    itemGapRows: Double
   ): ResolvedSurfaceContent =
     val group         = runner.submenuGroup(groupId)
     val submenuState  = runner.activeSubmenu.filter(_.groupId == groupId)
@@ -1013,7 +1013,7 @@ object SurfaceContentResolver:
     menu: ContextMenu,
     rect: LayoutRect,
     mode: SurfaceRenderMode,
-    itemGapRows: Int
+    itemGapRows: Double
   ): ResolvedSurfaceContent =
     val itemWindow = SurfaceFrameLayout(rect).itemWindow(
       itemCount = menu.items.size,

@@ -706,7 +706,7 @@ object DocumentConfig:
 
 case class InterfaceConfig(
     density: InterfaceDensity = InterfaceDensity.Comfortable,
-    elementGap: Int = 0,
+    elementGap: Double = 0.0,
     cornerRadiusPx: Int = 8,
     outlineThicknessPx: Int = 2
 ):
@@ -758,7 +758,7 @@ object InterfaceConfig:
       val trimmed = value.trim
       if densityKeys.contains(key) then InterfaceDensity.fromConfigKey(trimmed).map(config.withInterfaceDensity)
       else if elementGapKeys.contains(key) then
-        trimmed.toIntOption
+        trimmed.toDoubleOption
           .filter(gap => gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap)
           .map(config.withUiElementGap)
       else if cornerRadiusKeys.contains(key) then
@@ -908,8 +908,8 @@ case class SurfaceConfig(
     commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     uiAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     commandRunnerVisibleRows: Option[Int] = None,
-    commandRunnerItemGapRows: Int = 0,
-    commandRunnerCursorGapRows: Option[Int] = None,
+    commandRunnerItemGapRows: Double = 0.0,
+    commandRunnerCursorGapRows: Option[Double] = None,
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
     commandRunnerTransitionKind: Option[TransitionKind] = None,
@@ -1429,16 +1429,16 @@ object SurfaceConfig:
             )
             .map(rows => Some(rows))
 
-    private def parseCommandRunnerItemGapRows(value: String): Option[Int] =
-      value.toIntOption.filter(rows =>
+    private def parseCommandRunnerItemGapRows(value: String): Option[Double] =
+      value.toDoubleOption.filter(rows =>
         rows >= AppConfig.MinCommandRunnerItemGapRows && rows <= AppConfig.MaxCommandRunnerItemGapRows
       )
 
-    private def parseCommandRunnerCursorGapRows(value: String): Option[Option[Int]] =
+    private def parseCommandRunnerCursorGapRows(value: String): Option[Option[Double]] =
       value.toLowerCase match
         case "auto" | "default" | "" => Some(None)
         case other =>
-          other.toIntOption
+          other.toDoubleOption
             .filter(rows =>
               rows >= AppConfig.MinCommandRunnerCursorGapRows && rows <= AppConfig.MaxCommandRunnerCursorGapRows
             )
@@ -1532,8 +1532,8 @@ case class AppConfig(
     commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     uiAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     commandRunnerVisibleRows: Option[Int] = None,
-    commandRunnerItemGapRows: Int = 0,
-    commandRunnerCursorGapRows: Option[Int] = None,
+    commandRunnerItemGapRows: Double = 0.0,
+    commandRunnerCursorGapRows: Option[Double] = None,
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
     commandRunnerTransitionKind: Option[TransitionKind] = None,
@@ -1674,7 +1674,7 @@ case class AppConfig(
   def interfaceDensity: InterfaceDensity =
     interfaceConfig.density
 
-  def uiElementGap: Int =
+  def uiElementGap: Double =
     interfaceConfig.elementGap
 
   def uiCornerRadiusPx: Int =
@@ -1866,10 +1866,10 @@ case class AppConfig(
   def withCommandRunnerVisibleRows(rows: Option[Int]): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(commandRunnerVisibleRows = rows))
 
-  def withCommandRunnerItemGapRows(rows: Int): AppConfig =
+  def withCommandRunnerItemGapRows(rows: Double): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(commandRunnerItemGapRows = rows))
 
-  def withCommandRunnerCursorGapRows(rows: Option[Int]): AppConfig =
+  def withCommandRunnerCursorGapRows(rows: Option[Double]): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(commandRunnerCursorGapRows = rows))
 
   def withRenderFpsTarget(target: RenderFpsTarget): AppConfig =
@@ -1975,7 +1975,7 @@ case class AppConfig(
   def withInterfaceDensity(density: InterfaceDensity): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(density = density))
 
-  def withUiElementGap(gap: Int): AppConfig =
+  def withUiElementGap(gap: Double): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(elementGap = gap))
 
   def withUiCornerRadiusPx(radius: Int): AppConfig =
@@ -2021,24 +2021,24 @@ object AppConfig:
 
   val MinElementTransitionSpeedScale: Double = 0.0
   val MaxElementTransitionSpeedScale: Double = 4.0
-  val MinUiElementGap: Int                   = 0
-  val MaxUiElementGap: Int                   = 8
+  val MinUiElementGap: Double                = 0.0
+  val MaxUiElementGap: Double                = 8.0
   val MinUiCornerRadiusPx: Int               = 0
   val MaxUiCornerRadiusPx: Int               = 32
   val MinUiOutlineThicknessPx: Int           = 1
   val MaxUiOutlineThicknessPx: Int           = 8
   val MinCommandRunnerVisibleRows: Int       = 1
   val MaxCommandRunnerVisibleRows: Int       = 20
-  val MinCommandRunnerItemGapRows: Int       = 0
-  val MaxCommandRunnerItemGapRows: Int       = 8
-  val MinCommandRunnerCursorGapRows: Int     = 0
-  val MaxCommandRunnerCursorGapRows: Int     = 8
+  val MinCommandRunnerItemGapRows: Double    = 0.0
+  val MaxCommandRunnerItemGapRows: Double    = 8.0
+  val MinCommandRunnerCursorGapRows: Double  = 0.0
+  val MaxCommandRunnerCursorGapRows: Double  = 8.0
 
   def clampElementTransitionSpeedScale(scale: Double): Double =
     scale.max(MinElementTransitionSpeedScale).min(MaxElementTransitionSpeedScale)
 
-  def clampUiElementGap(gap: Int): Int =
-    gap.max(MinUiElementGap).min(MaxUiElementGap)
+  def clampUiElementGap(gap: Double): Double =
+    if gap.isFinite then gap.max(MinUiElementGap).min(MaxUiElementGap) else MinUiElementGap
 
   def clampUiCornerRadiusPx(radius: Int): Int =
     radius.max(MinUiCornerRadiusPx).min(MaxUiCornerRadiusPx)
@@ -2049,11 +2049,13 @@ object AppConfig:
   def clampCommandRunnerVisibleRows(rows: Int): Int =
     rows.max(MinCommandRunnerVisibleRows).min(MaxCommandRunnerVisibleRows)
 
-  def clampCommandRunnerItemGapRows(rows: Int): Int =
-    rows.max(MinCommandRunnerItemGapRows).min(MaxCommandRunnerItemGapRows)
+  def clampCommandRunnerItemGapRows(rows: Double): Double =
+    if rows.isFinite then rows.max(MinCommandRunnerItemGapRows).min(MaxCommandRunnerItemGapRows)
+    else MinCommandRunnerItemGapRows
 
-  def clampCommandRunnerCursorGapRows(rows: Int): Int =
-    rows.max(MinCommandRunnerCursorGapRows).min(MaxCommandRunnerCursorGapRows)
+  def clampCommandRunnerCursorGapRows(rows: Double): Double =
+    if rows.isFinite then rows.max(MinCommandRunnerCursorGapRows).min(MaxCommandRunnerCursorGapRows)
+    else MinCommandRunnerCursorGapRows
 
   def scaledAnimation(animation: Option[AnimationConfig], speedScale: Double): Option[AnimationConfig] =
     animation.flatMap(_.scaledBy(clampElementTransitionSpeedScale(speedScale)))

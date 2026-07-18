@@ -622,6 +622,47 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     after.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
+  it should "select toolbar items at their fractional code-metric pixel offset when UI fonts differ" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-fractional-mouse")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
+    stateManager
+      .updateState(state =>
+        state.copy(
+          config = state.config
+            .withUiElementGap(0.5)
+            .withFontConfig(
+              state.config.fontConfig.copy(
+                codeFontFamily = Font.MONOSPACED,
+                fontSize = 24.0f,
+                uiFontFamily = Font.SANS_SERIF,
+                uiFontSize = 8.0f
+              )
+            )
+        )
+      )
+      .unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val before = stateManager.getCurrentState.unsafeRunSync()
+    val point  = fractionalToolbarPoint(before, toolbarItemPoint(before, itemId = "italic"))
+
+    stateManager
+      .applyEvent(MouseClick(point.x, point.y, pixelX = Some(point.pixelX), pixelY = Some(point.pixelY)))
+      .unsafeRunSync()
+
+    val after    = stateManager.getCurrentState.unsafeRunSync()
+    val bufferId = activeBufferId(after)
+    after
+      .buffers(bufferId)
+      .richTextDocument
+      .flatMap(_.paragraphs.headOption)
+      .flatMap(_.runs.find(_.text == "beta"))
+      .map(_.style.marks)
+      .getOrElse(fail("Expected styled beta run")) should contain(InlineMark.Italic)
+  }
+
   it should "retain toolbar focus for a clicked text-entry control, then restore editor focus on submit" in {
     val stateManager = createStateManager("ContextualToolbarSpec-mouse-input-focus")
 
@@ -1007,7 +1048,11 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     stateManager
       .updateState(state =>
-        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+        state.copy(
+          config = state.config
+            .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
+            .withUiElementGap(0.5)
+        )
       )
       .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(ViewportSize(78, 30))).unsafeRunSync()
@@ -1015,14 +1060,108 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
 
     val before         = stateManager.getCurrentState.unsafeRunSync()
-    val separatorPoint = toolbarSeparatorPoint(before, separatorIndex = 0)
+    val separatorPoint = fractionalToolbarPoint(before, toolbarSeparatorPoint(before, separatorIndex = 0))
+    val cursorBefore   = before.activeCursorPosition
 
-    stateManager.applyEvent(MouseMove(separatorPoint.x, separatorPoint.y)).unsafeRunSync()
+    stateManager
+      .applyEvent(
+        MouseMove(
+          separatorPoint.x,
+          separatorPoint.y,
+          pixelX = Some(separatorPoint.pixelX),
+          pixelY = Some(separatorPoint.pixelY)
+        )
+      )
+      .unsafeRunSync()
     val afterHover = stateManager.getCurrentState.unsafeRunSync()
     toolbarStateFrom(afterHover) shouldBe toolbarStateFrom(before)
 
-    stateManager.applyEvent(MouseClick(separatorPoint.x, separatorPoint.y)).unsafeRunSync()
-    toolbarStateFrom(stateManager.getCurrentState.unsafeRunSync()) shouldBe toolbarStateFrom(before)
+    stateManager
+      .applyEvent(
+        MouseClick(
+          separatorPoint.x,
+          separatorPoint.y,
+          pixelX = Some(separatorPoint.pixelX),
+          pixelY = Some(separatorPoint.pixelY)
+        )
+      )
+      .unsafeRunSync()
+    val afterClick = stateManager.getCurrentState.unsafeRunSync()
+    toolbarStateFrom(afterClick) shouldBe toolbarStateFrom(before)
+    afterClick.activeCursorPosition shouldBe cursorBefore
+  }
+
+  it should "ignore fractional toolbar separator drags before editor targeting" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-fractional-separator-drag")
+
+    stateManager
+      .updateState(state =>
+        state.copy(
+          config = state.config
+            .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
+            .withUiElementGap(0.5)
+        )
+      )
+      .unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(78, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val before         = stateManager.getCurrentState.unsafeRunSync()
+    val separatorPoint = fractionalToolbarPoint(before, toolbarSeparatorPoint(before, separatorIndex = 0))
+
+    stateManager
+      .applyEvent(
+        MouseDrag(
+          separatorPoint.x,
+          separatorPoint.y,
+          pixelX = Some(separatorPoint.pixelX),
+          pixelY = Some(separatorPoint.pixelY)
+        )
+      )
+      .unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.activeCursorPosition shouldBe before.activeCursorPosition
+    after.buffers(activeBufferId(after)).primarySelection shouldBe before
+      .buffers(activeBufferId(before))
+      .primarySelection
+  }
+
+  it should "ignore fractional toolbar separator secondary clicks before opening an editor context menu" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-fractional-separator-secondary-click")
+
+    stateManager
+      .updateState(state =>
+        state.copy(
+          config = state.config
+            .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
+            .withUiElementGap(0.5)
+        )
+      )
+      .unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(78, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val before         = stateManager.getCurrentState.unsafeRunSync()
+    val separatorPoint = fractionalToolbarPoint(before, toolbarSeparatorPoint(before, separatorIndex = 0))
+
+    stateManager
+      .applyEvent(
+        MouseClick(
+          separatorPoint.x,
+          separatorPoint.y,
+          pixelX = Some(separatorPoint.pixelX),
+          pixelY = Some(separatorPoint.pixelY),
+          button = MouseButton.Secondary
+        )
+      )
+      .unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.contextMenuSurface shouldBe None
+    after.activeCursorPosition shouldBe before.activeCursorPosition
   }
 
   it should "render icon-font glyphs alongside labels in IconAndText mode" in {
@@ -1208,7 +1347,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     movedUp.detailState shouldBe Some(ContextualToolbarDetailState.Dropdown("paragraph-role", 1))
   }
 
-  private case class Point(x: Int, y: Int)
+  private case class Point(x: Int, y: Int, pixelX: Int = 0, pixelY: Int = 0)
 
   private def seedToolbarDocument(
     stateManager: com.serenity.state.manager.StateManager,
@@ -1312,6 +1451,22 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .getOrElse(surface.id, Nil)
       .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(`displayedRowIndex`), y) => y }
       .getOrElse(fail(s"Expected toolbar content row $displayedRowIndex"))
+
+  private def fractionalToolbarPoint(state: AppState, point: Point): Point =
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar surface"))
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val metrics  = CellMetrics.fromFont(FontLoader.previewCodeFont(state.config.fontConfig))
+    val offsetPx = FloatingSurfaceGeometry.signedRowOffsetPixels(
+      layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
+      metrics
+    )
+    Point(
+      x = point.x,
+      y = point.y,
+      pixelX = point.x * metrics.charWidth + metrics.charWidth / 2,
+      pixelY = math.round(point.y * metrics.lineHeight + offsetPx + metrics.lineHeight / 2.0).toInt
+    )
 
   private def toolbarRect(state: AppState) =
     val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))

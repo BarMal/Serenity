@@ -448,6 +448,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         activeEditorPaneId = Some(paneId)
       ),
       focus = Focus.Surface(SurfaceId("command-runner")),
+      config = AppConfig.default.withUiElementGap(0.25),
       uiSurfaces = List(
         UiSurface(
           SurfaceId("contextual-toolbar"),
@@ -468,6 +469,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
 
     stack should have size 2
     stack.head.rows.flatMap(_.segments).exists(_.text.contains("Bold")) shouldBe true
+    stack.head.itemGapRows shouldBe 0.25
     stack(1).header.map(_.plainText) shouldBe Some("search: op")
     stack.head.rect.y should be < stack(1).rect.y
   }

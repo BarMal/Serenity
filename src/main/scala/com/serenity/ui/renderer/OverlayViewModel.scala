@@ -15,7 +15,8 @@ case class TextOverlayView(
     header: Option[OverlayRow] = None,
     rows: List[OverlayRow] = Nil,
     footer: Option[OverlayRow] = None,
-    itemGapRows: Int = 0,
+    itemGapRows: Double = 0.0,
+    verticalOffsetRows: Double = 0.0,
     surfaceId: Option[SurfaceId] = None
 ):
 
@@ -44,7 +45,13 @@ object OverlayViewModel:
   def fromState(state: AppState, layout: CalculatedLayout): OverlayViews =
     val aboveCursor = preferredFloatingSurface(state, SurfacePlacement.AboveCursor)
       .flatMap(surface =>
-        buildView(surface, state, EditorLayoutContract.overlayRectFor(surface.id, layout), collapsed = false)
+        buildView(
+          surface,
+          state,
+          EditorLayoutContract.overlayRectFor(surface.id, layout),
+          collapsed = false,
+          verticalOffsetRows = layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0)
+        )
       )
 
     val belowCursorStack = preferredBelowCursorSurfaces(state, layout)
@@ -60,7 +67,8 @@ object OverlayViewModel:
     surface: com.serenity.state.models.UiSurface,
     state: AppState,
     layoutRect: Option[LayoutRect],
-    collapsed: Boolean
+    collapsed: Boolean,
+    verticalOffsetRows: Double
   ): Option[TextOverlayView] =
     val animState = state.surfaceAnimations.get(surface.id).map(_.animationState).getOrElse(AnimationState.empty)
     surface.content match
@@ -78,6 +86,7 @@ object OverlayViewModel:
             rows = content.rows,
             footer = content.footer,
             itemGapRows = itemGapRowsFor(originalContent, state),
+            verticalOffsetRows = verticalOffsetRows,
             surfaceId = Some(surface.id)
           )
         }
@@ -95,6 +104,7 @@ object OverlayViewModel:
               rows = resolved.rows,
               footer = resolved.footer,
               itemGapRows = itemGapRowsFor(content, state),
+              verticalOffsetRows = verticalOffsetRows,
               surfaceId = Some(surface.id)
             )
           }
@@ -137,7 +147,8 @@ object OverlayViewModel:
             surface,
             state,
             EditorLayoutContract.overlayRectFor(surfaceId, layout),
-            collapsed = layout.collapsedFloatingSurfaceIds.contains(surfaceId)
+            collapsed = layout.collapsedFloatingSurfaceIds.contains(surfaceId),
+            verticalOffsetRows = layout.floatingOverlayOffsetRows.getOrElse(surfaceId, 0.0)
           )
         )
     }
@@ -169,12 +180,14 @@ object OverlayViewModel:
       case other =>
         SurfaceContentResolver.resolve(other, LayoutRect(0, 0, 80, 3), SurfaceRenderMode.Floating)
 
-  private def itemGapRowsFor(content: com.serenity.state.models.SurfaceContent, state: AppState): Int =
+  private def itemGapRowsFor(content: com.serenity.state.models.SurfaceContent, state: AppState): Double =
     content match
       case com.serenity.state.models.SurfaceContent.CommandPalette(_) |
           com.serenity.state.models.SurfaceContent.CommandPaletteSubmenu(_, _, _) |
           com.serenity.state.models.SurfaceContent.ContextMenu(_) =>
         state.config.commandRunnerItemGapRows
+      case com.serenity.state.models.SurfaceContent.ContextualToolbar(_) =>
+        state.config.uiElementGap
       case _ => 0
 
   private def alphaMultiplierFor(surface: com.serenity.state.models.UiSurface, state: AppState): Float =

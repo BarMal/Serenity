@@ -47,6 +47,9 @@ trait RenderSurface:
     arcPx: Int
   )(render: => Unit): Unit
 
+  /** Translate drawing in device-independent logical pixels for fractional-cell floating geometry. */
+  def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit = render
+
   def fillPixelRect(
     xPx: Int,
     yPx: Int,
@@ -61,6 +64,9 @@ trait RenderSurface:
     * s at (xPx, yPx + ascent) with the current foreground color. Callers set fg/bg colors before calling.
     */
   def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit = ()
+
+  /** Render cell-addressed content for one row at its logical-pixel top edge. */
+  def withLogicalPixelRow(cellRow: Int, pixelY: Int)(render: => Unit): Unit = render
 
   def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit = ()
 

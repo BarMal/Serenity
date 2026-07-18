@@ -608,6 +608,34 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "translate backdrop blur with a fractional floating offset" in {
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val state = stateWithRunner(Theme.light, "op", commands).copy(
+      config = AppConfig.default
+        .withBlurRadius(0.6f)
+        .withCommandRunnerCursorGapRows(Some(0.5))
+    )
+    val surface = new MockRenderSurface(100, 30)
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val offsetPx = FloatingSurfaceGeometry.signedRowOffsetPixels(
+      layout.floatingOverlayOffsetRows.getOrElse(SurfaceId("command-runner"), 0.0),
+      cellMetrics
+    )
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      codeFont,
+      Font(Font.SANS_SERIF, Font.PLAIN, 12),
+      cellMetrics,
+      None
+    )
+
+    surface.blurRegionTranslations should contain(surface.PixelTranslationCall(0.0, offsetPx))
+  }
+
   it should "skip backdrop blur for a solid overlay background style" in {
     val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
     val state = stateWithRunner(Theme.light, "op", commands).copy(

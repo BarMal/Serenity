@@ -15,6 +15,54 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  "TextOverlayRenderer" should "position a fractional cursor gap at its logical-pixel origin" in {
+    val surface = new MockRenderSurface(20, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics(charWidth = 8, lineHeight = 20, ascent = 15)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 1, 10, 3),
+      rows = List(OverlayRow("row")),
+      verticalOffsetRows = 0.5
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.pixelTranslationCalls.map(_.yPx) should contain(10.0)
+  }
+
+  it should "use fractional logical-pixel row positions for every overlay row layout" in {
+    val surface = new MockRenderSurface(80, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics(charWidth = 8, lineHeight = 20, ascent = 15)
+    val layouts = List(
+      OverlayRow("plain", layout = OverlayRowLayout.Plain),
+      OverlayRow(
+        "columns",
+        segments = List(OverlaySegment("columns"), OverlaySegment("hint")),
+        layout = OverlayRowLayout.Columns
+      ),
+      OverlayRow(
+        "split",
+        segments = List(OverlaySegment("split"), OverlaySegment("value")),
+        layout = OverlayRowLayout.Split
+      ),
+      OverlayRow(
+        "distributed",
+        segments = List(OverlaySegment("left"), OverlaySegment("right")),
+        layout = OverlayRowLayout.Distributed
+      )
+    )
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 40, 8),
+      rows = layouts,
+      itemGapRows = 0.25
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.putStringPixelYCalls.filter(_.text.nonEmpty).map(_.pixelY).distinct should contain allOf (20, 45, 70, 95)
+  }
+
   "TextOverlayRenderer" should "scroll a long editable split row horizontally to keep the caret visible" in {
     val surface = new MockRenderSurface(20, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)

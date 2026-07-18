@@ -64,6 +64,15 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
       .shouldBe(None)
   }
 
+  it should "keep fractional gaps from consuming a full additional item row" in {
+    val frame = SurfaceFrameLayout(LayoutRect(0, 0, 40, 8), borderCells = 0)
+
+    frame.visibleItemRows(hasHeader = true, hasFooter = true, itemGapRows = 0.5) shouldBe 4
+    frame
+      .itemWindow(itemCount = 8, selectedIndex = 0, hasHeader = true, hasFooter = true, itemGapRows = 0.5)
+      .rowCount shouldBe 4
+  }
+
   it should "derive a centered item window from the framed surface content contract" in {
     val frame = SurfaceFrameLayout(LayoutRect(0, 0, 40, 8))
 
@@ -178,4 +187,43 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
           SurfaceContentRowKind.Footer  -> 10
         )
       )
+  }
+
+  it should "calculate fractional item gaps in logical pixels without making the gap clickable" in {
+    val geometry = FloatingSurfaceGeometry.fromCells(
+      frame = LayoutRect(0, 0, 20, 8),
+      metrics = CellMetrics(charWidth = 8, lineHeight = 20, ascent = 15),
+      borderCells = 0,
+      itemCount = 3,
+      hasHeader = true,
+      hasFooter = true,
+      itemGapRows = 0.5
+    )
+
+    geometry.itemRects.map(_.y) shouldBe List(20.0, 50.0, 80.0)
+    geometry.itemIndexAt(10, 45) shouldBe None
+    geometry.itemIndexAt(10, 55) shouldBe Some(1)
+  }
+
+  it should "exclude a partial final item consistently from windows, slots, and pixel geometry" in {
+    val frame = SurfaceFrameLayout(LayoutRect(0, 0, 20, 7), borderCells = 0)
+    val geometry = FloatingSurfaceGeometry.fromCells(
+      frame = frame.frameRect,
+      metrics = CellMetrics(charWidth = 8, lineHeight = 20, ascent = 15),
+      borderCells = 0,
+      itemCount = 5,
+      hasHeader = true,
+      hasFooter = true,
+      itemGapRows = 0.5
+    )
+
+    frame.visibleItemRows(hasHeader = true, hasFooter = true, itemGapRows = 0.5) shouldBe 3
+    frame
+      .itemWindow(itemCount = 5, selectedIndex = 0, hasHeader = true, hasFooter = true, itemGapRows = 0.5)
+      .rowCount shouldBe 3
+    frame
+      .contentRowSlots(itemCount = 5, hasHeader = true, hasFooter = true, itemGapRows = 0.5)
+      .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), _) => index } shouldBe List(0, 1, 2)
+    geometry.itemRects.map(_.y) shouldBe List(20.0, 50.0, 80.0)
+    geometry.itemIndexAt(10, 105) shouldBe None
   }

@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.*
 import java.awt.font.{FontRenderContext, TextAttribute}
-import java.awt.geom.RoundRectangle2D
+import java.awt.geom.{Rectangle2D, RoundRectangle2D}
 import java.awt.image.*
 import java.util.concurrent.atomic.AtomicReference
 
@@ -48,9 +48,10 @@ class Java2DRenderSurface(
     */
   private val renderContext: FontRenderContext = g.getFontRenderContext()
 
-  private val fgRef       = AtomicReference(Color.WHITE)
-  private val bgRef       = AtomicReference(Color.BLACK)
-  private val baseFontRef = AtomicReference(font)
+  private val fgRef                   = AtomicReference(Color.WHITE)
+  private val bgRef                   = AtomicReference(Color.BLACK)
+  private val baseFontRef             = AtomicReference(font)
+  private val logicalPixelRowOverride = AtomicReference[Option[(Int, Int)]](None)
 
   override def setFont(newFont: Font): Unit =
     baseFontRef.set(newFont)
@@ -92,7 +93,7 @@ class Java2DRenderSurface(
   def putString(x: Int, y: Int, s: String): Unit =
     if s.nonEmpty then
       val px = metrics.toPixelX(x)
-      val py = metrics.toPixelY(y)
+      val py = pixelYForRow(y)
       // Fill background for the whole string using nominal width
       g.setColor(bgRef.get())
       g.fillRect(px, py, s.length * metrics.charWidth, metrics.lineHeight)
@@ -102,7 +103,7 @@ class Java2DRenderSurface(
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
     val px = metrics.toPixelX(x)
-    val py = metrics.toPixelY(y)
+    val py = pixelYForRow(y)
     val pw = width * metrics.charWidth
     val ph = height * metrics.lineHeight
     g.setColor(bgRef.get())
@@ -114,6 +115,24 @@ class Java2DRenderSurface(
           g.drawString(char.toString, metrics.toPixelX(x + col), metrics.toPixelY(y + row) + metrics.ascent)
         }
       }
+
+  override def withLogicalPixelRow(cellRow: Int, pixelY: Int)(render: => Unit): Unit =
+    val previous = logicalPixelRowOverride.getAndSet(Some(cellRow -> pixelY))
+    try render
+    finally logicalPixelRowOverride.set(previous)
+
+  override def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =
+    val savedTransform = g.getTransform
+    try
+      g.translate(xPx, yPx)
+      render
+    finally g.setTransform(savedTransform)
+
+  private def pixelYForRow(row: Int): Int =
+    logicalPixelRowOverride
+      .get()
+      .collect { case (cellRow, pixelY) if cellRow == row => pixelY }
+      .getOrElse(metrics.toPixelY(row))
 
   def enableStyle(style: TextStyle): Unit =
     val base     = baseFontRef.get()
@@ -141,17 +160,25 @@ class Java2DRenderSurface(
       val py         = metrics.toPixelY(y)
       val pw         = width * metrics.charWidth
       val ph         = height * metrics.lineHeight
-      val activeClip = Option(g.getClip).map(g.getTransform.createTransformedShape)
+      val transform  = g.getTransform
+      val activeClip = Option(g.getClip).map(transform.createTransformedShape)
+      val bounds = transform
+        .createTransformedShape(new Rectangle2D.Double(px, py, pw, ph))
+        .getBounds2D
+      val left   = math.floor(bounds.getMinX).toInt
+      val top    = math.floor(bounds.getMinY).toInt
+      val right  = math.ceil(bounds.getMaxX).toInt
+      val bottom = math.ceil(bounds.getMaxY).toInt
       Java2DRenderSurface
         .deviceRegionFor(
-          logicalX = px,
-          logicalY = py,
-          logicalWidth = pw,
-          logicalHeight = ph,
+          logicalX = left,
+          logicalY = top,
+          logicalWidth = right - left,
+          logicalHeight = bottom - top,
           imageWidth = image.getWidth,
           imageHeight = image.getHeight,
-          deviceScaleX = deviceScaleX,
-          deviceScaleY = deviceScaleY
+          deviceScaleX = 1.0,
+          deviceScaleY = 1.0
         )
         .foreach { region =>
           val size        = (radius * 10).toInt.max(1) * 2 + 1

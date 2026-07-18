@@ -779,7 +779,7 @@ private def decodeDocumentConfig(cursor: HCursor, defaultConfig: AppConfig): Dec
 private def decodeInterfaceConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[InterfaceConfig] =
   for
     density        <- cursor.getOrElse[InterfaceDensity]("interfaceDensity")(defaultConfig.interfaceConfig.density)
-    elementGap     <- cursor.getOrElse[Int]("uiElementGap")(defaultConfig.interfaceConfig.elementGap)
+    elementGap     <- cursor.getOrElse[Double]("uiElementGap")(defaultConfig.interfaceConfig.elementGap)
     cornerRadiusPx <- cursor.getOrElse[Int]("uiCornerRadiusPx")(defaultConfig.interfaceConfig.cornerRadiusPx)
     outlineThicknessPx <- cursor.getOrElse[Int]("uiOutlineThicknessPx")(
       defaultConfig.interfaceConfig.outlineThicknessPx
@@ -882,10 +882,10 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
       .getOrElse[Option[Int]]("commandRunnerVisibleRows")(None)
       .map(_.map(AppConfig.clampCommandRunnerVisibleRows))
     commandRunnerItemGapRows <- cursor
-      .getOrElse[Int]("commandRunnerItemGapRows")(defaultConfig.commandRunnerItemGapRows)
+      .getOrElse[Double]("commandRunnerItemGapRows")(defaultConfig.commandRunnerItemGapRows)
       .map(AppConfig.clampCommandRunnerItemGapRows)
     commandRunnerCursorGapRows <- cursor
-      .getOrElse[Option[Int]]("commandRunnerCursorGapRows")(defaultConfig.commandRunnerCursorGapRows)
+      .getOrElse[Option[Double]]("commandRunnerCursorGapRows")(defaultConfig.commandRunnerCursorGapRows)
       .map(_.map(AppConfig.clampCommandRunnerCursorGapRows))
     renderFpsTarget <- cursor.getOrElse[RenderFpsTarget]("renderFpsTarget")(RenderFpsTarget.Fps60)
     editorInsertionTransitionKind <- cursor.getOrElse[TransitionKind]("editorInsertionTransitionKind")(

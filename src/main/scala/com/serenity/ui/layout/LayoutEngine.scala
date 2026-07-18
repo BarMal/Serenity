@@ -66,6 +66,7 @@ case class CalculatedLayout(
     aboveCursorOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
     belowCursorOverlayStack: List[(SurfaceId, LayoutRect)] = Nil,
     collapsedFloatingSurfaceIds: Set[SurfaceId] = Set.empty,
+    floatingOverlayOffsetRows: Map[SurfaceId, Double] = Map.empty,
     lineNumberRect: Option[LayoutRect] = None,
     gutterRect: Option[LayoutRect] = None
 )
@@ -101,7 +102,7 @@ object LayoutEngine:
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
     val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
     val contentHeight  = math.max(1, viewportSize.height - gutterHeight)
-    val uiElementGap   = math.max(0, state.config.uiElementGap)
+    val uiElementGap   = math.ceil(math.max(0.0, state.config.uiElementGap)).toInt
     val pinnedPanelLayout = calculatePinnedPanelLayout(
       state.pinnedSurfaces,
       viewportSize.width,
@@ -217,13 +218,22 @@ object LayoutEngine:
     val aboveCursorOverlayStack =
       aboveSurfaces.flatMap(surface => calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface.id -> _))
     val belowLayout = calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
+    val floatingOffsets = floatingOverlayOffsets(
+      aboveSurfaces,
+      aboveCursorOverlayStack,
+      belowSurfaces,
+      belowLayout.stack,
+      state,
+      paneLayouts
+    )
 
     baseLayout.copy(
       aboveCursorOverlayRect = aboveCursorOverlayStack.headOption.map(_._2),
       belowCursorOverlayRect = belowLayout.stack.headOption.map(_._2),
       aboveCursorOverlayStack = aboveCursorOverlayStack,
       belowCursorOverlayStack = belowLayout.stack,
-      collapsedFloatingSurfaceIds = belowLayout.collapsedSurfaceIds
+      collapsedFloatingSurfaceIds = belowLayout.collapsedSurfaceIds,
+      floatingOverlayOffsetRows = floatingOffsets
     )
 
   private def usesBottomGutter(state: AppState): Boolean =
@@ -248,7 +258,7 @@ object LayoutEngine:
   ): Option[PinnedPanelDragResize] =
     val layout         = calculateLayoutWithUI(state, viewportSize)
     val contentHeight  = calculateContentHeight(state, viewportSize)
-    val uiElementGap   = math.max(0, state.config.uiElementGap)
+    val uiElementGap   = math.ceil(math.max(0.0, state.config.uiElementGap)).toInt
     val pinnedSurfaces = state.pinnedSurfaces
     val panelSizes = pinnedSurfaces.foldLeft(Map.empty[PanelPosition, Int]) {
       case (acc, UiSurface(_, _, SurfacePresentation.Pinned(position, size), _)) =>
@@ -519,7 +529,7 @@ object LayoutEngine:
         calculateFloatingSurfaceWidth(contentRect.width)
     val preferredHeight = calculateFloatingSurfaceHeight(surface.content, preferredWidth, contentRect.height, state)
     val finalHeight     = forcedHeight.getOrElse(preferredHeight)
-    val gapRows         = floatingCursorGapRows(state, surface.content)
+    val gapRows         = wholeRowOrigin(floatingCursorGapRows(state, surface.content))
 
     for
       anchor <- floatingAnchor(surface, state, buffer)
@@ -668,8 +678,8 @@ object LayoutEngine:
           (mainRectOpt, submenuBaseRectOpt, anchorFrameOpt) match
             case (Some(mainRect), Some(submenuRect), Some(anchorFrame)) =>
               val collapsedHeight = 3
-              val gapRows         = floatingCursorGapRows(state, main.content)
-              val stackGapRows    = floatingStackGapRows(state)
+              val gapRows         = wholeRowOrigin(floatingCursorGapRows(state, main.content))
+              val stackGapRows    = wholeRowOrigin(floatingStackGapRows(state))
               val availableBottom = anchorFrame.contentRect.bottom
               val totalHeight     = mainRect.height + stackGapRows + submenuRect.height
               val preferredBelowY = anchorFrame.screenPosition.y + 1 + gapRows
@@ -709,17 +719,70 @@ object LayoutEngine:
   private def calculateFloatingSurfaceWidth(maxWidth: Int): Int =
     maxWidth
 
-  private def floatingCursorGapRows(state: AppState, content: SurfaceContent): Int =
+  private def floatingCursorGapRows(state: AppState, content: SurfaceContent): Double =
     content match
       case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
-        state.config.commandRunnerCursorGapRows.getOrElse(floatingStackGapRows(state))
+        math.max(0.0, state.config.commandRunnerCursorGapRows.getOrElse(floatingStackGapRows(state)))
       case _ => floatingStackGapRows(state)
 
-  private def floatingStackGapRows(state: AppState): Int =
-    math.max(
-      InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows,
-      math.max(0, state.config.uiElementGap)
-    )
+  private def floatingStackGapRows(state: AppState): Double =
+    Option
+      .when(state.config.uiElementGap > 0.0)(state.config.uiElementGap)
+      .getOrElse(InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows.toDouble)
+
+  private def wholeRowOrigin(rows: Double): Int =
+    math.floor(math.max(0.0, rows)).toInt
+
+  private def floatingOverlayOffsets(
+    aboveSurfaces: List[UiSurface],
+    aboveRects: List[(SurfaceId, LayoutRect)],
+    belowSurfaces: List[UiSurface],
+    belowRects: List[(SurfaceId, LayoutRect)],
+    state: AppState,
+    paneLayouts: Map[PaneId, EditorPaneLayout]
+  ): Map[SurfaceId, Double] =
+    val aboveById = aboveSurfaces.map(surface => surface.id -> surface).toMap
+    val aboveOffsets = aboveRects.flatMap { (surfaceId, rect) =>
+      aboveById.get(surfaceId).flatMap { surface =>
+        val gap = floatingCursorGapRows(state, surface.content)
+        calculateFloatingAnchorFrame(surface, state, paneLayouts).map { anchorFrame =>
+          surfaceId -> clampedFloatingOffset(
+            rect,
+            anchorFrame.contentRect,
+            wholeRowOrigin(gap).toDouble - gap
+          )
+        }
+      }
+    }
+    val firstBelowDirection = for
+      surface   <- belowSurfaces.headOption
+      (_, rect) <- belowRects.headOption
+      anchorY   <- calculateFloatingAnchorFrame(surface, state, paneLayouts).map(_.screenPosition.y)
+    yield if rect.y <= anchorY then -1.0 else 1.0
+    val cursorRemainder = belowSurfaces.headOption
+      .map(surface =>
+        val gap = floatingCursorGapRows(state, surface.content)
+        gap - wholeRowOrigin(gap)
+      )
+      .getOrElse(0.0)
+    val stackGap        = floatingStackGapRows(state)
+    val stackRemainder  = stackGap - wholeRowOrigin(stackGap)
+    val direction       = firstBelowDirection.getOrElse(1.0)
+    val belowSurfaceIds = belowSurfaces.map(_.id).toSet
+    val belowContentRect = belowSurfaces.headOption
+      .flatMap(surface => calculateFloatingAnchorFrame(surface, state, paneLayouts))
+      .map(_.contentRect)
+    val belowOffsets = belowRects.zipWithIndex.collect {
+      case ((surfaceId, rect), index) if belowSurfaceIds.contains(surfaceId) =>
+        val desiredOffset = direction * (cursorRemainder + index * stackRemainder)
+        surfaceId -> belowContentRect
+          .map(contentRect => clampedFloatingOffset(rect, contentRect, desiredOffset))
+          .getOrElse(desiredOffset)
+    }
+    (aboveOffsets ++ belowOffsets).toMap
+
+  private def clampedFloatingOffset(rect: LayoutRect, contentRect: LayoutRect, desiredOffset: Double): Double =
+    math.max(contentRect.y - rect.y, math.min(desiredOffset, contentRect.bottom - rect.bottom))
 
   private def calculateFloatingSurfaceHeight(
     content: SurfaceContent,
@@ -767,7 +830,8 @@ object LayoutEngine:
           toolbarRows,
           hasHeader = false,
           hasFooter = false,
-          borderCells = borderCells
+          borderCells = borderCells,
+          itemGapRows = state.config.uiElementGap
         )
       case SurfaceContent.ContextMenu(menu) =>
         SurfaceFrameLayout.frameHeightForItemRows(
@@ -856,8 +920,10 @@ object LayoutEngine:
       case Some(_) if baseRects.isEmpty =>
         BelowOverlayLayout(Nil, Set.empty)
       case Some(anchorFrame) =>
-        val gapRows = surfaces.headOption.map(surface => floatingCursorGapRows(state, surface.content)).getOrElse(0)
-        val stackGapRows    = floatingStackGapRows(state)
+        val gapRows = surfaces.headOption
+          .map(surface => wholeRowOrigin(floatingCursorGapRows(state, surface.content)))
+          .getOrElse(0)
+        val stackGapRows    = wholeRowOrigin(floatingStackGapRows(state))
         val availableBottom = anchorFrame.contentRect.bottom
         val totalHeight     = baseRects.map(_._2.height).sum + (stackGapRows * (baseRects.length - 1).max(0))
         val preferredBelowY = anchorFrame.screenPosition.y + 1 + gapRows

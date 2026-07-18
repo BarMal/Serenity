@@ -2,6 +2,79 @@ package com.serenity.ui.layout
 
 import com.serenity.state.models.SurfaceContent
 
+/** A device-independent rectangle used at the floating-surface boundary. */
+case class LogicalPixelRect(x: Double, y: Double, width: Double, height: Double):
+  def contains(pixelX: Double, pixelY: Double): Boolean =
+    pixelX >= x && pixelX < x + width && pixelY >= y && pixelY < y + height
+
+  def translated(deltaX: Double, deltaY: Double): LogicalPixelRect =
+    copy(x = x + deltaX, y = y + deltaY)
+
+/** Shared pixel geometry for a framed floating surface and its selectable rows. */
+case class FloatingSurfaceGeometry(
+    frame: LogicalPixelRect,
+    content: LogicalPixelRect,
+    itemRects: List[LogicalPixelRect]
+):
+
+  def translated(deltaX: Double, deltaY: Double): FloatingSurfaceGeometry =
+    copy(
+      frame = frame.translated(deltaX, deltaY),
+      content = content.translated(deltaX, deltaY),
+      itemRects = itemRects.map(_.translated(deltaX, deltaY))
+    )
+
+  def itemIndexAt(pixelX: Double, pixelY: Double): Option[Int] =
+    itemRects.zipWithIndex.collectFirst { case (rect, index) if rect.contains(pixelX, pixelY) => index }
+
+object FloatingSurfaceGeometry:
+
+  /** Convert logical row spacing to the pixel coordinate space shared by layout, rendering, and hit testing. */
+  def rowOffsetPixels(rows: Double, metrics: CellMetrics): Double =
+    math.max(0.0, rows) * metrics.lineHeight
+
+  def signedRowOffsetPixels(rows: Double, metrics: CellMetrics): Double =
+    math.copySign(rowOffsetPixels(math.abs(rows), metrics), rows)
+
+  /** Count only rows whose complete interactive rectangle fits in the available height. */
+  def visibleItemCount(availableHeight: Double, itemHeight: Double, itemGapRows: Double): Int =
+    val safeItemHeight = math.max(0.0, itemHeight)
+    val step           = safeItemHeight * (1.0 + math.max(0.0, itemGapRows))
+    if safeItemHeight <= 0.0 || step <= 0.0 || availableHeight < safeItemHeight then 0
+    else math.floor((availableHeight - safeItemHeight) / step).toInt + 1
+
+  def fromCells(
+    frame: LayoutRect,
+    metrics: CellMetrics,
+    borderCells: Int,
+    itemCount: Int,
+    hasHeader: Boolean,
+    hasFooter: Boolean,
+    itemGapRows: Double
+  ): FloatingSurfaceGeometry =
+    val frameRect = LogicalPixelRect(
+      frame.x * metrics.charWidth.toDouble,
+      frame.y * metrics.lineHeight.toDouble,
+      frame.width * metrics.charWidth.toDouble,
+      frame.height * metrics.lineHeight.toDouble
+    )
+    val inset = math.max(0, borderCells)
+    val contentRect = LogicalPixelRect(
+      (frame.x + inset) * metrics.charWidth.toDouble,
+      (frame.y + inset) * metrics.lineHeight.toDouble,
+      math.max(0, frame.width - inset * 2) * metrics.charWidth.toDouble,
+      math.max(0, frame.height - inset * 2) * metrics.lineHeight.toDouble
+    )
+    val itemStart = contentRect.y + (if hasHeader then metrics.lineHeight else 0)
+    val usableHeight =
+      contentRect.height - (if hasHeader then metrics.lineHeight else 0) - (if hasFooter then metrics.lineHeight else 0)
+    val step         = metrics.lineHeight * (1.0 + math.max(0.0, itemGapRows))
+    val visibleItems = visibleItemCount(usableHeight, metrics.lineHeight.toDouble, itemGapRows)
+    val items =
+      (0 until math.min(math.max(0, itemCount), visibleItems)).toList
+        .map(index => LogicalPixelRect(contentRect.x, itemStart + index * step, contentRect.width, metrics.lineHeight))
+    FloatingSurfaceGeometry(frameRect, contentRect, items)
+
 case class SurfaceFrameLayout(
     frameRect: LayoutRect,
     borderCells: Int = SurfaceFrameLayout.DefaultBorderCells
@@ -23,12 +96,15 @@ case class SurfaceFrameLayout(
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): Int =
     val availableRows =
       math.max(0, maxContentRows - SurfaceFrameLayout.contentChromeRows(hasHeader, hasFooter, reservedContentRows))
-    val itemHeight = math.max(0, itemGapRows) + 1
-    if availableRows == 0 then 0 else (availableRows + itemHeight - 1) / itemHeight
+    FloatingSurfaceGeometry.visibleItemCount(
+      availableRows.toDouble,
+      itemHeight = 1.0,
+      itemGapRows = itemGapRows
+    )
 
   def itemWindow(
     itemCount: Int,
@@ -36,9 +112,9 @@ case class SurfaceFrameLayout(
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): SurfaceItemWindow =
-    val maxRows = math.max(1, visibleItemRows(hasHeader, hasFooter, reservedContentRows, itemGapRows))
+    val maxRows = visibleItemRows(hasHeader, hasFooter, reservedContentRows, itemGapRows)
     val offset =
       if itemCount <= maxRows then 0
       else
@@ -53,19 +129,22 @@ case class SurfaceFrameLayout(
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): Option[Int] =
     val window      = itemWindow(itemCount, selectedIndex, hasHeader, hasFooter, reservedContentRows, itemGapRows)
     val itemRowBase = contentRect.y + (if hasHeader then 1 else 0)
     val itemRow     = row - itemRowBase
-    val itemHeight  = math.max(0, itemGapRows) + 1
-    Option.when(itemRow >= 0 && itemRow % itemHeight == 0)(itemRow / itemHeight).flatMap(window.absoluteIndexAt)
+    val itemHeight  = 1.0 + math.max(0.0, itemGapRows)
+    Option
+      .when(itemRow >= 0)(math.floor(itemRow.toDouble / itemHeight).toInt)
+      .filter(index => math.floor(index * itemHeight).toInt == itemRow)
+      .flatMap(window.absoluteIndexAt)
 
   def contentRowSlots(
     itemCount: Int,
     hasHeader: Boolean,
     hasFooter: Boolean,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): List[SurfaceContentRowSlot] =
     SurfaceFrameLayout.contentRowSlotsFor(contentRect, itemCount, hasHeader, hasFooter, itemGapRows)
 
@@ -95,18 +174,25 @@ object SurfaceFrameLayout:
     itemCount: Int,
     hasHeader: Boolean,
     hasFooter: Boolean,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): List[SurfaceContentRowSlot] =
     if content.height <= 0 then Nil
     else
-      val headerRows   = if hasHeader then 1 else 0
-      val footerRows   = if hasFooter then 1 else 0
-      val itemRows     = math.max(0, content.height - headerRows - footerRows)
-      val itemHeight   = math.max(0, itemGapRows) + 1
-      val visibleItems = if itemRows == 0 then 0 else (itemRows + itemHeight - 1) / itemHeight
+      val headerRows = if hasHeader then 1 else 0
+      val footerRows = if hasFooter then 1 else 0
+      val itemRows   = math.max(0, content.height - headerRows - footerRows)
+      val itemHeight = 1.0 + math.max(0.0, itemGapRows)
+      val visibleItems = FloatingSurfaceGeometry.visibleItemCount(
+        itemRows.toDouble,
+        itemHeight = 1.0,
+        itemGapRows = itemGapRows
+      )
       val itemSlots =
         (0 until math.min(itemCount, visibleItems)).toList.map { index =>
-          SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), content.y + headerRows + (index * itemHeight))
+          SurfaceContentRowSlot(
+            SurfaceContentRowKind.Item(index),
+            content.y + headerRows + math.floor(index * itemHeight).toInt
+          )
         }
       val headerSlots =
         if hasHeader then List(SurfaceContentRowSlot(SurfaceContentRowKind.Header, content.y))
@@ -149,8 +235,8 @@ object SurfaceFrameLayout:
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
     borderCells: Int = DefaultBorderCells,
-    itemGapRows: Int = 0
+    itemGapRows: Double = 0.0
   ): Int =
     val rows = math.max(0, itemRows)
-    val gaps = math.max(0, rows - 1) * math.max(0, itemGapRows)
+    val gaps = math.ceil(math.max(0.0, rows - 1) * math.max(0.0, itemGapRows)).toInt
     rows + gaps + frameChromeRows(hasHeader, hasFooter, reservedContentRows, borderCells)
