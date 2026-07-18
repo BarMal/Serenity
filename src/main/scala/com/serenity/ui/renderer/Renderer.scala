@@ -47,8 +47,9 @@ object Renderer:
   private case class MarkdownLensFrame(
       lines: Vector[String],
       previewWindow: MarkdownDocumentPreview.PreviewWindow,
-      previewSourceLineCount: Int,
-      activeSourceRanges: List[Range.Inclusive]
+      activeSourceRanges: List[Range.Inclusive],
+      previewRows: Vector[MarkdownDocumentPreview.InlinePreviewLine],
+      placements: Map[Range.Inclusive, MarkdownLensPlacement]
   )
 
   private case class MarkdownLensPreviewWindow(
@@ -391,7 +392,7 @@ object Renderer:
     val bufferSnapshot = preparedSnapshot.orElse(buffer.map(snapshotForBuffer(_, contentRect, state, context)))
     val markdownLensFrame =
       buffer.collect {
-        case buf if isInlineMarkdownLens(buf, state) => markdownLensFrameFor(buf)
+        case buf if isInlineMarkdownLens(buf, state) => markdownLensFrameFor(buf, bufferSnapshot.get)
       }
 
     buffer match
@@ -416,7 +417,7 @@ object Renderer:
           state.config,
           cursorContext,
           bufferSnapshot.get,
-          markdownLensFrame.getOrElse(markdownLensFrameFor(buf))
+          markdownLensFrame.getOrElse(markdownLensFrameFor(buf, bufferSnapshot.get))
         )
       else renderCursors(buf, contentRect, state.theme, state.config, cursorContext, bufferSnapshot.get)
     }
@@ -509,7 +510,7 @@ object Renderer:
   ): Unit =
     context.surface.setFont(context.fontForBuffer(buffer))
     if isInlineMarkdownLens(buffer, state) then
-      val frame = markdownLensFrame.getOrElse(markdownLensFrameFor(buffer))
+      val frame = markdownLensFrame.getOrElse(markdownLensFrameFor(buffer, snapshot))
       renderInlineMarkdownPreview(buffer, rect, state, context, frame)
       renderMarkdownRawLenses(buffer, rect, state, context, snapshot, frame)
     else renderPlainBufferContent(buffer, rect, state, context, snapshot)
@@ -713,7 +714,6 @@ object Renderer:
     context: RenderContext,
     frame: MarkdownLensFrame
   ): Unit =
-    val previewWindow = frame.previewWindow
     val widthPx =
       scaledImagePixelDimension(rect.width * context.cellMetrics.charWidth, context.surface.devicePixelScaleX)
     val heightPx =
@@ -724,10 +724,9 @@ object Renderer:
       context.surface.devicePixelScaleY
     )
     val title = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
-    val image = MarkdownDocumentPreview.renderInlineImage(
+    val image = MarkdownDocumentPreview.renderInlineRowsImage(
+      rows = frame.previewRows,
       sourceLines = frame.lines,
-      firstSourceLine = previewWindow.firstSourceLine,
-      maxSourceLines = frame.previewSourceLineCount,
       title = title,
       widthPx = widthPx,
       heightPx = heightPx,
@@ -915,15 +914,65 @@ object Renderer:
   private def markdownSourceLines(buffer: Buffer): Vector[String] =
     buffer.content.linesFrom(0, buffer.content.lineCount)
 
-  private def markdownLensFrameFor(buffer: Buffer): MarkdownLensFrame =
+  private def markdownLensFrameFor(buffer: Buffer, snapshot: TextLayoutSnapshot): MarkdownLensFrame =
     val lines         = markdownSourceLines(buffer)
     val previewWindow = markdownPreviewWindow(buffer, lines, buffer.viewport.visibleLines)
+    val activeRanges  = activeMarkdownBlockRanges(lines, buffer)
+    val baseRows = MarkdownDocumentPreview.inlinePreviewRows(
+      lines,
+      previewWindow.window.firstSourceLine,
+      previewWindow.sourceLineCount
+    )
+    val (previewRows, placements) = markdownLensRows(
+      baseRows,
+      lines,
+      activeRanges,
+      buffer.cursors.map(_.line).toSet,
+      snapshot,
+      previewWindow.window
+    )
     MarkdownLensFrame(
       lines,
       previewWindow.window,
-      previewWindow.sourceLineCount,
-      activeMarkdownBlockRanges(lines, buffer)
+      activeRanges,
+      previewRows,
+      placements
     )
+
+  private def markdownLensRows(
+    baseRows: Vector[MarkdownDocumentPreview.InlinePreviewLine],
+    lines: Vector[String],
+    activeRanges: List[Range.Inclusive],
+    activeLines: Set[Int],
+    snapshot: TextLayoutSnapshot,
+    previewWindow: MarkdownDocumentPreview.PreviewWindow
+  ): (Vector[MarkdownDocumentPreview.InlinePreviewLine], Map[Range.Inclusive, MarkdownLensPlacement]) =
+    val (rows, placements, _) = activeRanges.foldLeft(
+      (baseRows, Map.empty[Range.Inclusive, MarkdownLensPlacement], 0)
+    ) {
+      case ((rows, placements, rowDelta), blockRange) =>
+        val previewRange = MarkdownDocumentPreview.previewRowsForSourceRange(lines, blockRange).map { range =>
+          (range.start - previewWindow.firstPreviewRow + rowDelta) to
+            (range.end - previewWindow.firstPreviewRow + rowDelta)
+        }
+        val visibleActiveLine = snapshot.visualLines.exists(line => activeLines.contains(line.bufferLine))
+        val rawHeight =
+          if visibleActiveLine then snapshot.visualLines.count(line => blockRange.contains(line.bufferLine)) else 0
+        previewRange match
+          case Some(range) if rawHeight > 0 && range.end >= 0 && range.start < rows.length =>
+            val start        = range.start.max(0).min(rows.length)
+            val endExclusive = (range.end + 1).max(start).min(rows.length)
+            val replacedRows = endExclusive - start
+            val replacement  = Vector.fill(rawHeight)(MarkdownDocumentPreview.InlinePreviewLine(None, ""))
+            val nextRows     = rows.take(start) ++ replacement ++ rows.drop(endExclusive)
+            (
+              nextRows,
+              placements + (blockRange -> MarkdownLensPlacement(start, rawHeight)),
+              rowDelta + rawHeight - replacedRows
+            )
+          case _ => (rows, placements, rowDelta)
+    }
+    rows -> placements
 
   private def markdownPreviewWindow(
     buffer: Buffer,
@@ -1006,14 +1055,10 @@ object Renderer:
     frame.activeSourceRanges.foreach { blockRange =>
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
-        val placement =
-          markdownLensPlacement(
-            blockRange,
-            blockVisualLines,
-            rect.height,
-            lines,
-            previewWindow
-          )
+        val placement = frame.placements.getOrElse(
+          blockRange,
+          markdownLensPlacement(blockRange, blockVisualLines, rect.height, lines, previewWindow)
+        )
         val lensY = rect.y + placement.top
         context.surface.setBackgroundColor(state.theme.panel.background)
         context.surface.fillRect(rect.x, lensY, rect.width, placement.height, ' ')
@@ -1079,14 +1124,10 @@ object Renderer:
     frame.activeSourceRanges.foreach { blockRange =>
       val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
-        val placement =
-          markdownLensPlacement(
-            blockRange,
-            blockVisualLines,
-            rect.height,
-            lines,
-            previewWindow
-          )
+        val placement = frame.placements.getOrElse(
+          blockRange,
+          markdownLensPlacement(blockRange, blockVisualLines, rect.height, lines, previewWindow)
+        )
         buffer.cursors.zipWithIndex.foreach { (cursor, cursorIndex) =>
           val isPrimaryCursor = cursorIndex == 0
           val shouldRenderCursor =

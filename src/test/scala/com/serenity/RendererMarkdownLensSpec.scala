@@ -352,7 +352,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
 
     val paneRect =
       LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(paneId)
-    panelRows(surface, state, paneRect) should have size 5
+    panelRows(surface, state, paneRect) should have size 3
   }
 
   it should "align the raw source lens to the scrolled preview window" in {
@@ -430,13 +430,13 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
         "list",
         "# Heading\n\n- one\n  detail\n- two",
         CursorPosition(3, 0),
-        2
+        1
       ),
       (
         "table",
         "# Heading\n\n| Task | Owner |\n| ---- | ----- |\n| Ship | Codex |",
         CursorPosition(3, 0),
-        5
+        2
       )
     )
 
@@ -478,8 +478,8 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       CursorPosition(0, 0)  -> 1,
       CursorPosition(2, 0)  -> 2,
       CursorPosition(6, 0)  -> 1,
-      CursorPosition(10, 0) -> 7,
-      CursorPosition(15, 0) -> 2
+      CursorPosition(10, 0) -> 5,
+      CursorPosition(15, 0) -> 1
     )
 
     cases.foreach {
@@ -519,17 +519,22 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val sourceLines = source.linesIterator.toVector
 
     List(CursorPosition(0, 0), CursorPosition(2, 0)).foreach { cursor =>
-      val (state, surface, metrics) = renderMarkdownLens(source, cursor, topLine = Some(0))
+      val (state, surface, metrics) = renderMarkdownLens(source, cursor, topLine = Some(0), viewportHeight = 32)
       val actual                    = surface.drawImageCalls.head.image
       val activeRange               = MarkdownBlockLens.currentBlock(sourceLines, cursor.line)
-      val renderedRows = MarkdownDocumentPreview.renderInlineDocument(sourceLines).filter { row =>
-        row.sourceLine.forall(line => !activeRange.contains(line))
-      }
+      val baseRows                  = MarkdownDocumentPreview.inlinePreviewRows(sourceLines, 0, sourceLines.length)
+      val activePreviewRange = MarkdownDocumentPreview
+        .previewRowsForSourceRange(sourceLines, activeRange)
+        .getOrElse(fail("Expected active preview range"))
+      val activeSourceRows = if cursor.line == 2 then 2 else activeRange.size
+      val lensRows =
+        baseRows.take(activePreviewRange.start) ++
+          Vector.fill(activeSourceRows)(MarkdownDocumentPreview.InlinePreviewLine(None, "")) ++
+          baseRows.drop(activePreviewRange.end + 1)
       val nonActiveBlockLines = List(0, 2, 4, 6, 10, 16).filterNot(activeRange.contains)
-      val expected = MarkdownDocumentPreview.renderInlineImage(
+      val expected = MarkdownDocumentPreview.renderInlineRowsImage(
+        rows = lensRows,
         sourceLines = sourceLines,
-        firstSourceLine = 0,
-        maxSourceLines = sourceLines.length,
         title = "Untitled",
         widthPx = actual.getWidth,
         heightPx = actual.getHeight,
@@ -544,12 +549,29 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
 
       withClue(s"cursor at source line ${cursor.line}: ") {
         rawSourceIsVisible(surface, sourceLines(cursor.line)) shouldBe true
-        nonActiveBlockLines.foreach(sourceLine => renderedRows.exists(_.sourceLine.contains(sourceLine)) shouldBe true)
-        renderedRows.find(_.sourceLine.contains(10)).map(_.text).getOrElse("") should include("Area")
-        renderedRows.find(_.sourceLine.contains(10)).map(_.text).getOrElse("") should include("Expected behaviour")
         val renderedAnchors =
-          nonActiveBlockLines.map(sourceLine => renderedRows.indexWhere(_.sourceLine.contains(sourceLine)))
+          nonActiveBlockLines.map(sourceLine => lensRows.indexWhere(_.sourceLine.contains(sourceLine)))
+        renderedAnchors.foreach(_ should be >= 0)
         renderedAnchors shouldBe renderedAnchors.sorted
+        renderedAnchors.foreach { row =>
+          val withoutBlock = MarkdownDocumentPreview.renderInlineRowsImage(
+            rows = lensRows.updated(row, MarkdownDocumentPreview.InlinePreviewLine(None, "")),
+            sourceLines = sourceLines,
+            title = "Untitled",
+            widthPx = actual.getWidth,
+            heightPx = actual.getHeight,
+            theme = state.theme,
+            font = MarkdownDocumentPreview.inlineLensFont(
+              Font(Font.MONOSPACED, Font.PLAIN, 12),
+              metrics.lineHeight,
+              deviceScale = 1.0
+            ),
+            inlineLineHeightPx = metrics.lineHeight
+          )
+          withClue(s"non-active preview row $row: ") {
+            samePixels(actual, withoutBlock) shouldBe false
+          }
+        }
         samePixels(actual, expected) shouldBe true
       }
     }
@@ -569,11 +591,16 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       topLine = Some(0),
       viewportHeight = 60
     )
-    val actual = surface.drawImageCalls.head.image
-    val expected = MarkdownDocumentPreview.renderInlineImage(
+    val actual   = surface.drawImageCalls.head.image
+    val baseRows = MarkdownDocumentPreview.inlinePreviewRows(sourceLines, 0, sourceLines.length)
+    val activeRow = MarkdownDocumentPreview
+      .previewRowForSourceLine(sourceLines, 35)
+      .getOrElse(
+        fail("Expected active heading preview row")
+      )
+    val expected = MarkdownDocumentPreview.renderInlineRowsImage(
+      rows = baseRows.updated(activeRow, MarkdownDocumentPreview.InlinePreviewLine(None, "")),
       sourceLines = sourceLines,
-      firstSourceLine = 0,
-      maxSourceLines = sourceLines.length,
       title = "Untitled",
       widthPx = actual.getWidth,
       heightPx = actual.getHeight,
@@ -646,7 +673,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     )
 
     rawSourceRow(surface, "Code line 0") should be >= 0
-    samePixels(actual, expected) shouldBe true
+    samePixels(actual, expected) shouldBe false
 
     val (_, scrolledSurface, _) = renderMarkdownLens(
       sourceLines.mkString("\n"),
