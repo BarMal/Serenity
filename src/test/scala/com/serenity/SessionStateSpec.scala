@@ -4,7 +4,7 @@ import java.awt.{Color, Font}
 import java.nio.file.Files
 
 import _root_.io.circe.syntax.*
-import com.serenity.animation.{AnimationConfig, TransitionKind}
+import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.config.*
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
@@ -321,6 +321,30 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         panelOpenTransitionKind = Some(TransitionKind.DirectionalSweep),
         panelCloseTransitionKind = Some(TransitionKind.Disabled),
         uiAnimation = AnimationConfig.subtle,
+        motionConfiguration = Some(
+          MotionConfig(
+            MotionAccessibility.Off,
+            MotionPreset.Smooth,
+            Map(
+              MotionFamily.CommandSurfaces -> MotionFamilyConfig(
+                enabled = true,
+                transitionKind = TransitionKind.TypedText,
+                animation = AnimationConfig.subtle,
+                speedScale = 0.5
+              ),
+              MotionFamily.PinnedPanels -> MotionFamilyConfig(
+                enabled = true,
+                transitionKind = TransitionKind.DirectionalSweep,
+                animation = AnimationConfig.smooth,
+                speedScale = 1.0,
+                transitionOverrides = Map(
+                  TransitionScope.PanelOpen  -> TransitionKind.DirectionalSweep,
+                  TransitionScope.PanelClose -> TransitionKind.Disabled
+                )
+              )
+            )
+          )
+        ),
         commandRunnerVisibleRows = Some(9),
         commandRunnerItemGapRows = 1,
         commandRunnerCursorGapRows = Some(3),
@@ -385,6 +409,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.panelOpenTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
     decoded.config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
     decoded.config.uiAnimation shouldBe AnimationConfig.subtle
+    decoded.config.motionConfiguration shouldBe appState.config.motionConfiguration
     decoded.config.commandRunnerVisibleRows shouldBe Some(9)
     decoded.config.commandRunnerItemGapRows shouldBe 1
     decoded.config.commandRunnerCursorGapRows shouldBe Some(3)

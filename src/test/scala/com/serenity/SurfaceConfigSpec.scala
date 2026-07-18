@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.animation.TransitionKind
+import com.serenity.animation.{TransitionKind, TransitionScope}
 import com.serenity.config.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -57,6 +57,65 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     config.surfaceConfig.wordWrapEnabled.shouldBe(false)
     config.surfaceConfig.focusedTextBodyEnabled.shouldBe(true)
     config.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.TextOnly)
+  }
+
+  it should "apply accessibility motion overrides after independent family settings" in {
+    val editor = MotionFamilyConfig(true, TransitionKind.TypedText, None, 0.5)
+    val panels = MotionFamilyConfig(true, TransitionKind.OutlineThenContent, None, 1.5)
+    val config = AppConfig.default.withMotionConfiguration(
+      MotionConfig(
+        MotionAccessibility.Off,
+        MotionPreset.Smooth,
+        Map(MotionFamily.EditorText -> editor, MotionFamily.PinnedPanels -> panels)
+      )
+    )
+
+    config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.EditorText).enabled shouldBe false
+    config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).enabled shouldBe false
+    config.scaledCharacterAnimation shouldBe None
+    config.scaledCommandRunnerAnimation shouldBe None
+    config.scaledUiAnimation shouldBe None
+    config.elementTransitionSettings.enabled shouldBe false
+    config.editorInsertionTransitionSettings.enabled shouldBe false
+  }
+
+  it should "resolve omitted families from the legacy baseline and use family animation values" in {
+    val commandAnimation = com.serenity.animation.AnimationConfig.subtle
+    val config = AppConfig.default.withMotionConfiguration(
+      MotionConfig(
+        MotionAccessibility.Standard,
+        MotionPreset.Smooth,
+        Map(MotionFamily.CommandSurfaces -> MotionFamilyConfig(true, TransitionKind.TypedText, commandAnimation, 0.5))
+      )
+    )
+
+    config.effectivePanelOpenTransitionKind shouldBe TransitionKind.OutlineThenContent
+    config.scaledCommandRunnerAnimation shouldBe commandAnimation.map(_.scaledBy(0.5)).flatten
+  }
+
+  it should "use the hierarchy baseline and pinned-panel family timing for panel transitions" in {
+    val panelAnimation = com.serenity.animation.AnimationConfig.subtle
+    val config = AppConfig.default.withMotionConfiguration(
+      MotionConfig(
+        MotionAccessibility.Standard,
+        MotionPreset.Expressive,
+        Map(
+          MotionFamily.PinnedPanels -> MotionFamilyConfig(
+            enabled = true,
+            transitionKind = TransitionKind.DirectionalSweep,
+            animation = panelAnimation,
+            speedScale = 0.5
+          )
+        )
+      )
+    )
+
+    config.elementTransitionSettings.baseTiming shouldBe MotionPreset.Expressive.elementTransitionSettings.baseTiming
+    config.pinnedPanelTransitionSettings.speedScale shouldBe 0.5
+    config.pinnedPanelTransitionSettings.baseTiming.durationMs shouldBe panelAnimation.fold(
+      fail("missing panel animation")
+    )(_.durationMs)
+    config.pinnedPanelTransitionSettings.overrides(TransitionScope.PanelOpen) shouldBe TransitionKind.DirectionalSweep
   }
 
   it should "default the contextual toolbar display mode to icons and text" in

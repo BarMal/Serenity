@@ -7,7 +7,7 @@ import scala.io.Source
 import scala.util.Using
 
 import cats.effect.IO
-import com.serenity.animation.{AnimationConfig, TransitionKind}
+import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
@@ -249,18 +249,38 @@ object ConfigManager:
              |character.animation.duration_ms = ${anim.durationMs}
              |character.animation.steps = ${anim.steps}""".stripMargin)
       else ""
-    val commandRunnerAnimationSetting = config.commandRunnerAnimation match
-      case None                                             => "none"
-      case Some(anim) if anim == AnimationConfig.quick.get  => "quick"
-      case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
-      case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
-      case Some(_)                                          => "custom"
-    val uiAnimationSetting = config.uiAnimation match
-      case None                                             => "none"
-      case Some(anim) if anim == AnimationConfig.quick.get  => "quick"
-      case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
-      case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
-      case Some(_)                                          => "custom"
+    def motionAnimationSetting(animation: Option[AnimationConfig]): String =
+      animation match
+        case None                                             => "none"
+        case Some(anim) if anim == AnimationConfig.quick.get  => "quick"
+        case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
+        case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
+        case Some(_)                                          => "custom"
+    val motionConfiguration = config.surfaceConfig.motionConfiguration match
+      case Some(configuration) =>
+        configuration.withFallback(MotionConfig.fromLegacy(config.surfaceConfig, configuration.baseline))
+      case None => MotionConfig.fromLegacy(config.surfaceConfig)
+    val motionFamilySettings = MotionFamily.values
+      .map { family =>
+        val settings         = motionConfiguration.families(family)
+        val animationSetting = motionAnimationSetting(settings.animation)
+        val customAnimationDetails =
+          if animationSetting == "custom" then settings.animation.fold("")(animation => s"""
+               |ui.motion.family.${family.configKey}.animation.duration_ms = ${animation.durationMs}
+               |ui.motion.family.${family.configKey}.animation.steps = ${animation.steps}""".stripMargin)
+          else ""
+        val scopedTransitions =
+          if family == MotionFamily.PinnedPanels then
+            s"""
+               |ui.motion.family.${family.configKey}.open_transition = ${transitionKindConfigKey(settings.transitionKindFor(TransitionScope.PanelOpen))}
+               |ui.motion.family.${family.configKey}.close_transition = ${transitionKindConfigKey(settings.transitionKindFor(TransitionScope.PanelClose))}""".stripMargin
+          else ""
+        s"""ui.motion.family.${family.configKey}.enabled = ${settings.enabled}
+         |ui.motion.family.${family.configKey}.transition = ${transitionKindConfigKey(settings.transitionKind)}
+         |ui.motion.family.${family.configKey}.animation = $animationSetting$customAnimationDetails
+         |ui.motion.family.${family.configKey}.speed_scale = ${settings.speedScale}$scopedTransitions""".stripMargin
+      }
+      .mkString("\n")
     val lspSettings = lspConfigToString(config.lspUserConfig)
     def editorBinding(action: EditorKeyAction): String =
       config.focusedKeymapConfig.editor
@@ -318,18 +338,9 @@ object ConfigManager:
        |ui.material = ${config.materialPreset.configKey}
        |# Post-processing: off, scanlines, glow
        |ui.post_processing = ${config.postProcessingEffect.configKey}
-       |ui.motion = ${config.motionPreset.configKey}
-       |ui.motion.speed_scale = ${config.elementTransitionSpeedScale}
-       |ui.motion.editor_text.speed_scale = ${config.effectiveEditorTextTransitionSpeedScale}
-        |ui.motion.command_runner.speed_scale = ${config.effectiveCommandRunnerTransitionSpeedScale}
-       |ui.motion.ui.speed_scale = ${config.effectiveUiTransitionSpeedScale}
-       |ui.motion.cursor.speed_scale = ${config.effectiveCursorTransitionSpeedScale}
-        |ui.motion.command_runner = $commandRunnerAnimationSetting
-        |ui.motion.command_runner_reveal = ${transitionKindConfigKey(config.effectiveCommandRunnerTransitionKind)}
-        |ui.motion.ui = $uiAnimationSetting
-       |ui.motion.editor_text = ${transitionKindConfigKey(config.editorInsertionTransitionKind)}
-       |ui.motion.panel_open = ${transitionKindConfigKey(config.effectivePanelOpenTransitionKind)}
-       |ui.motion.panel_close = ${transitionKindConfigKey(config.effectivePanelCloseTransitionKind)}
+       |ui.motion = ${motionConfiguration.baseline.configKey}
+       |ui.motion.accessibility = ${motionConfiguration.accessibility.configKey}
+       |$motionFamilySettings
        |
        |# Markdown rendering mode: source, split-preview, inline-lens
        |document.markdown_view = ${config.markdownViewMode.configKey}

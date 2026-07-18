@@ -610,7 +610,7 @@ final private[manager] class StateManagerEventPipeline(
   ): Option[SurfaceAnimationState] =
     val plan = ElementTransitionPlanner.plan(
       ElementTransitionRequest(TransitionScope.PanelOpen, Some(position)),
-      state.config.elementTransitionSettings
+      state.config.pinnedPanelTransitionSettings
     )
     val animationState = ElementTransitionLowerer.lower(plan, pinnedPanelOpenCells(rect, state), tickRateMs = 16)
     Option.when(animationState.hasActiveAnimations)(
@@ -630,7 +630,7 @@ final private[manager] class StateManagerEventPipeline(
   ): Option[SurfaceAnimationState] =
     val plan = ElementTransitionPlanner.plan(
       ElementTransitionRequest(TransitionScope.PanelClose, Some(position)),
-      state.config.elementTransitionSettings
+      state.config.pinnedPanelTransitionSettings
     )
     val animationState = ElementTransitionLowerer.lower(plan, pinnedPanelCloseCells(rect, state), tickRateMs = 16)
     Option.when(animationState.hasActiveAnimations)(

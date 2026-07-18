@@ -915,6 +915,7 @@ case class SurfaceConfig(
     commandRunnerTransitionKind: Option[TransitionKind] = None,
     panelOpenTransitionKind: Option[TransitionKind] = None,
     panelCloseTransitionKind: Option[TransitionKind] = None,
+    motionConfiguration: Option[MotionConfig] = None,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     viewportSizing: ViewportSizing = ViewportSizing()
 ):
@@ -928,6 +929,7 @@ case class SurfaceConfig(
         commandRunnerTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
       uiTransitionSpeedScale = uiTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
       cursorTransitionSpeedScale = cursorTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
+      motionConfiguration = motionConfiguration.map(_.normalized),
       commandRunnerVisibleRows = commandRunnerVisibleRows.map(AppConfig.clampCommandRunnerVisibleRows),
       commandRunnerItemGapRows = AppConfig.clampCommandRunnerItemGapRows(commandRunnerItemGapRows),
       commandRunnerCursorGapRows = commandRunnerCursorGapRows.map(AppConfig.clampCommandRunnerCursorGapRows),
@@ -947,40 +949,100 @@ case class SurfaceConfig(
   def effectiveCursorTransitionSpeedScale: Double =
     cursorTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
 
+  /** Resolve every runtime family from one hierarchy, preserving legacy fields when no hierarchy has been saved yet. */
+  def effectiveMotionConfiguration: EffectiveMotionConfig =
+    motionConfiguration match
+      case Some(configuration) =>
+        configuration.withFallback(MotionConfig.fromLegacy(this, configuration.baseline)).effective
+      case None => MotionConfig.fromLegacy(this).effective
+
+  def effectiveMotionBaseline: MotionPreset =
+    motionConfiguration.fold(motionPreset)(_.baseline)
+
   def effectiveCommandRunnerTransitionKind: TransitionKind =
-    commandRunnerTransitionKind.getOrElse(TransitionKind.Fade)
+    motionConfiguration.fold(commandRunnerTransitionKind.getOrElse(TransitionKind.Fade))(_ =>
+      effectiveMotionConfiguration.family(MotionFamily.CommandSurfaces).transitionKind
+    )
 
   def effectivePanelOpenTransitionKind: TransitionKind =
-    panelOpenTransitionKind.getOrElse(TransitionKind.OutlineThenContent)
+    motionConfiguration.fold(panelOpenTransitionKind.getOrElse(TransitionKind.OutlineThenContent))(_ =>
+      effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).transitionKindFor(TransitionScope.PanelOpen)
+    )
 
   def effectivePanelCloseTransitionKind: TransitionKind =
-    panelCloseTransitionKind.getOrElse(TransitionKind.Fade)
+    motionConfiguration.fold(panelCloseTransitionKind.getOrElse(TransitionKind.Fade))(_ =>
+      effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).transitionKindFor(TransitionScope.PanelClose)
+    )
 
   def elementTransitionSettings: ElementTransitionSettings =
-    val baseSettings = motionPreset.elementTransitionSettings
+    val uiMotion = effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
+    val baseSettings =
+      if uiMotion.enabled then effectiveMotionBaseline.elementTransitionSettings else ElementTransitionSettings.disabled
     if !baseSettings.enabled then baseSettings
     else
-      val transitionOverrides =
-        List(
-          Some(TransitionScope.EditorInsertion -> editorInsertionTransitionKind),
-          commandRunnerTransitionKind.map(TransitionScope.CommandRunner -> _),
-          panelOpenTransitionKind.map(TransitionScope.PanelOpen -> _),
-          panelCloseTransitionKind.map(TransitionScope.PanelClose -> _)
-        ).flatten.toMap
+      val transitionOverrides = motionConfiguration match
+        case Some(_) =>
+          List(
+            TransitionScope.EditorInsertion -> effectiveMotionConfiguration
+              .family(MotionFamily.EditorText)
+              .transitionKind,
+            TransitionScope.CommandRunner -> effectiveMotionConfiguration
+              .family(MotionFamily.CommandSurfaces)
+              .transitionKind,
+            TransitionScope.PanelOpen -> effectiveMotionConfiguration
+              .family(MotionFamily.PinnedPanels)
+              .transitionKindFor(TransitionScope.PanelOpen),
+            TransitionScope.PanelClose -> effectiveMotionConfiguration
+              .family(MotionFamily.PinnedPanels)
+              .transitionKindFor(TransitionScope.PanelClose)
+          ).toMap
+        case None =>
+          List(
+            Some(TransitionScope.EditorInsertion -> editorInsertionTransitionKind),
+            commandRunnerTransitionKind.map(TransitionScope.CommandRunner -> _),
+            panelOpenTransitionKind.map(TransitionScope.PanelOpen -> _),
+            panelCloseTransitionKind.map(TransitionScope.PanelClose -> _)
+          ).flatten.toMap
 
       baseSettings.copy(
-        speedScale = effectiveUiTransitionSpeedScale,
+        speedScale = uiMotion.speedScale,
         overrides = baseSettings.overrides ++ transitionOverrides
       )
 
   def editorInsertionTransitionSettings: ElementTransitionSettings =
-    val baseSettings = motionPreset.elementTransitionSettings
+    val editorMotion = effectiveMotionConfiguration.family(MotionFamily.EditorText)
+    val baseSettings =
+      if editorMotion.enabled then effectiveMotionBaseline.elementTransitionSettings
+      else ElementTransitionSettings.disabled
     if !baseSettings.enabled then baseSettings
     else
       baseSettings.copy(
-        speedScale = effectiveEditorTextTransitionSpeedScale,
-        overrides = baseSettings.overrides ++ Map(TransitionScope.EditorInsertion -> editorInsertionTransitionKind)
+        speedScale = editorMotion.speedScale,
+        overrides = baseSettings.overrides ++ Map(TransitionScope.EditorInsertion -> editorMotion.transitionKind)
       )
+
+  /** Transition policy for pinned panels, with independent family timing and reveal strategy. */
+  def pinnedPanelTransitionSettings: ElementTransitionSettings =
+    motionConfiguration match
+      case None => elementTransitionSettings
+      case Some(_) =>
+        val panelMotion = effectiveMotionConfiguration.family(MotionFamily.PinnedPanels)
+        val baseSettings =
+          if panelMotion.enabled then effectiveMotionBaseline.elementTransitionSettings
+          else ElementTransitionSettings.disabled
+        if !baseSettings.enabled then baseSettings
+        else
+          val timing = panelMotion.animation.fold(baseSettings.baseTiming)(animation =>
+            baseSettings.baseTiming.copy(durationMs = animation.durationMs, staggerMs = animation.tickRateMs)
+          )
+          baseSettings.copy(
+            baseTiming = timing,
+            speedScale = panelMotion.speedScale,
+            overrides = baseSettings.overrides ++ Map(
+              TransitionScope.PanelOpen  -> panelMotion.transitionKindFor(TransitionScope.PanelOpen),
+              TransitionScope.PanelClose -> panelMotion.transitionKindFor(TransitionScope.PanelClose)
+            )
+          )
 
 object SurfaceConfig:
 
@@ -1045,6 +1107,13 @@ object SurfaceConfig:
       "viewport.width.max",
       "viewport.height.percent",
       "viewport.height.max"
+    ) ++ Set("ui.motion.accessibility") ++ MotionFamily.values.flatMap { family =>
+      Set("enabled", "transition", "animation", "animation.duration_ms", "animation.steps", "speed_scale").map(field =>
+        s"ui.motion.family.${family.configKey}.$field"
+      )
+    } ++ Set(
+      "ui.motion.family.pinned_panels.open_transition",
+      "ui.motion.family.pinned_panels.close_transition"
     )
 
     val deprecatedKeys: Map[String, String] = Map(
@@ -1098,7 +1167,18 @@ object SurfaceConfig:
 
     val postProcessingKeys: Set[String] = Set("ui.post_processing")
 
-    val motionPresetKeys: Set[String] = Set("ui.motion", "ui_motion", "motion.preset", "motion_preset")
+    val motionPresetKeys: Set[String]        = Set("ui.motion", "ui_motion", "motion.preset", "motion_preset")
+    val motionAccessibilityKeys: Set[String] = Set("ui.motion.accessibility")
+    val motionFamilyPrefix                   = "ui.motion.family."
+
+    val motionFamilyKeys: Set[String] = MotionFamily.values.flatMap { family =>
+      Set("enabled", "transition", "animation", "animation.duration_ms", "animation.steps", "speed_scale").map(field =>
+        s"$motionFamilyPrefix${family.configKey}.$field"
+      )
+    }.toSet ++ Set(
+      s"${motionFamilyPrefix}pinned_panels.open_transition",
+      s"${motionFamilyPrefix}pinned_panels.close_transition"
+    )
 
     val elementTransitionSpeedScaleKeys: Set[String] =
       Set("ui.motion.speed_scale", "motion.speed_scale", "ui_motion_speed_scale", "motion_speed_scale")
@@ -1186,6 +1266,8 @@ object SurfaceConfig:
       materialPresetKeys ++
         postProcessingKeys ++
         motionPresetKeys ++
+        motionAccessibilityKeys ++
+        motionFamilyKeys ++
         elementTransitionSpeedScaleKeys ++
         editorTextTransitionSpeedScaleKeys ++
         commandRunnerTransitionSpeedScaleKeys ++
@@ -1223,6 +1305,9 @@ object SurfaceConfig:
       else if postProcessingKeys.contains(key) then
         PostProcessingEffect.fromConfigKey(trimmed).map(config.withPostProcessingEffect)
       else if motionPresetKeys.contains(key) then parseMotionPreset(trimmed).map(config.withMotionPreset)
+      else if motionAccessibilityKeys.contains(key) then
+        MotionAccessibility.fromConfigKey(trimmed).map(config.withMotionAccessibility)
+      else if motionFamilyKeys.contains(key) then parseMotionFamily(config, key, trimmed)
       else if elementTransitionSpeedScaleKeys.contains(key) then
         parseElementTransitionSpeedScale(trimmed).map(config.withElementTransitionSpeedScale)
       else if editorTextTransitionSpeedScaleKeys.contains(key) then
@@ -1285,6 +1370,53 @@ object SurfaceConfig:
         case "true" | "on" | "enabled"    => Some(true)
         case "false" | "off" | "disabled" => Some(false)
         case _                            => None
+
+    private def parseMotionFamily(config: AppConfig, key: String, value: String): Option[AppConfig] =
+      val parts = key.stripPrefix(motionFamilyPrefix).split("\\.")
+      for
+        familyName <- parts.headOption
+        family     <- MotionFamily.values.find(_.configKey == familyName)
+        field    = parts.drop(1).mkString(".")
+        current  = config.surfaceConfig.motionConfiguration.getOrElse(MotionConfig.fromLegacy(config.surfaceConfig))
+        settings = current.families(family)
+        updated <- field match
+          case "enabled"    => parseBoolean(value).map(enabled => settings.copy(enabled = enabled))
+          case "transition" => parseTransitionKind(value).map(kind => settings.copy(transitionKind = kind))
+          case "animation" if value.equalsIgnoreCase("custom") =>
+            Some(settings.copy(animation = Some(settings.animation.getOrElse(AnimationConfig.smooth.get))))
+          case "animation" => parseAnimationPreset(value).map(animation => settings.copy(animation = animation))
+          case "animation.duration_ms" =>
+            value.toIntOption
+              .filter(_ > 0)
+              .map(durationMs =>
+                settings.copy(animation =
+                  Some(
+                    settings.animation
+                      .getOrElse(AnimationConfig.smooth.get)
+                      .copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(durationMs * 1_000_000L))
+                  )
+                )
+              )
+          case "animation.steps" =>
+            value.toIntOption
+              .filter(_ > 0)
+              .map(steps =>
+                settings
+                  .copy(animation = Some(settings.animation.getOrElse(AnimationConfig.smooth.get).copy(steps = steps)))
+              )
+          case "speed_scale" => parseElementTransitionSpeedScale(value).map(scale => settings.copy(speedScale = scale))
+          case "open_transition" if family == MotionFamily.PinnedPanels =>
+            parseTransitionKind(value).map(kind =>
+              settings.copy(transitionOverrides = settings.transitionOverrides.updated(TransitionScope.PanelOpen, kind))
+            )
+          case "close_transition" if family == MotionFamily.PinnedPanels =>
+            parseTransitionKind(value).map(kind =>
+              settings.copy(transitionOverrides =
+                settings.transitionOverrides.updated(TransitionScope.PanelClose, kind)
+              )
+            )
+          case _ => None
+      yield config.withMotionFamilyConfiguration(family, updated)
 
     private def parseCommandRunnerVisibleRows(value: String): Option[Option[Int]] =
       value.toLowerCase match
@@ -1407,6 +1539,7 @@ case class AppConfig(
     commandRunnerTransitionKind: Option[TransitionKind] = None,
     panelOpenTransitionKind: Option[TransitionKind] = None,
     panelCloseTransitionKind: Option[TransitionKind] = None,
+    motionConfiguration: Option[MotionConfig] = None,
     cursorConfig: CursorConfig = CursorConfig(),
     windowConfig: WindowConfig = WindowConfig(),
     documentConfig: DocumentConfig = DocumentConfig(),
@@ -1487,6 +1620,7 @@ case class AppConfig(
       commandRunnerTransitionKind = commandRunnerTransitionKind,
       panelOpenTransitionKind = panelOpenTransitionKind,
       panelCloseTransitionKind = panelCloseTransitionKind,
+      motionConfiguration = motionConfiguration,
       textAreaInsets = textAreaInsets,
       viewportSizing = viewportSizing
     )
@@ -1520,6 +1654,7 @@ case class AppConfig(
       commandRunnerTransitionKind = normalized.commandRunnerTransitionKind,
       panelOpenTransitionKind = normalized.panelOpenTransitionKind,
       panelCloseTransitionKind = normalized.panelCloseTransitionKind,
+      motionConfiguration = normalized.motionConfiguration,
       textAreaInsets = normalized.textAreaInsets,
       viewportSizing = normalized.viewportSizing
     )
@@ -1675,6 +1810,7 @@ case class AppConfig(
         copy(characterAnimation = preset.animationConfig).withSurfaceConfig(
           surfaceConfig.copy(
             motionPreset = preset,
+            motionConfiguration = None,
             commandRunnerAnimation = preset.animationConfig,
             uiAnimation = preset.animationConfig
           )
@@ -1688,26 +1824,41 @@ case class AppConfig(
   def editorInsertionTransitionSettings: ElementTransitionSettings =
     surfaceConfig.editorInsertionTransitionSettings
 
+  /** Transition policy for pinned panel creation. */
+  def pinnedPanelTransitionSettings: ElementTransitionSettings =
+    surfaceConfig.pinnedPanelTransitionSettings
+
   def withElementTransitionSpeedScale(scale: Double): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(elementTransitionSpeedScale = scale))
+    withSurfaceConfig(surfaceConfig.copy(elementTransitionSpeedScale = scale, motionConfiguration = None))
 
   def withEditorTextTransitionSpeedScale(scale: Option[Double]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(editorTextTransitionSpeedScale = scale))
+    withSurfaceConfig(surfaceConfig.copy(editorTextTransitionSpeedScale = scale, motionConfiguration = None))
 
   def withCommandRunnerTransitionSpeedScale(scale: Option[Double]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(commandRunnerTransitionSpeedScale = scale))
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerTransitionSpeedScale = scale, motionConfiguration = None))
 
   def withUiTransitionSpeedScale(scale: Option[Double]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(uiTransitionSpeedScale = scale))
+    withSurfaceConfig(surfaceConfig.copy(uiTransitionSpeedScale = scale, motionConfiguration = None))
 
   def withCursorTransitionSpeedScale(scale: Option[Double]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(cursorTransitionSpeedScale = scale))
+    withSurfaceConfig(surfaceConfig.copy(cursorTransitionSpeedScale = scale, motionConfiguration = None))
+
+  def withMotionConfiguration(configuration: MotionConfig): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(motionConfiguration = Some(configuration.normalized)))
+
+  def withMotionAccessibility(accessibility: MotionAccessibility): AppConfig =
+    val current = surfaceConfig.motionConfiguration.getOrElse(MotionConfig.fromLegacy(surfaceConfig))
+    withMotionConfiguration(current.copy(accessibility = accessibility))
+
+  def withMotionFamilyConfiguration(family: MotionFamily, configuration: MotionFamilyConfig): AppConfig =
+    val current = surfaceConfig.motionConfiguration.getOrElse(MotionConfig.fromLegacy(surfaceConfig))
+    withMotionConfiguration(current.copy(families = current.families.updated(family, configuration)))
 
   def withCommandRunnerAnimation(animation: Option[AnimationConfig]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(commandRunnerAnimation = animation))
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerAnimation = animation, motionConfiguration = None))
 
   def withUiAnimation(animation: Option[AnimationConfig]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(uiAnimation = animation))
+    withSurfaceConfig(surfaceConfig.copy(uiAnimation = animation, motionConfiguration = None))
 
   def withCommandRunnerVisibleRows(rows: Option[Int]): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(commandRunnerVisibleRows = rows))
@@ -1735,30 +1886,36 @@ case class AppConfig(
 
   /** Character insertion animation after applying the effective editor text motion speed. */
   def scaledCharacterAnimation: Option[AnimationConfig] =
-    AppConfig.scaledAnimation(characterAnimation, effectiveEditorTextTransitionSpeedScale)
+    surfaceConfig.motionConfiguration match
+      case Some(_) =>
+        val motion = surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.EditorText)
+        Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
+      case None => AppConfig.scaledAnimation(characterAnimation, effectiveEditorTextTransitionSpeedScale)
 
   /** Command runner animation after applying the effective command runner motion speed. */
   def scaledCommandRunnerAnimation: Option[AnimationConfig] =
-    AppConfig.scaledAnimation(commandRunnerAnimation, effectiveCommandRunnerTransitionSpeedScale)
+    val motion = surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.CommandSurfaces)
+    Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
 
   /** General UI animation after applying the effective UI motion speed. */
   def scaledUiAnimation: Option[AnimationConfig] =
-    AppConfig.scaledAnimation(uiAnimation, effectiveUiTransitionSpeedScale)
+    val motion = surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
+    Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
 
   def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(editorInsertionTransitionKind = kind))
+    withSurfaceConfig(surfaceConfig.copy(editorInsertionTransitionKind = kind, motionConfiguration = None))
 
   def withCommandRunnerTransitionKind(kind: Option[TransitionKind]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(commandRunnerTransitionKind = kind))
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerTransitionKind = kind, motionConfiguration = None))
 
   def effectiveCommandRunnerTransitionKind: TransitionKind =
     surfaceConfig.effectiveCommandRunnerTransitionKind
 
   def withPanelOpenTransitionKind(kind: Option[TransitionKind]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(panelOpenTransitionKind = kind))
+    withSurfaceConfig(surfaceConfig.copy(panelOpenTransitionKind = kind, motionConfiguration = None))
 
   def withPanelCloseTransitionKind(kind: Option[TransitionKind]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(panelCloseTransitionKind = kind))
+    withSurfaceConfig(surfaceConfig.copy(panelCloseTransitionKind = kind, motionConfiguration = None))
 
   def effectivePanelOpenTransitionKind: TransitionKind =
     surfaceConfig.effectivePanelOpenTransitionKind

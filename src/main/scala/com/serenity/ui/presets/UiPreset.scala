@@ -96,7 +96,8 @@ object UiPreset:
           editorInsertionTransitionKind = source.surfaceConfig.editorInsertionTransitionKind,
           commandRunnerTransitionKind = source.surfaceConfig.commandRunnerTransitionKind,
           panelOpenTransitionKind = source.surfaceConfig.panelOpenTransitionKind,
-          panelCloseTransitionKind = source.surfaceConfig.panelCloseTransitionKind
+          panelCloseTransitionKind = source.surfaceConfig.panelCloseTransitionKind,
+          motionConfiguration = source.surfaceConfig.motionConfiguration
         )
       )
 
