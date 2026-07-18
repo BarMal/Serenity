@@ -220,7 +220,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "command-runner-transition",
       "command-runner-fade",
       "ui-animation",
-      "render-fps",
       "animation-duration",
       "animation-steps",
       "element-transition-speed-scale",
@@ -380,6 +379,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-cursor",
       "settings-surface-appearance",
       "settings-interface-layout",
+      "settings-rendering",
       "settings-animation"
     )
     nestedGroup("settings-cursor").label shouldBe "Cursor"
@@ -407,6 +407,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "command-runner-item-gap-rows",
       "command-runner-cursor-gap-rows"
     )
+    nestedGroup("settings-rendering").children.map(_.id) shouldBe List("render-fps")
     nestedGroup("settings-animation").children.map(_.id) should contain allOf (
       "motion-preset",
       "editor-text-transition",
@@ -414,8 +415,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "panel-close-transition",
       "command-runner-transition",
       "command-runner-fade",
-      "ui-animation",
-      "render-fps"
+      "ui-animation"
     )
     group("settings-ui-presets").label shouldBe "UI Presets"
     group("settings-ui-presets").children.map(_.id) shouldBe List(
@@ -573,15 +573,15 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     input.parse("0") shouldBe None
   }
 
-  it should "surface render FPS target as a motion setting" in {
+  it should "surface render FPS target as a rendering setting" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withRenderFpsTarget(RenderFpsTarget.Fps120))
       .withActiveCategory(CommandCategory.Settings)
 
-    val animationGroup = groupByIdRecursive(runner.settingsGroups, "settings-animation")
-    val option = animationGroup.children
+    val renderingGroup = groupByIdRecursive(runner.settingsGroups, "settings-rendering")
+    val option = renderingGroup.children
       .collectFirst { case item: CommandSurfaceItem.OptionItem if item.id == "render-fps" => item }
       .getOrElse(fail("missing render FPS option"))
 

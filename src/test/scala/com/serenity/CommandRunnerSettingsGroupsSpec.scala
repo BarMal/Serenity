@@ -88,6 +88,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "post-processing",
       "blur-radius"
     )
+    groupById(groups, "settings-rendering").children.map(_.id) shouldBe List("render-fps")
     groupById(groups, "settings-animation").children.map(_.id) should contain allOf (
       "motion-preset",
       "animation-mode",
@@ -97,9 +98,9 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "command-runner-transition",
       "command-runner-fade",
       "ui-animation",
-      "render-fps",
       "element-transition-speed-scale"
     )
+    groupById(groups, "settings-animation").children.map(_.id) should not contain "render-fps"
     groupById(groups, "settings-cursor").children.map(_.id) shouldBe List(
       "cursor-mode",
       "cursor-info-bar",
@@ -184,9 +185,9 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "command-runner-fade",
       "command-runner-speed-scale",
       "ui-animation",
-      "ui-speed-scale",
-      "render-fps"
+      "ui-speed-scale"
     )
+    groupById(groups, "settings-preset-ui-surface-motion").children.map(_.id) should not contain "render-fps"
   }
 
   it should "group preset font controls by editor and interface surface" in {

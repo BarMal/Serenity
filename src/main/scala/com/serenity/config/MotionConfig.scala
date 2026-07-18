@@ -103,6 +103,10 @@ object MotionConfig:
   def clampSpeedScale(value: Double): Double =
     if value.isNaN || value.isInfinite then 1.0 else value.max(MinSpeedScale).min(MaxSpeedScale)
 
+  /** Normal per-family values for a named baseline, before an accessibility override is applied. */
+  def forPreset(preset: MotionPreset): MotionConfig =
+    fromLegacy(SurfaceConfig(motionPreset = preset), preset, useBaselineAnimations = true)
+
   def fromLegacy(config: SurfaceConfig): MotionConfig =
     fromLegacy(config, config.motionPreset, useBaselineAnimations = false)
 

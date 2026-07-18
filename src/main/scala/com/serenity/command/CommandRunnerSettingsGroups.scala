@@ -88,8 +88,7 @@ object CommandRunnerSettingsGroups:
         panelCloseItem,
         commandRunnerReveal,
         commandRunnerFade,
-        uiAnimationItem,
-        renderFpsItem
+        uiAnimationItem
       ) ++ inputItems.filter(item => motionInputIds.contains(item.id)),
       category = CommandCategory.Settings,
       hint = Some("Reveal style, timing, and speed")
@@ -124,6 +123,13 @@ object CommandRunnerSettingsGroups:
       ),
       category = CommandCategory.Settings,
       hint = Some("Density, spacing, window chrome, command rows")
+    )
+    val renderingGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-rendering",
+      label = "Rendering",
+      children = List(renderFpsItem),
+      category = CommandCategory.Settings,
+      hint = Some("Render loop cadence and performance")
     )
     val textAreaGroup = CommandSurfaceItem.GroupItem(
       id = "settings-text-area",
@@ -242,7 +248,7 @@ object CommandRunnerSettingsGroups:
     val appearanceMotionGroup = CommandSurfaceItem.GroupItem(
       id = "settings-appearance-motion",
       label = "Appearance & Motion",
-      children = List(cursorGroup, surfaceAppearanceGroup, interfaceLayoutGroup, animationGroup),
+      children = List(cursorGroup, surfaceAppearanceGroup, interfaceLayoutGroup, renderingGroup, animationGroup),
       category = CommandCategory.Settings,
       hint = Some("Visual styling, spacing, and movement")
     )
@@ -314,8 +320,7 @@ object CommandRunnerSettingsGroups:
         panelCloseItem,
         commandRunnerReveal,
         commandRunnerFade,
-        uiAnimationItem,
-        renderFpsItem
+        uiAnimationItem
       ) ++ inputItems.filter(item =>
         item.id == "animation-duration" ||
           item.id == "animation-steps" ||
