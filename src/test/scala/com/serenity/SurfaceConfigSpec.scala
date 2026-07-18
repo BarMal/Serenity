@@ -144,6 +144,30 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     config.pinnedPanelTransitionSettings.overrides(TransitionScope.PanelOpen) shouldBe TransitionKind.DirectionalSweep
   }
 
+  it should "update UI transition speed without changing pinned panel speed" in {
+    val configured = AppConfig.default.withMotionPreset(MotionPreset.Smooth)
+    val panelSpeed = configured.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).speedScale
+
+    val updated = configured.withUiTransitionSpeedScale(Some(2.0))
+
+    updated.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions).speedScale shouldBe 2.0
+    updated.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).speedScale shouldBe panelSpeed
+  }
+
+  it should "update UI animation timing without changing pinned panel timing" in {
+    val configured = AppConfig.default.withMotionPreset(MotionPreset.Smooth)
+    val panelAnimation =
+      configured.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).animation
+
+    val updated = configured.withUiAnimation(com.serenity.animation.AnimationConfig.subtle)
+
+    updated.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions).animation shouldBe
+      com.serenity.animation.AnimationConfig.subtle
+    updated.surfaceConfig.effectiveMotionConfiguration
+      .family(MotionFamily.PinnedPanels)
+      .animation shouldBe panelAnimation
+  }
+
   it should "default the contextual toolbar display mode to icons and text" in
     AppConfig.default.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.IconAndText)
 

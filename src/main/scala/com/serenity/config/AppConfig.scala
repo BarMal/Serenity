@@ -1862,10 +1862,7 @@ case class AppConfig(
   def withUiTransitionSpeedScale(scale: Option[Double]): AppConfig =
     updateAuthoritativeMotion(_.copy(uiTransitionSpeedScale = scale)) { configuration =>
       val speed = scale.getOrElse(surfaceConfig.elementTransitionSpeedScale)
-      updateMotionFamily(
-        updateMotionFamily(configuration, MotionFamily.PinnedPanels)(_.copy(speedScale = speed)),
-        MotionFamily.UiTransitions
-      )(_.copy(speedScale = speed))
+      updateMotionFamily(configuration, MotionFamily.UiTransitions)(_.copy(speedScale = speed))
     }
 
   def withCursorTransitionSpeedScale(scale: Option[Double]): AppConfig =
@@ -1893,10 +1890,7 @@ case class AppConfig(
 
   def withUiAnimation(animation: Option[AnimationConfig]): AppConfig =
     updateAuthoritativeMotion(_.copy(uiAnimation = animation)) { configuration =>
-      updateMotionFamily(
-        updateMotionFamily(configuration, MotionFamily.PinnedPanels)(_.copy(animation = animation)),
-        MotionFamily.UiTransitions
-      )(_.copy(animation = animation))
+      updateMotionFamily(configuration, MotionFamily.UiTransitions)(_.copy(animation = animation))
     }
 
   def withCommandRunnerVisibleRows(rows: Option[Int]): AppConfig =
