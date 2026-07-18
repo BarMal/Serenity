@@ -68,6 +68,11 @@ case class AnimationState(
   def clearAll(): AnimationState =
     if animations.isEmpty then this else AnimationState.empty
 
+  /** Remove animations owned by one independent motion family. */
+  def clear(owner: AnimationOwner): AnimationState =
+    val retained = animations.filter((_, cell) => cell.owner != owner)
+    if retained.size == animations.size then this else AnimationState(retained)
+
   /** Get the animated cell at the given buffer position, if any */
   def getCell(x: Int, y: Int): Option[AnimatedCell] =
     animations.get(CharacterKey(x, y))

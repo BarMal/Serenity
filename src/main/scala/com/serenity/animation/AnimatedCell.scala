@@ -27,7 +27,8 @@ case class AnimatedCell(
     backgroundSteps: List[Color],
     cycling: Boolean = false,
     foregroundAnimation: Option[ColorTimeline] = None,
-    backgroundAnimation: Option[ColorTimeline] = None
+    backgroundAnimation: Option[ColorTimeline] = None,
+    owner: AnimationOwner = AnimationOwner.EditorText
 ):
 
   def currentForeground: Option[Color] =

@@ -246,19 +246,38 @@ final private[manager] class StateManagerEffectHandlers(
   private def cancelMotionFamily(family: com.serenity.config.MotionFamily): IO[Unit] =
     family match
       case com.serenity.config.MotionFamily.EditorText =>
-        stateRef.update(state => state.copy(buffers = clearBufferAnimations(state)))
+        stateRef.update(state =>
+          state.copy(buffers = clearBufferAnimations(state, com.serenity.animation.AnimationOwner.EditorText))
+        )
       case com.serenity.config.MotionFamily.CommandSurfaces =>
         cancelSurfaceMotion(isCommandSurface)
       case com.serenity.config.MotionFamily.PinnedPanels =>
-        cancelSurfaceMotion(_.presentation.isInstanceOf[SurfacePresentation.Pinned])
+        cancelSurfaceMotion(surface =>
+          surface.presentation.isInstanceOf[SurfacePresentation.Pinned] ||
+            surface.presentation.isInstanceOf[SurfacePresentation.Expanded]
+        )
       case com.serenity.config.MotionFamily.UiTransitions =>
-        stateRef.update(_.copy(themeTransition = None))
+        stateRef.update(state =>
+          state.copy(
+            buffers = clearBufferAnimations(state, com.serenity.animation.AnimationOwner.UiTransitions),
+            themeTransition = None
+          )
+        )
       case com.serenity.config.MotionFamily.Cursor =>
         IO.unit
 
   private def clearBufferAnimations(state: AppState): Map[BufferId, Buffer] =
     state.buffers.view.mapValues { buffer =>
       val animations = buffer.animations.clearAll()
+      if animations eq buffer.animations then buffer else buffer.copy(animations = animations)
+    }.toMap
+
+  private def clearBufferAnimations(
+    state: AppState,
+    owner: com.serenity.animation.AnimationOwner
+  ): Map[BufferId, Buffer] =
+    state.buffers.view.mapValues { buffer =>
+      val animations = buffer.animations.clear(owner)
       if animations eq buffer.animations then buffer else buffer.copy(animations = animations)
     }.toMap
 
@@ -1660,7 +1679,9 @@ final private[manager] class StateManagerEffectHandlers(
               sweep,
               config.steps
             )
-            val updatedBuffer = buffer.copy(animations = buffer.animations.clearAll().mergeAnimations(animated))
+            val uiAnimations =
+              animated.view.mapValues(_.copy(owner = com.serenity.animation.AnimationOwner.UiTransitions)).toMap
+            val updatedBuffer = buffer.copy(animations = buffer.animations.clearAll().mergeAnimations(uiAnimations))
             state.copy(buffers = state.buffers + (point.bufferId -> updatedBuffer))
           }
       case None =>
