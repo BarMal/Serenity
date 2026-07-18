@@ -1280,6 +1280,7 @@ final private[manager] class StateManagerEventPipeline(
       index <- overlayItemIndex(
         event,
         state,
+        layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
         contentRect,
         contract.overlayRowSlots(surface.id),
         menu.items.length,
@@ -1467,7 +1468,7 @@ final private[manager] class StateManagerEventPipeline(
           case _ =>
             List(state.commandRunnerSubmenuSurface, state.commandRunnerSurface).flatten
       surfaces.view
-        .flatMap(surface => commandRunnerSelectionForSurface(event, surface, contract, state))
+        .flatMap(surface => commandRunnerSelectionForSurface(event, surface, layout, contract, state))
         .headOption
     }
 
@@ -1534,6 +1535,7 @@ final private[manager] class StateManagerEventPipeline(
   private def commandRunnerSelectionForSurface(
     event: MouseInputEvent,
     surface: UiSurface,
+    layout: CalculatedLayout,
     contract: EditorLayoutContract,
     state: AppState
   ): Option[CommandRunnerEvent] =
@@ -1544,6 +1546,7 @@ final private[manager] class StateManagerEventPipeline(
           overlayItemIndex(
             event,
             state,
+            layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
             contentRect,
             rowSlots,
             runner.visibleItems.length,
@@ -1564,6 +1567,7 @@ final private[manager] class StateManagerEventPipeline(
           overlayItemIndex(
             event,
             state,
+            layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
             contentRect,
             rowSlots,
             items.length,
@@ -1583,6 +1587,7 @@ final private[manager] class StateManagerEventPipeline(
   private def overlayItemIndex(
     event: MouseInputEvent,
     state: AppState,
+    floatingOffsetRows: Double,
     contentRect: LayoutRect,
     rowSlots: List[SurfaceContentRowSlot],
     itemCount: Int,
@@ -1603,22 +1608,26 @@ final private[manager] class StateManagerEventPipeline(
     val pixelSelection = for
       pixelX <- event.pixelX
       pixelY <- event.pixelY
-      geometry = FloatingSurfaceGeometry.fromCells(
-        contentRect,
-        CellMetrics.fromFont(
-          java.awt
-            .Font(state.config.fontConfig.uiFontFamily, java.awt.Font.PLAIN, state.config.fontConfig.uiFontSize.toInt)
-        ),
-        borderCells = 0,
-        itemCount = itemCount,
-        hasHeader = hasHeader,
-        hasFooter = hasFooter,
-        itemGapRows = itemGapRows
+      metrics = CellMetrics.fromFont(
+        java.awt
+          .Font(state.config.fontConfig.uiFontFamily, java.awt.Font.PLAIN, state.config.fontConfig.uiFontSize.toInt)
       )
+      geometry = FloatingSurfaceGeometry
+        .fromCells(
+          contentRect,
+          metrics,
+          borderCells = 0,
+          itemCount = itemCount,
+          hasHeader = hasHeader,
+          hasFooter = hasFooter,
+          itemGapRows = itemGapRows
+        )
+        .translated(0.0, FloatingSurfaceGeometry.signedRowOffsetPixels(floatingOffsetRows, metrics))
       displayedIndex <- geometry.itemIndexAt(pixelX, pixelY)
       absoluteIndex  <- itemWindow.absoluteIndexAt(displayedIndex)
     yield absoluteIndex
-    pixelSelection.orElse(overlayDisplayedRowIndexAt(event, contentRect, rowSlots).flatMap(itemWindow.absoluteIndexAt))
+    if event.pixelX.isDefined && event.pixelY.isDefined then pixelSelection
+    else overlayDisplayedRowIndexAt(event, contentRect, rowSlots).flatMap(itemWindow.absoluteIndexAt)
 
   private def overlayDisplayedRowIndexAt(
     event: MouseInputEvent,

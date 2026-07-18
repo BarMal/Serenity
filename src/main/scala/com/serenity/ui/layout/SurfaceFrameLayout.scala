@@ -7,12 +7,23 @@ case class LogicalPixelRect(x: Double, y: Double, width: Double, height: Double)
   def contains(pixelX: Double, pixelY: Double): Boolean =
     pixelX >= x && pixelX < x + width && pixelY >= y && pixelY < y + height
 
+  def translated(deltaX: Double, deltaY: Double): LogicalPixelRect =
+    copy(x = x + deltaX, y = y + deltaY)
+
 /** Shared pixel geometry for a framed floating surface and its selectable rows. */
 case class FloatingSurfaceGeometry(
     frame: LogicalPixelRect,
     content: LogicalPixelRect,
     itemRects: List[LogicalPixelRect]
 ):
+
+  def translated(deltaX: Double, deltaY: Double): FloatingSurfaceGeometry =
+    copy(
+      frame = frame.translated(deltaX, deltaY),
+      content = content.translated(deltaX, deltaY),
+      itemRects = itemRects.map(_.translated(deltaX, deltaY))
+    )
+
   def itemIndexAt(pixelX: Double, pixelY: Double): Option[Int] =
     itemRects.zipWithIndex.collectFirst { case (rect, index) if rect.contains(pixelX, pixelY) => index }
 
@@ -21,6 +32,9 @@ object FloatingSurfaceGeometry:
   /** Convert logical row spacing to the pixel coordinate space shared by layout, rendering, and hit testing. */
   def rowOffsetPixels(rows: Double, metrics: CellMetrics): Double =
     math.max(0.0, rows) * metrics.lineHeight
+
+  def signedRowOffsetPixels(rows: Double, metrics: CellMetrics): Double =
+    math.copySign(rowOffsetPixels(math.abs(rows), metrics), rows)
 
   /** Count only rows whose complete interactive rectangle fits in the available height. */
   def visibleItemCount(availableHeight: Double, itemHeight: Double, itemGapRows: Double): Int =

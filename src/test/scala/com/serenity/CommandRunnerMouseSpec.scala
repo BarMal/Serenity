@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.awt.Font
+
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.CommandRunner
 import com.serenity.keystroke.events.*
@@ -41,6 +43,59 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     stateManager.applyEvent(MouseMove(itemPoint.x, itemPoint.y + 1)).unsafeRunSync()
 
     runnerFrom(stateManager.getCurrentState.unsafeRunSync()).selectedIndex shouldBe selectedBefore
+  }
+
+  it should "execute the row at its fractional floating pixel offset" in {
+    val stateManager = createStateManager("CommandRunnerMouseSpec")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(config = state.config.withCommandRunnerCursorGapRows(Some(0.5))))
+      .unsafeRunSync()
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    "toggle-line".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+
+    val before = stateManager.getCurrentState.unsafeRunSync()
+    before.config.showLineNumbers shouldBe true
+    val point = shiftedCommandRunnerItemPoint(before, 0)
+
+    stateManager
+      .applyEvent(MouseClick(point.x, point.y, pixelX = Some(point.pixelX), pixelY = Some(point.pixelY)))
+      .unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.config.showLineNumbers shouldBe false
+    after.commandRunnerSurface shouldBe None
+  }
+
+  it should "ignore a pixel click in a fractional shifted command-item gap" in {
+    val stateManager = createStateManager("CommandRunnerMouseSpec")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
+    stateManager
+      .updateState(state =>
+        state.copy(
+          config = state.config
+            .withCommandRunnerCursorGapRows(Some(0.5))
+            .withCommandRunnerItemGapRows(0.5)
+        )
+      )
+      .unsafeRunSync()
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+
+    val before         = stateManager.getCurrentState.unsafeRunSync()
+    val point          = shiftedCommandRunnerItemGapPoint(before, 0)
+    val selectedBefore = runnerFrom(before).selectedIndex
+
+    stateManager
+      .applyEvent(MouseClick(point.x, point.y, pixelX = Some(point.pixelX), pixelY = Some(point.pixelY)))
+      .unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    runnerFrom(after).selectedIndex shouldBe selectedBefore
+    after.commandRunnerSurface shouldBe defined
   }
 
   it should "execute the command row clicked under the pointer" in {
@@ -162,7 +217,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     after.commandRunnerSurface shouldBe None
   }
 
-  private case class Point(x: Int, y: Int)
+  private case class Point(x: Int, y: Int, pixelX: Int = 0, pixelY: Int = 0)
 
   private def commandRunnerItemPoint(state: AppState, displayedItemRow: Int): Point =
     val surface = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
@@ -184,6 +239,58 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
       .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(`displayedItemRow`), y) => y }
       .getOrElse(fail(s"Expected overlay item row $displayedItemRow for ${surfaceId.value}"))
     Point(x = contentRect.x + 1, y = rowY)
+
+  private def shiftedCommandRunnerItemPoint(state: AppState, displayedItemRow: Int): Point =
+    val geometry = shiftedCommandRunnerGeometry(state)
+    val rect     = geometry.itemRects.lift(displayedItemRow).getOrElse(fail(s"Expected item $displayedItemRow"))
+    Point(
+      x = math.floor(rect.x / uiMetrics(state).charWidth).toInt,
+      y = math.floor(rect.y / uiMetrics(state).lineHeight).toInt,
+      pixelX = math.round(rect.x + 1.0).toInt,
+      pixelY = math.round(rect.y + rect.height / 2.0).toInt
+    )
+
+  private def shiftedCommandRunnerItemGapPoint(state: AppState, displayedItemRow: Int): Point =
+    val geometry = shiftedCommandRunnerGeometry(state)
+    val current  = geometry.itemRects.lift(displayedItemRow).getOrElse(fail(s"Expected item $displayedItemRow"))
+    val next   = geometry.itemRects.lift(displayedItemRow + 1).getOrElse(fail(s"Expected item ${displayedItemRow + 1}"))
+    val pixelY = math.round((current.y + current.height + next.y) / 2.0).toInt
+    Point(
+      x = math.floor(current.x / uiMetrics(state).charWidth).toInt,
+      y = math.floor(pixelY.toDouble / uiMetrics(state).lineHeight).toInt,
+      pixelX = math.round(current.x + 1.0).toInt,
+      pixelY = pixelY
+    )
+
+  private def shiftedCommandRunnerGeometry(state: AppState): FloatingSurfaceGeometry =
+    val surface  = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val contract = EditorLayoutContract.from(state, viewport, layout)
+    val contentRect = contract
+      .overlayContentRect(surface.id)
+      .getOrElse(fail("Expected command runner content rect"))
+    val runner  = runnerFrom(state)
+    val metrics = uiMetrics(state)
+    FloatingSurfaceGeometry
+      .fromCells(
+        contentRect,
+        metrics,
+        borderCells = 0,
+        itemCount = runner.visibleItems.length,
+        hasHeader = true,
+        hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
+        itemGapRows = state.config.commandRunnerItemGapRows
+      )
+      .translated(
+        0.0,
+        FloatingSurfaceGeometry.signedRowOffsetPixels(layout.floatingOverlayOffsetRows(surface.id), metrics)
+      )
+
+  private def uiMetrics(state: AppState): CellMetrics =
+    CellMetrics.fromFont(
+      Font(state.config.fontConfig.uiFontFamily, Font.PLAIN, state.config.fontConfig.uiFontSize.toInt)
+    )
 
   private def openLanguageSubmenu(stateManager: com.serenity.state.manager.StateManager): Unit =
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()

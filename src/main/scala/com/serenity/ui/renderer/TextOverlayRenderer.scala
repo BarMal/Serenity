@@ -18,8 +18,7 @@ object TextOverlayRenderer:
     font: java.awt.Font,
     cellMetrics: CellMetrics
   ): Unit =
-    val offsetMagnitudePx = FloatingSurfaceGeometry.rowOffsetPixels(math.abs(overlay.verticalOffsetRows), cellMetrics)
-    val offsetPx          = math.copySign(offsetMagnitudePx, overlay.verticalOffsetRows)
+    val offsetPx = FloatingSurfaceGeometry.signedRowOffsetPixels(overlay.verticalOffsetRows, cellMetrics)
     surface.withPixelTranslation(0.0, offsetPx) {
       renderAtLogicalPixelOrigin(surface, overlay, theme, config, cursorVisible, font, cellMetrics)
     }
