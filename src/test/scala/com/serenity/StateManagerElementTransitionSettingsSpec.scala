@@ -116,6 +116,35 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         config.surfaceConfig.effectiveMotionConfiguration.families.values.foreach(_.enabled shouldBe false)
     }
 
+  it should "disable the authoritative editor text family when animation mode is none" in {
+    val stateManager = createStateManager()
+    stateManager
+      .updateState(state =>
+        state.copy(
+          config =
+            com.serenity.config.AppConfig.withTestAnimations.withMotionAccessibility(MotionAccessibility.Standard)
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "animation-mode",
+          "Set animation mode",
+          CommandIntent.SetAnimationMode(com.serenity.command.AnimationMode.None),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    val config = stateManager.getCurrentState.unsafeRunSync().config
+    config.scaledCharacterAnimation shouldBe None
+    config.surfaceConfig.effectiveMotionConfiguration
+      .family(com.serenity.config.MotionFamily.EditorText)
+      .enabled shouldBe false
+  }
+
   it should "update the editor text transition speed scale config" in {
     val stateManager = createStateManager()
 

@@ -211,27 +211,29 @@ final private[manager] class StateManagerEffectHandlers(
     updateConfigWithEditedPresetDraft(
       update,
       markEditedUiPresetDraftFromCommandRunner
-    )
+    ).flatTap { config =>
+      if config.surfaceConfig.effectiveMotionConfiguration.families.values.exists(!_.enabled) then cancelActiveMotion()
+      else IO.unit
+    }
 
   private def updateMotionAccessibility(
     accessibility: com.serenity.config.MotionAccessibility
   ): IO[com.serenity.config.AppConfig] =
-    updateConfigWithEditedPresetDraft(_.withMotionAccessibility(accessibility), IO.unit).flatTap { _ =>
-      if accessibility == com.serenity.config.MotionAccessibility.Standard then IO.unit
-      else
-        stateRef.update(state =>
-          val buffers = state.buffers.view.mapValues { buffer =>
-            val animations = buffer.animations.clearAll()
-            if animations eq buffer.animations then buffer else buffer.copy(animations = animations)
-          }.toMap
-          state.copy(
-            buffers = buffers,
-            themeTransition = None,
-            uiSurfaces = state.uiSurfaces.filterNot(_.content.isInstanceOf[SurfaceContent.GhostOverlay]),
-            surfaceAnimations = Map.empty
-          )
-        )
-    }
+    updateMotionConfig(_.withMotionAccessibility(accessibility))
+
+  private def cancelActiveMotion(): IO[Unit] =
+    stateRef.update(state =>
+      val buffers = state.buffers.view.mapValues { buffer =>
+        val animations = buffer.animations.clearAll()
+        if animations eq buffer.animations then buffer else buffer.copy(animations = animations)
+      }.toMap
+      state.copy(
+        buffers = buffers,
+        themeTransition = None,
+        uiSurfaces = state.uiSurfaces.filterNot(_.content.isInstanceOf[SurfaceContent.GhostOverlay]),
+        surfaceAnimations = Map.empty
+      )
+    )
 
   private def updateCustomMotionConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig

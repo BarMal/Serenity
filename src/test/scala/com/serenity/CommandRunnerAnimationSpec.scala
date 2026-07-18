@@ -81,8 +81,14 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     state.surfaceAnimations.get(surfaceId) shouldBe None
   }
 
-  it should "cancel all active animation state when motion accessibility is reduced or off" in
-    List(MotionAccessibility.Reduced, MotionAccessibility.Off).foreach { accessibility =>
+  it should "cancel all active animation state when a motion policy disables animation" in
+    List(
+      CommandIntent.SetMotionAccessibility(MotionAccessibility.Reduced),
+      CommandIntent.SetMotionAccessibility(MotionAccessibility.Off),
+      CommandIntent.SetMotionPreset(MotionPreset.Reduced),
+      CommandIntent.SetElementTransitionSpeedScale(0.0),
+      CommandIntent.SetEditorTextTransitionSpeedScale(0.0)
+    ).foreach { intent =>
       val sm = createStateManager()
       sm.updateState(_.copy(config = AppConfig.withTestAnimations)).unsafeRunSync()
       sm.applyEvent(InsertChar('a')).unsafeRunSync()
@@ -100,9 +106,9 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
       sm.executeCommand(
         Command.typed(
-          "motion-accessibility",
-          "Set motion accessibility",
-          CommandIntent.SetMotionAccessibility(accessibility),
+          "disable-motion",
+          "Disable motion",
+          intent,
           CommandCategory.Settings
         )
       ).unsafeRunSync()

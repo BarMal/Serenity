@@ -1693,7 +1693,7 @@ case class AppConfig(
 
   /** Create a new config with character animation disabled */
   def withoutCharacterAnimation: AppConfig =
-    withEditorConfig(editorConfig.copy(characterAnimation = None)).withSurfaceConfig(
+    val updated = withEditorConfig(editorConfig.copy(characterAnimation = None)).withSurfaceConfig(
       surfaceConfig.copy(
         motionPreset = MotionPreset.Reduced,
         editorTextTransitionSpeedScale = None,
@@ -1705,6 +1705,12 @@ case class AppConfig(
         commandRunnerTransitionKind = None
       )
     )
+    updated.updateAuthoritativeMotion(identity) { configuration =>
+      updated.updateMotionFamily(
+        configuration.copy(baseline = MotionPreset.Reduced),
+        MotionFamily.EditorText
+      )(_.disabled)
+    }
 
   /** Create a new config with syntax highlighting toggled */
   def withSyntaxHighlighting(enabled: Boolean): AppConfig =
