@@ -292,6 +292,17 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     surface.strokeRoundRectCalls shouldBe empty
   }
 
+  it should "reveal only a thematic break when the caret is on it" in {
+    val source =
+      """- Previous item
+        |---
+        |After paragraph""".stripMargin
+    val (_, surface, _) = renderMarkdownLens(source, CursorPosition(1, 0), topLine = Some(0))
+
+    rawSourceRow(surface, "---") should be >= 0
+    rows(surface).exists(_.contains("After paragraph")) shouldBe false
+  }
+
   it should "size an active table lens to cover the rendered preview table" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)

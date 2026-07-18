@@ -97,6 +97,27 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines, activeLine = 4) shouldBe (2 to 4)
   }
 
+  it should "keep a thematic break separate from following prose" in {
+    val lines = Vector(
+      "- Previous item",
+      "---",
+      "After paragraph"
+    )
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 1) shouldBe (1 to 1)
+  }
+
+  it should "treat setext heading text and underline as one source unit" in {
+    val lines = Vector(
+      "Setext title",
+      "---",
+      "After paragraph"
+    )
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 0) shouldBe (0 to 1)
+    MarkdownBlockLens.currentBlock(lines, activeLine = 1) shouldBe (0 to 1)
+  }
+
   it should "leave blank lines as single-line blocks" in {
     val lines = Vector("One", "", "Two")
 

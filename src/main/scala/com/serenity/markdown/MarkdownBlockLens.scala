@@ -11,6 +11,8 @@ object MarkdownBlockLens:
         fencedBlock(lines, clampedLine)
           .orElse(tableBlock(lines, clampedLine))
           .orElse(headingBlock(lines, clampedLine))
+          .orElse(setextHeadingBlock(lines, clampedLine))
+          .orElse(thematicBreakBlock(lines, clampedLine))
           .orElse(listItemBlock(lines, clampedLine))
           .orElse(blockQuoteBlock(lines, clampedLine))
           .getOrElse(paragraphBlock(lines, clampedLine))
@@ -36,6 +38,18 @@ object MarkdownBlockLens:
 
   private def headingBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
     Option.when(isHeadingLine(lines(activeLine)))(activeLine to activeLine)
+
+  private def setextHeadingBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
+    Option.when(isSetextUnderline(lines(activeLine)) && activeLine > 0 && isParagraphLine(lines(activeLine - 1))) {
+      (activeLine - 1) to activeLine
+    }.orElse {
+      Option.when(activeLine + 1 < lines.length && isSetextUnderline(lines(activeLine + 1))) {
+        activeLine to (activeLine + 1)
+      }
+    }
+
+  private def thematicBreakBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
+    Option.when(isThematicBreak(lines(activeLine)))(activeLine to activeLine)
 
   private def blockQuoteBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
     Option.when(isBlockQuoteLine(lines(activeLine))) {
@@ -120,11 +134,20 @@ object MarkdownBlockLens:
     !isFenceLine(line) &&
     !isTableLine(line) &&
     !isHeadingLine(line) &&
+    !isSetextUnderline(line) &&
+    !isThematicBreak(line) &&
     !isListItemLine(line) &&
     !isBlockQuoteLine(line)
 
   private def isHeadingLine(line: String): Boolean =
     line.trim.matches("""^#{1,6}\s+.*""")
+
+  private def isSetextUnderline(line: String): Boolean =
+    line.trim.matches("""^(=+|-+)$""")
+
+  private def isThematicBreak(line: String): Boolean =
+    val markers = line.filterNot(_.isWhitespace)
+    markers.length >= 3 && markers.headOption.exists(Set('*', '-', '_').contains) && markers.forall(_ == markers.head)
 
   private def isListItemLine(line: String): Boolean =
     val trimmed = line.trim
