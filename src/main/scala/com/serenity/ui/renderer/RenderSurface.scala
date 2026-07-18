@@ -62,6 +62,9 @@ trait RenderSurface:
     */
   def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit = ()
 
+  /** Render cell-addressed content for one row at its logical-pixel top edge. */
+  def withLogicalPixelRow(cellRow: Int, pixelY: Int)(render: => Unit): Unit = render
+
   def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit = ()
 
   def hideCursor(): Unit

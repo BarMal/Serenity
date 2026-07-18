@@ -48,9 +48,10 @@ class Java2DRenderSurface(
     */
   private val renderContext: FontRenderContext = g.getFontRenderContext()
 
-  private val fgRef       = AtomicReference(Color.WHITE)
-  private val bgRef       = AtomicReference(Color.BLACK)
-  private val baseFontRef = AtomicReference(font)
+  private val fgRef                   = AtomicReference(Color.WHITE)
+  private val bgRef                   = AtomicReference(Color.BLACK)
+  private val baseFontRef             = AtomicReference(font)
+  private val logicalPixelRowOverride = AtomicReference[Option[(Int, Int)]](None)
 
   override def setFont(newFont: Font): Unit =
     baseFontRef.set(newFont)
@@ -92,7 +93,7 @@ class Java2DRenderSurface(
   def putString(x: Int, y: Int, s: String): Unit =
     if s.nonEmpty then
       val px = metrics.toPixelX(x)
-      val py = metrics.toPixelY(y)
+      val py = pixelYForRow(y)
       // Fill background for the whole string using nominal width
       g.setColor(bgRef.get())
       g.fillRect(px, py, s.length * metrics.charWidth, metrics.lineHeight)
@@ -102,7 +103,7 @@ class Java2DRenderSurface(
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
     val px = metrics.toPixelX(x)
-    val py = metrics.toPixelY(y)
+    val py = pixelYForRow(y)
     val pw = width * metrics.charWidth
     val ph = height * metrics.lineHeight
     g.setColor(bgRef.get())
@@ -114,6 +115,17 @@ class Java2DRenderSurface(
           g.drawString(char.toString, metrics.toPixelX(x + col), metrics.toPixelY(y + row) + metrics.ascent)
         }
       }
+
+  override def withLogicalPixelRow(cellRow: Int, pixelY: Int)(render: => Unit): Unit =
+    val previous = logicalPixelRowOverride.getAndSet(Some(cellRow -> pixelY))
+    try render
+    finally logicalPixelRowOverride.set(previous)
+
+  private def pixelYForRow(row: Int): Int =
+    logicalPixelRowOverride
+      .get()
+      .collect { case (cellRow, pixelY) if cellRow == row => pixelY }
+      .getOrElse(metrics.toPixelY(row))
 
   def enableStyle(style: TextStyle): Unit =
     val base     = baseFontRef.get()

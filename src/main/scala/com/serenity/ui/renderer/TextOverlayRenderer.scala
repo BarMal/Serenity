@@ -98,10 +98,22 @@ object TextOverlayRenderer:
           val rowOffset        = slot.y - overlay.rect.y
           val (animFg, animBg) = rowColors(rowOffset)
           slot.kind match
-            case SurfaceContentRowKind.Item(index)
-                if overlay.itemGapRows > 0.0 && row.layout == OverlayRowLayout.Plain =>
+            case SurfaceContentRowKind.Item(index) if overlay.itemGapRows > 0.0 =>
               floatingGeometry.itemRects.lift(index).foreach { pixelRect =>
-                renderPixelRow(surface, pixelRect, maxLineSize, row, theme, animFg, animBg, cellMetrics)
+                renderRow(
+                  surface,
+                  contentRect.x,
+                  slot.y,
+                  maxLineSize,
+                  row,
+                  theme,
+                  cursorVisible,
+                  defaultForeground = Some(animFg),
+                  defaultBackground = Some(animBg),
+                  font = font,
+                  cellMetrics = cellMetrics,
+                  pixelY = Some(math.round(pixelRect.y).toInt)
+                )
               }
             case _ =>
               renderRow(
@@ -120,31 +132,6 @@ object TextOverlayRenderer:
         }
       }
 
-  private def renderPixelRow(
-    surface: RenderSurface,
-    pixelRect: LogicalPixelRect,
-    width: Int,
-    row: OverlayRow,
-    theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
-    metrics: CellMetrics
-  ): Unit =
-    val foreground =
-      row.foregroundColor.getOrElse(if row.selected then theme.highlighted.foreground else defaultForeground)
-    val background =
-      row.backgroundColor.getOrElse(if row.selected then theme.highlighted.background else defaultBackground)
-    surface.setForegroundColor(foreground)
-    surface.setBackgroundColor(background)
-    surface.drawRunPx(
-      pixelRect.x.toFloat,
-      math.round(pixelRect.y.toFloat),
-      pixelRect.width.toFloat,
-      math.round(pixelRect.height.toFloat),
-      metrics.ascent,
-      row.plainText.take(width)
-    )
-
   private def renderRow(
     surface: RenderSurface,
     x: Int,
@@ -156,7 +143,39 @@ object TextOverlayRenderer:
     defaultForeground: Option[Color],
     defaultBackground: Option[Color],
     font: java.awt.Font,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    pixelY: Option[Int] = None
+  ): Unit =
+    surface.withLogicalPixelRow(y, pixelY.getOrElse(cellMetrics.toPixelY(y))) {
+      renderRowAt(
+        surface,
+        x,
+        y,
+        width,
+        row,
+        theme,
+        cursorVisible,
+        defaultForeground,
+        defaultBackground,
+        font,
+        cellMetrics,
+        pixelY
+      )
+    }
+
+  private def renderRowAt(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    width: Int,
+    row: OverlayRow,
+    theme: Theme,
+    cursorVisible: Boolean,
+    defaultForeground: Option[Color],
+    defaultBackground: Option[Color],
+    font: java.awt.Font,
+    cellMetrics: CellMetrics,
+    pixelY: Option[Int]
   ): Unit =
     val rowView = scrolledRowView(row, width)
     val baseFg  = defaultForeground.getOrElse(theme.panel.foreground)
@@ -181,7 +200,16 @@ object TextOverlayRenderer:
         if rowView.row.segments.nonEmpty then
           renderInlineSegments(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
         else if rowView.useMeasuredCursor && shouldUseMeasuredCursor(font, surface) then
-          renderMeasuredPlainRow(surface, x, y, width, rowView.row.plainText, font, cellMetrics, rowRightXPx)
+          renderMeasuredPlainRow(
+            surface,
+            x,
+            pixelY.getOrElse(cellMetrics.toPixelY(y)),
+            width,
+            rowView.row.plainText,
+            font,
+            cellMetrics,
+            rowRightXPx
+          )
         else CharacterRenderer.renderStringPlain(surface, x, y, rowView.row.plainText.take(width))
       case OverlayRowLayout.Distributed =>
         renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
@@ -198,7 +226,7 @@ object TextOverlayRenderer:
             renderMeasuredCursor(
               surface,
               placement.x,
-              y,
+              pixelY.getOrElse(cellMetrics.toPixelY(y)),
               placement.textBeforeCursor,
               theme,
               font,
@@ -734,7 +762,7 @@ object TextOverlayRenderer:
   private def renderMeasuredPlainRow(
     surface: RenderSurface,
     x: Int,
-    y: Int,
+    yPx: Int,
     width: Int,
     text: String,
     font: java.awt.Font,
@@ -746,15 +774,14 @@ object TextOverlayRenderer:
       val frc        = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
       val caretXs    = TextLayoutSnapshot.caretXsForText(visibleText, font, frc)
       val textXPx    = cellMetrics.toPixelX(x).toFloat
-      val textYPx    = cellMetrics.toPixelY(y)
       val maxWidthPx = math.max(1.0f, maxRightXPx.toFloat - textXPx)
       val widthPx    = caretXs.lastOption.getOrElse(0.0f).max(1.0f).min(maxWidthPx)
-      surface.drawRunPx(textXPx, textYPx, widthPx, cellMetrics.lineHeight, cellMetrics.ascent, visibleText)
+      surface.drawRunPx(textXPx, yPx, widthPx, cellMetrics.lineHeight, cellMetrics.ascent, visibleText)
 
   private def renderMeasuredCursor(
     surface: RenderSurface,
     x: Int,
-    y: Int,
+    yPx: Int,
     textBeforeCursor: String,
     theme: Theme,
     font: java.awt.Font,
@@ -764,7 +791,6 @@ object TextOverlayRenderer:
   ): Unit =
     val frc          = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
     val caretXs      = TextLayoutSnapshot.caretXsForText(textBeforeCursor, font, frc)
-    val yPx          = cellMetrics.toPixelY(y)
     val rawWidthPx   = math.max(2, math.round(cellMetrics.charWidth * 0.12f))
     val caretWidthPx = math.min(rawWidthPx, math.max(1, maxRightXPx - minXPx))
     val unclampedXPx = cellMetrics.toPixelX(x) + math.round(caretXs.lastOption.getOrElse(0.0f))

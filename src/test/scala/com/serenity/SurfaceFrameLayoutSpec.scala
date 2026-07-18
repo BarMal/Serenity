@@ -204,3 +204,26 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
     geometry.itemIndexAt(10, 45) shouldBe None
     geometry.itemIndexAt(10, 55) shouldBe Some(1)
   }
+
+  it should "exclude a partial final item consistently from windows, slots, and pixel geometry" in {
+    val frame = SurfaceFrameLayout(LayoutRect(0, 0, 20, 7), borderCells = 0)
+    val geometry = FloatingSurfaceGeometry.fromCells(
+      frame = frame.frameRect,
+      metrics = CellMetrics(charWidth = 8, lineHeight = 20, ascent = 15),
+      borderCells = 0,
+      itemCount = 5,
+      hasHeader = true,
+      hasFooter = true,
+      itemGapRows = 0.5
+    )
+
+    frame.visibleItemRows(hasHeader = true, hasFooter = true, itemGapRows = 0.5) shouldBe 3
+    frame
+      .itemWindow(itemCount = 5, selectedIndex = 0, hasHeader = true, hasFooter = true, itemGapRows = 0.5)
+      .rowCount shouldBe 3
+    frame
+      .contentRowSlots(itemCount = 5, hasHeader = true, hasFooter = true, itemGapRows = 0.5)
+      .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), _) => index } shouldBe List(0, 1, 2)
+    geometry.itemRects.map(_.y) shouldBe List(20.0, 50.0, 80.0)
+    geometry.itemIndexAt(10, 105) shouldBe None
+  }
