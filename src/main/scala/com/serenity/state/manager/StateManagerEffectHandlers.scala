@@ -213,6 +213,11 @@ final private[manager] class StateManagerEffectHandlers(
       markEditedUiPresetDraftFromCommandRunner
     )
 
+  private def updateMotionAccessibility(
+    accessibility: com.serenity.config.MotionAccessibility
+  ): IO[com.serenity.config.AppConfig] =
+    updateConfigWithEditedPresetDraft(_.withMotionAccessibility(accessibility), IO.unit)
+
   private def updateCustomMotionConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
@@ -510,6 +515,8 @@ final private[manager] class StateManagerEffectHandlers(
         updateAppearanceConfig(_.withPostProcessingEffect(effect)).void
       case CommandIntent.SetMotionPreset(preset) =>
         updateMotionConfig(_.withMotionPreset(preset)).void
+      case CommandIntent.SetMotionAccessibility(accessibility) =>
+        updateMotionAccessibility(accessibility).void
       case CommandIntent.SetElementTransitionSpeedScale(scale) =>
         updateCustomMotionConfig(_.withElementTransitionSpeedScale(scale)).void
       case CommandIntent.SetEditorTextTransitionSpeedScale(scale) =>

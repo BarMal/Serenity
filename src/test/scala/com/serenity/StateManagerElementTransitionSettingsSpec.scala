@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
-import com.serenity.config.{MotionPreset, RenderFpsTarget}
+import com.serenity.config.{MotionAccessibility, MotionPreset, RenderFpsTarget}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -36,6 +36,29 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().config.elementTransitionSpeedScale shouldBe 2.25
+  }
+
+  it should "update the global motion accessibility override without changing the baseline" in {
+    val stateManager = createStateManager()
+    stateManager
+      .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Expressive)))
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "motion-accessibility",
+          "Set motion accessibility",
+          CommandIntent.SetMotionAccessibility(MotionAccessibility.Off),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    val motion = stateManager.getCurrentState.unsafeRunSync().config.surfaceConfig.motionConfiguration
+      .getOrElse(fail("Expected authoritative motion configuration"))
+    motion.accessibility shouldBe MotionAccessibility.Off
+    motion.baseline shouldBe MotionPreset.Expressive
   }
 
   it should "mark the motion preset custom when an explicit motion speed is edited" in {

@@ -90,8 +90,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
     groupById(groups, "settings-rendering").children.map(_.id) shouldBe List("render-fps")
     groupById(groups, "settings-animation").children.map(_.id) should contain allOf (
+      "motion-accessibility",
       "motion-preset",
-      "animation-mode",
       "editor-text-transition",
       "panel-open-transition",
       "panel-close-transition",
@@ -101,6 +101,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "element-transition-speed-scale"
     )
     groupById(groups, "settings-animation").children.map(_.id) should not contain "render-fps"
+    groupById(groups, "settings-animation").children.map(_.id) should not contain "animation-duration"
+    groupById(groups, "settings-animation").children.map(_.id) should not contain "animation-steps"
     groupById(groups, "settings-cursor").children.map(_.id) shouldBe List(
       "cursor-mode",
       "cursor-info-bar",
@@ -116,6 +118,21 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     groupById(groups, "settings-keymap").children.map(_.id) should contain allOf (
       "keymap-global-command_palette",
       "keymap-command-runner-submit"
+    )
+  }
+
+  it should "show advanced motion timing only for a custom baseline" in {
+    val config = AppConfig.default.withMotionPreset(com.serenity.config.MotionPreset.Custom)
+    val groups = CommandRunnerSettingsGroups.build(
+      optionSelections = CommandRunnerOptionSelections.default(config),
+      inputItems = CommandRunnerSettingsInputItems.build(config),
+      uiPresetPreviews = Nil,
+      editingPresetName = None
+    )
+
+    groupById(groups, "settings-animation").children.map(_.id) should contain allOf (
+      "animation-duration",
+      "animation-steps"
     )
   }
 

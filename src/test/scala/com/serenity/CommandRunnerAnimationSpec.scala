@@ -225,6 +225,29 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     ghostCell.backgroundSteps.length shouldBe (totalFadeSteps - remainingFadeSteps + 1)
   }
 
+  it should "reverse an exiting ghost into the reopened command runner" in {
+    val sm = createStateManager()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    advanceToVisible(sm)
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val closingState = sm.getCurrentState.unsafeRunSync()
+    val ghost = closingState.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay])
+      .getOrElse(fail("Expected exiting command runner ghost"))
+    sm.advanceAnimationsOnTick().unsafeRunSync()
+    val ghostBackground = sm.getCurrentState.unsafeRunSync().surfaceAnimations(ghost.id)
+      .animationState
+      .getCell(0, 0)
+      .flatMap(_.currentBackground)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val reopened = sm.getCurrentState.unsafeRunSync()
+    val surfaceId = reopened.commandRunnerSurface.map(_.id).getOrElse(fail("Expected reopened command runner"))
+    reopened.uiSurfaces.exists(_.id == ghost.id) shouldBe false
+    reopened.surfaceAnimations(surfaceId).animationState.getCell(0, 0).flatMap(_.currentBackground) shouldBe ghostBackground
+  }
+
   it should "remove the ghost surface when Exiting animation completes" in {
     val sm = createStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()

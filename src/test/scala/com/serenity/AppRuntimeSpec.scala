@@ -9,7 +9,7 @@ import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntime
-import com.serenity.config.{AppConfig, CursorMode, RenderFpsTarget}
+import com.serenity.config.{AppConfig, CursorMode, MotionAccessibility, RenderFpsTarget}
 import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.Event
@@ -108,6 +108,9 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
         .withCursorTransitionSpeedScale(Some(0.5))
     ) shouldBe Some(250.millis)
     AppRuntime.cursorIdleInterval(AppConfig.default.withCursorTransitionSpeedScale(Some(0.0))) shouldBe None
+    AppRuntime.cursorIdleInterval(
+      AppConfig.default.withMotionAccessibility(MotionAccessibility.Off)
+    ) shouldBe None
   }
 
   it should "reset the cursor activity phase to visible after user input" in {

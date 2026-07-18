@@ -10,6 +10,14 @@ import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
 
+  it should "select the current global motion accessibility override" in {
+    val selections = CommandRunnerOptionSelections.default(
+      AppConfig.default.withMotionAccessibility(MotionAccessibility.Off)
+    )
+
+    selections("motion-accessibility") shouldBe 2
+  }
+
   "CommandRunnerOptionSelections" should "derive option indices from current app config" in {
     val codeFont = FontLoader.availableMonospaceFamilies.drop(1).headOption.getOrElse("missing-code-font")
     val textFont = FontLoader.availableTextFamilies.drop(1).headOption.getOrElse("missing-text-font")

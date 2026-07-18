@@ -16,10 +16,13 @@ object CommandRunnerOptionSelections:
     val languageToolsConfig = config.languageToolsConfig
 
     Map(
-      "animation-mode"             -> animationModeIndex(editorConfig.characterAnimation),
-      "material-preset"            -> materialPresetIndex(surfaceConfig.materialPreset),
-      "post-processing"            -> postProcessingEffectIndex(surfaceConfig.postProcessingEffect),
-      "motion-preset"              -> motionPresetIndex(surfaceConfig.motionPreset),
+      "animation-mode"  -> animationModeIndex(editorConfig.characterAnimation),
+      "material-preset" -> materialPresetIndex(surfaceConfig.materialPreset),
+      "post-processing" -> postProcessingEffectIndex(surfaceConfig.postProcessingEffect),
+      "motion-preset"   -> motionPresetIndex(surfaceConfig.motionPreset),
+      "motion-accessibility" -> motionAccessibilityIndex(
+        surfaceConfig.motionConfiguration.fold(MotionAccessibility.Standard)(_.accessibility)
+      ),
       "command-runner-fade"        -> commandRunnerFadeIndex(surfaceConfig.commandRunnerAnimation),
       "ui-animation"               -> animationPresetIndex(surfaceConfig.uiAnimation),
       "render-fps"                 -> renderFpsTargetIndex(surfaceConfig.renderFpsTarget),
@@ -114,6 +117,12 @@ object CommandRunnerOptionSelections:
       case MotionPreset.Smooth     => 2
       case MotionPreset.Expressive => 3
       case MotionPreset.Custom     => 4
+
+  private def motionAccessibilityIndex(accessibility: MotionAccessibility): Int =
+    accessibility match
+      case MotionAccessibility.Standard => 0
+      case MotionAccessibility.Reduced  => 1
+      case MotionAccessibility.Off      => 2
 
   private def commandRunnerFadeIndex(animation: Option[AnimationConfig]): Int =
     animationPresetIndex(animation)
