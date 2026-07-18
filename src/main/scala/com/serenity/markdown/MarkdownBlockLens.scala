@@ -40,13 +40,15 @@ object MarkdownBlockLens:
     Option.when(isHeadingLine(lines(activeLine)))(activeLine to activeLine)
 
   private def setextHeadingBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
-    Option.when(isSetextUnderline(lines(activeLine)) && activeLine > 0 && isParagraphLine(lines(activeLine - 1))) {
-      (activeLine - 1) to activeLine
-    }.orElse {
-      Option.when(activeLine + 1 < lines.length && isSetextUnderline(lines(activeLine + 1))) {
-        activeLine to (activeLine + 1)
+    Option
+      .when(isSetextUnderline(lines(activeLine)) && activeLine > 0 && isParagraphLine(lines(activeLine - 1))) {
+        (activeLine - 1) to activeLine
       }
-    }
+      .orElse {
+        Option.when(activeLine + 1 < lines.length && isSetextUnderline(lines(activeLine + 1))) {
+          activeLine to (activeLine + 1)
+        }
+      }
 
   private def thematicBreakBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
     Option.when(isThematicBreak(lines(activeLine)))(activeLine to activeLine)
