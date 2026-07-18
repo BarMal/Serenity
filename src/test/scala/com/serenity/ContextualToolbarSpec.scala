@@ -225,6 +225,19 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     ContextualToolbar.rowCount(ContextualToolbarState(), state, width) should be > 1
   }
 
+  it should "separate paragraph-role and alignment controls into their own compact groups" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-semantic-groups")
+
+    seedToolbarDocument(stateManager)
+
+    val items = ContextualToolbar.itemsFor(stateManager.getCurrentState.unsafeRunSync())
+    val paragraphRoleIndex = items.indexWhere(_.id == "paragraph-role")
+    val paragraphRole = items.lift(paragraphRoleIndex).getOrElse(fail("Expected paragraph role control"))
+    val alignment = items.lift(paragraphRoleIndex + 1).getOrElse(fail("Expected alignment control"))
+
+    ContextualToolbar.hasTrailingGroupSeparator(paragraphRole, Some(alignment)) shouldBe true
+  }
+
   it should "keep the formatted run state when the caret sits on its trailing boundary" in {
     val stateManager = createStateManager("ContextualToolbarSpec-caret-boundary-style")
 
