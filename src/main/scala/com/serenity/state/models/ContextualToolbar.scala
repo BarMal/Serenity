@@ -264,13 +264,13 @@ object ContextualToolbar:
       case ContextualToolbarItem.Dropdown(_, label, icon, optionItem) =>
         val text = s"$label ${optionItem.selectedOption}".trim
         mode match
-          case ToolbarDisplayMode.IconOnly    => s"${optionItem.selectedOption} ▾"
+          case ToolbarDisplayMode.IconOnly    => icon
           case ToolbarDisplayMode.TextOnly    => text
           case ToolbarDisplayMode.IconAndText => s"$icon $text"
       case ContextualToolbarItem.Input(_, label, icon, inputItem) =>
         val text = s"$label ${inputItem.currentValue}".trim
         mode match
-          case ToolbarDisplayMode.IconOnly    => inputItem.currentValue
+          case ToolbarDisplayMode.IconOnly    => icon
           case ToolbarDisplayMode.TextOnly    => text
           case ToolbarDisplayMode.IconAndText => s"$icon $text"
 
