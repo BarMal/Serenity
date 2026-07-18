@@ -145,6 +145,25 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     )
   }
 
+  it should "never exceed its compact width cap when balanced groups are wider" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-absolute-compact-cap")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val editorWidth = LayoutEngine
+      .calculateEditorWorkspaceLayout(state, layout)
+      .activeContentRect(state)
+      .map(_.width)
+      .getOrElse(fail("Expected active content rect"))
+
+    toolbarRect(state).width should be <= ((editorWidth.toLong * 2) / 3).toInt + 2
+  }
+
   it should "wrap a fitting toolbar before it consumes most of the active editor pane" in {
     val stateManager = createStateManager("ContextualToolbarSpec-near-full-width-regression")
 
@@ -1521,7 +1540,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     rowGroups.zipWithIndex
       .collectFirst {
         case (rowItems, rowIndex)
-            if rowIndex < rowGroups.length - 1 && rowItems.length > 1 && rowGroups(rowIndex + 1).length > 1 =>
+            if rowIndex < rowGroups.length - 1 && rowItems.nonEmpty && rowGroups(rowIndex + 1).nonEmpty =>
           val localIndex = rowItems.length - 1
           (
             rowItems(localIndex).id,
