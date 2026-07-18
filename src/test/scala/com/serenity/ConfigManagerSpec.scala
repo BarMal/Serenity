@@ -778,6 +778,39 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     loaded.effectivePanelCloseTransitionKind shouldBe TransitionKind.Disabled
   }
 
+  it should "round-trip custom family animation timing" in {
+    val customAnimation = AnimationConfig(
+      steps = 7,
+      totalDuration = scala.concurrent.duration.Duration.fromNanos(320_000_000)
+    )
+    val configured = AppConfig.default.withMotionConfiguration(
+      MotionConfig(
+        MotionAccessibility.Standard,
+        MotionPreset.Smooth,
+        Map(
+          MotionFamily.CommandSurfaces -> MotionFamilyConfig(
+            enabled = true,
+            transitionKind = TransitionKind.TypedText,
+            animation = Some(customAnimation),
+            speedScale = 1.0
+          )
+        )
+      )
+    )
+    val configFile = Files.createTempFile("serenity-custom-family-animation", ".conf")
+    val serialized = ConfigManager.configToString(configured)
+    Files.writeString(configFile, serialized)
+
+    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    serialized should include("ui.motion.family.command_surfaces.animation = custom")
+    serialized should include("ui.motion.family.command_surfaces.animation.duration_ms = 320")
+    serialized should include("ui.motion.family.command_surfaces.animation.steps = 7")
+    loaded.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.CommandSurfaces).animation shouldBe Some(
+      customAnimation
+    )
+  }
+
   it should "load and write viewport sizing policy" in {
     val configFile = Files.createTempFile("serenity-viewport-config", ".conf")
     Files.writeString(

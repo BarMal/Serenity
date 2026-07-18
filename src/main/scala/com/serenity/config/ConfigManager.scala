@@ -262,7 +262,13 @@ object ConfigManager:
       case None => MotionConfig.fromLegacy(config.surfaceConfig)
     val motionFamilySettings = MotionFamily.values
       .map { family =>
-        val settings = motionConfiguration.families(family)
+        val settings         = motionConfiguration.families(family)
+        val animationSetting = motionAnimationSetting(settings.animation)
+        val customAnimationDetails =
+          if animationSetting == "custom" then settings.animation.fold("")(animation => s"""
+               |ui.motion.family.${family.configKey}.animation.duration_ms = ${animation.durationMs}
+               |ui.motion.family.${family.configKey}.animation.steps = ${animation.steps}""".stripMargin)
+          else ""
         val scopedTransitions =
           if family == MotionFamily.PinnedPanels then
             s"""
@@ -271,7 +277,7 @@ object ConfigManager:
           else ""
         s"""ui.motion.family.${family.configKey}.enabled = ${settings.enabled}
          |ui.motion.family.${family.configKey}.transition = ${transitionKindConfigKey(settings.transitionKind)}
-         |ui.motion.family.${family.configKey}.animation = ${motionAnimationSetting(settings.animation)}
+         |ui.motion.family.${family.configKey}.animation = $animationSetting$customAnimationDetails
          |ui.motion.family.${family.configKey}.speed_scale = ${settings.speedScale}$scopedTransitions""".stripMargin
       }
       .mkString("\n")

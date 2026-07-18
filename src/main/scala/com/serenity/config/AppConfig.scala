@@ -1108,7 +1108,7 @@ object SurfaceConfig:
       "viewport.height.percent",
       "viewport.height.max"
     ) ++ Set("ui.motion.accessibility") ++ MotionFamily.values.flatMap { family =>
-      Set("enabled", "transition", "animation", "speed_scale").map(field =>
+      Set("enabled", "transition", "animation", "animation.duration_ms", "animation.steps", "speed_scale").map(field =>
         s"ui.motion.family.${family.configKey}.$field"
       )
     } ++ Set(
@@ -1172,7 +1172,7 @@ object SurfaceConfig:
     val motionFamilyPrefix                   = "ui.motion.family."
 
     val motionFamilyKeys: Set[String] = MotionFamily.values.flatMap { family =>
-      Set("enabled", "transition", "animation", "speed_scale").map(field =>
+      Set("enabled", "transition", "animation", "animation.duration_ms", "animation.steps", "speed_scale").map(field =>
         s"$motionFamilyPrefix${family.configKey}.$field"
       )
     }.toSet ++ Set(
@@ -1376,13 +1376,34 @@ object SurfaceConfig:
       for
         familyName <- parts.headOption
         family     <- MotionFamily.values.find(_.configKey == familyName)
-        field      <- parts.drop(1).headOption
+        field    = parts.drop(1).mkString(".")
         current  = config.surfaceConfig.motionConfiguration.getOrElse(MotionConfig.fromLegacy(config.surfaceConfig))
         settings = current.families(family)
         updated <- field match
-          case "enabled"     => parseBoolean(value).map(enabled => settings.copy(enabled = enabled))
-          case "transition"  => parseTransitionKind(value).map(kind => settings.copy(transitionKind = kind))
-          case "animation"   => parseAnimationPreset(value).map(animation => settings.copy(animation = animation))
+          case "enabled"    => parseBoolean(value).map(enabled => settings.copy(enabled = enabled))
+          case "transition" => parseTransitionKind(value).map(kind => settings.copy(transitionKind = kind))
+          case "animation" if value.equalsIgnoreCase("custom") =>
+            Some(settings.copy(animation = Some(settings.animation.getOrElse(AnimationConfig.smooth.get))))
+          case "animation" => parseAnimationPreset(value).map(animation => settings.copy(animation = animation))
+          case "animation.duration_ms" =>
+            value.toIntOption
+              .filter(_ > 0)
+              .map(durationMs =>
+                settings.copy(animation =
+                  Some(
+                    settings.animation
+                      .getOrElse(AnimationConfig.smooth.get)
+                      .copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(durationMs * 1_000_000L))
+                  )
+                )
+              )
+          case "animation.steps" =>
+            value.toIntOption
+              .filter(_ > 0)
+              .map(steps =>
+                settings
+                  .copy(animation = Some(settings.animation.getOrElse(AnimationConfig.smooth.get).copy(steps = steps)))
+              )
           case "speed_scale" => parseElementTransitionSpeedScale(value).map(scale => settings.copy(speedScale = scale))
           case "open_transition" if family == MotionFamily.PinnedPanels =>
             parseTransitionKind(value).map(kind =>
