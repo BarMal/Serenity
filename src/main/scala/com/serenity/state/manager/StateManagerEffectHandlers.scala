@@ -304,7 +304,7 @@ final private[manager] class StateManagerEffectHandlers(
   private def updateCustomMotionConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
-    updateMotionConfig(config => update(config).copy(motionPreset = com.serenity.config.MotionPreset.Custom))
+    updateMotionConfig(config => update(config).withCustomMotionBaseline)
 
   private def updateTextDisplayConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
@@ -635,7 +635,7 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.SetBlurRadius(r) =>
         updateAppearanceConfig(_.withBlurRadius(r)).void
       case CommandIntent.SetAnimationDuration(ms) =>
-        updateMotionConfig { config =>
+        updateCustomMotionConfig { config =>
           val newAnim =
             if ms <= 0 then None
             else
@@ -649,10 +649,10 @@ final private[manager] class StateManagerEffectHandlers(
                   existing.copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
                 )
               )
-          config.copy(characterAnimation = newAnim, motionPreset = com.serenity.config.MotionPreset.Custom)
+          config.withEditorTextAnimation(newAnim)
         }.void
       case CommandIntent.SetAnimationSteps(n) =>
-        updateMotionConfig { config =>
+        updateCustomMotionConfig { config =>
           val newAnim =
             if n <= 0 then None
             else
@@ -664,7 +664,7 @@ final private[manager] class StateManagerEffectHandlers(
                   )
                 )(existing => existing.copy(steps = n))
               )
-          config.copy(characterAnimation = newAnim, motionPreset = com.serenity.config.MotionPreset.Custom)
+          config.withEditorTextAnimation(newAnim)
         }.void
       case CommandIntent.SetCursorMode(mode) =>
         updateAppearanceConfig(_.withCursorMode(mode)).void

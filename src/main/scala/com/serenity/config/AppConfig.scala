@@ -1828,6 +1828,16 @@ case class AppConfig(
           )
         )
 
+  /** Marks the current resolved family values as a custom motion baseline. */
+  def withCustomMotionBaseline: AppConfig =
+    val current = surfaceConfig.motionConfiguration.getOrElse(MotionConfig.fromLegacy(surfaceConfig))
+    withSurfaceConfig(
+      surfaceConfig.copy(
+        motionPreset = MotionPreset.Custom,
+        motionConfiguration = Some(current.copy(baseline = MotionPreset.Custom).normalized)
+      )
+    )
+
   /** Transition policy derived from the selected motion preset and UI speed scale. */
   def elementTransitionSettings: ElementTransitionSettings =
     surfaceConfig.elementTransitionSettings
@@ -1882,6 +1892,13 @@ case class AppConfig(
   def withMotionFamilyConfiguration(family: MotionFamily, configuration: MotionFamilyConfig): AppConfig =
     val current = surfaceConfig.motionConfiguration.getOrElse(MotionConfig.fromLegacy(surfaceConfig))
     withMotionConfiguration(current.copy(families = current.families.updated(family, configuration)))
+
+  /** Updates editor text timing in both the legacy field and the authoritative motion family. */
+  def withEditorTextAnimation(animation: Option[AnimationConfig]): AppConfig =
+    val updated = withEditorConfig(editorConfig.copy(characterAnimation = animation))
+    updated.updateAuthoritativeMotion(identity) { configuration =>
+      updated.updateMotionFamily(configuration, MotionFamily.EditorText)(_.copy(animation = animation))
+    }
 
   def withCommandRunnerAnimation(animation: Option[AnimationConfig]): AppConfig =
     updateAuthoritativeMotion(_.copy(commandRunnerAnimation = animation)) { configuration =>

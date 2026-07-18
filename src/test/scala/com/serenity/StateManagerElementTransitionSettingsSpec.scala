@@ -1,12 +1,14 @@
 package com.serenity
 
 import java.awt.Color
+import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, AnimationOwner, TransitionKind}
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.{MotionAccessibility, MotionPreset, RenderFpsTarget}
+import com.serenity.config.ConfigManager
 import com.serenity.keystroke.events.NextTab
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -87,6 +89,31 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().config.motionPreset shouldBe MotionPreset.Custom
+  }
+
+  it should "persist custom as the authoritative baseline after a manual motion edit" in {
+    val stateManager = createStateManager()
+    stateManager
+      .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Smooth)))
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "element-transition-speed-scale",
+          "Set element transition speed scale",
+          CommandIntent.SetElementTransitionSpeedScale(2.25),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    val config = stateManager.getCurrentState.unsafeRunSync().config
+    val configFile = Files.createTempFile("serenity-custom-motion-baseline", ".conf")
+    Files.writeString(configFile, ConfigManager.configToString(config))
+
+    config.surfaceConfig.motionConfiguration.map(_.baseline) shouldBe Some(MotionPreset.Custom)
+    ConfigManager.loadConfig(Some(configFile.toString)).surfaceConfig.effectiveMotionBaseline shouldBe MotionPreset.Custom
   }
 
   it should "preserve the accessibility override through manual motion edits" in
