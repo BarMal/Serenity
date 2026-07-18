@@ -85,34 +85,36 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     stateManager.getCurrentState.unsafeRunSync().config.motionPreset shouldBe MotionPreset.Custom
   }
 
-  it should "preserve the accessibility override through manual motion edits" in {
+  it should "preserve the accessibility override through manual motion edits" in
     List(
-      MotionAccessibility.Off -> CommandIntent.SetElementTransitionSpeedScale(2.25),
+      MotionAccessibility.Off     -> CommandIntent.SetElementTransitionSpeedScale(2.25),
       MotionAccessibility.Reduced -> CommandIntent.SetCommandRunnerTransitionKind(TransitionKind.DirectionalSweep)
-    ).foreach { case (accessibility, edit) =>
-      val stateManager = createStateManager()
-      stateManager
-        .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Smooth)))
-        .unsafeRunSync()
+    ).foreach {
+      case (accessibility, edit) =>
+        val stateManager = createStateManager()
+        stateManager
+          .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Smooth)))
+          .unsafeRunSync()
 
-      stateManager
-        .executeCommand(
-          Command.typed(
-            "motion-accessibility",
-            "Set motion accessibility",
-            CommandIntent.SetMotionAccessibility(accessibility),
-            CommandCategory.Settings
+        stateManager
+          .executeCommand(
+            Command.typed(
+              "motion-accessibility",
+              "Set motion accessibility",
+              CommandIntent.SetMotionAccessibility(accessibility),
+              CommandCategory.Settings
+            )
           )
-        )
-        .unsafeRunSync()
-      stateManager.executeCommand(Command.typed("motion-edit", "Edit motion", edit, CommandCategory.Settings)).unsafeRunSync()
+          .unsafeRunSync()
+        stateManager
+          .executeCommand(Command.typed("motion-edit", "Edit motion", edit, CommandCategory.Settings))
+          .unsafeRunSync()
 
-      val config = stateManager.getCurrentState.unsafeRunSync().config
-      config.motionPreset shouldBe MotionPreset.Custom
-      config.surfaceConfig.motionConfiguration.map(_.accessibility) shouldBe Some(accessibility)
-      config.surfaceConfig.effectiveMotionConfiguration.families.values.foreach(_.enabled shouldBe false)
+        val config = stateManager.getCurrentState.unsafeRunSync().config
+        config.motionPreset shouldBe MotionPreset.Custom
+        config.surfaceConfig.motionConfiguration.map(_.accessibility) shouldBe Some(accessibility)
+        config.surfaceConfig.effectiveMotionConfiguration.families.values.foreach(_.enabled shouldBe false)
     }
-  }
 
   it should "update the editor text transition speed scale config" in {
     val stateManager = createStateManager()

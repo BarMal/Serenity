@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.animation.{AnimationConfig, TransitionKind}
+import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.config.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
@@ -23,13 +23,21 @@ object CommandRunnerOptionSelections:
       "motion-accessibility" -> motionAccessibilityIndex(
         surfaceConfig.motionConfiguration.fold(MotionAccessibility.Standard)(_.accessibility)
       ),
-      "command-runner-fade"        -> commandRunnerFadeIndex(surfaceConfig.commandRunnerAnimation),
-      "ui-animation"               -> animationPresetIndex(surfaceConfig.uiAnimation),
-      "render-fps"                 -> renderFpsTargetIndex(surfaceConfig.renderFpsTarget),
-      "editor-text-transition"     -> editorTextTransitionIndex(surfaceConfig.editorInsertionTransitionKind),
-      "command-runner-transition"  -> panelTransitionIndex(config.effectiveCommandRunnerTransitionKind),
-      "panel-open-transition"      -> panelTransitionIndex(config.effectivePanelOpenTransitionKind),
-      "panel-close-transition"     -> panelTransitionIndex(config.effectivePanelCloseTransitionKind),
+      "command-runner-fade" -> commandRunnerFadeIndex(surfaceConfig.commandRunnerAnimation),
+      "ui-animation"        -> animationPresetIndex(surfaceConfig.uiAnimation),
+      "render-fps"          -> renderFpsTargetIndex(surfaceConfig.renderFpsTarget),
+      "editor-text-transition" -> editorTextTransitionIndex(
+        configuredTransitionKind(surfaceConfig, MotionFamily.EditorText, TransitionScope.EditorInsertion)
+      ),
+      "command-runner-transition" -> panelTransitionIndex(
+        configuredTransitionKind(surfaceConfig, MotionFamily.CommandSurfaces, TransitionScope.CommandRunner)
+      ),
+      "panel-open-transition" -> panelTransitionIndex(
+        configuredTransitionKind(surfaceConfig, MotionFamily.PinnedPanels, TransitionScope.PanelOpen)
+      ),
+      "panel-close-transition" -> panelTransitionIndex(
+        configuredTransitionKind(surfaceConfig, MotionFamily.PinnedPanels, TransitionScope.PanelClose)
+      ),
       "cursor-mode"                -> cursorModeIndex(cursorConfig.mode),
       "cursor-info-bar"            -> cursorInfoBarModeIndex(cursorConfig.infoBarMode),
       "cursor-info-bar-placement"  -> cursorInfoBarPlacementIndex(cursorConfig.infoBarPlacement),
@@ -54,6 +62,29 @@ object CommandRunnerOptionSelections:
       "text-ligatures"             -> ligaturesIndex(editorConfig.fontConfig.textLigatures),
       "ui-ligatures"               -> ligaturesIndex(editorConfig.fontConfig.uiLigatures)
     )
+
+  private def configuredTransitionKind(
+    surfaceConfig: SurfaceConfig,
+    family: MotionFamily,
+    scope: TransitionScope
+  ): TransitionKind =
+    surfaceConfig.motionConfiguration.fold {
+      family match
+        case MotionFamily.EditorText      => surfaceConfig.editorInsertionTransitionKind
+        case MotionFamily.CommandSurfaces => surfaceConfig.commandRunnerTransitionKind.getOrElse(TransitionKind.Fade)
+        case MotionFamily.PinnedPanels =>
+          scope match
+            case TransitionScope.PanelOpen =>
+              surfaceConfig.panelOpenTransitionKind.getOrElse(TransitionKind.OutlineThenContent)
+            case TransitionScope.PanelClose => surfaceConfig.panelCloseTransitionKind.getOrElse(TransitionKind.Fade)
+            case _                          => TransitionKind.Fade
+        case _ => TransitionKind.Fade
+    } { configuration =>
+      configuration
+        .withFallback(MotionConfig.fromLegacy(surfaceConfig, configuration.baseline))
+        .families(family)
+        .transitionKindFor(scope)
+    }
 
   private def animationModeIndex(animation: Option[AnimationConfig]): Int =
     animation match
