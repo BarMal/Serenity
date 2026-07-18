@@ -544,14 +544,11 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
 
       withClue(s"cursor at source line ${cursor.line}: ") {
         rawSourceIsVisible(surface, sourceLines(cursor.line)) shouldBe true
-        nonActiveBlockLines.foreach { sourceLine =>
-          renderedRows.exists(_.sourceLine.contains(sourceLine)) shouldBe true
-        }
+        nonActiveBlockLines.foreach(sourceLine => renderedRows.exists(_.sourceLine.contains(sourceLine)) shouldBe true)
         renderedRows.find(_.sourceLine.contains(10)).map(_.text).getOrElse("") should include("Area")
         renderedRows.find(_.sourceLine.contains(10)).map(_.text).getOrElse("") should include("Expected behaviour")
-        val renderedAnchors = nonActiveBlockLines.map { sourceLine =>
-          renderedRows.indexWhere(_.sourceLine.contains(sourceLine))
-        }
+        val renderedAnchors =
+          nonActiveBlockLines.map(sourceLine => renderedRows.indexWhere(_.sourceLine.contains(sourceLine)))
         renderedAnchors shouldBe renderedAnchors.sorted
         samePixels(actual, expected) shouldBe true
       }
