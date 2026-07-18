@@ -328,6 +328,7 @@ object ContextualToolbar:
           .max(largestGroupWidth)
     balancedWidth
       .max(1)
+      .min(compactRowLimit)
       .min(maxWidth.max(1))
 
   def rowCount(
