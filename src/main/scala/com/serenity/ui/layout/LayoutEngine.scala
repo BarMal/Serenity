@@ -530,6 +530,9 @@ object LayoutEngine:
         buffer.viewport,
         state.config.wordWrapEnabled
       )
+      if surface.content match
+        case SurfaceContent.ContextualToolbar(_) => contentRect.contains(screenPosition.x, screenPosition.y)
+        case _                                   => true
     yield
       val overlayX = math.max(
         contentRect.x,

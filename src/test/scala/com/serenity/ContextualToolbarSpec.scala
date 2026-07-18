@@ -418,6 +418,33 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     toolbarRect(state).y should be >= contentRect.y + 6
   }
 
+  it should "not leave a detached toolbar visible when its anchor scrolls out of view" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-offscreen-anchor")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 20))).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val bufferId = activeBufferId(state)
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope(List.fill(40)("toolbar target").mkString("\n")),
+            cursors = List(CursorPosition(30, 4)),
+            viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 10, visibleColumns = 120)
+          )
+        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+      }
+      .unsafeRunSync()
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar surface"))
+    val contract = EditorLayoutContract.from(state, viewport, LayoutEngine.calculateLayoutWithUI(state, viewport))
+
+    contract.overlayRect(surface.id) shouldBe None
+  }
+
   it should "open a focused font size field with the current value prefilled, accept edits, and apply them on Enter" in {
     val stateManager = createStateManager("ContextualToolbarSpec-font-size")
 
