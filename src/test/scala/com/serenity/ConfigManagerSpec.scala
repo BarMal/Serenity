@@ -722,7 +722,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     val configured = AppConfig.default.withMotionConfiguration(
       MotionConfig(
         MotionAccessibility.Reduced,
-        MotionPreset.Smooth,
+        MotionPreset.Expressive,
         Map(
           MotionFamily.CommandSurfaces -> MotionFamilyConfig(
             enabled = true,
@@ -744,9 +744,10 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val loaded = ConfigManager.loadConfig(Some(configFile.toString))
 
-    loaded.surfaceConfig.motionConfiguration shouldBe configured.surfaceConfig.motionConfiguration.map(
-      _.withFallback(MotionConfig.fromLegacy(configured.surfaceConfig))
+    loaded.surfaceConfig.motionConfiguration shouldBe configured.surfaceConfig.motionConfiguration.map(configuration =>
+      configuration.withFallback(MotionConfig.fromLegacy(configured.surfaceConfig, configuration.baseline))
     )
+    loaded.surfaceConfig.effectiveMotionBaseline shouldBe MotionPreset.Expressive
   }
 
   it should "load and write viewport sizing policy" in {

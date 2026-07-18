@@ -951,8 +951,13 @@ case class SurfaceConfig(
 
   /** Resolve every runtime family from one hierarchy, preserving legacy fields when no hierarchy has been saved yet. */
   def effectiveMotionConfiguration: EffectiveMotionConfig =
-    val legacy = MotionConfig.fromLegacy(this)
-    motionConfiguration.map(_.withFallback(legacy)).getOrElse(legacy).effective
+    motionConfiguration match
+      case Some(configuration) =>
+        configuration.withFallback(MotionConfig.fromLegacy(this, configuration.baseline)).effective
+      case None => MotionConfig.fromLegacy(this).effective
+
+  def effectiveMotionBaseline: MotionPreset =
+    motionConfiguration.fold(motionPreset)(_.baseline)
 
   def effectiveCommandRunnerTransitionKind: TransitionKind =
     motionConfiguration.fold(commandRunnerTransitionKind.getOrElse(TransitionKind.Fade))(_ =>
@@ -972,7 +977,7 @@ case class SurfaceConfig(
   def elementTransitionSettings: ElementTransitionSettings =
     val uiMotion = effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
     val baseSettings =
-      if uiMotion.enabled then motionPreset.elementTransitionSettings else ElementTransitionSettings.disabled
+      if uiMotion.enabled then effectiveMotionBaseline.elementTransitionSettings else ElementTransitionSettings.disabled
     if !baseSettings.enabled then baseSettings
     else
       val transitionOverrides = motionConfiguration match
@@ -1003,13 +1008,37 @@ case class SurfaceConfig(
   def editorInsertionTransitionSettings: ElementTransitionSettings =
     val editorMotion = effectiveMotionConfiguration.family(MotionFamily.EditorText)
     val baseSettings =
-      if editorMotion.enabled then motionPreset.elementTransitionSettings else ElementTransitionSettings.disabled
+      if editorMotion.enabled then effectiveMotionBaseline.elementTransitionSettings
+      else ElementTransitionSettings.disabled
     if !baseSettings.enabled then baseSettings
     else
       baseSettings.copy(
         speedScale = editorMotion.speedScale,
         overrides = baseSettings.overrides ++ Map(TransitionScope.EditorInsertion -> editorMotion.transitionKind)
       )
+
+  /** Transition policy for pinned panels, with independent family timing and reveal strategy. */
+  def pinnedPanelTransitionSettings: ElementTransitionSettings =
+    motionConfiguration match
+      case None => elementTransitionSettings
+      case Some(_) =>
+        val panelMotion = effectiveMotionConfiguration.family(MotionFamily.PinnedPanels)
+        val baseSettings =
+          if panelMotion.enabled then effectiveMotionBaseline.elementTransitionSettings
+          else ElementTransitionSettings.disabled
+        if !baseSettings.enabled then baseSettings
+        else
+          val timing = panelMotion.animation.fold(baseSettings.baseTiming)(animation =>
+            baseSettings.baseTiming.copy(durationMs = animation.durationMs, staggerMs = animation.tickRateMs)
+          )
+          baseSettings.copy(
+            baseTiming = timing,
+            speedScale = panelMotion.speedScale,
+            overrides = baseSettings.overrides ++ Map(
+              TransitionScope.PanelOpen  -> panelMotion.transitionKind,
+              TransitionScope.PanelClose -> panelMotion.transitionKind
+            )
+          )
 
 object SurfaceConfig:
 
@@ -1753,6 +1782,10 @@ case class AppConfig(
   /** Transition policy derived from the selected motion preset and editor text speed scale. */
   def editorInsertionTransitionSettings: ElementTransitionSettings =
     surfaceConfig.editorInsertionTransitionSettings
+
+  /** Transition policy for pinned panel creation. */
+  def pinnedPanelTransitionSettings: ElementTransitionSettings =
+    surfaceConfig.pinnedPanelTransitionSettings
 
   def withElementTransitionSpeedScale(scale: Double): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(elementTransitionSpeedScale = scale, motionConfiguration = None))

@@ -83,13 +83,25 @@ object MotionConfig:
     if value.isNaN || value.isInfinite then 1.0 else value.max(MinSpeedScale).min(MaxSpeedScale)
 
   def fromLegacy(config: SurfaceConfig): MotionConfig =
-    val base                 = config.motionPreset.animationConfig
+    fromLegacy(config, config.motionPreset, useBaselineAnimations = false)
+
+  def fromLegacy(config: SurfaceConfig, baseline: MotionPreset): MotionConfig =
+    fromLegacy(config, baseline, useBaselineAnimations = true)
+
+  private def fromLegacy(
+    config: SurfaceConfig,
+    baseline: MotionPreset,
+    useBaselineAnimations: Boolean
+  ): MotionConfig =
+    val base                 = baseline.animationConfig
+    val commandAnimation     = if useBaselineAnimations then base else config.commandRunnerAnimation
+    val uiAnimation          = if useBaselineAnimations then base else config.uiAnimation
     val commandTransition    = config.commandRunnerTransitionKind.getOrElse(TransitionKind.Fade)
     val panelOpenTransition  = config.panelOpenTransitionKind.getOrElse(TransitionKind.OutlineThenContent)
     val panelCloseTransition = config.panelCloseTransitionKind.getOrElse(TransitionKind.Fade)
     MotionConfig(
       accessibility = MotionAccessibility.Standard,
-      baseline = config.motionPreset,
+      baseline = baseline,
       families = Map(
         MotionFamily.Cursor -> MotionFamilyConfig(
           enabled = true,
@@ -106,19 +118,19 @@ object MotionConfig:
         MotionFamily.CommandSurfaces -> MotionFamilyConfig(
           enabled = commandTransition != TransitionKind.Disabled,
           transitionKind = commandTransition,
-          animation = config.commandRunnerAnimation,
+          animation = commandAnimation,
           speedScale = config.effectiveCommandRunnerTransitionSpeedScale
         ),
         MotionFamily.PinnedPanels -> MotionFamilyConfig(
           enabled = panelOpenTransition != TransitionKind.Disabled || panelCloseTransition != TransitionKind.Disabled,
           transitionKind = panelOpenTransition,
-          animation = config.uiAnimation,
+          animation = uiAnimation,
           speedScale = config.effectiveUiTransitionSpeedScale
         ),
         MotionFamily.UiTransitions -> MotionFamilyConfig(
           enabled = true,
           transitionKind = TransitionKind.Fade,
-          animation = config.uiAnimation,
+          animation = uiAnimation,
           speedScale = config.effectiveUiTransitionSpeedScale
         )
       )

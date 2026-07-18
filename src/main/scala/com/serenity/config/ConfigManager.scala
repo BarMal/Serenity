@@ -268,11 +268,13 @@ object ConfigManager:
         case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
         case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
         case Some(_)                                          => "custom"
-    val legacyMotionConfiguration = MotionConfig.fromLegacy(config.surfaceConfig)
-    val motionConfiguration       = config.surfaceConfig.motionConfiguration.getOrElse(legacyMotionConfiguration)
+    val motionConfiguration = config.surfaceConfig.motionConfiguration match
+      case Some(configuration) =>
+        configuration.withFallback(MotionConfig.fromLegacy(config.surfaceConfig, configuration.baseline))
+      case None => MotionConfig.fromLegacy(config.surfaceConfig)
     val motionFamilySettings = MotionFamily.values
       .map { family =>
-        val settings = motionConfiguration.families.getOrElse(family, legacyMotionConfiguration.families(family))
+        val settings = motionConfiguration.families(family)
         s"""ui.motion.family.${family.configKey}.enabled = ${settings.enabled}
          |ui.motion.family.${family.configKey}.transition = ${transitionKindConfigKey(settings.transitionKind)}
          |ui.motion.family.${family.configKey}.animation = ${motionAnimationSetting(settings.animation)}
@@ -336,7 +338,7 @@ object ConfigManager:
        |ui.material = ${config.materialPreset.configKey}
        |# Post-processing: off, scanlines, glow
        |ui.post_processing = ${config.postProcessingEffect.configKey}
-       |ui.motion = ${config.motionPreset.configKey}
+       |ui.motion = ${motionConfiguration.baseline.configKey}
        |ui.motion.speed_scale = ${config.elementTransitionSpeedScale}
        |ui.motion.editor_text.speed_scale = ${config.effectiveEditorTextTransitionSpeedScale}
         |ui.motion.command_runner.speed_scale = ${config.effectiveCommandRunnerTransitionSpeedScale}

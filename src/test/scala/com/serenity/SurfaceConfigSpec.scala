@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.animation.TransitionKind
+import com.serenity.animation.{TransitionKind, TransitionScope}
 import com.serenity.config.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -91,6 +91,31 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
 
     config.effectivePanelOpenTransitionKind shouldBe TransitionKind.OutlineThenContent
     config.scaledCommandRunnerAnimation shouldBe commandAnimation.map(_.scaledBy(0.5)).flatten
+  }
+
+  it should "use the hierarchy baseline and pinned-panel family timing for panel transitions" in {
+    val panelAnimation = com.serenity.animation.AnimationConfig.subtle
+    val config = AppConfig.default.withMotionConfiguration(
+      MotionConfig(
+        MotionAccessibility.Standard,
+        MotionPreset.Expressive,
+        Map(
+          MotionFamily.PinnedPanels -> MotionFamilyConfig(
+            enabled = true,
+            transitionKind = TransitionKind.DirectionalSweep,
+            animation = panelAnimation,
+            speedScale = 0.5
+          )
+        )
+      )
+    )
+
+    config.elementTransitionSettings.baseTiming shouldBe MotionPreset.Expressive.elementTransitionSettings.baseTiming
+    config.pinnedPanelTransitionSettings.speedScale shouldBe 0.5
+    config.pinnedPanelTransitionSettings.baseTiming.durationMs shouldBe panelAnimation.fold(
+      fail("missing panel animation")
+    )(_.durationMs)
+    config.pinnedPanelTransitionSettings.overrides(TransitionScope.PanelOpen) shouldBe TransitionKind.DirectionalSweep
   }
 
   it should "default the contextual toolbar display mode to icons and text" in
