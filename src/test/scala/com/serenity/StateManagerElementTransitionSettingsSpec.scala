@@ -55,7 +55,11 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    val motion = stateManager.getCurrentState.unsafeRunSync().config.surfaceConfig.motionConfiguration
+    val motion = stateManager.getCurrentState
+      .unsafeRunSync()
+      .config
+      .surfaceConfig
+      .motionConfiguration
       .getOrElse(fail("Expected authoritative motion configuration"))
     motion.accessibility shouldBe MotionAccessibility.Off
     motion.baseline shouldBe MotionPreset.Expressive

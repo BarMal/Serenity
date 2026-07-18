@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.CommandCategory
+import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -76,6 +77,9 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
 
   it should "unwind escape from submenu edit mode to submenu, then parent, then closed" in {
     val stateManager = createStateManager()
+    stateManager
+      .updateState(state => state.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Custom)))
+      .unsafeRunSync()
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     (1 to 5).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())

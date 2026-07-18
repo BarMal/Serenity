@@ -212,16 +212,14 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     animationGroup.label shouldBe "Motion & Animation"
     animationGroup.children.map(_.id) shouldBe List(
+      "motion-accessibility",
       "motion-preset",
-      "animation-mode",
       "editor-text-transition",
       "panel-open-transition",
       "panel-close-transition",
       "command-runner-transition",
       "command-runner-fade",
       "ui-animation",
-      "animation-duration",
-      "animation-steps",
       "element-transition-speed-scale",
       "editor-text-speed-scale",
       "command-runner-speed-scale",
@@ -233,7 +231,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))
       .withActiveCategory(CommandCategory.Settings)
       .updateSearchTerm("animation")
 
@@ -245,7 +243,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))
       .withActiveCategory(CommandCategory.Settings)
       .updateSearchTerm("\"ANIMATION-duration\"")
 
@@ -266,7 +264,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))
       .copy(editingPresetName = Some("Review"))
       .updateSearchTerm("animation duration")
 
@@ -286,7 +284,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry(List(prefixCommand))
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))
       .updateSearchTerm("\"ANIMATION-duration\"")
 
     runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-search:animation-duration")
