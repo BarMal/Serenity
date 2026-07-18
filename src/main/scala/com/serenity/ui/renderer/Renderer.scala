@@ -1451,22 +1451,7 @@ object Renderer:
 
     overlays.aboveCursor.foreach { overlay =>
       val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
-      if blurRadius > 0f then
-        context.surface.withRoundRectClip(
-          overlay.rect.x,
-          overlay.rect.y,
-          overlay.rect.width,
-          overlay.rect.height,
-          state.config.uiCornerRadiusPx
-        ) {
-          context.surface.blurRegion(
-            overlay.rect.x,
-            overlay.rect.y,
-            overlay.rect.width,
-            overlay.rect.height,
-            blurRadius
-          )
-        }
+      if blurRadius > 0f then renderFloatingBackdrop(overlay, blurRadius, state.config, context)
       TextOverlayRenderer.render(
         context.surface,
         overlay,
@@ -1481,22 +1466,7 @@ object Renderer:
       if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
     belowOverlays.foreach { overlay =>
       val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
-      if blurRadius > 0f then
-        context.surface.withRoundRectClip(
-          overlay.rect.x,
-          overlay.rect.y,
-          overlay.rect.width,
-          overlay.rect.height,
-          state.config.uiCornerRadiusPx
-        ) {
-          context.surface.blurRegion(
-            overlay.rect.x,
-            overlay.rect.y,
-            overlay.rect.width,
-            overlay.rect.height,
-            blurRadius
-          )
-        }
+      if blurRadius > 0f then renderFloatingBackdrop(overlay, blurRadius, state.config, context)
       TextOverlayRenderer.render(
         context.surface,
         overlay,
@@ -1506,6 +1476,31 @@ object Renderer:
         context.uiFont,
         context.cellMetrics
       )
+    }
+
+  private def renderFloatingBackdrop(
+    overlay: TextOverlayView,
+    blurRadius: Float,
+    config: AppConfig,
+    context: RenderContext
+  ): Unit =
+    val offsetPx = FloatingSurfaceGeometry.signedRowOffsetPixels(overlay.verticalOffsetRows, context.cellMetrics)
+    context.surface.withPixelTranslation(0.0, offsetPx) {
+      context.surface.withRoundRectClip(
+        overlay.rect.x,
+        overlay.rect.y,
+        overlay.rect.width,
+        overlay.rect.height,
+        config.uiCornerRadiusPx
+      ) {
+        context.surface.blurRegion(
+          overlay.rect.x,
+          overlay.rect.y,
+          overlay.rect.width,
+          overlay.rect.height,
+          blurRadius
+        )
+      }
     }
 
   private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =
