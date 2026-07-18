@@ -547,6 +547,44 @@ given Decoder[MotionPreset] = Decoder.decodeString.emap {
   case other        => Left(s"Unknown MotionPreset: $other")
 }
 
+given Encoder[MotionAccessibility] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[MotionAccessibility] = Decoder.decodeString.emap(value =>
+  MotionAccessibility.fromConfigKey(value).toRight(s"Unknown MotionAccessibility: $value")
+)
+
+given Encoder[MotionFamily] = Encoder.encodeString.contramap(_.toString)
+
+given Decoder[MotionFamily] = Decoder.decodeString.emap(value =>
+  MotionFamily.values.find(_.toString == value).toRight(s"Unknown MotionFamily: $value")
+)
+
+given Encoder[MotionFamilyConfig] = deriveEncoder
+given Decoder[MotionFamilyConfig] = deriveDecoder
+
+given Encoder[MotionConfig] = Encoder.instance { config =>
+  Json.obj(
+    "accessibility" -> config.accessibility.asJson,
+    "baseline"      -> config.baseline.asJson,
+    "families"      -> config.families.map { case (family, settings) => family.toString -> settings }.asJson
+  )
+}
+
+given Decoder[MotionConfig] = Decoder.instance { cursor =>
+  for
+    accessibility <- cursor.get[MotionAccessibility]("accessibility")
+    baseline      <- cursor.get[MotionPreset]("baseline")
+    encoded       <- cursor.get[Map[String, MotionFamilyConfig]]("families")
+    families <- encoded.toList.traverse {
+      case (name, settings) =>
+        MotionFamily.values
+          .find(_.toString == name)
+          .toRight(DecodingFailure(s"Unknown MotionFamily: $name", cursor.history))
+          .map(_ -> settings)
+    }
+  yield MotionConfig(accessibility, baseline, families.toMap)
+}
+
 given Encoder[TransitionKind] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[TransitionKind] = Decoder.decodeString.emap {
@@ -760,7 +798,8 @@ given Encoder[AppConfig] = Encoder.instance { config =>
         "editorInsertionTransitionKind"     -> config.editorInsertionTransitionKind.asJson,
         "commandRunnerTransitionKind"       -> config.commandRunnerTransitionKind.asJson,
         "panelOpenTransitionKind"           -> config.panelOpenTransitionKind.asJson,
-        "panelCloseTransitionKind"          -> config.panelCloseTransitionKind.asJson
+        "panelCloseTransitionKind"          -> config.panelCloseTransitionKind.asJson,
+        "motionConfiguration"               -> config.motionConfiguration.asJson
       ) ++
         encodeCursorConfig(config) ++
         encodeWindowConfig(config) ++
@@ -831,6 +870,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     commandRunnerTransitionKind <- cursor.getOrElse[Option[TransitionKind]]("commandRunnerTransitionKind")(None)
     panelOpenTransitionKind     <- cursor.getOrElse[Option[TransitionKind]]("panelOpenTransitionKind")(None)
     panelCloseTransitionKind    <- cursor.getOrElse[Option[TransitionKind]]("panelCloseTransitionKind")(None)
+    motionConfiguration         <- cursor.getOrElse[Option[MotionConfig]]("motionConfiguration")(None)
     cursorConfig                <- decodeCursorConfig(cursor, defaultConfig)
     windowConfig                <- decodeWindowConfig(cursor, defaultConfig)
     documentConfig              <- decodeDocumentConfig(cursor, defaultConfig)
@@ -867,6 +907,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     commandRunnerTransitionKind = commandRunnerTransitionKind,
     panelOpenTransitionKind = panelOpenTransitionKind,
     panelCloseTransitionKind = panelCloseTransitionKind,
+    motionConfiguration = motionConfiguration,
     cursorConfig = cursorConfig,
     windowConfig = windowConfig,
     documentConfig = documentConfig,

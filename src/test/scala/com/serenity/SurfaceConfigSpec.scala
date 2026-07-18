@@ -72,6 +72,25 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
 
     config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.EditorText).enabled shouldBe false
     config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).enabled shouldBe false
+    config.scaledCharacterAnimation shouldBe None
+    config.scaledCommandRunnerAnimation shouldBe None
+    config.scaledUiAnimation shouldBe None
+    config.elementTransitionSettings.enabled shouldBe false
+    config.editorInsertionTransitionSettings.enabled shouldBe false
+  }
+
+  it should "resolve omitted families from the legacy baseline and use family animation values" in {
+    val commandAnimation = com.serenity.animation.AnimationConfig.subtle
+    val config = AppConfig.default.withMotionConfiguration(
+      MotionConfig(
+        MotionAccessibility.Standard,
+        MotionPreset.Smooth,
+        Map(MotionFamily.CommandSurfaces -> MotionFamilyConfig(true, TransitionKind.TypedText, commandAnimation, 0.5))
+      )
+    )
+
+    config.effectivePanelOpenTransitionKind shouldBe TransitionKind.OutlineThenContent
+    config.scaledCommandRunnerAnimation shouldBe commandAnimation.map(_.scaledBy(0.5)).flatten
   }
 
   it should "default the contextual toolbar display mode to icons and text" in

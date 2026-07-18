@@ -18,12 +18,12 @@ object MotionAccessibility:
       case _                              => None
 
 /** Independently configurable runtime motion families. */
-enum MotionFamily:
-  case Cursor
-  case EditorText
-  case CommandSurfaces
-  case PinnedPanels
-  case UiTransitions
+enum MotionFamily(val configKey: String):
+  case Cursor          extends MotionFamily("cursor")
+  case EditorText      extends MotionFamily("editor_text")
+  case CommandSurfaces extends MotionFamily("command_surfaces")
+  case PinnedPanels    extends MotionFamily("pinned_panels")
+  case UiTransitions   extends MotionFamily("ui_transitions")
 
 /** Motion policy for one family before accessibility policy is applied. */
 case class MotionFamilyConfig(
@@ -58,6 +58,11 @@ case class MotionConfig(
   def normalized: MotionConfig =
     copy(families = families.view.mapValues(_.normalized).toMap)
 
+  def withFallback(fallback: MotionConfig): MotionConfig =
+    copy(families =
+      MotionFamily.values.map(family => family -> families.getOrElse(family, fallback.families(family))).toMap
+    )
+
   def effective: EffectiveMotionConfig =
     val normalizedFamilies = normalized.families
     val disabled           = accessibility != MotionAccessibility.Standard || baseline == MotionPreset.Reduced
@@ -78,7 +83,10 @@ object MotionConfig:
     if value.isNaN || value.isInfinite then 1.0 else value.max(MinSpeedScale).min(MaxSpeedScale)
 
   def fromLegacy(config: SurfaceConfig): MotionConfig =
-    val base = config.motionPreset.animationConfig
+    val base                 = config.motionPreset.animationConfig
+    val commandTransition    = config.commandRunnerTransitionKind.getOrElse(TransitionKind.Fade)
+    val panelOpenTransition  = config.panelOpenTransitionKind.getOrElse(TransitionKind.OutlineThenContent)
+    val panelCloseTransition = config.panelCloseTransitionKind.getOrElse(TransitionKind.Fade)
     MotionConfig(
       accessibility = MotionAccessibility.Standard,
       baseline = config.motionPreset,
@@ -96,15 +104,14 @@ object MotionConfig:
           speedScale = config.effectiveEditorTextTransitionSpeedScale
         ),
         MotionFamily.CommandSurfaces -> MotionFamilyConfig(
-          enabled = config.effectiveCommandRunnerTransitionKind != TransitionKind.Disabled,
-          transitionKind = config.effectiveCommandRunnerTransitionKind,
+          enabled = commandTransition != TransitionKind.Disabled,
+          transitionKind = commandTransition,
           animation = config.commandRunnerAnimation,
           speedScale = config.effectiveCommandRunnerTransitionSpeedScale
         ),
         MotionFamily.PinnedPanels -> MotionFamilyConfig(
-          enabled = config.effectivePanelOpenTransitionKind != TransitionKind.Disabled ||
-            config.effectivePanelCloseTransitionKind != TransitionKind.Disabled,
-          transitionKind = config.effectivePanelOpenTransitionKind,
+          enabled = panelOpenTransition != TransitionKind.Disabled || panelCloseTransition != TransitionKind.Disabled,
+          transitionKind = panelOpenTransition,
           animation = config.uiAnimation,
           speedScale = config.effectiveUiTransitionSpeedScale
         ),

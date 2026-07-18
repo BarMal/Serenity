@@ -718,6 +718,37 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     result.report.invalidEntries.map(_.key) should contain("ui.motion.command_runner_reveal")
   }
 
+  it should "round-trip the authoritative motion hierarchy" in {
+    val configured = AppConfig.default.withMotionConfiguration(
+      MotionConfig(
+        MotionAccessibility.Reduced,
+        MotionPreset.Smooth,
+        Map(
+          MotionFamily.CommandSurfaces -> MotionFamilyConfig(
+            enabled = true,
+            transitionKind = TransitionKind.TypedText,
+            animation = AnimationConfig.subtle,
+            speedScale = 0.5
+          ),
+          MotionFamily.PinnedPanels -> MotionFamilyConfig(
+            enabled = false,
+            transitionKind = TransitionKind.Disabled,
+            animation = None,
+            speedScale = 0.0
+          )
+        )
+      )
+    )
+    val configFile = Files.createTempFile("serenity-motion-hierarchy", ".conf")
+    Files.writeString(configFile, ConfigManager.configToString(configured))
+
+    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    loaded.surfaceConfig.motionConfiguration shouldBe configured.surfaceConfig.motionConfiguration.map(
+      _.withFallback(MotionConfig.fromLegacy(configured.surfaceConfig))
+    )
+  }
+
   it should "load and write viewport sizing policy" in {
     val configFile = Files.createTempFile("serenity-viewport-config", ".conf")
     Files.writeString(
