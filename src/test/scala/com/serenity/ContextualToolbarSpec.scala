@@ -230,10 +230,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     seedToolbarDocument(stateManager)
 
-    val items = ContextualToolbar.itemsFor(stateManager.getCurrentState.unsafeRunSync())
+    val items              = ContextualToolbar.itemsFor(stateManager.getCurrentState.unsafeRunSync())
     val paragraphRoleIndex = items.indexWhere(_.id == "paragraph-role")
-    val paragraphRole = items.lift(paragraphRoleIndex).getOrElse(fail("Expected paragraph role control"))
-    val alignment = items.lift(paragraphRoleIndex + 1).getOrElse(fail("Expected alignment control"))
+    val paragraphRole      = items.lift(paragraphRoleIndex).getOrElse(fail("Expected paragraph role control"))
+    val alignment          = items.lift(paragraphRoleIndex + 1).getOrElse(fail("Expected alignment control"))
 
     ContextualToolbar.hasTrailingGroupSeparator(paragraphRole, Some(alignment)) shouldBe true
   }
@@ -1035,7 +1035,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     resolved.rows.head.segments.filter(_.trailingSeparator).map(_.text) shouldBe List(
       ContextualToolbar.displayText(toolbarButton(state, "underline"), ToolbarDisplayMode.IconOnly),
       ContextualToolbar.displayText(toolbarInput(state, "font-size"), ToolbarDisplayMode.IconOnly),
-      ContextualToolbar.displayText(toolbarInput(state, "color-hex"), ToolbarDisplayMode.IconOnly)
+      ContextualToolbar.displayText(toolbarInput(state, "color-hex"), ToolbarDisplayMode.IconOnly),
+      ContextualToolbar.displayText(toolbarButton(state, "paragraph-role"), ToolbarDisplayMode.IconOnly)
     )
   }
 
@@ -1256,8 +1257,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     rowGroups shouldBe List(
       List("bold", "italic", "underline", "font-family", "font-family-text", "font-size"),
-      List("color", "color-hex"),
-      List("paragraph-role", "align-left", "align-center", "align-right", "align-justify")
+      List("color", "color-hex", "paragraph-role"),
+      List("align-left", "align-center", "align-right", "align-justify")
     )
   }
 
@@ -1271,7 +1272,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val toolbarState = ContextualToolbarState(displayMode = ToolbarDisplayMode.IconOnly)
     val width        = ContextualToolbar.compactContentWidth(toolbarState, state, maxWidth = 120)
 
-    width shouldBe 54
+    width shouldBe 55
     ContextualToolbar.rowCount(toolbarState, state, width) shouldBe 1
   }
 
@@ -1290,7 +1291,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     moveToolbarFocusTo(stateManager, "color-hex")
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    toolbarContentWidth(state) shouldBe 54
+    toolbarContentWidth(state) shouldBe 55
 
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new MockRenderSurface(viewport.width, viewport.height)
