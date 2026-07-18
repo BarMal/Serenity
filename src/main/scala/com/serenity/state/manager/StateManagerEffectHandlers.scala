@@ -1684,7 +1684,7 @@ final private[manager] class StateManagerEffectHandlers(
             val updatedBuffer = buffer.copy(
               animations = buffer.animations
                 .clear(com.serenity.animation.AnimationOwner.UiTransitions)
-                .mergeAnimations(uiAnimations)
+                .mergeUiTransitionAnimations(uiAnimations)
             )
             state.copy(buffers = state.buffers + (point.bufferId -> updatedBuffer))
           }

@@ -187,7 +187,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
           state.buffers.updated(
             secondBufferId,
             buffer
-              .copy(animations = buffer.animations.addCharacterAnimation('z', 100, 100, Color.BLACK, Color.WHITE, 5))
+              .copy(animations = buffer.animations.addCharacterAnimation('z', 0, 0, Color.BLACK, Color.WHITE, 5))
           )
         )
       }
@@ -195,15 +195,13 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
 
     stateManager.applyEvent(NextTab).unsafeRunSync()
 
-    val owners = stateManager.getCurrentState
+    val animations = stateManager.getCurrentState
       .unsafeRunSync()
       .buffers(secondBufferId)
       .animations
-      .animations
-      .values
-      .map(_.owner)
-      .toSet
+    val owners = animations.animations.values.map(_.owner).toSet
     owners should contain allOf (AnimationOwner.EditorText, AnimationOwner.UiTransitions)
+    animations.getCell(0, 0).map(_.owner) shouldBe Some(AnimationOwner.EditorText)
   }
 
   it should "update the command runner transition speed scale config" in {
