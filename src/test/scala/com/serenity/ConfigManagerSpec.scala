@@ -740,10 +740,24 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
       )
     )
     val configFile = Files.createTempFile("serenity-motion-hierarchy", ".conf")
-    Files.writeString(configFile, ConfigManager.configToString(configured))
+    val serialized = ConfigManager.configToString(configured)
+    Files.writeString(configFile, serialized)
 
     val loaded = ConfigManager.loadConfig(Some(configFile.toString))
 
+    serialized should not include "ui.motion.speed_scale ="
+    serialized should not include "ui.motion.editor_text.speed_scale ="
+    serialized should not include "ui.motion.command_runner.speed_scale ="
+    serialized should not include "ui.motion.ui.speed_scale ="
+    serialized should not include "ui.motion.cursor.speed_scale ="
+    serialized should not include "ui.motion.command_runner ="
+    serialized should not include "ui.motion.command_runner_reveal ="
+    serialized should not include "ui.motion.ui ="
+    serialized should not include "ui.motion.editor_text ="
+    serialized should not include "ui.motion.panel_open ="
+    serialized should not include "ui.motion.panel_close ="
+    serialized should include("ui.motion.family.command_surfaces.speed_scale = 0.5")
+    serialized should include("ui.motion.family.pinned_panels.close_transition = off")
     loaded.surfaceConfig.motionConfiguration shouldBe configured.surfaceConfig.motionConfiguration.map(configuration =>
       configuration.withFallback(MotionConfig.fromLegacy(configured.surfaceConfig, configuration.baseline))
     )
@@ -825,19 +839,19 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     config.commandRunnerAnimation shouldBe com.serenity.animation.AnimationConfig.subtle
     config.uiAnimation shouldBe com.serenity.animation.AnimationConfig.smooth
     config.characterAnimation shouldBe None
-    ConfigManager.configToString(config) should include("ui.material = crystal")
-    ConfigManager.configToString(config) should include("ui.motion = reduced")
-    ConfigManager.configToString(config) should include("ui.motion.speed_scale = 1.75")
-    ConfigManager.configToString(config) should include("ui.motion.editor_text.speed_scale = 0.5")
-    ConfigManager.configToString(config) should include("ui.motion.command_runner.speed_scale = 2.25")
-    ConfigManager.configToString(config) should include("ui.motion.ui.speed_scale = 1.25")
-    ConfigManager.configToString(config) should include("ui.motion.cursor.speed_scale = 0.75")
-    ConfigManager.configToString(config) should include("ui.motion.editor_text = typed")
-    ConfigManager.configToString(config) should include("ui.motion.panel_open = directional")
-    ConfigManager.configToString(config) should include("ui.motion.panel_close = off")
-    ConfigManager.configToString(config) should include("ui.motion.command_runner_reveal = outline")
-    ConfigManager.configToString(config) should include("ui.motion.command_runner = subtle")
-    ConfigManager.configToString(config) should include("ui.motion.ui = smooth")
+    val serialized = ConfigManager.configToString(config)
+    serialized should include("ui.material = crystal")
+    serialized should include("ui.motion = reduced")
+    serialized should include("ui.motion.accessibility = standard")
+    serialized should include("ui.motion.family.editor_text.transition = typed")
+    serialized should include("ui.motion.family.editor_text.speed_scale = 0.5")
+    serialized should include("ui.motion.family.command_surfaces.transition = outline")
+    serialized should include("ui.motion.family.command_surfaces.animation = subtle")
+    serialized should include("ui.motion.family.command_surfaces.speed_scale = 2.25")
+    serialized should include("ui.motion.family.pinned_panels.open_transition = directional")
+    serialized should include("ui.motion.family.pinned_panels.close_transition = off")
+    serialized should include("ui.motion.family.ui_transitions.animation = smooth")
+    serialized should include("ui.motion.family.cursor.speed_scale = 0.75")
   }
 
   it should "load and write the post-processing effect" in {

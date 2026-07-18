@@ -249,18 +249,6 @@ object ConfigManager:
              |character.animation.duration_ms = ${anim.durationMs}
              |character.animation.steps = ${anim.steps}""".stripMargin)
       else ""
-    val commandRunnerAnimationSetting = config.commandRunnerAnimation match
-      case None                                             => "none"
-      case Some(anim) if anim == AnimationConfig.quick.get  => "quick"
-      case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
-      case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
-      case Some(_)                                          => "custom"
-    val uiAnimationSetting = config.uiAnimation match
-      case None                                             => "none"
-      case Some(anim) if anim == AnimationConfig.quick.get  => "quick"
-      case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
-      case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
-      case Some(_)                                          => "custom"
     def motionAnimationSetting(animation: Option[AnimationConfig]): String =
       animation match
         case None                                             => "none"
@@ -345,17 +333,6 @@ object ConfigManager:
        |# Post-processing: off, scanlines, glow
        |ui.post_processing = ${config.postProcessingEffect.configKey}
        |ui.motion = ${motionConfiguration.baseline.configKey}
-       |ui.motion.speed_scale = ${config.elementTransitionSpeedScale}
-       |ui.motion.editor_text.speed_scale = ${config.effectiveEditorTextTransitionSpeedScale}
-        |ui.motion.command_runner.speed_scale = ${config.effectiveCommandRunnerTransitionSpeedScale}
-       |ui.motion.ui.speed_scale = ${config.effectiveUiTransitionSpeedScale}
-       |ui.motion.cursor.speed_scale = ${config.effectiveCursorTransitionSpeedScale}
-        |ui.motion.command_runner = $commandRunnerAnimationSetting
-        |ui.motion.command_runner_reveal = ${transitionKindConfigKey(config.commandRunnerTransitionKind.getOrElse(TransitionKind.Fade))}
-        |ui.motion.ui = $uiAnimationSetting
-       |ui.motion.editor_text = ${transitionKindConfigKey(config.editorInsertionTransitionKind)}
-       |ui.motion.panel_open = ${transitionKindConfigKey(config.panelOpenTransitionKind.getOrElse(TransitionKind.OutlineThenContent))}
-       |ui.motion.panel_close = ${transitionKindConfigKey(config.panelCloseTransitionKind.getOrElse(TransitionKind.Fade))}
        |ui.motion.accessibility = ${motionConfiguration.accessibility.configKey}
        |$motionFamilySettings
        |
