@@ -712,13 +712,13 @@ object LayoutEngine:
   private def floatingCursorGapRows(state: AppState, content: SurfaceContent): Int =
     content match
       case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
-        math.ceil(state.config.commandRunnerCursorGapRows.getOrElse(floatingStackGapRows(state))).toInt
+        math.floor(state.config.commandRunnerCursorGapRows.getOrElse(floatingStackGapRows(state))).toInt
       case _ => floatingStackGapRows(state)
 
   private def floatingStackGapRows(state: AppState): Int =
     math.max(
       InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows,
-      math.ceil(math.max(0.0, state.config.uiElementGap)).toInt
+      math.floor(math.max(0.0, state.config.uiElementGap)).toInt
     )
 
   private def calculateFloatingSurfaceHeight(
