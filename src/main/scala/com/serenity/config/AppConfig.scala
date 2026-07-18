@@ -915,6 +915,7 @@ case class SurfaceConfig(
     commandRunnerTransitionKind: Option[TransitionKind] = None,
     panelOpenTransitionKind: Option[TransitionKind] = None,
     panelCloseTransitionKind: Option[TransitionKind] = None,
+    motionConfiguration: Option[MotionConfig] = None,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     viewportSizing: ViewportSizing = ViewportSizing()
 ):
@@ -928,6 +929,7 @@ case class SurfaceConfig(
         commandRunnerTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
       uiTransitionSpeedScale = uiTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
       cursorTransitionSpeedScale = cursorTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
+      motionConfiguration = motionConfiguration.map(_.normalized),
       commandRunnerVisibleRows = commandRunnerVisibleRows.map(AppConfig.clampCommandRunnerVisibleRows),
       commandRunnerItemGapRows = AppConfig.clampCommandRunnerItemGapRows(commandRunnerItemGapRows),
       commandRunnerCursorGapRows = commandRunnerCursorGapRows.map(AppConfig.clampCommandRunnerCursorGapRows),
@@ -947,6 +949,10 @@ case class SurfaceConfig(
   def effectiveCursorTransitionSpeedScale: Double =
     cursorTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
 
+  /** Resolve every runtime family from one hierarchy, preserving legacy fields when no hierarchy has been saved yet. */
+  def effectiveMotionConfiguration: EffectiveMotionConfig =
+    motionConfiguration.getOrElse(MotionConfig.fromLegacy(this)).effective
+
   def effectiveCommandRunnerTransitionKind: TransitionKind =
     commandRunnerTransitionKind.getOrElse(TransitionKind.Fade)
 
@@ -957,7 +963,8 @@ case class SurfaceConfig(
     panelCloseTransitionKind.getOrElse(TransitionKind.Fade)
 
   def elementTransitionSettings: ElementTransitionSettings =
-    val baseSettings = motionPreset.elementTransitionSettings
+    val uiMotion = effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
+    val baseSettings = if uiMotion.enabled then motionPreset.elementTransitionSettings else ElementTransitionSettings.disabled
     if !baseSettings.enabled then baseSettings
     else
       val transitionOverrides =
@@ -969,17 +976,18 @@ case class SurfaceConfig(
         ).flatten.toMap
 
       baseSettings.copy(
-        speedScale = effectiveUiTransitionSpeedScale,
+        speedScale = uiMotion.speedScale,
         overrides = baseSettings.overrides ++ transitionOverrides
       )
 
   def editorInsertionTransitionSettings: ElementTransitionSettings =
-    val baseSettings = motionPreset.elementTransitionSettings
+    val editorMotion = effectiveMotionConfiguration.family(MotionFamily.EditorText)
+    val baseSettings = if editorMotion.enabled then motionPreset.elementTransitionSettings else ElementTransitionSettings.disabled
     if !baseSettings.enabled then baseSettings
     else
       baseSettings.copy(
-        speedScale = effectiveEditorTextTransitionSpeedScale,
-        overrides = baseSettings.overrides ++ Map(TransitionScope.EditorInsertion -> editorInsertionTransitionKind)
+        speedScale = editorMotion.speedScale,
+        overrides = baseSettings.overrides ++ Map(TransitionScope.EditorInsertion -> editorMotion.transitionKind)
       )
 
 object SurfaceConfig:
@@ -1407,6 +1415,7 @@ case class AppConfig(
     commandRunnerTransitionKind: Option[TransitionKind] = None,
     panelOpenTransitionKind: Option[TransitionKind] = None,
     panelCloseTransitionKind: Option[TransitionKind] = None,
+    motionConfiguration: Option[MotionConfig] = None,
     cursorConfig: CursorConfig = CursorConfig(),
     windowConfig: WindowConfig = WindowConfig(),
     documentConfig: DocumentConfig = DocumentConfig(),
@@ -1487,6 +1496,7 @@ case class AppConfig(
       commandRunnerTransitionKind = commandRunnerTransitionKind,
       panelOpenTransitionKind = panelOpenTransitionKind,
       panelCloseTransitionKind = panelCloseTransitionKind,
+      motionConfiguration = motionConfiguration,
       textAreaInsets = textAreaInsets,
       viewportSizing = viewportSizing
     )
@@ -1520,6 +1530,7 @@ case class AppConfig(
       commandRunnerTransitionKind = normalized.commandRunnerTransitionKind,
       panelOpenTransitionKind = normalized.panelOpenTransitionKind,
       panelCloseTransitionKind = normalized.panelCloseTransitionKind,
+      motionConfiguration = normalized.motionConfiguration,
       textAreaInsets = normalized.textAreaInsets,
       viewportSizing = normalized.viewportSizing
     )
@@ -1675,6 +1686,7 @@ case class AppConfig(
         copy(characterAnimation = preset.animationConfig).withSurfaceConfig(
           surfaceConfig.copy(
             motionPreset = preset,
+            motionConfiguration = None,
             commandRunnerAnimation = preset.animationConfig,
             uiAnimation = preset.animationConfig
           )
@@ -1689,19 +1701,22 @@ case class AppConfig(
     surfaceConfig.editorInsertionTransitionSettings
 
   def withElementTransitionSpeedScale(scale: Double): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(elementTransitionSpeedScale = scale))
+    withSurfaceConfig(surfaceConfig.copy(elementTransitionSpeedScale = scale, motionConfiguration = None))
 
   def withEditorTextTransitionSpeedScale(scale: Option[Double]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(editorTextTransitionSpeedScale = scale))
+    withSurfaceConfig(surfaceConfig.copy(editorTextTransitionSpeedScale = scale, motionConfiguration = None))
 
   def withCommandRunnerTransitionSpeedScale(scale: Option[Double]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(commandRunnerTransitionSpeedScale = scale))
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerTransitionSpeedScale = scale, motionConfiguration = None))
 
   def withUiTransitionSpeedScale(scale: Option[Double]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(uiTransitionSpeedScale = scale))
+    withSurfaceConfig(surfaceConfig.copy(uiTransitionSpeedScale = scale, motionConfiguration = None))
 
   def withCursorTransitionSpeedScale(scale: Option[Double]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(cursorTransitionSpeedScale = scale))
+    withSurfaceConfig(surfaceConfig.copy(cursorTransitionSpeedScale = scale, motionConfiguration = None))
+
+  def withMotionConfiguration(configuration: MotionConfig): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(motionConfiguration = Some(configuration.normalized)))
 
   def withCommandRunnerAnimation(animation: Option[AnimationConfig]): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(commandRunnerAnimation = animation))
@@ -1735,15 +1750,18 @@ case class AppConfig(
 
   /** Character insertion animation after applying the effective editor text motion speed. */
   def scaledCharacterAnimation: Option[AnimationConfig] =
-    AppConfig.scaledAnimation(characterAnimation, effectiveEditorTextTransitionSpeedScale)
+    val motion = surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.EditorText)
+    Option.when(motion.enabled)(AppConfig.scaledAnimation(characterAnimation, motion.speedScale)).flatten
 
   /** Command runner animation after applying the effective command runner motion speed. */
   def scaledCommandRunnerAnimation: Option[AnimationConfig] =
-    AppConfig.scaledAnimation(commandRunnerAnimation, effectiveCommandRunnerTransitionSpeedScale)
+    val motion = surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.CommandSurfaces)
+    Option.when(motion.enabled)(AppConfig.scaledAnimation(commandRunnerAnimation, motion.speedScale)).flatten
 
   /** General UI animation after applying the effective UI motion speed. */
   def scaledUiAnimation: Option[AnimationConfig] =
-    AppConfig.scaledAnimation(uiAnimation, effectiveUiTransitionSpeedScale)
+    val motion = surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
+    Option.when(motion.enabled)(AppConfig.scaledAnimation(uiAnimation, motion.speedScale)).flatten
 
   def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(editorInsertionTransitionKind = kind))

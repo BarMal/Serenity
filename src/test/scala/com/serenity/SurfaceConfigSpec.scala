@@ -59,6 +59,21 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     config.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.TextOnly)
   }
 
+  it should "apply accessibility motion overrides after independent family settings" in {
+    val editor = MotionFamilyConfig(true, TransitionKind.TypedText, None, 0.5)
+    val panels = MotionFamilyConfig(true, TransitionKind.OutlineThenContent, None, 1.5)
+    val config = AppConfig.default.withMotionConfiguration(
+      MotionConfig(
+        MotionAccessibility.Off,
+        MotionPreset.Smooth,
+        Map(MotionFamily.EditorText -> editor, MotionFamily.PinnedPanels -> panels)
+      )
+    )
+
+    config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.EditorText).enabled shouldBe false
+    config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).enabled shouldBe false
+  }
+
   it should "default the contextual toolbar display mode to icons and text" in
     AppConfig.default.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.IconAndText)
 

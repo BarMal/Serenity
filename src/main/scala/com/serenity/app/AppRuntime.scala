@@ -30,8 +30,9 @@ object AppRuntime:
     FiniteDuration(NanosPerSecond / target.framesPerSecond.toLong, NANOSECONDS)
 
   private[serenity] def cursorIdleInterval(config: AppConfig): Option[FiniteDuration] =
-    val scale = AppConfig.clampElementTransitionSpeedScale(config.effectiveCursorTransitionSpeedScale)
-    Option.when(scale > 0.0)(
+    val cursorMotion = config.surfaceConfig.effectiveMotionConfiguration.family(com.serenity.config.MotionFamily.Cursor)
+    val scale        = AppConfig.clampElementTransitionSpeedScale(cursorMotion.speedScale)
+    Option.when(cursorMotion.enabled && scale > 0.0)(
       FiniteDuration(
         math.max(1L, math.round(DefaultCursorIdleInterval.toNanos.toDouble * scale)),
         NANOSECONDS
