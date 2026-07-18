@@ -1,12 +1,11 @@
 package com.serenity
 
-import java.awt.Font
-
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.CommandRunner
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -244,8 +243,8 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     val geometry = shiftedCommandRunnerGeometry(state)
     val rect     = geometry.itemRects.lift(displayedItemRow).getOrElse(fail(s"Expected item $displayedItemRow"))
     Point(
-      x = math.floor(rect.x / uiMetrics(state).charWidth).toInt,
-      y = math.floor(rect.y / uiMetrics(state).lineHeight).toInt,
+      x = math.floor(rect.x / floatingMetrics(state).charWidth).toInt,
+      y = math.floor(rect.y / floatingMetrics(state).lineHeight).toInt,
       pixelX = math.round(rect.x + 1.0).toInt,
       pixelY = math.round(rect.y + rect.height / 2.0).toInt
     )
@@ -256,8 +255,8 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     val next   = geometry.itemRects.lift(displayedItemRow + 1).getOrElse(fail(s"Expected item ${displayedItemRow + 1}"))
     val pixelY = math.round((current.y + current.height + next.y) / 2.0).toInt
     Point(
-      x = math.floor(current.x / uiMetrics(state).charWidth).toInt,
-      y = math.floor(pixelY.toDouble / uiMetrics(state).lineHeight).toInt,
+      x = math.floor(current.x / floatingMetrics(state).charWidth).toInt,
+      y = math.floor(pixelY.toDouble / floatingMetrics(state).lineHeight).toInt,
       pixelX = math.round(current.x + 1.0).toInt,
       pixelY = pixelY
     )
@@ -271,7 +270,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
       .overlayContentRect(surface.id)
       .getOrElse(fail("Expected command runner content rect"))
     val runner  = runnerFrom(state)
-    val metrics = uiMetrics(state)
+    val metrics = floatingMetrics(state)
     FloatingSurfaceGeometry
       .fromCells(
         contentRect,
@@ -287,10 +286,8 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
         FloatingSurfaceGeometry.signedRowOffsetPixels(layout.floatingOverlayOffsetRows(surface.id), metrics)
       )
 
-  private def uiMetrics(state: AppState): CellMetrics =
-    CellMetrics.fromFont(
-      Font(state.config.fontConfig.uiFontFamily, Font.PLAIN, state.config.fontConfig.uiFontSize.toInt)
-    )
+  private def floatingMetrics(state: AppState): CellMetrics =
+    CellMetrics.fromFont(FontLoader.previewCodeFont(state.config.fontConfig))
 
   private def openLanguageSubmenu(stateManager: com.serenity.state.manager.StateManager): Unit =
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
