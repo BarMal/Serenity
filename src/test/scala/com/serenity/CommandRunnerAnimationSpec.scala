@@ -86,8 +86,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       CommandIntent.SetMotionAccessibility(MotionAccessibility.Reduced),
       CommandIntent.SetMotionAccessibility(MotionAccessibility.Off),
       CommandIntent.SetMotionPreset(MotionPreset.Reduced),
-      CommandIntent.SetElementTransitionSpeedScale(0.0),
-      CommandIntent.SetEditorTextTransitionSpeedScale(0.0)
+      CommandIntent.SetElementTransitionSpeedScale(0.0)
     ).foreach { intent =>
       val sm = createStateManager()
       sm.updateState(_.copy(config = AppConfig.withTestAnimations)).unsafeRunSync()
@@ -120,6 +119,31 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
       sm.advanceAnimationsOnTick().unsafeRunSync() shouldBe false
     }
+
+  it should "cancel only editor animations when the editor text family is disabled" in {
+    val sm = createStateManager()
+    sm.updateState(_.copy(config = AppConfig.withTestAnimations)).unsafeRunSync()
+    sm.applyEvent(InsertChar('a')).unsafeRunSync()
+    sm.updateState(state => state.copy(themeTransition = Some(ThemeTransition(state.theme, 0, 2)))).unsafeRunSync()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    advanceToVisible(sm)
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "editor-text-speed-scale",
+        "Set editor text speed scale",
+        CommandIntent.SetEditorTextTransitionSpeedScale(0.0),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    state.buffers.values.foreach(_.animations.animations shouldBe Map.empty)
+    state.themeTransition shouldBe defined
+    state.surfaceAnimations should not be empty
+    state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
+  }
 
   it should "scale command runner fade length with the global animation speed" in {
     val sm = createStateManager()

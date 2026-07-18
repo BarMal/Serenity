@@ -208,12 +208,11 @@ final private[manager] class StateManagerEffectHandlers(
   private def updateMotionConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
-    updateConfigWithEditedPresetDraft(
-      update,
-      markEditedUiPresetDraftFromCommandRunner
-    ).flatTap { config =>
-      if config.surfaceConfig.effectiveMotionConfiguration.families.values.exists(!_.enabled) then cancelActiveMotion()
-      else IO.unit
+    stateRef.get.flatMap { previousState =>
+      updateConfigWithEditedPresetDraft(
+        update,
+        markEditedUiPresetDraftFromCommandRunner
+      ).flatTap(cancelDisabledMotion(previousState.config, _))
     }
 
   private def updateMotionAccessibility(
@@ -223,17 +222,65 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def cancelActiveMotion(): IO[Unit] =
     stateRef.update(state =>
-      val buffers = state.buffers.view.mapValues { buffer =>
-        val animations = buffer.animations.clearAll()
-        if animations eq buffer.animations then buffer else buffer.copy(animations = animations)
-      }.toMap
       state.copy(
-        buffers = buffers,
+        buffers = clearBufferAnimations(state),
         themeTransition = None,
         uiSurfaces = state.uiSurfaces.filterNot(_.content.isInstanceOf[SurfaceContent.GhostOverlay]),
         surfaceAnimations = Map.empty
       )
     )
+
+  private def cancelDisabledMotion(
+    previous: com.serenity.config.AppConfig,
+    current: com.serenity.config.AppConfig
+  ): IO[Unit] =
+    val previousFamilies = previous.surfaceConfig.effectiveMotionConfiguration
+    val currentFamilies  = current.surfaceConfig.effectiveMotionConfiguration
+    if currentFamilies.families.values.forall(!_.enabled) && previousFamilies.families.values.exists(_.enabled) then
+      cancelActiveMotion()
+    else
+      com.serenity.config.MotionFamily.values.toList
+        .filter(family => previousFamilies.family(family).enabled && !currentFamilies.family(family).enabled)
+        .traverse_(cancelMotionFamily)
+
+  private def cancelMotionFamily(family: com.serenity.config.MotionFamily): IO[Unit] =
+    family match
+      case com.serenity.config.MotionFamily.EditorText =>
+        stateRef.update(state => state.copy(buffers = clearBufferAnimations(state)))
+      case com.serenity.config.MotionFamily.CommandSurfaces =>
+        cancelSurfaceMotion(isCommandSurface)
+      case com.serenity.config.MotionFamily.PinnedPanels =>
+        cancelSurfaceMotion(_.presentation.isInstanceOf[SurfacePresentation.Pinned])
+      case com.serenity.config.MotionFamily.UiTransitions =>
+        stateRef.update(_.copy(themeTransition = None))
+      case com.serenity.config.MotionFamily.Cursor =>
+        IO.unit
+
+  private def clearBufferAnimations(state: AppState): Map[BufferId, Buffer] =
+    state.buffers.view.mapValues { buffer =>
+      val animations = buffer.animations.clearAll()
+      if animations eq buffer.animations then buffer else buffer.copy(animations = animations)
+    }.toMap
+
+  private def cancelSurfaceMotion(matches: UiSurface => Boolean): IO[Unit] =
+    stateRef.update { state =>
+      val matchingIds = state.uiSurfaces.collect { case surface if matches(surface) => surface.id }.toSet
+      state.copy(
+        uiSurfaces = state.uiSurfaces.filterNot(surface =>
+          matches(surface) && surface.content.isInstanceOf[SurfaceContent.GhostOverlay]
+        ),
+        surfaceAnimations = state.surfaceAnimations.filterNot((surfaceId, _) => matchingIds.contains(surfaceId))
+      )
+    }
+
+  private def isCommandSurface(surface: UiSurface): Boolean =
+    surface.content match
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
+      case SurfaceContent.GhostOverlay(content, _) =>
+        content match
+          case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
+          case _                                                                                => false
+      case _ => false
 
   private def updateCustomMotionConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
