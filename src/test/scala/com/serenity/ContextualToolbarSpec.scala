@@ -1078,6 +1078,43 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     afterClick.activeCursorPosition shouldBe cursorBefore
   }
 
+  it should "ignore fractional toolbar separator drags before editor targeting" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-fractional-separator-drag")
+
+    stateManager
+      .updateState(state =>
+        state.copy(
+          config = state.config
+            .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
+            .withUiElementGap(0.5)
+        )
+      )
+      .unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(78, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val before         = stateManager.getCurrentState.unsafeRunSync()
+    val separatorPoint = fractionalToolbarPoint(before, toolbarSeparatorPoint(before, separatorIndex = 0))
+
+    stateManager
+      .applyEvent(
+        MouseDrag(
+          separatorPoint.x,
+          separatorPoint.y,
+          pixelX = Some(separatorPoint.pixelX),
+          pixelY = Some(separatorPoint.pixelY)
+        )
+      )
+      .unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.activeCursorPosition shouldBe before.activeCursorPosition
+    after.buffers(activeBufferId(after)).primarySelection shouldBe before
+      .buffers(activeBufferId(before))
+      .primarySelection
+  }
+
   it should "render icon-font glyphs alongside labels in IconAndText mode" in {
     val stateManager = createStateManager("ContextualToolbarSpec-rendered-icon-and-text")
     val viewport     = ViewportSize(120, 30)

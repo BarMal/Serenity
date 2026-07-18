@@ -900,37 +900,39 @@ final private[manager] class StateManagerEventPipeline(
           handlePinnedPanelResizeDrag(drag, state).flatMap {
             case true => cats.effect.IO.unit
             case false =>
-              resolveMouseTarget(drag, state).flatMap {
-                _.fold(cats.effect.IO.unit) { (paneId, buffer, draggedCursor) =>
-                  stateRef.update { s =>
-                    s.buffers.get(buffer.id) match
-                      case Some(current) =>
-                        val anchor =
-                          current.primarySelection
-                            .map(_.anchor)
-                            .orElse(current.cursors.headOption)
-                            .getOrElse(draggedCursor)
-                        val selection =
-                          Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
-                        s.copy(
-                          buffers = s.buffers.updated(
-                            buffer.id,
-                            current.copy(
-                              cursors = List(draggedCursor),
-                              selection = selection,
-                              selections = Nil,
-                              preferredColumn = Some(draggedCursor.column),
-                              preferredXPx = None,
-                              multiCursorVerticalStates = Nil
-                            )
-                          ),
-                          focus = Focus.EditorPane(paneId),
-                          layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-                        )
-                      case None => s
+              if isInsideFloatingSurface(drag, state) then cats.effect.IO.unit
+              else
+                resolveMouseTarget(drag, state).flatMap {
+                  _.fold(cats.effect.IO.unit) { (paneId, buffer, draggedCursor) =>
+                    stateRef.update { s =>
+                      s.buffers.get(buffer.id) match
+                        case Some(current) =>
+                          val anchor =
+                            current.primarySelection
+                              .map(_.anchor)
+                              .orElse(current.cursors.headOption)
+                              .getOrElse(draggedCursor)
+                          val selection =
+                            Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
+                          s.copy(
+                            buffers = s.buffers.updated(
+                              buffer.id,
+                              current.copy(
+                                cursors = List(draggedCursor),
+                                selection = selection,
+                                selections = Nil,
+                                preferredColumn = Some(draggedCursor.column),
+                                preferredXPx = None,
+                                multiCursorVerticalStates = Nil
+                              )
+                            ),
+                            focus = Focus.EditorPane(paneId),
+                            layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                          )
+                        case None => s
+                    }
                   }
                 }
-              }
           }
       }
 
