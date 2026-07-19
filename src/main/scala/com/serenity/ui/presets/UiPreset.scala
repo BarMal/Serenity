@@ -14,10 +14,10 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
+import io.circe.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.parser.decode
 import io.circe.syntax.*
-import io.circe.{Decoder, Encoder, JsonObject}
 
 case class UiPreset(
     name: String,
@@ -25,7 +25,8 @@ case class UiPreset(
     themeName: String,
     pinnedPanels: List[UiPreset.PinnedPanel],
     targetEditorPaneCount: Option[Int] = None,
-    unknownFields: JsonObject = JsonObject.empty
+    unknownFields: JsonObject = JsonObject.empty,
+    configUnknownFields: JsonObject = JsonObject.empty
 )
 
 /** The authoritative, unsaved workspace edit session for a UI preset. */
@@ -134,6 +135,21 @@ object UiPreset:
 
   private def patchTypographyConfig(base: AppConfig, source: AppConfig): AppConfig =
     base.withEditorConfig(base.editorConfig.copy(fontConfig = source.editorConfig.fontConfig))
+
+  private def unknownJsonFields(raw: JsonObject, known: JsonObject): JsonObject =
+    JsonObject.fromIterable(
+      raw.toIterable.flatMap {
+        case (key, rawValue) =>
+          known(key) match
+            case None => Some(key -> rawValue)
+            case Some(knownValue) =>
+              (rawValue.asObject, knownValue.asObject) match
+                case (Some(rawObject), Some(knownObject)) =>
+                  val nestedUnknown = unknownJsonFields(rawObject, knownObject)
+                  Option.when(nestedUnknown.nonEmpty)(key -> Json.fromJsonObject(nestedUnknown))
+                case _ => None
+      }
+    )
 
   case class Preview(name: String, hint: String)
 
@@ -539,7 +555,15 @@ object UiPreset:
   private given rawUiPresetEncoder: Encoder.AsObject[UiPreset] = deriveEncoder
 
   given Encoder[UiPreset] = Encoder.AsObject.instance { preset =>
-    preset.unknownFields.deepMerge(rawUiPresetEncoder.encodeObject(preset).remove("unknownFields"))
+    val encodedConfig = Json
+      .fromJsonObject(preset.configUnknownFields)
+      .deepMerge(preset.config.asJson)
+    val encodedPreset = rawUiPresetEncoder
+      .encodeObject(preset)
+      .remove("unknownFields")
+      .remove("configUnknownFields")
+      .add("config", encodedConfig)
+    preset.unknownFields.deepMerge(encodedPreset)
   }
 
   given Decoder[UiPreset] = Decoder.instance { cursor =>
@@ -554,7 +578,10 @@ object UiPreset:
       val unknown = cursor.value.asObject.fold(JsonObject.empty)(objectValue =>
         JsonObject.fromIterable(objectValue.toIterable.filterNot((key, _) => knownKeys.contains(key)))
       )
-      UiPreset(name, config, themeName, pinnedPanels, targetEditorPaneCount, unknown)
+      val configUnknownFields = cursor.downField("config").focus.flatMap(_.asObject).fold(JsonObject.empty) { rawConfig =>
+        unknownJsonFields(rawConfig, config.asJson.asObject.getOrElse(JsonObject.empty))
+      }
+      UiPreset(name, config, themeName, pinnedPanels, targetEditorPaneCount, unknown, configUnknownFields)
   }
 
 case class UiPresetIndex(presets: List[UiPreset], unknownFields: JsonObject = JsonObject.empty):
@@ -562,7 +589,16 @@ case class UiPresetIndex(presets: List[UiPreset], unknownFields: JsonObject = Js
   def upsert(preset: UiPreset): UiPresetIndex =
     val existing = find(preset.name)
     val preserved =
-      preset.copy(unknownFields = existing.fold(preset.unknownFields)(_.unknownFields.deepMerge(preset.unknownFields)))
+      preset.copy(
+        unknownFields = existing.fold(preset.unknownFields)(_.unknownFields.deepMerge(preset.unknownFields)),
+        configUnknownFields = existing.fold(preset.configUnknownFields)(existing =>
+          Json
+            .fromJsonObject(existing.configUnknownFields)
+            .deepMerge(Json.fromJsonObject(preset.configUnknownFields))
+            .asObject
+            .getOrElse(JsonObject.empty)
+        )
+      )
     copy(presets = presets.filterNot(item => UiPreset.nameKey(item.name) == UiPreset.nameKey(preset.name)) :+ preserved)
 
   def delete(name: String): UiPresetIndex =
