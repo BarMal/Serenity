@@ -140,8 +140,9 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     intrinsicWidth should be > editorWidth
     toolbar.width should be < (editorWidth * 3 / 4)
     rowGroups.map(_.map(_.id)) shouldBe List(
-      List("bold", "italic", "underline", "font-family", "font-family-text", "font-size"),
-      List("color", "color-hex", "paragraph-role", "align-left", "align-center", "align-right", "align-justify")
+      List("bold", "italic", "underline"),
+      List("font-family", "font-family-text", "font-size", "color", "color-hex"),
+      List("paragraph-role", "align-left", "align-center", "align-right", "align-justify")
     )
   }
 
@@ -189,7 +190,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     toolbar.width should be <= (editorWidth * 3 / 4)
   }
 
-  it should "wrap a nearly three-quarter-width toolbar into a compact palette" in {
+  it should "keep the default toolbar to half the active pane instead of a wide panel" in {
     val stateManager = createStateManager("ContextualToolbarSpec-wide-palette-regression")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(215, 30))).unsafeRunSync()
@@ -205,7 +206,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .map(_.width)
       .getOrElse(fail("Expected active content rect"))
 
-    toolbarRect(state).width should be <= (editorWidth * 2 / 3)
+    toolbarRect(state).width should be <= (editorWidth / 2) + 2
   }
 
   it should "keep a long font family from widening the compact toolbar to the pane" in {

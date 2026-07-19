@@ -372,7 +372,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val layout      = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val layout      = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
     val paneLayout  = LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId)
     val contentRect = paneLayout.contentRect
     val stack       = layout.belowCursorOverlayStack.toMap
