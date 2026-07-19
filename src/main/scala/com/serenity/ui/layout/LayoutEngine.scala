@@ -544,9 +544,13 @@ object LayoutEngine:
         case SurfaceContent.ContextualToolbar(_) => contentRect.contains(screenPosition.x, screenPosition.y)
         case _                                   => true
     yield
+      val horizontalAnchorX = toolbarSelectionEndScreenPosition(surface, buffer, contentRect, state)
+        .filter(_.y == screenPosition.y)
+        .map(selectionEnd => (screenPosition.x + selectionEnd.x) / 2)
+        .getOrElse(screenPosition.x)
       val overlayX = math.max(
         contentRect.x,
-        math.min(screenPosition.x - (preferredWidth / 2), contentRect.right - preferredWidth)
+        math.min(horizontalAnchorX - (preferredWidth / 2), contentRect.right - preferredWidth)
       )
       val preferredAboveY = screenPosition.y - finalHeight - gapRows
       val preferredBelowY = toolbarSelectionEndScreenPosition(surface, buffer, contentRect, state)
