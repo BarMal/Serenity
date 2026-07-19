@@ -973,7 +973,8 @@ final private[manager] class StateManagerEffectHandlers(
               (session.sourceName, session.sourceRevision) match
                 case (Some(source), Some(revision)) if UiPreset.nameKey(source) == UiPreset.nameKey(presetName) =>
                   uiPresetStore.replace(source, revision, preset).attempt
-                case _ => uiPresetStore.upsert(preset).attempt
+                case (None, _) => uiPresetStore.create(preset).attempt
+                case _         => uiPresetStore.upsert(preset).attempt
             case None => uiPresetStore.upsert(preset).attempt
           _ <- saved match
             case Left(error) =>

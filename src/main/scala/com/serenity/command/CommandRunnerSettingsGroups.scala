@@ -263,6 +263,7 @@ object CommandRunnerSettingsGroups:
       item.id == "ui-preset-save" ||
         item.id == "ui-preset-discard" ||
         item.id == "ui-preset-apply" ||
+        item.id == "ui-preset-edit" ||
         item.id == "ui-preset-duplicate" ||
         item.id == "ui-preset-delete" ||
         item.id == "ui-preset-reset"

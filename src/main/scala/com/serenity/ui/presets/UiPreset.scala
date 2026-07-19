@@ -607,6 +607,16 @@ class UiPresetStore private (path: Path):
   def upsert(preset: UiPreset): IO[Unit] =
     load().flatMap(index => IO.fromEither(validateForUpsert(preset, index)).flatMap(valid => save(index.upsert(valid))))
 
+  /** Creates a new custom preset and rejects any existing normalized name. */
+  def create(preset: UiPreset): IO[Unit] =
+    load().flatMap { index =>
+      IO.raiseWhen(index.find(preset.name).nonEmpty)(
+        new IllegalArgumentException(s"Preset name '${preset.name}' already exists")
+      ) >>
+        IO.fromEither(validateForUpsert(preset, index))
+          .flatMap(valid => save(index.copy(presets = index.presets :+ valid)))
+    }
+
   def delete(name: String): IO[Unit] =
     load().flatMap(index => save(index.delete(name)))
 

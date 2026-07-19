@@ -391,6 +391,44 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     com.serenity.ui.presets.UiPreset.builtIn("Writing") should not be empty
   }
 
+  it should "reject saving Create and Duplicate drafts over an existing preset" in {
+    val path     = Files.createTempDirectory("state-manager-ui-preset-draft-collision").resolve("ui-presets.json")
+    val store    = UiPresetStore(path)
+    val existing = UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Theme.dark.name, Nil)
+    val sm       = managerWithStore(store)
+    store.upsert(existing).unsafeRunSync()
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("create", "Create", CommandIntent.StartUiPresetDraft("Drafting"), CommandCategory.Settings)
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("save", "Save", CommandIntent.SaveUiPreset("Drafting"), CommandCategory.Settings)
+    ).unsafeRunSync()
+    store.find("Drafting").unsafeRunSync() shouldBe Some(existing)
+    commandRunnerState(sm).statusMessage.getOrElse(fail("save failure should be visible")) should include(
+      "Could not save Drafting"
+    )
+
+    sm.executeCommand(Command.typed("discard", "Discard", CommandIntent.DiscardUiPresetDraft, CommandCategory.Settings))
+      .unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "duplicate",
+        "Duplicate",
+        CommandIntent.DuplicateUiPreset("Writing", "Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("save", "Save", CommandIntent.SaveUiPreset("Drafting"), CommandCategory.Settings)
+    ).unsafeRunSync()
+    store.find("Drafting").unsafeRunSync() shouldBe Some(existing)
+    commandRunnerState(sm).statusMessage.getOrElse(fail("save failure should be visible")) should include(
+      "Could not save Drafting"
+    )
+  }
+
   it should "keep built-in presets immutable for rename commands" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-rename-built-in").resolve("ui-presets.json")
     val store = UiPresetStore(path)
