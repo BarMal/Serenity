@@ -46,6 +46,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     val savedMotion = driver.state.unsafeRunSync().config.motionPreset
     execute(driver, CommandIntent.SaveUiPreset("Scenario"))
+    val beforePreview = driver.renderFrame("before-preview-discard").unsafeRunSync()
     execute(driver, CommandIntent.SetMotionPreset(MotionPreset.Subtle))
     val preview = driver.renderFrame("preview").unsafeRunSync()
     driver.state.unsafeRunSync().config.motionPreset shouldBe MotionPreset.Subtle
@@ -56,11 +57,32 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     val discarded = driver.state.unsafeRunSync()
     discarded.config.backgroundStyle shouldBe BackgroundStyle.Solid
     discarded.config.motionPreset shouldBe savedMotion
+    beforePreview.evidence.layoutViolations shouldBe empty
+    driver.renderFrame("after-discard").unsafeRunSync().evidence.layoutViolations shouldBe empty
 
     val restarted = UiScenarioDriver.create("ui-preset-restarted", uiPresetStore = Some(store)).unsafeRunSync()
     execute(restarted, CommandIntent.ApplyUiPreset("Scenario"))
     restarted.state.unsafeRunSync().config.backgroundStyle shouldBe BackgroundStyle.Solid
     restarted.renderFrame("restarted").unsafeRunSync().evidence.layoutViolations shouldBe empty
+  }
+
+  it should "retain before preview and saved frame evidence when committing a preset draft" in {
+    val store  = UiPresetStore(Files.createTempDirectory("ui-scenario-preset-save").resolve("presets.json"))
+    val driver = UiScenarioDriver.create("ui-preset-preview-save", uiPresetStore = Some(store)).unsafeRunSync()
+
+    execute(driver, CommandIntent.SaveUiPreset("Scenario"))
+    val beforePreview = driver.renderFrame("before-preview-save").unsafeRunSync()
+    val savedMotion   = store.find("Scenario").unsafeRunSync().map(_.config.motionPreset)
+    execute(driver, CommandIntent.SetMotionPreset(MotionPreset.Subtle))
+    val preview = driver.renderFrame("preview-save").unsafeRunSync()
+    store.find("Scenario").unsafeRunSync().map(_.config.motionPreset) shouldBe savedMotion
+
+    execute(driver, CommandIntent.SaveUiPreset("Scenario"))
+    val saved = driver.renderFrame("after-save").unsafeRunSync()
+    store.find("Scenario").unsafeRunSync().map(_.config.motionPreset) shouldBe Some(MotionPreset.Subtle)
+    beforePreview.evidence.layoutViolations shouldBe empty
+    preview.evidence.layoutViolations shouldBe empty
+    saved.evidence.layoutViolations shouldBe empty
   }
 
   it should "recover after a preset persistence failure" in {

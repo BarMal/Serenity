@@ -496,6 +496,18 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     Files.exists(path) shouldBe false
   }
 
+  it should "reject renaming a preset to an existing normalized name" in {
+    val path  = Files.createTempDirectory("ui-preset-store-rename-collision").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val foo   = UiPreset("Foo", AppConfig.default, Theme.dark.name, Nil)
+    val bar   = UiPreset("Bar", AppConfig.default.withLineNumbers(false), Theme.dark.name, Nil)
+
+    store.upsert(foo).unsafeRunSync()
+    store.upsert(bar).unsafeRunSync()
+    store.rename("Foo", "Bar").attempt.unsafeRunSync().isLeft shouldBe true
+    store.load().unsafeRunSync().presets should contain theSameElementsInOrderAs List(foo, bar)
+  }
+
   it should "treat canonically equivalent Unicode names as one preset identity" in {
     val path       = Files.createTempDirectory("ui-preset-store-unicode").resolve("ui-presets.json")
     val store      = UiPresetStore(path)

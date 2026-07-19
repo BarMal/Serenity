@@ -626,6 +626,9 @@ class UiPresetStore private (path: Path):
         source <- IO.fromOption(index.find(sourceName))(
           new IllegalArgumentException(s"Preset '$sourceName' does not exist")
         )
+        _ <- IO.raiseWhen(index.find(targetName).exists(_ != source))(
+          new IllegalArgumentException(s"Preset name '$targetName' already exists")
+        )
         renamed <- IO.fromEither(
           validateForUpsert(source.copy(name = targetName), index.copy(presets = index.presets.filterNot(_ == source)))
         )
