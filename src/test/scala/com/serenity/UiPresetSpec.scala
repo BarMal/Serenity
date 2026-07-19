@@ -3,9 +3,9 @@ package com.serenity
 import java.awt.Font
 import java.nio.file.Files
 
-import _root_.io.circe.{Json, JsonObject}
 import _root_.io.circe.parser.decode
 import _root_.io.circe.syntax.*
+import _root_.io.circe.{Json, JsonObject}
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
 import com.serenity.animation.TransitionKind
