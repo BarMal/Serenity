@@ -1036,7 +1036,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       ContextualToolbar.displayText(toolbarButton(state, "underline"), ToolbarDisplayMode.IconOnly),
       ContextualToolbar.displayText(toolbarInput(state, "font-size"), ToolbarDisplayMode.IconOnly),
       ContextualToolbar.displayText(toolbarInput(state, "color-hex"), ToolbarDisplayMode.IconOnly),
-      ContextualToolbar.displayText(toolbarButton(state, "paragraph-role"), ToolbarDisplayMode.IconOnly)
+      ContextualToolbar.displayText(toolbarDropdown(state, "paragraph-role"), ToolbarDisplayMode.IconOnly)
     )
   }
 
@@ -1529,6 +1529,14 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
         case item: ContextualToolbarItem.Input if item.id == itemId => item
       }
       .getOrElse(fail(s"Expected toolbar input $itemId"))
+
+  private def toolbarDropdown(state: AppState, itemId: String): ContextualToolbarItem.Dropdown =
+    ContextualToolbar
+      .itemsFor(state)
+      .collectFirst {
+        case item: ContextualToolbarItem.Dropdown if item.id == itemId => item
+      }
+      .getOrElse(fail(s"Expected toolbar dropdown $itemId"))
 
   private def focusedToolbarItemId(state: AppState): String =
     val items = ContextualToolbar.itemsFor(state)
