@@ -4,7 +4,8 @@ import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
-import com.serenity.config.{BackgroundStyle, MotionPreset}
+import com.serenity.config.{BackgroundStyle, MaterialPreset, MotionPreset}
+import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
 import com.serenity.ui.presets.UiPresetStore
 import org.scalatest.flatspec.AnyFlatSpec
@@ -83,6 +84,39 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     beforePreview.evidence.layoutViolations shouldBe empty
     preview.evidence.layoutViolations shouldBe empty
     saved.evidence.layoutViolations shouldBe empty
+  }
+
+  it should "restore a dirty draft through the session path and discard it after reopening the runner" in {
+    val store  = UiPresetStore(Files.createTempDirectory("ui-scenario-dirty-restart").resolve("presets.json"))
+    val driver = UiScenarioDriver.create("ui-preset-dirty-restart", uiPresetStore = Some(store)).unsafeRunSync()
+    val baselineMaterial = driver.state.unsafeRunSync().config.materialPreset
+
+    driver.dispatch(ToggleCommandRunner).unsafeRunSync()
+    execute(driver, CommandIntent.StartUiPresetDraft("Restart Draft"))
+    execute(driver, CommandIntent.SetMaterialPreset(MaterialPreset.Solid))
+    val preview = driver.renderFrame("dirty-preview-before-restart").unsafeRunSync()
+    driver.stateManager.saveSession().unsafeRunSync()
+
+    val restored = driver.stateManager.loadSession().unsafeRunSync().getOrElse(fail("session should restore"))
+    driver.updateState(_ => restored).unsafeRunSync()
+    driver.dispatch(ToggleCommandRunner).unsafeRunSync()
+    val reopened      = driver.state.unsafeRunSync()
+    val reopenedFrame = driver.renderFrame("dirty-preview-after-restart").unsafeRunSync()
+
+    reopened.config.materialPreset shouldBe MaterialPreset.Solid
+    reopened.uiPresetEditSession.map(_.draftName) shouldBe Some("Restart Draft")
+    reopened.uiPresetEditSession.map(_.dirty) shouldBe Some(true)
+    store.find("Restart Draft").unsafeRunSync() shouldBe None
+    preview.evidence.layoutViolations shouldBe empty
+    reopenedFrame.evidence.layoutViolations shouldBe empty
+
+    execute(driver, CommandIntent.DiscardUiPresetDraft)
+    val discarded = driver.state.unsafeRunSync()
+
+    discarded.config.materialPreset shouldBe baselineMaterial
+    discarded.uiPresetEditSession shouldBe None
+    store.find("Restart Draft").unsafeRunSync() shouldBe None
+    driver.renderFrame("dirty-preview-after-discard").unsafeRunSync().evidence.layoutViolations shouldBe empty
   }
 
   it should "recover after a preset persistence failure" in {
