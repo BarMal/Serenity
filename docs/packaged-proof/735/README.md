@@ -2,7 +2,7 @@
 
 ## Artifact
 
-- Release commit: `3b98109b8d474c3da63321ffd617613d1565aeeb`
+- PR head: `f0d9cf7baa790de0e0b339ca8db87406c3041a16`
 - Packaged app: Linux `jpackage --type app-image`, version `1.0.783`
 - Assembly JAR SHA-256: `ee978527468101728101921764a4a3d494bee16d003147c46b0649188890be06`
 - App-image tar SHA-256: `12f7de134167673fd35921c4cf08edf31ca5d983bb3c13d2dafe70376a0bcf96`
@@ -10,14 +10,14 @@
 
 ## Isolated-home repro record
 
-The packaged executable was launched with a new `HOME` directory and no existing Serenity session. [startup.png](startup.png)
-shows the resulting fresh-session chooser; after starting a session and pressing `Ctrl+P`, [command-runner.png](command-runner.png)
-shows the packaged command runner. The images are retained with this record and have SHA-256 values recorded below.
+The packaged executable was launched under Linux/Xvfb and driven through the command runner. The retained Discard frames show a
+dirty `Discard Proof` draft after its material preview and the subsequent `Preset draft discarded. Workspace restored.` result.
+They replace the generic startup/runner images as transaction evidence.
 
 | Evidence | SHA-256 |
 | --- | --- |
-| `startup.png` | `691407df876c502e8cab798c56b44715f735c1c0622f796abe5295476bc6d0e5` |
-| `command-runner.png` | `e2a543b5def78f7c8cd7c1693cde85149cc2a9fff69e1e9103633783adf7470a` |
+| `preview-discard.png` | `fcca680f0108d0ecbffeaab78ae062b8118a89b4d92b37f0b568e938c932ad72` |
+| `discard-restored.png` | `83b58cacc23bc0350a627a217461aa06e3f2d91bb531e566a8125913cbb852df` |
 
 ## Transaction scenarios
 
@@ -33,5 +33,6 @@ Result: `testOnly com.serenity.UiPresetUiScenarioSpec` passed all 5 tests on thi
 emitted or retained: every rendered frame had an empty layout-violation set. The expected persistence-failure recovery
 case logs `FileAlreadyExistsException`; it is handled by the test and does not represent a scenario failure.
 
-The deterministic frame assertions are behavioral proof for the two flows; the screenshots above are the separate
-packaged-app visual proof required by the checklist.
+The deterministic frame assertions are behavioral proof for the two flows. The packaged Preview → Discard frames above
+are visual proof of that transaction. The packaged Preview → Save → restart capture is not claimed by this record: its
+automation run exits before the capture point and remains required acceptance work.
