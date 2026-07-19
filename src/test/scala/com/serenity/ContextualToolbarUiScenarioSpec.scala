@@ -31,6 +31,38 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
     closed.evidence.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
+  it should "render a wide default toolbar as two balanced rows with a material width margin" in {
+    val driver = UiScenarioDriver
+      .create(
+        "contextual-toolbar-wide-balanced",
+        UiScenarioEnvironment(viewport = com.serenity.ui.layout.ViewportSize(215, 30))
+      )
+      .unsafeRunSync()
+    driver
+      .updateState { state =>
+        val bufferId  = state.focusedBufferId.getOrElse(BufferId(0))
+        val selection = Selection(CursorPosition(0, 0), CursorPosition(0, 5))
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("alpha beta"),
+            selection = Some(selection),
+            cursors = List(selection.focus)
+          )
+        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+      }
+      .unsafeRunSync()
+    driver.dispatch(ToggleContextualToolbar).unsafeRunSync()
+
+    val rendered  = driver.renderFrame("wide-balanced").unsafeRunSync()
+    val surfaceId = rendered.evidence.surfaceRects.keys.headOption.getOrElse(fail("Expected toolbar"))
+    val toolbar   = rendered.evidence.surfaceRects(surfaceId)
+
+    toolbar.width should be <= (driver.environment.viewport.width * 2 / 3)
+    toolbarRows(driver) should have size 2
+    rendered.evidence.itemRects(surfaceId) should have size 2
+  }
+
   it should "exercise button, dropdown, input, and wrapped narrow navigation" in {
     val driver = UiScenarioDriver
       .create(
