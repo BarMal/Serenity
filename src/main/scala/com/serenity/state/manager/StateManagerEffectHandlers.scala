@@ -322,8 +322,10 @@ final private[manager] class StateManagerEffectHandlers(
   ): IO[com.serenity.config.AppConfig] =
     stateRef
       .modify { state =>
-        val newConfig    = update(state.config)
-        val draftSession = state.uiPresetEditSession.map(_.copy(dirty = true))
+        val newConfig = update(state.config)
+        val draftSession = state.uiPresetEditSession.map(session =>
+          session.copy(dirty = true, draft = session.draft.copy(config = newConfig, themeName = state.theme.name))
+        )
         val newState = withUpdatedRunnerConfig(
           state.copy(config = newConfig, uiPresetEditSession = draftSession),
           newConfig
@@ -355,8 +357,12 @@ final private[manager] class StateManagerEffectHandlers(
     stateRef.update { state =>
       state.uiPresetEditSession match
         case Some(session) =>
+          val updatedSession = session.copy(
+            dirty = true,
+            draft = UiPreset.capture(session.draftName, state, state.config.preferredWindowSize)
+          )
           updateCommandRunnerPresetContextInState(
-            state,
+            state.copy(uiPresetEditSession = Some(updatedSession)),
             Some(session.draftName),
             "Preset draft has unsaved changes. Save commits them; Discard restores the workspace."
           )
@@ -997,7 +1003,8 @@ final private[manager] class StateManagerEffectHandlers(
                         Some(presetName),
                         Some(UiPresetStore.revisionOf(preset)),
                         preset,
-                        state.theme
+                        state.theme,
+                        draft = preset
                       )
                     )
                   )
@@ -1025,7 +1032,15 @@ final private[manager] class StateManagerEffectHandlers(
             logger.error(error)("[PRESET] Window size capture failed").as(None)
           )
           baseline = UiPreset.capture(draftName, state, windowSize)
-          session  = UiPresetEditSession(UUID.randomUUID().toString, draftName, None, None, baseline, state.theme)
+          session = UiPresetEditSession(
+            UUID.randomUUID().toString,
+            draftName,
+            None,
+            None,
+            baseline,
+            state.theme,
+            draft = baseline
+          )
           _ <- stateRef.update(_.copy(uiPresetEditSession = Some(session)))
           _ <- updateCommandRunnerPresetContext(
             Some(draftName),
@@ -1120,7 +1135,8 @@ final private[manager] class StateManagerEffectHandlers(
                       Some(preset.name),
                       Some(UiPresetStore.revisionOf(preset)),
                       baseline,
-                      state.theme
+                      state.theme,
+                      draft = preset
                     )
                     _ <- stateRef.update { current =>
                       withUpdatedRunnerConfig(UiPreset.applyToState(preset, current, theme), preset.config)
@@ -1195,7 +1211,8 @@ final private[manager] class StateManagerEffectHandlers(
                             None,
                             baseline,
                             state.theme,
-                            dirty = true
+                            dirty = true,
+                            draft = draft
                           )
                         )
                       )

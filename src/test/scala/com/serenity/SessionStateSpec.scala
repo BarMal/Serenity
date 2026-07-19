@@ -930,7 +930,16 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(
       config = AppConfig.default.withBackgroundStyle(BackgroundStyle.GlassLike),
       uiPresetEditSession = Some(
-        UiPresetEditSession("draft-1", "Drafting", Some("Drafting"), None, baseline, Theme.dark, dirty = true)
+        UiPresetEditSession(
+          "draft-1",
+          "Drafting",
+          Some("Drafting"),
+          None,
+          baseline,
+          Theme.dark,
+          dirty = true,
+          draft = baseline.copy(config = AppConfig.default.withBackgroundStyle(BackgroundStyle.GlassLike))
+        )
       )
     )
 
@@ -941,5 +950,37 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     restored.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
     restored.uiPresetEditSession.map(_.baseline.config.backgroundStyle) shouldBe Some(BackgroundStyle.Solid)
+    restored.uiPresetEditSession.map(_.draft.config.backgroundStyle) shouldBe Some(BackgroundStyle.GlassLike)
     restored.uiPresetEditSession.map(_.dirty) shouldBe Some(true)
+  }
+
+  it should "restore pre-transaction sessions without a persisted draft snapshot" in {
+    val baseline = UiPreset(
+      "Drafting",
+      AppConfig.default.withBackgroundStyle(BackgroundStyle.Solid),
+      Theme.dark.name,
+      Nil
+    )
+    val state = AppState.initial.copy(
+      uiPresetEditSession = Some(
+        UiPresetEditSession(
+          "draft-1",
+          "Drafting",
+          Some("Drafting"),
+          None,
+          baseline,
+          Theme.dark,
+          draft = baseline
+        )
+      )
+    )
+    val encoded = SessionState.fromAppState(state).asJson
+    val legacy = encoded.mapObject { session =>
+      val legacyDraft = encoded.hcursor.downField("uiPresetEditSession").focus.map(_.mapObject(_.remove("draft")))
+      session.add("uiPresetEditSession", legacyDraft.getOrElse(fail("draft session should encode")))
+    }
+
+    val restored = legacy.as[SessionState].toOption.getOrElse(fail("legacy session should decode"))
+
+    restored.uiPresetEditSession.map(_.draft) shouldBe Some(baseline)
   }

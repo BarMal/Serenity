@@ -3,9 +3,9 @@ package com.serenity
 import java.awt.Font
 import java.nio.file.Files
 
-import _root_.io.circe.Json
 import _root_.io.circe.parser.decode
 import _root_.io.circe.syntax.*
+import _root_.io.circe.{Json, JsonObject}
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
 import com.serenity.animation.TransitionKind
@@ -592,6 +592,32 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     store.replace("Focus", UiPresetStore.revisionOf(changed), changed).attempt.unsafeRunSync().isLeft shouldBe true
     store.delete("Focus Renamed").unsafeRunSync()
     store.replace("Focus", UiPresetStore.revisionOf(changed), changed).attempt.unsafeRunSync().isLeft shouldBe true
+  }
+
+  it should "preserve compatible unknown fields when saving an edited preset draft" in {
+    val path  = Files.createTempDirectory("ui-preset-store-replace-unknown").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val source = UiPreset(
+      "Focus",
+      AppConfig.default,
+      Theme.dark.name,
+      Nil,
+      unknownFields = JsonObject("futurePresetField" -> Json.fromString("keep")),
+      configUnknownFields = JsonObject("futureConfigField" -> Json.fromString("keep"))
+    )
+    val replacement = source.copy(
+      config = AppConfig.default.withLineNumbers(false),
+      unknownFields = JsonObject.empty,
+      configUnknownFields = JsonObject.empty
+    )
+
+    store.upsert(source).unsafeRunSync()
+    store.replace("Focus", UiPresetStore.revisionOf(source), replacement).unsafeRunSync()
+
+    val saved = store.find("Focus").unsafeRunSync().getOrElse(fail("replacement should be saved"))
+    saved.config.showLineNumbers shouldBe false
+    saved.unknownFields("futurePresetField") shouldBe Some(Json.fromString("keep"))
+    saved.configUnknownFields("futureConfigField") shouldBe Some(Json.fromString("keep"))
   }
 
   it should "allow only one concurrent replacement from the same source revision" in

@@ -1,7 +1,7 @@
 package com.serenity
 
 import java.awt.Font
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 
 import _root_.io.circe.syntax.*
 import cats.effect.unsafe.implicits.global
@@ -29,7 +29,8 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
   private def managerWithStore(
     store: UiPresetStore,
     windowSize: IO[Option[PreferredWindowSize]] = IO.pure(None),
-    onWindowSizeChanged: PreferredWindowSize => IO[Unit] = _ => IO.unit
+    onWindowSizeChanged: PreferredWindowSize => IO[Unit] = _ => IO.unit,
+    sessionRoot: Option[Path] = None
   ): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerUiPresetSpec"))
     StateManager
@@ -37,7 +38,8 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         logger,
         uiPresetStore = store,
         windowSizeProvider = windowSize,
-        onPreferredWindowSizeChanged = onWindowSizeChanged
+        onPreferredWindowSizeChanged = onWindowSizeChanged,
+        sessionRootOverride = sessionRoot
       )
       .unsafeRunSync()
 
@@ -1418,8 +1420,66 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     original shouldBe savedBefore
     copy.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
+    sm.getCurrentState.unsafeRunSync().uiPresetEditSession.map(_.draft.config.defaultDocumentMode) shouldBe
+      Some(DefaultDocumentMode.RichText)
     runner.editingPresetName shouldBe Some("Drafting Edited")
     runner.statusMessage shouldBe Some("Preset saved. Configure Drafting Edited.")
+  }
+
+  it should "restore a dirty preview draft through a session restart and discard it from a reopened runner" in {
+    val sessionRoot = Files.createTempDirectory("state-manager-ui-preset-restart")
+    val store       = UiPresetStore(sessionRoot.resolve("ui-presets.json"))
+    val sm          = managerWithStore(store, sessionRoot = Some(sessionRoot))
+    val baseline    = sm.getCurrentState.unsafeRunSync().config.materialPreset
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "create-draft",
+        "Create draft",
+        CommandIntent.StartUiPresetDraft("Restart Draft"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "preview-solid-material",
+        "Preview solid material",
+        CommandIntent.SetMaterialPreset(MaterialPreset.Solid),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.saveSession().unsafeRunSync()
+
+    val restarted = managerWithStore(store, sessionRoot = Some(sessionRoot))
+    restarted
+      .executeCommand(
+        Command.typed(
+          "restore-session",
+          "Restore session",
+          CommandIntent.StartupRestoreSession,
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+    restarted.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val restored = restarted.getCurrentState.unsafeRunSync()
+    restored.config.materialPreset shouldBe MaterialPreset.Solid
+    restored.uiPresetEditSession.map(_.draftName) shouldBe Some("Restart Draft")
+    restored.uiPresetEditSession.map(_.dirty) shouldBe Some(true)
+    store.find("Restart Draft").unsafeRunSync() shouldBe None
+
+    restarted
+      .executeCommand(
+        Command.typed("discard-draft", "Discard draft", CommandIntent.DiscardUiPresetDraft, CommandCategory.Settings)
+      )
+      .unsafeRunSync()
+
+    val discarded = restarted.getCurrentState.unsafeRunSync()
+    discarded.config.materialPreset shouldBe baseline
+    discarded.uiPresetEditSession shouldBe None
+    store.find("Restart Draft").unsafeRunSync() shouldBe None
   }
 
   it should "reset a custom built-in preset override to the built-in defaults" in {

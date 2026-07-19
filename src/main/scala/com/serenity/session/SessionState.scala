@@ -44,7 +44,8 @@ case class SessionUiPresetEditSession(
     sourceRevision: Option[String] = None,
     baseline: UiPreset,
     baselineThemeName: String,
-    dirty: Boolean
+    dirty: Boolean,
+    draft: UiPreset
 )
 
 /** Persistent representation of a buffer
@@ -225,7 +226,8 @@ object SessionUiPresetEditSession:
       sourceRevision = session.sourceRevision,
       baseline = session.baseline,
       baselineThemeName = session.baselineTheme.name,
-      dirty = session.dirty
+      dirty = session.dirty,
+      draft = session.draft
     )
 
   def toSession(session: SessionUiPresetEditSession, baselineTheme: Theme): UiPresetEditSession =
@@ -236,7 +238,8 @@ object SessionUiPresetEditSession:
       sourceRevision = session.sourceRevision,
       baseline = session.baseline,
       baselineTheme = baselineTheme,
-      dirty = session.dirty
+      dirty = session.dirty,
+      draft = session.draft
     )
 
 object SessionBuffer:
@@ -1006,7 +1009,28 @@ private def formatColor(color: Color): String =
 given Encoder[SessionState] = deriveEncoder
 
 given Encoder[SessionUiPresetEditSession] = deriveEncoder
-given Decoder[SessionUiPresetEditSession] = deriveDecoder
+
+given Decoder[SessionUiPresetEditSession] = Decoder.instance { cursor =>
+  for
+    id                <- cursor.get[String]("id")
+    draftName         <- cursor.get[String]("draftName")
+    sourceName        <- cursor.get[Option[String]]("sourceName")
+    sourceRevision    <- cursor.getOrElse[Option[String]]("sourceRevision")(None)
+    baseline          <- cursor.get[UiPreset]("baseline")
+    baselineThemeName <- cursor.get[String]("baselineThemeName")
+    dirty             <- cursor.get[Boolean]("dirty")
+    draft             <- cursor.getOrElse[UiPreset]("draft")(baseline)
+  yield SessionUiPresetEditSession(
+    id,
+    draftName,
+    sourceName,
+    sourceRevision,
+    baseline,
+    baselineThemeName,
+    dirty,
+    draft
+  )
+}
 
 given Encoder[SessionBuffer] = deriveEncoder
 given Decoder[SessionBuffer] = deriveDecoder
