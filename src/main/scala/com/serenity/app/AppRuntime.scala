@@ -256,7 +256,7 @@ object AppRuntime:
         .repeatEval(stateManager.getCurrentState)
         .evalMap { stateAtFrameStart =>
           for
-            interval = fastFrameInterval(stateAtFrameStart.config.renderFpsTarget)
+            interval <- IO.pure(fastFrameInterval(stateAtFrameStart.config.renderFpsTarget))
             _ <- IO.sleep(fastFrameDelay(hasActiveAnimations(stateAtFrameStart), interval))
             _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(checkResizeAndHandle)
             animationTicks <- animationTickCadence.modify(_.advance(interval))
