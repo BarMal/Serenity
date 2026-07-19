@@ -236,11 +236,20 @@ object AppRuntime:
         ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
         stateManager.applyEvent(event) >>
         ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
-        stateManager.getCurrentState
-          .flatMap(state => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))) >>
+        refreshFocusedInputTranslator(event, stateManager, inputRouter) >>
         resetCursorActivity(cursorVisible, breathIndex) >>
         requestFastRender
     }.drain
+
+  private def refreshFocusedInputTranslator(
+    event: Event,
+    stateManager: StateReader,
+    inputRouter: InputRouter[IO, Event]
+  ): IO[Unit] =
+    event match
+      case _: com.serenity.keystroke.events.TextInputEvent => IO.unit
+      case _ =>
+        stateManager.getCurrentState.flatMap(state => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state)))
 
   private def fastRenderPhase(
     stateManager: StateReader & AnimationTicker,
