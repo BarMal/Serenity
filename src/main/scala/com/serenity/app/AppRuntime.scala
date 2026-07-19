@@ -275,22 +275,25 @@ object AppRuntime:
       Stream
         .repeatEval(stateManager.getCurrentState)
         .zipWithIndex
-        .evalMap { case (stateAtFrameStart, frameIndex) =>
-          for
-            interval <- IO.pure(fastFrameInterval(stateAtFrameStart.config.renderFpsTarget))
-            _        <- IO.sleep(fastFrameDelay(interval, isInitialFrame = frameIndex == 0L))
-            _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(checkResizeAndHandle)
-            animationTicks <- animationTickCadence.modify(_.advance(interval))
-            active <- withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
-              advanceAnimationsForCadence(animationTicks, stateManager)
-            )
-            state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
-              stateManager.getCurrentState
-            )
-            _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(state)))(
-              renderFull(state, true, None)
-            )
-          yield active
+        .evalMap {
+          case (stateAtFrameStart, frameIndex) =>
+            for
+              interval <- IO.pure(fastFrameInterval(stateAtFrameStart.config.renderFpsTarget))
+              _        <- IO.sleep(fastFrameDelay(interval, isInitialFrame = frameIndex == 0L))
+              _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(
+                checkResizeAndHandle
+              )
+              animationTicks <- animationTickCadence.modify(_.advance(interval))
+              active <- withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
+                advanceAnimationsForCadence(animationTicks, stateManager)
+              )
+              state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
+                stateManager.getCurrentState
+              )
+              _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(state)))(
+                renderFull(state, true, None)
+              )
+            yield active
         }
         .takeWhile(identity)
         .map(_ => ())
