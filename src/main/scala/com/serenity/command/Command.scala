@@ -83,6 +83,7 @@ enum CommandIntent:
   case SetMaterialPreset(preset: MaterialPreset)
   case SetPostProcessingEffect(effect: PostProcessingEffect)
   case SetMotionPreset(preset: MotionPreset)
+  case SetMotionAccessibility(accessibility: MotionAccessibility)
   case SetElementTransitionSpeedScale(scale: Double)
   case SetEditorTextTransitionSpeedScale(scale: Double)
   case SetCommandRunnerTransitionSpeedScale(scale: Double)

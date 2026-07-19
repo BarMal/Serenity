@@ -280,6 +280,22 @@ object CommandRunnerSettingsItems:
       hint = Some("Animation baseline for UI motion")
     )
 
+  private[command] def motionAccessibilityOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "motion-accessibility",
+      label = "Motion Accessibility",
+      options = List(
+        CommandOption("Standard", CommandIntent.SetMotionAccessibility(MotionAccessibility.Standard)),
+        CommandOption("Reduced", CommandIntent.SetMotionAccessibility(MotionAccessibility.Reduced)),
+        CommandOption("Off", CommandIntent.SetMotionAccessibility(MotionAccessibility.Off))
+      ),
+      selectedIndex = optionSelections.getOrElse("motion-accessibility", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Always overrides preset and family motion")
+    )
+
   private[command] def markdownViewOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "markdown-view",

@@ -27,6 +27,24 @@ class AnimationStateSpec extends AnyFlatSpec with Matchers:
     state.advanceAllAnimations() should be theSameInstanceAs state
   }
 
+  it should "clear only animations owned by the disabled motion family" in {
+    val editor = AnimatedCell(Some('e'), List(black, white), List.empty)
+    val ui     = AnimatedCell(Some('u'), List(black, white), List.empty, owner = AnimationOwner.UiTransitions)
+    val state = AnimationState(
+      Map(
+        CharacterKey(0, 0) -> editor,
+        CharacterKey(1, 0) -> ui
+      )
+    )
+
+    state.clear(AnimationOwner.EditorText).animations.values.map(_.owner).toSet shouldBe Set(
+      AnimationOwner.UiTransitions
+    )
+    state.clear(AnimationOwner.UiTransitions).animations.values.map(_.owner).toSet shouldBe Set(
+      AnimationOwner.EditorText
+    )
+  }
+
   it should "add character animation" in {
     val state = AnimationState.empty
     val newState = state.addCharacterAnimation(

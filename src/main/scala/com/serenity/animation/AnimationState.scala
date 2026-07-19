@@ -42,6 +42,14 @@ case class AnimationState(
     if incoming.isEmpty then this
     else copy(animations = animations ++ incoming)
 
+  /** Merge UI transitions without replacing an active editor-text animation at the same cell. */
+  def mergeUiTransitionAnimations(incoming: Map[CharacterKey, AnimatedCell]): AnimationState =
+    val nonConflicting = incoming.filter {
+      case (key, _) =>
+        animations.get(key).forall(cell => cell.owner != AnimationOwner.EditorText || cell.isComplete)
+    }
+    mergeAnimations(nonConflicting)
+
   /** Advance all animations by one step */
   def advanceAnimations(): AnimationState =
     if !hasActiveAnimations then this
@@ -67,6 +75,11 @@ case class AnimationState(
   /** Clear all animations */
   def clearAll(): AnimationState =
     if animations.isEmpty then this else AnimationState.empty
+
+  /** Remove animations owned by one independent motion family. */
+  def clear(owner: AnimationOwner): AnimationState =
+    val retained = animations.filter((_, cell) => cell.owner != owner)
+    if retained.size == animations.size then this else AnimationState(retained)
 
   /** Get the animated cell at the given buffer position, if any */
   def getCell(x: Int, y: Int): Option[AnimatedCell] =

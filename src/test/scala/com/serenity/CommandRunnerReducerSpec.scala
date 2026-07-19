@@ -11,8 +11,8 @@ import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
-  private def activeState(registry: CommandRegistry): AppState =
-    val runner = CommandRunner.empty.activate(registry, AppConfig.default)
+  private def activeState(registry: CommandRegistry, config: AppConfig = AppConfig.default): AppState =
+    val runner = CommandRunner.empty.activate(registry, config)
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -176,7 +176,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   it should "open the exact settings leaf selected from search" in {
     val registry = CommandRegistry.default
     val searched = List('a', 'n', 'i', 'm', 'a', 't', 'i', 'o', 'n', ' ', 'd', 'u', 'r', 'a', 't', 'i', 'o', 'n')
-      .foldLeft(activeState(registry)) { (state, char) =>
+      .foldLeft(activeState(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))) { (state, char) =>
         CommandRunnerReducer.reduce(RunnerInsertChar(char), state, registry).state
       }
 
@@ -291,10 +291,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     } shouldBe true
   }
 
-  it should "adjust the selected animation option inside the submenu with left and right" in {
+  it should "adjust the selected motion accessibility option inside the submenu with left and right" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val state             = settingsStateOnItem("settings-animation", "animation-mode")
+    val state             = settingsStateOnItem("settings-animation", "motion-accessibility")
 
     val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
     val runnerAfterLeft = movedLeft.state.commandRunnerSurface
@@ -308,9 +308,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runnerAfterLeft
       .submenuItems("settings-animation")
       .collectFirst {
-        case option: CommandSurfaceItem.OptionItem if option.id == "animation-mode" => option.selectedOption
+        case option: CommandSurfaceItem.OptionItem if option.id == "motion-accessibility" => option.selectedOption
       }
-      .shouldBe(Some("Subtle"))
+      .shouldBe(Some("Off"))
 
     val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), movedLeft.state, registry)
     val runnerAfterRight = movedRight.state.commandRunnerSurface
@@ -324,9 +324,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runnerAfterRight
       .submenuItems("settings-animation")
       .collectFirst {
-        case option: CommandSurfaceItem.OptionItem if option.id == "animation-mode" => option.selectedOption
+        case option: CommandSurfaceItem.OptionItem if option.id == "motion-accessibility" => option.selectedOption
       }
-      .shouldBe(Some("Full"))
+      .shouldBe(Some("Standard"))
   }
 
   it should "adjust the selected background style inside the surface appearance submenu with left and right" in {
@@ -715,8 +715,11 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   ): AppState =
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
+    val effectiveConfig =
+      if itemId == "animation-duration" || itemId == "animation-steps" then config.withMotionPreset(MotionPreset.Custom)
+      else config
     val searchedRunner = CommandRunner.empty
-      .activate(registry, config)
+      .activate(registry, effectiveConfig)
       .withActiveCategory(CommandCategory.Settings)
       .updateSearchTerm(settingsGroupSearchTerm(groupId))
     val selectedIndex = searchedRunner.visibleItems.indexWhere(_.id == groupId) match

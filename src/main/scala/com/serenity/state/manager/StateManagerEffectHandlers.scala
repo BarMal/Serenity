@@ -208,15 +208,103 @@ final private[manager] class StateManagerEffectHandlers(
   private def updateMotionConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
-    updateConfigWithEditedPresetDraft(
-      update,
-      markEditedUiPresetDraftFromCommandRunner
+    stateRef.get.flatMap { previousState =>
+      updateConfigWithEditedPresetDraft(
+        update,
+        markEditedUiPresetDraftFromCommandRunner
+      ).flatTap(cancelDisabledMotion(previousState.config, _))
+    }
+
+  private def updateMotionAccessibility(
+    accessibility: com.serenity.config.MotionAccessibility
+  ): IO[com.serenity.config.AppConfig] =
+    updateMotionConfig(_.withMotionAccessibility(accessibility))
+
+  private def cancelActiveMotion(): IO[Unit] =
+    stateRef.update(state =>
+      state.copy(
+        buffers = clearBufferAnimations(state),
+        themeTransition = None,
+        uiSurfaces = state.uiSurfaces.filterNot(_.content.isInstanceOf[SurfaceContent.GhostOverlay]),
+        surfaceAnimations = Map.empty
+      )
     )
+
+  private def cancelDisabledMotion(
+    previous: com.serenity.config.AppConfig,
+    current: com.serenity.config.AppConfig
+  ): IO[Unit] =
+    val previousFamilies = previous.surfaceConfig.effectiveMotionConfiguration
+    val currentFamilies  = current.surfaceConfig.effectiveMotionConfiguration
+    if currentFamilies.families.values.forall(!_.enabled) && previousFamilies.families.values.exists(_.enabled) then
+      cancelActiveMotion()
+    else
+      com.serenity.config.MotionFamily.values.toList
+        .filter(family => previousFamilies.family(family).enabled && !currentFamilies.family(family).enabled)
+        .traverse_(cancelMotionFamily)
+
+  private def cancelMotionFamily(family: com.serenity.config.MotionFamily): IO[Unit] =
+    family match
+      case com.serenity.config.MotionFamily.EditorText =>
+        stateRef.update(state =>
+          state.copy(buffers = clearBufferAnimations(state, com.serenity.animation.AnimationOwner.EditorText))
+        )
+      case com.serenity.config.MotionFamily.CommandSurfaces =>
+        cancelSurfaceMotion(isCommandSurface)
+      case com.serenity.config.MotionFamily.PinnedPanels =>
+        cancelSurfaceMotion(surface =>
+          surface.presentation.isInstanceOf[SurfacePresentation.Pinned] ||
+            surface.presentation.isInstanceOf[SurfacePresentation.Expanded]
+        )
+      case com.serenity.config.MotionFamily.UiTransitions =>
+        stateRef.update(state =>
+          state.copy(
+            buffers = clearBufferAnimations(state, com.serenity.animation.AnimationOwner.UiTransitions),
+            themeTransition = None
+          )
+        )
+      case com.serenity.config.MotionFamily.Cursor =>
+        IO.unit
+
+  private def clearBufferAnimations(state: AppState): Map[BufferId, Buffer] =
+    state.buffers.view.mapValues { buffer =>
+      val animations = buffer.animations.clearAll()
+      if animations eq buffer.animations then buffer else buffer.copy(animations = animations)
+    }.toMap
+
+  private def clearBufferAnimations(
+    state: AppState,
+    owner: com.serenity.animation.AnimationOwner
+  ): Map[BufferId, Buffer] =
+    state.buffers.view.mapValues { buffer =>
+      val animations = buffer.animations.clear(owner)
+      if animations eq buffer.animations then buffer else buffer.copy(animations = animations)
+    }.toMap
+
+  private def cancelSurfaceMotion(matches: UiSurface => Boolean): IO[Unit] =
+    stateRef.update { state =>
+      val matchingIds = state.uiSurfaces.collect { case surface if matches(surface) => surface.id }.toSet
+      state.copy(
+        uiSurfaces = state.uiSurfaces.filterNot(surface =>
+          matches(surface) && surface.content.isInstanceOf[SurfaceContent.GhostOverlay]
+        ),
+        surfaceAnimations = state.surfaceAnimations.filterNot((surfaceId, _) => matchingIds.contains(surfaceId))
+      )
+    }
+
+  private def isCommandSurface(surface: UiSurface): Boolean =
+    surface.content match
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
+      case SurfaceContent.GhostOverlay(content, _) =>
+        content match
+          case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
+          case _                                                                                => false
+      case _ => false
 
   private def updateCustomMotionConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
-    updateMotionConfig(config => update(config).copy(motionPreset = com.serenity.config.MotionPreset.Custom))
+    updateMotionConfig(config => update(config).withCustomMotionBaseline)
 
   private def updateTextDisplayConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
@@ -510,6 +598,8 @@ final private[manager] class StateManagerEffectHandlers(
         updateAppearanceConfig(_.withPostProcessingEffect(effect)).void
       case CommandIntent.SetMotionPreset(preset) =>
         updateMotionConfig(_.withMotionPreset(preset)).void
+      case CommandIntent.SetMotionAccessibility(accessibility) =>
+        updateMotionAccessibility(accessibility).void
       case CommandIntent.SetElementTransitionSpeedScale(scale) =>
         updateCustomMotionConfig(_.withElementTransitionSpeedScale(scale)).void
       case CommandIntent.SetEditorTextTransitionSpeedScale(scale) =>
@@ -545,7 +635,7 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.SetBlurRadius(r) =>
         updateAppearanceConfig(_.withBlurRadius(r)).void
       case CommandIntent.SetAnimationDuration(ms) =>
-        updateMotionConfig { config =>
+        updateCustomMotionConfig { config =>
           val newAnim =
             if ms <= 0 then None
             else
@@ -559,10 +649,10 @@ final private[manager] class StateManagerEffectHandlers(
                   existing.copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
                 )
               )
-          config.copy(characterAnimation = newAnim, motionPreset = com.serenity.config.MotionPreset.Custom)
+          config.withEditorTextAnimation(newAnim)
         }.void
       case CommandIntent.SetAnimationSteps(n) =>
-        updateMotionConfig { config =>
+        updateCustomMotionConfig { config =>
           val newAnim =
             if n <= 0 then None
             else
@@ -574,7 +664,7 @@ final private[manager] class StateManagerEffectHandlers(
                   )
                 )(existing => existing.copy(steps = n))
               )
-          config.copy(characterAnimation = newAnim, motionPreset = com.serenity.config.MotionPreset.Custom)
+          config.withEditorTextAnimation(newAnim)
         }.void
       case CommandIntent.SetCursorMode(mode) =>
         updateAppearanceConfig(_.withCursorMode(mode)).void
@@ -1589,7 +1679,13 @@ final private[manager] class StateManagerEffectHandlers(
               sweep,
               config.steps
             )
-            val updatedBuffer = buffer.copy(animations = buffer.animations.clearAll().mergeAnimations(animated))
+            val uiAnimations =
+              animated.view.mapValues(_.copy(owner = com.serenity.animation.AnimationOwner.UiTransitions)).toMap
+            val updatedBuffer = buffer.copy(
+              animations = buffer.animations
+                .clear(com.serenity.animation.AnimationOwner.UiTransitions)
+                .mergeUiTransitionAnimations(uiAnimations)
+            )
             state.copy(buffers = state.buffers + (point.bufferId -> updatedBuffer))
           }
       case None =>

@@ -352,7 +352,12 @@ final private[manager] class StateManagerEventPipeline(
         if cells.nonEmpty
       yield
         val animated = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, sweep, config.steps)
-        val newAnims = buffer.animations.clearAll().mergeAnimations(animated)
+        val uiAnimations =
+          animated.view.mapValues(_.copy(owner = com.serenity.animation.AnimationOwner.UiTransitions)).toMap
+        val newAnims =
+          buffer.animations
+            .clear(com.serenity.animation.AnimationOwner.UiTransitions)
+            .mergeUiTransitionAnimations(uiAnimations)
         state.copy(buffers = state.buffers.updated(buffId, buffer.copy(animations = newAnims)))
       animOpt match
         case Some(newState) => stateRef.set(newState)
@@ -412,9 +417,16 @@ final private[manager] class StateManagerEventPipeline(
           val contract      = EditorLayoutContract.from(s, tSize, layout)
           val overlayRect   = contract.overlayRect(surface.id)
           val overlayHeight = overlayRect.map(_.height).getOrElse(4)
+          val exitingGhost  = matchingExitingCommandGhost(surface, s)
           val revealKind    = s.config.effectiveCommandRunnerTransitionKind
           val animationState =
-            if revealKind == TransitionKind.Fade then commandRunnerFadeInAnimation(overlayHeight, steps, s)
+            if revealKind == TransitionKind.Fade then
+              commandRunnerFadeInAnimation(
+                overlayHeight,
+                steps,
+                s,
+                exitingGhost.flatMap(ghost => s.surfaceAnimations.get(ghost.id).map(_.animationState))
+              )
             else
               val plan = ElementTransitionPlanner.plan(
                 ElementTransitionRequest(TransitionScope.CommandRunner),
@@ -440,22 +452,34 @@ final private[manager] class StateManagerEventPipeline(
                 phaseTick = 0
               ))
             else s.surfaceAnimations - surface.id
-          s.copy(surfaceAnimations = surfaceAnimations)
+          exitingGhost.fold(s.copy(surfaceAnimations = surfaceAnimations)) { ghost =>
+            s.copy(
+              uiSurfaces = s.uiSurfaces.filterNot(_.id == ghost.id),
+              surfaceAnimations = surfaceAnimations - ghost.id
+            )
+          }
         }
       case _ =>
         stateRef.update(s => s.copy(surfaceAnimations = s.surfaceAnimations - surface.id))
 
-  private def commandRunnerFadeInAnimation(overlayHeight: Int, steps: Int, state: AppState): AnimationState =
+  private def commandRunnerFadeInAnimation(
+    overlayHeight: Int,
+    steps: Int,
+    state: AppState,
+    previous: Option[AnimationState]
+  ): AnimationState =
     val overlayFadeIn = (0 until overlayHeight).map { rowOffset =>
-      val delay    = rowOffset
-      val panelBg  = state.theme.panel.background
-      val panelFg  = state.theme.panel.foreground
-      val transpBg = transparent(panelBg)
-      val transpFg = transparent(panelFg)
-      val bgSteps = List.fill(delay)(transpBg) ++
-        RgbInterpolator.interpolateRgba(transpBg, panelBg, steps)
-      val fgSteps = List.fill(delay)(transpFg) ++
-        RgbInterpolator.interpolateRgba(transpFg, panelFg, steps)
+      val delay        = rowOffset
+      val panelBg      = state.theme.panel.background
+      val panelFg      = state.theme.panel.foreground
+      val previousCell = previous.flatMap(_.getCell(0, rowOffset))
+      val initialBg    = previousCell.flatMap(_.currentBackground).getOrElse(transparent(panelBg))
+      val initialFg    = previousCell.flatMap(_.currentForeground).getOrElse(transparent(panelFg))
+      val remainingSteps = previousCell
+        .map(cell => completedFadeSteps(rowOffset + steps, cell.backgroundSteps.length))
+        .getOrElse(steps)
+      val bgSteps = List.fill(delay)(initialBg) ++ RgbInterpolator.interpolateRgba(initialBg, panelBg, remainingSteps)
+      val fgSteps = List.fill(delay)(initialFg) ++ RgbInterpolator.interpolateRgba(initialFg, panelFg, remainingSteps)
       CharacterKey(0, rowOffset) -> AnimatedCell(
         content = None,
         foregroundSteps = fgSteps,
@@ -549,6 +573,17 @@ final private[manager] class StateManagerEventPipeline(
         case SurfaceContent.CommandPalette(_)              => true
         case SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
         case _                                             => false
+    }
+
+  private def matchingExitingCommandGhost(surface: UiSurface, state: AppState): Option[UiSurface] =
+    state.uiSurfaces.find {
+      case UiSurface(id, SurfaceContent.GhostOverlay(content, _), _, _) =>
+        state.surfaceAnimations.get(id).exists(_.phase == SurfacePhase.Exiting) &&
+        ((surface.content, content) match
+          case (SurfaceContent.CommandPalette(_), SurfaceContent.CommandPalette(_))                           => true
+          case (SurfaceContent.CommandPaletteSubmenu(_, _, _), SurfaceContent.CommandPaletteSubmenu(_, _, _)) => true
+          case _                                                                                              => false)
+      case _ => false
     }
 
   private def animatedPanelSurfaces(state: AppState): List[UiSurface] =

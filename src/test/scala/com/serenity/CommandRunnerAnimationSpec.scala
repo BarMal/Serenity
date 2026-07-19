@@ -3,7 +3,8 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, TransitionKind}
-import com.serenity.config.{AppConfig, MotionPreset}
+import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.config.{AppConfig, MotionAccessibility, MotionPreset}
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -78,6 +79,70 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val state     = sm.getCurrentState.unsafeRunSync()
     val surfaceId = state.commandRunnerSurface.get.id
     state.surfaceAnimations.get(surfaceId) shouldBe None
+  }
+
+  it should "cancel all active animation state when a motion policy disables animation" in
+    List(
+      CommandIntent.SetMotionAccessibility(MotionAccessibility.Reduced),
+      CommandIntent.SetMotionAccessibility(MotionAccessibility.Off),
+      CommandIntent.SetMotionPreset(MotionPreset.Reduced),
+      CommandIntent.SetElementTransitionSpeedScale(0.0)
+    ).foreach { intent =>
+      val sm = createStateManager()
+      sm.updateState(_.copy(config = AppConfig.withTestAnimations)).unsafeRunSync()
+      sm.applyEvent(InsertChar('a')).unsafeRunSync()
+      sm.updateState(state => state.copy(themeTransition = Some(ThemeTransition(state.theme, 0, 2)))).unsafeRunSync()
+      sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+      advanceToVisible(sm)
+      sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+      val activeState = sm.getCurrentState.unsafeRunSync()
+      activeState.buffers.values.exists(_.animations.hasActiveAnimations) shouldBe true
+      activeState.themeTransition shouldBe defined
+      activeState.surfaceAnimations should not be empty
+      activeState.uiSurfaces
+        .exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
+
+      sm.executeCommand(
+        Command.typed(
+          "disable-motion",
+          "Disable motion",
+          intent,
+          CommandCategory.Settings
+        )
+      ).unsafeRunSync()
+
+      val state = sm.getCurrentState.unsafeRunSync()
+      state.buffers.values.foreach(_.animations.animations shouldBe Map.empty)
+      state.themeTransition shouldBe None
+      state.surfaceAnimations shouldBe Map.empty
+      state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
+      sm.advanceAnimationsOnTick().unsafeRunSync() shouldBe false
+    }
+
+  it should "cancel only editor animations when the editor text family is disabled" in {
+    val sm = createStateManager()
+    sm.updateState(_.copy(config = AppConfig.withTestAnimations)).unsafeRunSync()
+    sm.applyEvent(InsertChar('a')).unsafeRunSync()
+    sm.updateState(state => state.copy(themeTransition = Some(ThemeTransition(state.theme, 0, 2)))).unsafeRunSync()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    advanceToVisible(sm)
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "editor-text-speed-scale",
+        "Set editor text speed scale",
+        CommandIntent.SetEditorTextTransitionSpeedScale(0.0),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    state.buffers.values.foreach(_.animations.animations shouldBe Map.empty)
+    state.themeTransition shouldBe defined
+    state.surfaceAnimations should not be empty
+    state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
   }
 
   it should "scale command runner fade length with the global animation speed" in {
@@ -223,6 +288,36 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
     ghostCell.currentBackground shouldBe Some(partialBackground)
     ghostCell.backgroundSteps.length shouldBe (totalFadeSteps - remainingFadeSteps + 1)
+  }
+
+  it should "reverse an exiting ghost into the reopened command runner" in {
+    val sm = createStateManager()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    advanceToVisible(sm)
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val closingState = sm.getCurrentState.unsafeRunSync()
+    val ghost = closingState.uiSurfaces
+      .find(_.content.isInstanceOf[SurfaceContent.GhostOverlay])
+      .getOrElse(fail("Expected exiting command runner ghost"))
+    sm.advanceAnimationsOnTick().unsafeRunSync()
+    val ghostBackground = sm.getCurrentState
+      .unsafeRunSync()
+      .surfaceAnimations(ghost.id)
+      .animationState
+      .getCell(0, 0)
+      .flatMap(_.currentBackground)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val reopened  = sm.getCurrentState.unsafeRunSync()
+    val surfaceId = reopened.commandRunnerSurface.map(_.id).getOrElse(fail("Expected reopened command runner"))
+    reopened.uiSurfaces.exists(_.id == ghost.id) shouldBe false
+    reopened
+      .surfaceAnimations(surfaceId)
+      .animationState
+      .getCell(0, 0)
+      .flatMap(_.currentBackground) shouldBe ghostBackground
   }
 
   it should "remove the ghost surface when Exiting animation completes" in {
