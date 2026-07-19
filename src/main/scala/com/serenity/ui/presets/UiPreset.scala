@@ -1,10 +1,13 @@
 package com.serenity.ui.presets
 
 import java.awt.Font
+import java.nio.channels.FileChannel
 import java.nio.charset.StandardCharsets
 import java.nio.file.*
 import java.text.Normalizer
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantLock
 
 import cats.effect.IO
 import com.serenity.animation.TransitionKind
@@ -651,6 +654,20 @@ enum UiPresetStoreConflict(message: String) extends RuntimeException(message):
 class UiPresetStore private (path: Path):
   import UiPresetIndex.given
 
+  private val replaceLockPath = path.resolveSibling(s".${path.getFileName.toString}.lock")
+
+  private def withExclusiveReplaceLock[A](operation: IO[A]): IO[A] =
+    val processLock = UiPresetStore.inProcessLock(replaceLockPath)
+    IO.blocking(processLock.lock())
+      .bracket { _ =>
+        IO.blocking {
+          Option(replaceLockPath.getParent).foreach(Files.createDirectories(_))
+          FileChannel.open(replaceLockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+        }.bracket { channel =>
+          IO.blocking(channel.lock()).bracket(_ => operation)(fileLock => IO.blocking(fileLock.release()))
+        }(channel => IO.blocking(channel.close()))
+      }(_ => IO.blocking(processLock.unlock()))
+
   def load(): IO[UiPresetIndex] =
     IO.blocking(Files.exists(path)).flatMap {
       case false => IO.pure(UiPresetIndex.empty)
@@ -727,16 +744,18 @@ class UiPresetStore private (path: Path):
 
   /** Replaces a custom preset only when its persisted source has not changed since the draft was opened. */
   def replace(sourceName: String, sourceRevision: String, replacement: UiPreset): IO[Unit] =
-    load().flatMap { index =>
-      index.find(sourceName) match
-        case None => IO.raiseError(UiPresetStoreConflict.SourceMissing(sourceName))
-        case Some(source) if revisionOf(source) != sourceRevision =>
-          IO.raiseError(UiPresetStoreConflict.SourceChanged(sourceName))
-        case Some(source) =>
-          val withoutSource = index.copy(presets = index.presets.filterNot(_ == source))
-          IO.fromEither(validateForUpsert(replacement, withoutSource)).flatMap { valid =>
-            save(withoutSource.copy(presets = withoutSource.presets :+ valid))
-          }
+    withExclusiveReplaceLock {
+      load().flatMap { index =>
+        index.find(sourceName) match
+          case None => IO.raiseError(UiPresetStoreConflict.SourceMissing(sourceName))
+          case Some(source) if revisionOf(source) != sourceRevision =>
+            IO.raiseError(UiPresetStoreConflict.SourceChanged(sourceName))
+          case Some(source) =>
+            val withoutSource = index.copy(presets = index.presets.filterNot(_ == source))
+            IO.fromEither(validateForUpsert(replacement, withoutSource)).flatMap { valid =>
+              save(withoutSource.copy(presets = withoutSource.presets :+ valid))
+            }
+      }
     }
 
   private def validateForUpsert(preset: UiPreset, index: UiPresetIndex): Either[IllegalArgumentException, UiPreset] =
@@ -767,6 +786,11 @@ class UiPresetStore private (path: Path):
 
 object UiPresetStore:
   val defaultPath: Path = Paths.get(System.getProperty("user.home"), ".serenity", "ui-presets.json")
+
+  private val inProcessLocks = new ConcurrentHashMap[Path, ReentrantLock]()
+
+  private def inProcessLock(path: Path): ReentrantLock =
+    inProcessLocks.computeIfAbsent(path.toAbsolutePath.normalize, _ => new ReentrantLock())
 
   def revisionOf(preset: UiPreset): String =
     preset.asJson.noSpaces

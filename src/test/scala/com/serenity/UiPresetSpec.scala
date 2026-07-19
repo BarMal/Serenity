@@ -7,13 +7,14 @@ import _root_.io.circe.Json
 import _root_.io.circe.parser.decode
 import _root_.io.circe.syntax.*
 import cats.effect.unsafe.implicits.global
+import cats.syntax.all.*
 import com.serenity.animation.TransitionKind
 import com.serenity.config.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
-import com.serenity.ui.presets.{UiPreset, UiPresetStore}
+import com.serenity.ui.presets.{UiPreset, UiPresetStore, UiPresetStoreConflict}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -592,3 +593,27 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     store.delete("Focus Renamed").unsafeRunSync()
     store.replace("Focus", UiPresetStore.revisionOf(changed), changed).attempt.unsafeRunSync().isLeft shouldBe true
   }
+
+  it should "allow only one concurrent replacement from the same source revision" in
+    (1 to 20).foreach { attempt =>
+      val path   = Files.createTempDirectory(s"ui-preset-store-concurrent-replace-$attempt").resolve("ui-presets.json")
+      val source = UiPreset("Focus", AppConfig.default, Theme.dark.name, Nil)
+      val storeA = UiPresetStore(path)
+      val storeB = UiPresetStore(path)
+      val first  = source.copy(config = AppConfig.default.withLineNumbers(false))
+      val second = source.copy(config = AppConfig.default.withWordWrap(false))
+      val revision = UiPresetStore.revisionOf(source)
+
+      storeA.upsert(source).unsafeRunSync()
+      val results = (
+        storeA.replace("Focus", revision, first).attempt,
+        storeB.replace("Focus", revision, second).attempt
+      ).parTupled.unsafeRunSync()
+
+      List(results._1, results._2).count(_.isRight) shouldBe 1
+      List(results._1, results._2).collect { case Left(error) => error } should contain only UiPresetStoreConflict
+        .SourceChanged(
+          "Focus"
+        )
+      storeA.find("Focus").unsafeRunSync() shouldBe Some(if results._1.isRight then first else second)
+    }
