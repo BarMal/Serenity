@@ -61,6 +61,7 @@ class SwingWindow(
   private val roundedContentBuffers  = new SwingWindow.RoundedCornerMaskBufferCache
   private val perPixelTranslucencySupported =
     SwingWindow.perPixelTranslucencySupported
+  private val shapeUpdateCoalescer = new SwingWindow.CoalescedEdtUpdate(() => updateShape())
 
   def setOnResize(cb: () => Unit): Unit = onResizeCallbackRef.set(Some(cb))
 
@@ -128,6 +129,9 @@ class SwingWindow(
     else if usesCustomChrome then frame.setShape(null)
 
     if refreshRoundedCornerMask then resizeGlassPaneRef.get().foreach(_.repaint())
+
+  private def scheduleShapeUpdate(): Unit =
+    if usesCustomChrome then shapeUpdateCoalescer.schedule(SwingUtilities.invokeLater)
 
   private def toggleMaximize(): Unit =
     if maximizedRef.get() then
@@ -428,7 +432,7 @@ class SwingWindow(
     f.addComponentListener(
       new ComponentAdapter:
         override def componentResized(e: ComponentEvent): Unit =
-          if usesCustomChrome then SwingUtilities.invokeLater(() => updateShape())
+          scheduleShapeUpdate()
     )
     val content = new RoundedContentPane(new BorderLayout):
       setBackground(Color.BLACK)
@@ -709,6 +713,18 @@ object SwingWindow:
 
   private[serenity] def shouldRefreshRoundedCornerMask(previous: Option[Int], current: Option[Int]): Boolean =
     previous != current
+
+  final private[serenity] class CoalescedEdtUpdate(update: () => Unit):
+    private val queued = new AtomicBoolean(false)
+
+    def schedule(enqueue: Runnable => Unit): Unit =
+      if queued.compareAndSet(false, true) then
+        enqueue(
+          new Runnable:
+            def run(): Unit =
+              queued.set(false)
+              update()
+        )
 
   case class ChromeMetrics(
       titleBarHeight: Int,
