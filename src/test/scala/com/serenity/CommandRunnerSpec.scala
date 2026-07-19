@@ -785,6 +785,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "ui-preset-save",
       "ui-preset-discard",
       "ui-preset-apply",
+      "ui-preset-edit",
       "ui-preset-duplicate",
       "ui-preset-delete",
       "ui-preset-reset"
