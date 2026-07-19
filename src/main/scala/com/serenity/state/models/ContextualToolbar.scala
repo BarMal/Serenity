@@ -515,7 +515,7 @@ object ContextualToolbar:
       val weightedShares = weights.map(weight => remainingWidth.toLong * weight)
       val allocated      = weightedShares.map(_ / totalWeight)
       val remainingCells = remainingWidth - allocated.sum.toInt
-      val extraCells     = weightedShares.zipWithIndex
+      val extraCells = weightedShares.zipWithIndex
         .sortBy { case (share, index) => (-(share % totalWeight), index) }
         .take(remainingCells)
         .map(_._2)
