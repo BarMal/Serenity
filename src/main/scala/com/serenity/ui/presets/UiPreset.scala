@@ -17,14 +17,15 @@ import com.serenity.ui.theme.Theme
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.parser.decode
 import io.circe.syntax.*
-import io.circe.{Decoder, Encoder}
+import io.circe.{Decoder, Encoder, JsonObject}
 
 case class UiPreset(
     name: String,
     config: AppConfig,
     themeName: String,
     pinnedPanels: List[UiPreset.PinnedPanel],
-    targetEditorPaneCount: Option[Int] = None
+    targetEditorPaneCount: Option[Int] = None,
+    unknownFields: JsonObject = JsonObject.empty
 )
 
 /** The authoritative, unsaved workspace edit session for a UI preset. */
@@ -535,15 +536,34 @@ object UiPreset:
   given Encoder[PinnedPanel] = deriveEncoder
   given Decoder[PinnedPanel] = deriveDecoder
 
-  given Encoder[UiPreset] = deriveEncoder
-  given Decoder[UiPreset] = deriveDecoder
+  private given rawUiPresetEncoder: Encoder.AsObject[UiPreset] = deriveEncoder
 
-case class UiPresetIndex(presets: List[UiPreset]):
+  given Encoder[UiPreset] = Encoder.AsObject.instance { preset =>
+    preset.unknownFields.deepMerge(rawUiPresetEncoder.encodeObject(preset).remove("unknownFields"))
+  }
+
+  given Decoder[UiPreset] = Decoder.instance { cursor =>
+    for
+      name                  <- cursor.get[String]("name")
+      config                <- cursor.get[AppConfig]("config")
+      themeName             <- cursor.get[String]("themeName")
+      pinnedPanels          <- cursor.get[List[PinnedPanel]]("pinnedPanels")
+      targetEditorPaneCount <- cursor.get[Option[Int]]("targetEditorPaneCount")
+    yield
+      val knownKeys = Set("name", "config", "themeName", "pinnedPanels", "targetEditorPaneCount")
+      val unknown = cursor.value.asObject.fold(JsonObject.empty)(objectValue =>
+        JsonObject.fromIterable(objectValue.toIterable.filterNot((key, _) => knownKeys.contains(key)))
+      )
+      UiPreset(name, config, themeName, pinnedPanels, targetEditorPaneCount, unknown)
+  }
+
+case class UiPresetIndex(presets: List[UiPreset], unknownFields: JsonObject = JsonObject.empty):
 
   def upsert(preset: UiPreset): UiPresetIndex =
-    copy(presets =
-      presets.filterNot(existing => UiPreset.nameKey(existing.name) == UiPreset.nameKey(preset.name)) :+ preset
-    )
+    val existing = find(preset.name)
+    val preserved =
+      preset.copy(unknownFields = existing.fold(preset.unknownFields)(_.unknownFields.deepMerge(preset.unknownFields)))
+    copy(presets = presets.filterNot(item => UiPreset.nameKey(item.name) == UiPreset.nameKey(preset.name)) :+ preserved)
 
   def delete(name: String): UiPresetIndex =
     copy(presets = presets.filterNot(existing => UiPreset.nameKey(existing.name) == UiPreset.nameKey(name)))
@@ -571,8 +591,21 @@ case class UiPresetIndex(presets: List[UiPreset]):
 object UiPresetIndex:
   val empty: UiPresetIndex = UiPresetIndex(Nil)
 
-  given Encoder[UiPresetIndex] = deriveEncoder
-  given Decoder[UiPresetIndex] = deriveDecoder
+  private given rawUiPresetIndexEncoder: Encoder.AsObject[UiPresetIndex] = deriveEncoder
+
+  given Encoder[UiPresetIndex] = Encoder.AsObject.instance { index =>
+    index.unknownFields.deepMerge(rawUiPresetIndexEncoder.encodeObject(index).remove("unknownFields"))
+  }
+
+  given Decoder[UiPresetIndex] = Decoder.instance { cursor =>
+    cursor.get[List[UiPreset]]("presets").map { presets =>
+      val knownKeys = Set("presets")
+      val unknown = cursor.value.asObject.fold(JsonObject.empty)(objectValue =>
+        JsonObject.fromIterable(objectValue.toIterable.filterNot((key, _) => knownKeys.contains(key)))
+      )
+      UiPresetIndex(presets, unknown)
+    }
+  }
 
 enum UiPresetStoreConflict(message: String) extends RuntimeException(message):
   case SourceChanged(name: String) extends UiPresetStoreConflict(s"Preset '$name' changed outside this draft")
@@ -691,7 +724,7 @@ class UiPresetStore private (path: Path):
       .foldLeft[Either[IllegalArgumentException, List[UiPreset]]](Right(Nil)) { (validated, preset) =>
         validated.flatMap(accepted => validateForUpsert(preset, UiPresetIndex(accepted)).map(accepted :+ _))
       }
-      .map(UiPresetIndex.apply)
+      .map(presets => UiPresetIndex(presets, index.unknownFields))
 
   def revisionOf(preset: UiPreset): String =
     preset.asJson.noSpaces

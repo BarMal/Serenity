@@ -5,6 +5,7 @@ import java.nio.file.Files
 
 import _root_.io.circe.parser.decode
 import _root_.io.circe.syntax.*
+import _root_.io.circe.Json
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.TransitionKind
 import com.serenity.config.*
@@ -494,6 +495,23 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     store.upsert(preset).attempt.unsafeRunSync().isLeft shouldBe true
     store.upsert(preset.copy(name = "../escape")).attempt.unsafeRunSync().isLeft shouldBe true
     Files.exists(path) shouldBe false
+  }
+
+  it should "preserve unknown compatible preset and index fields when saving" in {
+    val path   = Files.createTempDirectory("ui-preset-store-future-fields").resolve("ui-presets.json")
+    val store  = UiPresetStore(path)
+    val preset = UiPreset("Future", AppConfig.default, Theme.dark.name, Nil)
+    val input = Json.obj(
+      "presets" -> Json.arr(preset.asJson.mapObject(_.add("futurePresetField", Json.fromString("keep")))),
+      "futureIndexField" -> Json.fromString("keep")
+    )
+
+    Files.writeString(path, input.noSpaces)
+    store.upsert(preset.copy(config = AppConfig.default.withLineNumbers(false))).unsafeRunSync()
+    val saved = _root_.io.circe.parser.parse(Files.readString(path)).getOrElse(fail("saved JSON should parse"))
+
+    saved.hcursor.downField("futureIndexField").as[String] shouldBe Right("keep")
+    saved.hcursor.downField("presets").downArray.downField("futurePresetField").as[String] shouldBe Right("keep")
   }
 
   it should "reject renaming a preset to an existing normalized name" in {
