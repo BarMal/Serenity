@@ -7,6 +7,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.{BackgroundStyle, MaterialPreset, MotionPreset}
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
+import com.serenity.state.models.SurfaceContent
 import com.serenity.ui.presets.UiPresetStore
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -87,8 +88,11 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "restore a dirty draft through the session path and discard it after reopening the runner" in {
-    val store  = UiPresetStore(Files.createTempDirectory("ui-scenario-dirty-restart").resolve("presets.json"))
-    val driver = UiScenarioDriver.create("ui-preset-dirty-restart", uiPresetStore = Some(store)).unsafeRunSync()
+    val sessionRoot = Files.createTempDirectory("ui-scenario-dirty-restart")
+    val store       = UiPresetStore(sessionRoot.resolve("presets.json"))
+    val driver = UiScenarioDriver
+      .create("ui-preset-dirty-restart", uiPresetStore = Some(store), sessionRoot = Some(sessionRoot))
+      .unsafeRunSync()
     val baselineMaterial = driver.state.unsafeRunSync().config.materialPreset
 
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
@@ -97,26 +101,34 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     val preview = driver.renderFrame("dirty-preview-before-restart").unsafeRunSync()
     driver.stateManager.saveSession().unsafeRunSync()
 
-    val restored = driver.stateManager.loadSession().unsafeRunSync().getOrElse(fail("session should restore"))
-    driver.updateState(_ => restored).unsafeRunSync()
-    driver.dispatch(ToggleCommandRunner).unsafeRunSync()
-    val reopened      = driver.state.unsafeRunSync()
-    val reopenedFrame = driver.renderFrame("dirty-preview-after-restart").unsafeRunSync()
+    val restarted = UiScenarioDriver
+      .create("ui-preset-fresh-runtime", uiPresetStore = Some(store), sessionRoot = Some(sessionRoot))
+      .unsafeRunSync()
+    execute(restarted, CommandIntent.StartupRestoreSession)
+    restarted.dispatch(ToggleCommandRunner).unsafeRunSync()
+    val reopened      = restarted.state.unsafeRunSync()
+    val reopenedFrame = restarted.renderFrame("dirty-preview-after-restart").unsafeRunSync()
+    val runner = reopened.commandRunnerSurface
+      .flatMap(_.content match
+        case SurfaceContent.CommandPalette(current) => Some(current)
+        case _                                      => None)
+      .getOrElse(fail("command runner should reopen after session restore"))
 
     reopened.config.materialPreset shouldBe MaterialPreset.Solid
     reopened.uiPresetEditSession.map(_.draftName) shouldBe Some("Restart Draft")
     reopened.uiPresetEditSession.map(_.dirty) shouldBe Some(true)
     store.find("Restart Draft").unsafeRunSync() shouldBe None
+    inputIds(runner.settingsGroups) should contain allOf ("ui-preset-save", "ui-preset-discard")
     preview.evidence.layoutViolations shouldBe empty
     reopenedFrame.evidence.layoutViolations shouldBe empty
 
-    execute(driver, CommandIntent.DiscardUiPresetDraft)
-    val discarded = driver.state.unsafeRunSync()
+    execute(restarted, CommandIntent.DiscardUiPresetDraft)
+    val discarded = restarted.state.unsafeRunSync()
 
     discarded.config.materialPreset shouldBe baselineMaterial
     discarded.uiPresetEditSession shouldBe None
     store.find("Restart Draft").unsafeRunSync() shouldBe None
-    driver.renderFrame("dirty-preview-after-discard").unsafeRunSync().evidence.layoutViolations shouldBe empty
+    restarted.renderFrame("dirty-preview-after-discard").unsafeRunSync().evidence.layoutViolations shouldBe empty
   }
 
   it should "recover after a preset persistence failure" in {
@@ -138,3 +150,9 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.stateManager
       .executeCommand(Command.typed("scenario-preset", "Scenario preset", intent, CommandCategory.Settings))
       .unsafeRunSync()
+
+  private def inputIds(groups: List[com.serenity.command.CommandSurfaceItem.GroupItem]): List[String] =
+    groups.flatMap { group =>
+      group.children.collect { case input: com.serenity.command.CommandSurfaceItem.InputItem => input.id } ++
+        inputIds(group.children.collect { case child: com.serenity.command.CommandSurfaceItem.GroupItem => child })
+    }

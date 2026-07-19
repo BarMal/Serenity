@@ -363,12 +363,13 @@ object UiScenarioDriver:
     artifactDirectory: Option[Path] = None,
     initialConfig: com.serenity.config.AppConfig = com.serenity.config.AppConfig.default,
     uiPresetStore: Option[UiPresetStore] = None,
-    isolatedConfig: Boolean = false
+    isolatedConfig: Boolean = false,
+    sessionRoot: Option[Path] = None
   )(using Balance): IO[UiScenarioDriver] =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger
     for
-      sessionRoot <- IO.blocking(Files.createTempDirectory(s"$name-ui-scenario"))
+      configuredSessionRoot <- sessionRoot.fold(IO.blocking(Files.createTempDirectory(s"$name-ui-scenario")))(IO.pure)
       configuredInitialConfig <-
         if isolatedConfig then IO.blocking(ConfigManager.loadConfig(Some(isolatedConfigPath.toString)))
         else IO.pure(initialConfig)
@@ -376,7 +377,7 @@ object UiScenarioDriver:
         logger,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(environment.deviceScale),
-        sessionRootOverride = Some(sessionRoot),
+        sessionRootOverride = Some(configuredSessionRoot),
         initialConfig = configuredInitialConfig,
         uiPresetStore = uiPresetStore.getOrElse(UiPresetStore.default)
       )
