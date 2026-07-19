@@ -365,33 +365,40 @@ final private[manager] class StateManagerEventPipeline(
     }
 
   private[manager] def applyAnimationHooks(prevState: AppState): cats.effect.IO[Unit] =
-    stateRef.get.flatMap { currentState =>
-      val prevSurfaces    = animatedCommandSurfaces(prevState)
-      val currentSurfaces = animatedCommandSurfaces(currentState)
-      val openedSurfaces =
-        currentSurfaces.filter(surface => !prevSurfaces.exists(_.id == surface.id))
-      val transitionedSurfaces =
-        currentSurfaces.filter(current =>
-          prevSurfaces
-            .find(_.id == current.id)
-            .exists(previous => commandSurfaceTransitionKey(previous) != commandSurfaceTransitionKey(current))
-        )
-      val closedSurfaces =
-        prevSurfaces.filter(surface => !currentSurfaces.exists(_.id == surface.id))
-      val prevPanels    = animatedPanelSurfaces(prevState)
-      val currentPanels = animatedPanelSurfaces(currentState)
-      val openedPanels =
-        currentPanels.filter(surface => !prevPanels.exists(_.id == surface.id))
-      val closedPanels =
-        prevPanels.filter(surface => !currentPanels.exists(_.id == surface.id))
+    if !shouldApplySurfaceAnimationHooks(prevState) then cats.effect.IO.unit
+    else
+      stateRef.get.flatMap { currentState =>
+        val prevSurfaces    = animatedCommandSurfaces(prevState)
+        val currentSurfaces = animatedCommandSurfaces(currentState)
+        val openedSurfaces =
+          currentSurfaces.filter(surface => !prevSurfaces.exists(_.id == surface.id))
+        val transitionedSurfaces =
+          currentSurfaces.filter(current =>
+            prevSurfaces
+              .find(_.id == current.id)
+              .exists(previous => commandSurfaceTransitionKey(previous) != commandSurfaceTransitionKey(current))
+          )
+        val closedSurfaces =
+          prevSurfaces.filter(surface => !currentSurfaces.exists(_.id == surface.id))
+        val prevPanels    = animatedPanelSurfaces(prevState)
+        val currentPanels = animatedPanelSurfaces(currentState)
+        val openedPanels =
+          currentPanels.filter(surface => !prevPanels.exists(_.id == surface.id))
+        val closedPanels =
+          prevPanels.filter(surface => !currentPanels.exists(_.id == surface.id))
 
-      (openedSurfaces ++ transitionedSurfaces).distinct.traverse_(surface =>
-        applyCommandRunnerOpenAnimation(surface, currentState)
-      ) >>
-        closedSurfaces.traverse_(surface => applyCommandRunnerCloseAnimation(surface, prevState)) >>
-        openedPanels.traverse_(surface => applyPinnedPanelOpenAnimation(surface)) >>
-        closedPanels.traverse_(surface => applyPinnedPanelCloseAnimation(surface, prevState))
-    }
+        (openedSurfaces ++ transitionedSurfaces).distinct.traverse_(surface =>
+          applyCommandRunnerOpenAnimation(surface, currentState)
+        ) >>
+          closedSurfaces.traverse_(surface => applyCommandRunnerCloseAnimation(surface, prevState)) >>
+          openedPanels.traverse_(surface => applyPinnedPanelOpenAnimation(surface)) >>
+          closedPanels.traverse_(surface => applyPinnedPanelCloseAnimation(surface, prevState))
+      }
+
+  private[manager] def shouldApplySurfaceAnimationHooks(state: AppState): Boolean =
+    state.surfaceAnimations.nonEmpty ||
+      state.config.scaledCommandRunnerAnimation.exists(config => !config.isDisabled) ||
+      state.config.pinnedPanelTransitionSettings.enabled
 
   private def commandSurfaceTransitionKey(surface: UiSurface): Option[(String, Boolean, Option[String], List[String])] =
     surface.content match

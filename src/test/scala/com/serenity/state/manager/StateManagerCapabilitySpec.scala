@@ -208,6 +208,20 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     operations.takeOperations.unsafeRunSync() shouldBe Nil
   }
 
+  it should "skip surface animation hooks when motion is disabled" in {
+    val state = AppState.initial.copy(
+      config = AppConfig.default.withMotionAccessibility(com.serenity.config.MotionAccessibility.Off)
+    )
+    val stateRef = Ref.of[IO, AppState](state).unsafeRunSync()
+    val fiberRef = Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None).unsafeRunSync()
+    val operations = StateManagerOperationBoundary
+      .create(stateRef, fiberRef, org.typelevel.log4cats.noop.NoOpLogger.impl[IO])
+      .unsafeRunSync()
+    val pipeline = composedPipeline(stateRef, operations, _ => IO.unit)
+
+    pipeline.shouldApplySurfaceAnimationHooks(state) shouldBe false
+  }
+
   it should "coordinate document analysis scheduling with shutdown" in {
     val spellCheckEnabledState = AppState.initial.copy(
       config = AppState.initial.config.withSpellCheck(AppConfig.default.spellCheck.copy(enabled = true))
