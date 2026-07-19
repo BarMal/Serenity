@@ -29,8 +29,11 @@ object AppRuntime:
   private[serenity] def fastFrameInterval(target: RenderFpsTarget): FiniteDuration =
     FiniteDuration(NanosPerSecond / target.framesPerSecond.toLong, NANOSECONDS)
 
-  private[serenity] def fastFrameDelay(frameInterval: FiniteDuration): FiniteDuration =
-    frameInterval
+  private[serenity] def fastFrameDelay(
+    frameInterval: FiniteDuration,
+    isInitialFrame: Boolean = false
+  ): FiniteDuration =
+    if isInitialFrame then Duration.Zero else frameInterval
 
   private[serenity] def cursorIdleInterval(config: AppConfig): Option[FiniteDuration] =
     val cursorMotion = config.surfaceConfig.effectiveMotionConfiguration.family(com.serenity.config.MotionFamily.Cursor)
@@ -271,10 +274,11 @@ object AppRuntime:
     Stream.eval(fastRenderRequestEpoch.get).flatMap { phaseStartRenderRequest =>
       Stream
         .repeatEval(stateManager.getCurrentState)
-        .evalMap { stateAtFrameStart =>
+        .zipWithIndex
+        .evalMap { case (stateAtFrameStart, frameIndex) =>
           for
             interval <- IO.pure(fastFrameInterval(stateAtFrameStart.config.renderFpsTarget))
-            _        <- IO.sleep(fastFrameDelay(interval))
+            _        <- IO.sleep(fastFrameDelay(interval, isInitialFrame = frameIndex == 0L))
             _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(checkResizeAndHandle)
             animationTicks <- animationTickCadence.modify(_.advance(interval))
             active <- withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(

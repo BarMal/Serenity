@@ -83,6 +83,13 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     AppRuntime.fastFrameDelay(frameInterval) shouldBe frameInterval
   }
 
+  it should "render the first fast frame without waiting for the configured frame interval" in {
+    val frameInterval = AppRuntime.fastFrameInterval(RenderFpsTarget.Fps30)
+
+    AppRuntime.fastFrameDelay(frameInterval, isInitialFrame = true) shouldBe Duration.Zero
+    AppRuntime.fastFrameDelay(frameInterval, isInitialFrame = false) shouldBe frameInterval
+  }
+
   it should "advance animations at a stable 60 FPS cadence across render targets" in {
     val sixtyFpsCadence = AppRuntime.AnimationTickCadence.empty
     val (after60, ticks60) =
