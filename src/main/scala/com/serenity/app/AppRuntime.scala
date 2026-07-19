@@ -29,8 +29,11 @@ object AppRuntime:
   private[serenity] def fastFrameInterval(target: RenderFpsTarget): FiniteDuration =
     FiniteDuration(NanosPerSecond / target.framesPerSecond.toLong, NANOSECONDS)
 
-  private[serenity] def fastFrameDelay(frameInterval: FiniteDuration): FiniteDuration =
-    frameInterval
+  private[serenity] def fastFrameDelay(
+    frameInterval: FiniteDuration,
+    isInitialFrame: Boolean = false
+  ): FiniteDuration =
+    if isInitialFrame then Duration.Zero else frameInterval
 
   private[serenity] def cursorIdleInterval(config: AppConfig): Option[FiniteDuration] =
     val cursorMotion = config.surfaceConfig.effectiveMotionConfiguration.family(com.serenity.config.MotionFamily.Cursor)
@@ -259,34 +262,44 @@ object AppRuntime:
           inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))
         )
 
-  private def fastRenderPhase(
+  private[serenity] def fastRenderPhase(
     stateManager: StateReader & AnimationTicker,
     fastMode: SignallingRef[IO, Boolean],
     fastRenderRequestEpoch: Ref[IO, Long],
     animationTickCadence: Ref[IO, AnimationTickCadence],
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
-    renderFull: (AppState, Boolean, Option[Color]) => IO[Unit]
+    renderFull: (AppState, Boolean, Option[Color]) => IO[Unit],
+    sleep: FiniteDuration => IO[Unit] = IO.sleep
   ): Stream[IO, Unit] =
     Stream.eval(fastRenderRequestEpoch.get).flatMap { phaseStartRenderRequest =>
       Stream
         .repeatEval(stateManager.getCurrentState)
-        .evalMap { stateAtFrameStart =>
-          for
-            interval <- IO.pure(fastFrameInterval(stateAtFrameStart.config.renderFpsTarget))
-            _        <- IO.sleep(fastFrameDelay(interval))
-            _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(checkResizeAndHandle)
-            animationTicks <- animationTickCadence.modify(_.advance(interval))
-            active <- withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
-              advanceAnimationsForCadence(animationTicks, stateManager)
-            )
-            state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
-              stateManager.getCurrentState
-            )
-            _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(state)))(
-              renderFull(state, true, None)
-            )
-          yield active
+        .zipWithIndex
+        .evalMap {
+          case (stateAtFrameStart, frameIndex) =>
+            for
+              isInitialFrame <- IO.pure(frameIndex == 0L)
+              interval       <- IO.pure(fastFrameInterval(stateAtFrameStart.config.renderFpsTarget))
+              _              <- sleep(fastFrameDelay(interval, isInitialFrame))
+              _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(
+                checkResizeAndHandle
+              )
+              active <-
+                if isInitialFrame then stateManager.getCurrentState.map(hasActiveAnimations)
+                else
+                  animationTickCadence.modify(_.advance(interval)).flatMap { animationTicks =>
+                    withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
+                      advanceAnimationsForCadence(animationTicks, stateManager)
+                    )
+                  }
+              state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
+                stateManager.getCurrentState
+              )
+              _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(state)))(
+                renderFull(state, true, None)
+              )
+            yield active
         }
         .takeWhile(identity)
         .map(_ => ())
