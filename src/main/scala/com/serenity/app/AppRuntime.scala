@@ -257,7 +257,7 @@ object AppRuntime:
         .evalMap { stateAtFrameStart =>
           for
             interval <- IO.pure(fastFrameInterval(stateAtFrameStart.config.renderFpsTarget))
-            _ <- IO.sleep(fastFrameDelay(hasActiveAnimations(stateAtFrameStart), interval))
+            _        <- IO.sleep(fastFrameDelay(hasActiveAnimations(stateAtFrameStart), interval))
             _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(checkResizeAndHandle)
             animationTicks <- animationTickCadence.modify(_.advance(interval))
             active <- withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
