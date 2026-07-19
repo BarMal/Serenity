@@ -2,7 +2,7 @@
 
 ## Artifact
 
-- PR head: `f0d9cf7baa790de0e0b339ca8db87406c3041a16`
+- Reviewed PR head: `1c34949acc72e6ec896ce29c3e4723091c770c5e`
 - Packaged app: Linux `jpackage --type app-image`, version `1.0.783`
 - Assembly JAR SHA-256: `ee978527468101728101921764a4a3d494bee16d003147c46b0649188890be06`
 - App-image tar SHA-256: `12f7de134167673fd35921c4cf08edf31ca5d983bb3c13d2dafe70376a0bcf96`
@@ -34,5 +34,8 @@ emitted or retained: every rendered frame had an empty layout-violation set. The
 case logs `FileAlreadyExistsException`; it is handled by the test and does not represent a scenario failure.
 
 The deterministic frame assertions are behavioral proof for the two flows. The packaged Preview → Discard frames above
-are visual proof of that transaction. The packaged Preview → Save → restart capture is not claimed by this record: its
-automation run exits before the capture point and remains required acceptance work.
+are visual proof of that transaction. The packaged Preview → Save → restart capture is not claimed by this record:
+the package exits after the startup action in a fresh Java-isolated home, and also exits when `Ctrl+P` opens the runner
+in an isolated home seeded with a copy of a valid session. Both runs used `-Duser.home` and Linux/Xvfb. The resulting
+packaged startup/runner failure remains required acceptance work; it must be fixed before a truthful Save/restart
+recording can be attached.
