@@ -732,7 +732,7 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.DeleteUiPreset(name) =>
         requireCleanPresetDraft(deleteUiPresetEffect(name))
       case CommandIntent.ResetUiPreset(name) =>
-        resetUiPresetEffect(name)
+        requireCleanPresetDraft(resetUiPresetEffect(name))
       case CommandIntent.SetTextAreaLeftInset(value) =>
         updateTextDisplayConfig(_.withTextAreaLeftInset(value)).void
       case CommandIntent.SetTextAreaRightInset(value) =>
