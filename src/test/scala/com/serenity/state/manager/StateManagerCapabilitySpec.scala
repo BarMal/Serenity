@@ -209,8 +209,11 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "coordinate document analysis scheduling with shutdown" in {
+    val spellCheckEnabledState = AppState.initial.copy(
+      config = AppState.initial.config.withSpellCheck(AppConfig.default.spellCheck.copy(enabled = true))
+    )
     val program = for
-      stateRef           <- Ref.of[IO, AppState](AppState.initial)
+      stateRef           <- Ref.of[IO, AppState](spellCheckEnabledState)
       fiberRef           <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
       scheduleStarted    <- cats.effect.Deferred[IO, Unit]
       continueScheduling <- cats.effect.Deferred[IO, Unit]
@@ -236,6 +239,27 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     yield
       pending shouldBe None
       afterShutdown shouldBe None
+
+    program.unsafeRunSync()
+  }
+
+  it should "skip document analysis scheduling when spell checking is disabled" in {
+    val program = for
+      stateRef <- Ref.of[IO, AppState](AppState.initial)
+      fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
+      starts   <- Ref.of[IO, Int](0)
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        fiberRef,
+        org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
+        beforeDocumentAnalysisStart = starts.update(_ + 1)
+      )
+      _       <- operations.scheduleDocumentAnalysis()
+      started <- starts.get
+      pending <- fiberRef.get
+    yield
+      started shouldBe 0
+      pending shouldBe None
 
     program.unsafeRunSync()
   }

@@ -120,17 +120,21 @@ final private[manager] class StateManagerOperationBoundary private (
           stateRef.set(fallbackState)
 
   def scheduleDocumentAnalysis(): IO[Unit] =
-    analysisLifecycleLock.permit.use { _ =>
-      documentAnalysisShutdownRef.get.ifM(
-        IO.unit,
-        for
-          previous <- documentAnalysisFiberRef.getAndSet(None)
-          _        <- previous.traverse_(_.cancel)
-          _        <- beforeDocumentAnalysisStart
-          fiber    <- documentAnalysisJob.start
-          _        <- documentAnalysisFiberRef.set(Some(fiber))
-        yield ()
-      )
+    stateRef.get.flatMap { state =>
+      if !requiresDocumentAnalysis(state) then IO.unit
+      else
+        analysisLifecycleLock.permit.use { _ =>
+          documentAnalysisShutdownRef.get.ifM(
+            IO.unit,
+            for
+              previous <- documentAnalysisFiberRef.getAndSet(None)
+              _        <- previous.traverse_(_.cancel)
+              _        <- beforeDocumentAnalysisStart
+              fiber    <- documentAnalysisJob.start
+              _        <- documentAnalysisFiberRef.set(Some(fiber))
+            yield ()
+          )
+        }
     }
 
   def cancelDocumentAnalysis(): IO[Unit] =
@@ -146,6 +150,9 @@ final private[manager] class StateManagerOperationBoundary private (
         IO.blocking(SpellChecker.refreshDiagnostics(snapshot))
           .flatMap(analyzed => stateRef.update(current => SpellChecker.applyIfCurrent(current, analyzed, expected)))
       }).handleErrorWith(error => logger.error(error)("[ANALYSIS] Document analysis refresh failed"))
+
+  private def requiresDocumentAnalysis(state: AppState): Boolean =
+    state.config.spellCheck.enabled || state.spellCheckCache.nonEmpty
 
   private def normalizeCommandRunnerFocus(state: AppState): AppState =
     if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then
