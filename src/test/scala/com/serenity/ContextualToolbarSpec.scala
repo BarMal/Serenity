@@ -225,6 +225,19 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     ContextualToolbar.rowCount(ContextualToolbarState(), state, width) should be > 1
   }
 
+  it should "separate paragraph-role and alignment controls into their own compact groups" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-semantic-groups")
+
+    seedToolbarDocument(stateManager)
+
+    val items              = ContextualToolbar.itemsFor(stateManager.getCurrentState.unsafeRunSync())
+    val paragraphRoleIndex = items.indexWhere(_.id == "paragraph-role")
+    val paragraphRole      = items.lift(paragraphRoleIndex).getOrElse(fail("Expected paragraph role control"))
+    val alignment          = items.lift(paragraphRoleIndex + 1).getOrElse(fail("Expected alignment control"))
+
+    ContextualToolbar.hasTrailingGroupSeparator(paragraphRole, Some(alignment)) shouldBe true
+  }
+
   it should "keep the formatted run state when the caret sits on its trailing boundary" in {
     val stateManager = createStateManager("ContextualToolbarSpec-caret-boundary-style")
 
@@ -1022,7 +1035,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     resolved.rows.head.segments.filter(_.trailingSeparator).map(_.text) shouldBe List(
       ContextualToolbar.displayText(toolbarButton(state, "underline"), ToolbarDisplayMode.IconOnly),
       ContextualToolbar.displayText(toolbarInput(state, "font-size"), ToolbarDisplayMode.IconOnly),
-      ContextualToolbar.displayText(toolbarInput(state, "color-hex"), ToolbarDisplayMode.IconOnly)
+      ContextualToolbar.displayText(toolbarInput(state, "color-hex"), ToolbarDisplayMode.IconOnly),
+      ContextualToolbar.displayText(toolbarDropdown(state, "paragraph-role"), ToolbarDisplayMode.IconOnly)
     )
   }
 
@@ -1243,8 +1257,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     rowGroups shouldBe List(
       List("bold", "italic", "underline", "font-family", "font-family-text", "font-size"),
-      List("color", "color-hex"),
-      List("paragraph-role", "align-left", "align-center", "align-right", "align-justify")
+      List("color", "color-hex", "paragraph-role"),
+      List("align-left", "align-center", "align-right", "align-justify")
     )
   }
 
@@ -1258,7 +1272,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val toolbarState = ContextualToolbarState(displayMode = ToolbarDisplayMode.IconOnly)
     val width        = ContextualToolbar.compactContentWidth(toolbarState, state, maxWidth = 120)
 
-    width shouldBe 54
+    width shouldBe 55
     ContextualToolbar.rowCount(toolbarState, state, width) shouldBe 1
   }
 
@@ -1277,7 +1291,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     moveToolbarFocusTo(stateManager, "color-hex")
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    toolbarContentWidth(state) shouldBe 54
+    toolbarContentWidth(state) shouldBe 55
 
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new MockRenderSurface(viewport.width, viewport.height)
@@ -1515,6 +1529,14 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
         case item: ContextualToolbarItem.Input if item.id == itemId => item
       }
       .getOrElse(fail(s"Expected toolbar input $itemId"))
+
+  private def toolbarDropdown(state: AppState, itemId: String): ContextualToolbarItem.Dropdown =
+    ContextualToolbar
+      .itemsFor(state)
+      .collectFirst {
+        case item: ContextualToolbarItem.Dropdown if item.id == itemId => item
+      }
+      .getOrElse(fail(s"Expected toolbar dropdown $itemId"))
 
   private def focusedToolbarItemId(state: AppState): String =
     val items = ContextualToolbar.itemsFor(state)

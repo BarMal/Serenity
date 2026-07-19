@@ -187,10 +187,10 @@ object ContextualToolbar:
     "color"            -> 2,
     "color-hex"        -> 2,
     "paragraph-role"   -> 3,
-    "align-left"       -> 3,
-    "align-center"     -> 3,
-    "align-right"      -> 3,
-    "align-justify"    -> 3
+    "align-left"       -> 4,
+    "align-center"     -> 4,
+    "align-right"      -> 4,
+    "align-justify"    -> 4
   )
 
   val markdownItems: List[ContextualToolbarItem] = List(
