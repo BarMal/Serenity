@@ -20,8 +20,8 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.text.TextEditing
-import com.serenity.ui.layout.*
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.*
 import com.serenity.ui.presets.{UiPreset, UiPresetEditSession, UiPresetStore}
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.{ThemeConfigWriter, ThemeCreatorState}

@@ -493,23 +493,28 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reject unavailable preset resources without changing the workspace" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-unavailable-resources").resolve("ui-presets.json")
-    val store = UiPresetStore(path)
-    val sm    = managerWithStore(store)
+    val path    = Files.createTempDirectory("state-manager-ui-preset-unavailable-resources").resolve("ui-presets.json")
+    val store   = UiPresetStore(path)
+    val sm      = managerWithStore(store)
     val initial = sm.getCurrentState.unsafeRunSync()
-    store.upsert(UiPreset("Missing Theme", AppConfig.default.withLineNumbers(false), "not-installed", Nil)).unsafeRunSync()
-    store.upsert(
-      UiPreset(
-        "Missing Font",
-        AppConfig.default.copy(fontConfig = AppConfig.default.fontConfig.copy(textFontFamily = "not-installed")),
-        Theme.dark.name,
-        Nil
+    store
+      .upsert(UiPreset("Missing Theme", AppConfig.default.withLineNumbers(false), "not-installed", Nil))
+      .unsafeRunSync()
+    store
+      .upsert(
+        UiPreset(
+          "Missing Font",
+          AppConfig.default.copy(fontConfig = AppConfig.default.fontConfig.copy(textFontFamily = "not-installed")),
+          Theme.dark.name,
+          Nil
+        )
       )
-    ).unsafeRunSync()
+      .unsafeRunSync()
 
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    sm.executeCommand(Command.typed("edit", "Edit", CommandIntent.EditUiPreset("Missing Theme"), CommandCategory.Settings))
-      .unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("edit", "Edit", CommandIntent.EditUiPreset("Missing Theme"), CommandCategory.Settings)
+    ).unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().config shouldBe initial.config
     sm.getCurrentState.unsafeRunSync().uiPresetEditSession shouldBe None
     commandRunnerState(sm).statusMessage.getOrElse(fail("missing preset error")) should include(

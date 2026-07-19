@@ -3,9 +3,9 @@ package com.serenity
 import java.awt.Font
 import java.nio.file.Files
 
+import _root_.io.circe.Json
 import _root_.io.circe.parser.decode
 import _root_.io.circe.syntax.*
-import _root_.io.circe.Json
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.TransitionKind
 import com.serenity.config.*
@@ -502,7 +502,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val store  = UiPresetStore(path)
     val preset = UiPreset("Future", AppConfig.default, Theme.dark.name, Nil)
     val input = Json.obj(
-      "presets" -> Json.arr(preset.asJson.mapObject(_.add("futurePresetField", Json.fromString("keep")))),
+      "presets"          -> Json.arr(preset.asJson.mapObject(_.add("futurePresetField", Json.fromString("keep")))),
       "futureIndexField" -> Json.fromString("keep")
     )
 
