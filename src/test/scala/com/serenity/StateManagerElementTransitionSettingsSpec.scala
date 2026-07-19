@@ -166,6 +166,29 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .map(_.steps) shouldBe Some(9)
   }
 
+  it should "preserve authoritative custom editor timing through UI motion edits" in {
+    val configFile = Files.createTempFile("serenity-authoritative-editor-timing", ".conf")
+    Files.writeString(
+      configFile,
+      """ui.motion = custom
+        |ui.motion.family.editor_text.animation = custom
+        |ui.motion.family.editor_text.animation.duration_ms = 375
+        |ui.motion.family.editor_text.animation.steps = 9
+        |""".stripMargin
+    )
+    val updated = ConfigManager
+      .loadConfig(Some(configFile.toString))
+      .withUiTransitionSpeedScale(Some(1.5))
+      .withUiAnimation(AnimationConfig.quick)
+      .withCustomMotionBaseline
+      .surfaceConfig
+      .effectiveMotionConfiguration
+      .family(MotionFamily.EditorText)
+
+    updated.animation.map(_.durationMs) shouldBe Some(375L)
+    updated.animation.map(_.steps) shouldBe Some(9)
+  }
+
   it should "preserve the accessibility override through manual motion edits" in
     List(
       MotionAccessibility.Off     -> CommandIntent.SetElementTransitionSpeedScale(2.25),

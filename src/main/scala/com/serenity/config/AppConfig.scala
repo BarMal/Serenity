@@ -1834,7 +1834,9 @@ case class AppConfig(
     val current = surfaceConfig.motionConfiguration
       .getOrElse(fallback)
       .withFallback(fallback)
-    val editorText = current.families(MotionFamily.EditorText).copy(animation = characterAnimation)
+    val editorText = surfaceConfig.motionConfiguration
+      .flatMap(_.families.get(MotionFamily.EditorText))
+      .getOrElse(current.families(MotionFamily.EditorText).copy(animation = characterAnimation))
     withSurfaceConfig(
       surfaceConfig.copy(
         motionPreset = MotionPreset.Custom,
