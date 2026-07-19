@@ -104,7 +104,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty.activate(registry, config)
 
     runner.optionSelections.get("interface-density") shouldBe Some(0)
-    runner.optionSelections.get("window-chrome") shouldBe Some(1)
+    runner.optionSelections.get("window-chrome") shouldBe Some(2)
     settingsGroup(runner, "settings-interface-layout").map(_.children.map(_.id)) should contain(
       List(
         "interface-density",
@@ -122,7 +122,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         _.children.collectFirst { case item: CommandSurfaceItem.OptionItem if item.id == "window-chrome" => item }
       )
       .map(item => (item.selectedIndex, item.hint)) shouldBe
-      Some((1, Some("Applies after restart; native-themed falls back to native outside Windows")))
+      Some((2, Some("Applies after restart; auto uses Serenity chrome on Linux")))
     settingsGroup(runner, "settings-interface-layout")
       .flatMap(
         _.children.collectFirst {

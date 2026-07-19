@@ -7,7 +7,7 @@ import javax.accessibility.AccessibleContext
 import javax.swing.JComponent
 
 import com.serenity.config.WindowChromeMode
-import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.terminal.{SwingWindow, WindowsNativeChrome}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -52,6 +52,14 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
       maximized = false,
       perPixelTranslucencySupported = false
     ) shouldBe false
+  }
+
+  it should "use rounded custom chrome only for Auto mode on Linux" in {
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Auto, "Linux") shouldBe true
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Auto, "Windows 11") shouldBe false
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Native, "Linux") shouldBe false
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.NativeThemed, "Linux") shouldBe false
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Custom, "Linux") shouldBe true
   }
 
   it should "refresh the per-pixel corner mask when chrome metrics change" in {
@@ -135,6 +143,15 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     snapshot.pixelSize shouldBe new Dimension(640, 480)
     snapshot.viewportSize.width shouldBe 64
     snapshot.viewportSize.height shouldBe 24
+  }
+
+  it should "publish a resize only when the cell viewport changes" in {
+    val current         = SwingWindow.CanvasResizeSnapshot(new Dimension(640, 480), ViewportSize(64, 24))
+    val sameViewport    = SwingWindow.CanvasResizeSnapshot(new Dimension(645, 495), ViewportSize(64, 24))
+    val changedViewport = SwingWindow.CanvasResizeSnapshot(new Dimension(650, 500), ViewportSize(65, 25))
+
+    SwingWindow.shouldPublishCanvasResize(current, sameViewport) shouldBe false
+    SwingWindow.shouldPublishCanvasResize(current, changedViewport) shouldBe true
   }
 
   it should "fall back to the requested window size before the canvas has been laid out" in {

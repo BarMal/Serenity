@@ -123,9 +123,10 @@ object CommandRunnerOptionSelections:
 
   private def windowChromeModeIndex(mode: WindowChromeMode): Int =
     mode match
-      case WindowChromeMode.Native       => 0
-      case WindowChromeMode.NativeThemed => 1
-      case WindowChromeMode.Custom       => 2
+      case WindowChromeMode.Auto         => 0
+      case WindowChromeMode.Native       => 1
+      case WindowChromeMode.NativeThemed => 2
+      case WindowChromeMode.Custom       => 3
 
   private def materialPresetIndex(preset: MaterialPreset): Int =
     preset match

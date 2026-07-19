@@ -144,6 +144,7 @@ object CursorInfoBarPlacement:
         None
 
 enum WindowChromeMode(val configKey: String):
+  case Auto         extends WindowChromeMode("auto")
   case Native       extends WindowChromeMode("native")
   case NativeThemed extends WindowChromeMode("native-themed")
   case Custom       extends WindowChromeMode("custom")
@@ -152,6 +153,7 @@ object WindowChromeMode:
 
   def fromConfigKey(value: String): Option[WindowChromeMode] =
     value.trim.toLowerCase match
+      case "auto" | "default"                                  => Some(WindowChromeMode.Auto)
       case "custom" | "themed" | "serenity"                    => Some(WindowChromeMode.Custom)
       case "native-themed" | "native_themed" | "system-themed" => Some(WindowChromeMode.NativeThemed)
       case "native" | "os" | "system"                          => Some(WindowChromeMode.Native)
@@ -450,7 +452,7 @@ case class PreferredWindowSize(width: Int, height: Int):
     PreferredWindowSize(width.max(400), height.max(300))
 
 case class WindowConfig(
-    chromeMode: WindowChromeMode = WindowChromeMode.Native,
+    chromeMode: WindowChromeMode = WindowChromeMode.Auto,
     preferredSize: Option[PreferredWindowSize] = None
 ):
 

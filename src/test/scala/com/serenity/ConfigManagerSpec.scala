@@ -394,17 +394,17 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     val configFile = Files.createTempFile("serenity-window-chrome-config", ".conf")
     Files.writeString(
       configFile,
-      """window.chrome = native
+      """window.chrome = auto
         |""".stripMargin
     )
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.windowChromeMode shouldBe WindowChromeMode.Native
+    config.windowChromeMode shouldBe WindowChromeMode.Auto
     ConfigManager.configToString(config) should include(
-      "# Window chrome: native preserves OS snap/window animations; native-themed uses Windows system chrome colours; custom is themed and applies after restart"
+      "# Window chrome: auto uses themed chrome on Linux; native preserves OS snap/window animations; native-themed uses Windows system chrome colours; custom is themed and applies after restart"
     )
-    ConfigManager.configToString(config) should include("window.chrome = native")
+    ConfigManager.configToString(config) should include("window.chrome = auto")
   }
 
   it should "report invalid window config values through the window schema" in {
