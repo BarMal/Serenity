@@ -170,8 +170,9 @@ case class ContextualToolbarState(
 
 object ContextualToolbar:
 
-  private val maxDisplayTextWidth      = 18
-  private val compactPaneWidthFraction = 2L
+  private val maxDisplayTextWidth         = 18
+  private val compactPaneWidthNumerator   = 2L
+  private val compactPaneWidthDenominator = 3L
 
   private val colorPresets = List(
     "Ink"  -> "#202020",
@@ -320,7 +321,8 @@ object ContextualToolbar:
     val compactRowLimit =
       toolbarState.displayMode match
         case ToolbarDisplayMode.IconOnly => maxWidth.max(1)
-        case _                           => (maxWidth.max(1).toLong / compactPaneWidthFraction).toInt.max(1)
+        case _ =>
+          ((maxWidth.max(1).toLong * compactPaneWidthNumerator) / compactPaneWidthDenominator).toInt.max(1)
     val balancedWidth =
       if intrinsicWidth <= compactRowLimit then intrinsicWidth
       else
