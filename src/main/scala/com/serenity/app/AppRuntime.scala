@@ -249,7 +249,9 @@ object AppRuntime:
     event match
       case _: com.serenity.keystroke.events.TextInputEvent => IO.unit
       case _ =>
-        stateManager.getCurrentState.flatMap(state => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state)))
+        stateManager.getCurrentState.flatMap(state =>
+          inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))
+        )
 
   private def fastRenderPhase(
     stateManager: StateReader & AnimationTicker,
