@@ -12,7 +12,7 @@ import com.serenity.app.AppRuntime
 import com.serenity.config.*
 import com.serenity.input.{InputHandler, InputRouter, SystemClipboard}
 import com.serenity.keystroke.KeyStrokeInfo
-import com.serenity.keystroke.events.{DeleteBackward, Event, InsertChar, MoveLeft, OpenFind}
+import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
