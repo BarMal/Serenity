@@ -51,5 +51,7 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers:
     sm.setCursorPosition(paneId, 0, 6).unsafeRunSync()
 
     val finalState = sm.getCurrentState.unsafeRunSync()
-    noException should be thrownBy Renderer.render(finalState, cursorVisible = true, surface, ViewportSize(80, 24))
+    Renderer.render(finalState, cursorVisible = true, surface, ViewportSize(80, 24))
+
+    surface.getRow(0) should include("Hello, World!")
   }

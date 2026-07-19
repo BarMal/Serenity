@@ -65,21 +65,9 @@ object Main extends IOApp:
             checkResize = IO(swingWin.doResizeIfNecessary()),
             renderFull = (state, vis, cc) =>
               syncDisplayMetrics() >> syncChromeTheme(state) >> IO.blocking {
-                Renderer.render(
-                  state,
-                  cursorVisible = false,
-                  swingWin,
-                  displayState.codeFont,
-                  displayState.textFont,
-                  displayState.uiFont,
-                  displayState.uiMetrics,
-                  None,
-                  repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(vis)
-                )
                 if vis then
-                  val _ = Renderer.renderCursorOnly(
+                  val _ = Renderer.renderWithCursorOverlay(
                     state,
-                    vis,
                     swingWin,
                     displayState.codeFont,
                     displayState.textFont,
@@ -88,6 +76,18 @@ object Main extends IOApp:
                     cc
                   )
                   ()
+                else
+                  Renderer.render(
+                    state,
+                    cursorVisible = false,
+                    swingWin,
+                    displayState.codeFont,
+                    displayState.textFont,
+                    displayState.uiFont,
+                    displayState.uiMetrics,
+                    None,
+                    repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(vis)
+                  )
               },
             renderCursorOnly = (state, vis, cc) =>
               syncDisplayMetrics() >> syncChromeTheme(state) >> IO.blocking {
