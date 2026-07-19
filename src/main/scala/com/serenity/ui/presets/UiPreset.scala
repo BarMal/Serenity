@@ -654,15 +654,15 @@ enum UiPresetStoreConflict(message: String) extends RuntimeException(message):
 class UiPresetStore private (path: Path):
   import UiPresetIndex.given
 
-  private val replaceLockPath = path.resolveSibling(s".${path.getFileName.toString}.lock")
+  private val mutationLockPath = path.resolveSibling(s".${path.getFileName.toString}.lock")
 
-  private def withExclusiveReplaceLock[A](operation: IO[A]): IO[A] =
-    val processLock = UiPresetStore.inProcessLock(replaceLockPath)
+  private def withExclusiveMutationLock[A](operation: IO[A]): IO[A] =
+    val processLock = UiPresetStore.inProcessLock(mutationLockPath)
     IO.blocking(processLock.lock())
       .bracket { _ =>
         IO.blocking {
-          Option(replaceLockPath.getParent).foreach(Files.createDirectories(_))
-          FileChannel.open(replaceLockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+          Option(mutationLockPath.getParent).foreach(Files.createDirectories(_))
+          FileChannel.open(mutationLockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
         }.bracket { channel =>
           IO.blocking(channel.lock()).bracket(_ => operation)(fileLock => IO.blocking(fileLock.release()))
         }(channel => IO.blocking(channel.close()))
@@ -677,7 +677,7 @@ class UiPresetStore private (path: Path):
         }
     }
 
-  def save(index: UiPresetIndex): IO[Unit] =
+  private def saveUnlocked(index: UiPresetIndex): IO[Unit] =
     IO.fromEither(validateIndex(index)).flatMap { validIndex =>
       IO.blocking {
         Option(path.getParent).foreach(Files.createDirectories(_))
@@ -690,50 +690,66 @@ class UiPresetStore private (path: Path):
       }.void
     }
 
+  def save(index: UiPresetIndex): IO[Unit] =
+    withExclusiveMutationLock(saveUnlocked(index))
+
   def upsert(preset: UiPreset): IO[Unit] =
-    load().flatMap(index => IO.fromEither(validateForUpsert(preset, index)).flatMap(valid => save(index.upsert(valid))))
+    withExclusiveMutationLock {
+      load().flatMap(index =>
+        IO.fromEither(validateForUpsert(preset, index)).flatMap(valid => saveUnlocked(index.upsert(valid)))
+      )
+    }
 
   /** Creates a new custom preset and rejects any existing normalized name. */
   def create(preset: UiPreset): IO[Unit] =
-    load().flatMap { index =>
-      IO.raiseWhen(index.find(preset.name).nonEmpty)(
-        new IllegalArgumentException(s"Preset name '${preset.name}' already exists")
-      ) >>
-        IO.fromEither(validateForUpsert(preset, index))
-          .flatMap(valid => save(index.copy(presets = index.presets :+ valid)))
+    withExclusiveMutationLock {
+      load().flatMap { index =>
+        IO.raiseWhen(index.find(preset.name).nonEmpty)(
+          new IllegalArgumentException(s"Preset name '${preset.name}' already exists")
+        ) >>
+          IO.fromEither(validateForUpsert(preset, index))
+            .flatMap(valid => saveUnlocked(index.copy(presets = index.presets :+ valid)))
+      }
     }
 
   def delete(name: String): IO[Unit] =
-    load().flatMap(index => save(index.delete(name)))
+    withExclusiveMutationLock(load().flatMap(index => saveUnlocked(index.delete(name))))
 
   def rename(sourceName: String, targetName: String): IO[Unit] =
-    load().flatMap { index =>
-      for
-        source <- IO.fromOption(index.find(sourceName))(
-          new IllegalArgumentException(s"Preset '$sourceName' does not exist")
-        )
-        _ <- IO.raiseWhen(index.find(targetName).exists(_ != source))(
-          new IllegalArgumentException(s"Preset name '$targetName' already exists")
-        )
-        renamed <- IO.fromEither(
-          validateForUpsert(source.copy(name = targetName), index.copy(presets = index.presets.filterNot(_ == source)))
-        )
-        _ <- save(index.copy(presets = index.presets.filterNot(_ == source) :+ renamed))
-      yield ()
+    withExclusiveMutationLock {
+      load().flatMap { index =>
+        for
+          source <- IO.fromOption(index.find(sourceName))(
+            new IllegalArgumentException(s"Preset '$sourceName' does not exist")
+          )
+          _ <- IO.raiseWhen(index.find(targetName).exists(_ != source))(
+            new IllegalArgumentException(s"Preset name '$targetName' already exists")
+          )
+          renamed <- IO.fromEither(
+            validateForUpsert(
+              source.copy(name = targetName),
+              index.copy(presets = index.presets.filterNot(_ == source))
+            )
+          )
+          _ <- saveUnlocked(index.copy(presets = index.presets.filterNot(_ == source) :+ renamed))
+        yield ()
+      }
     }
 
   def duplicate(sourceName: String, targetName: String): IO[Unit] =
-    load().flatMap { index =>
-      for
-        source <- IO.fromOption(index.find(sourceName))(
-          new IllegalArgumentException(s"Preset '$sourceName' does not exist")
-        )
-        _ <- IO.raiseWhen(index.find(targetName).nonEmpty)(
-          new IllegalArgumentException(s"Preset name '$targetName' already exists")
-        )
-        copy <- IO.fromEither(validateForUpsert(source.copy(name = targetName), index))
-        _    <- save(index.copy(presets = index.presets :+ copy))
-      yield ()
+    withExclusiveMutationLock {
+      load().flatMap { index =>
+        for
+          source <- IO.fromOption(index.find(sourceName))(
+            new IllegalArgumentException(s"Preset '$sourceName' does not exist")
+          )
+          _ <- IO.raiseWhen(index.find(targetName).nonEmpty)(
+            new IllegalArgumentException(s"Preset name '$targetName' already exists")
+          )
+          copy <- IO.fromEither(validateForUpsert(source.copy(name = targetName), index))
+          _    <- saveUnlocked(index.copy(presets = index.presets :+ copy))
+        yield ()
+      }
     }
 
   def find(name: String): IO[Option[UiPreset]] =
@@ -744,7 +760,7 @@ class UiPresetStore private (path: Path):
 
   /** Replaces a custom preset only when its persisted source has not changed since the draft was opened. */
   def replace(sourceName: String, sourceRevision: String, replacement: UiPreset): IO[Unit] =
-    withExclusiveReplaceLock {
+    withExclusiveMutationLock {
       load().flatMap { index =>
         index.find(sourceName) match
           case None => IO.raiseError(UiPresetStoreConflict.SourceMissing(sourceName))
@@ -753,7 +769,7 @@ class UiPresetStore private (path: Path):
           case Some(source) =>
             val withoutSource = index.copy(presets = index.presets.filterNot(_ == source))
             IO.fromEither(validateForUpsert(replacement, withoutSource)).flatMap { valid =>
-              save(withoutSource.copy(presets = withoutSource.presets :+ valid))
+              saveUnlocked(withoutSource.copy(presets = withoutSource.presets :+ valid))
             }
       }
     }

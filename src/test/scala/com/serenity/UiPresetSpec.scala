@@ -617,3 +617,55 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
         )
       storeA.find("Focus").unsafeRunSync() shouldBe Some(if results._1.isRight then first else second)
     }
+
+  it should "serialize replacement with concurrent deletion" in
+    (1 to 20).foreach { attempt =>
+      val path   = Files.createTempDirectory(s"ui-preset-store-replace-delete-$attempt").resolve("ui-presets.json")
+      val source = UiPreset("Focus", AppConfig.default, Theme.dark.name, Nil)
+      val storeA = UiPresetStore(path)
+      val storeB = UiPresetStore(path)
+
+      storeA.upsert(source).unsafeRunSync()
+      val results = (
+        storeA
+          .replace(
+            "Focus",
+            UiPresetStore.revisionOf(source),
+            source.copy(config = AppConfig.default.withLineNumbers(false))
+          )
+          .attempt,
+        storeB.delete("Focus").attempt
+      ).parTupled.unsafeRunSync()
+
+      results._2 shouldBe Right(())
+      results._1 match
+        case Right(_) | Left(UiPresetStoreConflict.SourceMissing("Focus")) => succeed
+        case other => fail(s"unexpected replacement outcome: $other")
+      storeA.find("Focus").unsafeRunSync() shouldBe None
+    }
+
+  it should "serialize replacement with concurrent rename" in
+    (1 to 20).foreach { attempt =>
+      val path   = Files.createTempDirectory(s"ui-preset-store-replace-rename-$attempt").resolve("ui-presets.json")
+      val source = UiPreset("Focus", AppConfig.default, Theme.dark.name, Nil)
+      val storeA = UiPresetStore(path)
+      val storeB = UiPresetStore(path)
+
+      storeA.upsert(source).unsafeRunSync()
+      val results = (
+        storeA
+          .replace(
+            "Focus",
+            UiPresetStore.revisionOf(source),
+            source.copy(config = AppConfig.default.withLineNumbers(false))
+          )
+          .attempt,
+        storeB.rename("Focus", "Renamed").attempt
+      ).parTupled.unsafeRunSync()
+
+      results._2 shouldBe Right(())
+      results._1 match
+        case Right(_) | Left(UiPresetStoreConflict.SourceMissing("Focus")) => succeed
+        case other => fail(s"unexpected replacement outcome: $other")
+      storeA.load().unsafeRunSync().names shouldBe List("Renamed")
+    }
