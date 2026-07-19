@@ -3,6 +3,7 @@ package com.serenity
 import java.awt.Font
 import java.nio.file.Files
 
+import _root_.io.circe.syntax.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.*
@@ -1447,4 +1448,39 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     store.find("Writing").unsafeRunSync() shouldBe None
     state.config.fontConfig.textFontFamily shouldBe Font.SERIF
     state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Left, 28))
+  }
+
+  it should "not reset a preset while another preset draft has unsaved changes" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-reset-dirty-draft").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val writingOverride = UiPreset(
+      "Writing",
+      AppConfig.default.withLineNumbers(false),
+      Theme.light.name,
+      Nil
+    )
+    Files.writeString(path, s"""{"presets":[${writingOverride.asJson.noSpaces}]}""")
+    val sm = managerWithStore(store)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("create", "Create", CommandIntent.StartUiPresetDraft("Drafting"), CommandCategory.Settings)
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "change",
+        "Change",
+        CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("reset", "Reset", CommandIntent.ResetUiPreset("Writing"), CommandCategory.Settings)
+    ).unsafeRunSync()
+
+    sm.getCurrentState.unsafeRunSync().uiPresetEditSession.map(_.draftName) shouldBe Some("Drafting")
+    store.find("Writing").unsafeRunSync() shouldBe Some(writingOverride)
+    commandRunnerState(sm).statusMessage shouldBe Some(
+      "Save or Discard the current preset draft before switching presets."
+    )
   }
