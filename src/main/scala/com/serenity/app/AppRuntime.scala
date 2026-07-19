@@ -247,7 +247,11 @@ object AppRuntime:
     inputRouter: InputRouter[IO, Event]
   ): IO[Unit] =
     event match
-      case _: com.serenity.keystroke.events.TextInputEvent => IO.unit
+      case _: com.serenity.keystroke.events.ModalRequestEvent =>
+        stateManager.getCurrentState.flatMap(state =>
+          inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))
+        )
+      case _: com.serenity.keystroke.events.TextEntryEvent => IO.unit
       case _ =>
         stateManager.getCurrentState.flatMap(state =>
           inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))
