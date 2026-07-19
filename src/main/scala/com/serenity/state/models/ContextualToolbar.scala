@@ -170,9 +170,9 @@ case class ContextualToolbarState(
 
 object ContextualToolbar:
 
-  private val maxDisplayTextWidth            = 18
-  private val compactPaneWidthNumerator      = 2L
-  private val compactPaneWidthDenominator    = 3L
+  private val maxDisplayTextWidth         = 18
+  private val compactPaneWidthNumerator   = 2L
+  private val compactPaneWidthDenominator = 3L
 
   private val colorPresets = List(
     "Ink"  -> "#202020",
