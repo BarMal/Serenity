@@ -670,6 +670,14 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.map(_.config.windowChromeMode) shouldBe Some(WindowChromeMode.NativeThemed)
   }
 
+  it should "round-trip automatic window chrome" in {
+    val original = SessionState.fromAppState(
+      AppState.initial.copy(config = AppConfig.default.withWindowChromeMode(WindowChromeMode.Auto))
+    )
+
+    original.asJson.as[SessionState].toOption.map(_.config.windowChromeMode) shouldBe Some(WindowChromeMode.Auto)
+  }
+
   it should "default interfaceDensity to Comfortable when loading older JSON without the field" in {
     val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
     val configObject =

@@ -27,6 +27,7 @@ class WindowChromeModeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "parse window chrome config values centrally" in {
+    WindowChromeMode.fromConfigKey("auto").shouldBe(Some(WindowChromeMode.Auto))
     WindowChromeMode.fromConfigKey("serenity").shouldBe(Some(WindowChromeMode.Custom))
     WindowChromeMode.fromConfigKey("native-themed").shouldBe(Some(WindowChromeMode.NativeThemed))
     WindowChromeMode.fromConfigKey("os").shouldBe(Some(WindowChromeMode.Native))
@@ -58,8 +59,8 @@ class WindowChromeModeSpec extends AnyFlatSpec with Matchers:
     WindowConfig.Schema.invalidValue("window.preferred.height", "").shouldBe(false)
   }
 
-  "AppConfig" should "default window chrome mode to Native" in {
-    AppConfig.default.windowChromeMode shouldBe WindowChromeMode.Native
+  "AppConfig" should "default window chrome mode to Auto" in {
+    AppConfig.default.windowChromeMode shouldBe WindowChromeMode.Auto
   }
 
   it should "change window chrome mode without disturbing other config fields" in {

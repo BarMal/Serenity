@@ -20,13 +20,23 @@ import com.serenity.ui.theme.Theme
 class SwingWindow(
     initialPixelSize: Dimension,
     initialMetrics: CellMetrics,
-    chromeMode: WindowChromeMode = WindowChromeMode.Native,
+    chromeMode: WindowChromeMode = WindowChromeMode.Auto,
     initialChromeMetrics: CellMetrics
 ):
 
+  private val usesCustomChrome           = SwingWindow.shouldUseCustomChrome(chromeMode)
+  private val effectiveChromeMode        = if usesCustomChrome then WindowChromeMode.Custom else chromeMode
+  private val usesNativeThemedChrome     = chromeMode == WindowChromeMode.NativeThemed
   private val initialChromeLayoutMetrics = SwingWindow.ChromeMetrics.fromCellMetrics(initialChromeMetrics)
+
   private val initialCanvasResizeSnapshot =
-    SwingWindow.fallbackCanvasResizeSnapshot(initialMetrics, initialPixelSize, chromeMode, initialChromeLayoutMetrics)
+    SwingWindow.fallbackCanvasResizeSnapshot(
+      initialMetrics,
+      initialPixelSize,
+      effectiveChromeMode,
+      initialChromeLayoutMetrics
+    )
+
   private val initialCanvasPixelSize = initialCanvasResizeSnapshot.pixelSize
   private val pixelSize              = new AtomicReference(initialCanvasPixelSize)
   private val metricsRef             = new AtomicReference(initialMetrics)
@@ -49,8 +59,6 @@ class SwingWindow(
   private val resizeGlassPaneRef     = new AtomicReference[Option[JComponent]](None)
   private val roundedCornerMaskRef   = new AtomicReference[Option[Int]](None)
   private val roundedContentBuffers  = new SwingWindow.RoundedCornerMaskBufferCache
-  private val usesCustomChrome       = SwingWindow.shouldUseCustomChrome(chromeMode)
-  private val usesNativeThemedChrome = chromeMode == WindowChromeMode.NativeThemed
   private val perPixelTranslucencySupported =
     SwingWindow.perPixelTranslucencySupported
 
@@ -472,7 +480,9 @@ class SwingWindow(
     SwingUtilities.invokeLater { () =>
       val dimension = new Dimension(normalized.width, normalized.height)
       val canvasFallback =
-        SwingWindow.fallbackCanvasResizeSnapshot(metrics, dimension, chromeMode, chromeMetricsRef.get()).pixelSize
+        SwingWindow
+          .fallbackCanvasResizeSnapshot(metrics, dimension, effectiveChromeMode, chromeMetricsRef.get())
+          .pixelSize
       canvas.setPreferredSize(canvasFallback)
       frame.setSize(dimension)
       frame.validate()
@@ -585,8 +595,12 @@ object SwingWindow:
     GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice
       .isWindowTranslucencySupported(GraphicsDevice.WindowTranslucency.PERPIXEL_TRANSLUCENT)
 
-  private[serenity] def shouldUseCustomChrome(chromeMode: WindowChromeMode): Boolean =
-    chromeMode == WindowChromeMode.Custom
+  private[serenity] def shouldUseCustomChrome(
+    chromeMode: WindowChromeMode,
+    osName: String = System.getProperty("os.name", "")
+  ): Boolean =
+    chromeMode == WindowChromeMode.Custom ||
+      (chromeMode == WindowChromeMode.Auto && osName.toLowerCase(java.util.Locale.ROOT).contains("linux"))
 
   private[serenity] def shouldUsePerPixelRoundedCorners(
     usesCustomChrome: Boolean,
@@ -926,8 +940,8 @@ object SwingWindow:
   ): Dimension =
     val chromeHeight =
       chromeMode match
-        case WindowChromeMode.Custom                                 => chromeMetrics.titleBarHeight
-        case WindowChromeMode.Native | WindowChromeMode.NativeThemed => 0
+        case WindowChromeMode.Custom => chromeMetrics.titleBarHeight
+        case WindowChromeMode.Auto | WindowChromeMode.Native | WindowChromeMode.NativeThemed => 0
     new Dimension(windowSize.width.max(1), (windowSize.height - chromeHeight).max(1))
 
   def fallbackCanvasResizeSnapshot(
@@ -945,7 +959,7 @@ object SwingWindow:
   def resource(
     metrics: CellMetrics = DefaultMetrics,
     chromeMetrics: CellMetrics = DefaultMetrics,
-    chromeMode: WindowChromeMode = WindowChromeMode.Native,
+    chromeMode: WindowChromeMode = WindowChromeMode.Auto,
     preferredWindowSize: Option[PreferredWindowSize] = None
   ): Resource[IO, SwingWindow] =
     Resource.make(

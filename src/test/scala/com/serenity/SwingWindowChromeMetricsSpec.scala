@@ -54,10 +54,12 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     ) shouldBe false
   }
 
-  it should "respect the configured chrome mode on Linux" in {
-    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Native) shouldBe false
-    SwingWindow.shouldUseCustomChrome(WindowChromeMode.NativeThemed) shouldBe false
-    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Custom) shouldBe true
+  it should "use rounded custom chrome only for Auto mode on Linux" in {
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Auto, "Linux") shouldBe true
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Auto, "Windows 11") shouldBe false
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Native, "Linux") shouldBe false
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.NativeThemed, "Linux") shouldBe false
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Custom, "Linux") shouldBe true
   }
 
   it should "refresh the per-pixel corner mask when chrome metrics change" in {

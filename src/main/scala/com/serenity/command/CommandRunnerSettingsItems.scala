@@ -221,13 +221,14 @@ object CommandRunnerSettingsItems:
       id = "window-chrome",
       label = "Window Chrome",
       options = List(
+        CommandOption("Auto (Linux Rounded)", CommandIntent.SetWindowChromeMode(WindowChromeMode.Auto)),
         CommandOption("Native", CommandIntent.SetWindowChromeMode(WindowChromeMode.Native)),
         CommandOption("Native Themed (Windows)", CommandIntent.SetWindowChromeMode(WindowChromeMode.NativeThemed)),
         CommandOption("Custom", CommandIntent.SetWindowChromeMode(WindowChromeMode.Custom))
       ),
       selectedIndex = optionSelections.getOrElse("window-chrome", 0),
       category = CommandCategory.Settings,
-      hint = Some("Applies after restart; native-themed falls back to native outside Windows")
+      hint = Some("Applies after restart; auto uses Serenity chrome on Linux")
     )
 
   private[command] def materialPresetOptionItem(

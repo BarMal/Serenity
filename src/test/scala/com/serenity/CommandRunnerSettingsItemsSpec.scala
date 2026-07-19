@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.{BackgroundStyle, PostProcessingEffect}
+import com.serenity.config.{BackgroundStyle, PostProcessingEffect, WindowChromeMode}
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.presets.UiPreset
 import org.scalatest.flatspec.AnyFlatSpec
@@ -11,6 +11,7 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
   "CommandRunnerSettingsItems" should "build typed option rows independently of runner state" in {
     val background = CommandRunnerSettingsItems.backgroundStyleOptionItem(Map("background-style" -> 3))
     val cursor     = CommandRunnerSettingsItems.cursorModeOptionItem(Map("cursor-mode" -> 1))
+    val chrome     = CommandRunnerSettingsItems.windowChromeOptionItem(Map("window-chrome" -> 0))
 
     background.label shouldBe "Background Style"
     background.selectedOption shouldBe "Glass"
@@ -25,6 +26,9 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
 
     cursor.label shouldBe "Cursor Style"
     cursor.selectedOption shouldBe "Breathe"
+    chrome.selectedOption shouldBe "Auto (Linux Rounded)"
+    chrome.selectedIntent shouldBe Some(CommandIntent.SetWindowChromeMode(WindowChromeMode.Auto))
+    chrome.options.map(_.label) shouldBe List("Auto (Linux Rounded)", "Native", "Native Themed (Windows)", "Custom")
   }
 
   it should "build workspace panel controls with bounded selections" in {
