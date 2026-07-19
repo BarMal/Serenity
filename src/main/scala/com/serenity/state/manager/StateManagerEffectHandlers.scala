@@ -1092,32 +1092,42 @@ final private[manager] class StateManagerEffectHandlers(
   private def editUiPresetEffect(name: String): IO[Unit] =
     normalizedPresetName(name) match
       case Some(presetName) if UiPreset.builtIn(presetName).nonEmpty =>
-        updateCommandRunnerPresetContext(Some(presetName), s"Built-in preset cannot be edited. Duplicate $presetName first.")
+        updateCommandRunnerPresetContext(
+          Some(presetName),
+          s"Built-in preset cannot be edited. Duplicate $presetName first."
+        )
       case Some(presetName) =>
-        uiPresetStore.find(presetName).flatMap {
-          case None => updateCommandRunnerPresetContext(None, s"Custom preset '$presetName' was not found.")
-          case Some(preset) =>
-            for
-              state <- stateRef.get
-              windowSize <- windowSizeProvider.handleErrorWith(error => logger.error(error)("[PRESET] Window size capture failed").as(None))
-              theme <- themeManager.loadTheme(preset.themeName).handleErrorWith(_ => IO.pure(state.theme))
-              baseline = UiPreset.capture(presetName, state, windowSize)
-              session = UiPresetEditSession(
-                UUID.randomUUID().toString,
-                preset.name,
-                Some(preset.name),
-                Some(UiPresetStore.revisionOf(preset)),
-                baseline,
-                state.theme
-              )
-              _ <- stateRef.update { current =>
-                withUpdatedRunnerConfig(UiPreset.applyToState(preset, current, theme), preset.config)
-                  .copy(uiPresetEditSession = Some(session))
-              }
-              _ <- onFontConfigChanged(preset.config.fontConfig)
-              _ <- updateCommandRunnerPresetContext(Some(preset.name), s"Editing $presetName. Save commits changes; Discard restores the workspace.")
-            yield ()
-        }.handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to edit UI preset $presetName"))
+        uiPresetStore
+          .find(presetName)
+          .flatMap {
+            case None => updateCommandRunnerPresetContext(None, s"Custom preset '$presetName' was not found.")
+            case Some(preset) =>
+              for
+                state <- stateRef.get
+                windowSize <- windowSizeProvider
+                  .handleErrorWith(error => logger.error(error)("[PRESET] Window size capture failed").as(None))
+                theme <- themeManager.loadTheme(preset.themeName).handleErrorWith(_ => IO.pure(state.theme))
+                baseline = UiPreset.capture(presetName, state, windowSize)
+                session = UiPresetEditSession(
+                  UUID.randomUUID().toString,
+                  preset.name,
+                  Some(preset.name),
+                  Some(UiPresetStore.revisionOf(preset)),
+                  baseline,
+                  state.theme
+                )
+                _ <- stateRef.update { current =>
+                  withUpdatedRunnerConfig(UiPreset.applyToState(preset, current, theme), preset.config)
+                    .copy(uiPresetEditSession = Some(session))
+                }
+                _ <- onFontConfigChanged(preset.config.fontConfig)
+                _ <- updateCommandRunnerPresetContext(
+                  Some(preset.name),
+                  s"Editing $presetName. Save commits changes; Discard restores the workspace."
+                )
+              yield ()
+          }
+          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to edit UI preset $presetName"))
       case None => logger.warn("[PRESET] Ignoring edit request with empty UI preset name")
 
   private def applyPresetDocumentModeToActiveEmptyBuffer(state: AppState, mode: DefaultDocumentMode): AppState =

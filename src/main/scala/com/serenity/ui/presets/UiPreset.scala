@@ -539,8 +539,11 @@ object UiPreset:
   given Decoder[UiPreset] = deriveDecoder
 
 case class UiPresetIndex(presets: List[UiPreset]):
+
   def upsert(preset: UiPreset): UiPresetIndex =
-    copy(presets = presets.filterNot(existing => UiPreset.nameKey(existing.name) == UiPreset.nameKey(preset.name)) :+ preset)
+    copy(presets =
+      presets.filterNot(existing => UiPreset.nameKey(existing.name) == UiPreset.nameKey(preset.name)) :+ preset
+    )
 
   def delete(name: String): UiPresetIndex =
     copy(presets = presets.filterNot(existing => UiPreset.nameKey(existing.name) == UiPreset.nameKey(name)))
@@ -573,7 +576,8 @@ object UiPresetIndex:
 
 enum UiPresetStoreConflict(message: String) extends RuntimeException(message):
   case SourceChanged(name: String) extends UiPresetStoreConflict(s"Preset '$name' changed outside this draft")
-  case SourceMissing(name: String) extends UiPresetStoreConflict(s"Preset '$name' was deleted or renamed outside this draft")
+  case SourceMissing(name: String)
+      extends UiPresetStoreConflict(s"Preset '$name' was deleted or renamed outside this draft")
 
 class UiPresetStore private (path: Path):
   import UiPresetIndex.given
@@ -609,8 +613,12 @@ class UiPresetStore private (path: Path):
   def rename(sourceName: String, targetName: String): IO[Unit] =
     load().flatMap { index =>
       for
-        source <- IO.fromOption(index.find(sourceName))(new IllegalArgumentException(s"Preset '$sourceName' does not exist"))
-        renamed <- IO.fromEither(validateForUpsert(source.copy(name = targetName), index.copy(presets = index.presets.filterNot(_ == source))))
+        source <- IO.fromOption(index.find(sourceName))(
+          new IllegalArgumentException(s"Preset '$sourceName' does not exist")
+        )
+        renamed <- IO.fromEither(
+          validateForUpsert(source.copy(name = targetName), index.copy(presets = index.presets.filterNot(_ == source)))
+        )
         _ <- save(index.copy(presets = index.presets.filterNot(_ == source) :+ renamed))
       yield ()
     }
@@ -618,10 +626,14 @@ class UiPresetStore private (path: Path):
   def duplicate(sourceName: String, targetName: String): IO[Unit] =
     load().flatMap { index =>
       for
-        source <- IO.fromOption(index.find(sourceName))(new IllegalArgumentException(s"Preset '$sourceName' does not exist"))
-        _ <- IO.raiseWhen(index.find(targetName).nonEmpty)(new IllegalArgumentException(s"Preset name '$targetName' already exists"))
+        source <- IO.fromOption(index.find(sourceName))(
+          new IllegalArgumentException(s"Preset '$sourceName' does not exist")
+        )
+        _ <- IO.raiseWhen(index.find(targetName).nonEmpty)(
+          new IllegalArgumentException(s"Preset name '$targetName' already exists")
+        )
         copy <- IO.fromEither(validateForUpsert(source.copy(name = targetName), index))
-        _ <- save(index.copy(presets = index.presets :+ copy))
+        _    <- save(index.copy(presets = index.presets :+ copy))
       yield ()
     }
 

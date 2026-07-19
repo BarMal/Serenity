@@ -497,9 +497,9 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "treat canonically equivalent Unicode names as one preset identity" in {
-    val path  = Files.createTempDirectory("ui-preset-store-unicode").resolve("ui-presets.json")
-    val store = UiPresetStore(path)
-    val composed = UiPreset("Caf\u00e9", AppConfig.default, Theme.dark.name, Nil)
+    val path       = Files.createTempDirectory("ui-preset-store-unicode").resolve("ui-presets.json")
+    val store      = UiPresetStore(path)
+    val composed   = UiPreset("Caf\u00e9", AppConfig.default, Theme.dark.name, Nil)
     val decomposed = composed.copy(name = "Cafe\u0301")
 
     store.upsert(composed).unsafeRunSync()
@@ -508,14 +508,18 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reject replacement when the draft source was changed or removed" in {
-    val path  = Files.createTempDirectory("ui-preset-store-conflict").resolve("ui-presets.json")
-    val store = UiPresetStore(path)
-    val source = UiPreset("Focus", AppConfig.default, Theme.dark.name, Nil)
+    val path    = Files.createTempDirectory("ui-preset-store-conflict").resolve("ui-presets.json")
+    val store   = UiPresetStore(path)
+    val source  = UiPreset("Focus", AppConfig.default, Theme.dark.name, Nil)
     val changed = source.copy(config = AppConfig.default.withLineNumbers(false))
 
     store.upsert(source).unsafeRunSync()
     store.upsert(changed).unsafeRunSync()
-    store.replace("Focus", UiPresetStore.revisionOf(source), source.copy(name = "Focus Updated")).attempt.unsafeRunSync().isLeft shouldBe true
+    store
+      .replace("Focus", UiPresetStore.revisionOf(source), source.copy(name = "Focus Updated"))
+      .attempt
+      .unsafeRunSync()
+      .isLeft shouldBe true
     store.rename("Focus", "Focus Renamed").unsafeRunSync()
     store.replace("Focus", UiPresetStore.revisionOf(changed), changed).attempt.unsafeRunSync().isLeft shouldBe true
     store.delete("Focus Renamed").unsafeRunSync()

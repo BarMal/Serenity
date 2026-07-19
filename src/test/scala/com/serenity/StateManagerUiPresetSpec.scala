@@ -414,17 +414,28 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "restore a dirty preset draft into a reopened command runner" in {
-    val path  = Files.createTempDirectory("state-manager-ui-preset-reopen").resolve("ui-presets.json")
-    val sm    = managerWithStore(UiPresetStore(path))
+    val path = Files.createTempDirectory("state-manager-ui-preset-reopen").resolve("ui-presets.json")
+    val sm   = managerWithStore(UiPresetStore(path))
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    sm.executeCommand(Command.typed("create", "Create", CommandIntent.StartUiPresetDraft("Drafting"), CommandCategory.Settings)).unsafeRunSync()
-    sm.executeCommand(Command.typed("change", "Change", CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown), CommandCategory.Settings)).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("create", "Create", CommandIntent.StartUiPresetDraft("Drafting"), CommandCategory.Settings)
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "change",
+        "Change",
+        CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     val runner = commandRunnerState(sm)
     runner.editingPresetName shouldBe Some("Drafting")
-    runner.statusMessage shouldBe Some("Preset draft has unsaved changes. Save commits them; Discard restores the workspace.")
+    runner.statusMessage shouldBe Some(
+      "Preset draft has unsaved changes. Save commits them; Discard restores the workspace."
+    )
   }
 
   it should "edit custom presets as drafts and reject built-in edit requests" in {
@@ -433,10 +444,13 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val sm    = managerWithStore(store)
     store.upsert(UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Theme.dark.name, Nil)).unsafeRunSync()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    sm.executeCommand(Command.typed("edit", "Edit", CommandIntent.EditUiPreset("Drafting"), CommandCategory.Settings)).unsafeRunSync()
+    sm.executeCommand(Command.typed("edit", "Edit", CommandIntent.EditUiPreset("Drafting"), CommandCategory.Settings))
+      .unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().uiPresetEditSession.flatMap(_.sourceName) shouldBe Some("Drafting")
-    sm.executeCommand(Command.typed("discard", "Discard", CommandIntent.DiscardUiPresetDraft, CommandCategory.Settings)).unsafeRunSync()
-    sm.executeCommand(Command.typed("edit", "Edit", CommandIntent.EditUiPreset("Writing"), CommandCategory.Settings)).unsafeRunSync()
+    sm.executeCommand(Command.typed("discard", "Discard", CommandIntent.DiscardUiPresetDraft, CommandCategory.Settings))
+      .unsafeRunSync()
+    sm.executeCommand(Command.typed("edit", "Edit", CommandIntent.EditUiPreset("Writing"), CommandCategory.Settings))
+      .unsafeRunSync()
     commandRunnerState(sm).statusMessage shouldBe Some("Built-in preset cannot be edited. Duplicate Writing first.")
   }
 
