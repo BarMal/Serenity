@@ -1057,6 +1057,21 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     surface.setFontCalls.map(_.getFamily) should contain(FontLoader.ToolbarIconFontFamily)
   }
 
+  it should "give constrained toolbar rows more room for descriptive controls" in {
+    val items = List(
+      ContextualToolbarItem.Button("bold", "Bold", "bold", "b"),
+      ContextualToolbarItem.Button("font-family", "Font family", "font-family", "f"),
+      ContextualToolbarItem.Button("size", "Size", "size", "s")
+    )
+
+    val widths = ContextualToolbar.itemCellWidths(items, contentWidth = 22, ToolbarDisplayMode.TextOnly)
+
+    widths.sum shouldBe 19
+    widths.foreach(_ should be > 0)
+    widths(1) should be > widths(0)
+    widths(1) should be > widths(2)
+  }
+
   it should "visually separate semantic formatting control groups" in {
     val stateManager = createStateManager("ContextualToolbarSpec-group-separators")
 

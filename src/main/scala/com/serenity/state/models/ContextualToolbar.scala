@@ -298,7 +298,7 @@ object ContextualToolbar:
     }
     val availableWidth = (contentWidth - gutters).max(0)
     if preferredWidths.sum <= availableWidth then preferredWidths
-    else distributeEvenly(items.length, availableWidth)
+    else distributeProportionally(preferredWidths, availableWidth)
 
   def rowGroups(
     items: List[ContextualToolbarItem],
@@ -503,6 +503,25 @@ object ContextualToolbar:
     else
       List.tabulate(itemCount) { index =>
         (availableWidth / itemCount) + Option.when(index < availableWidth % itemCount)(1).getOrElse(0)
+      }
+
+  private def distributeProportionally(preferredWidths: List[Int], availableWidth: Int): List[Int] =
+    if preferredWidths.isEmpty then Nil
+    else if availableWidth < preferredWidths.length then distributeEvenly(preferredWidths.length, availableWidth)
+    else
+      val remainingWidth = availableWidth - preferredWidths.length
+      val weights        = preferredWidths.map(_ - 1)
+      val totalWeight    = weights.sum.toLong
+      val weightedShares = weights.map(weight => remainingWidth.toLong * weight)
+      val allocated      = weightedShares.map(_ / totalWeight)
+      val remainingCells = remainingWidth - allocated.sum.toInt
+      val extraCells     = weightedShares.zipWithIndex
+        .sortBy { case (share, index) => (-(share % totalWeight), index) }
+        .take(remainingCells)
+        .map(_._2)
+        .toSet
+      List.tabulate(preferredWidths.length) { index =>
+        1 + allocated(index).toInt + Option.when(extraCells.contains(index))(1).getOrElse(0)
       }
 
   private def displayTextWidth(text: String): Int =
