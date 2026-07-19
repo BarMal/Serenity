@@ -1830,11 +1830,22 @@ case class AppConfig(
 
   /** Marks the current resolved family values as a custom motion baseline. */
   def withCustomMotionBaseline: AppConfig =
-    val current = surfaceConfig.motionConfiguration.getOrElse(MotionConfig.fromLegacy(surfaceConfig))
+    val fallback = MotionConfig.fromLegacy(surfaceConfig, motionPreset)
+    val current = surfaceConfig.motionConfiguration
+      .getOrElse(fallback)
+      .withFallback(fallback)
+    val editorText = current.families(MotionFamily.EditorText).copy(animation = characterAnimation)
     withSurfaceConfig(
       surfaceConfig.copy(
         motionPreset = MotionPreset.Custom,
-        motionConfiguration = Some(current.copy(baseline = MotionPreset.Custom).normalized)
+        motionConfiguration = Some(
+          current
+            .copy(
+              baseline = MotionPreset.Custom,
+              families = current.families.updated(MotionFamily.EditorText, editorText)
+            )
+            .normalized
+        )
       )
     )
 
@@ -1895,10 +1906,14 @@ case class AppConfig(
 
   /** Updates editor text timing in both the legacy field and the authoritative motion family. */
   def withEditorTextAnimation(animation: Option[AnimationConfig]): AppConfig =
-    val updated = withEditorConfig(editorConfig.copy(characterAnimation = animation))
-    updated.updateAuthoritativeMotion(identity) { configuration =>
+    val updated  = withEditorConfig(editorConfig.copy(characterAnimation = animation))
+    val fallback = MotionConfig.fromLegacy(updated.surfaceConfig, updated.motionPreset)
+    val configuration = updated.surfaceConfig.motionConfiguration
+      .getOrElse(fallback)
+      .withFallback(fallback)
+    updated.withMotionConfiguration(
       updated.updateMotionFamily(configuration, MotionFamily.EditorText)(_.copy(animation = animation))
-    }
+    )
 
   def withCommandRunnerAnimation(animation: Option[AnimationConfig]): AppConfig =
     updateAuthoritativeMotion(_.copy(commandRunnerAnimation = animation)) { configuration =>

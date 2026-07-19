@@ -22,9 +22,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-  private def createStateManager(): StateManager =
+  private def createStateManager(initialConfig: com.serenity.config.AppConfig = AppConfig.default): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerElementTransitionSettingsSpec"))
-    StateManager(logger).unsafeRunSync()
+    StateManager(logger, initialConfig = initialConfig).unsafeRunSync()
 
   "StateManager element transition setting commands" should "update the element transition speed scale config" in {
     val stateManager = createStateManager()
@@ -116,6 +116,54 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .loadConfig(Some(configFile.toString))
       .surfaceConfig
       .effectiveMotionBaseline shouldBe MotionPreset.Custom
+  }
+
+  it should "promote custom editor timing into the authoritative family" in {
+    val stateManager = createStateManager(AppConfig.default.withMotionPreset(MotionPreset.Custom))
+
+    List(CommandIntent.SetAnimationDuration(375), CommandIntent.SetAnimationSteps(9)).zipWithIndex.foreach {
+      case (intent, index) =>
+        stateManager
+          .executeCommand(
+            Command.typed(s"custom-editor-timing-$index", "Set custom editor timing", intent, CommandCategory.Settings)
+          )
+          .unsafeRunSync()
+    }
+
+    val config     = stateManager.getCurrentState.unsafeRunSync().config
+    val configFile = Files.createTempFile("serenity-custom-editor-timing", ".conf")
+    Files.writeString(configFile, ConfigManager.configToString(config))
+    val persistedFamily = ConfigManager
+      .loadConfig(Some(configFile.toString))
+      .surfaceConfig
+      .effectiveMotionConfiguration
+      .family(MotionFamily.EditorText)
+
+    config.scaledCharacterAnimation.map(_.durationMs) shouldBe Some(375L)
+    config.scaledCharacterAnimation.map(_.steps) shouldBe Some(9)
+    persistedFamily.animation.map(_.durationMs) shouldBe Some(375L)
+    persistedFamily.animation.map(_.steps) shouldBe Some(9)
+
+    val promoted = AppConfig.default
+      .withMotionPreset(MotionPreset.Custom)
+      .withEditorTextAnimation(
+        Some(
+          AnimationConfig.smooth.get
+            .copy(steps = 9, totalDuration = scala.concurrent.duration.Duration.fromNanos(375_000_000L))
+        )
+      )
+      .withCustomMotionBaseline
+
+    promoted.surfaceConfig.effectiveMotionConfiguration
+      .family(MotionFamily.EditorText)
+      .animation
+      .map(_.durationMs) shouldBe Some(
+      375L
+    )
+    promoted.surfaceConfig.effectiveMotionConfiguration
+      .family(MotionFamily.EditorText)
+      .animation
+      .map(_.steps) shouldBe Some(9)
   }
 
   it should "preserve the accessibility override through manual motion edits" in
