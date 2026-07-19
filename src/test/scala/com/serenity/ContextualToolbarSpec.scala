@@ -420,6 +420,37 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     toolbarRect(state).bottom should be <= contentRect.y + 12
   }
 
+  it should "center on the bounding box of a same-line selection" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-inline-selection-center")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(160, 30))).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        val bufferId  = activeBufferId(state)
+        val selection = Selection(CursorPosition(12, 60), CursorPosition(12, 100))
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope(List.fill(20)("x" * 140).mkString("\n")),
+            selection = Some(selection),
+            cursors = List(selection.focus)
+          )
+        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+      }
+      .unsafeRunSync()
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val contentRect = LayoutEngine
+      .calculateEditorWorkspaceLayout(state, layout)
+      .activeContentRect(state)
+      .getOrElse(fail("Expected active content rect"))
+
+    toolbarRect(state).centerX shouldBe contentRect.x + 80
+  }
+
   it should "place below a top-edge multi-line selection without covering its selected text" in {
     val stateManager = createStateManager("ContextualToolbarSpec-top-edge-selection-placement")
 
