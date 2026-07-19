@@ -40,7 +40,8 @@ case class UiPresetEditSession(
     sourceRevision: Option[String] = None,
     baseline: UiPreset,
     baselineTheme: Theme,
-    dirty: Boolean = false
+    dirty: Boolean = false,
+    draft: UiPreset
 )
 
 object UiPreset:
@@ -768,7 +769,11 @@ class UiPresetStore private (path: Path):
             IO.raiseError(UiPresetStoreConflict.SourceChanged(sourceName))
           case Some(source) =>
             val withoutSource = index.copy(presets = index.presets.filterNot(_ == source))
-            IO.fromEither(validateForUpsert(replacement, withoutSource)).flatMap { valid =>
+            val preservingUnknownFields = replacement.copy(
+              unknownFields = source.unknownFields.deepMerge(replacement.unknownFields),
+              configUnknownFields = source.configUnknownFields.deepMerge(replacement.configUnknownFields)
+            )
+            IO.fromEither(validateForUpsert(preservingUnknownFields, withoutSource)).flatMap { valid =>
               saveUnlocked(withoutSource.copy(presets = withoutSource.presets :+ valid))
             }
       }

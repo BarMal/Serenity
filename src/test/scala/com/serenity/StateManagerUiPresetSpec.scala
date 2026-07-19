@@ -1418,6 +1418,8 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     original shouldBe savedBefore
     copy.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
+    sm.getCurrentState.unsafeRunSync().uiPresetEditSession.map(_.draft.config.defaultDocumentMode) shouldBe
+      Some(DefaultDocumentMode.RichText)
     runner.editingPresetName shouldBe Some("Drafting Edited")
     runner.statusMessage shouldBe Some("Preset saved. Configure Drafting Edited.")
   }
