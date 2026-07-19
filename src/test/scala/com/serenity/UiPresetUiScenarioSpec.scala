@@ -36,7 +36,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     frame.evidence.layoutViolations shouldBe empty
   }
 
-  it should "preview edits, discard by reapplying, and restore the saved preset after restart" in {
+  it should "preview edits, discard explicitly, and restore the saved preset after restart" in {
     val path   = Files.createTempDirectory("ui-scenario-preset-restart").resolve("presets.json")
     val store  = UiPresetStore(path)
     val driver = UiScenarioDriver.create("ui-preset-transactions", uiPresetStore = Some(store)).unsafeRunSync()
@@ -52,7 +52,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     preview.evidence.layoutViolations shouldBe empty
     store.find("Scenario").unsafeRunSync().map(_.config.motionPreset) shouldBe Some(savedMotion)
 
-    execute(driver, CommandIntent.ApplyUiPreset("Scenario"))
+    execute(driver, CommandIntent.DiscardUiPresetDraft)
     val discarded = driver.state.unsafeRunSync()
     discarded.config.backgroundStyle shouldBe BackgroundStyle.Solid
     discarded.config.motionPreset shouldBe savedMotion
