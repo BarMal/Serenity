@@ -77,11 +77,10 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     AppRuntime.fastFrameInterval(RenderFpsTarget.Uncapped).toNanos shouldBe 3333333L
   }
 
-  it should "render an input update immediately when no animations are active" in {
+  it should "pace full renders at the configured frame interval when no animations are active" in {
     val frameInterval = AppRuntime.fastFrameInterval(RenderFpsTarget.Fps60)
 
-    AppRuntime.fastFrameDelay(hasActiveAnimations = false, frameInterval) shouldBe Duration.Zero
-    AppRuntime.fastFrameDelay(hasActiveAnimations = true, frameInterval) shouldBe frameInterval
+    AppRuntime.fastFrameDelay(frameInterval) shouldBe frameInterval
   }
 
   it should "advance animations at a stable 60 FPS cadence across render targets" in {
