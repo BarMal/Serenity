@@ -5,6 +5,7 @@ import com.serenity.config.*
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
+import com.serenity.ui.presets.UiPresetEditSession
 
 enum SurfacePhase:
   case BufferFadingOut // surface not rendered; buffer chars in overlay area fading out
@@ -145,7 +146,8 @@ case class AppState(
     focusHistory: List[Focus] = List.empty,
     navigationBackStack: List[NavigationPoint] = Nil,
     navigationForwardStack: List[NavigationPoint] = Nil,
-    hoveredEditorTarget: Option[HoveredEditorTarget] = None
+    hoveredEditorTarget: Option[HoveredEditorTarget] = None,
+    uiPresetEditSession: Option[UiPresetEditSession] = None
 ):
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled

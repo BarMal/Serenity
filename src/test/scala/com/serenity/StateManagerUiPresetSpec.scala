@@ -58,14 +58,11 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
       .getOrElse(fail("command runner should be open"))
 
-  private def unsavedPresetCopyName(name: String): String =
-    s"$name (modified, unsaved)"
-
   private def assertPresetMarkedUnsaved(sm: StateManager, sourceName: String = "Drafting"): Unit =
     val runner = commandRunnerState(sm)
 
-    runner.editingPresetName shouldBe Some(unsavedPresetCopyName(sourceName))
-    runner.statusMessage shouldBe Some(s"Editing unsaved copy of $sourceName. Save the preset to preserve it.")
+    runner.editingPresetName shouldBe Some(sourceName)
+    runner.statusMessage shouldBe Some("Preset draft has unsaved changes. Save commits them; Discard restores the workspace.")
 
   "StateManager UI presets" should "save the current UI preset to the preset store" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-save").resolve("ui-presets.json")
@@ -614,6 +611,42 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     runner.statusMessage shouldBe Some("Preset saved. Configure workspace options.")
     state.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
     submenu shouldBe Some("settings-preset-edit" -> false)
+  }
+
+  it should "keep a created preset draft out of storage and restore its baseline on discard" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-transaction").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "ui-preset-create",
+        "Create preset",
+        CommandIntent.StartUiPresetDraft("Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "set-drafting-markdown-default",
+        "Set drafting document default",
+        CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    store.find("Drafting").unsafeRunSync() shouldBe None
+    sm.getCurrentState.unsafeRunSync().config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
+
+    sm.executeCommand(
+      Command.typed("discard-preset-draft", "Discard preset draft", CommandIntent.DiscardUiPresetDraft, CommandCategory.Settings)
+    ).unsafeRunSync()
+
+    val restored = sm.getCurrentState.unsafeRunSync()
+    restored.config.defaultDocumentMode shouldBe AppConfig.default.defaultDocumentMode
+    restored.uiPresetEditSession shouldBe None
+    store.find("Drafting").unsafeRunSync() shouldBe None
   }
 
   it should "mark config changes as an unsaved copy of the preset currently being edited" in {

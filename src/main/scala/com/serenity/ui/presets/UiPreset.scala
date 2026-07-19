@@ -25,6 +25,16 @@ case class UiPreset(
     targetEditorPaneCount: Option[Int] = None
 )
 
+/** The authoritative, unsaved workspace edit session for a UI preset. */
+case class UiPresetEditSession(
+    id: String,
+    draftName: String,
+    sourceName: Option[String],
+    baseline: UiPreset,
+    baselineTheme: Theme,
+    dirty: Boolean = false
+)
+
 object UiPreset:
 
   val builtIns: List[UiPreset] =

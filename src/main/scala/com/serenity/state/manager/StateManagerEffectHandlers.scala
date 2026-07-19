@@ -1,6 +1,7 @@
 package com.serenity.state.manager
 
 import java.nio.file.Path
+import java.util.UUID
 
 import cats.effect.IO
 import cats.syntax.all.*
@@ -20,7 +21,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.*
-import com.serenity.ui.presets.UiPreset
+import com.serenity.ui.presets.{UiPreset, UiPresetEditSession}
 import com.serenity.ui.theme.config.{ThemeConfigWriter, ThemeCreatorState}
 
 /** Workflow operations selected by command effects. */
@@ -72,7 +73,6 @@ final private[manager] class StateManagerEffectHandlers(
   import sessions.*
   import workflow.*
   private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
-  private val UnsavedPresetCopySuffix       = " (modified, unsaved)"
 
   private val workflowEffects = new WorkflowEffectHandler(new WorkflowEffectPort:
     def requestOpenFile: IO[Unit] = requestOpenFileDialog
@@ -321,18 +321,26 @@ final private[manager] class StateManagerEffectHandlers(
     stateRef
       .modify { state =>
         val newConfig = update(state.config)
-        val newState  = withUpdatedRunnerConfig(state.copy(config = newConfig), newConfig)
+        val draftSession = state.uiPresetEditSession.map(_.copy(dirty = true))
+        val newState = withUpdatedRunnerConfig(
+          state.copy(config = newConfig, uiPresetEditSession = draftSession),
+          newConfig
+        )
         (newState, newConfig)
       }
       .flatTap(config =>
-        configPersistencePath match
-          case Some(path) =>
-            IO.blocking(com.serenity.config.ConfigManager.saveConfig(config, path)).flatMap {
-              case true  => IO.unit
-              case false => logger.warn(s"[CONFIG] Failed to persist config to $path")
-            }
+        stateRef.get.map(_.uiPresetEditSession).flatMap {
+          case Some(_) => IO.unit
           case None =>
-            IO.unit
+            configPersistencePath match
+              case Some(path) =>
+                IO.blocking(com.serenity.config.ConfigManager.saveConfig(config, path)).flatMap {
+                  case true  => IO.unit
+                  case false => logger.warn(s"[CONFIG] Failed to persist config to $path")
+                }
+              case None =>
+                IO.unit
+        }
       )
       .flatTap(_ => markEditedPreset)
       .flatTap(_ =>
@@ -343,36 +351,16 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def markEditedUiPresetDraftFromCommandRunner: IO[Unit] =
     stateRef.update { state =>
-      editingUiPresetName(state) match
-        case Some(presetName) =>
-          val sourceName = sourcePresetName(presetName)
+      state.uiPresetEditSession match
+        case Some(session) =>
           updateCommandRunnerPresetContextInState(
             state,
-            Some(unsavedPresetCopyName(sourceName)),
-            s"Editing unsaved copy of $sourceName. Save the preset to preserve it."
+            Some(session.draftName),
+            "Preset draft has unsaved changes. Save commits them; Discard restores the workspace."
           )
         case None =>
           state
     }
-
-  private def editingUiPresetName(state: AppState): Option[String] =
-    state.commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(runner) =>
-          runner.editingPresetName.map(_.trim).filter(_.nonEmpty)
-        case _ =>
-          None
-    }
-
-  private def unsavedPresetCopyName(name: String): String =
-    val trimmed = name.trim
-    if trimmed.endsWith(UnsavedPresetCopySuffix) then trimmed
-    else s"$trimmed$UnsavedPresetCopySuffix"
-
-  private def sourcePresetName(name: String): String =
-    val trimmed = name.trim
-    if trimmed.endsWith(UnsavedPresetCopySuffix) then trimmed.dropRight(UnsavedPresetCopySuffix.length).trim
-    else trimmed
 
   private[manager] def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
@@ -723,10 +711,14 @@ final private[manager] class StateManagerEffectHandlers(
         updateFontConfig(_.copy(textLigatures = enabled))
       case CommandIntent.SetUiLigatures(enabled) =>
         updateFontConfig(_.copy(uiLigatures = enabled))
+      case CommandIntent.StartUiPresetDraft(name) =>
+        startUiPresetDraftEffect(name) >> focusCreatedPresetOptions(name)
       case CommandIntent.SaveUiPreset(name) if command.name == "ui-preset-create" =>
         saveUiPresetEffect(name) >> focusCreatedPresetOptions(name)
       case CommandIntent.SaveUiPreset(name) =>
         saveUiPresetEffect(name)
+      case CommandIntent.DiscardUiPresetDraft =>
+        discardUiPresetDraftEffect
       case CommandIntent.ApplyUiPreset(name) =>
         applyUiPresetEffect(name)
       case CommandIntent.DuplicateUiPreset(sourceName, targetName) =>
@@ -979,7 +971,42 @@ final private[manager] class StateManagerEffectHandlers(
             .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to save UI preset $presetName"))
           _ <- refreshCommandRunnerUiPresetPreviews
           _ <- updateCommandRunnerPresetContext(Some(presetName), s"Preset saved. Configure $presetName.")
+          _ <- stateRef.update(
+            _.copy(uiPresetEditSession = Some(
+              UiPresetEditSession(UUID.randomUUID().toString, presetName, Some(presetName), preset, state.theme)
+            ))
+          )
         yield ()
+
+  private def startUiPresetDraftEffect(name: String): IO[Unit] =
+    normalizedPresetName(name) match
+      case None => logger.warn("[PRESET] Ignoring empty UI preset draft name")
+      case Some(draftName) =>
+        for
+          state <- stateRef.get
+          windowSize <- windowSizeProvider.handleErrorWith(error =>
+            logger.error(error)("[PRESET] Window size capture failed").as(None)
+          )
+          baseline = UiPreset.capture(draftName, state, windowSize)
+          session = UiPresetEditSession(UUID.randomUUID().toString, draftName, None, baseline, state.theme)
+          _ <- stateRef.update(_.copy(uiPresetEditSession = Some(session)))
+          _ <- updateCommandRunnerPresetContext(Some(draftName), "Editing draft from the current workspace. Save commits it.")
+        yield ()
+
+  private def discardUiPresetDraftEffect: IO[Unit] =
+    stateRef.modify { state =>
+      state.uiPresetEditSession match
+        case Some(session) =>
+          val restored = withUpdatedRunnerConfig(
+            UiPreset.applyToState(session.baseline, state, session.baselineTheme),
+            session.baseline.config
+          ).copy(uiPresetEditSession = None)
+          (restored, true)
+        case None => (state, false)
+    }.flatMap {
+      case true  => updateCommandRunnerPresetContext(None, "Preset draft discarded. Workspace restored.")
+      case false => IO.unit
+    }
 
   protected def applyUiPresetEffect(name: String): IO[Unit] =
     normalizedPresetName(name) match

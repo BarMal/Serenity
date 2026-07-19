@@ -162,7 +162,9 @@ enum CommandIntent:
   case SetCodeLigatures(enabled: Boolean)
   case SetTextLigatures(enabled: Boolean)
   case SetUiLigatures(enabled: Boolean)
+  case StartUiPresetDraft(name: String)
   case SaveUiPreset(name: String)
+  case DiscardUiPresetDraft
   case ApplyUiPreset(name: String)
   case DuplicateUiPreset(sourceName: String, targetName: String)
   case RenameUiPreset(sourceName: String, targetName: String)

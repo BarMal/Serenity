@@ -99,7 +99,7 @@ object CommandRunnerSettingsInputItems:
         hint = "New preset name",
         currentValue = "",
         isDecimal = false,
-        parse = text => nonEmptyText(text).map(CommandIntent.SaveUiPreset(_)),
+        parse = text => nonEmptyText(text).map(CommandIntent.StartUiPresetDraft(_)),
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),
@@ -112,6 +112,15 @@ object CommandRunnerSettingsInputItems:
         parse = text => nonEmptyText(text).map(CommandIntent.SaveUiPreset(_)),
         category = CommandCategory.Settings,
         acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "ui-preset-discard",
+        label = "Discard Preset Draft",
+        hint = "Restore the workspace from before editing",
+        currentValue = "",
+        isDecimal = false,
+        parse = _ => Some(CommandIntent.DiscardUiPresetDraft),
+        category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
         id = "ui-preset-apply",
