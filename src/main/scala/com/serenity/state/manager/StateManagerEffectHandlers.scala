@@ -727,6 +727,8 @@ final private[manager] class StateManagerEffectHandlers(
         saveUiPresetEffect(name)
       case CommandIntent.DiscardUiPresetDraft =>
         discardUiPresetDraftEffect
+      case CommandIntent.CancelUiPresetSwitch =>
+        cancelUiPresetSwitchEffect
       case CommandIntent.ApplyUiPreset(name) =>
         requireCleanPresetDraft(applyUiPresetEffect(name))
       case CommandIntent.EditUiPreset(name) =>
@@ -1017,9 +1019,17 @@ final private[manager] class StateManagerEffectHandlers(
         val session = state.uiPresetEditSession.get
         updateCommandRunnerPresetContext(
           Some(session.draftName),
-          "Save or Discard the current preset draft before switching presets."
+          "Save, Discard, or Cancel the current preset draft before switching presets."
         )
       case _ => action
+    }
+
+  private def cancelUiPresetSwitchEffect: IO[Unit] =
+    stateRef.get.flatMap {
+      case state if state.uiPresetEditSession.exists(_.dirty) =>
+        val draftName = state.uiPresetEditSession.map(_.draftName).getOrElse("")
+        updateCommandRunnerPresetContext(Some(draftName), s"Preset switch cancelled. Continue editing $draftName.")
+      case _ => IO.unit
     }
 
   private def startUiPresetDraftEffect(name: String): IO[Unit] =

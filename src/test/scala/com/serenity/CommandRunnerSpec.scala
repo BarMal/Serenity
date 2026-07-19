@@ -784,6 +784,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     presetActions.children.map(_.id) shouldBe List(
       "ui-preset-save",
       "ui-preset-discard",
+      "ui-preset-cancel-switch",
       "ui-preset-apply",
       "ui-preset-edit",
       "ui-preset-duplicate",

@@ -262,6 +262,7 @@ object CommandRunnerSettingsGroups:
     val presetActionItems = presetInputItems.filter(item =>
       item.id == "ui-preset-save" ||
         item.id == "ui-preset-discard" ||
+        item.id == "ui-preset-cancel-switch" ||
         item.id == "ui-preset-apply" ||
         item.id == "ui-preset-edit" ||
         item.id == "ui-preset-duplicate" ||
@@ -280,7 +281,7 @@ object CommandRunnerSettingsGroups:
       label = "Preset Actions",
       children = presetActionItems,
       category = CommandCategory.Settings,
-      hint = Some("Save, apply, duplicate, delete, or reset")
+      hint = Some("Save, discard, cancel, apply, duplicate, delete, or reset")
     )
     val createPresetNameGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-create-name",

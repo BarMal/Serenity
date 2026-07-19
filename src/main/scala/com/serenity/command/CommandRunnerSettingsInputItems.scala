@@ -124,6 +124,16 @@ object CommandRunnerSettingsInputItems:
         acceptsFreeText = true
       ),
       CommandSurfaceItem.InputItem(
+        id = "ui-preset-cancel-switch",
+        label = "Cancel Preset Switch",
+        hint = "Keep editing the current draft",
+        currentValue = "",
+        isDecimal = false,
+        parse = _ => Some(CommandIntent.CancelUiPresetSwitch),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
         id = "ui-preset-apply",
         label = "Apply Preset",
         hint = "Preset name",
