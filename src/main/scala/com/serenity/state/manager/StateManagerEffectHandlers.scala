@@ -712,7 +712,7 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.SetUiLigatures(enabled) =>
         updateFontConfig(_.copy(uiLigatures = enabled))
       case CommandIntent.StartUiPresetDraft(name) =>
-        startUiPresetDraftEffect(name) >> focusCreatedPresetOptions(name)
+        requireCleanPresetDraft(startUiPresetDraftEffect(name) >> focusCreatedPresetOptions(name))
       case CommandIntent.SaveUiPreset(name) if command.name == "ui-preset-create" =>
         saveUiPresetEffect(name) >> focusCreatedPresetOptions(name)
       case CommandIntent.SaveUiPreset(name) =>
@@ -720,13 +720,13 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.DiscardUiPresetDraft =>
         discardUiPresetDraftEffect
       case CommandIntent.ApplyUiPreset(name) =>
-        applyUiPresetEffect(name)
+        requireCleanPresetDraft(applyUiPresetEffect(name))
       case CommandIntent.DuplicateUiPreset(sourceName, targetName) =>
-        duplicateUiPresetEffect(sourceName, targetName)
+        requireCleanPresetDraft(duplicateUiPresetEffect(sourceName, targetName))
       case CommandIntent.RenameUiPreset(sourceName, targetName) =>
-        renameUiPresetEffect(sourceName, targetName)
+        requireCleanPresetDraft(renameUiPresetEffect(sourceName, targetName))
       case CommandIntent.DeleteUiPreset(name) =>
-        deleteUiPresetEffect(name)
+        requireCleanPresetDraft(deleteUiPresetEffect(name))
       case CommandIntent.ResetUiPreset(name) =>
         resetUiPresetEffect(name)
       case CommandIntent.SetTextAreaLeftInset(value) =>
@@ -966,19 +966,36 @@ final private[manager] class StateManagerEffectHandlers(
             logger.error(error)("[PRESET] Window size capture failed").as(None)
           )
           preset = UiPreset.capture(presetName, state, windowSize)
-          _ <- uiPresetStore
-            .upsert(preset)
-            .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to save UI preset $presetName"))
-          _ <- refreshCommandRunnerUiPresetPreviews
-          _ <- updateCommandRunnerPresetContext(Some(presetName), s"Preset saved. Configure $presetName.")
-          _ <- stateRef.update(
-            _.copy(uiPresetEditSession =
-              Some(
-                UiPresetEditSession(UUID.randomUUID().toString, presetName, Some(presetName), preset, state.theme)
-              )
-            )
-          )
+          saved <- uiPresetStore.upsert(preset).attempt
+          _ <- saved match
+            case Left(error) =>
+              logger.error(error)(s"[PRESET] Failed to save UI preset $presetName") >>
+                updateCommandRunnerPresetContext(
+                  Some(presetName),
+                  s"Could not save $presetName: ${Option(error.getMessage).getOrElse(error.getClass.getSimpleName)}"
+                )
+            case Right(_) =>
+              refreshCommandRunnerUiPresetPreviews >>
+                updateCommandRunnerPresetContext(Some(presetName), s"Preset saved. Configure $presetName.") >>
+                stateRef.update(
+                  _.copy(uiPresetEditSession =
+                    Some(
+                      UiPresetEditSession(UUID.randomUUID().toString, presetName, Some(presetName), preset, state.theme)
+                    )
+                  )
+                )
         yield ()
+
+  private def requireCleanPresetDraft(action: IO[Unit]): IO[Unit] =
+    stateRef.get.flatMap {
+      case state if state.uiPresetEditSession.exists(_.dirty) =>
+        val session = state.uiPresetEditSession.get
+        updateCommandRunnerPresetContext(
+          Some(session.draftName),
+          "Save or Discard the current preset draft before switching presets."
+        )
+      case _ => action
+    }
 
   private def startUiPresetDraftEffect(name: String): IO[Unit] =
     normalizedPresetName(name) match

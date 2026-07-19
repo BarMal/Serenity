@@ -13,6 +13,7 @@ import com.serenity.session.given
 import com.serenity.session.{SessionFindResult, SessionFindState, SessionState}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Layout, PaneSplitDirection}
+import com.serenity.ui.presets.{UiPreset, UiPresetEditSession}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -909,4 +910,28 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     restored.buffers(buffer1.id).findState shouldBe Some(FindState("apple", List(FindResult(0, 0)), 0))
     restored.buffers(buffer2.id).findState shouldBe Some(FindState("elephant", List(FindResult(1, 0)), 0))
+  }
+
+  it should "persist a dirty UI preset draft separately from its preview workspace" in {
+    val baseline = UiPreset(
+      name = "Drafting",
+      config = AppConfig.default.withBackgroundStyle(BackgroundStyle.Solid),
+      themeName = Theme.dark.name,
+      pinnedPanels = Nil
+    )
+    val state = AppState.initial.copy(
+      config = AppConfig.default.withBackgroundStyle(BackgroundStyle.GlassLike),
+      uiPresetEditSession = Some(
+        UiPresetEditSession("draft-1", "Drafting", Some("Drafting"), baseline, Theme.dark, dirty = true)
+      )
+    )
+
+    val restored = SessionState.toAppState(
+      SessionState.fromAppState(state).asJson.as[SessionState].toOption.getOrElse(fail("session should decode")),
+      Theme.dark
+    )
+
+    restored.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    restored.uiPresetEditSession.map(_.baseline.config.backgroundStyle) shouldBe Some(BackgroundStyle.Solid)
+    restored.uiPresetEditSession.map(_.dirty) shouldBe Some(true)
   }

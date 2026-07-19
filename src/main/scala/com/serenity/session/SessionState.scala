@@ -14,6 +14,8 @@ import com.serenity.richtext.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.{FontConfig, TextScaleMode}
 import com.serenity.ui.layout.{Layout, PaneSplitDirection}
+import com.serenity.ui.presets.UiPreset.given
+import com.serenity.ui.presets.{UiPreset, UiPresetEditSession}
 import com.serenity.ui.theme.Theme
 import io.circe.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
@@ -30,7 +32,18 @@ case class SessionState(
     config: AppConfig,
     themeName: String, // Store theme name instead of full theme object
     recentFiles: List[String] = Nil,
+    uiPresetEditSession: Option[SessionUiPresetEditSession] = None,
     schemaVersion: Int = 1
+)
+
+/** Persistent draft metadata that preserves the pre-preview workspace baseline. */
+case class SessionUiPresetEditSession(
+    id: String,
+    draftName: String,
+    sourceName: Option[String],
+    baseline: UiPreset,
+    baselineThemeName: String,
+    dirty: Boolean
 )
 
 /** Persistent representation of a buffer
@@ -115,7 +128,8 @@ object SessionState:
       bufferOrder = appState.bufferOrder.map(_.value),
       config = appState.config,
       themeName = appState.theme.name,
-      recentFiles = appState.recentFiles.map(_.toString)
+      recentFiles = appState.recentFiles.map(_.toString),
+      uiPresetEditSession = appState.uiPresetEditSession.map(SessionUiPresetEditSession.fromSession)
     )
 
   private def orderedBuffers(appState: AppState): List[Buffer] =
@@ -158,7 +172,8 @@ object SessionState:
       recentFiles = sessionState.recentFiles.map(Path.of(_)),
       nextBufferId = BufferId(bufferMap.keys.map(_.value).maxOption.getOrElse(-1) + 1),
       nextPaneId = PaneId(layout.editorPanes.keys.map(_.value).maxOption.getOrElse(-1) + 1),
-      nextSurfaceId = 0
+      nextSurfaceId = 0,
+      uiPresetEditSession = sessionState.uiPresetEditSession.map(SessionUiPresetEditSession.toSession(_, theme))
     )
 
   /** Convert SessionState back to AppState for restoration, reading file-backed buffers from disk when older or
@@ -195,7 +210,30 @@ object SessionState:
       recentFiles = sessionState.recentFiles.map(Path.of(_)),
       nextBufferId = BufferId(bufferMap.keys.map(_.value).maxOption.getOrElse(-1) + 1),
       nextPaneId = PaneId(layout.editorPanes.keys.map(_.value).maxOption.getOrElse(-1) + 1),
-      nextSurfaceId = 0
+      nextSurfaceId = 0,
+      uiPresetEditSession = sessionState.uiPresetEditSession.map(SessionUiPresetEditSession.toSession(_, theme))
+    )
+
+object SessionUiPresetEditSession:
+
+  def fromSession(session: UiPresetEditSession): SessionUiPresetEditSession =
+    SessionUiPresetEditSession(
+      id = session.id,
+      draftName = session.draftName,
+      sourceName = session.sourceName,
+      baseline = session.baseline,
+      baselineThemeName = session.baselineTheme.name,
+      dirty = session.dirty
+    )
+
+  def toSession(session: SessionUiPresetEditSession, baselineTheme: Theme): UiPresetEditSession =
+    UiPresetEditSession(
+      id = session.id,
+      draftName = session.draftName,
+      sourceName = session.sourceName,
+      baseline = session.baseline,
+      baselineTheme = baselineTheme,
+      dirty = session.dirty
     )
 
 object SessionBuffer:
@@ -963,6 +1001,9 @@ private def formatColor(color: Color): String =
 
 given Encoder[SessionState] = deriveEncoder
 
+given Encoder[SessionUiPresetEditSession] = deriveEncoder
+given Decoder[SessionUiPresetEditSession] = deriveDecoder
+
 given Encoder[SessionBuffer] = deriveEncoder
 given Decoder[SessionBuffer] = deriveDecoder
 
@@ -1022,13 +1063,14 @@ given Decoder[SessionState] = Decoder.instance { cursor =>
         cursor.history
       )
     )
-    buffers     <- cursor.get[List[SessionBuffer]]("buffers")
-    layout      <- cursor.get[SessionLayout]("layout")
-    focus       <- cursor.get[Option[SessionFocus]]("focus")
-    bufferOrder <- cursor.get[List[Int]]("bufferOrder")
-    config      <- cursor.get[AppConfig]("config")
-    themeName   <- cursor.get[String]("themeName")
-    recentFiles <- cursor.getOrElse[List[String]]("recentFiles")(Nil)
+    buffers             <- cursor.get[List[SessionBuffer]]("buffers")
+    layout              <- cursor.get[SessionLayout]("layout")
+    focus               <- cursor.get[Option[SessionFocus]]("focus")
+    bufferOrder         <- cursor.get[List[Int]]("bufferOrder")
+    config              <- cursor.get[AppConfig]("config")
+    themeName           <- cursor.get[String]("themeName")
+    recentFiles         <- cursor.getOrElse[List[String]]("recentFiles")(Nil)
+    uiPresetEditSession <- cursor.getOrElse[Option[SessionUiPresetEditSession]]("uiPresetEditSession")(None)
   yield SessionState(
     buffers = buffers,
     layout = layout,
@@ -1037,6 +1079,7 @@ given Decoder[SessionState] = Decoder.instance { cursor =>
     config = config,
     themeName = themeName,
     recentFiles = recentFiles,
+    uiPresetEditSession = uiPresetEditSession,
     schemaVersion = schemaVersion
   )
 }
