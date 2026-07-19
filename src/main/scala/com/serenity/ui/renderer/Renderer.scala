@@ -82,7 +82,7 @@ object Renderer:
     val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, codeFont, swingWin.canvas, publishFrame)
     val viewportSize = swingWin.viewportSize
     val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
-    renderFrame(
+    val _ = renderFrame(
       state0,
       cursorVisible,
       surface,
@@ -129,6 +129,57 @@ object Renderer:
       surface.flush()
     }
 
+  /** Render a base frame and its cursor overlay without recalculating the editor layout. */
+  def renderWithCursorOverlay(
+    state: AppState,
+    swingWin: com.serenity.ui.terminal.SwingWindow,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    uiMetrics: CellMetrics,
+    cursorColor: Option[java.awt.Color]
+  ): Boolean =
+    val state0       = withEffectiveTheme(state)
+    val viewportSize = swingWin.viewportSize
+    val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
+    val surface = Java2DRenderSurface.forFrame(
+      swingWin.metrics,
+      codeFont,
+      swingWin.canvas,
+      swingWin.onBaseImageReady
+    )
+    renderFrame(
+      state0,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      layout,
+      codeFont,
+      textFont,
+      uiFont,
+      swingWin.metrics,
+      uiMetrics,
+      cursorColor = None
+    ).fold(false) { renderPlan =>
+      swingWin.onCursorOverlayReady { image =>
+        val cursorSurface =
+          Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
+        val cursorContext = RenderContext(
+          cursorSurface,
+          layout,
+          true,
+          cursorColor,
+          codeFont,
+          textFont,
+          uiFont,
+          swingWin.metrics,
+          uiMetrics
+        )
+        renderEditorCursors(state0, cursorContext, renderPlan)
+        cursorSurface.flush()
+      }
+    }
+
   def render(
     state: AppState,
     cursorVisible: Boolean,
@@ -167,7 +218,7 @@ object Renderer:
   ): Unit =
     val state0 = withEffectiveTheme(state)
     val layout = LayoutEngine.calculateLayout(state0, viewportSize)
-    renderFrame(
+    val _ = renderFrame(
       state0,
       cursorVisible,
       surface,
@@ -212,11 +263,11 @@ object Renderer:
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color]
-  ): Unit =
+  ): Option[EditorPaneRenderPlan] =
     surface.hideCursor()
     surface.clearViewport(state.theme.background)
 
-    state.startPageSurface.flatMap {
+    val editorRenderPlan = state.startPageSurface.flatMap {
       _.content match
         case SurfaceContent.StartPage(page) => Some(page)
         case _                              => None
@@ -226,6 +277,7 @@ object Renderer:
         val floatContext =
           RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
         renderFloatingPanels(state, floatContext)
+        None
       case None =>
         val context =
           RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
@@ -236,9 +288,11 @@ object Renderer:
         renderPinnedPanels(state, context)
         renderEditorPanes(state, context, editorRenderPlan)
         renderFloatingPanels(state, context)
+        Some(editorRenderPlan)
 
     surface.applyPostProcessing(state.config.postProcessingEffect)
     surface.flush()
+    editorRenderPlan
 
   private def renderSpacerColumns(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     val surface = context.surface
