@@ -783,6 +783,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     presetActions.label shouldBe "Preset Actions"
     presetActions.children.map(_.id) shouldBe List(
       "ui-preset-save",
+      "ui-preset-discard",
       "ui-preset-apply",
       "ui-preset-duplicate",
       "ui-preset-delete",
@@ -869,7 +870,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     renameInput.currentValue shouldBe "Writing -> "
     deleteInput.currentValue shouldBe "Writing"
     resetInput.currentValue shouldBe "Writing"
-    createInput.parse("Longform Writing") shouldBe Some(CommandIntent.SaveUiPreset("Longform Writing"))
+    createInput.parse("Longform Writing") shouldBe Some(CommandIntent.StartUiPresetDraft("Longform Writing"))
     dupeInput.parse("Writing -> My Writing") shouldBe Some(CommandIntent.DuplicateUiPreset("Writing", "My Writing"))
     renameInput.parse("Draft -> Final") shouldBe Some(CommandIntent.RenameUiPreset("Draft", "Final"))
     deleteInput.parse("Old Preset") shouldBe Some(CommandIntent.DeleteUiPreset("Old Preset"))

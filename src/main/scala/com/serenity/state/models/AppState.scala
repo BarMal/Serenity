@@ -4,8 +4,8 @@ import com.serenity.animation.AnimationState
 import com.serenity.config.*
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.ui.layout.{Layout, ViewportSize}
-import com.serenity.ui.theme.Theme
 import com.serenity.ui.presets.UiPresetEditSession
+import com.serenity.ui.theme.Theme
 
 enum SurfacePhase:
   case BufferFadingOut // surface not rendered; buffer chars in overlay area fading out

@@ -150,6 +150,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     groupById(groups, "settings-preset-name").children.map(_.id) shouldBe List("ui-preset-rename")
     groupById(groups, "settings-preset-actions").children.map(_.id) shouldBe List(
       "ui-preset-save",
+      "ui-preset-discard",
       "ui-preset-apply",
       "ui-preset-duplicate",
       "ui-preset-delete",

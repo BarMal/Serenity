@@ -320,7 +320,7 @@ final private[manager] class StateManagerEffectHandlers(
   ): IO[com.serenity.config.AppConfig] =
     stateRef
       .modify { state =>
-        val newConfig = update(state.config)
+        val newConfig    = update(state.config)
         val draftSession = state.uiPresetEditSession.map(_.copy(dirty = true))
         val newState = withUpdatedRunnerConfig(
           state.copy(config = newConfig, uiPresetEditSession = draftSession),
@@ -972,9 +972,11 @@ final private[manager] class StateManagerEffectHandlers(
           _ <- refreshCommandRunnerUiPresetPreviews
           _ <- updateCommandRunnerPresetContext(Some(presetName), s"Preset saved. Configure $presetName.")
           _ <- stateRef.update(
-            _.copy(uiPresetEditSession = Some(
-              UiPresetEditSession(UUID.randomUUID().toString, presetName, Some(presetName), preset, state.theme)
-            ))
+            _.copy(uiPresetEditSession =
+              Some(
+                UiPresetEditSession(UUID.randomUUID().toString, presetName, Some(presetName), preset, state.theme)
+              )
+            )
           )
         yield ()
 
@@ -988,25 +990,30 @@ final private[manager] class StateManagerEffectHandlers(
             logger.error(error)("[PRESET] Window size capture failed").as(None)
           )
           baseline = UiPreset.capture(draftName, state, windowSize)
-          session = UiPresetEditSession(UUID.randomUUID().toString, draftName, None, baseline, state.theme)
+          session  = UiPresetEditSession(UUID.randomUUID().toString, draftName, None, baseline, state.theme)
           _ <- stateRef.update(_.copy(uiPresetEditSession = Some(session)))
-          _ <- updateCommandRunnerPresetContext(Some(draftName), "Editing draft from the current workspace. Save commits it.")
+          _ <- updateCommandRunnerPresetContext(
+            Some(draftName),
+            "Editing draft from the current workspace. Save commits it."
+          )
         yield ()
 
   private def discardUiPresetDraftEffect: IO[Unit] =
-    stateRef.modify { state =>
-      state.uiPresetEditSession match
-        case Some(session) =>
-          val restored = withUpdatedRunnerConfig(
-            UiPreset.applyToState(session.baseline, state, session.baselineTheme),
-            session.baseline.config
-          ).copy(uiPresetEditSession = None)
-          (restored, true)
-        case None => (state, false)
-    }.flatMap {
-      case true  => updateCommandRunnerPresetContext(None, "Preset draft discarded. Workspace restored.")
-      case false => IO.unit
-    }
+    stateRef
+      .modify { state =>
+        state.uiPresetEditSession match
+          case Some(session) =>
+            val restored = withUpdatedRunnerConfig(
+              UiPreset.applyToState(session.baseline, state, session.baselineTheme),
+              session.baseline.config
+            ).copy(uiPresetEditSession = None)
+            (restored, true)
+          case None => (state, false)
+      }
+      .flatMap {
+        case true  => updateCommandRunnerPresetContext(None, "Preset draft discarded. Workspace restored.")
+        case false => IO.unit
+      }
 
   protected def applyUiPresetEffect(name: String): IO[Unit] =
     normalizedPresetName(name) match

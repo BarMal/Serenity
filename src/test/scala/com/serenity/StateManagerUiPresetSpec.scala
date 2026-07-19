@@ -62,7 +62,9 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val runner = commandRunnerState(sm)
 
     runner.editingPresetName shouldBe Some(sourceName)
-    runner.statusMessage shouldBe Some("Preset draft has unsaved changes. Save commits them; Discard restores the workspace.")
+    runner.statusMessage shouldBe Some(
+      "Preset draft has unsaved changes. Save commits them; Discard restores the workspace."
+    )
 
   "StateManager UI presets" should "save the current UI preset to the preset store" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-save").resolve("ui-presets.json")
@@ -640,7 +642,12 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     sm.getCurrentState.unsafeRunSync().config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
 
     sm.executeCommand(
-      Command.typed("discard-preset-draft", "Discard preset draft", CommandIntent.DiscardUiPresetDraft, CommandCategory.Settings)
+      Command.typed(
+        "discard-preset-draft",
+        "Discard preset draft",
+        CommandIntent.DiscardUiPresetDraft,
+        CommandCategory.Settings
+      )
     ).unsafeRunSync()
 
     val restored = sm.getCurrentState.unsafeRunSync()

@@ -120,7 +120,8 @@ object CommandRunnerSettingsInputItems:
         currentValue = "",
         isDecimal = false,
         parse = _ => Some(CommandIntent.DiscardUiPresetDraft),
-        category = CommandCategory.Settings
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
       ),
       CommandSurfaceItem.InputItem(
         id = "ui-preset-apply",

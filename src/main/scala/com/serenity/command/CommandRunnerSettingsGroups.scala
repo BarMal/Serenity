@@ -260,7 +260,7 @@ object CommandRunnerSettingsGroups:
     val createPresetItems = presetInputItems.filter(_.id == "ui-preset-create")
     val renamePresetItems = presetInputItems.filter(_.id == "ui-preset-rename")
     val presetActionItems = presetInputItems.filter(item =>
-        item.id == "ui-preset-save" ||
+      item.id == "ui-preset-save" ||
         item.id == "ui-preset-discard" ||
         item.id == "ui-preset-apply" ||
         item.id == "ui-preset-duplicate" ||
