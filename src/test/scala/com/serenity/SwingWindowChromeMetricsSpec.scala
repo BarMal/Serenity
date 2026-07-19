@@ -82,6 +82,25 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     SwingWindow.shouldRefreshRoundedCornerMask(before, after) shouldBe true
   }
 
+  it should "coalesce burst resize shape updates until the queued update runs" in {
+    val updates   = new AtomicInteger(0)
+    val queued    = new java.util.concurrent.ConcurrentLinkedQueue[Runnable]()
+    val coalescer = new SwingWindow.CoalescedEdtUpdate(() => updates.incrementAndGet())
+
+    coalescer.schedule(queued.add)
+    coalescer.schedule(queued.add)
+    coalescer.schedule(queued.add)
+
+    queued.size shouldBe 1
+    updates.get() shouldBe 0
+
+    queued.remove().run()
+    updates.get() shouldBe 1
+
+    coalescer.schedule(queued.add)
+    queued.size shouldBe 1
+  }
+
   it should "antialias a per-pixel rounded-corner mask over the composed window contents" in {
     val contents = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB)
     val graphics = contents.createGraphics()
