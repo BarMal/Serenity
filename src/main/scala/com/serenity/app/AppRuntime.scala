@@ -232,7 +232,7 @@ object AppRuntime:
     requestFastRender: IO[Unit]
   ): Stream[IO, Event] => Stream[IO, Unit] =
     _.evalMap { event =>
-      checkResizeAndHandle >>
+      checkResizeBeforeInput(event, checkResizeAndHandle) >>
         ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
         stateManager.applyEvent(event) >>
         ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
@@ -240,6 +240,11 @@ object AppRuntime:
         resetCursorActivity(cursorVisible, breathIndex) >>
         requestFastRender
     }.drain
+
+  private def checkResizeBeforeInput(event: Event, checkResizeAndHandle: IO[Unit]): IO[Unit] =
+    event match
+      case _: com.serenity.keystroke.events.MouseInputEvent => checkResizeAndHandle
+      case _                                                => IO.unit
 
   private def refreshFocusedInputTranslator(
     event: Event,
