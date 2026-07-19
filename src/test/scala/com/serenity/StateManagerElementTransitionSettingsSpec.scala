@@ -189,6 +189,31 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     updated.animation.map(_.steps) shouldBe Some(9)
   }
 
+  it should "preserve legacy surface family animations when custom editor timing is promoted" in {
+    val configured = AppConfig(
+      characterAnimation = AnimationConfig.smooth,
+      motionPreset = MotionPreset.Custom,
+      commandRunnerAnimation = AnimationConfig.subtle,
+      uiAnimation = AnimationConfig.quick,
+      panelOpenTransitionKind = Some(TransitionKind.OutlineThenContent),
+      panelCloseTransitionKind = Some(TransitionKind.Fade)
+    )
+    val families = configured
+      .withEditorTextAnimation(
+        Some(
+          AnimationConfig.smooth.get
+            .copy(steps = 9, totalDuration = scala.concurrent.duration.Duration.fromNanos(375_000_000L))
+        )
+      )
+      .withCustomMotionBaseline
+      .surfaceConfig
+      .effectiveMotionConfiguration
+
+    families.family(MotionFamily.CommandSurfaces).animation shouldBe AnimationConfig.subtle
+    families.family(MotionFamily.PinnedPanels).animation shouldBe AnimationConfig.quick
+    families.family(MotionFamily.UiTransitions).animation shouldBe AnimationConfig.quick
+  }
+
   it should "preserve the accessibility override through manual motion edits" in
     List(
       MotionAccessibility.Off     -> CommandIntent.SetElementTransitionSpeedScale(2.25),

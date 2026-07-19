@@ -1830,7 +1830,7 @@ case class AppConfig(
 
   /** Marks the current resolved family values as a custom motion baseline. */
   def withCustomMotionBaseline: AppConfig =
-    val fallback = MotionConfig.fromLegacy(surfaceConfig, motionPreset)
+    val fallback = MotionConfig.fromLegacy(surfaceConfig)
     val current = surfaceConfig.motionConfiguration
       .getOrElse(fallback)
       .withFallback(fallback)
@@ -1909,7 +1909,7 @@ case class AppConfig(
   /** Updates editor text timing in both the legacy field and the authoritative motion family. */
   def withEditorTextAnimation(animation: Option[AnimationConfig]): AppConfig =
     val updated  = withEditorConfig(editorConfig.copy(characterAnimation = animation))
-    val fallback = MotionConfig.fromLegacy(updated.surfaceConfig, updated.motionPreset)
+    val fallback = MotionConfig.fromLegacy(updated.surfaceConfig)
     val configuration = updated.surfaceConfig.motionConfiguration
       .getOrElse(fallback)
       .withFallback(fallback)
