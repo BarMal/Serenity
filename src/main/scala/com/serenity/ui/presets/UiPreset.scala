@@ -1,8 +1,13 @@
 package com.serenity.ui.presets
 
 import java.awt.Font
+import java.nio.channels.FileChannel
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.*
+import java.text.Normalizer
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantLock
 
 import cats.effect.IO
 import com.serenity.animation.TransitionKind
@@ -12,20 +17,39 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
+import io.circe.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.parser.decode
 import io.circe.syntax.*
-import io.circe.{Decoder, Encoder}
 
 case class UiPreset(
     name: String,
     config: AppConfig,
     themeName: String,
     pinnedPanels: List[UiPreset.PinnedPanel],
-    targetEditorPaneCount: Option[Int] = None
+    targetEditorPaneCount: Option[Int] = None,
+    unknownFields: JsonObject = JsonObject.empty,
+    configUnknownFields: JsonObject = JsonObject.empty
+)
+
+/** The authoritative, unsaved workspace edit session for a UI preset. */
+case class UiPresetEditSession(
+    id: String,
+    draftName: String,
+    sourceName: Option[String],
+    sourceRevision: Option[String] = None,
+    baseline: UiPreset,
+    baselineTheme: Theme,
+    dirty: Boolean = false
 )
 
 object UiPreset:
+
+  def normalizedName(name: String): String =
+    Normalizer.normalize(name.trim, Normalizer.Form.NFC)
+
+  def nameKey(name: String): String =
+    normalizedName(name).toLowerCase(Locale.ROOT)
 
   val builtIns: List[UiPreset] =
     List(writingPreset, documentationPreset, codePreset, reviewPreset)
@@ -114,6 +138,21 @@ object UiPreset:
 
   private def patchTypographyConfig(base: AppConfig, source: AppConfig): AppConfig =
     base.withEditorConfig(base.editorConfig.copy(fontConfig = source.editorConfig.fontConfig))
+
+  private def unknownJsonFields(raw: JsonObject, known: JsonObject): JsonObject =
+    JsonObject.fromIterable(
+      raw.toIterable.flatMap {
+        case (key, rawValue) =>
+          known(key) match
+            case None => Some(key -> rawValue)
+            case Some(knownValue) =>
+              (rawValue.asObject, knownValue.asObject) match
+                case (Some(rawObject), Some(knownObject)) =>
+                  val nestedUnknown = unknownJsonFields(rawObject, knownObject)
+                  Option.when(nestedUnknown.nonEmpty)(key -> Json.fromJsonObject(nestedUnknown))
+                case _ => None
+      }
+    )
 
   case class Preview(name: String, hint: String)
 
@@ -516,15 +555,57 @@ object UiPreset:
   given Encoder[PinnedPanel] = deriveEncoder
   given Decoder[PinnedPanel] = deriveDecoder
 
-  given Encoder[UiPreset] = deriveEncoder
-  given Decoder[UiPreset] = deriveDecoder
+  private given rawUiPresetEncoder: Encoder.AsObject[UiPreset] = deriveEncoder
 
-case class UiPresetIndex(presets: List[UiPreset]):
+  given Encoder[UiPreset] = Encoder.AsObject.instance { preset =>
+    val encodedConfig = Json
+      .fromJsonObject(preset.configUnknownFields)
+      .deepMerge(preset.config.asJson)
+    val encodedPreset = rawUiPresetEncoder
+      .encodeObject(preset)
+      .remove("unknownFields")
+      .remove("configUnknownFields")
+      .add("config", encodedConfig)
+    preset.unknownFields.deepMerge(encodedPreset)
+  }
+
+  given Decoder[UiPreset] = Decoder.instance { cursor =>
+    for
+      name                  <- cursor.get[String]("name")
+      config                <- cursor.get[AppConfig]("config")
+      themeName             <- cursor.get[String]("themeName")
+      pinnedPanels          <- cursor.get[List[PinnedPanel]]("pinnedPanels")
+      targetEditorPaneCount <- cursor.get[Option[Int]]("targetEditorPaneCount")
+    yield
+      val knownKeys = Set("name", "config", "themeName", "pinnedPanels", "targetEditorPaneCount")
+      val unknown = cursor.value.asObject.fold(JsonObject.empty)(objectValue =>
+        JsonObject.fromIterable(objectValue.toIterable.filterNot((key, _) => knownKeys.contains(key)))
+      )
+      val configUnknownFields = cursor.downField("config").focus.flatMap(_.asObject).fold(JsonObject.empty) { rawConfig =>
+        unknownJsonFields(rawConfig, config.asJson.asObject.getOrElse(JsonObject.empty))
+      }
+      UiPreset(name, config, themeName, pinnedPanels, targetEditorPaneCount, unknown, configUnknownFields)
+  }
+
+case class UiPresetIndex(presets: List[UiPreset], unknownFields: JsonObject = JsonObject.empty):
+
   def upsert(preset: UiPreset): UiPresetIndex =
-    copy(presets = presets.filterNot(_.name.equalsIgnoreCase(preset.name)) :+ preset)
+    val existing = find(preset.name)
+    val preserved =
+      preset.copy(
+        unknownFields = existing.fold(preset.unknownFields)(_.unknownFields.deepMerge(preset.unknownFields)),
+        configUnknownFields = existing.fold(preset.configUnknownFields)(existing =>
+          Json
+            .fromJsonObject(existing.configUnknownFields)
+            .deepMerge(Json.fromJsonObject(preset.configUnknownFields))
+            .asObject
+            .getOrElse(JsonObject.empty)
+        )
+      )
+    copy(presets = presets.filterNot(item => UiPreset.nameKey(item.name) == UiPreset.nameKey(preset.name)) :+ preserved)
 
   def delete(name: String): UiPresetIndex =
-    copy(presets = presets.filterNot(_.name.equalsIgnoreCase(name.trim)))
+    copy(presets = presets.filterNot(existing => UiPreset.nameKey(existing.name) == UiPreset.nameKey(name)))
 
   def rename(sourceName: String, targetName: String): UiPresetIndex =
     val normalizedTarget = targetName.trim
@@ -541,7 +622,7 @@ case class UiPresetIndex(presets: List[UiPreset]):
       .getOrElse(this)
 
   def find(name: String): Option[UiPreset] =
-    presets.find(_.name.equalsIgnoreCase(name.trim))
+    presets.find(existing => UiPreset.nameKey(existing.name) == UiPreset.nameKey(name))
 
   def names: List[String] =
     presets.map(_.name)
@@ -549,11 +630,43 @@ case class UiPresetIndex(presets: List[UiPreset]):
 object UiPresetIndex:
   val empty: UiPresetIndex = UiPresetIndex(Nil)
 
-  given Encoder[UiPresetIndex] = deriveEncoder
-  given Decoder[UiPresetIndex] = deriveDecoder
+  private given rawUiPresetIndexEncoder: Encoder.AsObject[UiPresetIndex] = deriveEncoder
+
+  given Encoder[UiPresetIndex] = Encoder.AsObject.instance { index =>
+    index.unknownFields.deepMerge(rawUiPresetIndexEncoder.encodeObject(index).remove("unknownFields"))
+  }
+
+  given Decoder[UiPresetIndex] = Decoder.instance { cursor =>
+    cursor.get[List[UiPreset]]("presets").map { presets =>
+      val knownKeys = Set("presets")
+      val unknown = cursor.value.asObject.fold(JsonObject.empty)(objectValue =>
+        JsonObject.fromIterable(objectValue.toIterable.filterNot((key, _) => knownKeys.contains(key)))
+      )
+      UiPresetIndex(presets, unknown)
+    }
+  }
+
+enum UiPresetStoreConflict(message: String) extends RuntimeException(message):
+  case SourceChanged(name: String) extends UiPresetStoreConflict(s"Preset '$name' changed outside this draft")
+  case SourceMissing(name: String)
+      extends UiPresetStoreConflict(s"Preset '$name' was deleted or renamed outside this draft")
 
 class UiPresetStore private (path: Path):
   import UiPresetIndex.given
+
+  private val mutationLockPath = path.resolveSibling(s".${path.getFileName.toString}.lock")
+
+  private def withExclusiveMutationLock[A](operation: IO[A]): IO[A] =
+    val processLock = UiPresetStore.inProcessLock(mutationLockPath)
+    IO.blocking(processLock.lock())
+      .bracket { _ =>
+        IO.blocking {
+          Option(mutationLockPath.getParent).foreach(Files.createDirectories(_))
+          FileChannel.open(mutationLockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+        }.bracket { channel =>
+          IO.blocking(channel.lock()).bracket(_ => operation)(fileLock => IO.blocking(fileLock.release()))
+        }(channel => IO.blocking(channel.close()))
+      }(_ => IO.blocking(processLock.unlock()))
 
   def load(): IO[UiPresetIndex] =
     IO.blocking(Files.exists(path)).flatMap {
@@ -564,23 +677,80 @@ class UiPresetStore private (path: Path):
         }
     }
 
+  private def saveUnlocked(index: UiPresetIndex): IO[Unit] =
+    IO.fromEither(validateIndex(index)).flatMap { validIndex =>
+      IO.blocking {
+        Option(path.getParent).foreach(Files.createDirectories(_))
+        val directory = Option(path.getParent).getOrElse(Paths.get("."))
+        val temporary = Files.createTempFile(directory, s".${path.getFileName.toString}.", ".tmp")
+        try
+          Files.writeString(temporary, validIndex.asJson.spaces2, StandardCharsets.UTF_8)
+          Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        finally Files.deleteIfExists(temporary): Unit
+      }.void
+    }
+
   def save(index: UiPresetIndex): IO[Unit] =
-    IO.blocking {
-      Option(path.getParent).foreach(Files.createDirectories(_))
-      Files.writeString(path, index.asJson.spaces2, StandardCharsets.UTF_8)
-    }.void
+    withExclusiveMutationLock(saveUnlocked(index))
 
   def upsert(preset: UiPreset): IO[Unit] =
-    load().flatMap(index => save(index.upsert(preset)))
+    withExclusiveMutationLock {
+      load().flatMap(index =>
+        IO.fromEither(validateForUpsert(preset, index)).flatMap(valid => saveUnlocked(index.upsert(valid)))
+      )
+    }
+
+  /** Creates a new custom preset and rejects any existing normalized name. */
+  def create(preset: UiPreset): IO[Unit] =
+    withExclusiveMutationLock {
+      load().flatMap { index =>
+        IO.raiseWhen(index.find(preset.name).nonEmpty)(
+          new IllegalArgumentException(s"Preset name '${preset.name}' already exists")
+        ) >>
+          IO.fromEither(validateForUpsert(preset, index))
+            .flatMap(valid => saveUnlocked(index.copy(presets = index.presets :+ valid)))
+      }
+    }
 
   def delete(name: String): IO[Unit] =
-    load().flatMap(index => save(index.delete(name)))
+    withExclusiveMutationLock(load().flatMap(index => saveUnlocked(index.delete(name))))
 
   def rename(sourceName: String, targetName: String): IO[Unit] =
-    load().flatMap(index => save(index.rename(sourceName, targetName)))
+    withExclusiveMutationLock {
+      load().flatMap { index =>
+        for
+          source <- IO.fromOption(index.find(sourceName))(
+            new IllegalArgumentException(s"Preset '$sourceName' does not exist")
+          )
+          _ <- IO.raiseWhen(index.find(targetName).exists(_ != source))(
+            new IllegalArgumentException(s"Preset name '$targetName' already exists")
+          )
+          renamed <- IO.fromEither(
+            validateForUpsert(
+              source.copy(name = targetName),
+              index.copy(presets = index.presets.filterNot(_ == source))
+            )
+          )
+          _ <- saveUnlocked(index.copy(presets = index.presets.filterNot(_ == source) :+ renamed))
+        yield ()
+      }
+    }
 
   def duplicate(sourceName: String, targetName: String): IO[Unit] =
-    load().flatMap(index => save(index.duplicate(sourceName, targetName)))
+    withExclusiveMutationLock {
+      load().flatMap { index =>
+        for
+          source <- IO.fromOption(index.find(sourceName))(
+            new IllegalArgumentException(s"Preset '$sourceName' does not exist")
+          )
+          _ <- IO.raiseWhen(index.find(targetName).nonEmpty)(
+            new IllegalArgumentException(s"Preset name '$targetName' already exists")
+          )
+          copy <- IO.fromEither(validateForUpsert(source.copy(name = targetName), index))
+          _    <- saveUnlocked(index.copy(presets = index.presets :+ copy))
+        yield ()
+      }
+    }
 
   def find(name: String): IO[Option[UiPreset]] =
     load().map(_.find(name))
@@ -588,8 +758,58 @@ class UiPresetStore private (path: Path):
   def list(): IO[List[UiPreset]] =
     load().map(_.presets)
 
+  /** Replaces a custom preset only when its persisted source has not changed since the draft was opened. */
+  def replace(sourceName: String, sourceRevision: String, replacement: UiPreset): IO[Unit] =
+    withExclusiveMutationLock {
+      load().flatMap { index =>
+        index.find(sourceName) match
+          case None => IO.raiseError(UiPresetStoreConflict.SourceMissing(sourceName))
+          case Some(source) if revisionOf(source) != sourceRevision =>
+            IO.raiseError(UiPresetStoreConflict.SourceChanged(sourceName))
+          case Some(source) =>
+            val withoutSource = index.copy(presets = index.presets.filterNot(_ == source))
+            IO.fromEither(validateForUpsert(replacement, withoutSource)).flatMap { valid =>
+              saveUnlocked(withoutSource.copy(presets = withoutSource.presets :+ valid))
+            }
+      }
+    }
+
+  private def validateForUpsert(preset: UiPreset, index: UiPresetIndex): Either[IllegalArgumentException, UiPreset] =
+    val name = UiPreset.normalizedName(preset.name)
+    Either
+      .cond(
+        name.nonEmpty && !name.exists(ch => ch == '/' || ch == '\\' || ch == 0) &&
+          name != "." && name != ".." && UiPreset.builtIn(name).isEmpty,
+        preset.copy(name = name),
+        new IllegalArgumentException("Preset name must be a non-built-in, non-path-like name")
+      )
+      .flatMap { valid =>
+        index.find(valid.name) match
+          case Some(existing) if existing.name != preset.name =>
+            Left(new IllegalArgumentException(s"Preset name collides with existing preset '${existing.name}'"))
+          case _ => Right(valid)
+      }
+
+  private def validateIndex(index: UiPresetIndex): Either[IllegalArgumentException, UiPresetIndex] =
+    index.presets
+      .foldLeft[Either[IllegalArgumentException, List[UiPreset]]](Right(Nil)) { (validated, preset) =>
+        validated.flatMap(accepted => validateForUpsert(preset, UiPresetIndex(accepted)).map(accepted :+ _))
+      }
+      .map(presets => UiPresetIndex(presets, index.unknownFields))
+
+  def revisionOf(preset: UiPreset): String =
+    preset.asJson.noSpaces
+
 object UiPresetStore:
   val defaultPath: Path = Paths.get(System.getProperty("user.home"), ".serenity", "ui-presets.json")
+
+  private val inProcessLocks = new ConcurrentHashMap[Path, ReentrantLock]()
+
+  private def inProcessLock(path: Path): ReentrantLock =
+    inProcessLocks.computeIfAbsent(path.toAbsolutePath.normalize, _ => new ReentrantLock())
+
+  def revisionOf(preset: UiPreset): String =
+    preset.asJson.noSpaces
 
   def apply(path: Path): UiPresetStore =
     new UiPresetStore(path)

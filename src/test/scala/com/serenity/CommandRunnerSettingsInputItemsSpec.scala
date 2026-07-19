@@ -55,7 +55,8 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
   it should "build preset and binding parsers as reusable schema rows" in {
     val items = CommandRunnerSettingsInputItems.build(AppConfig.default)
 
-    inputById(items, "ui-preset-create").parse("Focus") shouldBe Some(CommandIntent.SaveUiPreset("Focus"))
+    inputById(items, "ui-preset-create").parse("Focus") shouldBe Some(CommandIntent.StartUiPresetDraft("Focus"))
+    inputById(items, "ui-preset-edit").parse("Focus") shouldBe Some(CommandIntent.EditUiPreset("Focus"))
     inputById(items, "ui-preset-rename").parse("Focus -> Review") shouldBe
       Some(CommandIntent.RenameUiPreset("Focus", "Review"))
     inputById(items, "ui-preset-rename").parse("Focus") shouldBe None

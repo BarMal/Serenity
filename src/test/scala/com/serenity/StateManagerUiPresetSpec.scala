@@ -58,14 +58,13 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
       .getOrElse(fail("command runner should be open"))
 
-  private def unsavedPresetCopyName(name: String): String =
-    s"$name (modified, unsaved)"
-
   private def assertPresetMarkedUnsaved(sm: StateManager, sourceName: String = "Drafting"): Unit =
     val runner = commandRunnerState(sm)
 
-    runner.editingPresetName shouldBe Some(unsavedPresetCopyName(sourceName))
-    runner.statusMessage shouldBe Some(s"Editing unsaved copy of $sourceName. Save the preset to preserve it.")
+    runner.editingPresetName shouldBe Some(sourceName)
+    runner.statusMessage shouldBe Some(
+      "Preset draft has unsaved changes. Save commits them; Discard restores the workspace."
+    )
 
   "StateManager UI presets" should "save the current UI preset to the preset store" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-save").resolve("ui-presets.json")
@@ -107,7 +106,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       onWindowSizeChanged = size => observedWindowSize.set(Some(size))
     )
     val preset = com.serenity.ui.presets.UiPreset(
-      name = "Review",
+      name = "Review Custom",
       config = AppConfig.default
         .withBackgroundStyle(BackgroundStyle.Solid)
         .withPreferredWindowSize(PreferredWindowSize(1280, 720)),
@@ -129,7 +128,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "apply-review-preset",
         "Apply review preset",
-        CommandIntent.ApplyUiPreset("Review"),
+        CommandIntent.ApplyUiPreset("Review Custom"),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -357,7 +356,16 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
-    store.find("Personal Writing").unsafeRunSync() should not be empty
+    store.find("Personal Writing").unsafeRunSync() shouldBe None
+
+    sm.executeCommand(
+      Command.typed(
+        "save-personal-writing-preset",
+        "Save personal writing preset",
+        CommandIntent.SaveUiPreset("Personal Writing"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
 
     sm.executeCommand(
       Command.typed(
@@ -383,6 +391,44 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     com.serenity.ui.presets.UiPreset.builtIn("Writing") should not be empty
   }
 
+  it should "reject saving Create and Duplicate drafts over an existing preset" in {
+    val path     = Files.createTempDirectory("state-manager-ui-preset-draft-collision").resolve("ui-presets.json")
+    val store    = UiPresetStore(path)
+    val existing = UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Theme.dark.name, Nil)
+    val sm       = managerWithStore(store)
+    store.upsert(existing).unsafeRunSync()
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("create", "Create", CommandIntent.StartUiPresetDraft("Drafting"), CommandCategory.Settings)
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("save", "Save", CommandIntent.SaveUiPreset("Drafting"), CommandCategory.Settings)
+    ).unsafeRunSync()
+    store.find("Drafting").unsafeRunSync() shouldBe Some(existing)
+    commandRunnerState(sm).statusMessage.getOrElse(fail("save failure should be visible")) should include(
+      "Could not save Drafting"
+    )
+
+    sm.executeCommand(Command.typed("discard", "Discard", CommandIntent.DiscardUiPresetDraft, CommandCategory.Settings))
+      .unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "duplicate",
+        "Duplicate",
+        CommandIntent.DuplicateUiPreset("Writing", "Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("save", "Save", CommandIntent.SaveUiPreset("Drafting"), CommandCategory.Settings)
+    ).unsafeRunSync()
+    store.find("Drafting").unsafeRunSync() shouldBe Some(existing)
+    commandRunnerState(sm).statusMessage.getOrElse(fail("save failure should be visible")) should include(
+      "Could not save Drafting"
+    )
+  }
+
   it should "keep built-in presets immutable for rename commands" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-rename-built-in").resolve("ui-presets.json")
     val store = UiPresetStore(path)
@@ -405,18 +451,95 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     runner.statusMessage shouldBe Some("Built-in preset cannot be renamed. Duplicate Writing first.")
   }
 
+  it should "restore a dirty preset draft into a reopened command runner" in {
+    val path = Files.createTempDirectory("state-manager-ui-preset-reopen").resolve("ui-presets.json")
+    val sm   = managerWithStore(UiPresetStore(path))
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("create", "Create", CommandIntent.StartUiPresetDraft("Drafting"), CommandCategory.Settings)
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "change",
+        "Change",
+        CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val runner = commandRunnerState(sm)
+    runner.editingPresetName shouldBe Some("Drafting")
+    runner.statusMessage shouldBe Some(
+      "Preset draft has unsaved changes. Save commits them; Discard restores the workspace."
+    )
+  }
+
+  it should "edit custom presets as drafts and reject built-in edit requests" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-edit").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+    store.upsert(UiPreset("Drafting", AppConfig.default.withLineNumbers(false), Theme.dark.name, Nil)).unsafeRunSync()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(Command.typed("edit", "Edit", CommandIntent.EditUiPreset("Drafting"), CommandCategory.Settings))
+      .unsafeRunSync()
+    sm.getCurrentState.unsafeRunSync().uiPresetEditSession.flatMap(_.sourceName) shouldBe Some("Drafting")
+    sm.executeCommand(Command.typed("discard", "Discard", CommandIntent.DiscardUiPresetDraft, CommandCategory.Settings))
+      .unsafeRunSync()
+    sm.executeCommand(Command.typed("edit", "Edit", CommandIntent.EditUiPreset("Writing"), CommandCategory.Settings))
+      .unsafeRunSync()
+    commandRunnerState(sm).statusMessage shouldBe Some("Built-in preset cannot be edited. Duplicate Writing first.")
+  }
+
+  it should "reject unavailable preset resources without changing the workspace" in {
+    val path    = Files.createTempDirectory("state-manager-ui-preset-unavailable-resources").resolve("ui-presets.json")
+    val store   = UiPresetStore(path)
+    val sm      = managerWithStore(store)
+    val initial = sm.getCurrentState.unsafeRunSync()
+    store
+      .upsert(UiPreset("Missing Theme", AppConfig.default.withLineNumbers(false), "not-installed", Nil))
+      .unsafeRunSync()
+    store
+      .upsert(
+        UiPreset(
+          "Missing Font",
+          AppConfig.default.copy(fontConfig = AppConfig.default.fontConfig.copy(textFontFamily = "not-installed")),
+          Theme.dark.name,
+          Nil
+        )
+      )
+      .unsafeRunSync()
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("edit", "Edit", CommandIntent.EditUiPreset("Missing Theme"), CommandCategory.Settings)
+    ).unsafeRunSync()
+    sm.getCurrentState.unsafeRunSync().config shouldBe initial.config
+    sm.getCurrentState.unsafeRunSync().uiPresetEditSession shouldBe None
+    commandRunnerState(sm).statusMessage.getOrElse(fail("missing preset error")) should include(
+      "Theme 'not-installed' could not be loaded"
+    )
+
+    sm.executeCommand(
+      Command.typed(
+        "duplicate",
+        "Duplicate",
+        CommandIntent.DuplicateUiPreset("Missing Font", "Copy"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.getCurrentState.unsafeRunSync().config shouldBe initial.config
+    sm.getCurrentState.unsafeRunSync().uiPresetEditSession shouldBe None
+    commandRunnerState(sm).statusMessage.getOrElse(fail("missing preset error")) should include(
+      "Preset requires unavailable text font 'not-installed'"
+    )
+  }
+
   it should "keep built-in presets immutable for delete commands" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-delete-built-in").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
-    val customWriting = UiPreset(
-      name = "Writing",
-      config = AppConfig.default.copy(backgroundStyle = BackgroundStyle.Solid),
-      themeName = Theme.dark.name,
-      pinnedPanels = Nil
-    )
-    store.upsert(customWriting).unsafeRunSync()
-
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
@@ -429,7 +552,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     val runner = commandRunnerState(sm)
 
-    store.find("Writing").unsafeRunSync() should not be empty
+    store.find("Writing").unsafeRunSync() shouldBe None
     runner.editingPresetName shouldBe Some("Writing")
     runner.statusMessage shouldBe Some("Built-in preset cannot be deleted. Use Reset Preset to discard overrides.")
   }
@@ -553,7 +676,16 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     ).unsafeRunSync()
 
     runnerState.editingPresetName shouldBe Some("Drafting Copy")
-    runnerState.statusMessage shouldBe Some("Preset duplicated. Configure Drafting Copy.")
+    runnerState.statusMessage shouldBe Some("Editing unsaved duplicate of Drafting. Save commits it.")
+
+    sm.executeCommand(
+      Command.typed(
+        "save-drafting-copy-preset",
+        "Save drafting copy preset",
+        CommandIntent.SaveUiPreset("Drafting Copy"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
 
     sm.executeCommand(
       Command.typed(
@@ -611,9 +743,50 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-edit")
     runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-presets")
     runner.editingPresetName shouldBe Some("Drafting")
-    runner.statusMessage shouldBe Some("Preset saved. Configure workspace options.")
+    runner.statusMessage shouldBe Some("Editing draft from the current workspace. Save commits it.")
     state.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
     submenu shouldBe Some("settings-preset-edit" -> false)
+  }
+
+  it should "keep a created preset draft out of storage and restore its baseline on discard" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-transaction").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "ui-preset-create",
+        "Create preset",
+        CommandIntent.StartUiPresetDraft("Drafting"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "set-drafting-markdown-default",
+        "Set drafting document default",
+        CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    store.find("Drafting").unsafeRunSync() shouldBe None
+    sm.getCurrentState.unsafeRunSync().config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
+
+    sm.executeCommand(
+      Command.typed(
+        "discard-preset-draft",
+        "Discard preset draft",
+        CommandIntent.DiscardUiPresetDraft,
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val restored = sm.getCurrentState.unsafeRunSync()
+    restored.config.defaultDocumentMode shouldBe AppConfig.default.defaultDocumentMode
+    restored.uiPresetEditSession shouldBe None
+    store.find("Drafting").unsafeRunSync() shouldBe None
   }
 
   it should "mark config changes as an unsaved copy of the preset currently being edited" in {
@@ -1252,14 +1425,6 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val path  = Files.createTempDirectory("state-manager-ui-preset-reset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
-    val customWriting = UiPreset(
-      name = "Writing",
-      config = AppConfig.default.copy(backgroundStyle = BackgroundStyle.Solid),
-      themeName = Theme.dark.name,
-      pinnedPanels = Nil
-    )
-    store.upsert(customWriting).unsafeRunSync()
-
     sm.executeCommand(
       Command.typed(
         "reset-writing-preset",

@@ -261,7 +261,9 @@ object CommandRunnerSettingsGroups:
     val renamePresetItems = presetInputItems.filter(_.id == "ui-preset-rename")
     val presetActionItems = presetInputItems.filter(item =>
       item.id == "ui-preset-save" ||
+        item.id == "ui-preset-discard" ||
         item.id == "ui-preset-apply" ||
+        item.id == "ui-preset-edit" ||
         item.id == "ui-preset-duplicate" ||
         item.id == "ui-preset-delete" ||
         item.id == "ui-preset-reset"
@@ -485,7 +487,7 @@ object CommandRunnerSettingsGroups:
     presetName match
       case Some(name) =>
         item.id match
-          case "ui-preset-save" | "ui-preset-apply" | "ui-preset-delete" | "ui-preset-reset" =>
+          case "ui-preset-save" | "ui-preset-apply" | "ui-preset-edit" | "ui-preset-delete" | "ui-preset-reset" =>
             item.copy(currentValue = name)
           case "ui-preset-duplicate" | "ui-preset-rename" =>
             item.copy(currentValue = s"$name -> ")

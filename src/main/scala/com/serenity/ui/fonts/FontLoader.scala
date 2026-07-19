@@ -75,6 +75,17 @@ object FontLoader:
   lazy val availableUiFamilies: List[String] =
     availableTextFamilies
 
+  /** Lists configured font roles whose requested families cannot be resolved by this runtime. */
+  def missingFamilies(config: FontConfig): List[String] =
+    List(
+      ("code", config.codeFontFamily, availableMonospaceFamilies),
+      ("text", config.textFontFamily, availableTextFamilies),
+      ("UI", config.uiFontFamily, availableUiFamilies)
+    ).collect {
+      case (role, family, available) if !available.exists(_.equalsIgnoreCase(family)) =>
+        s"$role font '$family'"
+    }
+
   def isMonospacedFamily(family: String): Boolean =
     if family == BundledCodeFontFamily then true
     else isMonospaced(Font(family, Font.PLAIN, 12))

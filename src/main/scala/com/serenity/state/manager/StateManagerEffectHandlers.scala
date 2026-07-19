@@ -1,6 +1,7 @@
 package com.serenity.state.manager
 
 import java.nio.file.Path
+import java.util.UUID
 
 import cats.effect.IO
 import cats.syntax.all.*
@@ -19,8 +20,10 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.text.TextEditing
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.presets.UiPreset
+import com.serenity.ui.presets.{UiPreset, UiPresetEditSession, UiPresetStore}
+import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.{ThemeConfigWriter, ThemeCreatorState}
 
 /** Workflow operations selected by command effects. */
@@ -72,7 +75,6 @@ final private[manager] class StateManagerEffectHandlers(
   import sessions.*
   import workflow.*
   private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
-  private val UnsavedPresetCopySuffix       = " (modified, unsaved)"
 
   private val workflowEffects = new WorkflowEffectHandler(new WorkflowEffectPort:
     def requestOpenFile: IO[Unit] = requestOpenFileDialog
@@ -320,19 +322,27 @@ final private[manager] class StateManagerEffectHandlers(
   ): IO[com.serenity.config.AppConfig] =
     stateRef
       .modify { state =>
-        val newConfig = update(state.config)
-        val newState  = withUpdatedRunnerConfig(state.copy(config = newConfig), newConfig)
+        val newConfig    = update(state.config)
+        val draftSession = state.uiPresetEditSession.map(_.copy(dirty = true))
+        val newState = withUpdatedRunnerConfig(
+          state.copy(config = newConfig, uiPresetEditSession = draftSession),
+          newConfig
+        )
         (newState, newConfig)
       }
       .flatTap(config =>
-        configPersistencePath match
-          case Some(path) =>
-            IO.blocking(com.serenity.config.ConfigManager.saveConfig(config, path)).flatMap {
-              case true  => IO.unit
-              case false => logger.warn(s"[CONFIG] Failed to persist config to $path")
-            }
+        stateRef.get.map(_.uiPresetEditSession).flatMap {
+          case Some(_) => IO.unit
           case None =>
-            IO.unit
+            configPersistencePath match
+              case Some(path) =>
+                IO.blocking(com.serenity.config.ConfigManager.saveConfig(config, path)).flatMap {
+                  case true  => IO.unit
+                  case false => logger.warn(s"[CONFIG] Failed to persist config to $path")
+                }
+              case None =>
+                IO.unit
+        }
       )
       .flatTap(_ => markEditedPreset)
       .flatTap(_ =>
@@ -343,36 +353,16 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def markEditedUiPresetDraftFromCommandRunner: IO[Unit] =
     stateRef.update { state =>
-      editingUiPresetName(state) match
-        case Some(presetName) =>
-          val sourceName = sourcePresetName(presetName)
+      state.uiPresetEditSession match
+        case Some(session) =>
           updateCommandRunnerPresetContextInState(
             state,
-            Some(unsavedPresetCopyName(sourceName)),
-            s"Editing unsaved copy of $sourceName. Save the preset to preserve it."
+            Some(session.draftName),
+            "Preset draft has unsaved changes. Save commits them; Discard restores the workspace."
           )
         case None =>
           state
     }
-
-  private def editingUiPresetName(state: AppState): Option[String] =
-    state.commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(runner) =>
-          runner.editingPresetName.map(_.trim).filter(_.nonEmpty)
-        case _ =>
-          None
-    }
-
-  private def unsavedPresetCopyName(name: String): String =
-    val trimmed = name.trim
-    if trimmed.endsWith(UnsavedPresetCopySuffix) then trimmed
-    else s"$trimmed$UnsavedPresetCopySuffix"
-
-  private def sourcePresetName(name: String): String =
-    val trimmed = name.trim
-    if trimmed.endsWith(UnsavedPresetCopySuffix) then trimmed.dropRight(UnsavedPresetCopySuffix.length).trim
-    else trimmed
 
   private[manager] def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
@@ -723,18 +713,24 @@ final private[manager] class StateManagerEffectHandlers(
         updateFontConfig(_.copy(textLigatures = enabled))
       case CommandIntent.SetUiLigatures(enabled) =>
         updateFontConfig(_.copy(uiLigatures = enabled))
+      case CommandIntent.StartUiPresetDraft(name) =>
+        requireCleanPresetDraft(startUiPresetDraftEffect(name) >> focusCreatedPresetOptions(name))
       case CommandIntent.SaveUiPreset(name) if command.name == "ui-preset-create" =>
         saveUiPresetEffect(name) >> focusCreatedPresetOptions(name)
       case CommandIntent.SaveUiPreset(name) =>
         saveUiPresetEffect(name)
+      case CommandIntent.DiscardUiPresetDraft =>
+        discardUiPresetDraftEffect
       case CommandIntent.ApplyUiPreset(name) =>
-        applyUiPresetEffect(name)
+        requireCleanPresetDraft(applyUiPresetEffect(name))
+      case CommandIntent.EditUiPreset(name) =>
+        requireCleanPresetDraft(editUiPresetEffect(name))
       case CommandIntent.DuplicateUiPreset(sourceName, targetName) =>
-        duplicateUiPresetEffect(sourceName, targetName)
+        requireCleanPresetDraft(duplicateUiPresetEffect(sourceName, targetName))
       case CommandIntent.RenameUiPreset(sourceName, targetName) =>
-        renameUiPresetEffect(sourceName, targetName)
+        requireCleanPresetDraft(renameUiPresetEffect(sourceName, targetName))
       case CommandIntent.DeleteUiPreset(name) =>
-        deleteUiPresetEffect(name)
+        requireCleanPresetDraft(deleteUiPresetEffect(name))
       case CommandIntent.ResetUiPreset(name) =>
         resetUiPresetEffect(name)
       case CommandIntent.SetTextAreaLeftInset(value) =>
@@ -974,12 +970,87 @@ final private[manager] class StateManagerEffectHandlers(
             logger.error(error)("[PRESET] Window size capture failed").as(None)
           )
           preset = UiPreset.capture(presetName, state, windowSize)
-          _ <- uiPresetStore
-            .upsert(preset)
-            .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to save UI preset $presetName"))
-          _ <- refreshCommandRunnerUiPresetPreviews
-          _ <- updateCommandRunnerPresetContext(Some(presetName), s"Preset saved. Configure $presetName.")
+          saved <- state.uiPresetEditSession match
+            case Some(session) =>
+              (session.sourceName, session.sourceRevision) match
+                case (Some(source), Some(revision)) if UiPreset.nameKey(source) == UiPreset.nameKey(presetName) =>
+                  uiPresetStore.replace(source, revision, preset).attempt
+                case (None, _) => uiPresetStore.create(preset).attempt
+                case _         => uiPresetStore.upsert(preset).attempt
+            case None => uiPresetStore.upsert(preset).attempt
+          _ <- saved match
+            case Left(error) =>
+              logger.error(error)(s"[PRESET] Failed to save UI preset $presetName") >>
+                updateCommandRunnerPresetContext(
+                  Some(presetName),
+                  s"Could not save $presetName: ${Option(error.getMessage).getOrElse(error.getClass.getSimpleName)}"
+                )
+            case Right(_) =>
+              refreshCommandRunnerUiPresetPreviews >>
+                updateCommandRunnerPresetContext(Some(presetName), s"Preset saved. Configure $presetName.") >>
+                stateRef.update(
+                  _.copy(uiPresetEditSession =
+                    Some(
+                      UiPresetEditSession(
+                        UUID.randomUUID().toString,
+                        presetName,
+                        Some(presetName),
+                        Some(UiPresetStore.revisionOf(preset)),
+                        preset,
+                        state.theme
+                      )
+                    )
+                  )
+                )
         yield ()
+
+  private def requireCleanPresetDraft(action: IO[Unit]): IO[Unit] =
+    stateRef.get.flatMap {
+      case state if state.uiPresetEditSession.exists(_.dirty) =>
+        val session = state.uiPresetEditSession.get
+        updateCommandRunnerPresetContext(
+          Some(session.draftName),
+          "Save or Discard the current preset draft before switching presets."
+        )
+      case _ => action
+    }
+
+  private def startUiPresetDraftEffect(name: String): IO[Unit] =
+    normalizedPresetName(name) match
+      case None => logger.warn("[PRESET] Ignoring empty UI preset draft name")
+      case Some(draftName) =>
+        for
+          state <- stateRef.get
+          windowSize <- windowSizeProvider.handleErrorWith(error =>
+            logger.error(error)("[PRESET] Window size capture failed").as(None)
+          )
+          baseline = UiPreset.capture(draftName, state, windowSize)
+          session  = UiPresetEditSession(UUID.randomUUID().toString, draftName, None, None, baseline, state.theme)
+          _ <- stateRef.update(_.copy(uiPresetEditSession = Some(session)))
+          _ <- updateCommandRunnerPresetContext(
+            Some(draftName),
+            "Editing draft from the current workspace. Save commits it."
+          )
+        yield ()
+
+  private def discardUiPresetDraftEffect: IO[Unit] =
+    stateRef
+      .modify { state =>
+        state.uiPresetEditSession match
+          case Some(session) =>
+            val restored = withUpdatedRunnerConfig(
+              UiPreset.applyToState(session.baseline, state, session.baselineTheme),
+              session.baseline.config
+            ).copy(uiPresetEditSession = None)
+            (restored, true)
+          case None => (state, false)
+      }
+      .flatMap {
+        case true =>
+          stateRef.get.flatMap(state => onFontConfigChanged(state.config.fontConfig)) >>
+            updateCommandRunnerPresetContext(None, "Preset draft discarded. Workspace restored.")
+        case false => IO.unit
+      }
 
   protected def applyUiPresetEffect(name: String): IO[Unit] =
     normalizedPresetName(name) match
@@ -993,33 +1064,78 @@ final private[manager] class StateManagerEffectHandlers(
             case None =>
               logger.warn(s"[PRESET] UI preset not found: $presetName")
             case Some(preset) =>
-              for
-                currentState <- stateRef.get
-                theme <- themeManager
-                  .loadTheme(preset.themeName)
-                  .handleErrorWith(error =>
-                    logger.error(error)(s"[PRESET] Failed to load theme ${preset.themeName}; keeping current theme") >>
-                      IO.pure(currentState.theme)
-                  )
-                _ <- stateRef.modify { state =>
-                  val restoredPresetState = UiPreset.applyToState(preset, state, theme)
-                  val restoredDocumentState =
-                    applyPresetDocumentModeToActiveEmptyBuffer(restoredPresetState, preset.config.defaultDocumentMode)
-                  val restoredOutlineState = hydratePresetOutlinePanels(restoredDocumentState)
-                  val restored             = withUpdatedRunnerConfig(restoredOutlineState, preset.config)
-                  (restored, ())
-                }
-                _ <- persistConfigFile(preset.config)
-                _ <- onFontConfigChanged(preset.config.fontConfig)
-                  .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset font config"))
-                _ <- reloadPresetDirectories(preset)
-                _ <- openPresetMarkdownPreviewIfNeeded(preset)
-                _ <- stateRef.get
-                  .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
-                  .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after preset apply failed"))
-              yield ()
+              loadUiPresetResources(preset).flatMap {
+                case Left(reason) =>
+                  rejectUiPresetPreview(presetName, reason)
+                case Right(theme) =>
+                  for
+                    _ <- stateRef.modify { state =>
+                      val restoredPresetState = UiPreset.applyToState(preset, state, theme)
+                      val restoredDocumentState =
+                        applyPresetDocumentModeToActiveEmptyBuffer(
+                          restoredPresetState,
+                          preset.config.defaultDocumentMode
+                        )
+                      val restoredOutlineState = hydratePresetOutlinePanels(restoredDocumentState)
+                      val restored             = withUpdatedRunnerConfig(restoredOutlineState, preset.config)
+                      (restored, ())
+                    }
+                    _ <- persistConfigFile(preset.config)
+                    _ <- onFontConfigChanged(preset.config.fontConfig)
+                      .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset font config"))
+                    _ <- reloadPresetDirectories(preset)
+                    _ <- openPresetMarkdownPreviewIfNeeded(preset)
+                    _ <- stateRef.get
+                      .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
+                      .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after preset apply failed"))
+                  yield ()
+              }
           }
           .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to apply UI preset $presetName"))
+
+  private def editUiPresetEffect(name: String): IO[Unit] =
+    normalizedPresetName(name) match
+      case Some(presetName) if UiPreset.builtIn(presetName).nonEmpty =>
+        updateCommandRunnerPresetContext(
+          Some(presetName),
+          s"Built-in preset cannot be edited. Duplicate $presetName first."
+        )
+      case Some(presetName) =>
+        uiPresetStore
+          .find(presetName)
+          .flatMap {
+            case None => updateCommandRunnerPresetContext(None, s"Custom preset '$presetName' was not found.")
+            case Some(preset) =>
+              loadUiPresetResources(preset).flatMap {
+                case Left(reason) => rejectUiPresetPreview(presetName, reason)
+                case Right(theme) =>
+                  for
+                    state <- stateRef.get
+                    windowSize <- windowSizeProvider
+                      .handleErrorWith(error => logger.error(error)("[PRESET] Window size capture failed").as(None))
+                    baseline = UiPreset.capture(presetName, state, windowSize)
+                    session = UiPresetEditSession(
+                      UUID.randomUUID().toString,
+                      preset.name,
+                      Some(preset.name),
+                      Some(UiPresetStore.revisionOf(preset)),
+                      baseline,
+                      state.theme
+                    )
+                    _ <- stateRef.update { current =>
+                      withUpdatedRunnerConfig(UiPreset.applyToState(preset, current, theme), preset.config)
+                        .copy(uiPresetEditSession = Some(session))
+                    }
+                    _ <- onFontConfigChanged(preset.config.fontConfig)
+                    _ <- updateCommandRunnerPresetContext(
+                      Some(preset.name),
+                      s"Editing $presetName. Save commits changes; Discard restores the workspace."
+                    )
+                  yield ()
+              }
+          }
+          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to edit UI preset $presetName"))
+      case None => logger.warn("[PRESET] Ignoring edit request with empty UI preset name")
 
   private def applyPresetDocumentModeToActiveEmptyBuffer(state: AppState, mode: DefaultDocumentMode): AppState =
     state.focusedBufferId.flatMap(state.buffers.get) match
@@ -1059,9 +1175,38 @@ final private[manager] class StateManagerEffectHandlers(
           .map(_.orElse(UiPreset.builtIn(source)))
           .flatMap {
             case Some(preset) =>
-              uiPresetStore.upsert(preset.copy(name = target)) >>
-                refreshCommandRunnerUiPresetPreviews >>
-                updateCommandRunnerPresetContext(Some(target), s"Preset duplicated. Configure $target.")
+              loadUiPresetResources(preset).flatMap {
+                case Left(reason) => rejectUiPresetPreview(target, reason)
+                case Right(theme) =>
+                  for
+                    state <- stateRef.get
+                    windowSize <- windowSizeProvider
+                      .handleErrorWith(error => logger.error(error)("[PRESET] Window size capture failed").as(None))
+                    baseline = UiPreset.capture(target, state, windowSize)
+                    draft    = preset.copy(name = target)
+                    _ <- stateRef.update { current =>
+                      val preview = withUpdatedRunnerConfig(UiPreset.applyToState(draft, current, theme), draft.config)
+                      preview.copy(
+                        uiPresetEditSession = Some(
+                          UiPresetEditSession(
+                            UUID.randomUUID().toString,
+                            target,
+                            None,
+                            None,
+                            baseline,
+                            state.theme,
+                            dirty = true
+                          )
+                        )
+                      )
+                    }
+                    _ <- onFontConfigChanged(draft.config.fontConfig)
+                    _ <- updateCommandRunnerPresetContext(
+                      Some(target),
+                      s"Editing unsaved duplicate of $source. Save commits it."
+                    )
+                  yield ()
+              }
             case None =>
               logger.warn(s"[PRESET] UI preset not found: $source")
           }
@@ -1119,7 +1264,7 @@ final private[manager] class StateManagerEffectHandlers(
         logger.warn("[PRESET] Ignoring empty UI preset name")
 
   private def normalizedPresetName(name: String): Option[String] =
-    Option(name.trim).filter(_.nonEmpty)
+    Option(UiPreset.normalizedName(name)).filter(_.nonEmpty)
 
   private def refreshCommandRunnerUiPresetPreviews: IO[Unit] =
     uiPresetStore
@@ -1147,6 +1292,21 @@ final private[manager] class StateManagerEffectHandlers(
             state
       case None =>
         state
+
+  private def loadUiPresetResources(preset: UiPreset): IO[Either[String, Theme]] =
+    FontLoader.missingFamilies(preset.config.fontConfig) match
+      case missing :: _ => IO.pure(Left(s"Preset requires unavailable $missing."))
+      case Nil =>
+        themeManager.loadTheme(preset.themeName).attempt.map {
+          case Right(theme) => Right(theme)
+          case Left(error) =>
+            val detail = Option(error.getMessage).filter(_.nonEmpty).getOrElse(error.getClass.getSimpleName)
+            Left(s"Theme '${preset.themeName}' could not be loaded: $detail")
+        }
+
+  private def rejectUiPresetPreview(name: String, reason: String): IO[Unit] =
+    logger.warn(s"[PRESET] Cannot preview UI preset '$name': $reason") >>
+      updateCommandRunnerPresetContext(Some(name), s"Cannot preview $name: $reason")
 
   private def updateCommandRunnerPresetContext(presetName: Option[String], statusMessage: String): IO[Unit] =
     stateRef.update(updateCommandRunnerPresetContextInState(_, presetName, statusMessage))
@@ -1198,7 +1358,7 @@ final private[manager] class StateManagerEffectHandlers(
                 editingItemId = None,
                 editingText = "",
                 editingPresetName = Some(name.trim),
-                statusMessage = Some("Preset saved. Configure workspace options.")
+                statusMessage = Some("Editing draft from the current workspace. Save commits it.")
               )
               val submenuSurface = UiSurface(
                 id = CommandRunnerSubmenuSurfaceId,
