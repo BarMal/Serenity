@@ -2,7 +2,7 @@ package com.serenity.ui.presets
 
 import java.awt.Font
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.*
 
 import cats.effect.IO
 import com.serenity.animation.TransitionKind
@@ -575,13 +575,23 @@ class UiPresetStore private (path: Path):
     }
 
   def save(index: UiPresetIndex): IO[Unit] =
-    IO.blocking {
-      Option(path.getParent).foreach(Files.createDirectories(_))
-      Files.writeString(path, index.asJson.spaces2, StandardCharsets.UTF_8)
-    }.void
+    IO.fromEither(validateIndex(index)).flatMap { validIndex =>
+      IO.blocking {
+        Option(path.getParent).foreach(Files.createDirectories(_))
+        val directory = Option(path.getParent).getOrElse(Paths.get("."))
+        val temporary = Files.createTempFile(directory, s".${path.getFileName.toString}.", ".tmp")
+        try
+          Files.writeString(temporary, validIndex.asJson.spaces2, StandardCharsets.UTF_8)
+          try Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+          catch
+            case _: AtomicMoveNotSupportedException =>
+              Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING)
+        finally Files.deleteIfExists(temporary): Unit
+      }.void
+    }
 
   def upsert(preset: UiPreset): IO[Unit] =
-    load().flatMap(index => save(index.upsert(preset)))
+    load().flatMap(index => IO.fromEither(validateForUpsert(preset, index)).flatMap(valid => save(index.upsert(valid))))
 
   def delete(name: String): IO[Unit] =
     load().flatMap(index => save(index.delete(name)))
@@ -597,6 +607,29 @@ class UiPresetStore private (path: Path):
 
   def list(): IO[List[UiPreset]] =
     load().map(_.presets)
+
+  private def validateForUpsert(preset: UiPreset, index: UiPresetIndex): Either[IllegalArgumentException, UiPreset] =
+    val name = preset.name.trim
+    Either
+      .cond(
+        name.nonEmpty && name == preset.name && !name.exists(ch => ch == '/' || ch == '\\' || ch == 0) &&
+          name != "." && name != ".." && UiPreset.builtIn(name).isEmpty,
+        preset.copy(name = name),
+        new IllegalArgumentException("Preset name must be a non-built-in, non-path-like name")
+      )
+      .flatMap { valid =>
+        index.find(valid.name) match
+          case Some(existing) if existing.name != valid.name =>
+            Left(new IllegalArgumentException(s"Preset name collides with existing preset '${existing.name}'"))
+          case _ => Right(valid)
+      }
+
+  private def validateIndex(index: UiPresetIndex): Either[IllegalArgumentException, UiPresetIndex] =
+    index.presets
+      .foldLeft[Either[IllegalArgumentException, List[UiPreset]]](Right(Nil)) { (validated, preset) =>
+        validated.flatMap(accepted => validateForUpsert(preset, UiPresetIndex(accepted)).map(accepted :+ _))
+      }
+      .map(UiPresetIndex.apply)
 
 object UiPresetStore:
   val defaultPath: Path = Paths.get(System.getProperty("user.home"), ".serenity", "ui-presets.json")

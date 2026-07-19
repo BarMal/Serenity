@@ -468,20 +468,30 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       themeName = "dark",
       pinnedPanels = Nil
     )
-    val review = focus.copy(name = "Review")
+    val review = focus.copy(name = "Review Notes")
 
     (for
       _       <- store.upsert(focus)
       _       <- store.upsert(review)
       _       <- store.duplicate("Focus", "Focus Copy")
-      _       <- store.rename("Review", "Review Notes")
+      _       <- store.rename("Review Notes", "Review Archive")
       _       <- store.delete("Focus")
       loaded  <- store.load()
       copied  <- store.find("Focus Copy")
-      renamed <- store.find("Review Notes")
+      renamed <- store.find("Review Archive")
     yield
-      loaded.names.sorted shouldBe List("Focus Copy", "Review Notes")
+      loaded.names.sorted shouldBe List("Focus Copy", "Review Archive")
       copied.flatMap(_.config.preferredWindowSize) shouldBe Some(PreferredWindowSize(1000, 700))
       renamed.map(_.themeName) shouldBe Some("dark")
     ).unsafeRunSync()
+  }
+
+  it should "reject built-in and path-like preset names before writing" in {
+    val path   = Files.createTempDirectory("ui-preset-store-validation").resolve("ui-presets.json")
+    val store  = UiPresetStore(path)
+    val preset = UiPreset("Writing", AppConfig.default, Theme.dark.name, Nil)
+
+    store.upsert(preset).attempt.unsafeRunSync().isLeft shouldBe true
+    store.upsert(preset.copy(name = "../escape")).attempt.unsafeRunSync().isLeft shouldBe true
+    Files.exists(path) shouldBe false
   }

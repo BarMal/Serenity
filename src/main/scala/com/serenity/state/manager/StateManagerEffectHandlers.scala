@@ -1028,7 +1028,9 @@ final private[manager] class StateManagerEffectHandlers(
           case None => (state, false)
       }
       .flatMap {
-        case true  => updateCommandRunnerPresetContext(None, "Preset draft discarded. Workspace restored.")
+        case true =>
+          stateRef.get.flatMap(state => onFontConfigChanged(state.config.fontConfig)) >>
+            updateCommandRunnerPresetContext(None, "Preset draft discarded. Workspace restored.")
         case false => IO.unit
       }
 
@@ -1110,9 +1112,34 @@ final private[manager] class StateManagerEffectHandlers(
           .map(_.orElse(UiPreset.builtIn(source)))
           .flatMap {
             case Some(preset) =>
-              uiPresetStore.upsert(preset.copy(name = target)) >>
-                refreshCommandRunnerUiPresetPreviews >>
-                updateCommandRunnerPresetContext(Some(target), s"Preset duplicated. Configure $target.")
+              for
+                state <- stateRef.get
+                windowSize <- windowSizeProvider
+                  .handleErrorWith(error => logger.error(error)("[PRESET] Window size capture failed").as(None))
+                theme <- themeManager.loadTheme(preset.themeName).handleErrorWith(_ => IO.pure(state.theme))
+                baseline = UiPreset.capture(target, state, windowSize)
+                draft    = preset.copy(name = target)
+                _ <- stateRef.update { current =>
+                  val preview = withUpdatedRunnerConfig(UiPreset.applyToState(draft, current, theme), draft.config)
+                  preview.copy(
+                    uiPresetEditSession = Some(
+                      UiPresetEditSession(
+                        UUID.randomUUID().toString,
+                        target,
+                        Some(source),
+                        baseline,
+                        state.theme,
+                        dirty = true
+                      )
+                    )
+                  )
+                }
+                _ <- onFontConfigChanged(draft.config.fontConfig)
+                _ <- updateCommandRunnerPresetContext(
+                  Some(target),
+                  s"Editing unsaved duplicate of $source. Save commits it."
+                )
+              yield ()
             case None =>
               logger.warn(s"[PRESET] UI preset not found: $source")
           }
@@ -1249,7 +1276,7 @@ final private[manager] class StateManagerEffectHandlers(
                 editingItemId = None,
                 editingText = "",
                 editingPresetName = Some(name.trim),
-                statusMessage = Some("Preset saved. Configure workspace options.")
+                statusMessage = Some("Editing draft from the current workspace. Save commits it.")
               )
               val submenuSurface = UiSurface(
                 id = CommandRunnerSubmenuSurfaceId,

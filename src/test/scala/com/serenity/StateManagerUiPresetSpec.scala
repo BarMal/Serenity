@@ -106,7 +106,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       onWindowSizeChanged = size => observedWindowSize.set(Some(size))
     )
     val preset = com.serenity.ui.presets.UiPreset(
-      name = "Review",
+      name = "Review Custom",
       config = AppConfig.default
         .withBackgroundStyle(BackgroundStyle.Solid)
         .withPreferredWindowSize(PreferredWindowSize(1280, 720)),
@@ -128,7 +128,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "apply-review-preset",
         "Apply review preset",
-        CommandIntent.ApplyUiPreset("Review"),
+        CommandIntent.ApplyUiPreset("Review Custom"),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -356,7 +356,16 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
-    store.find("Personal Writing").unsafeRunSync() should not be empty
+    store.find("Personal Writing").unsafeRunSync() shouldBe None
+
+    sm.executeCommand(
+      Command.typed(
+        "save-personal-writing-preset",
+        "Save personal writing preset",
+        CommandIntent.SaveUiPreset("Personal Writing"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
 
     sm.executeCommand(
       Command.typed(
@@ -408,14 +417,6 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val path  = Files.createTempDirectory("state-manager-ui-preset-delete-built-in").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
-    val customWriting = UiPreset(
-      name = "Writing",
-      config = AppConfig.default.copy(backgroundStyle = BackgroundStyle.Solid),
-      themeName = Theme.dark.name,
-      pinnedPanels = Nil
-    )
-    store.upsert(customWriting).unsafeRunSync()
-
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     sm.executeCommand(
       Command.typed(
@@ -428,7 +429,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     val runner = commandRunnerState(sm)
 
-    store.find("Writing").unsafeRunSync() should not be empty
+    store.find("Writing").unsafeRunSync() shouldBe None
     runner.editingPresetName shouldBe Some("Writing")
     runner.statusMessage shouldBe Some("Built-in preset cannot be deleted. Use Reset Preset to discard overrides.")
   }
@@ -552,7 +553,16 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     ).unsafeRunSync()
 
     runnerState.editingPresetName shouldBe Some("Drafting Copy")
-    runnerState.statusMessage shouldBe Some("Preset duplicated. Configure Drafting Copy.")
+    runnerState.statusMessage shouldBe Some("Editing unsaved duplicate of Drafting. Save commits it.")
+
+    sm.executeCommand(
+      Command.typed(
+        "save-drafting-copy-preset",
+        "Save drafting copy preset",
+        CommandIntent.SaveUiPreset("Drafting Copy"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
 
     sm.executeCommand(
       Command.typed(
@@ -610,7 +620,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-edit")
     runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-presets")
     runner.editingPresetName shouldBe Some("Drafting")
-    runner.statusMessage shouldBe Some("Preset saved. Configure workspace options.")
+    runner.statusMessage shouldBe Some("Editing draft from the current workspace. Save commits it.")
     state.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
     submenu shouldBe Some("settings-preset-edit" -> false)
   }
@@ -1292,14 +1302,6 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val path  = Files.createTempDirectory("state-manager-ui-preset-reset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
-    val customWriting = UiPreset(
-      name = "Writing",
-      config = AppConfig.default.copy(backgroundStyle = BackgroundStyle.Solid),
-      themeName = Theme.dark.name,
-      pinnedPanels = Nil
-    )
-    store.upsert(customWriting).unsafeRunSync()
-
     sm.executeCommand(
       Command.typed(
         "reset-writing-preset",
