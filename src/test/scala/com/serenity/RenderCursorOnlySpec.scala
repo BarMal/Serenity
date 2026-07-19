@@ -53,5 +53,5 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers:
     val finalState = sm.getCurrentState.unsafeRunSync()
     Renderer.render(finalState, cursorVisible = true, surface, ViewportSize(80, 24))
 
-    surface.getRow(0) should include("Hello, World!")
+    (0 until surface.height).map(surface.getRow).mkString("\n") should include("Hello, World!")
   }
