@@ -57,10 +57,12 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
     val rendered  = driver.renderFrame("wide-balanced").unsafeRunSync()
     val surfaceId = rendered.evidence.surfaceRects.keys.headOption.getOrElse(fail("Expected toolbar"))
     val toolbar   = rendered.evidence.surfaceRects(surfaceId)
+    val itemRows  = rendered.evidence.itemRects(surfaceId)
 
     toolbar.width should be <= (driver.environment.viewport.width * 2 / 3)
     toolbarRows(driver) should have size 2
-    rendered.evidence.itemRects(surfaceId) should have size 2
+    itemRows should have size 2
+    itemRows.foreach(itemRow => toolbar.containsRect(itemRow) shouldBe true)
   }
 
   it should "exercise button, dropdown, input, and wrapped narrow navigation" in {
