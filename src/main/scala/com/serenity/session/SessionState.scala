@@ -41,6 +41,7 @@ case class SessionUiPresetEditSession(
     id: String,
     draftName: String,
     sourceName: Option[String],
+    sourceRevision: Option[String] = None,
     baseline: UiPreset,
     baselineThemeName: String,
     dirty: Boolean
@@ -221,6 +222,7 @@ object SessionUiPresetEditSession:
       id = session.id,
       draftName = session.draftName,
       sourceName = session.sourceName,
+      sourceRevision = session.sourceRevision,
       baseline = session.baseline,
       baselineThemeName = session.baselineTheme.name,
       dirty = session.dirty
@@ -231,6 +233,7 @@ object SessionUiPresetEditSession:
       id = session.id,
       draftName = session.draftName,
       sourceName = session.sourceName,
+      sourceRevision = session.sourceRevision,
       baseline = session.baseline,
       baselineTheme = baselineTheme,
       dirty = session.dirty

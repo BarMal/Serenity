@@ -56,7 +56,12 @@ object AppEventReducer:
         val activatedRunner = CommandRunner.empty
           .activate(registry, state.config)
         val runnerWithPanelSelections = activatedRunner.copy(
-          optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
+          optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state),
+          editingPresetName = state.uiPresetEditSession.map(_.draftName),
+          statusMessage = state.uiPresetEditSession.map { session =>
+            if session.dirty then "Preset draft has unsaved changes. Save commits them; Discard restores the workspace."
+            else "Preset draft recovered. Save commits it; Discard restores the workspace."
+          }
         )
         val (stateWithId, surfaceId) =
           state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)

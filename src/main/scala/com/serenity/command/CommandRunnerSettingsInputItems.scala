@@ -134,6 +134,16 @@ object CommandRunnerSettingsInputItems:
         acceptsFreeText = true
       ),
       CommandSurfaceItem.InputItem(
+        id = "ui-preset-edit",
+        label = "Edit Preset",
+        hint = "Custom preset name",
+        currentValue = "",
+        isDecimal = false,
+        parse = text => nonEmptyText(text).map(CommandIntent.EditUiPreset(_)),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
         id = "ui-preset-duplicate",
         label = "Duplicate Preset",
         hint = "Source -> Copy",

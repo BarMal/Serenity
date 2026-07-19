@@ -486,7 +486,7 @@ object CommandRunnerSettingsGroups:
     presetName match
       case Some(name) =>
         item.id match
-          case "ui-preset-save" | "ui-preset-apply" | "ui-preset-delete" | "ui-preset-reset" =>
+          case "ui-preset-save" | "ui-preset-apply" | "ui-preset-edit" | "ui-preset-delete" | "ui-preset-reset" =>
             item.copy(currentValue = name)
           case "ui-preset-duplicate" | "ui-preset-rename" =>
             item.copy(currentValue = s"$name -> ")

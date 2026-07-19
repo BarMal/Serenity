@@ -922,7 +922,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(
       config = AppConfig.default.withBackgroundStyle(BackgroundStyle.GlassLike),
       uiPresetEditSession = Some(
-        UiPresetEditSession("draft-1", "Drafting", Some("Drafting"), baseline, Theme.dark, dirty = true)
+        UiPresetEditSession("draft-1", "Drafting", Some("Drafting"), None, baseline, Theme.dark, dirty = true)
       )
     )
 

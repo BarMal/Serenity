@@ -3,6 +3,8 @@ package com.serenity.ui.presets
 import java.awt.Font
 import java.nio.charset.StandardCharsets
 import java.nio.file.*
+import java.text.Normalizer
+import java.util.Locale
 
 import cats.effect.IO
 import com.serenity.animation.TransitionKind
@@ -30,12 +32,19 @@ case class UiPresetEditSession(
     id: String,
     draftName: String,
     sourceName: Option[String],
+    sourceRevision: Option[String] = None,
     baseline: UiPreset,
     baselineTheme: Theme,
     dirty: Boolean = false
 )
 
 object UiPreset:
+
+  def normalizedName(name: String): String =
+    Normalizer.normalize(name.trim, Normalizer.Form.NFC)
+
+  def nameKey(name: String): String =
+    normalizedName(name).toLowerCase(Locale.ROOT)
 
   val builtIns: List[UiPreset] =
     List(writingPreset, documentationPreset, codePreset, reviewPreset)
@@ -531,10 +540,10 @@ object UiPreset:
 
 case class UiPresetIndex(presets: List[UiPreset]):
   def upsert(preset: UiPreset): UiPresetIndex =
-    copy(presets = presets.filterNot(_.name.equalsIgnoreCase(preset.name)) :+ preset)
+    copy(presets = presets.filterNot(existing => UiPreset.nameKey(existing.name) == UiPreset.nameKey(preset.name)) :+ preset)
 
   def delete(name: String): UiPresetIndex =
-    copy(presets = presets.filterNot(_.name.equalsIgnoreCase(name.trim)))
+    copy(presets = presets.filterNot(existing => UiPreset.nameKey(existing.name) == UiPreset.nameKey(name)))
 
   def rename(sourceName: String, targetName: String): UiPresetIndex =
     val normalizedTarget = targetName.trim
@@ -551,7 +560,7 @@ case class UiPresetIndex(presets: List[UiPreset]):
       .getOrElse(this)
 
   def find(name: String): Option[UiPreset] =
-    presets.find(_.name.equalsIgnoreCase(name.trim))
+    presets.find(existing => UiPreset.nameKey(existing.name) == UiPreset.nameKey(name))
 
   def names: List[String] =
     presets.map(_.name)
@@ -561,6 +570,10 @@ object UiPresetIndex:
 
   given Encoder[UiPresetIndex] = deriveEncoder
   given Decoder[UiPresetIndex] = deriveDecoder
+
+enum UiPresetStoreConflict(message: String) extends RuntimeException(message):
+  case SourceChanged(name: String) extends UiPresetStoreConflict(s"Preset '$name' changed outside this draft")
+  case SourceMissing(name: String) extends UiPresetStoreConflict(s"Preset '$name' was deleted or renamed outside this draft")
 
 class UiPresetStore private (path: Path):
   import UiPresetIndex.given
@@ -582,10 +595,7 @@ class UiPresetStore private (path: Path):
         val temporary = Files.createTempFile(directory, s".${path.getFileName.toString}.", ".tmp")
         try
           Files.writeString(temporary, validIndex.asJson.spaces2, StandardCharsets.UTF_8)
-          try Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-          catch
-            case _: AtomicMoveNotSupportedException =>
-              Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING)
+          Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         finally Files.deleteIfExists(temporary): Unit
       }.void
     }
@@ -597,10 +607,23 @@ class UiPresetStore private (path: Path):
     load().flatMap(index => save(index.delete(name)))
 
   def rename(sourceName: String, targetName: String): IO[Unit] =
-    load().flatMap(index => save(index.rename(sourceName, targetName)))
+    load().flatMap { index =>
+      for
+        source <- IO.fromOption(index.find(sourceName))(new IllegalArgumentException(s"Preset '$sourceName' does not exist"))
+        renamed <- IO.fromEither(validateForUpsert(source.copy(name = targetName), index.copy(presets = index.presets.filterNot(_ == source))))
+        _ <- save(index.copy(presets = index.presets.filterNot(_ == source) :+ renamed))
+      yield ()
+    }
 
   def duplicate(sourceName: String, targetName: String): IO[Unit] =
-    load().flatMap(index => save(index.duplicate(sourceName, targetName)))
+    load().flatMap { index =>
+      for
+        source <- IO.fromOption(index.find(sourceName))(new IllegalArgumentException(s"Preset '$sourceName' does not exist"))
+        _ <- IO.raiseWhen(index.find(targetName).nonEmpty)(new IllegalArgumentException(s"Preset name '$targetName' already exists"))
+        copy <- IO.fromEither(validateForUpsert(source.copy(name = targetName), index))
+        _ <- save(index.copy(presets = index.presets :+ copy))
+      yield ()
+    }
 
   def find(name: String): IO[Option[UiPreset]] =
     load().map(_.find(name))
@@ -608,18 +631,32 @@ class UiPresetStore private (path: Path):
   def list(): IO[List[UiPreset]] =
     load().map(_.presets)
 
+  /** Replaces a custom preset only when its persisted source has not changed since the draft was opened. */
+  def replace(sourceName: String, sourceRevision: String, replacement: UiPreset): IO[Unit] =
+    load().flatMap { index =>
+      index.find(sourceName) match
+        case None => IO.raiseError(UiPresetStoreConflict.SourceMissing(sourceName))
+        case Some(source) if revisionOf(source) != sourceRevision =>
+          IO.raiseError(UiPresetStoreConflict.SourceChanged(sourceName))
+        case Some(source) =>
+          val withoutSource = index.copy(presets = index.presets.filterNot(_ == source))
+          IO.fromEither(validateForUpsert(replacement, withoutSource)).flatMap { valid =>
+            save(withoutSource.copy(presets = withoutSource.presets :+ valid))
+          }
+    }
+
   private def validateForUpsert(preset: UiPreset, index: UiPresetIndex): Either[IllegalArgumentException, UiPreset] =
-    val name = preset.name.trim
+    val name = UiPreset.normalizedName(preset.name)
     Either
       .cond(
-        name.nonEmpty && name == preset.name && !name.exists(ch => ch == '/' || ch == '\\' || ch == 0) &&
+        name.nonEmpty && !name.exists(ch => ch == '/' || ch == '\\' || ch == 0) &&
           name != "." && name != ".." && UiPreset.builtIn(name).isEmpty,
         preset.copy(name = name),
         new IllegalArgumentException("Preset name must be a non-built-in, non-path-like name")
       )
       .flatMap { valid =>
         index.find(valid.name) match
-          case Some(existing) if existing.name != valid.name =>
+          case Some(existing) if existing.name != preset.name =>
             Left(new IllegalArgumentException(s"Preset name collides with existing preset '${existing.name}'"))
           case _ => Right(valid)
       }
@@ -631,8 +668,14 @@ class UiPresetStore private (path: Path):
       }
       .map(UiPresetIndex.apply)
 
+  def revisionOf(preset: UiPreset): String =
+    preset.asJson.noSpaces
+
 object UiPresetStore:
   val defaultPath: Path = Paths.get(System.getProperty("user.home"), ".serenity", "ui-presets.json")
+
+  def revisionOf(preset: UiPreset): String =
+    preset.asJson.noSpaces
 
   def apply(path: Path): UiPresetStore =
     new UiPresetStore(path)
