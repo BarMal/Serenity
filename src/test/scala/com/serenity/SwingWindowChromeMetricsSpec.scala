@@ -144,8 +144,8 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "publish a resize only when the cell viewport changes" in {
-    val current = SwingWindow.CanvasResizeSnapshot(new Dimension(640, 480), ViewportSize(64, 24))
-    val sameViewport = SwingWindow.CanvasResizeSnapshot(new Dimension(645, 495), ViewportSize(64, 24))
+    val current         = SwingWindow.CanvasResizeSnapshot(new Dimension(640, 480), ViewportSize(64, 24))
+    val sameViewport    = SwingWindow.CanvasResizeSnapshot(new Dimension(645, 495), ViewportSize(64, 24))
     val changedViewport = SwingWindow.CanvasResizeSnapshot(new Dimension(650, 500), ViewportSize(65, 25))
 
     SwingWindow.shouldPublishCanvasResize(current, sameViewport) shouldBe false

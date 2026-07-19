@@ -24,12 +24,19 @@ class SwingWindow(
     initialChromeMetrics: CellMetrics
 ):
 
-  private val usesCustomChrome       = SwingWindow.shouldUseCustomChrome(chromeMode)
-  private val effectiveChromeMode    = if usesCustomChrome then WindowChromeMode.Custom else chromeMode
-  private val usesNativeThemedChrome = chromeMode == WindowChromeMode.NativeThemed && !usesCustomChrome
+  private val usesCustomChrome           = SwingWindow.shouldUseCustomChrome(chromeMode)
+  private val effectiveChromeMode        = if usesCustomChrome then WindowChromeMode.Custom else chromeMode
+  private val usesNativeThemedChrome     = chromeMode == WindowChromeMode.NativeThemed && !usesCustomChrome
   private val initialChromeLayoutMetrics = SwingWindow.ChromeMetrics.fromCellMetrics(initialChromeMetrics)
+
   private val initialCanvasResizeSnapshot =
-    SwingWindow.fallbackCanvasResizeSnapshot(initialMetrics, initialPixelSize, effectiveChromeMode, initialChromeLayoutMetrics)
+    SwingWindow.fallbackCanvasResizeSnapshot(
+      initialMetrics,
+      initialPixelSize,
+      effectiveChromeMode,
+      initialChromeLayoutMetrics
+    )
+
   private val initialCanvasPixelSize = initialCanvasResizeSnapshot.pixelSize
   private val pixelSize              = new AtomicReference(initialCanvasPixelSize)
   private val metricsRef             = new AtomicReference(initialMetrics)
@@ -473,7 +480,9 @@ class SwingWindow(
     SwingUtilities.invokeLater { () =>
       val dimension = new Dimension(normalized.width, normalized.height)
       val canvasFallback =
-        SwingWindow.fallbackCanvasResizeSnapshot(metrics, dimension, effectiveChromeMode, chromeMetricsRef.get()).pixelSize
+        SwingWindow
+          .fallbackCanvasResizeSnapshot(metrics, dimension, effectiveChromeMode, chromeMetricsRef.get())
+          .pixelSize
       canvas.setPreferredSize(canvasFallback)
       frame.setSize(dimension)
       frame.validate()
