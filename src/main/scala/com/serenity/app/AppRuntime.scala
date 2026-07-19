@@ -262,14 +262,15 @@ object AppRuntime:
           inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))
         )
 
-  private def fastRenderPhase(
+  private[serenity] def fastRenderPhase(
     stateManager: StateReader & AnimationTicker,
     fastMode: SignallingRef[IO, Boolean],
     fastRenderRequestEpoch: Ref[IO, Long],
     animationTickCadence: Ref[IO, AnimationTickCadence],
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
-    renderFull: (AppState, Boolean, Option[Color]) => IO[Unit]
+    renderFull: (AppState, Boolean, Option[Color]) => IO[Unit],
+    sleep: FiniteDuration => IO[Unit] = IO.sleep
   ): Stream[IO, Unit] =
     Stream.eval(fastRenderRequestEpoch.get).flatMap { phaseStartRenderRequest =>
       Stream
@@ -278,15 +279,20 @@ object AppRuntime:
         .evalMap {
           case (stateAtFrameStart, frameIndex) =>
             for
-              interval <- IO.pure(fastFrameInterval(stateAtFrameStart.config.renderFpsTarget))
-              _        <- IO.sleep(fastFrameDelay(interval, isInitialFrame = frameIndex == 0L))
+              isInitialFrame <- IO.pure(frameIndex == 0L)
+              interval       <- IO.pure(fastFrameInterval(stateAtFrameStart.config.renderFpsTarget))
+              _              <- sleep(fastFrameDelay(interval, isInitialFrame))
               _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(
                 checkResizeAndHandle
               )
-              animationTicks <- animationTickCadence.modify(_.advance(interval))
-              active <- withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
-                advanceAnimationsForCadence(animationTicks, stateManager)
-              )
+              active <-
+                if isInitialFrame then stateManager.getCurrentState.map(hasActiveAnimations)
+                else
+                  animationTickCadence.modify(_.advance(interval)).flatMap { animationTicks =>
+                    withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
+                      advanceAnimationsForCadence(animationTicks, stateManager)
+                    )
+                  }
               state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
                 stateManager.getCurrentState
               )

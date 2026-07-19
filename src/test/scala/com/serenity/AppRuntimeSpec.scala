@@ -90,6 +90,82 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     AppRuntime.fastFrameDelay(frameInterval, isInitialFrame = false) shouldBe frameInterval
   }
 
+  it should "render an input-requested first fast frame immediately, pace its follow-up, and defer its animation tick" in {
+    val frameInterval = AppRuntime.fastFrameInterval(RenderFpsTarget.Fps30)
+    val state = AppState.initial.copy(
+      config = AppState.initial.config.copy(renderFpsTarget = RenderFpsTarget.Fps30),
+      surfaceAnimations = Map(
+        com.serenity.state.models.SurfaceId("fast-render-regression") -> com.serenity.state.models
+          .SurfaceAnimationState()
+      )
+    )
+
+    val program = for
+      fastMode               <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      fastRenderRequestEpoch <- Ref.of[IO, Long](0L)
+      animationTickCadence   <- Ref.of[IO, AppRuntime.AnimationTickCadence](AppRuntime.AnimationTickCadence.empty)
+      animationTicks         <- Ref.of[IO, Int](0)
+      rendered               <- Ref.of[IO, Vector[Int]](Vector.empty)
+      requestedDelays        <- Ref.of[IO, Vector[FiniteDuration]](Vector.empty)
+      cursorVisible          <- Ref.of[IO, Boolean](true)
+      breathIndex            <- Ref.of[IO, Int](0)
+      stateManager = new com.serenity.state.manager.StateReader
+        with com.serenity.state.manager.StateUpdater
+        with com.serenity.state.manager.EventApplier
+        with com.serenity.state.manager.AnimationTicker:
+        def getCurrentState: IO[AppState]                       = IO.pure(state)
+        def updateState(update: AppState => AppState): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]                  = IO.unit
+        def advanceAnimationFrames(): IO[Unit]                  = IO.unit
+        def advanceAnimationsOnTick(): IO[Boolean]              = animationTicks.updateAndGet(_ + 1).as(true)
+      inputRouter = new InputRouter[IO, Event]:
+        private val translator = new TextEntryTranslator(AppConfig.default)
+
+        def eventStream(infoStream: Stream[IO, KeyStrokeInfo]): Stream[IO, Event] = Stream.empty
+        def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = IO.unit
+        def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(translator)
+      clipboard = new SystemClipboard[IO]:
+        def readText: IO[Option[String]]      = IO.pure(None)
+        def writeText(text: String): IO[Unit] = IO.unit
+      requestFastRender = fastRenderRequestEpoch.update(_ + 1L) >> fastMode.set(true)
+      given Logger[IO]  = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+      _ <- AppRuntime
+        .inputEventPhase(
+          stateManager,
+          inputRouter,
+          clipboard,
+          IO.unit,
+          cursorVisible,
+          breathIndex,
+          requestFastRender
+        )(Stream.emit(InsertChar('a')))
+        .compile
+        .drain
+      _ <- AppRuntime
+        .fastRenderPhase(
+          stateManager,
+          fastMode,
+          fastRenderRequestEpoch,
+          animationTickCadence,
+          IO.pure(Some(state)),
+          IO.unit,
+          (_: AppState, _: Boolean, _: Option[Color]) =>
+            animationTicks.get.flatMap(tickCount => rendered.update(_ :+ tickCount)),
+          delay => requestedDelays.update(_ :+ delay)
+        )
+        .take(2)
+        .compile
+        .drain
+      frames <- rendered.get
+      delays <- requestedDelays.get
+    yield
+      frames should have size 2
+      delays shouldBe Vector(Duration.Zero, frameInterval)
+      frames shouldBe Vector(0, 2)
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
   it should "advance animations at a stable 60 FPS cadence across render targets" in {
     val sixtyFpsCadence = AppRuntime.AnimationTickCadence.empty
     val (after60, ticks60) =
