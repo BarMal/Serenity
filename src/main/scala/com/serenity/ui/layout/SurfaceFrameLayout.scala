@@ -167,7 +167,7 @@ case class SurfaceContentRowSlot(kind: SurfaceContentRowKind, y: Int)
 
 object SurfaceFrameLayout:
   val DefaultBorderCells: Int        = 1
-  val CommandSurfaceBorderCells: Int = 0
+  val CommandSurfaceBorderCells: Int = DefaultBorderCells
 
   def contentRowSlotsFor(
     content: LayoutRect,

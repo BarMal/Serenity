@@ -80,7 +80,10 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val paneRect = LayoutEngine
       .calculatePaneLayouts(state, layout)
       .getOrElse(paneId, fail("Expected pane layout"))
-    val contentRect = CursorLayout.contentRectForPane(paneRect)
+    val paneContentRect = CursorLayout.contentRectForPane(paneRect)
+    val commandContentRect = SurfaceFrameLayout
+      .forContent(overlay, state.uiSurfaces.head.content)
+      .contentRect
 
     Renderer.render(
       state,
@@ -94,26 +97,29 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     )
 
     val commandLine =
-      (overlay.x until overlay.right).map(x => surface.getChar(x, overlay.y + 1)).mkString.trim
+      (commandContentRect.x until commandContentRect.right)
+        .map(x => surface.getChar(x, commandContentRect.y + 1))
+        .mkString
+        .trim
 
     commandLine should include("Open")
     commandLine should include("Open file")
-    overlay.width shouldBe contentRect.width
-    overlay.x shouldBe contentRect.x
+    overlay.width shouldBe paneContentRect.width
+    overlay.x shouldBe paneContentRect.x
 
     surface.getBg(0, 0) shouldBe state.theme.highlighted.background
     surface.getBg(overlay.x, overlay.y) shouldBe state.theme.panel.background
-    surface.getBg(overlay.x, overlay.y + 1) shouldBe state.theme.highlighted.background
+    surface.getBg(commandContentRect.x, commandContentRect.y + 1) shouldBe state.theme.highlighted.background
 
     val uiFont     = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
     val searchText = "search: op"
     val searchRun  = surface.drawRunPxCalls.find(_.s == searchText).getOrElse(fail("Expected measured search text"))
-    searchRun.xPx shouldBe cellMetrics.toPixelX(overlay.x).toFloat
-    searchRun.yPx shouldBe cellMetrics.toPixelY(overlay.y)
+    searchRun.xPx shouldBe cellMetrics.toPixelX(commandContentRect.x).toFloat
+    searchRun.yPx shouldBe cellMetrics.toPixelY(commandContentRect.y)
 
-    val searchCursorXPx = cellMetrics.toPixelX(overlay.x) +
+    val searchCursorXPx = cellMetrics.toPixelX(commandContentRect.x) +
       math.round(TextLayoutSnapshot.caretXsForText(searchText, uiFont, surface.fontRenderContext.get).last)
-    val searchCursorYPx = cellMetrics.toPixelY(overlay.y)
+    val searchCursorYPx = cellMetrics.toPixelY(commandContentRect.y)
     surface.fillPixelRectCalls.exists(call =>
       call.xPx == searchCursorXPx &&
         call.yPx == searchCursorYPx &&
@@ -208,13 +214,22 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(100, 30)
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+    val commandContentRect = SurfaceFrameLayout
+      .forContent(overlay, state.uiSurfaces.head.content)
+      .contentRect
 
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     val tabLine =
-      (overlay.x until overlay.right).map(x => surface.getChar(x, overlay.y)).mkString.trim
+      (commandContentRect.x until commandContentRect.right)
+        .map(x => surface.getChar(x, commandContentRect.y))
+        .mkString
+        .trim
     val optionLine =
-      (overlay.x until overlay.right).map(x => surface.getChar(x, overlay.y + 1)).mkString.trim
+      (commandContentRect.x until commandContentRect.right)
+        .map(x => surface.getChar(x, commandContentRect.y + 1))
+        .mkString
+        .trim
 
     tabLine should include("All")
     tabLine should include("File")
@@ -227,8 +242,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     optionLine should not include "["
 
     val settingsBackgrounds =
-      (overlay.x until overlay.right)
-        .map(x => surface.getBg(x, overlay.y))
+      (commandContentRect.x until commandContentRect.right)
+        .map(x => surface.getBg(x, commandContentRect.y))
         .distinct
     settingsBackgrounds.size should be > 1
     surface.fillPixelRectCalls.filter(_.color == state.theme.cursor) should have size 1
@@ -402,7 +417,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     )
     val animationState = AnimationState.empty.mergeAnimations(
       Map(
-        CharacterKey(0, 1) -> AnimatedCell.fromThemeTransition(
+        CharacterKey(0, 2) -> AnimatedCell.fromThemeTransition(
           transparentPanelForeground,
           baseState.theme.panel.foreground,
           transparentPanelBackground,
@@ -418,11 +433,14 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(100, 30)
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+    val commandContentRect = SurfaceFrameLayout
+      .forContent(overlay, state.uiSurfaces.head.content)
+      .contentRect
 
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
-    val selectedBackground = surface.getBg(overlay.x, overlay.y + 1)
-    val selectedForeground = surface.getFg(overlay.x, overlay.y + 1)
+    val selectedBackground = surface.getBg(commandContentRect.x, commandContentRect.y + 1)
+    val selectedForeground = surface.getFg(commandContentRect.x, commandContentRect.y + 1)
     selectedBackground.getRGB & 0x00ffffff shouldBe state.theme.highlighted.background.getRGB & 0x00ffffff
     selectedForeground.getRGB & 0x00ffffff shouldBe state.theme.highlighted.foreground.getRGB & 0x00ffffff
     selectedBackground.getAlpha shouldBe 0
