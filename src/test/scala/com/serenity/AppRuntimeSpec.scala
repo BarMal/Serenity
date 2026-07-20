@@ -350,6 +350,43 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunTimed(10.seconds) shouldBe Some(true)
   }
 
+  it should "cancel the input stream when the initial render fails" in {
+    given Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeStartupFailureSpec"))
+
+    val program = for
+      inputStarted  <- Deferred[IO, Unit]
+      inputCancelled <- Deferred[IO, Unit]
+      stateManager <- StateManager.apply(
+        LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeStartupFailureSpec")),
+        policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+      )
+      inputHandler = new InputHandler[IO]:
+        override def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] = Stream.never
+        override def eventStream: Stream[IO, Event] =
+          Stream.eval(inputStarted.complete(()).map(_ => ())).drain ++ Stream.repeatEval(IO.never[Event])
+            .onFinalize(inputCancelled.complete(()).map(_ => ()))
+        override def shutdown: IO[Unit] = IO.unit
+      result <- AppRuntime
+        .run(
+          initialViewportSize = ViewportSize(120, 40),
+          makeInputHandler = _ => inputHandler,
+          checkResize = IO.pure(None),
+          renderFull = (_: AppState, _: Boolean, _: Option[Color]) =>
+            inputStarted.get >> IO.raiseError(RuntimeException("initial render failed")),
+          renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
+          appConfig = AppConfig.default,
+          makeStateManager = Some(_ => IO.pure(stateManager)),
+          registerResizeCallback = _ => ()
+        )
+        .attempt
+      cancelled <- IO.race(inputCancelled.get, IO.sleep(250.millis)).map(_.isLeft)
+    yield (result, cancelled)
+
+    val (result, cancelled) = program.unsafeRunTimed(10.seconds).getOrElse(fail("Runtime did not finish"))
+    result.swap.toOption.map(_.getMessage) should contain("initial render failed")
+    cancelled shouldBe true
+  }
+
   it should "refresh the focused translator after a modal request" in {
     val program = for
       refreshes     <- Ref.of[IO, Int](0)

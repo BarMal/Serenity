@@ -120,35 +120,45 @@ object AppRuntime:
           requestFastRender
         )
         inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
-        inputFiber <- inputLoop.start
-        _          <- renderFull(initialState, true, None)
-        _          <- logger.info("Initial render completed, starting main loop")
         _ <-
-          val idlePhase = idleRenderPhase(
-            loadState = stateManager.getCurrentState,
-            fastMode = fastMode,
-            currentStateForDiagnostics = currentStateForDiagnostics,
-            checkResizeAndHandle = checkResizeAndHandle,
-            cursorVisible = cursorVisible,
-            breathIndex = breathIndex,
-            renderCursorOnly = renderCursorOnly,
-            requestFastRender = requestFastRender
-          )
+          Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
+            renderFull(initialState, true, None) >>
+              logger.info("Initial render completed, starting main loop") >>
+              {
+                val idlePhase = idleRenderPhase(
+                  loadState = stateManager.getCurrentState,
+                  fastMode = fastMode,
+                  currentStateForDiagnostics = currentStateForDiagnostics,
+                  checkResizeAndHandle = checkResizeAndHandle,
+                  cursorVisible = cursorVisible,
+                  breathIndex = breathIndex,
+                  renderCursorOnly = renderCursorOnly,
+                  requestFastRender = requestFastRender
+                )
 
-          val fastPhase = fastRenderPhase(
-            stateManager,
-            fastMode,
-            fastRenderRequestEpoch,
-            animationTickCadence,
-            currentStateForDiagnostics,
-            checkResizeAndHandle,
-            renderFull
-          )
+                val fastPhase = fastRenderPhase(
+                  stateManager,
+                  fastMode,
+                  fastRenderRequestEpoch,
+                  animationTickCadence,
+                  currentStateForDiagnostics,
+                  checkResizeAndHandle,
+                  renderFull
+                )
 
-          val renderLoop: Stream[IO, Unit] =
-            Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
+                val renderLoop: Stream[IO, Unit] =
+                  Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
 
-          runRuntimeLoops(stateManager, inputHandler, inputFiber.joinWithNever, renderLoop, awaitExternalQuit, appConfig)
+                runRuntimeLoops(
+                  stateManager,
+                  inputHandler,
+                  inputFiber.joinWithNever,
+                  renderLoop,
+                  awaitExternalQuit,
+                  appConfig
+                )
+              }
+          }
         _ <- logger.info("Serenity editor shutdown complete")
       yield ()
     }
