@@ -17,7 +17,7 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "inset command menus from their rounded frame corners" in {
-    val frame = LayoutRect(10, 4, 40, 8)
+    val frame  = LayoutRect(10, 4, 40, 8)
     val runner = CommandRunner.empty
 
     SurfaceFrameLayout

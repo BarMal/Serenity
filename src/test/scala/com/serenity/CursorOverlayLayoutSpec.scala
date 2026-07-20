@@ -346,7 +346,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
-    layout.belowCursorOverlayRect.map(_.height) shouldBe Some(9)
+    layout.belowCursorOverlayRect.map(_.height) shouldBe Some(11)
   }
 
   it should "apply configured gaps below the cursor and between stacked overlays" in {

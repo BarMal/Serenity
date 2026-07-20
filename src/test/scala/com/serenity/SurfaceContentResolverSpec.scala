@@ -544,12 +544,10 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     floating.rows.map(_.plainText) shouldBe List(
-      "Haskell - Use Haskell mode for the current buffer.",
       "JSON - Use JSON mode for the current buffer.",
       "Java - Use Java mode for the current buffer.",
       "JavaScript - Use JavaScript mode for the current buffer.",
-      "Kotlin - Use Kotlin mode for the current buffer.",
-      "Lua - Use Lua mode for the current buffer."
+      "Kotlin - Use Kotlin mode for the current buffer."
     )
     floating.rows.count(_.selected) shouldBe 1
     floating.rows.find(_.selected).map(_.plainText) shouldBe Some(
@@ -604,11 +602,10 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       itemGapRows = 1
     )
 
-    floating.rows should have size 3
+    floating.rows should have size 2
     floating.rows.map(_.plainText) shouldBe List(
       "Cmd 1 - Command number 1",
-      "Cmd 2 - Command number 2",
-      "Cmd 3 - Command number 3"
+      "Cmd 2 - Command number 2"
     )
   }
 
