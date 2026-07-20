@@ -357,7 +357,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
 
     val rightmostContentPixel =
       (for
-        row <- 0 until image.getHeight
+        row    <- 0 until image.getHeight
         column <- 0 until image.getWidth
         if image.getRGB(column, row) != theme.background.getRGB
       yield column).max
