@@ -44,7 +44,8 @@ class CommandRegistry(private val commands: List[Command]):
           CommandRunnerSettingsItems.animationOptionItem(optionSelections),
           CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections),
           CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections),
-          CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections)
+          CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections),
+          CommandRunnerSettingsItems.uiShadowsOptionItem(optionSelections)
         )
       else Nil
 
@@ -60,7 +61,8 @@ class CommandRegistry(private val commands: List[Command]):
       CommandRunnerSettingsItems.animationOptionItem(optionSelections),
       CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections),
       CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections),
-      CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections)
+      CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections),
+      CommandRunnerSettingsItems.uiShadowsOptionItem(optionSelections)
     ).filter { item =>
       val lowerTerm = term.toLowerCase
       lowerTerm.isEmpty || item.searchText.toLowerCase.contains(lowerTerm)

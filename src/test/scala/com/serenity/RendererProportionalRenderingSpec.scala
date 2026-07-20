@@ -78,11 +78,18 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
     Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, propFont, monoMetrics, None)
 
     val expectedAscent = com.serenity.ui.layout.TextLayoutSnapshot
-      .fromBuffer(state.buffers(BufferId(1)), panelWidthPx = 400, propFont)
+      .fromBuffer(
+        state.buffers(BufferId(1)),
+        panelWidthPx = 400,
+        propFont,
+        surface.fontRenderContext.getOrElse(fail("Expected mock render surface font context"))
+    )
       .ascentPx
 
-    surface.drawRunPxCalls should not be empty
-    surface.drawRunPxCalls.head.ascentPx shouldBe expectedAscent
+    val renderedMarkdown = surface.drawRunPxCalls
+      .find(_.s.contains("hello markdown"))
+      .getOrElse(fail("Expected the Markdown buffer to render through drawRunPx"))
+    renderedMarkdown.ascentPx shouldBe expectedAscent
   }
 
   it should "render proportional selections with highlight colors via drawRunPx" in {

@@ -22,7 +22,11 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     postProcessing.label shouldBe "Post-processing"
     postProcessing.selectedOption shouldBe "Glow"
     postProcessing.selectedIntent shouldBe Some(CommandIntent.SetPostProcessingEffect(PostProcessingEffect.Glow))
-    postProcessing.options.map(_.label) shouldBe List("Off", "Scanlines", "Glow")
+    postProcessing.options.map(_.label) shouldBe List("Off", "Scanlines", "Glow", "Scanlines + Glow")
+
+    val shadows = CommandRunnerSettingsItems.uiShadowsOptionItem(Map("ui-shadows" -> 1))
+    shadows.selectedOption shouldBe "On"
+    shadows.selectedIntent shouldBe Some(CommandIntent.SetUiShadowsEnabled(true))
 
     cursor.label shouldBe "Cursor Style"
     cursor.selectedOption shouldBe "Breathe"

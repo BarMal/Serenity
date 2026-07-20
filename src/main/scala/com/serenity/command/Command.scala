@@ -82,6 +82,7 @@ enum CommandIntent:
   case SetAnimationMode(mode: AnimationMode)
   case SetMaterialPreset(preset: MaterialPreset)
   case SetPostProcessingEffect(effect: PostProcessingEffect)
+  case SetUiShadowsEnabled(enabled: Boolean)
   case SetMotionPreset(preset: MotionPreset)
   case SetMotionAccessibility(accessibility: MotionAccessibility)
   case SetElementTransitionSpeedScale(scale: Double)

@@ -217,11 +217,10 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
 
     surface.clearViewport(Color.WHITE)
-    surface.applyPostProcessing(PostProcessingEffect.Scanlines)
+    surface.applyPostProcessing(PostProcessingEffect.Scanlines, animationPhase = 0L)
     surface.flush()
 
     new Color(image.getRGB(0, 1), true).getRed should be < new Color(image.getRGB(0, 0), true).getRed
-    new Color(image.getRGB(0, 4), true).getRed should be < new Color(image.getRGB(0, 3), true).getRed
   }
 
   it should "add a phosphor mask to the scanline post-process" in {
@@ -237,6 +236,27 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val firstPhosphor  = new Color(image.getRGB(0, 0), true)
     val secondPhosphor = new Color(image.getRGB(1, 0), true)
     firstPhosphor.getRed should not be secondPhosphor.getRed
+  }
+
+  it should "move uneven, variably thick scanlines between animation phases" in {
+    def darkRows(phase: Long): List[Int] =
+      val image   = new BufferedImage(24, 24, BufferedImage.TYPE_INT_ARGB)
+      val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
+      val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+      val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+      surface.clearViewport(Color.WHITE)
+      surface.applyPostProcessing(PostProcessingEffect.Scanlines, phase)
+      surface.flush()
+
+      (0 until image.getHeight).filter(y => new Color(image.getRGB(12, y), true).getRed < 230).toList
+
+    val initial = darkRows(phase = 0L)
+    val moved   = darkRows(phase = 1L)
+
+    initial should not be empty
+    initial.sliding(2).exists { case List(first, second) => second == first + 1; case _ => false } shouldBe true
+    moved should not be initial
   }
 
   it should "spread bright UI pixels into a glow" in {
@@ -283,6 +303,36 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     new Color(image.getRGB(5, 5), true) shouldBe Color.BLACK
   }
 
+  it should "preserve sharp source glyphs when compositing glow" in {
+    val image   = new BufferedImage(11, 11, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(Color.WHITE)
+    surface.fillPixelRect(5, 5, 1, 1, Color.BLACK)
+    surface.applyPostProcessing(PostProcessingEffect.Glow)
+    surface.flush()
+
+    new Color(image.getRGB(5, 5), true) shouldBe Color.BLACK
+    new Color(image.getRGB(3, 5), true).getRed should be > 210
+  }
+
+  it should "compose scanlines and glow in one post-process" in {
+    val image   = new BufferedImage(15, 15, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(Color.BLACK)
+    surface.fillPixelRect(7, 7, 1, 1, Color.WHITE)
+    surface.applyPostProcessing(PostProcessingEffect.ScanlinesAndGlow, animationPhase = 0L)
+    surface.flush()
+
+    new Color(image.getRGB(5, 7), true).getRed should be > 0
+    (0 until image.getHeight).exists(y => new Color(image.getRGB(12, y), true).getRed < 230) shouldBe true
+  }
+
   "Renderer.render" should "clear pixels outside the whole-cell grid to the theme background" in {
     val image   = new BufferedImage(83, 57, BufferedImage.TYPE_INT_ARGB)
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
@@ -313,7 +363,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(8, 5), font, font, metrics, None)
 
-    new Color(image.getRGB(82, 55), true).getRed should be < new Color(image.getRGB(82, 56), true).getRed
+    (0 until image.getHeight).exists(y => new Color(image.getRGB(82, y), true).getRed < 230) shouldBe true
   }
 
   private def maxAlpha(image: BufferedImage): Int =

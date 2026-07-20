@@ -56,6 +56,22 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     surface.strokeRoundRectCalls.headOption.map(_.strokeWidth) shouldBe Some(4.0f)
   }
 
+  it should "draw a shadow for panels only when UI shadows are enabled" in {
+    val panel = TextPanelView(
+      rect = LayoutRect(2, 2, 20, 6),
+      title = "outline",
+      rows = List(TextPanelRow("Item 1"))
+    )
+    val enabledSurface  = new MockRenderSurface(40, 12)
+    val disabledSurface = new MockRenderSurface(40, 12)
+
+    PinnedPanelRenderer.render(enabledSurface, panel, Theme.light, AppConfig.default)
+    PinnedPanelRenderer.render(disabledSurface, panel, Theme.light, AppConfig.default.withUiShadowsEnabled(false))
+
+    enabledSurface.roundRectShadowCalls.map(_.rect) should contain(panel.rect)
+    disabledSurface.roundRectShadowCalls shouldBe empty
+  }
+
   it should "render selected rows using the theme highlight colors" in {
     val surface = new MockRenderSurface(40, 12)
     val panel = TextPanelView(

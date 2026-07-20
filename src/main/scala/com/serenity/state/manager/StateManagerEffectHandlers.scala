@@ -592,6 +592,8 @@ final private[manager] class StateManagerEffectHandlers(
         updateAppearanceConfig(_.withMaterialPreset(preset)).void
       case CommandIntent.SetPostProcessingEffect(effect) =>
         updateAppearanceConfig(_.withPostProcessingEffect(effect)).void
+      case CommandIntent.SetUiShadowsEnabled(enabled) =>
+        updateAppearanceConfig(_.withUiShadowsEnabled(enabled)).void
       case CommandIntent.SetMotionPreset(preset) =>
         updateMotionConfig(_.withMotionPreset(preset)).void
       case CommandIntent.SetMotionAccessibility(accessibility) =>

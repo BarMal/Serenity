@@ -21,6 +21,7 @@ object CommandRunnerSettingsGroups:
     val windowChromeItem        = CommandRunnerSettingsItems.windowChromeOptionItem(optionSelections)
     val materialPresetItem      = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
     val postProcessingItem      = CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections)
+    val uiShadowsItem           = CommandRunnerSettingsItems.uiShadowsOptionItem(optionSelections)
     val motionPresetItem        = CommandRunnerSettingsItems.motionPresetOptionItem(optionSelections)
     val motionAccessibilityItem = CommandRunnerSettingsItems.motionAccessibilityOptionItem(optionSelections)
     val commandRunnerFade       = CommandRunnerSettingsItems.commandRunnerFadeOptionItem(optionSelections)
@@ -106,7 +107,7 @@ object CommandRunnerSettingsGroups:
     val surfaceAppearanceGroup = CommandSurfaceItem.GroupItem(
       id = "settings-surface-appearance",
       label = "Surface Appearance",
-      children = List(backgroundStyleItem, materialPresetItem, postProcessingItem) ++ inputItems.filter(
+      children = List(backgroundStyleItem, materialPresetItem, postProcessingItem, uiShadowsItem) ++ inputItems.filter(
         _.id == "blur-radius"
       ),
       category = CommandCategory.Settings,

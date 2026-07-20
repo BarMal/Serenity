@@ -86,6 +86,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "background-style",
       "material-preset",
       "post-processing",
+      "ui-shadows",
       "blur-radius"
     )
     groupById(groups, "settings-rendering").children.map(_.id) shouldBe List("render-fps")
@@ -265,6 +266,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "background-style",
       "material-preset",
       "post-processing",
+      "ui-shadows",
       "blur-radius"
     )
   }
