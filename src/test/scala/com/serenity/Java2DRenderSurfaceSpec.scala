@@ -333,6 +333,19 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     (0 until image.getHeight).exists(y => new Color(image.getRGB(12, y), true).getRed < 230) shouldBe true
   }
 
+  it should "not bloom scanlines across a light background when composing effects" in {
+    val image   = new BufferedImage(15, 15, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(Color.WHITE)
+    surface.applyPostProcessing(PostProcessingEffect.ScanlinesAndGlow, animationPhase = 0L)
+    surface.flush()
+
+    new Color(image.getRGB(6, 4), true).getRed shouldBe 255
+  }
+
   "Renderer.render" should "clear pixels outside the whole-cell grid to the theme background" in {
     val image   = new BufferedImage(83, 57, BufferedImage.TYPE_INT_ARGB)
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)

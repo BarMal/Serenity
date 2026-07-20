@@ -22,12 +22,12 @@ trait RenderSurface:
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit
   def enableStyle(style: TextStyle): Unit
   def disableStyle(style: TextStyle): Unit
-  def setAlpha(alpha: Float): Unit                                             = ()
-  def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit = ()
-  def applyPostProcessing(effect: PostProcessingEffect): Unit                  = ()
+  def setAlpha(alpha: Float): Unit                                                  = ()
+  def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit      = ()
+  def applyPostProcessing(effect: PostProcessingEffect): Unit                       = ()
   def applyPostProcessing(effect: PostProcessingEffect, animationPhase: Long): Unit = applyPostProcessing(effect)
-  def devicePixelScaleX: Double                                                = 1.0
-  def devicePixelScaleY: Double                                                = 1.0
+  def devicePixelScaleX: Double                                                     = 1.0
+  def devicePixelScaleY: Double                                                     = 1.0
 
   def strokeRoundRect(
     x: Int,

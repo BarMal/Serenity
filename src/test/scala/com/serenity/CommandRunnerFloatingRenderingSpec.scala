@@ -493,7 +493,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "draw a shadow behind the command runner only when UI shadows are enabled" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands     = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
     val enabledState = stateWithRunner(Theme.light, "op", commands)
     val disabledState = enabledState.copy(
       config = AppConfig.default.withUiShadowsEnabled(false)

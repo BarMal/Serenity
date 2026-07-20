@@ -20,7 +20,14 @@ object PinnedPanelRenderer:
     val rect = panel.rect
 
     if config.uiShadowsEnabled then
-      surface.drawRoundRectShadow(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx, new java.awt.Color(0, 0, 0))
+      surface.drawRoundRectShadow(
+        rect.x,
+        rect.y,
+        rect.width,
+        rect.height,
+        config.uiCornerRadiusPx,
+        new java.awt.Color(0, 0, 0)
+      )
     surface.setAlpha(SurfaceMaterials.panelAlpha(config, theme))
     surface.setForegroundColor(theme.panel.foreground)
     surface.setBackgroundColor(theme.panel.background)

@@ -231,8 +231,8 @@ class Java2DRenderSurface(
       case PostProcessingEffect.Glow =>
         applyGlow()
       case PostProcessingEffect.ScanlinesAndGlow =>
-        applyScanlines(animationPhase)
         applyGlow()
+        applyScanlines(animationPhase)
 
   private def applyScanlines(animationPhase: Long): Unit =
     val rawGraphics = image.createGraphics()
@@ -257,7 +257,9 @@ class Java2DRenderSurface(
       val alpha     = if thickness == 2 then 0.18f else 0.13f
       rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha))
       rawGraphics.setColor(Color.BLACK)
-      (y until math.min(image.getHeight, y + thickness)).foreach(row => rawGraphics.drawLine(0, row, image.getWidth - 1, row))
+      (y until math.min(image.getHeight, y + thickness)).foreach(row =>
+        rawGraphics.drawLine(0, row, image.getWidth - 1, row)
+      )
       val spacing = 3 + math.floorMod(y + phase, 4)
       drawScanlines(rawGraphics, y + thickness + spacing, phase)
 
@@ -277,8 +279,8 @@ class Java2DRenderSurface(
       new Kernel(
         5,
         5,
-        Array(1f, 4f, 6f, 4f, 1f, 4f, 16f, 24f, 16f, 4f, 6f, 24f, 36f, 24f, 6f, 4f, 16f, 24f, 16f, 4f, 1f, 4f, 6f,
-          4f, 1f).map(_ / 128f)
+        Array(1f, 4f, 6f, 4f, 1f, 4f, 16f, 24f, 16f, 4f, 6f, 24f, 36f, 24f, 6f, 4f, 16f, 24f, 16f, 4f, 1f, 4f, 6f, 4f,
+          1f).map(_ / 128f)
       ),
       ConvolveOp.EDGE_NO_OP,
       null
@@ -303,7 +305,8 @@ class Java2DRenderSurface(
       (0 until image.getHeight).foreach { y =>
         (0 until image.getWidth).foreach { x =>
           val color = new Color(blurred.getRGB(x, y), true)
-          val intensity = scala.collection.immutable.List(color.getAlpha, color.getRed, color.getGreen, color.getBlue).max
+          val intensity =
+            scala.collection.immutable.List(color.getAlpha, color.getRed, color.getGreen, color.getBlue).max
           if intensity > 0 then
             val alpha = math.max(1, (intensity * 0.8f).toInt)
             rawGraphics.setColor(new Color(color.getRed, color.getGreen, color.getBlue, alpha))
@@ -326,10 +329,10 @@ class Java2DRenderSurface(
     arcPx: Int,
     color: Color
   ): Unit =
-    val px = metrics.toPixelX(x)
-    val py = metrics.toPixelY(y)
-    val pw = width * metrics.charWidth
-    val ph = height * metrics.lineHeight
+    val px             = metrics.toPixelX(x)
+    val py             = metrics.toPixelY(y)
+    val pw             = width * metrics.charWidth
+    val ph             = height * metrics.lineHeight
     val savedComposite = g.getComposite
     try
       scala.collection.immutable.List(6 -> 0.025f, 5 -> 0.035f, 4 -> 0.05f, 3 -> 0.07f).foreach { (offset, alpha) =>

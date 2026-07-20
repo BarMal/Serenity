@@ -170,7 +170,11 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
   def strokeRoundRectCalls: List[StrokeRoundRectCall] = strokeRoundRectCallsBuffer.toList
 
   override def drawRoundRectShadow(x: Int, y: Int, width: Int, height: Int, arcPx: Int, color: Color): Unit =
-    roundRectShadowCallsBuffer += RoundRectShadowCall(com.serenity.ui.layout.LayoutRect(x, y, width, height), arcPx, color)
+    roundRectShadowCallsBuffer += RoundRectShadowCall(
+      com.serenity.ui.layout.LayoutRect(x, y, width, height),
+      arcPx,
+      color
+    )
 
   def roundRectShadowCalls: List[RoundRectShadowCall] = roundRectShadowCallsBuffer.toList
 

@@ -38,9 +38,9 @@ enum MaterialPreset(val configKey: String):
       case Custom        => 0.3f
 
 enum PostProcessingEffect(val configKey: String):
-  case Off             extends PostProcessingEffect("off")
-  case Scanlines       extends PostProcessingEffect("scanlines")
-  case Glow            extends PostProcessingEffect("glow")
+  case Off              extends PostProcessingEffect("off")
+  case Scanlines        extends PostProcessingEffect("scanlines")
+  case Glow             extends PostProcessingEffect("glow")
   case ScanlinesAndGlow extends PostProcessingEffect("scanlines-glow")
 
 object PostProcessingEffect:
@@ -52,7 +52,7 @@ object PostProcessingEffect:
       case "glow"                           => Some(PostProcessingEffect.Glow)
       case "scanlines-glow" | "scanlines+glow" | "scanlines,glow" | "glow,scanlines" =>
         Some(PostProcessingEffect.ScanlinesAndGlow)
-      case _                                => None
+      case _ => None
 
 enum MotionPreset(val configKey: String):
   case Reduced    extends MotionPreset("reduced")
@@ -1314,8 +1314,7 @@ object SurfaceConfig:
       if materialPresetKeys.contains(key) then parseMaterialPreset(trimmed).map(config.withMaterialPreset)
       else if postProcessingKeys.contains(key) then
         PostProcessingEffect.fromConfigKey(trimmed).map(config.withPostProcessingEffect)
-      else if uiShadowsKeys.contains(key) then
-        trimmed.toBooleanOption.map(config.withUiShadowsEnabled)
+      else if uiShadowsKeys.contains(key) then trimmed.toBooleanOption.map(config.withUiShadowsEnabled)
       else if motionPresetKeys.contains(key) then parseMotionPreset(trimmed).map(config.withMotionPreset)
       else if motionAccessibilityKeys.contains(key) then
         MotionAccessibility.fromConfigKey(trimmed).map(config.withMotionAccessibility)

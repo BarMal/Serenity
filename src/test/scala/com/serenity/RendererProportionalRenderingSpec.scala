@@ -83,7 +83,7 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
         panelWidthPx = 400,
         propFont,
         surface.fontRenderContext.getOrElse(fail("Expected mock render surface font context"))
-    )
+      )
       .ascentPx
 
     val renderedMarkdown = surface.drawRunPxCalls
