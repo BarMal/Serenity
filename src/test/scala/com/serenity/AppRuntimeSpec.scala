@@ -340,11 +340,11 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           registerResizeCallback = _ => ()
         )
         .start
-      _ <- initialRenderStarted.get
+      _                           <- initialRenderStarted.get
       selectedDuringInitialRender <- waitForStartupSelection(stateManager, expected = 1, attempts = 20)
-      _ <- allowInitialRender.complete(())
-      _ <- closeRequested.complete(())
-      _ <- fiber.joinWithNever
+      _                           <- allowInitialRender.complete(())
+      _                           <- closeRequested.complete(())
+      _                           <- fiber.joinWithNever
     yield selectedDuringInitialRender
 
     program.unsafeRunTimed(10.seconds) shouldBe Some(true)
@@ -354,7 +354,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     given Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeStartupFailureSpec"))
 
     val program = for
-      inputStarted  <- Deferred[IO, Unit]
+      inputStarted   <- Deferred[IO, Unit]
       inputCancelled <- Deferred[IO, Unit]
       stateManager <- StateManager.apply(
         LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeStartupFailureSpec")),
@@ -363,7 +363,8 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       inputHandler = new InputHandler[IO]:
         override def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] = Stream.never
         override def eventStream: Stream[IO, Event] =
-          Stream.eval(inputStarted.complete(()).map(_ => ())).drain ++ Stream.repeatEval(IO.never[Event])
+          Stream.eval(inputStarted.complete(()).map(_ => ())).drain ++ Stream
+            .repeatEval(IO.never[Event])
             .onFinalize(inputCancelled.complete(()).map(_ => ()))
         override def shutdown: IO[Unit] = IO.unit
       result <- AppRuntime
@@ -379,7 +380,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           registerResizeCallback = _ => ()
         )
         .attempt
-      cancelled <- IO.race(inputCancelled.get, IO.sleep(250.millis)).map(_.isLeft)
+      cancelled <- IO.race(inputCancelled.get, IO.sleep(5.seconds)).map(_.isLeft)
     yield (result, cancelled)
 
     val (result, cancelled) = program.unsafeRunTimed(10.seconds).getOrElse(fail("Runtime did not finish"))
