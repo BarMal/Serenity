@@ -827,7 +827,8 @@ object Renderer:
                   widthPx,
                   snapshot.lineHeightPx,
                   snapshot.ascentPx,
-                  selectedText
+                  selectedText,
+                  clipGlyphToRun = true
                 )
               }
           else
@@ -925,7 +926,8 @@ object Renderer:
             widthPx,
             snapshot.lineHeightPx,
             snapshot.ascentPx,
-            rangeText
+            rangeText,
+            clipGlyphToRun = true
           )
         }
     else

@@ -124,8 +124,8 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     surface.viewportHeight shouldBe 5
   }
 
-  it should "clip measured text runs to their background width" in {
-    val image   = new BufferedImage(180, 70, BufferedImage.TYPE_INT_ARGB)
+  it should "preserve proportional glyph overhangs while clipping measured text to the cell grid" in {
+    val image   = new BufferedImage(183, 70, BufferedImage.TYPE_INT_ARGB)
     val metrics = CellMetrics(charWidth = 10, lineHeight = 40, ascent = 32)
     val font    = new Font(Font.SANS_SERIF, Font.BOLD, 40)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
@@ -135,13 +135,67 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     surface.drawRunPx(xPx = 10.0f, yPx = 5, bgWidthPx = 24.0f, lineHeightPx = 40, ascentPx = 32, s = "WWWWWW")
     surface.flush()
 
-    val pixelsBeyondRun =
+    val pixelsBeyondCellGrid =
       for
         y <- 5 until 45
-        x <- 35 until image.getWidth
+        x <- 180 until image.getWidth
       yield (image.getRGB(x, y) >>> 24) & 0xff
 
-    pixelsBeyondRun.max shouldBe 0
+    pixelsBeyondCellGrid.max shouldBe 0
+  }
+
+  it should "not cut off the right overhang of an italic prose glyph" in {
+    val image   = new BufferedImage(80, 70, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 10, lineHeight = 50, ascent = 38)
+    val font    = new Font(Font.SANS_SERIF, Font.ITALIC, 40)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    val renderContext = surface.fontRenderContext.getOrElse(fail("Java2D surface must expose its font render context"))
+    val backgroundWidth = font.getStringBounds("f", renderContext).getWidth.toFloat
+    surface.setBackgroundColor(Color.WHITE)
+    surface.setForegroundColor(Color.BLACK)
+    surface.drawRunPx(xPx = 20.0f, yPx = 5, bgWidthPx = backgroundWidth, lineHeightPx = 50, ascentPx = 38, s = "f")
+    surface.flush()
+
+    val pixelsInGlyphOverhang =
+      for
+        y <- 5 until 55
+        x <- math.ceil(20.0f + backgroundWidth).toInt until 45
+      yield (image.getRGB(x, y) >>> 24) & 0xff
+
+    pixelsInGlyphOverhang.max should be > 0
+  }
+
+  it should "clip an italic selected glyph to its measured run" in {
+    val image   = new BufferedImage(80, 70, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 10, lineHeight = 50, ascent = 38)
+    val font    = new Font(Font.SANS_SERIF, Font.ITALIC, 40)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    val renderContext = surface.fontRenderContext.getOrElse(fail("Java2D surface must expose its font render context"))
+    val backgroundWidth = font.getStringBounds("f", renderContext).getWidth.toFloat
+    surface.setBackgroundColor(Color.BLACK)
+    surface.setForegroundColor(Color.BLUE)
+    surface.drawRunPx(xPx = 20.0f, yPx = 5, bgWidthPx = backgroundWidth, lineHeightPx = 50, ascentPx = 38, s = "f")
+    surface.setForegroundColor(Color.RED)
+    surface.drawRunPx(
+      xPx = 20.0f,
+      yPx = 5,
+      bgWidthPx = backgroundWidth,
+      lineHeightPx = 50,
+      ascentPx = 38,
+      s = "f",
+      clipGlyphToRun = true
+    )
+    surface.flush()
+
+    val pixelsPastSelection =
+      for
+        y <- 5 until 55
+        x <- math.ceil(20.0f + backgroundWidth).toInt until 45
+      yield new Color(image.getRGB(x, y), true)
+
+    pixelsPastSelection.forall(_.getRed == 0) shouldBe true
   }
 
   it should "use the canvas preferred size before Swing reports a non-zero runtime size" in {

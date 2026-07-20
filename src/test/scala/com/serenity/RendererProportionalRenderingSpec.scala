@@ -112,6 +112,7 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
     surface.drawRunPxCalls.exists(call =>
       call.s == "hello" &&
         call.foreground == Theme.light.highlighted.foreground &&
-        call.background == Theme.light.highlighted.background
+        call.background == Theme.light.highlighted.background &&
+        call.clipGlyphToRun
     ) shouldBe true
   }

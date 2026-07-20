@@ -333,13 +333,14 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
     bgWidthPx: Float,
     lineHeightPx: Int,
     ascentPx: Int,
-    text: String
+    text: String,
+    clipGlyphToRun: Boolean = false
   ): Unit =
     val x     = math.floor(xPx / metrics.charWidth.max(1).toFloat).toInt
     val y     = math.floor(yPx / metrics.lineHeight.max(1).toFloat).toInt
     val width = math.ceil(bgWidthPx / metrics.charWidth.max(1).toFloat).toInt.max(1)
     recordText(text, LayoutRect(x, y, width, 1))
-    delegate.drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, text)
+    delegate.drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, text, clipGlyphToRun)
 
   override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
     drawnImageBuffer += ScenarioDrawnImage(image, LayoutRect(x, y, width, height))
