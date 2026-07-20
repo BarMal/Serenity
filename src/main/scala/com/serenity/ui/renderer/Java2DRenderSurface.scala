@@ -59,7 +59,15 @@ class Java2DRenderSurface(
 
   override def fontRenderContext: Option[FontRenderContext] = Some(renderContext)
 
-  override def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit =
+  override def drawRunPx(
+    xPx: Float,
+    yPx: Int,
+    bgWidthPx: Float,
+    lineHeightPx: Int,
+    ascentPx: Int,
+    s: String,
+    clipGlyphToRun: Boolean = false
+  ): Unit =
     val clipX         = math.floor(xPx.toDouble).toInt
     val clipRight     = math.ceil((xPx + bgWidthPx).toDouble).toInt
     val clipBottom    = yPx + lineHeightPx
@@ -77,7 +85,8 @@ class Java2DRenderSurface(
         val savedClip = g.getClip
         g.setColor(fgRef.get())
         try
-          g.clipRect(0, 0, cellGridWidthPx, cellGridHeightPx)
+          if clipGlyphToRun then g.clipRect(boundedLeft, boundedTop, boundedWidth, boundedHeight)
+          else g.clipRect(0, 0, cellGridWidthPx, cellGridHeightPx)
           g.drawString(s, xPx, (yPx + ascentPx).toFloat)
         finally g.setClip(savedClip)
 

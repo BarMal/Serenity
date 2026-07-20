@@ -74,12 +74,21 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
       s: String,
       foreground: Color,
       background: Color,
-      font: Option[Font]
+      font: Option[Font],
+      clipGlyphToRun: Boolean
   )
 
   private val drawRunPxCallsBuffer = scala.collection.mutable.ListBuffer.empty[DrawRunPxCall]
 
-  override def drawRunPx(xPx: Float, yPx: Int, bgWidthPx: Float, lineHeightPx: Int, ascentPx: Int, s: String): Unit =
+  override def drawRunPx(
+    xPx: Float,
+    yPx: Int,
+    bgWidthPx: Float,
+    lineHeightPx: Int,
+    ascentPx: Int,
+    s: String,
+    clipGlyphToRun: Boolean = false
+  ): Unit =
     drawRunPxCallsBuffer += DrawRunPxCall(
       xPx,
       yPx,
@@ -89,7 +98,8 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
       s,
       currentFg.get(),
       currentBg.get(),
-      currentFont.get()
+      currentFont.get(),
+      clipGlyphToRun
     )
     val metrics =
       currentFont

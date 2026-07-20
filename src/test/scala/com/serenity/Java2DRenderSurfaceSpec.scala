@@ -166,6 +166,38 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     pixelsInGlyphOverhang.max should be > 0
   }
 
+  it should "clip an italic selected glyph to its measured run" in {
+    val image   = new BufferedImage(80, 70, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 10, lineHeight = 50, ascent = 38)
+    val font    = new Font(Font.SANS_SERIF, Font.ITALIC, 40)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    val renderContext = surface.fontRenderContext.getOrElse(fail("Java2D surface must expose its font render context"))
+    val backgroundWidth = font.getStringBounds("f", renderContext).getWidth.toFloat
+    surface.setBackgroundColor(Color.BLACK)
+    surface.setForegroundColor(Color.BLUE)
+    surface.drawRunPx(xPx = 20.0f, yPx = 5, bgWidthPx = backgroundWidth, lineHeightPx = 50, ascentPx = 38, s = "f")
+    surface.setForegroundColor(Color.RED)
+    surface.drawRunPx(
+      xPx = 20.0f,
+      yPx = 5,
+      bgWidthPx = backgroundWidth,
+      lineHeightPx = 50,
+      ascentPx = 38,
+      s = "f",
+      clipGlyphToRun = true
+    )
+    surface.flush()
+
+    val pixelsPastSelection =
+      for
+        y <- 5 until 55
+        x <- math.ceil(20.0f + backgroundWidth).toInt until 45
+      yield new Color(image.getRGB(x, y), true)
+
+    pixelsPastSelection.forall(_.getRed == 0) shouldBe true
+  }
+
   it should "use the canvas preferred size before Swing reports a non-zero runtime size" in {
     val canvas = new JPanel()
     canvas.setPreferredSize(new java.awt.Dimension(640, 480))
