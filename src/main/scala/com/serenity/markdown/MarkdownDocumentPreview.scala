@@ -514,7 +514,7 @@ object MarkdownDocumentPreview:
     val fragment = renderHtmlFragment(source, title, baseUri)
     renderXhtmlFragment(fragment, title, theme, font, panelChrome, inlineLineHeightPx)
 
-  private def renderInlineXhtml(
+  private[serenity] def renderInlineXhtml(
     rows: Vector[InlinePreviewLine],
     sourceLines: Vector[String],
     title: String,
@@ -523,7 +523,7 @@ object MarkdownDocumentPreview:
     inlineLineHeightPx: Int
   ): String =
     val fragment =
-      s"<table class=\"inline-rows\"><tbody>${rows.map(inlineRowHtml(_, sourceLines)).mkString}</tbody></table>"
+      s"<div class=\"inline-rows\">${rows.map(inlineRowHtml(_, sourceLines)).mkString}</div>"
     renderXhtmlFragment(fragment, title, theme, font, panelChrome = false, Some(inlineLineHeightPx))
 
   private def renderXhtmlFragment(
@@ -554,7 +554,7 @@ object MarkdownDocumentPreview:
       .flatMap(sourceLines.lift)
       .filter(_.matches("^\\s*#{1,6}\\s+.+$"))
       .fold("")(_ => " inline-heading")
-    s"<tr><td class=\"inline-row$headingClass\">${escapeXml(row.text)}</td></tr>"
+    s"<div class=\"inline-row$headingClass\">${escapeXml(row.text)}</div>"
 
   private def stylesheet(
     theme: Theme,
@@ -577,10 +577,7 @@ object MarkdownDocumentPreview:
          |      p, blockquote, pre, table, ul, ol { margin: 0; }
          |      li { margin: 0; }
          |      .inline-rows {
-         |        border: 0;
-         |        border-collapse: collapse;
          |        margin: 0;
-         |        width: 100%;
          |      }
          |      .inline-rows .inline-row {
          |        border: 0;
