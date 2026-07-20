@@ -167,7 +167,22 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     surface.flush()
 
     new Color(image.getRGB(0, 1), true).getRed should be < new Color(image.getRGB(0, 0), true).getRed
-    new Color(image.getRGB(0, 3), true).getRed should be < new Color(image.getRGB(0, 2), true).getRed
+    new Color(image.getRGB(0, 4), true).getRed should be < new Color(image.getRGB(0, 3), true).getRed
+  }
+
+  it should "add a phosphor mask to the scanline post-process" in {
+    val image   = new BufferedImage(9, 9, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(Color.WHITE)
+    surface.applyPostProcessing(PostProcessingEffect.Scanlines)
+    surface.flush()
+
+    val firstPhosphor  = new Color(image.getRGB(0, 0), true)
+    val secondPhosphor = new Color(image.getRGB(1, 0), true)
+    firstPhosphor.getRed should not be secondPhosphor.getRed
   }
 
   it should "spread bright UI pixels into a glow" in {
@@ -183,6 +198,35 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     new Color(image.getRGB(3, 4), true).getRed should be > 0
     new Color(image.getRGB(4, 4), true).getRed should be >= 250
+  }
+
+  it should "extend the glow halo beyond immediately adjacent pixels" in {
+    val image   = new BufferedImage(11, 11, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(Color.BLACK)
+    surface.fillPixelRect(5, 5, 1, 1, Color.WHITE)
+    surface.applyPostProcessing(PostProcessingEffect.Glow)
+    surface.flush()
+
+    new Color(image.getRGB(3, 5), true).getRed should be > 0
+  }
+
+  it should "spread dark glyphs into a halo on a light background" in {
+    val image   = new BufferedImage(11, 11, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(Color.WHITE)
+    surface.fillPixelRect(5, 5, 1, 1, Color.BLACK)
+    surface.applyPostProcessing(PostProcessingEffect.Glow)
+    surface.flush()
+
+    new Color(image.getRGB(3, 5), true).getRed should be < 255
+    new Color(image.getRGB(5, 5), true) shouldBe Color.BLACK
   }
 
   "Renderer.render" should "clear pixels outside the whole-cell grid to the theme background" in {

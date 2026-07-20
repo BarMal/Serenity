@@ -1634,9 +1634,10 @@ object EditorEventReducer:
         else if plan.kind == TransitionKind.Fade then
           state.config.scaledCharacterAnimation match
             case Some(animConfig) =>
-              val updatedAnimations = insertedCells.foldLeft(buffer.animations) {
-                case (animations, (key, cell)) =>
-                  animations.addCharacterAnimation(
+              if insertedCells.size == 1 then
+                val (key, cell) = insertedCells.head
+                buffer.copy(
+                  animations = buffer.animations.addCharacterAnimation(
                     cell.char,
                     key.column,
                     key.line,
@@ -1644,8 +1645,22 @@ object EditorEventReducer:
                     cell.endColor,
                     animConfig.steps
                   )
-              }
-              buffer.copy(animations = updatedAnimations)
+                )
+              else
+                val staggeredCells = insertedCells
+                  .groupBy { case (key, _) => key.line }
+                  .valuesIterator
+                  .flatMap(lineCells =>
+                    FlowAnimationBuilder.build(
+                      cells = lineCells,
+                      direction = FlowDirection.ByColumn,
+                      sweep = SweepDirection.Forward,
+                      steps = animConfig.steps,
+                      staggerFrames = 1
+                    )
+                  )
+                  .toMap
+                buffer.copy(animations = buffer.animations.mergeAnimations(staggeredCells))
             case None =>
               buffer
         else
