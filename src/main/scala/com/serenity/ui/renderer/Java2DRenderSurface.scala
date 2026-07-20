@@ -77,7 +77,7 @@ class Java2DRenderSurface(
         val savedClip = g.getClip
         g.setColor(fgRef.get())
         try
-          g.clipRect(boundedLeft, boundedTop, boundedWidth, boundedHeight)
+          g.clipRect(0, 0, cellGridWidthPx, cellGridHeightPx)
           g.drawString(s, xPx, (yPx + ascentPx).toFloat)
         finally g.setClip(savedClip)
 
