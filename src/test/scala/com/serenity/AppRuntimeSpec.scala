@@ -363,8 +363,8 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       inputHandler = new InputHandler[IO]:
         override def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] = Stream.never
         override def eventStream: Stream[IO, Event] =
-          Stream.eval(inputStarted.complete(()).map(_ => ())).drain ++ Stream
-            .repeatEval(IO.never[Event])
+          (Stream.eval(inputStarted.complete(()).map(_ => ())).drain ++ Stream
+            .repeatEval(IO.never[Event]))
             .onFinalize(inputCancelled.complete(()).map(_ => ()))
         override def shutdown: IO[Unit] = IO.unit
       result <- AppRuntime
