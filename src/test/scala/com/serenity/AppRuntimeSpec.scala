@@ -7,7 +7,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
-import cats.effect.{IO, Ref}
+import cats.effect.{Deferred, IO, Ref}
 import com.serenity.app.AppRuntime
 import com.serenity.config.*
 import com.serenity.input.{InputHandler, InputRouter, SystemClipboard}
@@ -68,6 +68,22 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
             IO.sleep(25.millis) >> loop(remaining - 1)
       }
     loop(attempts)
+
+  private def waitForStartupSelection(
+    stateManager: StateManager,
+    expected: Int,
+    attempts: Int
+  ): IO[Boolean] =
+    stateManager.getCurrentState.flatMap { state =>
+      val selection = state.startPageSurface.flatMap {
+        _.content match
+          case com.serenity.state.models.SurfaceContent.StartPage(page) => Some(page.selectedIndex)
+          case _                                                        => None
+      }
+      if selection.contains(expected) then IO.pure(true)
+      else if attempts <= 0 then IO.pure(false)
+      else IO.sleep(25.millis) >> waitForStartupSelection(stateManager, expected, attempts - 1)
+    }
 
   "AppRuntime" should "derive render frame intervals from the configured FPS target" in {
     AppRuntime.fastFrameInterval(RenderFpsTarget.Fps30).toNanos shouldBe 33333333L
@@ -293,6 +309,83 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     yield count
 
     program.unsafeRunSync() shouldBe 1
+  }
+
+  it should "process landing-page input while the initial frame is rendering" in {
+    given Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeStartupInputSpec"))
+
+    val program = for
+      initialRenderStarted <- Deferred[IO, Unit]
+      allowInitialRender   <- Deferred[IO, Unit]
+      closeRequested       <- Deferred[IO, Unit]
+      stateManager <- StateManager.apply(
+        LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeStartupInputSpec")),
+        policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+      )
+      inputHandler = new InputHandler[IO]:
+        override def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] = Stream.never
+        override def eventStream: Stream[IO, Event]                 = Stream.emit(MoveDown) ++ Stream.never
+        override def shutdown: IO[Unit]                             = IO.unit
+      fiber <- AppRuntime
+        .run(
+          initialViewportSize = ViewportSize(120, 40),
+          makeInputHandler = _ => inputHandler,
+          checkResize = IO.pure(None),
+          renderFull = (_: AppState, _: Boolean, _: Option[Color]) =>
+            initialRenderStarted.complete(()).flatMap(_ => allowInitialRender.get),
+          renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
+          appConfig = AppConfig.default,
+          makeStateManager = Some(_ => IO.pure(stateManager)),
+          awaitExternalQuit = closeRequested.get,
+          registerResizeCallback = _ => ()
+        )
+        .start
+      _                           <- initialRenderStarted.get
+      selectedDuringInitialRender <- waitForStartupSelection(stateManager, expected = 1, attempts = 20)
+      _                           <- allowInitialRender.complete(())
+      _                           <- closeRequested.complete(())
+      _                           <- fiber.joinWithNever
+    yield selectedDuringInitialRender
+
+    program.unsafeRunTimed(10.seconds) shouldBe Some(true)
+  }
+
+  it should "cancel the input stream when the initial render fails" in {
+    given Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeStartupFailureSpec"))
+
+    val program = for
+      inputStarted   <- Deferred[IO, Unit]
+      inputCancelled <- Deferred[IO, Unit]
+      stateManager <- StateManager.apply(
+        LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeStartupFailureSpec")),
+        policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+      )
+      inputHandler = new InputHandler[IO]:
+        override def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] = Stream.never
+        override def eventStream: Stream[IO, Event] =
+          (Stream.eval(inputStarted.complete(()).map(_ => ())).drain ++ Stream
+            .repeatEval(IO.never[Event]))
+            .onFinalize(inputCancelled.complete(()).map(_ => ()))
+        override def shutdown: IO[Unit] = IO.unit
+      result <- AppRuntime
+        .run(
+          initialViewportSize = ViewportSize(120, 40),
+          makeInputHandler = _ => inputHandler,
+          checkResize = IO.pure(None),
+          renderFull = (_: AppState, _: Boolean, _: Option[Color]) =>
+            inputStarted.get >> IO.raiseError(RuntimeException("initial render failed")),
+          renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
+          appConfig = AppConfig.default,
+          makeStateManager = Some(_ => IO.pure(stateManager)),
+          registerResizeCallback = _ => ()
+        )
+        .attempt
+      cancelled <- IO.race(inputCancelled.get, IO.sleep(5.seconds)).map(_.isLeft)
+    yield (result, cancelled)
+
+    val (result, cancelled) = program.unsafeRunTimed(10.seconds).getOrElse(fail("Runtime did not finish"))
+    result.swap.toOption.map(_.getMessage) should contain("initial render failed")
+    cancelled shouldBe true
   }
 
   it should "refresh the focused translator after a modal request" in {

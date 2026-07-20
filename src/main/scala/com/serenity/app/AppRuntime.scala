@@ -99,8 +99,6 @@ object AppRuntime:
         systemClipboard = SystemClipboard.awt[IO]
         inputHandler    = makeInputHandler(inputRouter)
         _                      <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
-        _                      <- renderFull(initialState, true, None)
-        _                      <- logger.info("Initial render completed, starting main loop")
         fastMode               <- SignallingRef.of[IO, Boolean](false)
         fastRenderRequestEpoch <- Ref.of[IO, Long](0L)
         requestFastRender = fastRenderRequestEpoch.update(_ + 1L) >> fastMode.set(true)
@@ -121,32 +119,46 @@ object AppRuntime:
           breathIndex,
           requestFastRender
         )
+        inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
         _ <-
-          val idlePhase = idleRenderPhase(
-            loadState = stateManager.getCurrentState,
-            fastMode = fastMode,
-            currentStateForDiagnostics = currentStateForDiagnostics,
-            checkResizeAndHandle = checkResizeAndHandle,
-            cursorVisible = cursorVisible,
-            breathIndex = breathIndex,
-            renderCursorOnly = renderCursorOnly,
-            requestFastRender = requestFastRender
-          )
+          Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
+            renderFull(initialState, true, None) >>
+              logger.info("Initial render completed, starting main loop") >>
+              {
+                val idlePhase = idleRenderPhase(
+                  loadState = stateManager.getCurrentState,
+                  fastMode = fastMode,
+                  currentStateForDiagnostics = currentStateForDiagnostics,
+                  checkResizeAndHandle = checkResizeAndHandle,
+                  cursorVisible = cursorVisible,
+                  breathIndex = breathIndex,
+                  renderCursorOnly = renderCursorOnly,
+                  requestFastRender = requestFastRender
+                )
 
-          val fastPhase = fastRenderPhase(
-            stateManager,
-            fastMode,
-            fastRenderRequestEpoch,
-            animationTickCadence,
-            currentStateForDiagnostics,
-            checkResizeAndHandle,
-            renderFull
-          )
+                val fastPhase = fastRenderPhase(
+                  stateManager,
+                  fastMode,
+                  fastRenderRequestEpoch,
+                  animationTickCadence,
+                  currentStateForDiagnostics,
+                  checkResizeAndHandle,
+                  renderFull
+                )
 
-          val renderLoop: Stream[IO, Unit] =
-            Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
+                val renderLoop: Stream[IO, Unit] =
+                  Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
 
-          runRuntimeLoops(stateManager, inputHandler, inputFunnel, renderLoop, awaitExternalQuit, appConfig)
+                runRuntimeLoops(
+                  stateManager,
+                  inputHandler,
+                  inputFiber.joinWithNever,
+                  renderLoop,
+                  awaitExternalQuit,
+                  appConfig
+                )
+              }
+          }
         _ <- logger.info("Serenity editor shutdown complete")
       yield ()
     }
@@ -154,21 +166,14 @@ object AppRuntime:
   private def runRuntimeLoops(
     stateManager: StateReader & EventApplier & RuntimeLifecycle & LspEffectSource,
     inputHandler: InputHandler[IO],
-    inputFunnel: Stream[IO, Event] => Stream[IO, Unit],
+    awaitInputLoop: IO[Unit],
     renderLoop: Stream[IO, Unit],
     awaitExternalQuit: IO[Unit],
     appConfig: AppConfig
   )(using logger: Logger[IO]): IO[Unit] =
     val quitSignal = stateManager.awaitQuit.attempt
     (
-      superviseLoop("input loop", stateManager.forceQuit())(
-        inputHandler.eventStream
-          .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
-          .through(inputFunnel)
-          .interruptWhen(quitSignal)
-          .compile
-          .drain
-      ),
+      awaitInputLoop,
       superviseLoop("render loop", stateManager.forceQuit())(renderLoop.interruptWhen(quitSignal).compile.drain),
       stateManager.awaitQuit,
       superviseLoop("interval save loop", stateManager.forceQuit())(stateManager.intervalSaveStream.compile.drain),
@@ -182,6 +187,21 @@ object AppRuntime:
         LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger, appConfig.lspUserConfig)
       )
     ).parMapN((_, _, _, _, _, _, _) => ())
+
+  private def runInputLoop(
+    stateManager: StateReader & EventApplier & RuntimeLifecycle,
+    inputHandler: InputHandler[IO],
+    inputFunnel: Stream[IO, Event] => Stream[IO, Unit]
+  )(using logger: Logger[IO]): IO[Unit] =
+    val quitSignal = stateManager.awaitQuit.attempt
+    superviseLoop("input loop", stateManager.forceQuit())(
+      inputHandler.eventStream
+        .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
+        .through(inputFunnel)
+        .interruptWhen(quitSignal)
+        .compile
+        .drain
+    )
 
   private[serenity] def coordinateExternalQuit(
     awaitExternalQuit: IO[Unit],
