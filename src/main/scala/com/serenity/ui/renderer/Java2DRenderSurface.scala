@@ -201,24 +201,60 @@ class Java2DRenderSurface(
       case PostProcessingEffect.Scanlines =>
         val rawGraphics = image.createGraphics()
         try
-          rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.16f))
+          rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.22f))
           rawGraphics.setColor(Color.BLACK)
-          (1 until image.getHeight by 2).foreach(y => rawGraphics.drawLine(0, y, image.getWidth - 1, y))
+          (1 until image.getHeight by 3).foreach(y => rawGraphics.drawLine(0, y, image.getWidth - 1, y))
+          rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.08f))
+          (2 until image.getHeight by 3).foreach(y => rawGraphics.drawLine(0, y, image.getWidth - 1, y))
+          rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.035f))
+          (0 until image.getWidth).foreach { x =>
+            rawGraphics.setColor(
+              x % 3 match
+                case 0 => Color.RED
+                case 1 => Color.GREEN
+                case _ => Color.BLUE
+            )
+            rawGraphics.drawLine(x, 0, x, image.getHeight - 1)
+          }
         finally rawGraphics.dispose()
       case PostProcessingEffect.Glow =>
-        val source         = new BufferedImage(image.getWidth, image.getHeight, BufferedImage.TYPE_INT_ARGB)
-        val sourceGraphics = source.createGraphics()
-        try sourceGraphics.drawImage(image, 0, 0, null)
-        finally sourceGraphics.dispose()
+        val source = new BufferedImage(image.getWidth, image.getHeight, BufferedImage.TYPE_INT_ARGB)
+        (0 until image.getHeight).foreach { y =>
+          (0 until image.getWidth).foreach { x =>
+            val color = new Color(image.getRGB(x, y), true)
+            val luminance = (color.getRed * 0.2126 + color.getGreen * 0.7152 + color.getBlue * 0.0722).toInt
+            if luminance >= 96 then source.setRGB(x, y, color.getRGB)
+          }
+        }
         val blurred = new ConvolveOp(
-          new Kernel(3, 3, Array(1f, 2f, 1f, 2f, 4f, 2f, 1f, 2f, 1f).map(_ / 16f)),
+          new Kernel(
+            5,
+            5,
+            Array(1f, 4f, 6f, 4f, 1f, 4f, 16f, 24f, 16f, 4f, 6f, 24f, 36f, 24f, 6f, 4f, 16f, 24f, 16f, 4f, 1f, 4f, 6f, 4f, 1f)
+              .map(_ / 256f)
+          ),
           ConvolveOp.EDGE_NO_OP,
           null
         ).filter(source, null)
-        val glow        = new RescaleOp(4f, 0f, null).filter(blurred, null)
+        val glow = new BufferedImage(image.getWidth, image.getHeight, BufferedImage.TYPE_INT_ARGB)
+        (0 until glow.getHeight).foreach { y =>
+          (0 until glow.getWidth).foreach { x =>
+            val color = new Color(blurred.getRGB(x, y), true)
+            if color.getAlpha > 0 then
+              glow.setRGB(
+                x,
+                y,
+                new Color(
+                  (color.getRed * 8).min(255),
+                  (color.getGreen * 8).min(255),
+                  (color.getBlue * 8).min(255)
+                ).getRGB
+              )
+          }
+        }
         val rawGraphics = image.createGraphics()
         try
-          rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.35f))
+          rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f))
           val _ = rawGraphics.drawImage(glow, 0, 0, null)
         finally rawGraphics.dispose()
 

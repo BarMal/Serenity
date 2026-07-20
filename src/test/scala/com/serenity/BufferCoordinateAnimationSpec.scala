@@ -170,6 +170,35 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
+  it should "reveal default fade insertions in staggered character slices" in {
+    val program = for
+      sm <- IO.pure(makeStateManager())
+      _ <- sm.updateState(state =>
+        state.copy(
+          config = AppConfig.default.withMotionPreset(MotionPreset.Smooth),
+          clipboard = Some("abc")
+        )
+      )
+      bufferId <- sm.createBuffer("Hello")
+      state    <- sm.getCurrentState
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      _        <- sm.setBufferForPane(paneId, bufferId)
+      _        <- sm.setCursorPosition(paneId, 0, 5)
+      _        <- sm.applyEvent(Paste)
+      newState <- sm.getCurrentState
+    yield
+      val animations = newState.buffers(bufferId).animations
+      List(5, 6, 7).map(column =>
+        animations
+          .getCell(column, 0)
+          .flatMap(_.foregroundAnimation)
+          .map(_.delayFrames)
+          .getOrElse(fail(s"Expected an animation at column $column"))
+      ) shouldBe List(0, 1, 2)
+
+    program.unsafeRunSync()
+  }
+
   it should "use the editor text speed scale for inserted span choreography" in {
     val program = for
       sm <- IO.pure(makeStateManager())
