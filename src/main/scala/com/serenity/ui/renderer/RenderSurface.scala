@@ -59,11 +59,11 @@ trait RenderSurface:
   ): Unit = ()
 
   /** Draw a proportional text run at exact pixel coordinates.
-   *
-   * Fills background [xPx, xPx + bgWidthPx) × [yPx, yPx + lineHeightPx) with the current background color, then draws
-   * s at (xPx, yPx + ascent) with the current foreground color. Callers set fg/bg colors before calling. Set
-   * clipGlyphToRun when a styled overlay must not paint outside its measured run bounds.
-   */
+    *
+    * Fills background [xPx, xPx + bgWidthPx) × [yPx, yPx + lineHeightPx) with the current background color, then draws
+    * s at (xPx, yPx + ascent) with the current foreground color. Callers set fg/bg colors before calling. Set
+    * clipGlyphToRun when a styled overlay must not paint outside its measured run bounds.
+    */
   def drawRunPx(
     xPx: Float,
     yPx: Int,
