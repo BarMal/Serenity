@@ -45,7 +45,10 @@ case class SessionUiPresetEditSession(
     baseline: UiPreset,
     baselineThemeName: String,
     dirty: Boolean,
-    draft: UiPreset
+    draft: UiPreset,
+    baselineLayout: Option[SessionLayout] = None,
+    baselineFocus: Option[SessionFocus] = None,
+    baselineNextPaneId: Option[Int] = None
 )
 
 /** Persistent representation of a buffer
@@ -227,7 +230,10 @@ object SessionUiPresetEditSession:
       baseline = session.baseline,
       baselineThemeName = session.baselineTheme.name,
       dirty = session.dirty,
-      draft = session.draft
+      draft = session.draft,
+      baselineLayout = session.baselineLayout.map(SessionLayout.fromLayout),
+      baselineFocus = session.baselineFocus.flatMap(SessionFocus.fromFocus),
+      baselineNextPaneId = session.baselineNextPaneId.map(_.value)
     )
 
   def toSession(session: SessionUiPresetEditSession, baselineTheme: Theme): UiPresetEditSession =
@@ -239,7 +245,10 @@ object SessionUiPresetEditSession:
       baseline = session.baseline,
       baselineTheme = baselineTheme,
       dirty = session.dirty,
-      draft = session.draft
+      draft = session.draft,
+      baselineLayout = session.baselineLayout.map(SessionLayout.toLayout),
+      baselineFocus = session.baselineFocus.map(SessionFocus.toFocus),
+      baselineNextPaneId = session.baselineNextPaneId.map(PaneId.apply)
     )
 
 object SessionBuffer:
@@ -1008,33 +1017,6 @@ private def formatColor(color: Color): String =
 
 given Encoder[SessionState] = deriveEncoder
 
-given Encoder[SessionUiPresetEditSession] = deriveEncoder
-
-given Decoder[SessionUiPresetEditSession] = Decoder.instance { cursor =>
-  for
-    id                <- cursor.get[String]("id")
-    draftName         <- cursor.get[String]("draftName")
-    sourceName        <- cursor.get[Option[String]]("sourceName")
-    sourceRevision    <- cursor.getOrElse[Option[String]]("sourceRevision")(None)
-    baseline          <- cursor.get[UiPreset]("baseline")
-    baselineThemeName <- cursor.get[String]("baselineThemeName")
-    dirty             <- cursor.get[Boolean]("dirty")
-    draft             <- cursor.getOrElse[UiPreset]("draft")(baseline)
-  yield SessionUiPresetEditSession(
-    id,
-    draftName,
-    sourceName,
-    sourceRevision,
-    baseline,
-    baselineThemeName,
-    dirty,
-    draft
-  )
-}
-
-given Encoder[SessionBuffer] = deriveEncoder
-given Decoder[SessionBuffer] = deriveDecoder
-
 given Encoder[SessionLayout] = deriveEncoder
 given Decoder[SessionLayout] = deriveDecoder
 
@@ -1043,6 +1025,39 @@ given Decoder[SessionEditorPane] = deriveDecoder
 
 given Encoder[SessionFocus] = deriveEncoder
 given Decoder[SessionFocus] = deriveDecoder
+
+given Encoder[SessionUiPresetEditSession] = deriveEncoder
+
+given Decoder[SessionUiPresetEditSession] = Decoder.instance { cursor =>
+  for
+    id                 <- cursor.get[String]("id")
+    draftName          <- cursor.get[String]("draftName")
+    sourceName         <- cursor.get[Option[String]]("sourceName")
+    sourceRevision     <- cursor.getOrElse[Option[String]]("sourceRevision")(None)
+    baseline           <- cursor.get[UiPreset]("baseline")
+    baselineThemeName  <- cursor.get[String]("baselineThemeName")
+    dirty              <- cursor.get[Boolean]("dirty")
+    draft              <- cursor.getOrElse[UiPreset]("draft")(baseline)
+    baselineLayout     <- cursor.getOrElse[Option[SessionLayout]]("baselineLayout")(None)
+    baselineFocus      <- cursor.getOrElse[Option[SessionFocus]]("baselineFocus")(None)
+    baselineNextPaneId <- cursor.getOrElse[Option[Int]]("baselineNextPaneId")(None)
+  yield SessionUiPresetEditSession(
+    id,
+    draftName,
+    sourceName,
+    sourceRevision,
+    baseline,
+    baselineThemeName,
+    dirty,
+    draft,
+    baselineLayout,
+    baselineFocus,
+    baselineNextPaneId
+  )
+}
+
+given Encoder[SessionBuffer] = deriveEncoder
+given Decoder[SessionBuffer] = deriveDecoder
 
 given Encoder[SessionCursorPosition] = deriveEncoder
 given Decoder[SessionCursorPosition] = deriveDecoder

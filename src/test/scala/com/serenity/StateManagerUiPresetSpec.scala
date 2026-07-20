@@ -1482,6 +1482,62 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     store.find("Restart Draft").unsafeRunSync() shouldBe None
   }
 
+  it should "restore the complete pane layout after discarding a pane-count-changing preview" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-discard-layout").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+    val baselineLayout = Layout(
+      editorPanes = Map(
+        PaneId(0) -> EditorPane.withBuffer(PaneId(0), BufferId(0)),
+        PaneId(4) -> EditorPane.withBuffer(PaneId(4), BufferId(1))
+      ),
+      activeEditorPaneId = Some(PaneId(4)),
+      paneOrder = List(PaneId(4), PaneId(0)),
+      splitDirection = PaneSplitDirection.Horizontal
+    )
+
+    sm.updateState { state =>
+      state.copy(
+        buffers = state.buffers + (BufferId(1) -> Buffer.newEmpty(BufferId(1))),
+        bufferOrder = List(BufferId(0), BufferId(1)),
+        layout = baselineLayout,
+        focus = Focus.EditorPane(PaneId(4)),
+        nextBufferId = BufferId(2),
+        nextPaneId = PaneId(5)
+      )
+    }.unsafeRunSync()
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    val baselineFocus = sm.getCurrentState.unsafeRunSync().focus
+    sm.executeCommand(
+      Command.typed(
+        "create-layout-draft",
+        "Create layout draft",
+        CommandIntent.StartUiPresetDraft("Layout Draft"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "preview-writing-layout",
+        "Preview writing layout",
+        CommandIntent.ApplyUiPreset("Writing"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    sm.getCurrentState.unsafeRunSync().layout.editorPanes should have size 1
+
+    sm.executeCommand(
+      Command
+        .typed("discard-layout-draft", "Discard draft", CommandIntent.DiscardUiPresetDraft, CommandCategory.Settings)
+    ).unsafeRunSync()
+
+    val discarded = sm.getCurrentState.unsafeRunSync()
+    discarded.layout shouldBe baselineLayout
+    discarded.focus shouldBe baselineFocus
+    discarded.nextPaneId shouldBe PaneId(5)
+  }
+
   it should "reset a custom built-in preset override to the built-in defaults" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-reset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
