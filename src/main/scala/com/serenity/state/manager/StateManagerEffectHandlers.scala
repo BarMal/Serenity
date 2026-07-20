@@ -1006,7 +1006,10 @@ final private[manager] class StateManagerEffectHandlers(
                         Some(UiPresetStore.revisionOf(preset)),
                         preset,
                         state.theme,
-                        draft = preset
+                        draft = preset,
+                        baselineLayout = Some(state.layout),
+                        baselineFocus = Some(state.focus),
+                        baselineNextPaneId = Some(state.nextPaneId)
                       )
                     )
                   )
@@ -1049,7 +1052,10 @@ final private[manager] class StateManagerEffectHandlers(
             None,
             baseline,
             state.theme,
-            draft = baseline
+            draft = baseline,
+            baselineLayout = Some(state.layout),
+            baselineFocus = Some(state.focus),
+            baselineNextPaneId = Some(state.nextPaneId)
           )
           _ <- stateRef.update(_.copy(uiPresetEditSession = Some(session)))
           _ <- updateCommandRunnerPresetContext(
@@ -1066,8 +1072,21 @@ final private[manager] class StateManagerEffectHandlers(
             val restored = withUpdatedRunnerConfig(
               UiPreset.applyToState(session.baseline, state, session.baselineTheme),
               session.baseline.config
-            ).copy(uiPresetEditSession = None)
-            (restored, true)
+            )
+            val withBaselineLayout = session.baselineLayout.fold(restored) { layout =>
+              restored.copy(
+                layout = layout,
+                focus = session.baselineFocus
+                  .filter { focus =>
+                    focus match
+                      case Focus.EditorPane(paneId) => layout.editorPanes.contains(paneId)
+                      case Focus.Surface(surfaceId) => restored.surfaceById(surfaceId).nonEmpty
+                  }
+                  .getOrElse(restored.focus),
+                nextPaneId = session.baselineNextPaneId.getOrElse(restored.nextPaneId)
+              )
+            }
+            (withBaselineLayout.copy(uiPresetEditSession = None), true)
           case None => (state, false)
       }
       .flatMap {
@@ -1146,7 +1165,10 @@ final private[manager] class StateManagerEffectHandlers(
                       Some(UiPresetStore.revisionOf(preset)),
                       baseline,
                       state.theme,
-                      draft = preset
+                      draft = preset,
+                      baselineLayout = Some(state.layout),
+                      baselineFocus = Some(state.focus),
+                      baselineNextPaneId = Some(state.nextPaneId)
                     )
                     _ <- stateRef.update { current =>
                       withUpdatedRunnerConfig(UiPreset.applyToState(preset, current, theme), preset.config)
@@ -1222,7 +1244,10 @@ final private[manager] class StateManagerEffectHandlers(
                             baseline,
                             state.theme,
                             dirty = true,
-                            draft = draft
+                            draft = draft,
+                            baselineLayout = Some(state.layout),
+                            baselineFocus = Some(state.focus),
+                            baselineNextPaneId = Some(state.nextPaneId)
                           )
                         )
                       )

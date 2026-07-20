@@ -927,6 +927,12 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       themeName = Theme.dark.name,
       pinnedPanels = Nil
     )
+    val baselineLayout = Layout(
+      editorPanes = Map(PaneId(3) -> EditorPane.withBuffer(PaneId(3), BufferId(0))),
+      activeEditorPaneId = Some(PaneId(3)),
+      paneOrder = List(PaneId(3)),
+      splitDirection = PaneSplitDirection.Vertical
+    )
     val state = AppState.initial.copy(
       config = AppConfig.default.withBackgroundStyle(BackgroundStyle.GlassLike),
       uiPresetEditSession = Some(
@@ -938,7 +944,10 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
           baseline,
           Theme.dark,
           dirty = true,
-          draft = baseline.copy(config = AppConfig.default.withBackgroundStyle(BackgroundStyle.GlassLike))
+          draft = baseline.copy(config = AppConfig.default.withBackgroundStyle(BackgroundStyle.GlassLike)),
+          baselineLayout = Some(baselineLayout),
+          baselineFocus = Some(Focus.EditorPane(PaneId(3))),
+          baselineNextPaneId = Some(PaneId(4))
         )
       )
     )
@@ -952,6 +961,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restored.uiPresetEditSession.map(_.baseline.config.backgroundStyle) shouldBe Some(BackgroundStyle.Solid)
     restored.uiPresetEditSession.map(_.draft.config.backgroundStyle) shouldBe Some(BackgroundStyle.GlassLike)
     restored.uiPresetEditSession.map(_.dirty) shouldBe Some(true)
+    restored.uiPresetEditSession.map(_.baselineLayout) shouldBe Some(Some(baselineLayout))
+    restored.uiPresetEditSession.map(_.baselineFocus) shouldBe Some(Some(Focus.EditorPane(PaneId(3))))
+    restored.uiPresetEditSession.map(_.baselineNextPaneId) shouldBe Some(Some(PaneId(4)))
   }
 
   it should "restore pre-transaction sessions without a persisted draft snapshot" in {

@@ -41,7 +41,10 @@ case class UiPresetEditSession(
     baseline: UiPreset,
     baselineTheme: Theme,
     dirty: Boolean = false,
-    draft: UiPreset
+    draft: UiPreset,
+    baselineLayout: Option[Layout] = None,
+    baselineFocus: Option[Focus] = None,
+    baselineNextPaneId: Option[PaneId] = None
 )
 
 object UiPreset:
