@@ -44,7 +44,8 @@ case class OverlayRow(
     foregroundColor: Option[Color] = None,
     backgroundColor: Option[Color] = None,
     segments: List[OverlaySegment] = Nil,
-    layout: OverlayRowLayout = OverlayRowLayout.Plain
+    layout: OverlayRowLayout = OverlayRowLayout.Plain,
+    leadingPadding: Int = 0
 )
 
 case class ResolvedSurfaceContent(
@@ -920,6 +921,11 @@ object SurfaceContentResolver:
       .foldLeft((0, List.empty[OverlayRow])) {
         case ((offset, acc), rowItems) =>
           val cellWidths = ContextualToolbar.itemCellWidths(rowItems, contentRect.width.max(1), normalized.displayMode)
+          val leadingPadding = ContextualToolbar.rowLeadingPadding(
+            rowItems,
+            contentRect.width.max(1),
+            normalized.displayMode
+          )
           val segments = rowItems.zip(cellWidths).zipWithIndex.map {
             case ((item, cellWidth), index) =>
               val selected          = isSelected(item) || offset + index == focused
@@ -955,7 +961,8 @@ object SurfaceContentResolver:
             acc :+ OverlayRow(
               plainText = segments.map(_.text).mkString(" "),
               segments = segments,
-              layout = OverlayRowLayout.Distributed
+              layout = OverlayRowLayout.Distributed,
+              leadingPadding = leadingPadding
             )
           )
       }

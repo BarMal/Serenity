@@ -292,13 +292,19 @@ object ContextualToolbar:
     mode: ToolbarDisplayMode
   ): List[Int] =
     val preferredWidths = items.map(item => displayTextWidth(displayText(item, mode)) + 2)
-    val gutters = items.drop(1).length + items.zip(items.drop(1)).count {
-      case (item, nextItem) =>
-        hasTrailingGroupSeparator(item, Some(nextItem))
-    }
-    val availableWidth = (contentWidth - gutters).max(0)
+    val gutters         = rowGutterWidth(items)
+    val availableWidth  = (contentWidth - gutters).max(0)
     if preferredWidths.sum <= availableWidth then preferredWidths
     else distributeProportionally(preferredWidths, availableWidth)
+
+  /** Leading blank cells that center a compact toolbar row within its frame. */
+  def rowLeadingPadding(
+    items: List[ContextualToolbarItem],
+    contentWidth: Int,
+    mode: ToolbarDisplayMode
+  ): Int =
+    val occupiedWidth = itemCellWidths(items, contentWidth, mode).sum + rowGutterWidth(items)
+    ((contentWidth - occupiedWidth).max(0)) / 2
 
   def rowGroups(
     items: List[ContextualToolbarItem],
@@ -416,19 +422,26 @@ object ContextualToolbar:
     contentWidth: Int,
     mode: ToolbarDisplayMode
   ): Option[Int] =
-    val widths = itemCellWidths(items, contentWidth, mode)
+    val widths      = itemCellWidths(items, contentWidth, mode)
+    val localColumn = columnOffset - rowLeadingPadding(items, contentWidth, mode)
     items
       .zip(widths)
       .zipWithIndex
       .foldLeft((0, Option.empty[Int])) {
         case ((cursor, found), ((item, width), index)) =>
           val cellEnd        = cursor + width
-          val hit            = Option.when(columnOffset >= cursor && columnOffset < cellEnd)(index)
+          val hit            = Option.when(localColumn >= cursor && localColumn < cellEnd)(index)
           val separatorWidth = Option.when(hasTrailingGroupSeparator(item, items.lift(index + 1)))(1).getOrElse(0)
           val gapWidth       = Option.when(index < items.length - 1)(1).getOrElse(0)
           (cellEnd + separatorWidth + gapWidth, found.orElse(hit))
       }
       ._2
+
+  private def rowGutterWidth(items: List[ContextualToolbarItem]): Int =
+    items.drop(1).length + items.zip(items.drop(1)).count {
+      case (item, nextItem) =>
+        hasTrailingGroupSeparator(item, Some(nextItem))
+    }
 
   def dropdownItem(itemId: String, items: List[ContextualToolbarItem]): Option[ContextualToolbarItem.Dropdown] =
     items.collectFirst { case item: ContextualToolbarItem.Dropdown if item.id == itemId => item }
