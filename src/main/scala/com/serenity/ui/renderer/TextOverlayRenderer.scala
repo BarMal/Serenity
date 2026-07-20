@@ -34,6 +34,9 @@ object TextOverlayRenderer:
   ): Unit =
     val rect = overlay.rect
 
+    if config.uiShadowsEnabled then
+      surface.drawRoundRectShadow(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx, new Color(0, 0, 0))
+
     def rowColors(rowOffset: Int): (Color, Color) =
       overlay.animationState
         .getCell(0, rowOffset)

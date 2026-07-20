@@ -221,68 +221,126 @@ class Java2DRenderSurface(
       math.abs(color.getBlue - background.getBlue)
 
   override def applyPostProcessing(effect: PostProcessingEffect): Unit =
+    applyPostProcessing(effect, System.nanoTime() / 50000000L)
+
+  override def applyPostProcessing(effect: PostProcessingEffect, animationPhase: Long): Unit =
     effect match
       case PostProcessingEffect.Off => ()
       case PostProcessingEffect.Scanlines =>
-        val rawGraphics = image.createGraphics()
-        try
-          rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.22f))
-          rawGraphics.setColor(Color.BLACK)
-          (1 until image.getHeight by 3).foreach(y => rawGraphics.drawLine(0, y, image.getWidth - 1, y))
-          rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.08f))
-          (2 until image.getHeight by 3).foreach(y => rawGraphics.drawLine(0, y, image.getWidth - 1, y))
-          rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.035f))
-          (0 until image.getWidth).foreach { x =>
-            rawGraphics.setColor(
-              x % 3 match
-                case 0 => Color.RED
-                case 1 => Color.GREEN
-                case _ => Color.BLUE
-            )
-            rawGraphics.drawLine(x, 0, x, image.getHeight - 1)
-          }
-        finally rawGraphics.dispose()
+        applyScanlines(animationPhase)
       case PostProcessingEffect.Glow =>
-        val background = estimatedBackgroundColor
-        val source     = new BufferedImage(image.getWidth, image.getHeight, BufferedImage.TYPE_INT_ARGB)
-        (0 until image.getHeight).foreach { y =>
-          (0 until image.getWidth).foreach { x =>
-            val color = new Color(image.getRGB(x, y), true)
-            if contrastFrom(color, background) >= 96 then source.setRGB(x, y, color.getRGB)
-          }
+        applyGlow()
+      case PostProcessingEffect.ScanlinesAndGlow =>
+        applyGlow()
+        applyScanlines(animationPhase)
+
+  private def applyScanlines(animationPhase: Long): Unit =
+    val rawGraphics = image.createGraphics()
+    try
+      val phase = (animationPhase % 97L).toInt
+      drawScanlines(rawGraphics, 1 + phase % 3, phase)
+      rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.025f))
+      (0 until image.getWidth).foreach { x =>
+        rawGraphics.setColor(
+          x % 3 match
+            case 0 => Color.RED
+            case 1 => Color.GREEN
+            case _ => Color.BLUE
+        )
+        rawGraphics.drawLine(x, 0, x, image.getHeight - 1)
+      }
+    finally rawGraphics.dispose()
+
+  private def drawScanlines(rawGraphics: Graphics2D, y: Int, phase: Int): Unit =
+    if y < image.getHeight then
+      val thickness = if (y + phase) % 11 <= 1 then 2 else 1
+      val alpha     = if thickness == 2 then 0.18f else 0.13f
+      rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha))
+      rawGraphics.setColor(Color.BLACK)
+      (y until math.min(image.getHeight, y + thickness)).foreach(row =>
+        rawGraphics.drawLine(0, row, image.getWidth - 1, row)
+      )
+      val spacing = 3 + math.floorMod(y + phase, 4)
+      drawScanlines(rawGraphics, y + thickness + spacing, phase)
+
+  private def applyGlow(): Unit =
+    val background = estimatedBackgroundColor
+    val source     = new BufferedImage(image.getWidth, image.getHeight, BufferedImage.TYPE_INT_ARGB)
+    val sourceMask = Array.ofDim[Boolean](image.getHeight, image.getWidth)
+    (0 until image.getHeight).foreach { y =>
+      (0 until image.getWidth).foreach { x =>
+        val color = new Color(image.getRGB(x, y), true)
+        if contrastFrom(color, background) >= 96 then
+          source.setRGB(x, y, color.getRGB)
+          sourceMask(y)(x) = true
+      }
+    }
+    val blurred = new ConvolveOp(
+      new Kernel(
+        5,
+        5,
+        Array(1f, 4f, 6f, 4f, 1f, 4f, 16f, 24f, 16f, 4f, 6f, 24f, 36f, 24f, 6f, 4f, 16f, 24f, 16f, 4f, 1f, 4f, 6f, 4f,
+          1f).map(_ / 128f)
+      ),
+      ConvolveOp.EDGE_NO_OP,
+      null
+    ).filter(source, null)
+    val rawGraphics = image.createGraphics()
+    try
+      (0 until image.getHeight).foreach { y =>
+        (0 until image.getWidth).foreach { x =>
+          if sourceMask(y)(x) then
+            val sourceColor = new Color(source.getRGB(x, y), true)
+            (-2 to 2).foreach { yOffset =>
+              (-2 to 2).foreach { xOffset =>
+                val distance = math.max(math.abs(xOffset), math.abs(yOffset))
+                if distance > 0 then
+                  val alpha = if distance == 1 then 14 else 6
+                  rawGraphics.setColor(new Color(sourceColor.getRed, sourceColor.getGreen, sourceColor.getBlue, alpha))
+                  rawGraphics.fillRect(x + xOffset, y + yOffset, 1, 1)
+              }
+            }
         }
-        val blurred = new ConvolveOp(
-          new Kernel(
-            5,
-            5,
-            Array(1f, 4f, 6f, 4f, 1f, 4f, 16f, 24f, 16f, 4f, 6f, 24f, 36f, 24f, 6f, 4f, 16f, 24f, 16f, 4f, 1f, 4f, 6f,
-              4f, 1f)
-              .map(_ / 256f)
-          ),
-          ConvolveOp.EDGE_NO_OP,
-          null
-        ).filter(source, null)
-        val glow = new BufferedImage(image.getWidth, image.getHeight, BufferedImage.TYPE_INT_ARGB)
-        (0 until glow.getHeight).foreach { y =>
-          (0 until glow.getWidth).foreach { x =>
-            val color = new Color(blurred.getRGB(x, y), true)
-            if color.getAlpha > 0 then
-              glow.setRGB(
-                x,
-                y,
-                new Color(
-                  (color.getRed * 8).min(255),
-                  (color.getGreen * 8).min(255),
-                  (color.getBlue * 8).min(255)
-                ).getRGB
-              )
-          }
+      }
+      (0 until image.getHeight).foreach { y =>
+        (0 until image.getWidth).foreach { x =>
+          val color = new Color(blurred.getRGB(x, y), true)
+          val intensity =
+            scala.collection.immutable.List(color.getAlpha, color.getRed, color.getGreen, color.getBlue).max
+          if intensity > 0 then
+            val alpha = math.max(1, (intensity * 0.8f).toInt)
+            rawGraphics.setColor(new Color(color.getRed, color.getGreen, color.getBlue, alpha))
+            rawGraphics.fillRect(x, y, 1, 1)
         }
-        val rawGraphics = image.createGraphics()
-        try
-          rawGraphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f))
-          val _ = rawGraphics.drawImage(glow, 0, 0, null)
-        finally rawGraphics.dispose()
+      }
+      (0 until image.getHeight).foreach { y =>
+        (0 until image.getWidth).foreach { x =>
+          if sourceMask(y)(x) then
+            val _ = rawGraphics.drawImage(source, x, y, x + 1, y + 1, x, y, x + 1, y + 1, null)
+        }
+      }
+    finally rawGraphics.dispose()
+
+  override def drawRoundRectShadow(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    arcPx: Int,
+    color: Color
+  ): Unit =
+    val px             = metrics.toPixelX(x)
+    val py             = metrics.toPixelY(y)
+    val pw             = width * metrics.charWidth
+    val ph             = height * metrics.lineHeight
+    val savedComposite = g.getComposite
+    try
+      scala.collection.immutable.List(6 -> 0.025f, 5 -> 0.035f, 4 -> 0.05f, 3 -> 0.07f).foreach { (offset, alpha) =>
+        g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha))
+        g.setColor(color)
+        g.fillRoundRect(px + offset, py + offset, pw, ph, arcPx * 2, arcPx * 2)
+      }
+    finally g.setComposite(savedComposite)
 
   override def strokeRoundRect(
     x: Int,

@@ -19,6 +19,7 @@ object CommandRunnerOptionSelections:
       "animation-mode"  -> animationModeIndex(editorConfig.characterAnimation),
       "material-preset" -> materialPresetIndex(surfaceConfig.materialPreset),
       "post-processing" -> postProcessingEffectIndex(surfaceConfig.postProcessingEffect),
+      "ui-shadows"      -> (if surfaceConfig.uiShadowsEnabled then 1 else 0),
       "motion-preset"   -> motionPresetIndex(surfaceConfig.motionPreset),
       "motion-accessibility" -> motionAccessibilityIndex(
         surfaceConfig.motionConfiguration.fold(MotionAccessibility.Standard)(_.accessibility)
@@ -138,9 +139,10 @@ object CommandRunnerOptionSelections:
 
   private def postProcessingEffectIndex(effect: PostProcessingEffect): Int =
     effect match
-      case PostProcessingEffect.Off       => 0
-      case PostProcessingEffect.Scanlines => 1
-      case PostProcessingEffect.Glow      => 2
+      case PostProcessingEffect.Off              => 0
+      case PostProcessingEffect.Scanlines        => 1
+      case PostProcessingEffect.Glow             => 2
+      case PostProcessingEffect.ScanlinesAndGlow => 3
 
   private def motionPresetIndex(preset: MotionPreset): Int =
     preset match

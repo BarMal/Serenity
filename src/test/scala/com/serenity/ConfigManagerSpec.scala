@@ -909,12 +909,14 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   it should "load and write the post-processing effect" in {
     val configFile = Files.createTempFile("serenity-post-processing-config", ".conf")
-    Files.writeString(configFile, "ui.post_processing = glow\n")
+    Files.writeString(configFile, "ui.post_processing = scanlines-glow\nui.shadows = false\n")
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.postProcessingEffect shouldBe PostProcessingEffect.Glow
-    ConfigManager.configToString(config) should include("ui.post_processing = glow")
+    config.postProcessingEffect shouldBe PostProcessingEffect.ScanlinesAndGlow
+    config.uiShadowsEnabled shouldBe false
+    ConfigManager.configToString(config) should include("ui.post_processing = scanlines-glow")
+    ConfigManager.configToString(config) should include("ui.shadows = false")
   }
 
   it should "round-trip custom character animation duration and steps" in {

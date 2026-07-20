@@ -492,6 +492,22 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.strokeRoundRectCalls.headOption.map(_.strokeWidth) shouldBe Some(4.0f)
   }
 
+  it should "draw a shadow behind the command runner only when UI shadows are enabled" in {
+    val commands     = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val enabledState = stateWithRunner(Theme.light, "op", commands)
+    val disabledState = enabledState.copy(
+      config = AppConfig.default.withUiShadowsEnabled(false)
+    )
+    val enabledSurface  = new MockRenderSurface(100, 30)
+    val disabledSurface = new MockRenderSurface(100, 30)
+
+    Renderer.render(enabledState, cursorVisible = true, enabledSurface, ViewportSize(100, 30))
+    Renderer.render(disabledState, cursorVisible = true, disabledSurface, ViewportSize(100, 30))
+
+    enabledSurface.roundRectShadowCalls should not be empty
+    disabledSurface.roundRectShadowCalls shouldBe empty
+  }
+
   it should "preserve the rounded command runner after its animation has materialised" in {
     val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
     val state = stateWithRunner(Theme.light, "op", commands).copy(

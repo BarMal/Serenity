@@ -38,9 +38,10 @@ enum MaterialPreset(val configKey: String):
       case Custom        => 0.3f
 
 enum PostProcessingEffect(val configKey: String):
-  case Off       extends PostProcessingEffect("off")
-  case Scanlines extends PostProcessingEffect("scanlines")
-  case Glow      extends PostProcessingEffect("glow")
+  case Off              extends PostProcessingEffect("off")
+  case Scanlines        extends PostProcessingEffect("scanlines")
+  case Glow             extends PostProcessingEffect("glow")
+  case ScanlinesAndGlow extends PostProcessingEffect("scanlines-glow")
 
 object PostProcessingEffect:
 
@@ -49,7 +50,9 @@ object PostProcessingEffect:
       case "off" | "none" | "disabled"      => Some(PostProcessingEffect.Off)
       case "scanlines" | "scanline" | "crt" => Some(PostProcessingEffect.Scanlines)
       case "glow"                           => Some(PostProcessingEffect.Glow)
-      case _                                => None
+      case "scanlines-glow" | "scanlines+glow" | "scanlines,glow" | "glow,scanlines" =>
+        Some(PostProcessingEffect.ScanlinesAndGlow)
+      case _ => None
 
 enum MotionPreset(val configKey: String):
   case Reduced    extends MotionPreset("reduced")
@@ -901,6 +904,7 @@ case class SurfaceConfig(
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
     postProcessingEffect: PostProcessingEffect = PostProcessingEffect.Off,
+    uiShadowsEnabled: Boolean = true,
     motionPreset: MotionPreset = MotionPreset.Reduced,
     elementTransitionSpeedScale: Double = 1.0,
     editorTextTransitionSpeedScale: Option[Double] = None,
@@ -1054,6 +1058,7 @@ object SurfaceConfig:
       "ui.material",
       "material.preset",
       "ui.post_processing",
+      "ui.shadows",
       "ui.motion",
       "motion.preset",
       "ui.motion.speed_scale",
@@ -1169,6 +1174,8 @@ object SurfaceConfig:
 
     val postProcessingKeys: Set[String] = Set("ui.post_processing")
 
+    val uiShadowsKeys: Set[String] = Set("ui.shadows", "ui_shadows")
+
     val motionPresetKeys: Set[String]        = Set("ui.motion", "ui_motion", "motion.preset", "motion_preset")
     val motionAccessibilityKeys: Set[String] = Set("ui.motion.accessibility")
     val motionFamilyPrefix                   = "ui.motion.family."
@@ -1267,6 +1274,7 @@ object SurfaceConfig:
     private val handledKeys: Set[String] =
       materialPresetKeys ++
         postProcessingKeys ++
+        uiShadowsKeys ++
         motionPresetKeys ++
         motionAccessibilityKeys ++
         motionFamilyKeys ++
@@ -1306,6 +1314,7 @@ object SurfaceConfig:
       if materialPresetKeys.contains(key) then parseMaterialPreset(trimmed).map(config.withMaterialPreset)
       else if postProcessingKeys.contains(key) then
         PostProcessingEffect.fromConfigKey(trimmed).map(config.withPostProcessingEffect)
+      else if uiShadowsKeys.contains(key) then trimmed.toBooleanOption.map(config.withUiShadowsEnabled)
       else if motionPresetKeys.contains(key) then parseMotionPreset(trimmed).map(config.withMotionPreset)
       else if motionAccessibilityKeys.contains(key) then
         MotionAccessibility.fromConfigKey(trimmed).map(config.withMotionAccessibility)
@@ -1525,6 +1534,7 @@ case class AppConfig(
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
     postProcessingEffect: PostProcessingEffect = PostProcessingEffect.Off,
+    uiShadowsEnabled: Boolean = true,
     motionPreset: MotionPreset = MotionPreset.Reduced,
     elementTransitionSpeedScale: Double = 1.0,
     editorTextTransitionSpeedScale: Option[Double] = None,
@@ -1606,6 +1616,7 @@ case class AppConfig(
       backgroundStyle = backgroundStyle,
       materialPreset = materialPreset,
       postProcessingEffect = postProcessingEffect,
+      uiShadowsEnabled = uiShadowsEnabled,
       motionPreset = motionPreset,
       elementTransitionSpeedScale = elementTransitionSpeedScale,
       editorTextTransitionSpeedScale = editorTextTransitionSpeedScale,
@@ -1640,6 +1651,7 @@ case class AppConfig(
       backgroundStyle = normalized.backgroundStyle,
       materialPreset = normalized.materialPreset,
       postProcessingEffect = normalized.postProcessingEffect,
+      uiShadowsEnabled = normalized.uiShadowsEnabled,
       motionPreset = normalized.motionPreset,
       elementTransitionSpeedScale = normalized.elementTransitionSpeedScale,
       editorTextTransitionSpeedScale = normalized.editorTextTransitionSpeedScale,
@@ -1812,6 +1824,9 @@ case class AppConfig(
 
   def withPostProcessingEffect(effect: PostProcessingEffect): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(postProcessingEffect = effect))
+
+  def withUiShadowsEnabled(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(uiShadowsEnabled = enabled))
 
   def withMotionPreset(preset: MotionPreset): AppConfig =
     preset match

@@ -25,7 +25,8 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default.copy(
       characterAnimation = AnimationConfig.subtle,
       materialPreset = MaterialPreset.Crystal,
-      postProcessingEffect = PostProcessingEffect.Glow,
+      postProcessingEffect = PostProcessingEffect.ScanlinesAndGlow,
+      uiShadowsEnabled = false,
       motionPreset = MotionPreset.Expressive,
       commandRunnerAnimation = AnimationConfig.quick,
       uiAnimation = AnimationConfig.subtle,
@@ -66,7 +67,8 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
 
     selections("animation-mode") shouldBe 1
     selections("material-preset") shouldBe 3
-    selections("post-processing") shouldBe 2
+    selections("post-processing") shouldBe 3
+    selections("ui-shadows") shouldBe 0
     selections("motion-preset") shouldBe 3
     selections("command-runner-fade") shouldBe 3
     selections("ui-animation") shouldBe 1

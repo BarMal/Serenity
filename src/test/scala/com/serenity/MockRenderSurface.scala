@@ -145,6 +145,8 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
 
   case class StrokeRoundRectCall(x: Int, y: Int, w: Int, h: Int, arcPx: Int, color: Color, strokeWidth: Float)
   private val strokeRoundRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[StrokeRoundRectCall]
+  case class RoundRectShadowCall(rect: com.serenity.ui.layout.LayoutRect, arcPx: Int, color: Color)
+  private val roundRectShadowCallsBuffer = scala.collection.mutable.ListBuffer.empty[RoundRectShadowCall]
   case class BlurRegionCall(x: Int, y: Int, width: Int, height: Int, radius: Float)
   private val blurRegionCallsBuffer        = scala.collection.mutable.ListBuffer.empty[BlurRegionCall]
   private val blurRegionTranslationsBuffer = scala.collection.mutable.ListBuffer.empty[PixelTranslationCall]
@@ -166,6 +168,15 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
     strokeRoundRectCallsBuffer += StrokeRoundRectCall(x, y, width, height, arcPx, color, strokeWidth)
 
   def strokeRoundRectCalls: List[StrokeRoundRectCall] = strokeRoundRectCallsBuffer.toList
+
+  override def drawRoundRectShadow(x: Int, y: Int, width: Int, height: Int, arcPx: Int, color: Color): Unit =
+    roundRectShadowCallsBuffer += RoundRectShadowCall(
+      com.serenity.ui.layout.LayoutRect(x, y, width, height),
+      arcPx,
+      color
+    )
+
+  def roundRectShadowCalls: List[RoundRectShadowCall] = roundRectShadowCallsBuffer.toList
 
   override def withRoundRectClip(
     _x: Int,
@@ -233,6 +244,7 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
     putStringPixelYCallsBuffer.clear()
     pixelTranslationCallsBuffer.clear()
     strokeRoundRectCallsBuffer.clear()
+    roundRectShadowCallsBuffer.clear()
     blurRegionCallsBuffer.clear()
     blurRegionTranslationsBuffer.clear()
     fillPixelRectCallsBuffer.clear()

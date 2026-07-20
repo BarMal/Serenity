@@ -336,8 +336,10 @@ object ConfigManager:
        |
        |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
        |ui.material = ${config.materialPreset.configKey}
-       |# Post-processing: off, scanlines, glow
+       |# Post-processing: off, scanlines, glow, scanlines-glow
        |ui.post_processing = ${config.postProcessingEffect.configKey}
+       |# Draw soft shadows behind menus and panels
+       |ui.shadows = ${config.uiShadowsEnabled}
        |ui.motion = ${motionConfiguration.baseline.configKey}
        |ui.motion.accessibility = ${motionConfiguration.accessibility.configKey}
        |$motionFamilySettings

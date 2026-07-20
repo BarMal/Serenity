@@ -258,11 +258,25 @@ object CommandRunnerSettingsItems:
       options = List(
         CommandOption("Off", CommandIntent.SetPostProcessingEffect(PostProcessingEffect.Off)),
         CommandOption("Scanlines", CommandIntent.SetPostProcessingEffect(PostProcessingEffect.Scanlines)),
-        CommandOption("Glow", CommandIntent.SetPostProcessingEffect(PostProcessingEffect.Glow))
+        CommandOption("Glow", CommandIntent.SetPostProcessingEffect(PostProcessingEffect.Glow)),
+        CommandOption("Scanlines + Glow", CommandIntent.SetPostProcessingEffect(PostProcessingEffect.ScanlinesAndGlow))
       ),
       selectedIndex = optionSelections.getOrElse("post-processing", 0),
       category = CommandCategory.Settings,
-      hint = Some("Frame-wide scanlines or glow")
+      hint = Some("Frame-wide scanlines, glow, or both")
+    )
+
+  private[command] def uiShadowsOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "ui-shadows",
+      label = "Menu & Panel Shadows",
+      options = List(
+        CommandOption("Off", CommandIntent.SetUiShadowsEnabled(false)),
+        CommandOption("On", CommandIntent.SetUiShadowsEnabled(true))
+      ),
+      selectedIndex = optionSelections.getOrElse("ui-shadows", 1),
+      category = CommandCategory.Settings,
+      hint = Some("Draw soft depth shadows behind menus and panels")
     )
 
   private[command] def motionPresetOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =

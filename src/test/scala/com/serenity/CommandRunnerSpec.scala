@@ -314,6 +314,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "background-style",
       "material-preset",
       "post-processing",
+      "ui-shadows",
       "blur-radius"
     )
   }
@@ -392,6 +393,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "background-style",
       "material-preset",
       "post-processing",
+      "ui-shadows",
       "blur-radius"
     )
     nestedGroup("settings-interface-layout").label shouldBe "Interface Layout"

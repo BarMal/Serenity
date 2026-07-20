@@ -22,11 +22,12 @@ trait RenderSurface:
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit
   def enableStyle(style: TextStyle): Unit
   def disableStyle(style: TextStyle): Unit
-  def setAlpha(alpha: Float): Unit                                             = ()
-  def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit = ()
-  def applyPostProcessing(effect: PostProcessingEffect): Unit                  = ()
-  def devicePixelScaleX: Double                                                = 1.0
-  def devicePixelScaleY: Double                                                = 1.0
+  def setAlpha(alpha: Float): Unit                                                  = ()
+  def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit      = ()
+  def applyPostProcessing(effect: PostProcessingEffect): Unit                       = ()
+  def applyPostProcessing(effect: PostProcessingEffect, animationPhase: Long): Unit = applyPostProcessing(effect)
+  def devicePixelScaleX: Double                                                     = 1.0
+  def devicePixelScaleY: Double                                                     = 1.0
 
   def strokeRoundRect(
     x: Int,
@@ -36,6 +37,16 @@ trait RenderSurface:
     arcPx: Int,
     color: Color,
     strokeWidth: Float = 1.5f
+  ): Unit = ()
+
+  /** Draw a soft shadow behind a rounded UI surface. */
+  def drawRoundRectShadow(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    arcPx: Int,
+    color: Color
   ): Unit = ()
 
   /** Restrict drawing performed by `render` to a rounded rectangle in cell coordinates. */

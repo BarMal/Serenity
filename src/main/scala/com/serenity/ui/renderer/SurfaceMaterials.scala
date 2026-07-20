@@ -12,19 +12,19 @@ object SurfaceMaterials:
       case MaterialPreset.Solid   => 1.0f
       case MaterialPreset.Clear   => 0.28f
       case MaterialPreset.Frosted => theme.panel.alpha.toFloat
-      case MaterialPreset.Crystal => 0.74f
+      case MaterialPreset.Crystal => 0.68f
       case MaterialPreset.Custom  => alphaForBackground(config.backgroundStyle, theme)
 
   def effectiveBlurRadius(config: AppConfig): Float =
     config.materialPreset match
       case MaterialPreset.Solid | MaterialPreset.Clear => 0.0f
       case MaterialPreset.Frosted                      => config.blurRadius
-      case MaterialPreset.Crystal                      => math.max(config.blurRadius, 0.65f)
+      case MaterialPreset.Crystal                      => math.max(config.blurRadius, 0.75f)
       case MaterialPreset.Custom                       => blurForBackground(config.backgroundStyle, config.blurRadius)
 
   def glassSheenBackground(config: AppConfig, theme: Theme): Option[Color] =
     Option.when(config.materialPreset == MaterialPreset.Crystal || isCustomGlass(config)) {
-      blend(theme.panel.background, theme.panel.foreground, 0.18)
+      blend(theme.panel.background, theme.panel.foreground, 0.24)
     }
 
   private def alphaForBackground(style: BackgroundStyle, theme: Theme): Float =
