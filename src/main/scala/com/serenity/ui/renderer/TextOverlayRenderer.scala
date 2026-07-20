@@ -390,7 +390,8 @@ object TextOverlayRenderer:
     val segments = row.segments
     if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
     else
-      val _ = segments.zipWithIndex.foldLeft(x) {
+      val startX = x + row.leadingPadding.max(0).min(width)
+      val _ = segments.zipWithIndex.foldLeft(startX) {
         case (cursorX, (segment, index)) =>
           val remainingWidth = (x + width - cursorX).max(0)
           val cellWidth      = segment.allocatedWidth.getOrElse(0).min(remainingWidth)

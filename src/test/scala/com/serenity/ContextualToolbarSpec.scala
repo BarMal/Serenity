@@ -145,6 +145,46 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     )
   }
 
+  it should "center short wrapped rows and leave their surrounding padding inactive" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-centered-wrapped-rows")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(140, 30))).unsafeRunSync()
+    seedToolbarDocument(stateManager)
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+
+    val state        = stateManager.getCurrentState.unsafeRunSync()
+    val toolbarState = toolbarStateFrom(state)
+    val contentWidth = toolbarContentWidth(state)
+    val rowGroups = ContextualToolbar.rowGroups(
+      ContextualToolbar.itemsFor(state),
+      contentWidth,
+      toolbarState.displayMode
+    )
+    val resolvedRows = SurfaceContentResolver
+      .resolveContextualToolbar(toolbarState, state, toolbarRect(state), SurfaceRenderMode.Floating)
+      .rows
+    val centeredRowIndex = rowGroups.zipWithIndex
+      .collectFirst {
+        case (row, index) if ContextualToolbar.rowLeadingPadding(row, contentWidth, toolbarState.displayMode) > 0 =>
+          index
+      }
+      .getOrElse(fail("Expected a short toolbar row"))
+    val centeredPadding = ContextualToolbar.rowLeadingPadding(
+      rowGroups(centeredRowIndex),
+      contentWidth,
+      toolbarState.displayMode
+    )
+
+    resolvedRows(centeredRowIndex).leadingPadding shouldBe centeredPadding
+    ContextualToolbar.hitAt(
+      centeredRowIndex,
+      centeredPadding - 1,
+      contentWidth,
+      toolbarState,
+      state
+    ) shouldBe None
+  }
+
   it should "never exceed its compact width cap when balanced groups are wider" in {
     val stateManager = createStateManager("ContextualToolbarSpec-absolute-compact-cap")
 
@@ -1628,11 +1668,12 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     contentWidth: Int,
     mode: ToolbarDisplayMode
   ): List[(Int, Int)] =
-    val widths = ContextualToolbar.itemCellWidths(items, contentWidth, mode)
+    val widths         = ContextualToolbar.itemCellWidths(items, contentWidth, mode)
+    val leadingPadding = ContextualToolbar.rowLeadingPadding(items, contentWidth, mode)
     items
       .zip(widths)
       .zipWithIndex
-      .foldLeft((0, List.empty[(Int, Int)])) {
+      .foldLeft((leadingPadding, List.empty[(Int, Int)])) {
         case ((cursor, regions), ((item, width), index)) =>
           val separatorWidth = Option
             .when(ContextualToolbar.hasTrailingGroupSeparator(item, items.lift(index + 1)))(1)

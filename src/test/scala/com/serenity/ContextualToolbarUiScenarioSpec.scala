@@ -193,11 +193,12 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
     contentWidth: Int,
     mode: com.serenity.config.ToolbarDisplayMode
   ): List[(Int, Int)] =
-    val widths = ContextualToolbar.itemCellWidths(items, contentWidth, mode)
+    val widths         = ContextualToolbar.itemCellWidths(items, contentWidth, mode)
+    val leadingPadding = ContextualToolbar.rowLeadingPadding(items, contentWidth, mode)
     items
       .zip(widths)
       .zipWithIndex
-      .foldLeft((0, List.empty[(Int, Int)])) {
+      .foldLeft((leadingPadding, List.empty[(Int, Int)])) {
         case ((cursor, regions), ((item, width), index)) =>
           val separatorWidth = Option
             .when(ContextualToolbar.hasTrailingGroupSeparator(item, items.lift(index + 1)))(1)
