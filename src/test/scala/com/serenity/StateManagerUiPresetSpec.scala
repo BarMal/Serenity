@@ -1528,7 +1528,8 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     sm.getCurrentState.unsafeRunSync().layout.editorPanes should have size 1
 
     sm.executeCommand(
-      Command.typed("discard-layout-draft", "Discard draft", CommandIntent.DiscardUiPresetDraft, CommandCategory.Settings)
+      Command
+        .typed("discard-layout-draft", "Discard draft", CommandIntent.DiscardUiPresetDraft, CommandCategory.Settings)
     ).unsafeRunSync()
 
     val discarded = sm.getCurrentState.unsafeRunSync()
