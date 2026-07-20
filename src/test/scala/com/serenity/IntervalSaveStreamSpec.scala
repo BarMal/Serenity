@@ -24,8 +24,15 @@ class IntervalSaveStreamSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      emitted      <- stateManager.intervalSaveStream.take(1).timeout(50.millis).compile.toList.attempt
-    yield emitted shouldBe Right(List.empty)
+      emitted <- stateManager.intervalSaveStream
+        .take(1)
+        .compile
+        .toList
+        .timeoutTo(
+          1.second,
+          IO.raiseError[List[Unit]](new AssertionError("Empty interval save stream did not terminate"))
+        )
+    yield emitted shouldBe List.empty
 
     program.unsafeRunSync()
   }
