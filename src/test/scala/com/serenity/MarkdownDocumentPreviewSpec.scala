@@ -325,6 +325,46 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "avoid stretching inline table preview rows across the editor width" in {
+    val sourceLines = Vector(
+      "| Status | Result |",
+      "| ------ | ------ |",
+      "| Ready  | Passed |"
+    )
+    val theme = Theme.default
+    val rows  = MarkdownDocumentPreview.renderInlineDocument(sourceLines)
+    val xhtml = MarkdownDocumentPreview.renderInlineXhtml(
+      rows = rows,
+      sourceLines = sourceLines,
+      title = "table.md",
+      theme = theme,
+      font = Font(Font.MONOSPACED, Font.PLAIN, 16),
+      inlineLineHeightPx = 24
+    )
+    val image = MarkdownDocumentPreview.renderInlineRowsImage(
+      rows = rows,
+      sourceLines = sourceLines,
+      title = "table.md",
+      widthPx = 800,
+      heightPx = 120,
+      theme = theme,
+      font = Font(Font.MONOSPACED, Font.PLAIN, 16),
+      inlineLineHeightPx = 24
+    )
+
+    xhtml should include("<div class=\"inline-rows\">")
+    xhtml should not include "<table class=\"inline-rows\">"
+
+    val rightmostContentPixel =
+      (for
+        row <- 0 until image.getHeight
+        column <- 0 until image.getWidth
+        if image.getRGB(column, row) != theme.background.getRGB
+      yield column).max
+
+    rightmostContentPixel should be < image.getWidth / 2
+  }
+
   it should "render a bounded inline window without inspecting trailing source lines" in {
     val lines =
       Vector("# Visible heading", "Visible prose", "Visible tail") ++
