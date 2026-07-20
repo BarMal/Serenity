@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.command.CommandRunner
+import com.serenity.state.models.SurfaceContent
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -12,6 +14,20 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
     frame.frameRect.shouldBe(LayoutRect(10, 4, 40, 8))
     frame.contentRect.shouldBe(LayoutRect(11, 5, 38, 6))
     frame.maxContentRows.shouldBe(6)
+  }
+
+  it should "inset command menus from their rounded frame corners" in {
+    val frame = LayoutRect(10, 4, 40, 8)
+    val runner = CommandRunner.empty
+
+    SurfaceFrameLayout
+      .forContent(frame, SurfaceContent.CommandPalette(runner))
+      .contentRect
+      .shouldBe(LayoutRect(11, 5, 38, 6))
+    SurfaceFrameLayout
+      .forContent(frame, SurfaceContent.CommandPaletteSubmenu(runner, "settings", previewOnly = false))
+      .contentRect
+      .shouldBe(LayoutRect(11, 5, 38, 6))
   }
 
   it should "calculate visible item rows after header, footer, and reserved detail rows" in {
