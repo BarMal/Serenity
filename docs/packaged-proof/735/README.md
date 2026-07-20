@@ -33,6 +33,26 @@ with `Material Preset` still set to `Clear`.
 | `restart-startup.png` | `06893cdd8c178c40be7b3af5b9d8759a15a8299b319851cd93f06f00a65c3b38` |
 | `applied-after-restart.png` | `7fcb1ef98ffc764e249440cc131db416bddf4c548df3e4a9d5083278e6af117c` |
 
+## PR #790 follow-up record
+
+- Packaged-code head: `eb9af9da99b3b390099c2597e1969871f3a8b90a`
+- Packaged app: Linux `jpackage --type app-image`, version `1.0.790`
+- Assembly JAR SHA-256: `01da7e882a5c0a9833c9eb7a201d9221ecd5debc34393624f686919920c05f96`
+- App-image tar SHA-256: `b10bee826eaaa1734013264d4021ac29159aabe6c2076c651a53c02b9259b9a9`
+- Platform/tester: Linux container, Codex; isolated `HOME` and Xvfb display `:101`.
+
+The packaged app created `Save Restart Proof`, previewed its `Crystal` material, and explicitly saved it. The app
+then exited normally, restarted against the same isolated home, and exposed `Save Restart Proof` through the Apply
+Preset control. The process remained live after the preview and the save, and the display server was kept alive for
+the entire launch/restart sequence.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `790-preview-save.png` | `49486b36c7d3a1847acf205a081760176632fc13620d5d5c11516a24327e5141` |
+| `790-preset-saved.png` | `2b60a52dca4b5ebced7c70a005eedb2b3f140ec03825d60258a1e139224f221b` |
+| `790-restart-startup.png` | `538b82b30bb160d3fc046dcf3d43af58377d99cb29ee6b6da507bca3438ae201` |
+| `790-applied-after-restart.png` | `4cd69913fd53c6182645cfd72274e6bb1374e65be2b89012ce70470624ec4ddb` |
+
 ## Transaction scenarios
 
 The real state/session path is exercised by `UiPresetUiScenarioSpec` with an isolated session root:

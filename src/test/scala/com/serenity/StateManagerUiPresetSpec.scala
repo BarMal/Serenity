@@ -1541,6 +1541,42 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     sm.getCurrentState.unsafeRunSync().uiPresetEditSession.map(_.draftName) shouldBe Some("Drafting")
     store.find("Writing").unsafeRunSync() shouldBe Some(writingOverride)
     commandRunnerState(sm).statusMessage shouldBe Some(
-      "Save or Discard the current preset draft before switching presets."
+      "Save, Discard, or Cancel the current preset draft before switching presets."
     )
+  }
+
+  it should "cancel a blocked preset switch without losing the dirty draft" in {
+    val path  = Files.createTempDirectory("state-manager-ui-preset-cancel-switch").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("create", "Create", CommandIntent.StartUiPresetDraft("Drafting"), CommandCategory.Settings)
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "change",
+        "Change",
+        CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("apply", "Apply", CommandIntent.ApplyUiPreset("Writing"), CommandCategory.Settings)
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed("cancel", "Cancel", CommandIntent.CancelUiPresetSwitch, CommandCategory.Settings)
+    ).unsafeRunSync()
+
+    val state  = sm.getCurrentState.unsafeRunSync()
+    val runner = commandRunnerState(sm)
+
+    state.uiPresetEditSession.map(_.draftName) shouldBe Some("Drafting")
+    state.uiPresetEditSession.map(_.dirty) shouldBe Some(true)
+    state.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
+    runner.settingsGroups.flatMap(descendants).collect {
+      case input: CommandSurfaceItem.InputItem => input.id
+    } should contain("ui-preset-cancel-switch")
+    runner.statusMessage shouldBe Some("Preset switch cancelled. Continue editing Drafting.")
   }

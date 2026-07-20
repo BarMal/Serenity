@@ -165,6 +165,7 @@ enum CommandIntent:
   case StartUiPresetDraft(name: String)
   case SaveUiPreset(name: String)
   case DiscardUiPresetDraft
+  case CancelUiPresetSwitch
   case ApplyUiPreset(name: String)
   case EditUiPreset(name: String)
   case DuplicateUiPreset(sourceName: String, targetName: String)

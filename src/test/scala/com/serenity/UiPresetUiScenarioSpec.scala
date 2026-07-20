@@ -82,9 +82,17 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     execute(driver, CommandIntent.SaveUiPreset("Scenario"))
     val saved = driver.renderFrame("after-save").unsafeRunSync()
     store.find("Scenario").unsafeRunSync().map(_.config.motionPreset) shouldBe Some(MotionPreset.Subtle)
+
+    val restarted =
+      UiScenarioDriver.create("ui-preset-preview-save-restarted", uiPresetStore = Some(store)).unsafeRunSync()
+    execute(restarted, CommandIntent.ApplyUiPreset("Scenario"))
+    val appliedAfterRestart = restarted.renderFrame("applied-after-restart").unsafeRunSync()
+
+    restarted.state.unsafeRunSync().config.motionPreset shouldBe MotionPreset.Subtle
     beforePreview.evidence.layoutViolations shouldBe empty
     preview.evidence.layoutViolations shouldBe empty
     saved.evidence.layoutViolations shouldBe empty
+    appliedAfterRestart.evidence.layoutViolations shouldBe empty
   }
 
   it should "restore a dirty draft through the session path and discard it after reopening the runner" in {
