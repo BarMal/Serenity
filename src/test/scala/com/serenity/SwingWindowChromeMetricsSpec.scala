@@ -164,6 +164,17 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     snapshot.viewportSize.height shouldBe 24
   }
 
+  "SwingWindow font metric updates" should "recalculate the viewport from the live canvas size" in {
+    val updatedMetrics = CellMetrics(charWidth = 20, lineHeight = 40, ascent = 30)
+    val liveCanvasSize = new Dimension(800, 480)
+    val staleFallback  = new Dimension(1200, 900)
+
+    val snapshot = SwingWindow.fontMetricsUpdateSnapshot(updatedMetrics, liveCanvasSize, staleFallback)
+
+    snapshot.pixelSize shouldBe liveCanvasSize
+    snapshot.viewportSize shouldBe ViewportSize(40, 12)
+  }
+
   it should "publish a resize only when the cell viewport changes" in {
     val current         = SwingWindow.CanvasResizeSnapshot(new Dimension(640, 480), ViewportSize(64, 24))
     val sameViewport    = SwingWindow.CanvasResizeSnapshot(new Dimension(645, 495), ViewportSize(64, 24))
