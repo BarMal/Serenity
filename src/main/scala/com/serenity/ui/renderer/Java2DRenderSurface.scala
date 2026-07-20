@@ -199,8 +199,7 @@ class Java2DRenderSurface(
     val horizontalStep = (image.getWidth / 64).max(1)
     val verticalStep   = (image.getHeight / 64).max(1)
     val sampledColors =
-      (0 until image.getWidth by horizontalStep)
-        .iterator
+      (0 until image.getWidth by horizontalStep).iterator
         .flatMap(x => (0 until image.getHeight by verticalStep).iterator.map(y => image.getRGB(x, y)))
     val counts = sampledColors.foldLeft(Map.empty[Int, Int]) { (accumulator, color) =>
       accumulator.updated(color, accumulator.getOrElse(color, 0) + 1)
@@ -247,7 +246,8 @@ class Java2DRenderSurface(
           new Kernel(
             5,
             5,
-            Array(1f, 4f, 6f, 4f, 1f, 4f, 16f, 24f, 16f, 4f, 6f, 24f, 36f, 24f, 6f, 4f, 16f, 24f, 16f, 4f, 1f, 4f, 6f, 4f, 1f)
+            Array(1f, 4f, 6f, 4f, 1f, 4f, 16f, 24f, 16f, 4f, 6f, 24f, 36f, 24f, 6f, 4f, 16f, 24f, 16f, 4f, 1f, 4f, 6f,
+              4f, 1f)
               .map(_ / 256f)
           ),
           ConvolveOp.EDGE_NO_OP,
