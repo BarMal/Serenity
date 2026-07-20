@@ -504,8 +504,9 @@ class SwingWindow(
   def updateMetrics(newMetrics: CellMetrics, newChromeMetrics: CellMetrics): Unit =
     metricsRef.set(newMetrics)
     applyChromeMetrics(newChromeMetrics)
-    val d = pixelSize.get()
-    pendingResize.set(Some(newMetrics.viewportSize(d.width, d.height)))
+    val snapshot = SwingWindow.fontMetricsUpdateSnapshot(newMetrics, canvas.getSize(), pixelSize.get())
+    pixelSize.set(snapshot.pixelSize)
+    pendingResize.set(Some(snapshot.viewportSize))
     onResizeCallbackRef.get().foreach(_.apply())
 
   def updateChromeTheme(theme: Theme): Unit =
@@ -948,6 +949,14 @@ object SwingWindow:
       if canvasSize.width > 0 && canvasSize.height > 0 then new Dimension(canvasSize)
       else new Dimension(fallbackSize)
     CanvasResizeSnapshot(size, metrics.viewportSize(size.width, size.height))
+
+  /** Recalculate the cell viewport after a font change using the currently laid-out canvas when available. */
+  def fontMetricsUpdateSnapshot(
+    metrics: CellMetrics,
+    canvasSize: Dimension,
+    previousCanvasSize: Dimension
+  ): CanvasResizeSnapshot =
+    canvasResizeSnapshot(metrics, canvasSize, previousCanvasSize)
 
   def canvasFallbackSize(
     windowSize: Dimension,
