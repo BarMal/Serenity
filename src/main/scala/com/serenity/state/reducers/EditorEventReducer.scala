@@ -1647,13 +1647,19 @@ object EditorEventReducer:
                   )
                 )
               else
-                val staggeredCells = FlowAnimationBuilder.build(
-                  cells = insertedCells,
-                  direction = FlowDirection.ByColumn,
-                  sweep = SweepDirection.Forward,
-                  steps = animConfig.steps,
-                  staggerFrames = 1
-                )
+                val staggeredCells = insertedCells
+                  .groupBy { case (key, _) => key.line }
+                  .valuesIterator
+                  .flatMap(lineCells =>
+                    FlowAnimationBuilder.build(
+                      cells = lineCells,
+                      direction = FlowDirection.ByColumn,
+                      sweep = SweepDirection.Forward,
+                      steps = animConfig.steps,
+                      staggerFrames = 1
+                    )
+                  )
+                  .toMap
                 buffer.copy(animations = buffer.animations.mergeAnimations(staggeredCells))
             case None =>
               buffer

@@ -199,6 +199,37 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
+  it should "restart default fade slices at the start of each inserted line" in {
+    val program = for
+      sm <- IO.pure(makeStateManager())
+      _ <- sm.updateState(state =>
+        state.copy(
+          config = AppConfig.default.withMotionPreset(MotionPreset.Smooth),
+          clipboard = Some("abc\ndef")
+        )
+      )
+      bufferId <- sm.createBuffer("prefix\nsuffix")
+      state    <- sm.getCurrentState
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      _        <- sm.setBufferForPane(paneId, bufferId)
+      _        <- sm.setCursorPosition(paneId, 0, 3)
+      _        <- sm.applyEvent(Paste)
+      newState <- sm.getCurrentState
+    yield
+      val animations = newState.buffers(bufferId).animations
+      def delayAt(column: Int, line: Int): Int =
+        animations
+          .getCell(column, line)
+          .flatMap(_.foregroundAnimation)
+          .map(_.delayFrames)
+          .getOrElse(fail(s"Expected an animation at ($column, $line)"))
+
+      List(delayAt(3, 0), delayAt(4, 0), delayAt(5, 0)) shouldBe List(0, 1, 2)
+      List(delayAt(0, 1), delayAt(1, 1), delayAt(2, 1)) shouldBe List(0, 1, 2)
+
+    program.unsafeRunSync()
+  }
+
   it should "use the editor text speed scale for inserted span choreography" in {
     val program = for
       sm <- IO.pure(makeStateManager())

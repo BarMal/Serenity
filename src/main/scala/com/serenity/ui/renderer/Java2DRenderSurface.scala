@@ -195,6 +195,23 @@ class Java2DRenderSurface(
           finally rawGraphics.dispose()
         }
 
+  private def estimatedBackgroundColor: Color =
+    val horizontalStep = (image.getWidth / 64).max(1)
+    val verticalStep   = (image.getHeight / 64).max(1)
+    val sampledColors =
+      (0 until image.getWidth by horizontalStep)
+        .iterator
+        .flatMap(x => (0 until image.getHeight by verticalStep).iterator.map(y => image.getRGB(x, y)))
+    val counts = sampledColors.foldLeft(Map.empty[Int, Int]) { (accumulator, color) =>
+      accumulator.updated(color, accumulator.getOrElse(color, 0) + 1)
+    }
+    new Color(counts.maxBy(_._2)._1, true)
+
+  private def contrastFrom(color: Color, background: Color): Int =
+    math.abs(color.getRed - background.getRed) +
+      math.abs(color.getGreen - background.getGreen) +
+      math.abs(color.getBlue - background.getBlue)
+
   override def applyPostProcessing(effect: PostProcessingEffect): Unit =
     effect match
       case PostProcessingEffect.Off => ()
@@ -218,12 +235,12 @@ class Java2DRenderSurface(
           }
         finally rawGraphics.dispose()
       case PostProcessingEffect.Glow =>
-        val source = new BufferedImage(image.getWidth, image.getHeight, BufferedImage.TYPE_INT_ARGB)
+        val background = estimatedBackgroundColor
+        val source     = new BufferedImage(image.getWidth, image.getHeight, BufferedImage.TYPE_INT_ARGB)
         (0 until image.getHeight).foreach { y =>
           (0 until image.getWidth).foreach { x =>
             val color = new Color(image.getRGB(x, y), true)
-            val luminance = (color.getRed * 0.2126 + color.getGreen * 0.7152 + color.getBlue * 0.0722).toInt
-            if luminance >= 96 then source.setRGB(x, y, color.getRGB)
+            if contrastFrom(color, background) >= 96 then source.setRGB(x, y, color.getRGB)
           }
         }
         val blurred = new ConvolveOp(

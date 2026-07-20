@@ -214,6 +214,21 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     new Color(image.getRGB(3, 5), true).getRed should be > 0
   }
 
+  it should "spread dark glyphs into a halo on a light background" in {
+    val image   = new BufferedImage(11, 11, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(Color.WHITE)
+    surface.fillPixelRect(5, 5, 1, 1, Color.BLACK)
+    surface.applyPostProcessing(PostProcessingEffect.Glow)
+    surface.flush()
+
+    new Color(image.getRGB(3, 5), true).getRed should be < 255
+    new Color(image.getRGB(5, 5), true) shouldBe Color.BLACK
+  }
+
   "Renderer.render" should "clear pixels outside the whole-cell grid to the theme background" in {
     val image   = new BufferedImage(83, 57, BufferedImage.TYPE_INT_ARGB)
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
