@@ -33,11 +33,10 @@ case class SceneNode(
     zIndex: Int
 )
 
-/**
-  * Pure, authoritative UI geometry for a frame.
+/** Pure, authoritative UI geometry for a frame.
   *
-  * `calculatedLayout` remains available temporarily for callers that have not yet migrated away from the legacy
-  * layout API.
+  * `calculatedLayout` remains available temporarily for callers that have not yet migrated away from the legacy layout
+  * API.
   */
 case class UiSceneSnapshot(
     calculatedLayout: CalculatedLayout,
@@ -45,7 +44,8 @@ case class UiSceneSnapshot(
     workspace: List[SceneNode],
     floating: List[SceneNode],
     modalBackdrop: Option[SceneNode],
-    modal: List[SceneNode]
+    modal: List[SceneNode],
+    focusOrder: List[SceneNodeId]
 ):
 
   def nodesInPaintOrder: List[SceneNode] =
@@ -70,7 +70,6 @@ object UiSceneSnapshot:
           contentRect = pane.contentRect,
           hitRegions = List(
             SceneHitRegion(SceneHitKind.Frame, pane.paneRect),
-            SceneHitRegion(SceneHitKind.Header, pane.headerRect),
             SceneHitRegion(SceneHitKind.Content, pane.contentRect)
           ),
           zIndex = 0
@@ -78,15 +77,25 @@ object UiSceneSnapshot:
       }
     }
     val workspaceSurfaces = workspaceSurfaceNodes(state, calculatedLayout, workspacePanes.size)
-    val floating = floatingSurfaceNodes(state, calculatedLayout, workspacePanes.size + workspaceSurfaces.size)
+    val floating          = floatingSurfaceNodes(state, calculatedLayout, workspacePanes.size + workspaceSurfaces.size)
+    val modal             = List.empty[SceneNode]
+    val nodes             = workspacePanes ++ workspaceSurfaces ++ floating ++ modal
     UiSceneSnapshot(
       calculatedLayout = calculatedLayout,
       paneLayouts = paneLayouts,
       workspace = workspacePanes ++ workspaceSurfaces,
       floating = floating,
       modalBackdrop = None,
-      modal = Nil
+      modal = modal,
+      focusOrder = orderedForFocus(state.focus, nodes)
     )
+
+  private def orderedForFocus(focus: Focus, nodes: List[SceneNode]): List[SceneNodeId] =
+    val nodeIds = nodes.map(_.id)
+    val focused = focus match
+      case Focus.EditorPane(paneId) => SceneNodeId.EditorPane(paneId)
+      case Focus.Surface(surfaceId) => SceneNodeId.Surface(surfaceId)
+    Option.when(nodeIds.contains(focused))(focused).toList ++ nodeIds.filterNot(_ == focused)
 
   private def workspaceSurfaceNodes(
     state: AppState,
@@ -99,10 +108,11 @@ object UiSceneSnapshot:
         case SurfacePresentation.Expanded(_, _) => true
         case _                                  => false
     }
-    (pinned ++ expanded).zipWithIndex.flatMap { case (surface, offset) =>
-      panelRect(surface, calculatedLayout).map { frame =>
-        surfaceNode(surface.id, SceneLayer.Workspace, frame, initialZIndex + offset)
-      }
+    (pinned ++ expanded).zipWithIndex.flatMap {
+      case (surface, offset) =>
+        panelRect(surface, calculatedLayout).map { frame =>
+          surfaceNode(surface.id, SceneLayer.Workspace, frame, initialZIndex + offset)
+        }
     }
 
   private def floatingSurfaceNodes(
@@ -110,10 +120,12 @@ object UiSceneSnapshot:
     calculatedLayout: CalculatedLayout,
     initialZIndex: Int
   ): List[SceneNode] =
-    (calculatedLayout.aboveCursorOverlayStack ++ calculatedLayout.belowCursorOverlayStack)
-      .zipWithIndex
-      .flatMap { case ((surfaceId, frame), offset) =>
-        state.surfaceById(surfaceId).map(_ => surfaceNode(surfaceId, SceneLayer.Floating, frame, initialZIndex + offset))
+    (calculatedLayout.aboveCursorOverlayStack ++ calculatedLayout.belowCursorOverlayStack).zipWithIndex
+      .flatMap {
+        case ((surfaceId, frame), offset) =>
+          state
+            .surfaceById(surfaceId)
+            .map(_ => surfaceNode(surfaceId, SceneLayer.Floating, frame, initialZIndex + offset))
       }
 
   private def panelRect(surface: UiSurface, calculatedLayout: CalculatedLayout): Option[LayoutRect] =

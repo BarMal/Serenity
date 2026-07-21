@@ -51,6 +51,49 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     scene.floating.map(_.id) shouldBe List(SceneNodeId.Surface(modal.id))
   }
 
+  it should "characterize multi-pane geometry and place the focused pane first in focus order" in {
+    val firstPane  = PaneId(0)
+    val secondPane = PaneId(1)
+    val state = AppState.initial.copy(
+      layout = Layout(
+        editorPanes = Map(
+          firstPane  -> EditorPane.empty(firstPane),
+          secondPane -> EditorPane.empty(secondPane)
+        ),
+        activeEditorPaneId = Some(secondPane),
+        paneOrder = List(firstPane, secondPane)
+      ),
+      focus = Focus.EditorPane(secondPane)
+    )
+
+    val scene = UiSceneSnapshot.from(state, viewport)
+
+    scene.workspace.map(_.id) should contain allOf (
+      SceneNodeId.EditorPane(firstPane),
+      SceneNodeId.EditorPane(secondPane)
+    )
+    scene.focusOrder.headOption shouldBe Some(SceneNodeId.EditorPane(secondPane))
+    scene.workspace.foreach { node =>
+      node.hitRegions.foreach(region => node.frameRect.containsRect(region.rect) shouldBe true)
+    }
+  }
+
+  it should "characterize an expanded surface as a workspace node and focus target" in {
+    val surface = UiSurface(
+      SurfaceId("diagnostics"),
+      SurfaceContent.Diagnostics(Nil),
+      SurfacePresentation.Expanded(PanelPosition.Right, 22)
+    )
+    val state = AppState.initial.copy(uiSurfaces = List(surface), focus = Focus.Surface(surface.id))
+
+    val scene = UiSceneSnapshot.from(state, viewport)
+    val expanded =
+      scene.workspace.find(_.id == SceneNodeId.Surface(surface.id)).getOrElse(fail("expected expanded surface"))
+
+    scene.calculatedLayout.expandedPanelRect shouldBe Some(expanded.frameRect)
+    scene.focusOrder.headOption shouldBe Some(SceneNodeId.Surface(surface.id))
+  }
+
   it should "expose the calculated layout as a temporary compatibility adapter" in {
     val state = AppState.initial
 

@@ -95,7 +95,7 @@ private[manager] case class MouseTargetCache(
 private[manager] object MouseTargetCache:
 
   def fromState(state: AppState, viewportSize: ViewportSize): MouseTargetCache =
-    val layoutKey   = MouseTargetLayoutKey.from(state, viewportSize)
-    val layout      = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-    val scene       = UiSceneSnapshot.from(state, layout)
+    val layoutKey = MouseTargetLayoutKey.from(state, viewportSize)
+    val layout    = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+    val scene     = UiSceneSnapshot.from(state, layout)
     MouseTargetCache(layoutKey, layout, scene, scene.paneLayouts)
