@@ -9,9 +9,9 @@ import javax.swing.{JFileChooser, SwingUtilities}
 import scala.util.control.NonFatal
 
 import cats.effect.IO
-import com.sun.jna.{Native, NativeLibrary, Pointer, WString}
-import com.sun.jna.platform.win32.{Guid, Ole32}
+import com.sun.jna.*
 import com.sun.jna.platform.win32.COM.Unknown
+import com.sun.jna.platform.win32.{Guid, Ole32}
 import com.sun.jna.ptr.{IntByReference, PointerByReference}
 
 class SwingFileDialog(parent: Component) extends FileDialog:
@@ -36,8 +36,9 @@ class SwingFileDialog(parent: Component) extends FileDialog:
           SwingFileDialog.preferredBackend(nativeOwner.isDefined) match
             case SwingFileDialog.Backend.WindowsModern =>
               nativeOwner match
-                case Some(owner) => SwingFileDialog.chooseWithModernWindowsDialog(owner, mode, initialDirectory, suggestedFileName)
-                case None        => SwingFileDialog.chooseWithSwingChooser(initialDirectory, suggestedFileName, showDialog)
+                case Some(owner) =>
+                  SwingFileDialog.chooseWithModernWindowsDialog(owner, mode, initialDirectory, suggestedFileName)
+                case None => SwingFileDialog.chooseWithSwingChooser(initialDirectory, suggestedFileName, showDialog)
             case SwingFileDialog.Backend.Native =>
               nativeOwner.flatMap(owner =>
                 SwingFileDialog.chooseWithNativeDialog(owner, mode, initialDirectory, suggestedFileName)
@@ -152,7 +153,7 @@ object SwingFileDialog:
     private val ClassContextInprocServer = 1
     private val ForceFileSystem          = 0x40
     private val SigdnFileSystemPath      = 0x80058000
-    private val ErrorCancelled           = 0x800704C7
+    private val ErrorCancelled           = 0x800704c7
 
     private val FileOpenDialogClassId = new Guid.CLSID("{DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7}")
     private val FileSaveDialogClassId = new Guid.CLSID("{C0B4E2F3-BA21-4773-8DBA-335EC946EB8B}")
@@ -184,13 +185,15 @@ object SwingFileDialog:
       suggestedFileName: Option[String]
     ): Either[Unit, Option[Path]] =
       val dialogReference = new PointerByReference()
-      val createResult = Ole32.INSTANCE.CoCreateInstance(
-        if mode == AwtFileDialog.SAVE then FileSaveDialogClassId else FileOpenDialogClassId,
-        Pointer.NULL,
-        ClassContextInprocServer,
-        if mode == AwtFileDialog.SAVE then FileSaveDialogId else FileOpenDialogId,
-        dialogReference
-      ).intValue()
+      val createResult = Ole32.INSTANCE
+        .CoCreateInstance(
+          if mode == AwtFileDialog.SAVE then FileSaveDialogClassId else FileOpenDialogClassId,
+          Pointer.NULL,
+          ClassContextInprocServer,
+          if mode == AwtFileDialog.SAVE then FileSaveDialogId else FileOpenDialogId,
+          dialogReference
+        )
+        .intValue()
       if failed(createResult) then Left(())
       else
         val dialog = new CommonFileDialog(dialogReference.getValue)
@@ -244,7 +247,7 @@ object SwingFileDialog:
     private def succeeded(result: Int): Boolean = !failed(result)
     private def failed(result: Int): Boolean    = result < 0
 
-    private final class CommonFileDialog(pointer: Pointer) extends Unknown(pointer):
+    final private class CommonFileDialog(pointer: Pointer) extends Unknown(pointer):
       def show(owner: Pointer): Int =
         _invokeNativeInt(3, Array(getPointer, owner))
 
@@ -263,6 +266,6 @@ object SwingFileDialog:
       def getResult(result: PointerByReference): Int =
         _invokeNativeInt(20, Array(getPointer, result))
 
-    private final class ShellItem(pointer: Pointer) extends Unknown(pointer):
+    final private class ShellItem(pointer: Pointer) extends Unknown(pointer):
       def getDisplayName(result: PointerByReference): Int =
         _invokeNativeInt(5, Array(getPointer, Int.box(SigdnFileSystemPath), result))
