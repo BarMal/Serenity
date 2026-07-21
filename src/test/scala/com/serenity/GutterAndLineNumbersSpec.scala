@@ -293,7 +293,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       }
     }
 
-  it should "leave continuation rows blank when a logical line wraps" in {
+  it should "render a vertical indicator on continuation rows when a logical line wraps" in {
     val longLine = List.fill(20)("alpha").mkString(" ")
     val buffer = Buffer
       .fromString(BufferId(3), s"$longLine\nsecond")
@@ -331,7 +331,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val secondLineRow =
       (lineRect.x until lineRect.right).map(x => surface.getChar(x, lineRect.y + secondLineVisualRow)).mkString.trim
 
-    continuationRow shouldBe empty
+    continuationRow shouldBe "│"
     secondLineRow shouldBe "2"
   }
 

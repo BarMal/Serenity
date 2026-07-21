@@ -88,7 +88,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     cursorRects.head.xPx should be > runCalls.head.xPx.toInt
   }
 
-  it should "leave wrapped continuation rows unnumbered after vertical visual scrolling" in {
+  it should "render wrapped continuation indicators after vertical visual scrolling" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val buffer = Buffer
@@ -115,8 +115,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = false, surface, viewportSize, font, font, cellMetrics, None)
 
-    surface.getRow(1).take(3).trim shouldBe ""
-    surface.getRow(2).take(3).trim shouldBe ""
+    surface.getRow(1).take(3).trim shouldBe "│"
+    surface.getRow(2).take(3).trim shouldBe "│"
     surface.getRow(3).take(3).trim should not be "1"
   }
 

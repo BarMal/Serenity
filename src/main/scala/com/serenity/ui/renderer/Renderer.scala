@@ -1747,23 +1747,27 @@ object Renderer:
                     if visualLineFits(lineRect, index, context, snapshot) =>
                   snapshot.visualLines.lift(index).foreach { visualLine =>
                     val lineTopPx = visualLineTopPx(lineRect, index, context, snapshot)
-                    if shouldRenderLineNumberForVisualLine(visualLine, state.config.wordWrapEnabled) then
-                      val numberWidth = math.max(1, lineRect.width - 1)
-                      val lineNumberText =
+                    val rendersLineNumber =
+                      shouldRenderLineNumberForVisualLine(visualLine, state.config.wordWrapEnabled)
+                    val lineNumberText =
+                      if rendersLineNumber then
+                        val numberWidth = math.max(1, lineRect.width - 1)
                         (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
-                      val measuredLineNumberFont = buffer.filter(useMeasuredLineNumberFont(_, context))
-                      if snapshot.usesMeasuredLayout && measuredLineNumberFont.nonEmpty then
-                        measuredLineNumberFont.foreach(buf => surface.setFont(context.fontForBuffer(buf)))
-                        surface.drawRunPx(
-                          context.cellMetrics.toPixelX(lineRect.x).toFloat,
-                          lineTopPx,
-                          lineRect.width * context.cellMetrics.charWidth.toFloat,
-                          snapshot.lineHeightPx,
-                          snapshot.ascentPx,
-                          lineNumberText
-                        )
-                        surface.setFont(context.uiFont)
-                      else surface.putString(lineRect.x, rowY, lineNumberText)
+                      else continuationIndicatorText(lineRect.width)
+                    val measuredLineNumberFont = buffer.filter(useMeasuredLineNumberFont(_, context))
+                    if snapshot.usesMeasuredLayout && measuredLineNumberFont.nonEmpty then
+                      measuredLineNumberFont.foreach(buf => surface.setFont(context.fontForBuffer(buf)))
+                      surface.drawRunPx(
+                        context.cellMetrics.toPixelX(lineRect.x).toFloat,
+                        lineTopPx,
+                        lineRect.width * context.cellMetrics.charWidth.toFloat,
+                        snapshot.lineHeightPx,
+                        snapshot.ascentPx,
+                        lineNumberText
+                      )
+                      surface.setFont(context.uiFont)
+                    else surface.putString(lineRect.x, rowY, lineNumberText)
+                    if rendersLineNumber then
                       buffer.foreach(
                         renderDiagnosticIndicator(surface, lineRect, rowY, visualLine.bufferLine, _, state)
                       )
@@ -1779,6 +1783,11 @@ object Renderer:
 
   private def shouldRenderLineNumberForVisualLine(visualLine: TextVisualLine, wordWrapEnabled: Boolean): Boolean =
     !wordWrapEnabled || visualLine.startColumn == 0
+
+  private def continuationIndicatorText(width: Int): String =
+    val safeWidth = math.max(1, width)
+    val leftWidth = (safeWidth - 1) / 2
+    " " * leftWidth + "│" + " " * (safeWidth - leftWidth - 1)
 
   private def renderDiagnosticIndicator(
     surface: RenderSurface,
