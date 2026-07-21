@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.command.{CommandRegistry, CommandRunner}
+import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -59,6 +61,49 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     header.hitRegions.map(_.kind) should contain(SceneHitKind.Header)
     header.hitRegions.foreach(region => header.frameRect.containsRect(region.rect) shouldBe true)
     scene.focusOrder should not contain header.id
+  }
+
+  it should "characterize stacked floating surfaces in scene paint order" in {
+    val cursor = CursorPosition(1, 2)
+    val buffer = Buffer
+      .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
+      .copy(cursors = List(cursor))
+    val first = UiSurface(
+      SurfaceId("contextual-toolbar"),
+      SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    )
+    val second = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)),
+      SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0)),
+        paneOrder = List(PaneId(0))
+      ),
+      uiSurfaces = List(first, second)
+    )
+
+    val scene          = UiSceneSnapshot.from(state, viewport)
+    val expectedFrames = scene.calculatedLayout.belowCursorOverlayStack
+
+    scene.floating.map(_.id) shouldBe expectedFrames.map((surfaceId, _) => SceneNodeId.Surface(surfaceId))
+    scene.floating.zip(expectedFrames).foreach { case (node, (_, frame)) =>
+      val surfaceId = node.id match
+        case SceneNodeId.Surface(id) => id
+        case _                       => fail("expected floating surface node")
+      node.frameRect shouldBe frame
+      node.contentRect shouldBe SurfaceFrameLayout.forContent(
+        frame,
+        state.surfaceById(surfaceId).getOrElse(fail("expected surface")).content
+      ).contentRect
+      node.hitRegions.foreach(region => node.frameRect.containsRect(region.rect) shouldBe true)
+    }
   }
 
   it should "retain the current floating presentation for modal workflows" in {

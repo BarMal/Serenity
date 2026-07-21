@@ -2,7 +2,6 @@ package com.serenity.ui.layout
 
 import com.serenity.config.InterfaceDensityMetrics
 import com.serenity.state.models.*
-import com.serenity.ui.renderer.{OverlayRow, ResolvedSurfaceContent, SurfaceContentResolver, SurfaceRenderMode}
 
 /** Named layout ownership violation for editor and surface rectangles. */
 case class LayoutContractViolation(
