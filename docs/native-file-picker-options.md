@@ -2,7 +2,7 @@
 
 ## Current boundary
 
-Serenity routes open/save/save-as through `com.serenity.io.FileDialog`, with workflow coverage already living at the `StateManager` boundary. The concrete desktop implementation now prefers AWT `FileDialog` and falls back to Swing `JFileChooser` when Serenity does not have a usable top-level AWT owner window.
+Serenity routes open/save/save-as through `com.serenity.io.FileDialog`, with workflow coverage already living at the `StateManager` boundary. On Windows, the concrete desktop implementation uses the Vista+ Common Item Dialog (`IFileOpenDialog` / `IFileSaveDialog`) when Serenity has a usable top-level AWT owner window. It falls back to AWT `FileDialog` if that COM API is unavailable, and to Swing `JFileChooser` when no usable owner window exists.
 
 ## Options considered
 
@@ -43,12 +43,11 @@ Serenity routes open/save/save-as through `com.serenity.io.FileDialog`, with wor
   - best Windows-specific native integration path
   - exposes the newest Windows dialog capabilities directly
 - Cons:
-  - Windows-only
-  - would require a native bridge layer such as JNA/JNI plus separate macOS/Linux strategies
-  - much larger scope than the current file-dialog abstraction needs
+- Windows-only, so macOS and Linux retain AWT `FileDialog`
+- needs a JNA bridge and COM lifecycle handling
 
 ## Decision for this slice
 
-Prefer AWT `FileDialog` when Serenity already has a native-capable owner window. Fall back to `JFileChooser` otherwise.
+On Windows, prefer the Common Item Dialog when Serenity has a native-capable owner window. If COM initialization, dialog creation, or selection retrieval fails, fall back to AWT `FileDialog`. On macOS and Linux, prefer AWT `FileDialog`; fall back to `JFileChooser` when no owner is available.
 
-This improves the Windows experience without introducing a new UI toolkit or a platform-specific native bridge, and it preserves the existing open/save/save-as/cancel workflow tests at the abstraction boundary.
+This provides Windows 11-style file management while retaining native locations, permissions, keyboard behavior, and cancellation semantics. It preserves the existing open/save/save-as/cancel workflow tests at the abstraction boundary.
