@@ -59,6 +59,15 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     cache.paneLayouts(paneId).headerRect.bottom.shouldBe(cache.paneLayouts(paneId).contentRect.y)
   }
 
+  it should "cache the authoritative scene used for mouse-target geometry" in {
+    val state = stateWith(Buffer.fromString(bufferId, "alpha\nbeta"))
+    val size  = ViewportSize(80, 24)
+    val cache = MouseTargetCache.fromState(state, size)
+
+    cache.scene.paneLayouts shouldBe cache.paneLayouts
+    cache.scene.calculatedLayout shouldBe cache.layout
+  }
+
   it should "change when layout-affecting content changes with line numbers enabled" in {
     val shortState = stateWith(Buffer.fromString(bufferId, "one"))
     val longState  = stateWith(Buffer.fromString(bufferId, (1 to 100).map(i => s"line $i").mkString("\n")))

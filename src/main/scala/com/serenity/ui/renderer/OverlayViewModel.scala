@@ -43,18 +43,29 @@ object OverlayViewModel:
   private val InactiveFloatingPanelAlphaMultiplier = 0.68f
 
   def fromState(state: AppState, layout: CalculatedLayout): OverlayViews =
+    fromState(state, layout, None)
+
+  /** Build overlay views from the frame scene so rendering shares the snapshot used by hit testing. */
+  def fromState(state: AppState, scene: UiSceneSnapshot): OverlayViews =
+    fromState(state, scene.calculatedLayout, Some(scene))
+
+  private def fromState(
+    state: AppState,
+    layout: CalculatedLayout,
+    scene: Option[UiSceneSnapshot]
+  ): OverlayViews =
     val aboveCursor = preferredFloatingSurface(state, SurfacePlacement.AboveCursor)
       .flatMap(surface =>
         buildView(
           surface,
           state,
-          EditorLayoutContract.overlayRectFor(surface.id, layout),
+          overlayRect(surface.id, layout, scene),
           collapsed = false,
           verticalOffsetRows = layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0)
         )
       )
 
-    val belowCursorStack = preferredBelowCursorSurfaces(state, layout)
+    val belowCursorStack = preferredBelowCursorSurfaces(state, layout, scene)
     val belowCursor      = belowCursorStack.headOption
 
     OverlayViews(
@@ -62,6 +73,13 @@ object OverlayViewModel:
       belowCursor = belowCursor,
       belowCursorStack = belowCursorStack
     )
+
+  private def overlayRect(
+    surfaceId: SurfaceId,
+    layout: CalculatedLayout,
+    scene: Option[UiSceneSnapshot]
+  ): Option[LayoutRect] =
+    scene.flatMap(_.floatingRect(surfaceId)).orElse(EditorLayoutContract.overlayRectFor(surfaceId, layout))
 
   private def buildView(
     surface: com.serenity.state.models.UiSurface,
@@ -138,7 +156,11 @@ object OverlayViewModel:
 
     selectedSurface
 
-  private def preferredBelowCursorSurfaces(state: AppState, layout: CalculatedLayout): List[TextOverlayView] =
+  private def preferredBelowCursorSurfaces(
+    state: AppState,
+    layout: CalculatedLayout,
+    scene: Option[UiSceneSnapshot]
+  ): List[TextOverlayView] =
     layout.belowCursorOverlayStack.map(_._1).flatMap { surfaceId =>
       state
         .surfaceById(surfaceId)
@@ -146,7 +168,7 @@ object OverlayViewModel:
           buildView(
             surface,
             state,
-            EditorLayoutContract.overlayRectFor(surfaceId, layout),
+            overlayRect(surfaceId, layout, scene),
             collapsed = layout.collapsedFloatingSurfaceIds.contains(surfaceId),
             verticalOffsetRows = layout.floatingOverlayOffsetRows.getOrElse(surfaceId, 0.0)
           )
