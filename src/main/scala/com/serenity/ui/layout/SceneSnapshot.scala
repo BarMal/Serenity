@@ -69,12 +69,13 @@ object UiSceneSnapshot:
           layer = SceneLayer.Workspace,
           frameRect = pane.paneRect,
           contentRect = pane.contentRect,
-          hitRegions =
-            List(SceneHitRegion(SceneHitKind.Frame, pane.paneRect)) ++
-              Option.when(!state.layout.activeEditorPaneId.contains(paneId))(
+          hitRegions = List(SceneHitRegion(SceneHitKind.Frame, pane.paneRect)) ++
+            Option
+              .when(!state.layout.activeEditorPaneId.contains(paneId))(
                 SceneHitRegion(SceneHitKind.Header, pane.headerRect)
-              ).toList ++
-              List(SceneHitRegion(SceneHitKind.Content, pane.contentRect)),
+              )
+              .toList ++
+            List(SceneHitRegion(SceneHitKind.Content, pane.contentRect)),
           zIndex = 0
         )
         val activeHeader = Option.when(state.layout.activeEditorPaneId.contains(paneId))(

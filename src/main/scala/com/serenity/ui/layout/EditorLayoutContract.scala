@@ -379,8 +379,7 @@ object EditorLayoutContract:
         case _                                  => false
     }).flatMap { surface =>
       panelRectFor(surface, calculatedLayout).map(rect => surface.id -> pinnedGeometry(surface, rect, state))
-    }
-      .toMap
+    }.toMap
     val pinnedSurfaceIds = calculatedLayout.pinnedSurfaceRects.keySet
     val pinnedSurfaceTitleRects = pinnedSurfaceIds.toList
       .flatMap(surfaceId => panelGeometryById.get(surfaceId).map(geometry => surfaceId -> geometry.titleRect))
@@ -409,7 +408,9 @@ object EditorLayoutContract:
     val floatingOverlayRects    = aboveCursorOverlayRects ++ belowCursorOverlayRects
     val floatingGeometryById = floatingOverlayRects.flatMap {
       case (surfaceId, frameRect) =>
-        state.surfaceById(surfaceId).flatMap(surface => floatingGeometry(surface, frameRect, state, calculatedLayout))
+        state
+          .surfaceById(surfaceId)
+          .flatMap(surface => floatingGeometry(surface, frameRect, state, calculatedLayout))
           .map(surfaceId -> _)
     }.toMap
     val floatingOverlayContentRects = floatingOverlayRects.flatMap {
@@ -457,9 +458,11 @@ object EditorLayoutContract:
       case SurfaceContent.Outline(symbols, activeLocation) =>
         val resolvedOutline = SurfaceContent.Outline(
           symbols,
-          activeLocation.orElse(state.activeCursorPosition.flatMap(cursor =>
-            com.serenity.document.DocumentNavigation.currentSymbol(symbols, cursor).map(_.location)
-          ))
+          activeLocation.orElse(
+            state.activeCursorPosition.flatMap(cursor =>
+              com.serenity.document.DocumentNavigation.currentSymbol(symbols, cursor).map(_.location)
+            )
+          )
         )
         SurfaceContentResolver.resolve(resolvedOutline, frameRect, SurfaceRenderMode.Pinned)
       case content =>
@@ -467,10 +470,10 @@ object EditorLayoutContract:
     surfaceGeometry(surface.content, frameRect, resolved, itemGapRows = 0.0)
 
   private def floatingGeometry(
-      surface: UiSurface,
-      frameRect: LayoutRect,
-      state: AppState,
-      calculatedLayout: CalculatedLayout
+    surface: UiSurface,
+    frameRect: LayoutRect,
+    state: AppState,
+    calculatedLayout: CalculatedLayout
   ): Option[SurfaceGeometry] =
     val collapsed = calculatedLayout.collapsedFloatingSurfaceIds.contains(surface.id)
     val geometryFrame = surface.content match
@@ -478,22 +481,38 @@ object EditorLayoutContract:
       case _                                          => frameRect
     val resolved =
       if collapsed then collapsedFloatingContent(surface.content)
-      else surface.content match
-        case SurfaceContent.ContextualToolbar(toolbarState) =>
-          SurfaceContentResolver.resolveContextualToolbar(toolbarState, state, geometryFrame, SurfaceRenderMode.Floating)
-        case SurfaceContent.GhostOverlay(originalContent, _) =>
-          SurfaceContentResolver.resolve(originalContent, geometryFrame, SurfaceRenderMode.Floating, itemGapRowsFor(originalContent, state))
-        case content =>
-          SurfaceContentResolver.resolve(content, geometryFrame, SurfaceRenderMode.Floating, itemGapRowsFor(content, state))
+      else
+        surface.content match
+          case SurfaceContent.ContextualToolbar(toolbarState) =>
+            SurfaceContentResolver.resolveContextualToolbar(
+              toolbarState,
+              state,
+              geometryFrame,
+              SurfaceRenderMode.Floating
+            )
+          case SurfaceContent.GhostOverlay(originalContent, _) =>
+            SurfaceContentResolver.resolve(
+              originalContent,
+              geometryFrame,
+              SurfaceRenderMode.Floating,
+              itemGapRowsFor(originalContent, state)
+            )
+          case content =>
+            SurfaceContentResolver.resolve(
+              content,
+              geometryFrame,
+              SurfaceRenderMode.Floating,
+              itemGapRowsFor(content, state)
+            )
     Option.when(resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty)(
       surfaceGeometry(surface.content, geometryFrame, resolved, itemGapRowsFor(surface.content, state))
     )
 
   private def surfaceGeometry(
-      content: SurfaceContent,
-      frameRect: LayoutRect,
-      resolved: ResolvedSurfaceContent,
-      itemGapRows: Double
+    content: SurfaceContent,
+    frameRect: LayoutRect,
+    resolved: ResolvedSurfaceContent,
+    itemGapRows: Double
   ): SurfaceGeometry =
     val contentRect = SurfaceFrameLayout.forContent(frameRect, content).contentRect
     SurfaceGeometry(
@@ -524,8 +543,7 @@ object EditorLayoutContract:
 
   private def itemGapRowsFor(content: SurfaceContent, state: AppState): Double =
     content match
-      case SurfaceContent.CommandPalette(_) |
-          SurfaceContent.CommandPaletteSubmenu(_, _, _) |
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) |
           SurfaceContent.ContextMenu(_) =>
         state.config.commandRunnerItemGapRows
       case SurfaceContent.ContextualToolbar(_) =>
