@@ -12,6 +12,7 @@ enum SceneLayer:
 /** Stable identity for a scene node without introducing renderer state into the layout model. */
 enum SceneNodeId:
   case EditorPane(paneId: PaneId)
+  case EditorPaneHeader(paneId: PaneId)
   case Surface(surfaceId: SurfaceId)
 
 /** The interactive role of a rectangle owned by a scene node. */
@@ -62,18 +63,34 @@ object UiSceneSnapshot:
   def from(state: AppState, calculatedLayout: CalculatedLayout): UiSceneSnapshot =
     val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
     val workspacePanes = state.layout.orderedPaneIds.flatMap { paneId =>
-      paneLayouts.get(paneId).map { pane =>
-        SceneNode(
+      paneLayouts.get(paneId).toList.flatMap { pane =>
+        val paneNode = SceneNode(
           id = SceneNodeId.EditorPane(paneId),
           layer = SceneLayer.Workspace,
           frameRect = pane.paneRect,
           contentRect = pane.contentRect,
-          hitRegions = List(
-            SceneHitRegion(SceneHitKind.Frame, pane.paneRect),
-            SceneHitRegion(SceneHitKind.Content, pane.contentRect)
-          ),
+          hitRegions =
+            List(SceneHitRegion(SceneHitKind.Frame, pane.paneRect)) ++
+              Option.when(!state.layout.activeEditorPaneId.contains(paneId))(
+                SceneHitRegion(SceneHitKind.Header, pane.headerRect)
+              ).toList ++
+              List(SceneHitRegion(SceneHitKind.Content, pane.contentRect)),
           zIndex = 0
         )
+        val activeHeader = Option.when(state.layout.activeEditorPaneId.contains(paneId))(
+          SceneNode(
+            id = SceneNodeId.EditorPaneHeader(paneId),
+            layer = SceneLayer.Workspace,
+            frameRect = pane.headerRect,
+            contentRect = pane.headerRect,
+            hitRegions = List(
+              SceneHitRegion(SceneHitKind.Frame, pane.headerRect),
+              SceneHitRegion(SceneHitKind.Header, pane.headerRect)
+            ),
+            zIndex = 0
+          )
+        )
+        paneNode :: activeHeader.toList
       }
     }
     val workspaceSurfaces = workspaceSurfaceNodes(state, calculatedLayout, workspacePanes.size)
@@ -87,7 +104,12 @@ object UiSceneSnapshot:
       floating = floating,
       modalBackdrop = None,
       modal = modal,
-      focusOrder = orderedForFocus(state.focus, nodes)
+      focusOrder = orderedForFocus(
+        state.focus,
+        nodes.filterNot(_.id match
+          case SceneNodeId.EditorPaneHeader(_) => true
+          case _                               => false)
+      )
     )
 
   private def orderedForFocus(focus: Focus, nodes: List[SceneNode]): List[SceneNodeId] =

@@ -29,12 +29,36 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     val scene = UiSceneSnapshot.from(state, viewport)
 
     scene.workspace.map(_.id) should contain(SceneNodeId.EditorPane(paneId))
+    scene.workspace.map(_.id) should contain(SceneNodeId.EditorPaneHeader(paneId))
     scene.workspace.map(_.id) should contain(SceneNodeId.Surface(panel.id))
     scene.floating.map(_.id) shouldBe List(SceneNodeId.Surface(floating.id))
-    scene.nodesInPaintOrder.map(_.layer) shouldBe List(SceneLayer.Workspace, SceneLayer.Workspace, SceneLayer.Floating)
+    scene.nodesInPaintOrder.map(_.layer) shouldBe List(
+      SceneLayer.Workspace,
+      SceneLayer.Workspace,
+      SceneLayer.Workspace,
+      SceneLayer.Floating
+    )
     scene.nodesInPaintOrder.foreach { node =>
       node.hitRegions.foreach(region => node.frameRect.containsRect(region.rect) shouldBe true)
     }
+  }
+
+  it should "own the rendered active-pane header as a contained workspace node" in {
+    val paneId = PaneId(0)
+    val scene  = UiSceneSnapshot.from(AppState.initial, viewport)
+    val pane = scene.workspace
+      .find(_.id == SceneNodeId.EditorPane(paneId))
+      .getOrElse(fail("expected editor pane"))
+    val header = scene.workspace
+      .find(_.id == SceneNodeId.EditorPaneHeader(paneId))
+      .getOrElse(fail("expected active-pane header"))
+
+    header.layer shouldBe SceneLayer.Workspace
+    header.frameRect shouldBe scene.paneLayouts(paneId).headerRect
+    header.frameRect.width should be >= pane.frameRect.width
+    header.hitRegions.map(_.kind) should contain(SceneHitKind.Header)
+    header.hitRegions.foreach(region => header.frameRect.containsRect(region.rect) shouldBe true)
+    scene.focusOrder should not contain header.id
   }
 
   it should "retain the current floating presentation for modal workflows" in {

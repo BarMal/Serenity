@@ -2,7 +2,7 @@ package com.serenity.ui.layout
 
 import com.serenity.config.InterfaceDensityMetrics
 import com.serenity.state.models.*
-import com.serenity.ui.renderer.{OverlayViewModel, PinnedPanelViewModel}
+import com.serenity.ui.renderer.{OverlayRow, ResolvedSurfaceContent, SurfaceContentResolver, SurfaceRenderMode}
 
 /** Named layout ownership violation for editor and surface rectangles. */
 case class LayoutContractViolation(
@@ -328,6 +328,13 @@ case class EditorLayoutContract(
 
 object EditorLayoutContract:
 
+  private case class SurfaceGeometry(
+      titleRect: LayoutRect,
+      contentRect: LayoutRect,
+      rowSlots: List[SurfaceContentRowSlot],
+      headerRect: Option[LayoutRect]
+  )
+
   def panelRectFor(surface: UiSurface, calculatedLayout: CalculatedLayout): Option[LayoutRect] =
     surface.presentation match
       case SurfacePresentation.Pinned(position, _) =>
@@ -367,59 +374,54 @@ object EditorLayoutContract:
       InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows,
       math.ceil(math.max(0.0, state.config.uiElementGap)).toInt
     )
-    val panelViews = PinnedPanelViewModel.fromState(state, calculatedLayout)
-    val panelViewsById = panelViews
-      .flatMap(view => view.surfaceId.map(_ -> view))
+    val panelGeometryById = (state.pinnedSurfaces ++ state.uiSurfaces.filter {
+      _.presentation match
+        case SurfacePresentation.Expanded(_, _) => true
+        case _                                  => false
+    }).flatMap { surface =>
+      panelRectFor(surface, calculatedLayout).map(rect => surface.id -> pinnedGeometry(surface, rect, state))
+    }
       .toMap
     val pinnedSurfaceIds = calculatedLayout.pinnedSurfaceRects.keySet
     val pinnedSurfaceTitleRects = pinnedSurfaceIds.toList
-      .flatMap(surfaceId => panelViewsById.get(surfaceId).map(view => surfaceId -> view.titleRect))
+      .flatMap(surfaceId => panelGeometryById.get(surfaceId).map(geometry => surfaceId -> geometry.titleRect))
       .toMap
     val pinnedSurfaceContentRects = pinnedSurfaceIds.toList
-      .flatMap(surfaceId => panelViewsById.get(surfaceId).map(view => surfaceId -> view.resolvedContentRect))
+      .flatMap(surfaceId => panelGeometryById.get(surfaceId).map(geometry => surfaceId -> geometry.contentRect))
       .toMap
     val pinnedSurfaceRowSlots = pinnedSurfaceIds.toList
-      .flatMap(surfaceId => panelViewsById.get(surfaceId).map(view => surfaceId -> view.contentRowSlots))
+      .flatMap(surfaceId => panelGeometryById.get(surfaceId).map(geometry => surfaceId -> geometry.rowSlots))
       .toMap
     val expandedSurfaceRects = state.expandedPanelSurface.toList.flatMap { surface =>
       calculatedLayout.expandedPanelRect.map(rect => surface.id -> rect)
     }.toMap
     val expandedSurfaceIds = expandedSurfaceRects.keySet.toList
     val expandedSurfaceTitleRects = expandedSurfaceIds
-      .flatMap(surfaceId => panelViewsById.get(surfaceId).map(view => surfaceId -> view.titleRect))
+      .flatMap(surfaceId => panelGeometryById.get(surfaceId).map(geometry => surfaceId -> geometry.titleRect))
       .toMap
     val expandedSurfaceContentRects = expandedSurfaceIds
-      .flatMap(surfaceId => panelViewsById.get(surfaceId).map(view => surfaceId -> view.resolvedContentRect))
+      .flatMap(surfaceId => panelGeometryById.get(surfaceId).map(geometry => surfaceId -> geometry.contentRect))
       .toMap
     val expandedSurfaceRowSlots = expandedSurfaceIds
-      .flatMap(surfaceId => panelViewsById.get(surfaceId).map(view => surfaceId -> view.contentRowSlots))
-      .toMap
-    val overlayViews         = OverlayViewModel.fromState(state, calculatedLayout)
-    val floatingOverlayViews = overlayViews.aboveCursor.toList ++ overlayViews.belowCursorStack
-    val overlayViewsById = floatingOverlayViews
-      .flatMap(view => view.surfaceId.map(_ -> view))
+      .flatMap(surfaceId => panelGeometryById.get(surfaceId).map(geometry => surfaceId -> geometry.rowSlots))
       .toMap
     val aboveCursorOverlayRects = calculatedLayout.aboveCursorOverlayStack
     val belowCursorOverlayRects = calculatedLayout.belowCursorOverlayStack
     val floatingOverlayRects    = aboveCursorOverlayRects ++ belowCursorOverlayRects
+    val floatingGeometryById = floatingOverlayRects.flatMap {
+      case (surfaceId, frameRect) =>
+        state.surfaceById(surfaceId).flatMap(surface => floatingGeometry(surface, frameRect, state, calculatedLayout))
+          .map(surfaceId -> _)
+    }.toMap
     val floatingOverlayContentRects = floatingOverlayRects.flatMap {
       case (surfaceId, _) =>
-        overlayViewsById.get(surfaceId).map(view => surfaceId -> view.resolvedContentRect)
+        floatingGeometryById.get(surfaceId).map(geometry => surfaceId -> geometry.contentRect)
     }
-    val floatingOverlayHeaderRects = floatingOverlayViews.flatMap { view =>
-      view.surfaceId.flatMap { surfaceId =>
-        Option.when(view.header.nonEmpty && view.resolvedContentRect.height > 0)(
-          surfaceId -> LayoutRect(
-            view.resolvedContentRect.x,
-            view.resolvedContentRect.y,
-            view.resolvedContentRect.width,
-            1
-          )
-        )
-      }
-    }.toMap
-    val floatingOverlayRowSlots = floatingOverlayViews
-      .flatMap(view => view.surfaceId.map(_ -> view.contentRowSlots))
+    val floatingOverlayHeaderRects = floatingGeometryById.flatMap {
+      case (surfaceId, geometry) => geometry.headerRect.map(surfaceId -> _)
+    }
+    val floatingOverlayRowSlots = floatingGeometryById
+      .map((surfaceId, geometry) => surfaceId -> geometry.rowSlots)
       .toMap
     EditorLayoutContract(
       viewportRect = viewportRect,
@@ -447,3 +449,88 @@ object EditorLayoutContract:
       floatingOverlayHeaderRects = floatingOverlayHeaderRects,
       floatingOverlayRowSlots = floatingOverlayRowSlots
     )
+
+  private def pinnedGeometry(surface: UiSurface, frameRect: LayoutRect, state: AppState): SurfaceGeometry =
+    val resolved = surface.content match
+      case SurfaceContent.MarkdownPreview(bufferId, title) =>
+        val content = state.buffers.get(bufferId).map(_.content.collect()).getOrElse("")
+        SurfaceContentResolver.resolveMarkdownPreview(title, content, frameRect, SurfaceRenderMode.Pinned)
+      case SurfaceContent.Outline(symbols, activeLocation) =>
+        val resolvedOutline = SurfaceContent.Outline(
+          symbols,
+          activeLocation.orElse(state.activeCursorPosition.flatMap(cursor =>
+            com.serenity.document.DocumentNavigation.currentSymbol(symbols, cursor).map(_.location)
+          ))
+        )
+        SurfaceContentResolver.resolve(resolvedOutline, frameRect, SurfaceRenderMode.Pinned)
+      case content =>
+        SurfaceContentResolver.resolve(content, frameRect, SurfaceRenderMode.Pinned)
+    surfaceGeometry(surface.content, frameRect, resolved, itemGapRows = 0.0)
+
+  private def floatingGeometry(
+      surface: UiSurface,
+      frameRect: LayoutRect,
+      state: AppState,
+      calculatedLayout: CalculatedLayout
+  ): Option[SurfaceGeometry] =
+    val collapsed = calculatedLayout.collapsedFloatingSurfaceIds.contains(surface.id)
+    val geometryFrame = surface.content match
+      case SurfaceContent.GhostOverlay(_, cachedRect) => cachedRect
+      case _                                          => frameRect
+    val resolved =
+      if collapsed then collapsedFloatingContent(surface.content)
+      else surface.content match
+        case SurfaceContent.ContextualToolbar(toolbarState) =>
+          SurfaceContentResolver.resolveContextualToolbar(toolbarState, state, geometryFrame, SurfaceRenderMode.Floating)
+        case SurfaceContent.GhostOverlay(originalContent, _) =>
+          SurfaceContentResolver.resolve(originalContent, geometryFrame, SurfaceRenderMode.Floating, itemGapRowsFor(originalContent, state))
+        case content =>
+          SurfaceContentResolver.resolve(content, geometryFrame, SurfaceRenderMode.Floating, itemGapRowsFor(content, state))
+    Option.when(resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty)(
+      surfaceGeometry(surface.content, geometryFrame, resolved, itemGapRowsFor(surface.content, state))
+    )
+
+  private def surfaceGeometry(
+      content: SurfaceContent,
+      frameRect: LayoutRect,
+      resolved: ResolvedSurfaceContent,
+      itemGapRows: Double
+  ): SurfaceGeometry =
+    val contentRect = SurfaceFrameLayout.forContent(frameRect, content).contentRect
+    SurfaceGeometry(
+      titleRect = LayoutRect(contentRect.x, frameRect.y, contentRect.width, 1),
+      contentRect = contentRect,
+      rowSlots = SurfaceFrameLayout.contentRowSlotsFor(
+        contentRect,
+        resolved.rows.length,
+        resolved.header.nonEmpty,
+        resolved.footer.nonEmpty,
+        itemGapRows
+      ),
+      headerRect = Option.when(resolved.header.nonEmpty && contentRect.height > 0)(
+        LayoutRect(contentRect.x, contentRect.y, contentRect.width, 1)
+      )
+    )
+
+  private def collapsedFloatingContent(content: SurfaceContent): ResolvedSurfaceContent =
+    content match
+      case SurfaceContent.CommandPalette(runner) =>
+        val label = runner.selectedItem match
+          case Some(group: com.serenity.command.CommandSurfaceItem.GroupItem) => group.label
+          case Some(item)                                                     => item.searchText
+          case None                                                           => "commands"
+        ResolvedSurfaceContent(rows = List(OverlayRow(label)))
+      case other =>
+        SurfaceContentResolver.resolve(other, LayoutRect(0, 0, 80, 3), SurfaceRenderMode.Floating)
+
+  private def itemGapRowsFor(content: SurfaceContent, state: AppState): Double =
+    content match
+      case SurfaceContent.CommandPalette(_) |
+          SurfaceContent.CommandPaletteSubmenu(_, _, _) |
+          SurfaceContent.ContextMenu(_) =>
+        state.config.commandRunnerItemGapRows
+      case SurfaceContent.ContextualToolbar(_) =>
+        state.config.uiElementGap
+      case SurfaceContent.GhostOverlay(originalContent, _) =>
+        itemGapRowsFor(originalContent, state)
+      case _ => 0.0
