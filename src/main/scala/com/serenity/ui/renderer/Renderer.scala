@@ -1747,7 +1747,8 @@ object Renderer:
                     if visualLineFits(lineRect, index, context, snapshot) =>
                   snapshot.visualLines.lift(index).foreach { visualLine =>
                     val lineTopPx = visualLineTopPx(lineRect, index, context, snapshot)
-                    val rendersLineNumber = shouldRenderLineNumberForVisualLine(visualLine, state.config.wordWrapEnabled)
+                    val rendersLineNumber =
+                      shouldRenderLineNumberForVisualLine(visualLine, state.config.wordWrapEnabled)
                     val lineNumberText =
                       if rendersLineNumber then
                         val numberWidth = math.max(1, lineRect.width - 1)
