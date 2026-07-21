@@ -93,16 +93,19 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     val expectedFrames = scene.calculatedLayout.belowCursorOverlayStack
 
     scene.floating.map(_.id) shouldBe expectedFrames.map((surfaceId, _) => SceneNodeId.Surface(surfaceId))
-    scene.floating.zip(expectedFrames).foreach { case (node, (_, frame)) =>
-      val surfaceId = node.id match
-        case SceneNodeId.Surface(id) => id
-        case _                       => fail("expected floating surface node")
-      node.frameRect shouldBe frame
-      node.contentRect shouldBe SurfaceFrameLayout.forContent(
-        frame,
-        state.surfaceById(surfaceId).getOrElse(fail("expected surface")).content
-      ).contentRect
-      node.hitRegions.foreach(region => node.frameRect.containsRect(region.rect) shouldBe true)
+    scene.floating.zip(expectedFrames).foreach {
+      case (node, (_, frame)) =>
+        val surfaceId = node.id match
+          case SceneNodeId.Surface(id) => id
+          case _                       => fail("expected floating surface node")
+        node.frameRect shouldBe frame
+        node.contentRect shouldBe SurfaceFrameLayout
+          .forContent(
+            frame,
+            state.surfaceById(surfaceId).getOrElse(fail("expected surface")).content
+          )
+          .contentRect
+        node.hitRegions.foreach(region => node.frameRect.containsRect(region.rect) shouldBe true)
     }
   }
 
