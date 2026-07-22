@@ -1,7 +1,7 @@
 package com.serenity
 
 import java.awt.Rectangle
-import javax.accessibility.AccessibleRole
+import javax.accessibility.{AccessibleRole, AccessibleState}
 import javax.swing.JPanel
 
 import com.serenity.ui.accessibility.{
@@ -41,4 +41,5 @@ class SwingWindowAccessibilitySpec extends AnyFlatSpec with Matchers:
     child.asInstanceOf[java.awt.Component].getName shouldBe "surface:runner/item:open-settings"
     child.asInstanceOf[java.awt.Component].getBounds shouldBe new Rectangle(2, 3, 20, 2)
     child.getAccessibleContext.getAccessibleDescription should include("selected=true")
+    child.getAccessibleContext.getAccessibleStateSet.contains(AccessibleState.FOCUSED) shouldBe true
   }

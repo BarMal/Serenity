@@ -1,8 +1,8 @@
 package com.serenity.ui.accessibility
 
 import java.awt.Graphics
-import java.util.concurrent.atomic.AtomicReference
-import javax.accessibility.AccessibleContext
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import javax.accessibility.{AccessibleContext, AccessibleState, AccessibleStateSet}
 import javax.swing.{JComponent, JLabel, JPanel, JTextArea, JTextField, JToggleButton}
 
 import com.serenity.ui.layout.CellMetrics
@@ -52,8 +52,8 @@ final class SwingAccessibilityBridge(canvas: JComponent):
     canvas.revalidate()
     canvas.repaint()
 
-  private def proxyFor(node: AccessibleNode): JComponent =
-    val component: JComponent =
+  private def proxyFor(node: AccessibleNode): JComponent & SemanticFocusProxy =
+    val component: JComponent & SemanticFocusProxy =
       node.role match
         case AccessibilityRole.Document =>
           val document = new TransparentTextArea
@@ -74,6 +74,7 @@ final class SwingAccessibilityBridge(canvas: JComponent):
           status
         case AccessibilityRole.Dialog | AccessibilityRole.Panel => new TransparentPanel
     component.setFocusable(false)
+    component.setSemanticFocused(node.focused)
     component.setOpaque(false)
     component
 
@@ -107,27 +108,78 @@ final class SwingAccessibilityBridge(canvas: JComponent):
       List(focus, status).flatten
     }
 
-  private class TransparentPanel extends JPanel:
+  private trait SemanticFocusProxy:
+    private val semanticallyFocused = AtomicBoolean(false)
+
+    final def setSemanticFocused(focused: Boolean): Unit = semanticallyFocused.set(focused)
+
+    final protected def withSemanticFocus(states: AccessibleStateSet): AccessibleStateSet =
+      if semanticallyFocused.get then
+        states.add(AccessibleState.FOCUSED)
+        ()
+      states
+
+  private class TransparentPanel extends JPanel with SemanticFocusProxy:
+
+    override def getAccessibleContext: AccessibleContext =
+      if accessibleContext == null then
+        accessibleContext = new AccessibleJPanel:
+          override def getAccessibleStateSet: AccessibleStateSet =
+            TransparentPanel.this.withSemanticFocus(super.getAccessibleStateSet)
+      accessibleContext
+
     override def contains(x: Int, y: Int): Boolean                  = false
     override protected def paintComponent(graphics: Graphics): Unit = ()
     override protected def paintBorder(graphics: Graphics): Unit    = ()
 
-  private class TransparentLabel extends JLabel:
+  private class TransparentLabel extends JLabel with SemanticFocusProxy:
+
+    override def getAccessibleContext: AccessibleContext =
+      if accessibleContext == null then
+        accessibleContext = new AccessibleJLabel:
+          override def getAccessibleStateSet: AccessibleStateSet =
+            TransparentLabel.this.withSemanticFocus(super.getAccessibleStateSet)
+      accessibleContext
+
     override def contains(x: Int, y: Int): Boolean                  = false
     override protected def paintComponent(graphics: Graphics): Unit = ()
     override protected def paintBorder(graphics: Graphics): Unit    = ()
 
-  private class TransparentTextArea extends JTextArea:
+  private class TransparentTextArea extends JTextArea with SemanticFocusProxy:
+
+    override def getAccessibleContext: AccessibleContext =
+      if accessibleContext == null then
+        accessibleContext = new AccessibleJTextArea:
+          override def getAccessibleStateSet: AccessibleStateSet =
+            TransparentTextArea.this.withSemanticFocus(super.getAccessibleStateSet)
+      accessibleContext
+
     override def contains(x: Int, y: Int): Boolean                  = false
     override protected def paintComponent(graphics: Graphics): Unit = ()
     override protected def paintBorder(graphics: Graphics): Unit    = ()
 
-  private class TransparentTextField extends JTextField:
+  private class TransparentTextField extends JTextField with SemanticFocusProxy:
+
+    override def getAccessibleContext: AccessibleContext =
+      if accessibleContext == null then
+        accessibleContext = new AccessibleJTextField:
+          override def getAccessibleStateSet: AccessibleStateSet =
+            TransparentTextField.this.withSemanticFocus(super.getAccessibleStateSet)
+      accessibleContext
+
     override def contains(x: Int, y: Int): Boolean                  = false
     override protected def paintComponent(graphics: Graphics): Unit = ()
     override protected def paintBorder(graphics: Graphics): Unit    = ()
 
-  private class TransparentToggleButton extends JToggleButton:
+  private class TransparentToggleButton extends JToggleButton with SemanticFocusProxy:
+
+    override def getAccessibleContext: AccessibleContext =
+      if accessibleContext == null then
+        accessibleContext = new AccessibleJToggleButton:
+          override def getAccessibleStateSet: AccessibleStateSet =
+            TransparentToggleButton.this.withSemanticFocus(super.getAccessibleStateSet)
+      accessibleContext
+
     override def contains(x: Int, y: Int): Boolean                  = false
     override protected def paintComponent(graphics: Graphics): Unit = ()
     override protected def paintBorder(graphics: Graphics): Unit    = ()
