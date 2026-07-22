@@ -1,5 +1,6 @@
 package com.serenity
 
+import com.serenity.config.{AppConfig, HotkeyConfig}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
@@ -8,7 +9,7 @@ import org.scalatest.matchers.should.Matchers
 
 class TabKeyboardShortcutsSpec extends AnyFlatSpec with Matchers:
 
-  val translator = new TextEntryTranslator()
+  private val translator = new TextEntryTranslator(AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux")))
 
   behavior of "Tab Management Keyboard Shortcuts"
 

@@ -22,6 +22,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   private val bufferId = BufferId(0)
 
   private val editorState = AppState.initial.copy(
+    config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux")),
     layout = Layout(
       editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
       activeEditorPaneId = Some(paneId)

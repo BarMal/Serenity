@@ -53,10 +53,10 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve a valid keymap when resetting an override would conflict" in {
-    val overridden = HotkeyConfig
-      .forOs("Linux")
+    val findDefault = HotkeyConfig.defaultBindings(HotkeyAction.Find).head
+    val overridden = HotkeyConfig()
       .withBinding(HotkeyAction.Find, "ctrl+alt+f")
-      .withBinding(HotkeyAction.Replace, "ctrl+f")
+      .withBinding(HotkeyAction.Replace, findDefault)
 
     val reset = overridden.resetBinding(HotkeyAction.Find)
 
