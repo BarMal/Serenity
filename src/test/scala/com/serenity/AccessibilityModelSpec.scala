@@ -88,10 +88,11 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
       focus = Focus.Surface(surfaceId)
     )
 
-    val controls = AccessibilitySnapshot.from(state, ViewportSize(40, 7)).nodes.filter(_.id.startsWith("surface:menu/item:"))
+    val controls = AccessibilitySnapshot.from(state, ViewportSize(40, 10)).nodes.filter(_.id.startsWith("surface:menu/item:"))
 
-    controls.map(_.name) shouldBe List("Save As")
+    controls.map(_.name) shouldBe List("Save", "Save As")
     controls.map(_.bounds.y).distinct.size shouldBe controls.size
+    controls.map(_.bounds.height).distinct shouldBe List(2)
     controls.find(_.name == "Save As").exists(_.focused) shouldBe true
   }
 

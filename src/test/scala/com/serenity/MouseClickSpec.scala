@@ -264,7 +264,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(0), y) => y }
       .getOrElse(fail("Expected first context menu item row"))
 
-    sm.applyEvent(MouseClick(contentRect.x + 1, firstItemRow + 1)).unsafeRunSync()
+    sm.applyEvent(MouseClick(contentRect.x + 1, firstItemRow + 2)).unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.contextMenuSurface shouldBe Some(surface)

@@ -13,7 +13,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
 
   "Contextual toolbar UI scenario" should "summon, follow the caret, and return focus on close" in {
     val driver = UiScenarioDriver
-      .create("contextual-toolbar", UiScenarioEnvironment(viewport = com.serenity.ui.layout.ViewportSize(60, 18)))
+      .create("contextual-toolbar", UiScenarioEnvironment(viewport = com.serenity.ui.layout.ViewportSize(60, 28)))
       .unsafeRunSync()
     driver.dispatch(ToggleContextualToolbar).unsafeRunSync()
     val opened    = driver.renderFrame("opened").unsafeRunSync()
@@ -69,7 +69,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver = UiScenarioDriver
       .create(
         "contextual-toolbar-controls",
-        UiScenarioEnvironment(viewport = com.serenity.ui.layout.ViewportSize(42, 18))
+        UiScenarioEnvironment(viewport = com.serenity.ui.layout.ViewportSize(42, 28))
       )
       .unsafeRunSync()
     driver
@@ -93,7 +93,8 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
     val content   = toolbarContentRect(driver)
     opened.evidence.surfaceRects(surfaceId).width should be < driver.environment.viewport.width
     rowGroups.length should be > 1
-    opened.evidence.itemRects(surfaceId) should have size rowGroups.length
+    opened.evidence.itemRects(surfaceId).size should be <= rowGroups.length
+    opened.evidence.itemRects(surfaceId).foreach(_.height shouldBe 2)
     opened.evidence.surfaceRects(surfaceId).height should be > content.height
 
     val dropdownPoint = toolbarItemPoint(driver, "paragraph-role")

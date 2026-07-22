@@ -1,7 +1,8 @@
 package com.serenity
 
 import com.serenity.command.CommandRunner
-import com.serenity.state.models.SurfaceContent
+import com.serenity.config.InterfaceDensity
+import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -28,6 +29,23 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
       .forContent(frame, SurfaceContent.CommandPaletteSubmenu(runner, "settings", previewOnly = false))
       .contentRect
       .shouldBe(LayoutRect(11, 5, 38, 6))
+  }
+
+  it should "reserve two rows for contextual menus and toolbars outside compact density" in {
+    val command = com.serenity.command.Command.typed(
+      "new-file",
+      "New file",
+      com.serenity.command.CommandIntent.NewFile,
+      com.serenity.command.CommandCategory.File
+    )
+    val menu = SurfaceContent.ContextMenu(ContextMenu("editor", Focus.EditorPane(PaneId(0)), List(ContextMenuItem("new-file", "New file", command))))
+    val toolbar = SurfaceContent.ContextualToolbar(ContextualToolbarState())
+
+    List(menu, toolbar).foreach { content =>
+      SurfaceFrameLayout.itemTargetRowsFor(content, InterfaceDensity.Compact) shouldBe 1
+      SurfaceFrameLayout.itemTargetRowsFor(content, InterfaceDensity.Comfortable) shouldBe 2
+      SurfaceFrameLayout.itemTargetRowsFor(content, InterfaceDensity.Spacious) shouldBe 2
+    }
   }
 
   it should "calculate visible item rows after header, footer, and reserved detail rows" in {

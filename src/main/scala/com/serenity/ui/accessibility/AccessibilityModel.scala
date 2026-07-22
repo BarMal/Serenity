@@ -178,10 +178,11 @@ object AccessibilitySnapshot:
 
   private def menuControls(surfaceId: SurfaceId, menu: ContextMenu, frameRect: LayoutRect, state: AppState): List[AccessibleNode] =
     val frame = SurfaceFrameLayout.forContent(frameRect, SurfaceContent.ContextMenu(menu))
+    val targetRows = SurfaceFrameLayout.itemTargetRowsFor(SurfaceContent.ContextMenu(menu), state.config.interfaceDensity)
     val window = frame.itemWindow(menu.items.size, menu.selectedIndex, hasHeader = true, hasFooter = menu.items.nonEmpty,
-      itemGapRows = state.config.commandRunnerItemGapRows)
+      itemGapRows = state.config.commandRunnerItemGapRows, itemTargetRows = targetRows)
     val bounds = itemBounds(frame, window.rowCount, hasHeader = true, hasFooter = menu.items.nonEmpty,
-      state.config.commandRunnerItemGapRows)
+      state.config.commandRunnerItemGapRows, targetRows)
     window.slice(menu.items).zip(bounds).zipWithIndex.map { case ((item, bound), index) =>
       val selected = window.offset + index == menu.selectedIndex
       AccessibleNode(s"surface:${surfaceId.value}/item:${item.id}", AccessibilityRole.Button, item.label, None, selected,
@@ -213,6 +214,7 @@ object AccessibilitySnapshot:
     state: AppState
   ): List[AccessibleNode] =
     val frame = SurfaceFrameLayout.forContent(frameRect, SurfaceContent.ContextualToolbar(toolbarState))
+    val targetRows = SurfaceFrameLayout.itemTargetRowsFor(SurfaceContent.ContextualToolbar(toolbarState), state.config.interfaceDensity)
     val items = ContextualToolbar.itemsFor(state)
     val normalized = toolbarState.normalized(items)
     val rows = ContextualToolbar.rowGroups(items, frame.contentRect.width.max(1), normalized.displayMode)
@@ -229,7 +231,7 @@ object AccessibilitySnapshot:
         AccessibleNode(s"surface:${surfaceId.value}/item:${item.id}", role, item.label, value,
           absoluteIndex == normalized.focusedIndex,
           state.focus == Focus.Surface(surfaceId) && absoluteIndex == normalized.focusedIndex,
-          LayoutRect(x, frame.contentRect.y + rowIndex, width, 1))
+          LayoutRect(x, frame.contentRect.y + (rowIndex * targetRows), width, targetRows))
       }
     }
 
@@ -242,9 +244,9 @@ object AccessibilitySnapshot:
           state.focus == Focus.Surface(surfaceId) && row.selected, bound)
     }
 
-  private def itemBounds(frame: SurfaceFrameLayout, itemCount: Int, hasHeader: Boolean, hasFooter: Boolean, itemGapRows: Double): List[LayoutRect] =
-    frame.contentRowSlots(itemCount, hasHeader, hasFooter, itemGapRows).collect {
-      case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), y) => LayoutRect(frame.contentRect.x, y, frame.contentRect.width, 1)
+  private def itemBounds(frame: SurfaceFrameLayout, itemCount: Int, hasHeader: Boolean, hasFooter: Boolean, itemGapRows: Double, itemTargetRows: Int = 1): List[LayoutRect] =
+    frame.contentRowSlots(itemCount, hasHeader, hasFooter, itemGapRows, itemTargetRows).collect {
+      case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), y) => LayoutRect(frame.contentRect.x, y, frame.contentRect.width, itemTargetRows)
     }
 
   private def isPinned(presentation: SurfacePresentation): Boolean =

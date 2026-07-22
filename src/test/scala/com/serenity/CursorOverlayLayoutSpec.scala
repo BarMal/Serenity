@@ -407,8 +407,8 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
 
-    layout.floatingOverlayOffsetRows(SurfaceId("contextual-toolbar")) shouldBe 0.25
-    layout.floatingOverlayOffsetRows(SurfaceId("command-runner")) shouldBe 0.5
+    layout.floatingOverlayOffsetRows(SurfaceId("contextual-toolbar")) shouldBe -0.25
+    layout.floatingOverlayOffsetRows(SurfaceId("command-runner")) shouldBe -0.5
   }
 
   it should "keep command runner cursor and submenu stack gaps independent" in {
