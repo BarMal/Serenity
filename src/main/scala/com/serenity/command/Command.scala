@@ -22,6 +22,10 @@ enum CommandCategory:
   case Project
   case Settings
 
+enum CommandRunnerMode:
+  case Palette
+  case Settings
+
 enum PanelKind:
   case Explorer
   case Outline
@@ -29,6 +33,7 @@ enum PanelKind:
   case MarkdownPreview
 
 enum CommandIntent:
+  case OpenSettings
   case SaveCurrentFile
   case SaveCurrentFileAs
   case SaveConfig

@@ -134,6 +134,13 @@ object CommandRegistry:
   /** Default set of editor commands */
   private def defaultCommands: List[Command] = List(
     Command.typed(
+      "open-settings",
+      "Browse, search, inspect, and change application settings.",
+      CommandIntent.OpenSettings,
+      CommandCategory.Settings,
+      label = "Open Settings"
+    ),
+    Command.typed(
       "save",
       "Save the current file.",
       CommandIntent.SaveCurrentFile,

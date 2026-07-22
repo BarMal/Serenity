@@ -395,6 +395,22 @@ final private[manager] class StateManagerEffectHandlers(
 
   private[manager] def interpretCommand(command: Command, state: AppState): IO[Unit] =
     command.intent match
+      case CommandIntent.OpenSettings =>
+        val registry = CommandRegistry.withToggleUI
+        updateState { current =>
+          val opened = AppEventReducer.reduce(com.serenity.keystroke.events.ToggleCommandRunner, current, registry)(using balance).state
+          opened.commandRunnerSurface match
+            case Some(surface) =>
+              surface.content match
+                case SurfaceContent.CommandPalette(runner) =>
+                  opened.copy(uiSurfaces = opened.uiSurfaces.map {
+                    case currentSurface if currentSurface.id == surface.id =>
+                      currentSurface.copy(content = SurfaceContent.CommandPalette(runner.openSettings))
+                    case currentSurface => currentSurface
+                  })
+                case _ => opened
+            case None => opened
+        }
       case CommandIntent.ToggleLineNumbers =>
         updateTextDisplayConfig(config => config.withLineNumbers(!config.showLineNumbers)).void
       case CommandIntent.ToggleGutter =>

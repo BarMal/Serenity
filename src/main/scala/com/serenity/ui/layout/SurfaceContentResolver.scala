@@ -381,7 +381,8 @@ object SurfaceContentResolver:
     mode: SurfaceRenderMode,
     itemGapRows: Double
   ): ResolvedSurfaceContent =
-    if !runner.isActive then ResolvedSurfaceContent(titleFor(mode, "commands"))
+    if runner.isSettingsSurface then resolveSettingsSurface(runner, rect, itemGapRows)
+    else if !runner.isActive then ResolvedSurfaceContent(titleFor(mode, "commands"))
     else
       given com.serenity.command.CommandRegistry = com.serenity.command.CommandRegistry.withToggleUI
       val header =
@@ -459,6 +460,64 @@ object SurfaceContentResolver:
         rows = rows,
         footer = footer
       )
+
+  private def resolveSettingsSurface(
+    runner: com.serenity.command.CommandRunner,
+    rect: LayoutRect,
+    itemGapRows: Double
+  ): ResolvedSurfaceContent =
+    val items = runner.settingsSurfaceItems
+    val selectedIndex = runner.settingsSurfaceSelectedIndex
+    val itemWindow = SurfaceFrameLayout
+      .forContent(rect, SurfaceContent.CommandPalette(runner))
+      .itemWindow(
+        itemCount = items.size,
+        selectedIndex = selectedIndex,
+        hasHeader = true,
+        hasFooter = true,
+        itemGapRows = itemGapRows
+      )
+    val rows = itemWindow.slice(items).zipWithIndex.map {
+      case (CommandSurfaceItem.CommandItem(command), index) =>
+        commandRow(command, index == itemWindow.adjustedSelectedIndex(selectedIndex), binding = runner.bindingFor(command))
+      case (option: CommandSurfaceItem.OptionItem, index) =>
+        optionRow(option, index == itemWindow.adjustedSelectedIndex(selectedIndex))
+      case (item: CommandSurfaceItem.InputItem, index) =>
+        val editingText = runner.activeSubmenu.filter(_.editingItemId.contains(item.id)).map(_.editingText)
+        inputRow(item, index == itemWindow.adjustedSelectedIndex(selectedIndex), editingText)
+      case (item: CommandSurfaceItem.SettingSearchItem, index) =>
+        OverlayRow(
+          plainText = item.label,
+          selected = index == itemWindow.adjustedSelectedIndex(selectedIndex),
+          segments = List(
+            OverlaySegment(item.label),
+            OverlaySegment(item.effectiveValue.getOrElse("")),
+            OverlaySegment(item.sourceScope),
+            OverlaySegment(item.breadcrumb)
+          ).filterNot(_.text.isEmpty),
+          layout = OverlayRowLayout.Columns
+        )
+      case (group: CommandSurfaceItem.GroupItem, index) =>
+        OverlayRow(
+          plainText = group.label,
+          selected = index == itemWindow.adjustedSelectedIndex(selectedIndex),
+          segments = List(OverlaySegment(group.label), OverlaySegment(group.hint.getOrElse(""))).filterNot(_.text.isEmpty),
+          layout = OverlayRowLayout.Columns
+        )
+    }
+    val searchTerm = runner.activeSubmenu.fold(runner.searchTerm)(_.searchTerm)
+    ResolvedSurfaceContent(
+      title = Some("Settings"),
+      header = Some(breadcrumbHeader(runner.settingsSurfaceBreadcrumbLabels, Option.when(searchTerm.nonEmpty)(searchTerm))),
+      rows = rows,
+      footer = runner.statusMessage.map(OverlayRow(_)).orElse(
+        Some(
+          OverlayRow(
+            s"↑↓ navigate • Enter open • Backspace back • Esc dismiss • ${selectedIndex + 1}/${items.length.max(1)}"
+          )
+        )
+      )
+    )
 
   private def commandPaletteFooter(runner: com.serenity.command.CommandRunner, itemCount: Int): String =
     val submitAction = runner.selectedItem match

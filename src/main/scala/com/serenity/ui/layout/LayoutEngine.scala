@@ -818,6 +818,8 @@ object LayoutEngine:
       case SurfaceContent.DirectoryListing(_, entries, _) => math.max(4, math.min(6, entries.take(4).size + 2))
       case SurfaceContent.DirectoryTree(tree, _) =>
         math.max(4, math.min(8, DirectoryTreeData.visibleRows(tree).size + 2))
+      case SurfaceContent.CommandPalette(runner) if runner.isSettingsSurface =>
+        math.min(commandMaxHeight, math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1))
       case SurfaceContent.CommandPalette(_) =>
         math.min(
           commandMaxHeight,

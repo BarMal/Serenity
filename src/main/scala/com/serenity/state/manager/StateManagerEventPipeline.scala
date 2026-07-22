@@ -1658,7 +1658,22 @@ final private[manager] class StateManagerEventPipeline(
       val rowSlots = contract.overlayRowSlots(surface.id)
       surface.content match
         case SurfaceContent.CommandPalette(runner) =>
-          commandPaletteCategoryAt(event, contentRect, contract.overlayHeaderRect(surface.id), runner.searchTerm)
+          if runner.isSettingsSurface then
+            overlayItemIndex(
+              event,
+              state,
+              layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
+              contentRect,
+              rowSlots,
+              runner.settingsSurfaceItems.length,
+              runner.settingsSurfaceSelectedIndex,
+              hasHeader = true,
+              hasFooter = true,
+              itemGapRows = state.config.commandRunnerItemGapRows
+            ).map { index =>
+              if runner.activeSubmenu.nonEmpty then RunnerSelectSubmenuItem(index) else RunnerSelectVisibleItem(index)
+            }
+          else commandPaletteCategoryAt(event, contentRect, contract.overlayHeaderRect(surface.id), runner.searchTerm)
             .map(RunnerSelectCategory(_))
             .orElse(
               overlayItemIndex(
