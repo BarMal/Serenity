@@ -29,9 +29,11 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
 
   "Settings surface" should "show peer categories and search leaves with their current values and paths" in {
     given CommandRegistry = registry
-    val runner = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val runner            = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
 
-    runner.settingsSurfaceItems.collect { case group: CommandSurfaceItem.GroupItem => group.label } should contain allOf (
+    runner.settingsSurfaceItems.collect {
+      case group: CommandSurfaceItem.GroupItem => group.label
+    } should contain allOf (
       "Prose & Documents",
       "Code & IDE",
       "Terminal & Workspace",
@@ -40,7 +42,8 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
     )
 
     val searched = runner.updateSettingsSearch("default document")
-    val result = searched.settingsSurfaceItems.collectFirst { case item: CommandSurfaceItem.SettingSearchItem => item }
+    val result = searched.settingsSurfaceItems
+      .collectFirst { case item: CommandSurfaceItem.SettingSearchItem => item }
       .getOrElse(fail("Expected matching setting"))
     result.effectiveValue shouldBe Some("Plain Text")
     result.breadcrumb should include("Prose & Documents")
@@ -98,13 +101,14 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
     resolved.title shouldBe Some("Settings")
     resolved.header.map(_.plainText) shouldBe Some("Settings > Appearance & Motion > Surface Appearance")
     resolved.rows.exists(_.cursorColumn.nonEmpty) shouldBe true
-    resolved.footer.map(_.plainText) should contain("Back")
+    resolved.footer.map(_.plainText).getOrElse(fail("Expected settings footer")) should include("Back")
   }
 
   it should "describe the selected group, option, and input action in its footer" in {
-    val root = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val root   = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
     val option = root.copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance")))
-    val input = option.copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance", selectedIndex = 4)))
+    val input =
+      option.copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance", selectedIndex = 4)))
     val editing = input.copy(
       activeSubmenu = input.activeSubmenu.map(_.copy(editingItemId = Some("blur-radius"), editingText = "1"))
     )
@@ -134,8 +138,10 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected settings footer"))
 
   private def runnerFrom(state: AppState): CommandRunner =
-    state.commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(runner) => Some(runner)
-        case _                                     => None
-    }.getOrElse(fail("Expected settings surface"))
+    state.commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(runner) => Some(runner)
+          case _                                     => None
+      }
+      .getOrElse(fail("Expected settings surface"))

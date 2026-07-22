@@ -466,7 +466,7 @@ object SurfaceContentResolver:
     rect: LayoutRect,
     itemGapRows: Double
   ): ResolvedSurfaceContent =
-    val items = runner.settingsSurfaceItems
+    val items         = runner.settingsSurfaceItems
     val selectedIndex = runner.settingsSurfaceSelectedIndex
     val itemWindow = SurfaceFrameLayout
       .forContent(rect, SurfaceContent.CommandPalette(runner))
@@ -479,7 +479,11 @@ object SurfaceContentResolver:
       )
     val rows = itemWindow.slice(items).zipWithIndex.map {
       case (CommandSurfaceItem.CommandItem(command), index) =>
-        commandRow(command, index == itemWindow.adjustedSelectedIndex(selectedIndex), binding = runner.bindingFor(command))
+        commandRow(
+          command,
+          index == itemWindow.adjustedSelectedIndex(selectedIndex),
+          binding = runner.bindingFor(command)
+        )
       case (option: CommandSurfaceItem.OptionItem, index) =>
         optionRow(option, index == itemWindow.adjustedSelectedIndex(selectedIndex))
       case (item: CommandSurfaceItem.InputItem, index) =>
@@ -501,23 +505,27 @@ object SurfaceContentResolver:
         OverlayRow(
           plainText = group.label,
           selected = index == itemWindow.adjustedSelectedIndex(selectedIndex),
-          segments = List(OverlaySegment(group.label), OverlaySegment(group.hint.getOrElse(""))).filterNot(_.text.isEmpty),
+          segments =
+            List(OverlaySegment(group.label), OverlaySegment(group.hint.getOrElse(""))).filterNot(_.text.isEmpty),
           layout = OverlayRowLayout.Columns
         )
     }
-    val searchTerm = runner.activeSubmenu.fold(runner.searchTerm)(_.searchTerm)
+    val searchTerm     = runner.activeSubmenu.fold(runner.searchTerm)(_.searchTerm)
     val selectedAction = settingsSurfaceSelectedAction(runner, items.lift(selectedIndex))
     ResolvedSurfaceContent(
       title = Some("Settings"),
-      header = Some(breadcrumbHeader(runner.settingsSurfaceBreadcrumbLabels, Option.when(searchTerm.nonEmpty)(searchTerm))),
+      header =
+        Some(breadcrumbHeader(runner.settingsSurfaceBreadcrumbLabels, Option.when(searchTerm.nonEmpty)(searchTerm))),
       rows = rows,
-      footer = runner.statusMessage.map(OverlayRow(_)).orElse(
-        Some(
-          OverlayRow(
-            s"Navigate • $selectedAction • Back • Dismiss • ${selectedIndex + 1}/${items.length.max(1)}"
+      footer = runner.statusMessage
+        .map(OverlayRow(_))
+        .orElse(
+          Some(
+            OverlayRow(
+              s"Navigate • $selectedAction • Back • Dismiss • ${selectedIndex + 1}/${items.length.max(1)}"
+            )
           )
         )
-      )
     )
 
   private def settingsSurfaceSelectedAction(
@@ -526,7 +534,7 @@ object SurfaceContentResolver:
   ): String =
     selectedItem match
       case Some(_: CommandSurfaceItem.GroupItem) | Some(_: CommandSurfaceItem.SettingSearchItem) => "Open"
-      case Some(_: CommandSurfaceItem.OptionItem)                                                  => "Apply"
+      case Some(_: CommandSurfaceItem.OptionItem)                                                => "Apply"
       case Some(item: CommandSurfaceItem.InputItem) =>
         if runner.activeSubmenu.exists(_.editingItemId.contains(item.id)) then "Save" else "Edit"
       case Some(_: CommandSurfaceItem.CommandItem) => "Run"

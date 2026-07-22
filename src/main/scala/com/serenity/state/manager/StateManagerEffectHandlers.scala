@@ -398,7 +398,9 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.OpenSettings =>
         val registry = CommandRegistry.withToggleUI
         updateState { current =>
-          val opened = AppEventReducer.reduce(com.serenity.keystroke.events.ToggleCommandRunner, current, registry)(using balance).state
+          val opened = AppEventReducer
+            .reduce(com.serenity.keystroke.events.ToggleCommandRunner, current, registry)(using balance)
+            .state
           opened.commandRunnerSurface match
             case Some(surface) =>
               surface.content match

@@ -112,15 +112,17 @@ case class CommandRunner(
 
   private lazy val settingsSurfaceGroups: List[CommandSurfaceItem.GroupItem] =
     val labels = Map(
-      "settings-workspace-layout" -> "Terminal & Workspace",
-      "settings-document-writing" -> "Prose & Documents",
-      "settings-editor-view" -> "Code & IDE",
+      "settings-workspace-layout"  -> "Terminal & Workspace",
+      "settings-document-writing"  -> "Prose & Documents",
+      "settings-editor-view"       -> "Code & IDE",
       "settings-appearance-motion" -> "Appearance & Motion"
     )
     val motionAccessibilityItems = settingsGroups
       .find(_.id == "settings-appearance-motion")
       .toList
-      .flatMap(_.children.collect { case group: CommandSurfaceItem.GroupItem if group.id == "settings-animation" => group })
+      .flatMap(_.children.collect {
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-animation" => group
+      })
       .flatMap(_.children.collect { case item if item.id == "motion-accessibility" => item })
     val accessibility = CommandSurfaceItem.GroupItem(
       id = "settings-accessibility",

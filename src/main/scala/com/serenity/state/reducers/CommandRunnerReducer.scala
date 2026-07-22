@@ -570,17 +570,18 @@ object CommandRunnerReducer:
     val baseSurfaces  = state.uiSurfaces.filterNot(_.id == SubmenuSurfaceId)
     val mainSurfaceId = state.commandRunnerSurface.map(_.id).getOrElse(SurfaceId("command-runner"))
     if runner.isSettingsSurface then state.copy(uiSurfaces = baseSurfaces, focus = Focus.Surface(mainSurfaceId))
-    else runner.previewOrFocusedGroupId match
-      case Some(groupId) =>
-        val submenuSurface = UiSurface(
-          id = SubmenuSurfaceId,
-          content = SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly = runner.activeSubmenu.isEmpty),
-          presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
-        )
-        state.copy(
-          uiSurfaces = baseSurfaces :+ submenuSurface,
-          focus =
-            if runner.activeSubmenu.isDefined then Focus.Surface(SubmenuSurfaceId) else Focus.Surface(mainSurfaceId)
-        )
-      case None =>
-        state.copy(uiSurfaces = baseSurfaces, focus = Focus.Surface(mainSurfaceId))
+    else
+      runner.previewOrFocusedGroupId match
+        case Some(groupId) =>
+          val submenuSurface = UiSurface(
+            id = SubmenuSurfaceId,
+            content = SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly = runner.activeSubmenu.isEmpty),
+            presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+          )
+          state.copy(
+            uiSurfaces = baseSurfaces :+ submenuSurface,
+            focus =
+              if runner.activeSubmenu.isDefined then Focus.Surface(SubmenuSurfaceId) else Focus.Surface(mainSurfaceId)
+          )
+        case None =>
+          state.copy(uiSurfaces = baseSurfaces, focus = Focus.Surface(mainSurfaceId))
