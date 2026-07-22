@@ -621,6 +621,18 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     rope.linesIteratorFrom(2).take(2).toVector shouldBe Vector(2 -> "gamma", 3 -> "")
     rope.linesFrom(4, 1) shouldBe Vector.empty
 
+  it should "traverse leaf chunks directly for visible lines and search" in new ChunkedRopeSpecScope:
+    val rope: Rope = Node(
+      Node(new IndexForbiddenLeaf("alpha\nbe"), new IndexForbiddenLeaf("ta\n")),
+      new IndexForbiddenLeaf("\uD83D\uDE42\uD83D\uDE42")
+    )
+
+    rope.linesFrom(1, 2) shouldBe Vector("beta", "\uD83D\uDE42\uD83D\uDE42")
+    rope.searchAll("a\nb") shouldBe List(4)
+    rope.searchAll("\uD83D\uDE42") shouldBe List(11, 13)
+    rope.searchAll("\uD83D\uDE42\uD83D\uDE42\uD83D\uDE42") shouldBe Nil
+    rope.searchAll("aa") shouldBe Nil
+
   trait ChunkedRopeSpecScope:
     given balance: Balance =
       Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
@@ -692,3 +704,7 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
     override def collect(): String =
       throw AssertionError("search should not materialise the whole rope")
+
+  final class IndexForbiddenLeaf(value: String)(using Balance) extends Leaf(value):
+    override def index(i: Int): Option[Char] =
+      throw AssertionError("sequential traversal should not index leaves character by character")

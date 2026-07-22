@@ -80,6 +80,44 @@ trait Rope(using balance: Balance):
     go(List(this))
     sb.toString
 
+  /** Visit the leaf content intersecting a half-open rope range from left to right. */
+  final private[rope] def chunksInRange(startIndex: Int, endIndex: Int): Iterator[(Int, String)] =
+    val start = math.max(0, math.min(startIndex, weight))
+    val end   = math.max(start, math.min(endIndex, weight))
+
+    if start == end then Iterator.empty
+    else
+      Iterator.unfold(List(this -> 0)) { stack =>
+        @tailrec
+        def nextChunk(remaining: List[(Rope, Int)]): Option[((Int, String), List[(Rope, Int)])] =
+          remaining match
+            case Nil => None
+            case (rope, baseOffset) :: tail if baseOffset >= end || baseOffset + rope.weight <= start =>
+              nextChunk(tail)
+            case (node: Node, baseOffset) :: tail =>
+              val rightOffset = baseOffset + node.left.weight
+              nextChunk((node.left -> baseOffset) :: (node.right -> rightOffset) :: tail)
+            case (Leaf(value), baseOffset) :: tail =>
+              val chunkStart = math.max(0, start - baseOffset)
+              val chunkEnd   = math.min(value.length, end - baseOffset)
+              Some((baseOffset + chunkStart, value.substring(chunkStart, chunkEnd)) -> tail)
+            case (other, baseOffset) :: tail =>
+              val chunkStart = math.max(0, start - baseOffset)
+              val chunkEnd   = math.min(other.weight, end - baseOffset)
+              val value      = new StringBuilder(chunkEnd - chunkStart)
+
+              @tailrec
+              def appendIndexed(index: Int): Unit =
+                if index < chunkEnd then
+                  other.index(index).foreach(value.append)
+                  appendIndexed(index + 1)
+
+              appendIndexed(chunkStart)
+              Some((baseOffset + chunkStart, value.toString) -> tail)
+
+        nextChunk(stack)
+      }
+
   override def toString: String = collect()
 
   def slice(startIndex: Int, endIndex: Int): Rope =
@@ -91,19 +129,20 @@ trait Rope(using balance: Balance):
     if start == end then ""
     else
       val value = new StringBuilder(end - start)
-      appendRange(this, start, end, 0, value)
+      chunksInRange(start, end).foreach { case (_, chunk) => value.append(chunk) }
       value.toString
 
   def searchAll(term: String): List[Int] =
     if term.isEmpty || term.length > weight then List.empty
     else
-      @tailrec
-      def findAll(start: Int, acc: List[Int]): List[Int] =
-        if start > weight - term.length then acc.reverse
-        else if matchesAt(start, term) then findAll(start + term.length, start :: acc)
-        else findAll(start + 1, acc)
-
-      findAll(0, List.empty)
+      val prefix = searchPrefixTable(term)
+      chunksInRange(0, weight)
+        .foldLeft((List.empty[Int], 0)) {
+          case ((found, matched), (chunkOffset, chunk)) =>
+            searchChunk(chunk, chunkOffset, term, prefix, matched, found)
+        }
+        ._1
+        .reverse
 
   def lineCount: Int =
     newlineCount + 1
@@ -121,13 +160,8 @@ trait Rope(using balance: Balance):
   def linesIteratorFrom(lineIndex: Int): Iterator[(Int, String)] =
     if lineIndex < 0 || lineIndex > newlineCount then Iterator.empty
     else
-      Iterator.unfold((lineColumnToOffset(lineIndex, 0), lineIndex, false)) {
-        case (_, _, true)                            => None
-        case (_, line, false) if line > newlineCount => None
-        case (offset, line, false) =>
-          val next = lineAt(offset)
-          Some((line -> next.value) -> (next.nextOffset, line + 1, next.isFinalLine))
-      }
+      val initial = LineTraversal(chunksInRange(lineColumnToOffset(lineIndex, 0), weight), "", 0, lineIndex, Nil, false)
+      Iterator.unfold(initial)(nextLine)
 
   /** Resolve a logical line and internal UTF-16 column to the corresponding rope offset. Columns are not grapheme
     * counts; they share the same UTF-16 code-unit contract as Java `String` indexes and `CursorPosition.column`.
@@ -167,42 +201,6 @@ trait Rope(using balance: Balance):
           case _                                        => false
 
     loop(0)
-
-  private def appendRange(
-    rope: Rope,
-    startIndex: Int,
-    endIndex: Int,
-    baseOffset: Int,
-    value: StringBuilder
-  ): Unit =
-    rope match
-      case Leaf(leafValue) =>
-        val leafStart = math.max(0, startIndex - baseOffset)
-        val leafEnd   = math.min(leafValue.length, endIndex - baseOffset)
-        if leafStart < leafEnd then value.append(leafValue.substring(leafStart, leafEnd))
-      case node: Node =>
-        val leftEnd = baseOffset + node.left.weight
-        if startIndex < leftEnd then appendRange(node.left, startIndex, endIndex, baseOffset, value)
-        if endIndex > leftEnd then appendRange(node.right, startIndex, endIndex, leftEnd, value)
-      case other =>
-        appendIndexedRange(other, startIndex - baseOffset, endIndex - baseOffset, value)
-
-  private def appendIndexedRange(
-    rope: Rope,
-    startIndex: Int,
-    endIndex: Int,
-    value: StringBuilder
-  ): Unit =
-    @tailrec
-    def loop(offset: Int): Unit =
-      if offset < endIndex then
-        rope.index(offset) match
-          case Some(char) =>
-            value.append(char)
-            loop(offset + 1)
-          case None => ()
-
-    loop(math.max(0, startIndex))
 
   private def appendLine(rope: Rope, lineIndex: Int, value: StringBuilder): Unit =
     rope match
@@ -247,23 +245,70 @@ trait Rope(using balance: Balance):
 
     loop(0, 0)
 
-  private case class LineRead(value: String, nextOffset: Int, isFinalLine: Boolean)
+  private case class LineTraversal(
+      chunks: Iterator[(Int, String)],
+      chunk: String,
+      chunkIndex: Int,
+      line: Int,
+      fragments: List[String],
+      finished: Boolean
+  )
 
-  private def lineAt(offset: Int): LineRead =
-    val value = new StringBuilder
-
-    @tailrec
-    def loop(index: Int): LineRead =
-      if index >= weight then LineRead(value.toString, index, isFinalLine = true)
+  @tailrec
+  private def nextLine(state: LineTraversal): Option[((Int, String), LineTraversal)] =
+    if state.finished then None
+    else if state.chunkIndex < state.chunk.length then
+      val newlineIndex = state.chunk.indexOf('\n', state.chunkIndex)
+      if newlineIndex >= 0 then
+        val value = (state.chunk.substring(state.chunkIndex, newlineIndex) :: state.fragments).reverse.mkString
+        Some(
+          (state.line -> value) ->
+            state.copy(chunkIndex = newlineIndex + 1, line = state.line + 1, fragments = Nil)
+        )
       else
-        this.index(index) match
-          case Some('\n') => LineRead(value.toString, index + 1, isFinalLine = false)
-          case Some(char) =>
-            value.append(char)
-            loop(index + 1)
-          case None => LineRead(value.toString, index, isFinalLine = true)
+        nextLine(
+          state.copy(
+            chunkIndex = state.chunk.length,
+            fragments = state.chunk.substring(state.chunkIndex) :: state.fragments
+          )
+        )
+    else if state.chunks.hasNext then nextLine(state.copy(chunk = state.chunks.next()._2, chunkIndex = 0))
+    else Some((state.line -> state.fragments.reverse.mkString) -> state.copy(finished = true))
 
-    loop(math.max(0, offset))
+  private def searchChunk(
+    chunk: String,
+    chunkOffset: Int,
+    term: String,
+    prefix: Vector[Int],
+    matched: Int,
+    found: List[Int]
+  ): (List[Int], Int) =
+    @tailrec
+    def scan(index: Int, currentMatch: Int, currentFound: List[Int]): (List[Int], Int) =
+      if index >= chunk.length then (currentFound, currentMatch)
+      else
+        val char          = chunk.charAt(index)
+        val matchedPrefix = fallbackMatch(char, term, prefix, currentMatch)
+        val nextMatch     = if char == term.charAt(matchedPrefix) then matchedPrefix + 1 else 0
+        if nextMatch == term.length then scan(index + 1, 0, chunkOffset + index - term.length + 1 :: currentFound)
+        else scan(index + 1, nextMatch, currentFound)
+
+    scan(0, matched, found)
+
+  @tailrec
+  private def fallbackMatch(char: Char, term: String, prefix: Vector[Int], matched: Int): Int =
+    if matched == 0 || char == term.charAt(matched) then matched
+    else fallbackMatch(char, term, prefix, prefix(matched - 1))
+
+  private def searchPrefixTable(term: String): Vector[Int] =
+    @tailrec
+    def build(index: Int, matched: Int, prefix: Vector[Int]): Vector[Int] =
+      if index >= term.length then prefix
+      else if term.charAt(index) == term.charAt(matched) then build(index + 1, matched + 1, prefix :+ (matched + 1))
+      else if matched > 0 then build(index, prefix(matched - 1), prefix)
+      else build(index + 1, 0, prefix :+ 0)
+
+    build(index = 1, matched = 0, prefix = Vector(0))
 
   private def lineColumnToOffsetIn(rope: Rope, line: Int, column: Int, baseOffset: Int): Int =
     rope match
