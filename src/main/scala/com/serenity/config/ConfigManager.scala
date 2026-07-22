@@ -59,7 +59,7 @@ object ConfigManager:
     // Simple key=value parser for configuration
     val lines = content.split("\n").map(_.trim).filter(_.nonEmpty).filter(!_.startsWith("#"))
 
-    lines.foldLeft(AppConfig.default) { (config, line) =>
+    val parsed = lines.foldLeft(AppConfig.default) { (config, line) =>
       line.split("=", 2) match
         case Array(key, value) =>
           key.trim.toLowerCase match
@@ -200,7 +200,11 @@ object ConfigManager:
                 .flatMap(action =>
                   HotkeyTrigger
                     .parse(value.trim)
-                    .map(trigger => config.withHotkeyConfig(config.hotkeyConfig.withBinding(action, trigger)))
+                    .map(trigger =>
+                      config.withHotkeyConfig(
+                        HotkeyConfig(config.hotkeyConfig.bindings + (action -> List(trigger)))
+                      )
+                    )
                 )
                 .getOrElse(config)
             case keymapKey if keymapKey.startsWith("keymap.editor.") =>
@@ -235,6 +239,10 @@ object ConfigManager:
         case _ =>
           config // Invalid line format, ignore
     }
+
+    HotkeyConfig
+      .fromBindings(parsed.hotkeyConfig.bindings)
+      .fold(_ => parsed.withHotkeyConfig(HotkeyConfig()), parsed.withHotkeyConfig)
 
   /** Generate configuration file content from AppConfig */
   def configToString(config: AppConfig): String =

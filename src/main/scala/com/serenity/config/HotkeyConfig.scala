@@ -188,8 +188,7 @@ case class HotkeyConfig(
     bindings.getOrElse(action, Nil)
 
   def withBinding(action: HotkeyAction, trigger: HotkeyTrigger): HotkeyConfig =
-    if bindings.exists { case (otherAction, triggers) => otherAction != action && triggers.contains(trigger) } then this
-    else copy(bindings = bindings + (action -> List(trigger)))
+    HotkeyConfig.fromBindings(bindings + (action -> List(trigger))).fold(_ => this, identity)
 
   def withBinding(action: HotkeyAction, binding: String): HotkeyConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
@@ -200,10 +199,10 @@ case class HotkeyConfig(
 object HotkeyConfig:
 
   def forOs(osName: String): HotkeyConfig =
-    HotkeyConfig(defaultBindingsFor(osName))
+    HotkeyConfig(validatedBindings(defaultBindingsFor(osName)))
 
   def defaultBindings: Map[HotkeyAction, List[HotkeyTrigger]] =
-    defaultBindingsFor(System.getProperty("os.name", ""))
+    validatedBindings(defaultBindingsFor(System.getProperty("os.name", "")))
 
   def defaultBindingsFor(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
     val primaryModifier =
@@ -263,6 +262,24 @@ object HotkeyConfig:
           "Conflicting hotkey binding '" + trigger.render + "' for " + actions.map(_.configKey).mkString(", ")
       }
 
+  private[config] def fromBindings(bindings: Map[HotkeyAction, List[HotkeyTrigger]]): Either[String, HotkeyConfig] =
+    validate(bindings).map(_ => HotkeyConfig(bindings))
+
+  private def validatedBindings(
+    bindings: Map[HotkeyAction, List[HotkeyTrigger]]
+  ): Map[HotkeyAction, List[HotkeyTrigger]] =
+    fromBindings(bindings).fold(_ => Map.empty, _.bindings)
+
+  private def addNonConflictingDefaults(
+    bindings: Map[HotkeyAction, List[HotkeyTrigger]]
+  ): Map[HotkeyAction, List[HotkeyTrigger]] =
+    defaultBindings.foldLeft(bindings) {
+      case (updated, (action, triggers)) =>
+        val conflicts = triggers.exists(trigger => updated.valuesIterator.flatten.contains(trigger))
+        if updated.contains(action) || conflicts then updated
+        else updated + (action -> triggers)
+    }
+
   given Encoder[HotkeyAction] = Encoder.encodeString.contramap(_.configKey)
 
   given Decoder[HotkeyAction] = Decoder.decodeString.emap { key =>
@@ -293,5 +310,5 @@ object HotkeyConfig:
     }
     decoded.collectFirst { case Left(error) => error } match
       case Some(error) => Left(error)
-      case None        => Right(HotkeyConfig(defaultBindings ++ decoded.collect { case Right(entry) => entry }.toMap))
+      case None        => fromBindings(addNonConflictingDefaults(decoded.collect { case Right(entry) => entry }.toMap))
   }

@@ -1,6 +1,6 @@
 package com.serenity.keystroke.translators
 
-import com.serenity.config.{AppConfig, HotkeyAction}
+import com.serenity.config.{AppConfig, HotkeyAction, HotkeyConfig}
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.*
 
@@ -31,7 +31,13 @@ object TextHotkeyConverters:
   )
 
   def hotkeyConverter(config: AppConfig = AppConfig.default): PartialFunction[KeyStrokeInfo, Event] =
-    val bindings =
-      actionEvents.flatMap((action, event) => config.hotkeyConfig.bindingsFor(action).map(_ -> event))
+    HotkeyConfig
+      .validate(config.hotkeyConfig.bindings)
+      .fold(
+        _ => PartialFunction.empty[KeyStrokeInfo, Event],
+        _ =>
+          val bindings =
+            actionEvents.flatMap((action, event) => config.hotkeyConfig.bindingsFor(action).map(_ -> event))
 
-    Function.unlift(info => bindings.collectFirst { case (trigger, event) if trigger.matches(info) => event })
+          Function.unlift(info => bindings.collectFirst { case (trigger, event) if trigger.matches(info) => event })
+      )
