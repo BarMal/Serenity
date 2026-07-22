@@ -56,6 +56,8 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
     a.index(-1) shouldBe None
     a.index(a.weight + 1) shouldBe None
+    Leaf("x").index(-1) shouldBe None
+    Leaf("x").index(1) shouldBe None
 
   it should "split" in new RopeSpecScope:
     val a: Rope = Rope("Hello, my name is Barney")

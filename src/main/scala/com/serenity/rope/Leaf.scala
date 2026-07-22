@@ -1,7 +1,5 @@
 package com.serenity.rope
 
-import scala.util.Try
-
 case class Leaf(value: String)(using balance: Balance) extends Rope:
   override def weight: Int               = value.length
   override def height: Int               = 1
@@ -17,7 +15,8 @@ case class Leaf(value: String)(using balance: Balance) extends Rope:
     if index < 0 || index > value.length then None
     else Some(Leaf(value.take(index)), Leaf(value.drop(index)))
 
-  override def index(i: Int): Option[Char] = Try(value.charAt(i)).toOption
+  override def index(i: Int): Option[Char] =
+    Option.when(i >= 0 && i < value.length)(value.charAt(i))
 
   override def insert(index: Int, str: String): Rope =
     if index < 0 || index > value.length then this
