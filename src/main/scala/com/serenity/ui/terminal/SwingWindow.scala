@@ -85,7 +85,7 @@ class SwingWindow(
 
   /** Publish the semantic projection of the custom-painted canvas to Swing accessibility clients. */
   def updateAccessibility(snapshot: AccessibilitySnapshot): Unit =
-    val publish: Runnable = () => accessibilityBridge.publish(snapshot)
+    val publish: Runnable = () => accessibilityBridge.publish(snapshot, metrics)
     if SwingUtilities.isEventDispatchThread then publish.run()
     else SwingUtilities.invokeLater(publish)
 
