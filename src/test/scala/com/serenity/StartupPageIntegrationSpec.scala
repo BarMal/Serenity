@@ -45,17 +45,28 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       startPage2 = state2.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       _          = startPage2.selectedIndex shouldBe 2
 
-      // Navigate down once more (should wrap to first option)
+      // Navigate through the workflow actions.
       _      <- stateManager.applyEvent(MoveDown)
       state3 <- stateManager.getCurrentState
       startPage3 = state3.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage3.selectedIndex shouldBe 0
+      _          = startPage3.selectedIndex shouldBe 3
+
+      _      <- stateManager.applyEvent(MoveDown)
+      state4 <- stateManager.getCurrentState
+      startPage4 = state4.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+      _          = startPage4.selectedIndex shouldBe 4
+
+      // Navigate down once more (should wrap to the first option)
+      _      <- stateManager.applyEvent(MoveDown)
+      state5 <- stateManager.getCurrentState
+      startPage5 = state5.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+      _          = startPage5.selectedIndex shouldBe 0
 
       // Navigate up (should wrap to last option)
       _      <- stateManager.applyEvent(MoveUp)
-      state4 <- stateManager.getCurrentState
-      startPage4 = state4.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage4.selectedIndex shouldBe 2
+      state6 <- stateManager.getCurrentState
+      startPage6 = state6.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+      _          = startPage6.selectedIndex shouldBe 4
 
       // Reset to first option and select it (new session)
       _          <- stateManager.applyEvent(MoveDown)

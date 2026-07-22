@@ -9,21 +9,56 @@ import com.serenity.ui.theme.config.ThemeCreatorState
 
 case class SurfaceId(value: String)
 
+/** An executable option displayed on the startup launch surface. */
+case class StartupAction(
+    id: String,
+    label: String,
+    command: Command,
+    shortcut: Option[Char] = None,
+    detail: Option[String] = None
+):
+  def renderedLabel: String =
+    val prefix = shortcut.fold("")(key => s"[$key] ")
+    val suffix = detail.fold("")(value => s"  $value")
+    s"$prefix$label$suffix"
+
 case class StartupPage(
     title: String,
-    options: List[String],
+    options: List[String] = Nil,
     statusMessage: Option[String] = None,
-    selectedIndex: Int = 0
+    selectedIndex: Int = 0,
+    actions: List[StartupAction] = Nil
 ):
 
+  private def legacyActions: List[StartupAction] =
+    options.zipWithIndex.map { case (label, index) =>
+      val (id, command) = index match
+        case 0 => "new-session" -> Command.typed("startup.new-session", "Start a new session", com.serenity.command.CommandIntent.StartupNewSession)
+        case 1 => "restore-session" -> Command.typed("startup.restore-session", "Restore an existing session", com.serenity.command.CommandIntent.StartupRestoreSession)
+        case 2 => "open-file" -> Command.typed("startup.open-file", "Open an existing file or directory", com.serenity.command.CommandIntent.StartupOpenFile)
+        case _ => s"option-$index" -> Command.typed("startup.new-session", "Start a new session", com.serenity.command.CommandIntent.StartupNewSession)
+      StartupAction(id, label, command)
+    }
+
+  def launchActions: List[StartupAction] =
+    if actions.nonEmpty then actions else legacyActions
+
+  def selectedAction: Option[StartupAction] =
+    launchActions.lift(selectedIndex)
+
+  def actionIndexAtRow(row: Int, viewportHeight: Int): Option[Int] =
+    val firstLine = math.max(0, (viewportHeight - renderLines.size) / 2)
+    val actionIndex = row - firstLine - 3
+    Option.when(actionIndex >= 0 && actionIndex < launchActions.size)(actionIndex)
+
   def renderLines: List[String] =
-    val baseLines = List(title, "") ++ options
+    val baseLines = List(title, "Choose a starting point", "") ++ launchActions.map(_.renderedLabel)
     statusMessage match
-      case Some(message) => baseLines ++ List("", message)
-      case None          => baseLines
+      case Some(message) => baseLines ++ List("", message, "", "↑↓ Navigate  •  Enter Select  •  Esc Close")
+      case None          => baseLines ++ List("", "↑↓ Navigate  •  Enter Select  •  Esc Close")
 
   def withSelectedIndex(index: Int): StartupPage =
-    val clampedIndex = if options.isEmpty then 0 else ((index % options.size) + options.size) % options.size
+    val clampedIndex = if launchActions.isEmpty then 0 else ((index % launchActions.size) + launchActions.size) % launchActions.size
     copy(selectedIndex = clampedIndex)
 
   def moveSelectionUp: StartupPage =

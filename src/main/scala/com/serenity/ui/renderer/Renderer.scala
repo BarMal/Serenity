@@ -1249,11 +1249,11 @@ object Renderer:
     val lineHeightPx = math.max(context.cellMetrics.lineHeight, textMetrics.lineHeight)
     val yPx          = centeredBlockTopPx(rect, context.cellMetrics, 1, lineHeightPx)
     context.surface.setFont(context.textFont)
-    context.surface.setForegroundColor(theme.muted)
+    context.surface.setForegroundColor(theme.foreground)
     context.surface.setBackgroundColor(theme.background)
     renderAlignedTextLine(
       surface = context.surface,
-      line = "~ Empty ~",
+      line = "Empty document — start typing",
       rect = rect,
       yPx = yPx,
       font = context.textFont,
@@ -1348,9 +1348,9 @@ object Renderer:
     val totalHeightPx = lines.size * lineHeightPx
     val startYPx      = math.max(0, ((viewportSize.height * cellMetrics.lineHeight) - totalHeightPx) / 2)
 
-    val titleLines       = 2
+    val titleLines       = 3
     val optionStartIndex = titleLines
-    val optionEndIndex   = titleLines + page.options.size - 1
+    val optionEndIndex   = titleLines + page.launchActions.size - 1
 
     lines.zipWithIndex.foreach {
       case (line, lineIndex) =>
@@ -1364,16 +1364,23 @@ object Renderer:
           if isSelected then
             surface.setForegroundColor(theme.highlighted.foreground)
             surface.setBackgroundColor(theme.highlighted.background)
+            val compactWidthPx = math.min(
+              viewportSize.width * cellMetrics.charWidth,
+              (line.length + 4) * cellMetrics.charWidth
+            )
             surface.fillPixelRect(
-              xPx = 0,
+              xPx = math.max(0, ((viewportSize.width * cellMetrics.charWidth) - compactWidthPx) / 2),
               yPx = yPx,
-              widthPx = viewportSize.width * cellMetrics.charWidth,
+              widthPx = compactWidthPx,
               heightPx = lineHeightPx,
               color = theme.highlighted.background
             )
             renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
           else
-            surface.setForegroundColor(theme.placeholder)
+            val foreground =
+              if lineIndex == 0 || isOption then theme.foreground
+              else theme.muted
+            surface.setForegroundColor(foreground)
             surface.setBackgroundColor(theme.background)
             renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
     }

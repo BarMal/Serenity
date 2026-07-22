@@ -454,6 +454,11 @@ final private[manager] class StateManagerEffectHandlers(
         clearSession()
       case CommandIntent.OpenFile =>
         requestOpenFileDialog
+      case CommandIntent.OpenRecentFile(path) =>
+        IO.blocking(java.nio.file.Files.isRegularFile(path) && java.nio.file.Files.isReadable(path)).flatMap {
+          case true  => directLoadFileEffect(path)
+          case false => logger.warn(s"[STARTUP] Recent file is unavailable: $path")
+        }
       case CommandIntent.OpenFileSearch =>
         openFileSearchEffect(state)
       case CommandIntent.ExportCurrentTheme =>

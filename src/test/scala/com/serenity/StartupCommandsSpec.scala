@@ -27,7 +27,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
     ): IO[Option[java.nio.file.Path]] =
       IO.pure(None)
 
-  it should "open the selected native-dialog file when third option (Open file) is selected" in {
+  it should "open the selected native-dialog file when Open file is selected" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val selectedFile = java.nio.file.Files.createTempFile("serenity-startup-open", ".txt")
@@ -40,11 +40,10 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
 
       _ <- AppStartup.initializeState(stateManager, theme, viewportSize)
       _ <- stateManager.applyEvent(MoveDown)
-      _ <- stateManager.applyEvent(MoveDown)
 
       stateAfterNav <- stateManager.getCurrentState
       startPage = stateAfterNav.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _         = startPage.selectedIndex shouldBe 2
+      _         = startPage.selectedIndex shouldBe 1
 
       _          <- stateManager.applyEvent(Enter)
       finalState <- stateManager.getCurrentState
@@ -70,7 +69,6 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
 
       _          <- AppStartup.initializeState(stateManager, theme, viewportSize)
       _          <- stateManager.applyEvent(MoveDown)
-      _          <- stateManager.applyEvent(MoveDown)
       _          <- stateManager.applyEvent(Enter)
       finalState <- stateManager.getCurrentState
     yield
@@ -83,7 +81,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
     program.unsafeRunSync()
   }
 
-  it should "create a default editor session when no saved session exists" in {
+  it should "ignore an unavailable Restore shortcut when no saved session exists" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
@@ -92,21 +90,13 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
       viewportSize = ViewportSize(80, 24)
 
       _ <- AppStartup.initializeState(stateManager, theme, viewportSize)
-      _ <- stateManager.applyEvent(MoveDown)
-
-      stateAfterNav <- stateManager.getCurrentState
-      startPage = stateAfterNav.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _         = startPage.selectedIndex shouldBe 1
-
-      _          <- stateManager.applyEvent(Enter)
+      _          <- stateManager.applyEvent(InsertChar('3'))
       finalState <- stateManager.getCurrentState
     yield
-      finalState.startPageSurface shouldBe None
-      finalState.layout.editorPanes should not be empty
-      finalState.buffers should not be empty
+      finalState.startPageSurface shouldBe defined
       finalState.focus match
-        case Focus.EditorPane(_) => succeed
-        case other               => fail(s"Expected editor pane focus, got $other")
+        case Focus.Surface(_) => succeed
+        case other            => fail(s"Expected startup surface focus, got $other")
 
     program.unsafeRunSync()
   }
