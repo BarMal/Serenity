@@ -38,7 +38,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     pane0Layout shouldBe calculatedLayout.editorPanelRect
   }
 
-  it should "use the full workspace width by default" in {
+  it should "use the full workspace width when no explicit text measure is configured" in {
     val state        = AppState.initial
     val viewportSize = ViewportSize(100, 30)
 
@@ -48,6 +48,16 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     calculatedLayout.rightSpacerRect.width shouldBe 0
     calculatedLayout.lineNumberRect.map(_.width) shouldBe Some(3)
     calculatedLayout.editorPanelRect shouldBe LayoutRect(3, 0, 97, 29)
+  }
+
+  it should "remove single-pane chrome when the selected configuration disables pane headers" in {
+    val state  = AppState.initial.copy(config = AppConfig.default.withPaneHeaders(false))
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val pane   = LayoutEngine.calculateEditorPaneLayouts(state, layout)(PaneId(0))
+
+    pane.headerRect.height shouldBe 0
+    pane.contentRect.y shouldBe layout.editorPanelRect.y
+    pane.contentRect.height shouldBe layout.editorPanelRect.height
   }
 
   it should "expose owned child rectangles for editor pane chrome and content" in {

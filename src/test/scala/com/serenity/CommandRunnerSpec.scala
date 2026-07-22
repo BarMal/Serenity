@@ -733,11 +733,11 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("missing combined preset picker"))
 
     presetPicker.options
-      .map(_.label) shouldBe List("Writing", "Documentation", "Code", "Review", "Drafting", "Research Notes")
+      .map(_.label) shouldBe List("Writing", "Documentation", "Code", "Compact", "Review", "Drafting", "Research Notes")
     presetPicker.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Writing"))
     presetPicker.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Research Notes"))
     presetPicker.options.headOption.flatMap(_.hint) shouldBe Some(
-      "rich text default; dark; subtle motion; typed text reveal; frosted material; frosted background; spacious density; Serif 18pt prose; 1 editor pane; Left outline 28"
+      "rich text default; dark; subtle motion; typed text reveal; frosted material; frosted background; spacious density; Serif 18pt prose; 1 editor pane"
     )
     presetPicker.options.takeRight(2).map(_.hint) shouldBe List(
       Some("Saved workspace setup"),
@@ -929,6 +929,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "Writing",
       "Documentation",
       "Code",
+      "Compact",
       "Review",
       "Drafting",
       "Research Notes"

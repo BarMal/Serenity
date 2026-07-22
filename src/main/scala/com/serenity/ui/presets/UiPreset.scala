@@ -56,7 +56,7 @@ object UiPreset:
     normalizedName(name).toLowerCase(Locale.ROOT)
 
   val builtIns: List[UiPreset] =
-    List(writingPreset, documentationPreset, codePreset, reviewPreset)
+    List(writingPreset, documentationPreset, codePreset, compactPreset, reviewPreset)
 
   def builtInNames: List[String] =
     builtIns.map(_.name)
@@ -241,6 +241,7 @@ object UiPreset:
       config = AppConfig.default
         .withLineNumbers(false)
         .withGutter(false)
+        .withPaneHeaders(false)
         .withMotionPreset(MotionPreset.Subtle)
         .withEditorInsertionTransitionKind(TransitionKind.TypedText)
         .withMaterialPreset(MaterialPreset.Frosted)
@@ -256,7 +257,7 @@ object UiPreset:
         )
         .withCursorInfoBarMode(CursorInfoBarMode.Position),
       themeName = Theme.dark.name,
-      pinnedPanels = List(PinnedPanel(PanelPosition.Left, 28, PanelContentSnapshot.Outline(Nil))),
+      pinnedPanels = Nil,
       targetEditorPaneCount = Some(1)
     )
 
@@ -266,6 +267,7 @@ object UiPreset:
       config = AppConfig.default
         .withLineNumbers(true)
         .withGutter(false)
+        .withPaneHeaders(false)
         .withMotionPreset(MotionPreset.Subtle)
         .withEditorInsertionTransitionKind(TransitionKind.LineAndCharacterTandem)
         .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
@@ -278,7 +280,7 @@ object UiPreset:
           )
         ),
       themeName = Theme.dark.name,
-      pinnedPanels = List(PinnedPanel(PanelPosition.Left, 30, PanelContentSnapshot.Outline(Nil))),
+      pinnedPanels = Nil,
       targetEditorPaneCount = Some(1)
     )
 
@@ -301,6 +303,25 @@ object UiPreset:
           PanelContentSnapshot.DirectoryTree(".", selectedPath = None, expandedPaths = Nil)
         )
       )
+    )
+
+  private def compactPreset: UiPreset =
+    UiPreset(
+      name = "Compact",
+      config = AppConfig.default
+        .withLineNumbers(true)
+        .withGutter(true)
+        .withPaneHeaders(true)
+        .withWordWrap(false)
+        .withContextualToolbarEnabled(false)
+        .withMotionPreset(MotionPreset.Reduced)
+        .withEditorInsertionTransitionKind(TransitionKind.Disabled)
+        .withInterfaceDensity(InterfaceDensity.Compact)
+        .withSyntaxHighlighting(true)
+        .copy(fontConfig = FontConfig()),
+      themeName = Theme.dark.name,
+      pinnedPanels = Nil,
+      targetEditorPaneCount = Some(1)
     )
 
   private def reviewPreset: UiPreset =

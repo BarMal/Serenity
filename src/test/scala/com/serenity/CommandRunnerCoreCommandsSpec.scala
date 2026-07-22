@@ -10,7 +10,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.animation.CharacterKey
 import com.serenity.app.AppStartup
 import com.serenity.command.*
-import com.serenity.config.SpellCheckConfig
+import com.serenity.config.{ConfigManager, SpellCheckConfig}
 import com.serenity.io.{FileDialog, FileUtils}
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
@@ -1456,8 +1456,29 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.config.fontConfig.textFontFamily shouldBe Font.SERIF
     updatedState.config.showLineNumbers shouldBe false
     updatedState.config.showGutter shouldBe false
-    updatedState.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Left, 28))
-    updatedState.pinnedSurfaces.headOption.map(_.content) shouldBe Some(SurfaceContent.Outline(Nil))
+    updatedState.config.showPaneHeaders shouldBe false
+    updatedState.pinnedSurfaces shouldBe Nil
+  }
+
+  it should "persist the selected compact workflow for a later session" in {
+    val configFile   = Files.createTempFile("serenity-compact-workflow", ".conf")
+    val stateManager = createStateManager(configPersistencePath = Some(configFile))
+
+    executeCommandThroughRunner(stateManager, "apply-compact-preset", "apply-compact-preset")
+
+    val updated   = stateManager.getCurrentState.unsafeRunSync().config
+    val persisted = ConfigManager.loadConfig(Some(configFile.toString))
+
+    updated.showLineNumbers shouldBe true
+    updated.showGutter shouldBe true
+    updated.showPaneHeaders shouldBe true
+    updated.wordWrapEnabled shouldBe false
+    updated.contextualToolbarEnabled shouldBe false
+    persisted.showLineNumbers shouldBe updated.showLineNumbers
+    persisted.showGutter shouldBe updated.showGutter
+    persisted.showPaneHeaders shouldBe updated.showPaneHeaders
+    persisted.wordWrapEnabled shouldBe updated.wordWrapEnabled
+    persisted.contextualToolbarEnabled shouldBe updated.contextualToolbarEnabled
   }
 
   it should "focus the left panel from the command runner" in {

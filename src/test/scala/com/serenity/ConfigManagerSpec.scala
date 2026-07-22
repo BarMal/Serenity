@@ -655,6 +655,16 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("display.word_wrap = false")
   }
 
+  it should "load and write pane header display mode" in {
+    val configFile = Files.createTempFile("serenity-pane-header-config", ".conf")
+    Files.writeString(configFile, "display.pane_headers = false\n")
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.showPaneHeaders shouldBe false
+    ConfigManager.configToString(config) should include("display.pane_headers = false")
+  }
+
   it should "load and write focused text body display mode" in {
     val configFile = Files.createTempFile("serenity-focused-body-config", ".conf")
     Files.writeString(

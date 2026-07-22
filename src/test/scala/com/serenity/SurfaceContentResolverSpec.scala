@@ -305,7 +305,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected preset option row"))
 
     row.layout shouldBe OverlayRowLayout.Distributed
-    row.segments.map(_.text) shouldBe List("Writing", "Documentation", "Code", "Review")
+    row.segments.map(_.text) shouldBe List("Writing", "Documentation", "Code", "Compact", "Review")
     row.segments.filter(_.selected).map(_.text) shouldBe List("Writing")
   }
 
@@ -488,7 +488,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     resolved.rows.lastOption.map(_.plainText) shouldBe Some(
-      "Preset Preview Documentation - markdown split preview; dark; subtle motion; tandem text reveal; frosted material; frosted background; comfortable density; SansSerif 14pt prose; 1 editor pane; Left outline 30"
+      "Preset Preview Documentation - markdown split preview; dark; subtle motion; tandem text reveal; frosted material; frosted background; comfortable density; SansSerif 14pt prose; 1 editor pane"
     )
   }
 

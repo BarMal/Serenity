@@ -236,7 +236,6 @@ object InterfaceDensity:
       case _             => None
 
 case class InterfaceDensityMetrics(
-    editorSpacerPercentage: Double,
     gutterHeight: Int,
     overlayGapRows: Int,
     commandSurfaceMaxHeight: Int,
@@ -250,7 +249,6 @@ object InterfaceDensityMetrics:
     density match
       case InterfaceDensity.Compact =>
         InterfaceDensityMetrics(
-          editorSpacerPercentage = 0.08,
           gutterHeight = 1,
           overlayGapRows = 0,
           commandSurfaceMaxHeight = 6,
@@ -259,7 +257,6 @@ object InterfaceDensityMetrics:
         )
       case InterfaceDensity.Comfortable =>
         InterfaceDensityMetrics(
-          editorSpacerPercentage = 0.15,
           gutterHeight = 1,
           overlayGapRows = 1,
           commandSurfaceMaxHeight = 8,
@@ -268,7 +265,6 @@ object InterfaceDensityMetrics:
         )
       case InterfaceDensity.Spacious =>
         InterfaceDensityMetrics(
-          editorSpacerPercentage = 0.22,
           gutterHeight = 2,
           overlayGapRows = 2,
           commandSurfaceMaxHeight = 10,
@@ -896,6 +892,7 @@ case class ViewportSizing(
 case class SurfaceConfig(
     showLineNumbers: Boolean = true,
     showGutter: Boolean = true,
+    showPaneHeaders: Boolean = true,
     wordWrapEnabled: Boolean = true,
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
@@ -1096,6 +1093,8 @@ object SurfaceConfig:
       "ui.render.fps",
       "display.word_wrap",
       "display.word.wrap",
+      "display.pane_headers",
+      "display.pane.headers",
       "display.focused_text_body",
       "display.focused.text.body",
       "display.contextual_toolbar",
@@ -1146,6 +1145,7 @@ object SurfaceConfig:
       "render_fps"                           -> "render.fps",
       "ui_render_fps"                        -> "ui.render.fps",
       "display_word_wrap"                    -> "display.word_wrap",
+      "display_pane_headers"                 -> "display.pane_headers",
       "display_focused_text_body"            -> "display.focused_text_body",
       "display_contextual_toolbar"           -> "display.contextual_toolbar",
       "display_contextual_toolbar_mode"      -> "display.contextual_toolbar_mode",
@@ -1238,6 +1238,9 @@ object SurfaceConfig:
 
     val wordWrapKeys: Set[String] = Set("display.word_wrap", "display.word.wrap", "display_word_wrap")
 
+    val paneHeaderKeys: Set[String] =
+      Set("display.pane_headers", "display.pane.headers", "display_pane_headers")
+
     val focusedTextBodyKeys: Set[String] =
       Set("display.focused_text_body", "display.focused.text.body", "display_focused_text_body")
 
@@ -1294,6 +1297,7 @@ object SurfaceConfig:
         commandRunnerCursorGapRowsKeys ++
         renderFpsKeys ++
         wordWrapKeys ++
+        paneHeaderKeys ++
         focusedTextBodyKeys ++
         contextualToolbarKeys ++
         contextualToolbarModeKeys ++
@@ -1350,6 +1354,7 @@ object SurfaceConfig:
         parseCommandRunnerCursorGapRows(trimmed).map(config.withCommandRunnerCursorGapRows)
       else if renderFpsKeys.contains(key) then RenderFpsTarget.fromConfigKey(trimmed).map(config.withRenderFpsTarget)
       else if wordWrapKeys.contains(key) then parseBoolean(trimmed).map(config.withWordWrap)
+      else if paneHeaderKeys.contains(key) then parseBoolean(trimmed).map(config.withPaneHeaders)
       else if focusedTextBodyKeys.contains(key) then parseBoolean(trimmed).map(config.withFocusedTextBody)
       else if contextualToolbarKeys.contains(key) then parseBoolean(trimmed).map(config.withContextualToolbarEnabled)
       else if contextualToolbarModeKeys.contains(key) then
@@ -1526,6 +1531,8 @@ case class AppConfig(
     minimumPaneWidth: Int = 50,
     showLineNumbers: Boolean = true,
     showGutter: Boolean = true,
+    /** Whether each editor pane reserves a visible identity header. */
+    showPaneHeaders: Boolean = true,
     wordWrapEnabled: Boolean = true,
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
@@ -1608,6 +1615,7 @@ case class AppConfig(
     SurfaceConfig(
       showLineNumbers = showLineNumbers,
       showGutter = showGutter,
+      showPaneHeaders = showPaneHeaders,
       wordWrapEnabled = wordWrapEnabled,
       focusedTextBodyEnabled = focusedTextBodyEnabled,
       contextualToolbarEnabled = contextualToolbarEnabled,
@@ -1643,6 +1651,7 @@ case class AppConfig(
     copy(
       showLineNumbers = normalized.showLineNumbers,
       showGutter = normalized.showGutter,
+      showPaneHeaders = normalized.showPaneHeaders,
       wordWrapEnabled = normalized.wordWrapEnabled,
       focusedTextBodyEnabled = normalized.focusedTextBodyEnabled,
       contextualToolbarEnabled = normalized.contextualToolbarEnabled,
@@ -1789,6 +1798,10 @@ case class AppConfig(
   /** Create a new config with gutter toggled */
   def withGutter(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(showGutter = enabled))
+
+  /** Show or hide the per-pane identity strip above editor content. */
+  def withPaneHeaders(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(showPaneHeaders = enabled))
 
   /** Create a new config with word wrapping toggled */
   def withWordWrap(enabled: Boolean): AppConfig =

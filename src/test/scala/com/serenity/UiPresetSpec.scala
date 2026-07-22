@@ -112,12 +112,13 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     preset.targetEditorPaneCount shouldBe Some(2)
   }
 
-  it should "provide built-in task presets for writing, documentation, code, and review" in {
-    UiPreset.builtInNames shouldBe List("Writing", "Documentation", "Code", "Review")
+  it should "provide peer prose, code, and compact workflow presets" in {
+    UiPreset.builtInNames shouldBe List("Writing", "Documentation", "Code", "Compact", "Review")
 
     val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
     val docs    = UiPreset.builtIn("Documentation").getOrElse(fail("missing Documentation preset"))
     val code    = UiPreset.builtIn("Code").getOrElse(fail("missing Code preset"))
+    val compact = UiPreset.builtIn("Compact").getOrElse(fail("missing Compact preset"))
     val review  = UiPreset.builtIn("Review").getOrElse(fail("missing Review preset"))
 
     writing.config.fontConfig.textFontFamily shouldBe Font.SERIF
@@ -128,21 +129,30 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     writing.config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
     writing.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
     writing.targetEditorPaneCount shouldBe Some(1)
-    writing.pinnedPanels.map(panel => panel.position -> panel.content) should contain(
-      PanelPosition.Left -> UiPreset.PanelContentSnapshot.Outline(Nil)
-    )
+    writing.config.showPaneHeaders shouldBe false
+    writing.pinnedPanels shouldBe Nil
 
     docs.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
     docs.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
     docs.config.editorInsertionTransitionKind shouldBe TransitionKind.LineAndCharacterTandem
     docs.targetEditorPaneCount shouldBe Some(1)
-    docs.pinnedPanels.map(_.content) should contain(UiPreset.PanelContentSnapshot.Outline(Nil))
+    docs.config.showPaneHeaders shouldBe false
+    docs.pinnedPanels shouldBe Nil
 
     code.config.defaultDocumentMode shouldBe DefaultDocumentMode.PlainText
     code.config.motionPreset shouldBe MotionPreset.Reduced
     code.config.editorInsertionTransitionKind shouldBe TransitionKind.Disabled
     code.config.showLineNumbers shouldBe true
+    code.config.showPaneHeaders shouldBe true
     code.pinnedPanels.map(_.position) should contain(PanelPosition.Left)
+
+    compact.config.showLineNumbers shouldBe true
+    compact.config.showGutter shouldBe true
+    compact.config.showPaneHeaders shouldBe true
+    compact.config.interfaceDensity shouldBe InterfaceDensity.Compact
+    compact.config.wordWrapEnabled shouldBe false
+    compact.config.contextualToolbarEnabled shouldBe false
+    compact.pinnedPanels shouldBe Nil
 
     review.pinnedPanels.map(_.content) should contain(UiPreset.PanelContentSnapshot.Diagnostics(Nil))
   }
@@ -152,8 +162,22 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     UiPreset.Preview.fromPreset(writing) shouldBe UiPreset.Preview(
       "Writing",
-      "rich text default; dark; subtle motion; typed text reveal; frosted material; frosted background; spacious density; Serif 18pt prose; 1 editor pane; Left outline 28"
+      "rich text default; dark; subtle motion; typed text reveal; frosted material; frosted background; spacious density; Serif 18pt prose; 1 editor pane"
     )
+  }
+
+  it should "restore each workflow contract when switching back to its preset" in {
+    val initial = AppState.initial
+    val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
+    val compact = UiPreset.builtIn("Compact").getOrElse(fail("missing Compact preset"))
+
+    val compactState = UiPreset.applyToState(compact, UiPreset.applyToState(writing, initial, Theme.dark), Theme.dark)
+    val restoredWriting = UiPreset.applyToState(writing, compactState, Theme.dark)
+
+    compactState.config shouldBe compact.config
+    compactState.pinnedSurfaces shouldBe Nil
+    restoredWriting.config shouldBe writing.config
+    restoredWriting.pinnedSurfaces shouldBe Nil
   }
 
   it should "include editor pane count targets in command runner previews" in {

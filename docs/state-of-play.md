@@ -124,6 +124,8 @@ Priority labels used in this archived snapshot:
 ## 12. Panel Presets, Expansion, And Density Modes
 
 - `[x]` Panels can be removed with `unpin`, and focus falls back to the editor when appropriate.[31]
+- `[x]` Built-in workflows are peer, reversible workspace presets: Writing provides centred serif prose with optional panels and no pane header; Documentation keeps the same low-chrome reading surface with Markdown preview support; Code keeps line numbers, a gutter, pane identity, and a project panel; Compact preserves the dense keyboard-forward editor presentation. The active preset writes its covered configuration to the normal config file, so later sessions retain the chosen presentation.[16][17][30][31]
+- `[x]` Readable measure is an explicit text-area inset owned by prose presets; density controls supported chrome metrics such as gutter and command-surface spacing rather than carrying an unused editor-margin value.[16][30]
 - `[ ][P1]` No direct implementation evidence was found for expanding a side panel into a central editor-space view.[30][31]
 - `[ ][P1]` No direct implementation evidence was found for standard preset panel/workspace configurations.[30][31]
 - `[ ][P1]` No direct implementation evidence was found for an explicit minimalist/maximalist interface mode system.[16][17][30]
