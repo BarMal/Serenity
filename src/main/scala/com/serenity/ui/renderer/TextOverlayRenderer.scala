@@ -210,6 +210,7 @@ object TextOverlayRenderer:
 
     surface.setForegroundColor(rowForeground)
     surface.setBackgroundColor(rowBackground)
+    if rowView.row.selected then surface.enableStyle(theme.focusStyle)
     CharacterRenderer.renderStringPlain(surface, x, y, " " * width)
 
     rowView.row.layout match
@@ -258,6 +259,8 @@ object TextOverlayRenderer:
             surface.setBackgroundColor(theme.cursor)
             CharacterRenderer.renderChar(surface, placement.x + placement.cellColumn, y, ' ')
         }
+
+    if rowView.row.selected then surface.disableStyle(theme.focusStyle)
 
   private case class OverlayRowView(row: OverlayRow, useMeasuredCursor: Boolean)
 
@@ -931,7 +934,7 @@ object TextOverlayRenderer:
     SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
       val contentRect = overlay.resolvedContentRect
       val sheenWidth  = contentRect.width
-      val sheenHeight = math.min(2, contentRect.height)
+      val sheenHeight = math.min(1, contentRect.height)
       if sheenWidth > 0 && sheenHeight > 0 then
         surface.setBackgroundColor(sheenColor)
         (0 until sheenHeight).foreach { rowOffset =>

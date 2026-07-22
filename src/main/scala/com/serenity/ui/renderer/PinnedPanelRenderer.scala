@@ -95,6 +95,7 @@ object PinnedPanelRenderer:
           if row.selected then
             surface.setForegroundColor(theme.highlighted.foreground)
             surface.setBackgroundColor(theme.highlighted.background)
+            surface.enableStyle(theme.focusStyle)
           else
             surface.setForegroundColor(theme.panel.foreground)
             surface.setBackgroundColor(theme.panel.background)
@@ -109,6 +110,7 @@ object PinnedPanelRenderer:
             baseForeground,
             animationState
           )
+          if row.selected then surface.disableStyle(theme.focusStyle)
         }
       }
 
@@ -138,7 +140,7 @@ object PinnedPanelRenderer:
     SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
       val contentRect = panel.resolvedContentRect
       val sheenWidth  = contentRect.width
-      val sheenHeight = math.min(2, contentRect.height)
+      val sheenHeight = math.min(1, contentRect.height)
       if sheenWidth > 0 && sheenHeight > 0 then
         surface.setBackgroundColor(sheenColor)
         (0 until sheenHeight).foreach { rowOffset =>

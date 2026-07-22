@@ -283,7 +283,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     runner.visibleItems.collect {
       case item: CommandSurfaceItem.SettingSearchItem if item.targetItemId == "animation-duration" =>
         (item.targetGroupId, item.effectiveValue, item.sourceScope)
-    } shouldBe List(("settings-animation", Some("200"), "Global"))
+    } shouldBe List(("settings-animation", Some("0"), "Global"))
   }
 
   it should "rank a normalized exact setting ahead of a prefix command" in {

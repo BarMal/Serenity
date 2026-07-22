@@ -13,8 +13,8 @@ class SurfaceMaterialsSpec extends AnyFlatSpec with Matchers:
   "SurfaceMaterials" should "derive crystal material values from the material preset" in {
     val config = AppConfig.default.withMaterialPreset(MaterialPreset.Crystal)
 
-    SurfaceMaterials.panelAlpha(config, Theme.default) shouldBe 0.68f
-    SurfaceMaterials.effectiveBlurRadius(config) shouldBe 0.75f
+    SurfaceMaterials.panelAlpha(config, Theme.default) shouldBe 0.78f
+    SurfaceMaterials.effectiveBlurRadius(config) shouldBe 0.42f
     SurfaceMaterials.glassSheenBackground(config, Theme.default) should not be empty
   }
 
@@ -40,4 +40,12 @@ class SurfaceMaterialsSpec extends AnyFlatSpec with Matchers:
     SurfaceMaterials
       .glassSheenBackground(AppConfig.default.withMaterialPreset(MaterialPreset.Crystal), theme)
       .map(_.getAlpha) shouldBe Some(120)
+  }
+
+  it should "keep the default frosted treatment restrained" in {
+    val config = AppConfig.default
+
+    SurfaceMaterials.effectiveBlurRadius(config) shouldBe 0.18f
+    SurfaceMaterials.panelAlpha(config, Theme.default) should be >= 0.9f
+    SurfaceMaterials.glassSheenBackground(config, Theme.default) shouldBe None
   }

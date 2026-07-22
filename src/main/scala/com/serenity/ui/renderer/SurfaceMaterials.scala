@@ -12,19 +12,19 @@ object SurfaceMaterials:
       case MaterialPreset.Solid   => 1.0f
       case MaterialPreset.Clear   => 0.28f
       case MaterialPreset.Frosted => theme.panel.alpha.toFloat
-      case MaterialPreset.Crystal => 0.68f
+      case MaterialPreset.Crystal => 0.78f
       case MaterialPreset.Custom  => alphaForBackground(config.backgroundStyle, theme)
 
   def effectiveBlurRadius(config: AppConfig): Float =
     config.materialPreset match
       case MaterialPreset.Solid | MaterialPreset.Clear => 0.0f
       case MaterialPreset.Frosted                      => config.blurRadius
-      case MaterialPreset.Crystal                      => math.max(config.blurRadius, 0.75f)
+      case MaterialPreset.Crystal                      => math.max(config.blurRadius, 0.42f)
       case MaterialPreset.Custom                       => blurForBackground(config.backgroundStyle, config.blurRadius)
 
   def glassSheenBackground(config: AppConfig, theme: Theme): Option[Color] =
     Option.when(config.materialPreset == MaterialPreset.Crystal || isCustomGlass(config)) {
-      blend(theme.panel.background, theme.panel.foreground, 0.24)
+      blend(theme.panel.background, theme.panel.foreground, 0.10)
     }
 
   private def alphaForBackground(style: BackgroundStyle, theme: Theme): Float =
@@ -32,14 +32,14 @@ object SurfaceMaterials:
       case BackgroundStyle.Solid       => 1.0f
       case BackgroundStyle.Transparent => 0.28f
       case BackgroundStyle.Frosted     => theme.panel.alpha.toFloat
-      case BackgroundStyle.GlassLike   => math.min(theme.panel.alpha.toFloat, 0.78f)
+      case BackgroundStyle.GlassLike   => math.min(theme.panel.alpha.toFloat, 0.82f)
 
   private def blurForBackground(style: BackgroundStyle, blurRadius: Float): Float =
     style match
       case BackgroundStyle.Solid       => 0.0f
       case BackgroundStyle.Transparent => 0.0f
       case BackgroundStyle.Frosted     => blurRadius
-      case BackgroundStyle.GlassLike   => math.max(blurRadius, 0.6f)
+      case BackgroundStyle.GlassLike   => math.max(blurRadius, 0.42f)
 
   private def isCustomGlass(config: AppConfig): Boolean =
     config.materialPreset == MaterialPreset.Custom && config.backgroundStyle == BackgroundStyle.GlassLike

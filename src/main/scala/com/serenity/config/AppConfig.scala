@@ -33,9 +33,9 @@ enum MaterialPreset(val configKey: String):
   def blurRadius: Float =
     this match
       case Solid | Clear => 0.0f
-      case Frosted       => 0.3f
-      case Crystal       => 0.65f
-      case Custom        => 0.3f
+      case Frosted       => 0.18f
+      case Crystal       => 0.42f
+      case Custom        => 0.18f
 
 enum PostProcessingEffect(val configKey: String):
   case Off              extends PostProcessingEffect("off")
@@ -897,7 +897,7 @@ case class SurfaceConfig(
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
     contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
-    blurRadius: Float = 0.0f,
+    blurRadius: Float = 0.18f,
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
     postProcessingEffect: PostProcessingEffect = PostProcessingEffect.Off,
@@ -1537,7 +1537,7 @@ case class AppConfig(
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
     contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
-    blurRadius: Float = 0.0f,
+    blurRadius: Float = 0.18f,
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
     postProcessingEffect: PostProcessingEffect = PostProcessingEffect.Off,
@@ -2209,12 +2209,12 @@ object AppConfig:
   def scaledAnimation(animation: Option[AnimationConfig], speedScale: Double): Option[AnimationConfig] =
     animation.flatMap(_.scaledBy(clampElementTransitionSpeedScale(speedScale)))
 
-  /** Default configuration with smooth animations and syntax highlighting disabled */
+  /** Default configuration keeps text entry immediate and uses restrained frosted surfaces. */
   val default: AppConfig = AppConfig(
-    characterAnimation = AnimationConfig.smooth,
+    characterAnimation = AnimationConfig.none,
     uiAnimation = AnimationConfig.smooth,
     syntaxHighlightingEnabled = false,
-    blurRadius = 0.3f,
+    blurRadius = 0.18f,
     backgroundStyle = BackgroundStyle.Frosted,
     motionPreset = MotionPreset.Smooth
   )

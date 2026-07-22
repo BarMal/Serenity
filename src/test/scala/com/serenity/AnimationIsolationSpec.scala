@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.animation.AnimationConfig
 import com.serenity.keystroke.events.{InsertChar, NewTab}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -20,6 +21,9 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     val logger                      = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager                = StateManager.apply(logger).unsafeRunSync()
     val wideTerminal                = com.serenity.ui.layout.ViewportSize(400, 24) // Wide enough for multiple panes
+    stateManager
+      .updateState(state => state.copy(config = state.config.withCharacterAnimation(AnimationConfig.smooth.get)))
+      .unsafeRunSync()
 
     @annotation.tailrec
     final def navigateUntilFocused(
