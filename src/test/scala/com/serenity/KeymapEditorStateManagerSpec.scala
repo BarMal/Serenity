@@ -9,8 +9,15 @@ import org.scalatest.matchers.should.Matchers
 
 class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
+  private def createLinuxStateManager(name: String) =
+    val stateManager = createStateManager(name)
+    stateManager
+      .updateState(state => state.copy(config = state.config.withHotkeyConfig(HotkeyConfig.forOs("Linux"))))
+      .unsafeRunSync()
+    stateManager
+
   "Keymap editor settings" should "update global hotkey bindings through the command runner" in {
-    val stateManager = createStateManager("KeymapEditorStateManagerSpec")
+    val stateManager = createLinuxStateManager("KeymapEditorStateManagerSpec")
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     "keymap".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
@@ -23,7 +30,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
   }
 
   it should "reset global hotkey bindings to defaults through the command runner" in {
-    val stateManager = createStateManager("KeymapEditorResetSpec")
+    val stateManager = createLinuxStateManager("KeymapEditorResetSpec")
 
     stateManager
       .updateState(state =>
@@ -42,7 +49,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
   }
 
   it should "keep the keymap editor open when a binding conflicts" in {
-    val stateManager = createStateManager("KeymapEditorConflictSpec")
+    val stateManager = createLinuxStateManager("KeymapEditorConflictSpec")
 
     stateManager
       .updateState(state =>

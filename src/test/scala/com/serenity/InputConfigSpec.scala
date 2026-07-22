@@ -20,14 +20,16 @@ class InputConfigSpec extends AnyFlatSpec with Matchers:
     )
 
   it should "group hotkeys and focused keymaps under AppConfig" in {
-    val hotkeys = HotkeyConfig().withBinding(
-      HotkeyAction.ToggleCommandRunner,
-      HotkeyTrigger(
-        keyType = InputKey.Character,
-        character = Some('k'),
-        modifiers = Set(Modifier.Ctrl)
+    val hotkeys = HotkeyConfig
+      .forOs("Linux")
+      .withBinding(
+        HotkeyAction.ToggleCommandRunner,
+        HotkeyTrigger(
+          keyType = InputKey.Character,
+          character = Some('k'),
+          modifiers = Set(Modifier.Ctrl)
+        )
       )
-    )
     val keymaps = FocusedKeymapConfig().withCommandRunnerBinding(CommandRunnerKeyAction.Submit, "meta+enter")
 
     val config = AppConfig.default
@@ -39,7 +41,7 @@ class InputConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reject a hotkey already assigned to another action" in {
-    val config = HotkeyConfig().withBinding(HotkeyAction.ToggleCommandRunner, "ctrl+shift+f")
+    val config = HotkeyConfig.forOs("Linux").withBinding(HotkeyAction.ToggleCommandRunner, "ctrl+shift+f")
 
     config.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render.shouldBe("ctrl+p")
     config.bindingsFor(HotkeyAction.FileSearch).head.render.shouldBe("ctrl+shift+f")

@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.{AppConfig, HotkeyConfig}
 import com.serenity.input.InputRouter
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -18,11 +19,13 @@ class EOFGracefulShutdownIntegrationSpec extends AnyFlatSpec with Matchers:
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
+  private val linuxConfig = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux"))
+
   "EOF Integration Test" should "demonstrate complete flow from EOF keystroke to graceful shutdown" in {
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator)
+      inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(linuxConfig))
 
       eofInfo = KeyStrokeInfo(InputKey.EOF, None, Set.empty)
 
@@ -42,7 +45,7 @@ class EOFGracefulShutdownIntegrationSpec extends AnyFlatSpec with Matchers:
       logger        <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager1 <- StateManager.apply(logger)
       stateManager2 <- StateManager.apply(logger)
-      translator = new TextEntryTranslator()
+      translator = new TextEntryTranslator(linuxConfig)
 
       eofEvent   = translator.translate(KeyStrokeInfo(InputKey.EOF, None, Set.empty))
       ctrlQEvent = translator.translate(KeyStrokeInfo(InputKey.Character, Some('q'), Set(Modifier.Ctrl)))

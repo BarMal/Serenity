@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.{AppConfig, HotkeyConfig}
 import com.serenity.keystroke.events.NewTab
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -73,7 +74,7 @@ class CtrlReverseTabNavigationSpec extends AnyFlatSpec with Matchers:
     // Given: A TextEntryTranslator and Ctrl+ReverseTab keystroke
     import com.serenity.keystroke.translators.TextEntryTranslator
     import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
-    val translator     = new TextEntryTranslator()
+    val translator     = new TextEntryTranslator(AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux")))
     val ctrlReverseTab = KeyStrokeInfo(InputKey.ReverseTab, None, Set(Modifier.Ctrl))
 
     // When: Translate the keystroke

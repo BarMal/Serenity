@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.config.{AppConfig, EditorKeyAction, HotkeyAction}
+import com.serenity.config.*
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.{LocalKeymapConverters, TextEntryTranslator, TextHotkeyConverters}
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
@@ -9,7 +9,8 @@ import org.scalatest.matchers.should.Matchers
 
 class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
 
-  private val translator = new TextEntryTranslator()
+  private val linuxConfig = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux"))
+  private val translator  = new TextEntryTranslator(linuxConfig)
 
   "TextEntryTranslator" should "keep plain character input in the editor event family" in {
     val event = translator.translate(KeyStrokeInfo(InputKey.Character, Some('a'), Set.empty))
