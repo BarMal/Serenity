@@ -1872,12 +1872,9 @@ object Renderer:
     else legacyGutterContent(state)
 
   private def legacyGutterContent(state: AppState): String =
-    state.focus match
-      case Focus.EditorPane(paneId) =>
-        state.layout.editorPanes
-          .get(paneId)
-          .flatMap(_.bufferId)
-          .flatMap(state.buffers.get) match
+    state.layout.activeEditorPaneId.flatMap(state.layout.editorPanes.get) match
+      case Some(pane) =>
+        pane.bufferId.flatMap(state.buffers.get) match
           case Some(buffer) =>
             val cursor   = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
             val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"
@@ -1889,4 +1886,4 @@ object Renderer:
 
             s" $position | Language: $language$filePath "
           case None => " No active buffer "
-      case _ => " No active editor pane "
+      case None => " No active editor pane "

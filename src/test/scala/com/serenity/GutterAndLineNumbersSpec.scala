@@ -1,6 +1,7 @@
 package com.serenity
 
 import java.awt.Font
+import java.nio.file.Paths
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -53,6 +54,58 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     Renderer.render(state, cursorVisible = true, surface, viewport)
 
     surface.drawRunPxCalls.map(_.s).mkString should include("Language: Markdown")
+  }
+
+  it should "preserve active document metadata while transient surfaces hold focus" in {
+    val paneId = PaneId(0)
+    val buffer = Buffer
+      .fromString(BufferId(6), "alpha\nbeta\ngamma")
+      .copy(
+        cursors = List(CursorPosition(2, 4)),
+        language = Some(LanguageId.Markdown),
+        filePath = Some(Paths.get("/workspace/active.md"))
+      )
+    val surfaces = List(
+      "command-runner",
+      "find-replace",
+      "settings",
+      "command-runner-submenu"
+    ).map { id =>
+      UiSurface(
+        SurfaceId(id),
+        SurfaceContent.QuickInfo(id),
+        SurfacePresentation.Floating(Some(CursorPosition(2, 4)), SurfacePlacement.BelowCursor)
+      )
+    }
+    val baseState = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = AppState.initial.layout.copy(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+        activeEditorPaneId = Some(paneId),
+        paneOrder = List(paneId)
+      ),
+      uiSurfaces = surfaces,
+      theme = Theme.light
+    )
+    val expected = " Line 3, Col 5 | Language: Markdown | active.md "
+
+    (Focus.EditorPane(paneId) :: surfaces.map(surface => Focus.Surface(surface.id))).foreach { focus =>
+      val surface = new MockRenderSurface(100, 30)
+
+      Renderer.render(baseState.copy(focus = focus), cursorVisible = true, surface, ViewportSize(100, 30))
+
+      surface.drawRunPxCalls.map(_.s).find(_.contains("Line 3, Col 5")) shouldBe Some(expected)
+      surface.drawRunPxCalls.map(_.s).mkString should not include "No active editor pane"
+    }
+  }
+
+  it should "show no active editor pane only for an empty workspace" in {
+    val surface = new MockRenderSurface(80, 24)
+
+    Renderer.render(AppState.empty, cursorVisible = true, surface, ViewportSize(80, 24))
+
+    surface.drawRunPxCalls.map(_.s).mkString should include("No active editor pane")
   }
 
   it should "show current cursor position and buffer path when gutter is enabled" in {
