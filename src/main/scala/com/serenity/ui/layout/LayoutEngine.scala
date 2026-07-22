@@ -525,8 +525,10 @@ object LayoutEngine:
           state,
           contentRect.width - (borderCells * 2)
         ) + (borderCells * 2)
-      case _ =>
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
         calculateFloatingSurfaceWidth(contentRect.width)
+      case _ =>
+        contentRect.width
     val preferredHeight = calculateFloatingSurfaceHeight(surface.content, preferredWidth, contentRect.height, state)
     val finalHeight     = forcedHeight.getOrElse(preferredHeight)
     val gapRows         = wholeRowOrigin(floatingCursorGapRows(state, surface.content))

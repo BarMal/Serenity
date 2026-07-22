@@ -447,3 +447,20 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     LayoutEngine.calculateLayout(state, ViewportSize(100, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(72)
     LayoutEngine.calculateLayout(state, ViewportSize(40, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(37)
   }
+
+  it should "leave non-runner floating surfaces at their available width" in {
+    val bufferId = BufferId(1)
+    val surface = UiSurface(
+      SurfaceId("file-search"),
+      SurfaceContent.FileSearch(FileSearchState("", Nil, selectedIndex = 0)),
+      SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.BelowCursor)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> Buffer.fromString(bufferId, "search")),
+      bufferOrder = List(bufferId),
+      layout = Layout(editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)), activeEditorPaneId = Some(PaneId(0))),
+      uiSurfaces = List(surface)
+    )
+
+    LayoutEngine.calculateLayout(state, ViewportSize(100, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(97)
+  }
