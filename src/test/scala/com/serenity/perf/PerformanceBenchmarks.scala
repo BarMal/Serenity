@@ -1,9 +1,10 @@
 package com.serenity.perf
 
-import java.awt.{Color, Font}
+import java.awt.Font
 import java.awt.image.BufferedImage
 import java.nio.file.Paths
 
+import cats.effect.IO
 import com.serenity.animation.*
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.keystroke.events.{InsertChar, ScrollDown}
@@ -30,17 +31,27 @@ object PerformanceBenchmarks:
 
   private val monoFont     = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val textFont     = Font(Font.SERIF, Font.PLAIN, 14)
+  private val uiFont       = Font(Font.SANS_SERIF, Font.PLAIN, 12)
   private val cellMetrics  = CellMetrics.fromFont(monoFont)
+  private val uiMetrics    = CellMetrics.fromFont(uiFont)
   private val viewportSize = ViewportSize(120, 40)
   private val frameWidthPx = viewportSize.width * cellMetrics.charWidth
   private val frameHeightPx = viewportSize.height * cellMetrics.lineHeight
-  private val repaintTarget = new javax.swing.JPanel()
 
   def main(args: Array[String]): Unit =
-    val results = benchmarks().map(runBenchmark)
-    printResults(results)
+    import cats.effect.unsafe.implicits.global
 
-  private def benchmarks(): List[Benchmark] =
+    SwingWindow
+      .resource(metrics = cellMetrics, chromeMetrics = uiMetrics)
+      .use(window =>
+        IO {
+          val results = benchmarks(window).map(runBenchmark)
+          printResults(results)
+        }
+      )
+      .unsafeRunSync()
+
+  private def benchmarks(cursorWindow: SwingWindow): List[Benchmark] =
     val jsonText       = largeSingleLineJson(entries = 20_000)
     val multilineText  = largeMultilineDocument(lines = 15_000)
     val findText       = largeFindDocument(matches = 12_000)
@@ -97,6 +108,13 @@ object PerformanceBenchmarks:
         buffer.copy(cursors = List(CursorPosition(6_000, 12)))
       }.toMap
     )
+    val normalEditingResult = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), editingState)
+    val plainScrollResult   = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
+    val richScrollResult    = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
+    val expectedEditedLine = editingState.buffers
+      .get(BufferId(1))
+      .flatMap(_.content.getLine(6_000))
+      .map(_.patch(12, "x", 0))
     val findResultSet = FindResultSet.normalized(
       "needle",
       (0 until 12_000).toList.map(line => FindResult(line, 10)),
@@ -107,17 +125,7 @@ object PerformanceBenchmarks:
     }
     val framedLspMessages = lspMessages.flatMap(LspFramer.encode).toArray
     val projectTask = ProjectTaskDetector.detect(Paths.get("."), ProjectTaskKind.Test)
-    val cursorSnapshot = plainScrollState.buffers
-      .get(BufferId(1))
-      .map(buffer =>
-        com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
-          buffer,
-          frameWidthPx,
-          monoFont,
-          wordWrapEnabled = false
-        )
-      )
-    val cursorBaseFrame = renderedFrame(plainScrollState, deviceScale = 1.0)
+    prepareCursorBaseFrame(plainScrollState, cursorWindow)
     val animationCells = multilineState.buffers.get(BufferId(1)).map(buffer =>
         com.serenity.state.manager.VisibleBufferAnimationCells.fromBuffer(
           buffer,
@@ -170,8 +178,10 @@ object PerformanceBenchmarks:
         "render.cursor_only.java2d_overlay",
         2,
         8,
-        () => assert(cursorSnapshot.exists(_.visualLines.nonEmpty)),
-        () => cursorSnapshot.foreach(snapshot => renderedCursorOverlay(cursorBaseFrame, snapshot))
+        () => assert(renderedCursorOverlay(plainScrollState, cursorWindow)),
+        () =>
+          val _ = renderedCursorOverlay(plainScrollState, cursorWindow)
+          ()
       ),
       Benchmark(
         "render.diagnostics_and_comments.java2d",
@@ -191,21 +201,26 @@ object PerformanceBenchmarks:
         "reducer.normal_editing",
         3,
         20,
-        () => assert(editingState.buffers.get(BufferId(1)).exists(_.cursors.headOption.contains(CursorPosition(6_000, 12)))),
+        () =>
+          assert(
+            expectedEditedLine.exists(line =>
+              normalEditingResult.state.buffers.get(BufferId(1)).flatMap(_.content.getLine(6_000)).contains(line)
+            )
+          ),
         () => EditorEventReducer.reduce(InsertChar('x'), PaneId(0), editingState)
       ),
       Benchmark(
         "reducer.deep_scroll.plain",
         3,
         20,
-        () => assert(plainScrollState.buffers.get(BufferId(1)).exists(_.viewport.topLine == deepViewport.topLine)),
+        () => assert(reducedTopLine(plainScrollResult) == Some(deepViewport.topLine + 40)),
         () => EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
       ),
       Benchmark(
         "reducer.deep_scroll.rich_text",
         3,
         20,
-        () => assert(richScrollState.buffers.get(BufferId(1)).exists(_.richTextDocument.nonEmpty)),
+        () => assert(reducedTopLine(richScrollResult) == Some(deepViewport.topLine + 40)),
         () => EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
       ),
       Benchmark(
@@ -307,7 +322,7 @@ object PerformanceBenchmarks:
       image,
       cellMetrics,
       monoFont,
-      _ => requestRepaint(),
+      _ => (),
       logicalWidthPx = frameWidthPx,
       logicalHeightPx = frameHeightPx,
       deviceScaleX = deviceScale,
@@ -316,19 +331,24 @@ object PerformanceBenchmarks:
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, textFont, cellMetrics, None)
     image
 
-  private def renderedCursorOverlay(
-      baseFrame: BufferedImage,
-      snapshot: com.serenity.ui.layout.TextLayoutSnapshot
-  ): BufferedImage =
-    val overlay = SwingWindow.copyImage(baseFrame)
-    val surface = new Java2DRenderSurface(overlay, cellMetrics, monoFont, _ => requestRepaint())
-    val cursorX = snapshot.visualLines.headOption.flatMap(_.xForColumn(0)).getOrElse(0.0f).toInt
-    surface.fillPixelRect(cursorX, 0, math.max(1, cellMetrics.charWidth / 8), cellMetrics.lineHeight, Color.WHITE)
-    surface.flush()
-    overlay
+  private def prepareCursorBaseFrame(state: AppState, window: SwingWindow): Unit =
+    Renderer.render(
+      state,
+      cursorVisible = false,
+      window,
+      monoFont,
+      textFont,
+      uiFont,
+      uiMetrics,
+      cursorColor = None,
+      repaintOnFlush = false
+    )
 
-  private def requestRepaint(): Unit =
-    repaintTarget.repaint()
+  private def renderedCursorOverlay(state: AppState, window: SwingWindow): Boolean =
+    Renderer.renderCursorOnly(state, cursorVisible = true, window, monoFont, textFont, uiFont, uiMetrics, None)
+
+  private def reducedTopLine(result: com.serenity.state.reducers.ReducerResult): Option[Int] =
+    result.state.buffers.get(BufferId(1)).map(_.viewport.topLine)
 
   private def decodeLspMessages(bytes: Array[Byte]): List[Json] =
     import cats.effect.unsafe.implicits.global
