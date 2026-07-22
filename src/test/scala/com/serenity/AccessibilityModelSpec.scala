@@ -69,3 +69,51 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     AccessibilitySnapshot.minimumTargetRows(InterfaceDensity.Comfortable) shouldBe 2
     AccessibilitySnapshot.minimumTargetRows(InterfaceDensity.Spacious) shouldBe 2
   }
+
+  it should "expose visible context-menu actions through their rendered row slots" in {
+    val surfaceId = SurfaceId("menu")
+    val command = com.serenity.command.Command.typed(
+      "save",
+      "Save",
+      com.serenity.command.CommandIntent.SaveCurrentFile,
+      com.serenity.command.CommandCategory.File
+    )
+    val menu = ContextMenu("Editor", Focus.EditorPane(PaneId(0)), List(
+      ContextMenuItem("save", "Save", command),
+      ContextMenuItem("save-as", "Save As", command),
+      ContextMenuItem("close", "Close", command)
+    ), selectedIndex = 1)
+    val state = AppState.initial.copy(
+      uiSurfaces = List(UiSurface(surfaceId, SurfaceContent.ContextMenu(menu), SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor))),
+      focus = Focus.Surface(surfaceId)
+    )
+
+    val controls = AccessibilitySnapshot.from(state, ViewportSize(40, 7)).nodes.filter(_.id.startsWith("surface:menu/item:"))
+
+    controls.map(_.name) shouldBe List("Save As")
+    controls.map(_.bounds.y).distinct.size shouldBe controls.size
+    controls.find(_.name == "Save As").exists(_.focused) shouldBe true
+  }
+
+  it should "expose find and replace workflow fields and actions" in {
+    val surfaceId = SurfaceId("replace")
+    val state = AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(
+          surfaceId,
+          SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(ReplaceWorkflowState(findText = "before", replacementText = "after"))),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(surfaceId)
+    )
+
+    val controls = AccessibilitySnapshot.from(state, viewport).nodes.filter(_.id.startsWith("surface:replace/control:"))
+
+    controls.map(node => node.name -> node.role) should contain allOf (
+      "Find" -> AccessibilityRole.TextField,
+      "Replace" -> AccessibilityRole.TextField,
+      "Replace Next" -> AccessibilityRole.Button,
+      "Replace All" -> AccessibilityRole.Button
+    )
+  }

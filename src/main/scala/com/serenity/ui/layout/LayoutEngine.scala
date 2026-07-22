@@ -694,15 +694,21 @@ object LayoutEngine:
               val totalHeight     = mainRect.height + stackGapRows + submenuRect.height
               val preferredBelowY = anchorFrame.screenPosition.y + 1 + gapRows
               val preferredAboveY = anchorFrame.screenPosition.y - gapRows - totalHeight
+              val collapsedTotalHeight = collapsedHeight + stackGapRows + submenuRect.height
+              val collapsedAboveY = anchorFrame.screenPosition.y - gapRows - collapsedTotalHeight
+              val fullStackFitsBelow = preferredBelowY + totalHeight <= availableBottom
+              val fullStackFitsAbove = preferredAboveY >= anchorFrame.contentRect.y
+              val collapsedStackFitsAbove = collapsedAboveY >= anchorFrame.contentRect.y
+              val shouldCollapse = !fullStackFitsBelow && !fullStackFitsAbove
               val stackY =
-                if preferredBelowY + totalHeight <= availableBottom then preferredBelowY
-                else if preferredAboveY >= anchorFrame.contentRect.y then preferredAboveY
+                if fullStackFitsBelow then preferredBelowY
+                else if fullStackFitsAbove then preferredAboveY
+                else if collapsedStackFitsAbove then collapsedAboveY
                 else
                   math.max(
                     anchorFrame.contentRect.y,
                     math.min(preferredBelowY, availableBottom - math.min(totalHeight, anchorFrame.contentRect.height))
                   )
-              val shouldCollapse    = stackY + totalHeight > availableBottom
               val stackHeightBudget = math.max(0, availableBottom - stackY)
               val adjustedMainHeight =
                 if shouldCollapse then math.min(collapsedHeight, stackHeightBudget) else mainRect.height

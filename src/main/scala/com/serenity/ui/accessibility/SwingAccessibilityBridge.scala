@@ -3,7 +3,7 @@ package com.serenity.ui.accessibility
 import java.awt.Graphics
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import javax.accessibility.{AccessibleContext, AccessibleState, AccessibleStateSet}
-import javax.swing.{JComponent, JLabel, JPanel, JTextArea, JTextField, JToggleButton}
+import javax.swing.{JButton, JComponent, JLabel, JPanel, JTextArea, JTextField}
 
 import com.serenity.ui.layout.CellMetrics
 
@@ -63,9 +63,8 @@ final class SwingAccessibilityBridge(canvas: JComponent):
           document.setText(node.value.getOrElse(""))
           document
         case AccessibilityRole.Button =>
-          val button = new TransparentToggleButton
+          val button = new TransparentButton
           button.setText(node.name)
-          button.setSelected(node.selected)
           button
         case AccessibilityRole.TextField =>
           val field = new TransparentTextField
@@ -174,13 +173,13 @@ final class SwingAccessibilityBridge(canvas: JComponent):
     override protected def paintComponent(graphics: Graphics): Unit = ()
     override protected def paintBorder(graphics: Graphics): Unit    = ()
 
-  private class TransparentToggleButton extends JToggleButton with SemanticFocusProxy:
+  private class TransparentButton extends JButton with SemanticFocusProxy:
 
     override def getAccessibleContext: AccessibleContext =
       if accessibleContext == null then
-        accessibleContext = new AccessibleJToggleButton:
+        accessibleContext = new AccessibleJButton:
           override def getAccessibleStateSet: AccessibleStateSet =
-            TransparentToggleButton.this.withSemanticFocus(super.getAccessibleStateSet)
+            TransparentButton.this.withSemanticFocus(super.getAccessibleStateSet)
       accessibleContext
 
     override def contains(x: Int, y: Int): Boolean                  = false

@@ -261,8 +261,7 @@ object SurfaceFrameLayout:
   /** Minimum physical height for pointer-operable surface controls at the selected density. */
   def itemTargetRowsFor(content: SurfaceContent, density: InterfaceDensity): Int =
     content match
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) |
-          SurfaceContent.ContextMenu(_) | SurfaceContent.ContextualToolbar(_) =>
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
         minimumTargetRows(density)
       case _ => 1
 

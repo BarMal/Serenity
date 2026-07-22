@@ -37,7 +37,8 @@ class SwingWindowAccessibilitySpec extends AnyFlatSpec with Matchers:
 
     val child = canvas.getAccessibleContext.getAccessibleChild(0)
     child.getAccessibleContext.getAccessibleName shouldBe "Open Settings"
-    child.getAccessibleContext.getAccessibleRole shouldBe AccessibleRole.TOGGLE_BUTTON
+    child.getAccessibleContext.getAccessibleRole shouldBe AccessibleRole.PUSH_BUTTON
+    child.getAccessibleContext.getAccessibleStateSet.contains(AccessibleState.CHECKED) shouldBe false
     child.asInstanceOf[java.awt.Component].getName shouldBe "surface:runner/item:open-settings"
     child.asInstanceOf[java.awt.Component].getBounds shouldBe new Rectangle(2, 3, 20, 2)
     child.getAccessibleContext.getAccessibleDescription should include("selected=true")
