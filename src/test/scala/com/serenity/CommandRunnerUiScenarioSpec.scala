@@ -70,6 +70,27 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.state.unsafeRunSync().config.blurRadius shouldBe 0.5f
   }
 
+  it should "open the dedicated settings surface, search and persist an edit, then dismiss in one action" in {
+    val driver = UiScenarioDriver.create("dedicated-settings-surface").unsafeRunSync()
+    driver.dispatch(ToggleCommandRunner).unsafeRunSync()
+    "open settings".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
+    driver.dispatch(Enter).unsafeRunSync()
+
+    val opened = runnerFrom(driver.state.unsafeRunSync())
+    opened.isSettingsSurface shouldBe true
+    driver.state.unsafeRunSync().commandRunnerSubmenuSurface shouldBe None
+
+    "blur radius".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
+    driver.dispatch(Enter).unsafeRunSync()
+    "0.5".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
+    driver.dispatch(Enter).unsafeRunSync()
+
+    driver.state.unsafeRunSync().config.blurRadius shouldBe 0.5f
+    driver.dispatch(Escape).unsafeRunSync()
+    driver.advanceToSettled().unsafeRunSync() shouldBe true
+    driver.state.unsafeRunSync().commandRunnerSurface shouldBe None
+  }
+
   private def runnerFrom(state: AppState): com.serenity.command.CommandRunner =
     state.commandRunnerSurface
       .orElse(state.commandRunnerSubmenuSurface)

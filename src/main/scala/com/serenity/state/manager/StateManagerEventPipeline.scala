@@ -1658,22 +1658,38 @@ final private[manager] class StateManagerEventPipeline(
       val rowSlots = contract.overlayRowSlots(surface.id)
       surface.content match
         case SurfaceContent.CommandPalette(runner) =>
-          commandPaletteCategoryAt(event, contentRect, contract.overlayHeaderRect(surface.id), runner.searchTerm)
-            .map(RunnerSelectCategory(_))
-            .orElse(
-              overlayItemIndex(
-                event,
-                state,
-                layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
-                contentRect,
-                rowSlots,
-                runner.visibleItems.length,
-                runner.selectedIndex,
-                hasHeader = true,
-                hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
-                itemGapRows = state.config.commandRunnerItemGapRows
-              ).map(RunnerSelectVisibleItem(_))
-            )
+          if runner.isSettingsSurface then
+            overlayItemIndex(
+              event,
+              state,
+              layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
+              contentRect,
+              rowSlots,
+              runner.settingsSurfaceItems.length,
+              runner.settingsSurfaceSelectedIndex,
+              hasHeader = true,
+              hasFooter = true,
+              itemGapRows = state.config.commandRunnerItemGapRows
+            ).map { index =>
+              if runner.activeSubmenu.nonEmpty then RunnerSelectSubmenuItem(index) else RunnerSelectVisibleItem(index)
+            }
+          else
+            commandPaletteCategoryAt(event, contentRect, contract.overlayHeaderRect(surface.id), runner.searchTerm)
+              .map(RunnerSelectCategory(_))
+              .orElse(
+                overlayItemIndex(
+                  event,
+                  state,
+                  layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
+                  contentRect,
+                  rowSlots,
+                  runner.visibleItems.length,
+                  runner.selectedIndex,
+                  hasHeader = true,
+                  hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
+                  itemGapRows = state.config.commandRunnerItemGapRows
+                ).map(RunnerSelectVisibleItem(_))
+              )
         case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
           val submenuState = runner.activeSubmenu.filter(_.groupId == groupId)
           val items = submenuState

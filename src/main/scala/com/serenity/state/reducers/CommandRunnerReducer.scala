@@ -24,7 +24,8 @@ object CommandRunnerReducer:
   private def reduceActive(event: CommandRunnerEvent, state: AppState, registry: CommandRegistry): ReducerResult =
     event match
       case RunnerDismiss =>
-        if submenuEditing(state) then ReducerResult.noEffects(clearSubmenuEditMode(state))
+        if currentRunner(state).exists(_.isSettingsSurface) then ReducerResult.noEffects(deactivate(state))
+        else if submenuEditing(state) then ReducerResult.noEffects(clearSubmenuEditMode(state))
         else if submenuSearching(state) then ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch("")))
         else if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.exitSubmenuToPreview))
         else if rootEditing(state) then ReducerResult.noEffects(clearRootEditMode(state))
@@ -69,6 +70,8 @@ object CommandRunnerReducer:
               currentRunner(state).flatMap(_.selectedItem) match
                 case Some(_: CommandSurfaceItem.InputItem) =>
                   ReducerResult.noEffects(state)
+                case Some(CommandSurfaceItem.CommandItem(command)) if command.intent == CommandIntent.OpenSettings =>
+                  ReducerResult.noEffects(replaceRunner(state, _.openSettings))
                 case Some(CommandSurfaceItem.CommandItem(command)) =>
                   ReducerResult(
                     state = deactivate(state),
@@ -171,6 +174,8 @@ object CommandRunnerReducer:
               )
             case Some(submenu) if submenu.searchTerm.nonEmpty =>
               ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(submenu.searchTerm.dropRight(1))))
+            case Some(_) if currentRunner(state).exists(_.isSettingsSurface) =>
+              ReducerResult.noEffects(replaceRunner(state, _.exitSubmenuToPreview))
             case _ =>
               ReducerResult.noEffects(state)
         else
@@ -449,7 +454,8 @@ object CommandRunnerReducer:
     }
 
   private def submenuHasFocus(state: AppState): Boolean =
-    state.focus == Focus.Surface(SubmenuSurfaceId)
+    state.focus == Focus.Surface(SubmenuSurfaceId) ||
+      currentRunner(state).exists(runner => runner.isSettingsSurface && runner.activeSubmenu.nonEmpty)
 
   private def submenuEditing(state: AppState): Boolean =
     currentRunner(state).flatMap(_.activeSubmenu.flatMap(_.editingItemId)).nonEmpty
@@ -563,17 +569,19 @@ object CommandRunnerReducer:
   private def syncSubmenuSurface(state: AppState, runner: CommandRunner): AppState =
     val baseSurfaces  = state.uiSurfaces.filterNot(_.id == SubmenuSurfaceId)
     val mainSurfaceId = state.commandRunnerSurface.map(_.id).getOrElse(SurfaceId("command-runner"))
-    runner.previewOrFocusedGroupId match
-      case Some(groupId) =>
-        val submenuSurface = UiSurface(
-          id = SubmenuSurfaceId,
-          content = SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly = runner.activeSubmenu.isEmpty),
-          presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
-        )
-        state.copy(
-          uiSurfaces = baseSurfaces :+ submenuSurface,
-          focus =
-            if runner.activeSubmenu.isDefined then Focus.Surface(SubmenuSurfaceId) else Focus.Surface(mainSurfaceId)
-        )
-      case None =>
-        state.copy(uiSurfaces = baseSurfaces, focus = Focus.Surface(mainSurfaceId))
+    if runner.isSettingsSurface then state.copy(uiSurfaces = baseSurfaces, focus = Focus.Surface(mainSurfaceId))
+    else
+      runner.previewOrFocusedGroupId match
+        case Some(groupId) =>
+          val submenuSurface = UiSurface(
+            id = SubmenuSurfaceId,
+            content = SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly = runner.activeSubmenu.isEmpty),
+            presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+          )
+          state.copy(
+            uiSurfaces = baseSurfaces :+ submenuSurface,
+            focus =
+              if runner.activeSubmenu.isDefined then Focus.Surface(SubmenuSurfaceId) else Focus.Surface(mainSurfaceId)
+          )
+        case None =>
+          state.copy(uiSurfaces = baseSurfaces, focus = Focus.Surface(mainSurfaceId))

@@ -42,30 +42,35 @@ case class CommandRunner(
     statusMessage: Option[String] = None,
     uiPresetPreviews: List[UiPreset.Preview] = Nil,
     editingPresetName: Option[String] = None,
-    commandBindings: Map[String, String] = Map.empty
+    commandBindings: Map[String, String] = Map.empty,
+    mode: CommandRunnerMode = CommandRunnerMode.Palette
 ):
+
+  def isSettingsSurface: Boolean = mode == CommandRunnerMode.Settings
 
   def bindingFor(command: Command): Option[String] =
     commandBindings.get(command.name)
 
   lazy val visibleItems: List[CommandSurfaceItem] =
-    val commandItems = filteredCommands.map(CommandSurfaceItem.CommandItem(_))
-    if searchTerm.isEmpty then
-      activeCategory match
-        case CommandCategory.Settings => settingsGroups ++ commandItems
-        case _                        => commandItems
+    if isSettingsSurface then settingsSurfaceItems
     else
-      val (strongCommandMatches, remainingCommandMatches) =
-        commandItems.partition(item => CommandRunner.isStrongCommandMatch(item.command, searchTerm))
-      val (exactCommandMatches, remainingStrongCommandMatches) =
-        strongCommandMatches.partition(item => CommandRunner.isExactCommandMatch(item.command, searchTerm))
-      val settingsMatches = matchingSettingsResults(searchTerm)
-      val (exactSettingsMatches, remainingSettingsMatches) =
-        settingsMatches.partition(item =>
-          CommandRunner.isExactSettingsTarget(item, CommandRunner.normalizedSearchTerm(searchTerm))
-        )
-      exactCommandMatches ++ exactSettingsMatches ++ remainingStrongCommandMatches ++ remainingSettingsMatches ++
-        remainingCommandMatches
+      val commandItems = filteredCommands.map(CommandSurfaceItem.CommandItem(_))
+      if searchTerm.isEmpty then
+        activeCategory match
+          case CommandCategory.Settings => settingsGroups ++ commandItems
+          case _                        => commandItems
+      else
+        val (strongCommandMatches, remainingCommandMatches) =
+          commandItems.partition(item => CommandRunner.isStrongCommandMatch(item.command, searchTerm))
+        val (exactCommandMatches, remainingStrongCommandMatches) =
+          strongCommandMatches.partition(item => CommandRunner.isExactCommandMatch(item.command, searchTerm))
+        val settingsMatches = matchingSettingsResults(searchTerm)
+        val (exactSettingsMatches, remainingSettingsMatches) =
+          settingsMatches.partition(item =>
+            CommandRunner.isExactSettingsTarget(item, CommandRunner.normalizedSearchTerm(searchTerm))
+          )
+        exactCommandMatches ++ exactSettingsMatches ++ remainingStrongCommandMatches ++ remainingSettingsMatches ++
+          remainingCommandMatches
 
   def selectedItem: Option[CommandSurfaceItem] =
     visibleItems.lift(selectedIndex)
@@ -104,6 +109,67 @@ case class CommandRunner(
       uiPresetPreviews = uiPresetPreviews,
       editingPresetName = editingPresetName
     )
+
+  private lazy val settingsSurfaceGroups: List[CommandSurfaceItem.GroupItem] =
+    val labels = Map(
+      "settings-workspace-layout"  -> "Terminal & Workspace",
+      "settings-document-writing"  -> "Prose & Documents",
+      "settings-editor-view"       -> "Code & IDE",
+      "settings-appearance-motion" -> "Appearance & Motion"
+    )
+    val motionAccessibilityItems = settingsGroups
+      .find(_.id == "settings-appearance-motion")
+      .toList
+      .flatMap(_.children.collect {
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-animation" => group
+      })
+      .flatMap(_.children.collect { case item if item.id == "motion-accessibility" => item })
+    val accessibility = CommandSurfaceItem.GroupItem(
+      id = "settings-accessibility",
+      label = "Accessibility",
+      children = motionAccessibilityItems,
+      category = CommandCategory.Settings,
+      hint = Some("Motion accessibility and reading comfort")
+    )
+    settingsGroups.map(group => group.copy(label = labels.getOrElse(group.id, group.label))) :+ accessibility
+
+  def openSettings: CommandRunner =
+    copy(
+      mode = CommandRunnerMode.Settings,
+      activeCategory = CommandCategory.Settings,
+      searchTerm = "",
+      selectedIndex = 0,
+      previewedGroupId = None,
+      activeSubmenu = None,
+      statusMessage = None
+    )
+
+  def settingsSurfaceItems: List[CommandSurfaceItem] =
+    activeSubmenu match
+      case Some(submenu) => submenu.filteredItems(submenuItems(submenu.groupId))
+      case None if searchTerm.nonEmpty =>
+        matchingSettingsResults(searchTerm).map {
+          case item: CommandSurfaceItem.SettingSearchItem =>
+            item.copy(
+              breadcrumb = item.breadcrumb
+                .replace("Settings > Document Writing", "Settings > Prose & Documents")
+                .replace("Settings > Editor View", "Settings > Code & IDE")
+                .replace("Settings > Panels & Workspace", "Settings > Terminal & Workspace")
+            )
+          case item => item
+        }
+      case None => settingsSurfaceGroups
+
+  def settingsSurfaceSelectedIndex: Int =
+    activeSubmenu.map(_.selectedIndex).getOrElse(selectedIndex)
+
+  def settingsSurfaceBreadcrumbLabels: List[String] =
+    activeSubmenu match
+      case Some(submenu) => "Settings" :: submenuBreadcrumbLabels(submenu.groupId)
+      case None          => List("Settings")
+
+  def updateSettingsSearch(term: String)(using registry: CommandRegistry): CommandRunner =
+    updateSearchTerm(term)
 
   def previewGroup(groupId: String): CommandRunner =
     copy(previewedGroupId = Some(groupId))
@@ -188,7 +254,7 @@ case class CommandRunner(
     submenuGroup(groupId).map(_.children).getOrElse(Nil)
 
   def submenuGroup(groupId: String): Option[CommandSurfaceItem.GroupItem] =
-    findGroup(groupId, settingsGroups)
+    findGroup(groupId, if isSettingsSurface then settingsSurfaceGroups else settingsGroups)
 
   private def findGroup(
     groupId: String,

@@ -1,0 +1,147 @@
+package com.serenity
+
+import com.serenity.command.*
+import com.serenity.config.AppConfig
+import com.serenity.keystroke.events.*
+import com.serenity.state.models.*
+import com.serenity.state.reducers.CommandRunnerReducer
+import com.serenity.ui.layout.*
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
+
+  private val registry = CommandRegistry.default
+
+  private def stateFor(runner: CommandRunner): AppState =
+    val surface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    AppState(
+      buffers = Map.empty,
+      layout = Layout.empty,
+      focus = Focus.Surface(surface.id),
+      uiSurfaces = List(surface),
+      focusHistory = List(Focus.EditorPane(PaneId(1)))
+    )
+
+  "Settings surface" should "show peer categories and search leaves with their current values and paths" in {
+    given CommandRegistry = registry
+    val runner            = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+
+    runner.settingsSurfaceItems.collect {
+      case group: CommandSurfaceItem.GroupItem => group.label
+    } should contain allOf (
+      "Prose & Documents",
+      "Code & IDE",
+      "Terminal & Workspace",
+      "Appearance & Motion",
+      "Accessibility"
+    )
+
+    val searched = runner.updateSettingsSearch("default document")
+    val result = searched.settingsSurfaceItems
+      .collectFirst { case item: CommandSurfaceItem.SettingSearchItem => item }
+      .getOrElse(fail("Expected matching setting"))
+    result.effectiveValue shouldBe Some("Plain Text")
+    result.breadcrumb should include("Prose & Documents")
+  }
+
+  it should "use Back for one level and Escape to dismiss at every depth" in {
+    val opened = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .openSettings
+      .withSelectedItem("settings-document-writing")
+      .enterSelectedGroup
+      .withSelectedFocusedSubmenuIndex(0)
+      .enterSelectedSubmenuGroup
+
+    opened.activeSubmenu.map(_.groupId) shouldBe Some("settings-navigation")
+
+    val back = CommandRunnerReducer.reduce(RunnerDeleteBackward, stateFor(opened), registry)
+    runnerFrom(back.state).activeSubmenu.map(_.groupId) shouldBe Some("settings-document-writing")
+
+    val dismissed = CommandRunnerReducer.reduce(Escape, back.state, registry)
+    dismissed.state.commandRunnerSurface shouldBe None
+    dismissed.state.commandRunnerSubmenuSurface shouldBe None
+  }
+
+  it should "open settings from the command runner without creating a submenu stack" in {
+    given CommandRegistry = registry
+    val palette = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("open settings")
+      .withSelectedItem("open-settings")
+
+    val opened = CommandRunnerReducer.reduce(Enter, stateFor(palette), registry)
+
+    runnerFrom(opened.state).isSettingsSurface shouldBe true
+    opened.state.commandRunnerSubmenuSurface shouldBe None
+  }
+
+  it should "render a single searchable settings surface with breadcrumbs and visible edit state" in {
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .openSettings
+      .withSelectedItem("settings-appearance-motion")
+      .enterSelectedGroup
+      .withSelectedFocusedSubmenuIndex(1)
+      .enterSelectedSubmenuGroup
+      .withSelectedFocusedSubmenuIndex(4)
+      .beginSubmenuEditMode
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 90, 16),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.title shouldBe Some("Settings")
+    resolved.header.map(_.plainText) shouldBe Some("Settings > Appearance & Motion > Surface Appearance")
+    resolved.rows.exists(_.cursorColumn.nonEmpty) shouldBe true
+    resolved.footer.map(_.plainText).getOrElse(fail("Expected settings footer")) should include("Back")
+  }
+
+  it should "describe the selected group, option, and input action in its footer" in {
+    val root   = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val option = root.copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance")))
+    val input =
+      option.copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance", selectedIndex = 4)))
+    val editing = input.copy(
+      activeSubmenu = input.activeSubmenu.map(_.copy(editingItemId = Some("blur-radius"), editingText = "1"))
+    )
+
+    footerText(root) should include("Open")
+    footerText(option) should include("Apply")
+    footerText(input) should include("Edit")
+    footerText(editing) should include("Save")
+    List(root, option, input, editing).foreach { runner =>
+      val footer = footerText(runner)
+      footer should not include "Enter"
+      footer should not include "Backspace"
+      footer should not include "Esc"
+      footer should not include "↑"
+    }
+  }
+
+  private def footerText(runner: CommandRunner): String =
+    SurfaceContentResolver
+      .resolve(
+        SurfaceContent.CommandPalette(runner),
+        LayoutRect(0, 0, 90, 16),
+        SurfaceRenderMode.Floating
+      )
+      .footer
+      .map(_.plainText)
+      .getOrElse(fail("Expected settings footer"))
+
+  private def runnerFrom(state: AppState): CommandRunner =
+    state.commandRunnerSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.CommandPalette(runner) => Some(runner)
+          case _                                     => None
+      }
+      .getOrElse(fail("Expected settings surface"))
