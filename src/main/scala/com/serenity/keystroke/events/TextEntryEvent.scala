@@ -38,6 +38,7 @@ case object MoveToStartOfFile     extends NavigationEvent
 case class ScrollDown(lines: Int) extends ScrollEvent
 case class ScrollUp(lines: Int)   extends ScrollEvent
 case object OpenGotoLine          extends ModalRequestEvent
+case object OpenReplace           extends ModalRequestEvent
 case object FindNext              extends TextEntryEvent
 case object Enter                 extends TextEntryEvent
 case object OpenFind              extends ModalRequestEvent

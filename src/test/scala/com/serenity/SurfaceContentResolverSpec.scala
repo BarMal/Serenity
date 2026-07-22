@@ -3,7 +3,7 @@ package com.serenity
 import java.nio.file.Paths
 
 import com.serenity.command.*
-import com.serenity.config.{AppConfig, ToolbarDisplayMode}
+import com.serenity.config.{AppConfig, HotkeyAction, HotkeyConfig, ToolbarDisplayMode}
 import com.serenity.document.RenderedComment
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
@@ -108,6 +108,26 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.rows.head.plainText should include("Open")
     floating.rows.head.plainText should include("Open file")
     floating.footer.map(_.plainText) shouldBe Some("1/2")
+  }
+
+  it should "render active platform and user shortcut bindings beside core command rows" in {
+    val config = AppConfig.default.withHotkeyConfig(
+      HotkeyConfig.forOs("Mac OS X").withBinding(HotkeyAction.Find, "ctrl+alt+f")
+    )
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, config)
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 80, 80),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.find(_.plainText.startsWith("Find")).map(_.segments.map(_.text)) shouldBe Some(
+      List("Find", "ctrl+alt+f", "Find text in the current file.")
+    )
+    resolved.rows.find(_.plainText.startsWith("Replace")).map(_.segments.map(_.text)) shouldBe Some(
+      List("Replace", "meta+h", "Find and replace text in the current file.")
+    )
   }
 
   it should "resolve context menus into a selected command list" in {

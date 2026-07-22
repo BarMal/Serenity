@@ -411,7 +411,7 @@ object SurfaceContentResolver:
           val prefix =
             if runner.searchTerm.isEmpty then ""
             else s"[${categoryLabel(command.category)}] "
-          commandRow(command, index == adjustedSelectedIndex, prefix)
+          commandRow(command, index == adjustedSelectedIndex, prefix, runner.bindingFor(command))
         case (option: CommandSurfaceItem.OptionItem, index) =>
           optionRow(option, index == adjustedSelectedIndex)
         case (item: CommandSurfaceItem.InputItem, index) =>
@@ -493,7 +493,7 @@ object SurfaceContentResolver:
           else None
         inputRow(item, !previewOnly && index == adjustedSelectedIndex, editingText)
       case (CommandSurfaceItem.CommandItem(command), index) =>
-        commandRow(command, !previewOnly && index == adjustedSelectedIndex)
+        commandRow(command, !previewOnly && index == adjustedSelectedIndex, binding = runner.bindingFor(command))
       case (group: CommandSurfaceItem.GroupItem, index) =>
         OverlayRow(
           plainText = group.label,
@@ -605,14 +605,19 @@ object SurfaceContentResolver:
       case CommandCategory.Project  => "Project"
       case CommandCategory.Settings => "Settings"
 
-  private def commandRow(command: com.serenity.command.Command, selected: Boolean, prefix: String = ""): OverlayRow =
+  private def commandRow(
+    command: com.serenity.command.Command,
+    selected: Boolean,
+    prefix: String = "",
+    binding: Option[String] = None
+  ): OverlayRow =
+    val label = s"$prefix${command.label}"
     OverlayRow(
-      plainText = s"$prefix${command.label} - ${command.description}",
+      plainText = (List(label) ++ binding.toList :+ command.description).mkString(" - "),
       selected = selected,
-      segments = List(
-        OverlaySegment(s"$prefix${command.label}", fontFamily = fontFamilyForCommand(command)),
-        OverlaySegment(command.description, tone = OverlayTone.Normal)
-      ),
+      segments = OverlaySegment(label, fontFamily = fontFamilyForCommand(command)) ::
+        binding.map(value => OverlaySegment(value, tone = OverlayTone.Muted)).toList :::
+        List(OverlaySegment(command.description, tone = OverlayTone.Normal)),
       layout = OverlayRowLayout.Columns
     )
 

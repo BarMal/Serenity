@@ -57,6 +57,32 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     translator.translate(KeyStrokeInfo(InputKey.Delete, None, Set(Modifier.Ctrl))) shouldBe DeleteWordForward
   }
 
+  it should "dispatch conventional core editing shortcuts from platform-resolved hotkeys" in {
+    val linuxState = editorState.copy(config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux")))
+    val macState   = editorState.copy(config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X")))
+
+    val linux = FocusedInputTranslator.forState(linuxState)
+    val mac   = FocusedInputTranslator.forState(macState)
+
+    List(
+      (InputKey.Character, Some('f'), Set(Modifier.Ctrl), OpenFind),
+      (InputKey.Character, Some('h'), Set(Modifier.Ctrl), OpenReplace),
+      (InputKey.Character, Some('g'), Set(Modifier.Ctrl), OpenGotoLine),
+      (InputKey.Character, Some('s'), Set(Modifier.Ctrl, Modifier.Shift), SaveAsFile)
+    ).foreach { case (key, character, modifiers, expected) =>
+      linux.translate(KeyStrokeInfo(key, character, modifiers)) shouldBe expected
+    }
+
+    List(
+      (InputKey.Character, Some('f'), Set(Modifier.Meta), OpenFind),
+      (InputKey.Character, Some('h'), Set(Modifier.Meta), OpenReplace),
+      (InputKey.Character, Some('g'), Set(Modifier.Meta), OpenGotoLine),
+      (InputKey.Character, Some('s'), Set(Modifier.Meta, Modifier.Shift), SaveAsFile)
+    ).foreach { case (key, character, modifiers, expected) =>
+      mac.translate(KeyStrokeInfo(key, character, modifiers)) shouldBe expected
+    }
+  }
+
   it should "treat PageUp, PageDown, Ctrl+Home, and Ctrl+End as file navigation in editor focus" in {
     val translator = FocusedInputTranslator.forState(editorState)
 

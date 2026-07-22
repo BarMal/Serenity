@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.*
 
 object TextHotkeyConverters:
 
-  private val actionEvents: List[(HotkeyAction, TextEntryEvent)] = List(
+  private val actionEvents: List[(HotkeyAction, Event)] = List(
     HotkeyAction.Save                     -> Save,
     HotkeyAction.Quit                     -> Quit,
     HotkeyAction.Undo                     -> Undo,
@@ -23,10 +23,14 @@ object TextHotkeyConverters:
     HotkeyAction.CloseTab                 -> CloseTab,
     HotkeyAction.FileSearch               -> FileSearch,
     HotkeyAction.PreviousTab              -> PreviousTab,
-    HotkeyAction.NextTab                  -> NextTab
+    HotkeyAction.NextTab                  -> NextTab,
+    HotkeyAction.Find                     -> OpenFind,
+    HotkeyAction.Replace                  -> OpenReplace,
+    HotkeyAction.GoToLine                 -> OpenGotoLine,
+    HotkeyAction.SaveAs                   -> SaveAsFile
   )
 
-  def hotkeyConverter(config: AppConfig = AppConfig.default): PartialFunction[KeyStrokeInfo, TextEntryEvent] =
+  def hotkeyConverter(config: AppConfig = AppConfig.default): PartialFunction[KeyStrokeInfo, Event] =
     val bindings =
       actionEvents.flatMap((action, event) => config.hotkeyConfig.bindingsFor(action).map(_ -> event))
 
