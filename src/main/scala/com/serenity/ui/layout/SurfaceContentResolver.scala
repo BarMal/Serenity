@@ -463,9 +463,13 @@ object SurfaceContentResolver:
   private def commandPaletteFooter(runner: com.serenity.command.CommandRunner, itemCount: Int): String =
     val submitAction = runner.selectedItem match
       case Some(_: CommandSurfaceItem.GroupItem) | Some(_: CommandSurfaceItem.SettingSearchItem) => "Enter open"
-      case _                                                                                       => "Enter run"
+      case _                                                                                     => "Enter run"
     val categoryAction = Option.when(runner.searchTerm.isEmpty)("Tab categories")
-    (List("↑↓ navigate") ++ categoryAction.toList ++ List(submitAction, "Esc dismiss", s"${runner.selectedIndex + 1}/$itemCount"))
+    (List("↑↓ navigate") ++ categoryAction.toList ++ List(
+      submitAction,
+      "Esc dismiss",
+      s"${runner.selectedIndex + 1}/$itemCount"
+    ))
       .mkString(" • ")
 
   private def resolveCommandPaletteSubmenu(
