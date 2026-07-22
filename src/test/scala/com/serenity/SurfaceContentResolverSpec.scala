@@ -130,6 +130,25 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "describe category navigation and group opening in browse-mode footer help" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+      .withSelectedItem("settings-workspace-layout")
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 60, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.footer.map(_.plainText) shouldBe Some(
+      s"↑↓ navigate • Tab categories • Enter open • Esc dismiss • ${runner.selectedIndex + 1}/${runner.visibleItems.length}"
+    )
+  }
+
   it should "resolve context menus into a selected command list" in {
     val save = Command.typed("save", "Save file", CommandIntent.SaveCurrentFile, label = "Save")
     val find = Command.typed("find", "Find text", CommandIntent.FindInCurrentFile, label = "Find")

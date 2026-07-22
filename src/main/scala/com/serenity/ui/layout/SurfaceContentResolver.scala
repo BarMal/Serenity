@@ -449,7 +449,7 @@ object SurfaceContentResolver:
           .map(OverlayRow(_))
           .orElse(
             Option.when(allItems.nonEmpty)(
-              OverlayRow(s"↑↓ navigate • Enter run • Esc dismiss • ${runner.selectedIndex + 1}/${allItems.length}")
+              OverlayRow(commandPaletteFooter(runner, allItems.length))
             )
           )
 
@@ -459,6 +459,14 @@ object SurfaceContentResolver:
         rows = rows,
         footer = footer
       )
+
+  private def commandPaletteFooter(runner: com.serenity.command.CommandRunner, itemCount: Int): String =
+    val submitAction = runner.selectedItem match
+      case Some(_: CommandSurfaceItem.GroupItem) | Some(_: CommandSurfaceItem.SettingSearchItem) => "Enter open"
+      case _                                                                                       => "Enter run"
+    val categoryAction = Option.when(runner.searchTerm.isEmpty)("Tab categories")
+    (List("↑↓ navigate") ++ categoryAction.toList ++ List(submitAction, "Esc dismiss", s"${runner.selectedIndex + 1}/$itemCount"))
+      .mkString(" • ")
 
   private def resolveCommandPaletteSubmenu(
     runner: com.serenity.command.CommandRunner,
