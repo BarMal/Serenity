@@ -6,14 +6,49 @@ Run the local performance harness with:
 sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks"
 ```
 
-The harness prints CSV rows with `min_ms`, `median_ms`, and `max_ms` for repeatable hot-path scenarios:
+The cursor-only scenario opens a temporary Swing window so it can measure Serenity's real overlay publication path. Run it in a graphical session; a headless Linux environment can use `xvfb-run -a sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks"`.
 
-- large single-line JSON rope search and cursor offset lookup
-- large multi-line visible viewport layout
-- rich-text rendering on a large document
-- document comment rendering on a large visible viewport
-- Markdown preview source-window mapping and HTML fragment rendering
-- inline Markdown lens rendering
-- large visible animation tick advancement
+The harness prints CSV rows with `min_ms`, `p50_ms`, `p95_ms`, and `max_ms`. Every scenario builds its immutable document, state, search, LSP, and project-task fixtures before timing, runs the measured operation once, and asserts its observable result before warmup. Java2D frame and cursor-overlay image allocation remain inside their timed paths because those allocations, drawing, copying, and repaint requests are part of the user-visible work being measured.
 
-Use this before and after rope constant changes, render-loop rewrites, markdown preview changes, and animation changes. CI still runs correctness checks; this harness is intended for manual baseline capture during performance PRs and release checks.
+Scenarios cover:
+
+- large JSON rope search and cursor-offset lookup
+- visible multiline layout, normal editing, and deep plain/rich-text scrolling reducers
+- real Java2D full frames, cursor-overlay copying, diagnostics/comments, and HiDPI buffers
+- large find/replace result-set presentation
+- LSP frame decoding and project-task detection/terminal preparation
+- Markdown preview and inline-lens rendering
+- visible animation tick advancement
+
+This remains a manual comparison tool. CI runs correctness tests but has no absolute timing gate.
+
+## Repeatable before/after workflow
+
+1. Close CPU-intensive applications and use the same power and display-scale settings for both captures.
+2. Run the command above once and discard that output if dependencies or classes were cold.
+3. Run it again, save the CSV output with the commit SHA, and compare p50 and p95 for like-named scenarios.
+4. Record the printed `context` rows with the results. Treat changes as signals for investigation, not pass/fail thresholds.
+
+## Baseline: 2026-07-21
+
+Captured on x86_64 Linux 5.15.153.1-microsoft-standard-WSL2, AMD Ryzen 5 5600X 6-Core Processor (12 available processors), Microsoft OpenJDK Runtime 21.0.8+9-LTS. Times are milliseconds.
+
+| Scenario | p50 | p95 |
+| --- | ---: | ---: |
+| `rope.large_json.search` | 12.789 | 14.422 |
+| `rope.large_json.cursor_offset` | 0.693 | 0.864 |
+| `layout.large_multiline.visible_viewport` | 4.292 | 6.355 |
+| `render.full_frame.java2d` | 11.284 | 15.223 |
+| `render.cursor_only.java2d_overlay` | 5.158 | 10.270 |
+| `render.diagnostics_and_comments.java2d` | 7.169 | 10.973 |
+| `render.hidpi_frame.java2d` | 10.277 | 20.254 |
+| `reducer.normal_editing` | 5.144 | 10.683 |
+| `reducer.deep_scroll.plain` | 0.006 | 0.048 |
+| `reducer.deep_scroll.rich_text` | 0.011 | 0.036 |
+| `find_replace.large_result_set` | 0.255 | 0.460 |
+| `lsp.framer.large_batch` | 3.864 | 5.803 |
+| `project_task.responsiveness` | 0.025 | 0.028 |
+| `markdown.preview.window_mapping` | 1.058 | 2.602 |
+| `markdown.preview.html_fragment` | 0.523 | 0.550 |
+| `render.markdown.inline_lens` | 10.894 | 13.942 |
+| `animation.large_visible_tick` | 1.354 | 1.783 |
