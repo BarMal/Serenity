@@ -128,23 +128,22 @@ final private[manager] class StateManagerOperationBoundary private (
   def scheduleDocumentAnalysis(): IO[Unit] =
     stateRef.get.flatMap { state =>
       IO.blocking(SpellChecker.analysisFingerprints(state)).flatMap { inputs =>
-        documentAnalysisInputsRef.modify { previous =>
-          Some(inputs) -> previous.forall(_ != inputs)
-        }.flatMap { inputsChanged =>
-          if !inputsChanged || !requiresDocumentAnalysis(state) then IO.unit
-          else
-            analysisLifecycleLock.permit.use { _ =>
-              documentAnalysisShutdownRef.get.ifM(
-                IO.unit,
-                for
-                  previous <- documentAnalysisFiberRef.getAndSet(None)
-                  _        <- previous.traverse_(_.cancel)
-                  _        <- beforeDocumentAnalysisStart
-                  fiber    <- documentAnalysisJob.start
-                  _        <- documentAnalysisFiberRef.set(Some(fiber))
-                yield ()
-              )
-            }
+        documentAnalysisInputsRef.modify(previous => Some(inputs) -> previous.forall(_ != inputs)).flatMap {
+          inputsChanged =>
+            if !inputsChanged || !requiresDocumentAnalysis(state) then IO.unit
+            else
+              analysisLifecycleLock.permit.use { _ =>
+                documentAnalysisShutdownRef.get.ifM(
+                  IO.unit,
+                  for
+                    previous <- documentAnalysisFiberRef.getAndSet(None)
+                    _        <- previous.traverse_(_.cancel)
+                    _        <- beforeDocumentAnalysisStart
+                    fiber    <- documentAnalysisJob.start
+                    _        <- documentAnalysisFiberRef.set(Some(fiber))
+                  yield ()
+                )
+              }
         }
       }
     }

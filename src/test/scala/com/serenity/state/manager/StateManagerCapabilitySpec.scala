@@ -282,7 +282,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(0)
     val initialState = AppState.initial.copy(
       config = AppConfig.default.withSpellCheck(AppConfig.default.spellCheck.copy(enabled = true)),
-      buffers = AppState.initial.buffers.updated(bufferId, AppState.initial.buffers(bufferId).copy(content = Rope("hello")))
+      buffers =
+        AppState.initial.buffers.updated(bufferId, AppState.initial.buffers(bufferId).copy(content = Rope("hello")))
     )
     val movedCursorState = initialState.copy(
       buffers = initialState.buffers.updated(
@@ -310,14 +311,14 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
         beforeDocumentAnalysisStart = starts.update(_ + 1)
       )
-      _ <- operations.validateAndUpdateState(initialState, initialState)
-      _ <- operations.validateAndUpdateState(movedCursorState, initialState)
-      afterCursorMove <- starts.get
-      _ <- operations.validateAndUpdateState(editedState, movedCursorState)
-      afterEdit <- starts.get
-      _ <- operations.validateAndUpdateState(configuredState, editedState)
+      _                        <- operations.validateAndUpdateState(initialState, initialState)
+      _                        <- operations.validateAndUpdateState(movedCursorState, initialState)
+      afterCursorMove          <- starts.get
+      _                        <- operations.validateAndUpdateState(editedState, movedCursorState)
+      afterEdit                <- starts.get
+      _                        <- operations.validateAndUpdateState(configuredState, editedState)
       afterConfigurationChange <- starts.get
-      _ <- operations.cancelDocumentAnalysis()
+      _                        <- operations.cancelDocumentAnalysis()
     yield
       afterCursorMove shouldBe 1
       afterEdit shouldBe 2
