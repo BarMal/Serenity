@@ -1,7 +1,7 @@
 package com.serenity
 
 import java.io.IOException
-import java.nio.file.attribute.PosixFilePermission
+import java.nio.file.attribute.{PosixFileAttributeView, PosixFilePermission}
 import java.nio.file.{AtomicMoveNotSupportedException, Files, Path, StandardCopyOption}
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -82,10 +82,14 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
       PosixFilePermission.GROUP_READ,
       PosixFilePermission.GROUP_EXECUTE
     )
-    Files.writeString(target, "before")
-    Files.setPosixFilePermissions(target, permissions.asJava)
 
     try
+      assume(
+        Files.getFileStore(directory).supportsFileAttributeView(classOf[PosixFileAttributeView]),
+        "POSIX file attributes are unavailable"
+      )
+      Files.writeString(target, "before")
+      Files.setPosixFilePermissions(target, permissions.asJava)
       AtomicFileWriter.writeString(target, "after").unsafeRunSync()
 
       Files.readString(target) shouldBe "after"
