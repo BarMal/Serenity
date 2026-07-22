@@ -2,9 +2,9 @@ package com.serenity.lsp
 
 import scala.concurrent.duration.*
 
-import cats.effect.{Deferred, Fiber, IO, Ref, Resource}
 import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
+import cats.effect.{Deferred, Fiber, IO, Ref, Resource}
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.LspConnection
 import com.serenity.lsp.config.LanguageId
@@ -37,11 +37,11 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
 
   private def harness: IO[Harness] =
     for
-      effects    <- Queue.unbounded[IO, Option[LspEffect]]
-      events     <- Ref.of[IO, List[Event]](Nil)
+      effects      <- Queue.unbounded[IO, Option[LspEffect]]
+      events       <- Ref.of[IO, List[Event]](Nil)
       eventApplied <- Deferred[IO, Unit]
-      connection <- LspConnection.create(LanguageId.Scala, logger)
-      released   <- Deferred[IO, Unit]
+      connection   <- LspConnection.create(LanguageId.Scala, logger)
+      released     <- Deferred[IO, Unit]
       provider = new LspManager.ConnectionProvider:
         def connect(
           languageId: LanguageId,
@@ -74,7 +74,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
         IO(message.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didOpen"))
       }
 
-  "LspManager" should "send document changes while a hover response is pending" in {
+  "LspManager" should "send document changes while a hover response is pending" in
     (for
       manager <- harness
       _       <- open(manager)
@@ -83,12 +83,11 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       )
       hover <- takeMessage(manager.connection)
       _ = hover.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/hover")
-      _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+      _      <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
       change <- takeMessage(manager.connection)
       _ = change.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didChange")
       _ <- manager.stop
     yield succeed).timeout(3.seconds).unsafeRunSync()
-  }
 
   it should "discard a definition response after its document version changes" in {
     val anchor = CursorPosition(0, 1)
@@ -99,8 +98,8 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
         Some(LspEffect.DefinitionRequested(uri, LanguageId.Scala, 0, 1, anchor, "Foo"))
       )
       request <- takeMessage(manager.connection)
-      _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
-      _ <- takeMessage(manager.connection)
+      _       <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+      _       <- takeMessage(manager.connection)
       pending <- manager.connection.pendingRequestCount
       _ = pending shouldBe 0
       _ <- manager.connection.handleIncomingJson(
@@ -110,7 +109,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
             "uri" -> uri.asJson,
             "range" -> Json.obj(
               "start" -> Json.obj("line" -> 0.asJson, "character" -> 0.asJson),
-              "end" -> Json.obj("line" -> 0.asJson, "character" -> 3.asJson)
+              "end"   -> Json.obj("line" -> 0.asJson, "character" -> 3.asJson)
             )
           )
         )
@@ -125,11 +124,11 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     val firstAnchor  = CursorPosition(0, 1)
     val secondAnchor = CursorPosition(0, 2)
     (for
-      manager <- harness
-      _       <- open(manager)
-      _ <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, firstAnchor)))
-      firstRequest <- takeMessage(manager.connection)
-      _ <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 2, secondAnchor)))
+      manager       <- harness
+      _             <- open(manager)
+      _             <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, firstAnchor)))
+      firstRequest  <- takeMessage(manager.connection)
+      _             <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 2, secondAnchor)))
       secondRequest <- takeMessage(manager.connection)
       _ <- manager.connection.handleIncomingJson(
         response(requestId(firstRequest), Json.obj("contents" -> "stale".asJson))
@@ -137,14 +136,14 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       _ <- manager.connection.handleIncomingJson(
         response(requestId(secondRequest), Json.obj("contents" -> "current".asJson))
       )
-      _ <- manager.eventApplied.get
+      _      <- manager.eventApplied.get
       events <- manager.events.get
       _ = events shouldBe List(LspEvent.LspHoverReceived("current", secondAnchor))
       _ <- manager.stop
     yield succeed).timeout(3.seconds).unsafeRunSync()
   }
 
-  it should "cancel pending request fibers before releasing connections on shutdown" in {
+  it should "cancel pending request fibers before releasing connections on shutdown" in
     (for
       manager <- harness
       _       <- open(manager)
@@ -155,5 +154,5 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       released <- manager.released.tryGet
     yield
       pending shouldBe 0
-      released shouldBe Some(())).timeout(3.seconds).unsafeRunSync()
-  }
+      released shouldBe Some(())
+    ).timeout(3.seconds).unsafeRunSync()

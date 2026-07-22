@@ -1,7 +1,7 @@
 package com.serenity.lsp
 
-import cats.effect.{IO, Ref, Resource}
 import cats.effect.std.Supervisor
+import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{LspConnection, LspProtocol}
@@ -21,6 +21,7 @@ object LspManager:
   private case class RequestContext(version: Int, anchor: CursorPosition)
 
   private[lsp] trait ConnectionProvider:
+
     def connect(
       languageId: LanguageId,
       fileUri: String,
@@ -41,28 +42,31 @@ object LspManager:
     logger: Logger[IO],
     connectionProvider: ConnectionProvider
   ): IO[Unit] =
-    Supervisor[IO].allocated.flatMap { case (supervisor, releaseRequests) =>
-      for
-        connectionsRef  <- Ref.of[IO, Map[LanguageId, ManagedConnection]](Map.empty)
-        documentVersions <- Ref.of[IO, Map[String, Int]](Map.empty)
-        requestContexts  <- Ref.of[IO, Map[RequestKey, RequestContext]](Map.empty)
-        requestFibers    <- Ref.of[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]](Map.empty)
-        runEffects = effects
-          .evalMap(handleEffect(
-            _,
-            connectionsRef,
-            documentVersions,
-            requestContexts,
-            requestFibers,
-            supervisor,
-            applyEvent,
-            logger,
-            connectionProvider
-          ))
-          .compile
-          .drain
-        _ <- runEffects.guarantee(releaseRequests >> releaseConnections(connectionsRef, logger))
-      yield ()
+    Supervisor[IO].allocated.flatMap {
+      case (supervisor, releaseRequests) =>
+        for
+          connectionsRef   <- Ref.of[IO, Map[LanguageId, ManagedConnection]](Map.empty)
+          documentVersions <- Ref.of[IO, Map[String, Int]](Map.empty)
+          requestContexts  <- Ref.of[IO, Map[RequestKey, RequestContext]](Map.empty)
+          requestFibers    <- Ref.of[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]](Map.empty)
+          runEffects = effects
+            .evalMap(
+              handleEffect(
+                _,
+                connectionsRef,
+                documentVersions,
+                requestContexts,
+                requestFibers,
+                supervisor,
+                applyEvent,
+                logger,
+                connectionProvider
+              )
+            )
+            .compile
+            .drain
+          _ <- runEffects.guarantee(releaseRequests >> releaseConnections(connectionsRef, logger))
+        yield ()
     }
 
   private def handleEffect(
@@ -272,7 +276,7 @@ object LspManager:
     connectionsRef.get.flatMap { conns =>
       conns.get(languageId) match
         case Some(managed) => IO.pure(Some(managed.connection))
-        case None          => spawnConnection(connectionsRef, languageId, fileUri, applyEvent, logger, connectionProvider)
+        case None => spawnConnection(connectionsRef, languageId, fileUri, applyEvent, logger, connectionProvider)
     }
 
   private def spawnConnection(
@@ -289,14 +293,15 @@ object LspManager:
       case None => IO.pure(None)
       case Some(resource) =>
         resource.allocated
-          .flatMap { case (conn, release) =>
-            conn.processIncoming(onDiagnostics).start.flatMap { diagnosticsFiber =>
-              val managed = ManagedConnection(
-                connection = conn,
-                release = release >> diagnosticsFiber.cancel
-              )
-              connectionsRef.update(_ + (languageId -> managed)) >> IO.pure(Some(conn))
-            }
+          .flatMap {
+            case (conn, release) =>
+              conn.processIncoming(onDiagnostics).start.flatMap { diagnosticsFiber =>
+                val managed = ManagedConnection(
+                  connection = conn,
+                  release = release >> diagnosticsFiber.cancel
+                )
+                connectionsRef.update(_ + (languageId -> managed)) >> IO.pure(Some(conn))
+              }
           }
           .handleErrorWith(ex => logger.error(ex)(s"[LSP] Failed to connect for ${languageId.id}").as(None))
     }
