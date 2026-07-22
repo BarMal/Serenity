@@ -506,7 +506,7 @@ object SurfaceContentResolver:
         )
     }
     val searchTerm = runner.activeSubmenu.fold(runner.searchTerm)(_.searchTerm)
-    val submitAction = settingsSurfaceSubmitAction(runner, items.lift(selectedIndex))
+    val selectedAction = settingsSurfaceSelectedAction(runner, items.lift(selectedIndex))
     ResolvedSurfaceContent(
       title = Some("Settings"),
       header = Some(breadcrumbHeader(runner.settingsSurfaceBreadcrumbLabels, Option.when(searchTerm.nonEmpty)(searchTerm))),
@@ -514,23 +514,23 @@ object SurfaceContentResolver:
       footer = runner.statusMessage.map(OverlayRow(_)).orElse(
         Some(
           OverlayRow(
-            s"↑↓ navigate • $submitAction • Backspace back • Esc dismiss • ${selectedIndex + 1}/${items.length.max(1)}"
+            s"Navigate • $selectedAction • Back • Dismiss • ${selectedIndex + 1}/${items.length.max(1)}"
           )
         )
       )
     )
 
-  private def settingsSurfaceSubmitAction(
+  private def settingsSurfaceSelectedAction(
     runner: com.serenity.command.CommandRunner,
     selectedItem: Option[CommandSurfaceItem]
   ): String =
     selectedItem match
-      case Some(_: CommandSurfaceItem.GroupItem) | Some(_: CommandSurfaceItem.SettingSearchItem) => "Enter open"
-      case Some(_: CommandSurfaceItem.OptionItem)                                                  => "Enter apply"
+      case Some(_: CommandSurfaceItem.GroupItem) | Some(_: CommandSurfaceItem.SettingSearchItem) => "Open"
+      case Some(_: CommandSurfaceItem.OptionItem)                                                  => "Apply"
       case Some(item: CommandSurfaceItem.InputItem) =>
-        if runner.activeSubmenu.exists(_.editingItemId.contains(item.id)) then "Enter save" else "Type edit"
-      case Some(_: CommandSurfaceItem.CommandItem) => "Enter run"
-      case None                                    => "Enter select"
+        if runner.activeSubmenu.exists(_.editingItemId.contains(item.id)) then "Save" else "Edit"
+      case Some(_: CommandSurfaceItem.CommandItem) => "Run"
+      case None                                    => "Select"
 
   private def commandPaletteFooter(runner: com.serenity.command.CommandRunner, itemCount: Int): String =
     val submitAction = runner.selectedItem match

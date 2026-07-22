@@ -109,10 +109,17 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
       activeSubmenu = input.activeSubmenu.map(_.copy(editingItemId = Some("blur-radius"), editingText = "1"))
     )
 
-    footerText(root) should include("Enter open")
-    footerText(option) should include("Enter apply")
-    footerText(input) should include("Type edit")
-    footerText(editing) should include("Enter save")
+    footerText(root) should include("Open")
+    footerText(option) should include("Apply")
+    footerText(input) should include("Edit")
+    footerText(editing) should include("Save")
+    List(root, option, input, editing).foreach { runner =>
+      val footer = footerText(runner)
+      footer should not include "Enter"
+      footer should not include "Backspace"
+      footer should not include "Esc"
+      footer should not include "↑"
+    }
   }
 
   private def footerText(runner: CommandRunner): String =
