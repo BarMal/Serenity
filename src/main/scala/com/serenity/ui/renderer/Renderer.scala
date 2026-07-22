@@ -266,6 +266,7 @@ object Renderer:
   ): Option[EditorPaneRenderPlan] =
     surface.hideCursor()
     surface.clearViewport(state.theme.background)
+    val scene = UiSceneSnapshot.from(state, layout)
 
     val editorRenderPlan = state.startPageSurface.flatMap {
       _.content match
@@ -276,7 +277,7 @@ object Renderer:
         renderStartPage(page, surface, viewportSize, state.theme, uiFont, cellMetrics, uiMetrics)
         val floatContext =
           RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
-        renderFloatingPanels(state, floatContext)
+        renderFloatingPanels(state, floatContext, scene)
         None
       case None =>
         val context =
@@ -287,7 +288,7 @@ object Renderer:
         renderGutter(state, context, editorRenderPlan.layoutContract)
         renderPinnedPanels(state, context)
         renderEditorPanes(state, context, editorRenderPlan)
-        renderFloatingPanels(state, context)
+        renderFloatingPanels(state, context, scene)
         Some(editorRenderPlan)
 
     surface.applyPostProcessing(state.config.postProcessingEffect)
@@ -1501,9 +1502,9 @@ object Renderer:
     if isPrimaryCursor then activeColor
     else config.cursorColors.inactiveOr(activeColor)
 
-  private def renderFloatingPanels(state: AppState, context: RenderContext): Unit =
+  private def renderFloatingPanels(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
     context.surface.setFont(context.uiFont)
-    val overlays = OverlayViewModel.fromState(state, context.layout)
+    val overlays = OverlayViewModel.fromState(state, scene)
 
     overlays.aboveCursor.foreach { overlay =>
       val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
