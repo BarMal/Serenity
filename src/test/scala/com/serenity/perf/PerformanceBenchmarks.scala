@@ -25,17 +25,25 @@ import io.circe.Json
 object PerformanceBenchmarks:
 
   private case class Benchmark(name: String, warmups: Int, iterations: Int, verify: () => Unit, run: () => Unit)
-  private case class BenchmarkResult(name: String, iterations: Int, minMs: Double, p50Ms: Double, p95Ms: Double, maxMs: Double)
+
+  private case class BenchmarkResult(
+      name: String,
+      iterations: Int,
+      minMs: Double,
+      p50Ms: Double,
+      p95Ms: Double,
+      maxMs: Double
+  )
 
   given Balance = Balance.default
 
-  private val monoFont     = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val textFont     = Font(Font.SERIF, Font.PLAIN, 14)
-  private val uiFont       = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-  private val cellMetrics  = CellMetrics.fromFont(monoFont)
-  private val uiMetrics    = CellMetrics.fromFont(uiFont)
-  private val viewportSize = ViewportSize(120, 40)
-  private val frameWidthPx = viewportSize.width * cellMetrics.charWidth
+  private val monoFont      = Font(Font.MONOSPACED, Font.PLAIN, 12)
+  private val textFont      = Font(Font.SERIF, Font.PLAIN, 14)
+  private val uiFont        = Font(Font.SANS_SERIF, Font.PLAIN, 12)
+  private val cellMetrics   = CellMetrics.fromFont(monoFont)
+  private val uiMetrics     = CellMetrics.fromFont(uiFont)
+  private val viewportSize  = ViewportSize(120, 40)
+  private val frameWidthPx  = viewportSize.width * cellMetrics.charWidth
   private val frameHeightPx = viewportSize.height * cellMetrics.lineHeight
 
   def main(args: Array[String]): Unit =
@@ -44,11 +52,12 @@ object PerformanceBenchmarks:
     SwingWindow
       .resource(metrics = cellMetrics, chromeMetrics = uiMetrics)
       .flatMap(window => projectTaskFixtureResource.map(projectRoot => window -> projectRoot))
-      .use { case (window, projectRoot) =>
-        IO {
-          val results = benchmarks(window, projectRoot).map(runBenchmark)
-          printResults(results)
-        }
+      .use {
+        case (window, projectRoot) =>
+          IO {
+            val results = benchmarks(window, projectRoot).map(runBenchmark)
+            printResults(results)
+          }
       }
       .unsafeRunSync()
 
@@ -105,9 +114,7 @@ object PerformanceBenchmarks:
     )
     val findState = editorState(findText, None)
     val editingState = findState.copy(
-      buffers = findState.buffers.view.mapValues { buffer =>
-        buffer.copy(cursors = List(CursorPosition(6_000, 12)))
-      }.toMap
+      buffers = findState.buffers.view.mapValues(buffer => buffer.copy(cursors = List(CursorPosition(6_000, 12)))).toMap
     )
     val normalEditingResult = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), editingState)
     val plainScrollResult   = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
@@ -118,14 +125,16 @@ object PerformanceBenchmarks:
       .map(_.patch(12, "x", 0))
     val jsonSearchResults = Rope(jsonText).searchAll("\"k19999\"")
     val jsonCursorOffset  = Rope(jsonText).lineColumnToOffset(0, jsonText.length - 5)
-    val layoutSnapshot = plainScrollState.buffers.get(BufferId(1)).map(buffer =>
-      com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
-        buffer,
-        panelWidthPx = frameWidthPx,
-        monoFont,
-        wordWrapEnabled = false
+    val layoutSnapshot = plainScrollState.buffers
+      .get(BufferId(1))
+      .map(buffer =>
+        com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
+          buffer,
+          panelWidthPx = frameWidthPx,
+          monoFont,
+          wordWrapEnabled = false
+        )
       )
-    )
     val findResultSet = FindResultSet.normalized(
       "needle",
       (0 until 12_000).toList.map(line => FindResult(line, 10)),
@@ -135,29 +144,37 @@ object PerformanceBenchmarks:
       Json.obj("jsonrpc" -> Json.fromString("2.0"), "id" -> Json.fromInt(id), "method" -> Json.fromString("benchmark"))
     }
     val framedLspMessages = lspMessages.flatMap(LspFramer.encode).toArray
-    val projectTask = ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test)
+    val projectTask       = ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test)
     prepareCursorBaseFrame(plainScrollState, cursorWindow)
-    val animationCells = multilineState.buffers.get(BufferId(1)).map(buffer =>
+    val animationCells = multilineState.buffers
+      .get(BufferId(1))
+      .map(buffer =>
         com.serenity.state.manager.VisibleBufferAnimationCells.fromBuffer(
           buffer,
           wordWrapEnabled = false,
           startColor = Theme.light.muted,
           endColor = Theme.light.foreground
         )
-      ).getOrElse(Map.empty)
+      )
+      .getOrElse(Map.empty)
     val animationState = AnimationState(
       FlowAnimationBuilder.build(animationCells, FlowDirection.ByColumn, SweepDirection.Forward, 12)
     )
-    val fullFrame                = renderedFrame(richState, deviceScale = 1.0)
-    val diagnosticsAndComments   = renderedFrame(diagnosticsState, deviceScale = 1.0)
-    val hidpiFrame               = renderedFrame(commentsState, deviceScale = 2.0)
-    val visibleFindResults       = findResultSet.visibleResults(maxResults = 80)
-    val decodedLspMessages       = decodeLspMessages(framedLspMessages)
-    val projectTaskPresentation  = projectTask.map(ProjectTaskTerminal.started)
+    val fullFrame               = renderedFrame(richState, deviceScale = 1.0)
+    val diagnosticsAndComments  = renderedFrame(diagnosticsState, deviceScale = 1.0)
+    val hidpiFrame              = renderedFrame(commentsState, deviceScale = 2.0)
+    val visibleFindResults      = findResultSet.visibleResults(maxResults = 80)
+    val decodedLspMessages      = decodeLspMessages(framedLspMessages)
+    val projectTaskPresentation = projectTask.map(ProjectTaskTerminal.started)
     val markdownPreviewWindow =
-      MarkdownDocumentPreview.previewWindow(markdownLines, activeLine = Some(1_200), fallbackTopLine = 1_000, maxSourceLines = 80)
-    val markdownHtmlFragment = MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark")
-    val markdownLensFrame    = renderedFrame(markdownState, deviceScale = 1.0)
+      MarkdownDocumentPreview.previewWindow(
+        markdownLines,
+        activeLine = Some(1_200),
+        fallbackTopLine = 1_000,
+        maxSourceLines = 80
+      )
+    val markdownHtmlFragment   = MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark")
+    val markdownLensFrame      = renderedFrame(markdownState, deviceScale = 1.0)
     val advancedAnimationState = animationState.advanceAllAnimations()
 
     List(
@@ -180,14 +197,15 @@ object PerformanceBenchmarks:
         3,
         20,
         () => assert(layoutSnapshot.exists(_.visualLines.size == viewportSize.height)),
-        () => plainScrollState.buffers.get(BufferId(1)).foreach { buffer =>
-          val _ = com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
-            buffer,
-            panelWidthPx = frameWidthPx,
-            monoFont,
-            wordWrapEnabled = false
-          )
-        }
+        () =>
+          plainScrollState.buffers.get(BufferId(1)).foreach { buffer =>
+            val _ = com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
+              buffer,
+              panelWidthPx = frameWidthPx,
+              monoFont,
+              wordWrapEnabled = false
+            )
+          }
       ),
       Benchmark(
         "render.full_frame.java2d",
@@ -216,11 +234,12 @@ object PerformanceBenchmarks:
         "render.hidpi_frame.java2d",
         2,
         8,
-        () => assert(
-          hidpiFrame.getWidth == frameWidthPx * 2 &&
-            hidpiFrame.getHeight == frameHeightPx * 2 &&
-            renderedFrameHasPixels(hidpiFrame)
-        ),
+        () =>
+          assert(
+            hidpiFrame.getWidth == frameWidthPx * 2 &&
+              hidpiFrame.getHeight == frameHeightPx * 2 &&
+              renderedFrameHasPixels(hidpiFrame)
+          ),
         () => renderedFrame(commentsState, deviceScale = 2.0)
       ),
       Benchmark(
@@ -267,10 +286,11 @@ object PerformanceBenchmarks:
         "project_task.responsiveness",
         3,
         20,
-        () => assert(
-          projectTask.exists(command => command.workingDirectory == projectRoot && command.executable == "sbt") &&
-            projectTaskPresentation.exists(_.contains("Running test task"))
-        ),
+        () =>
+          assert(
+            projectTask.exists(command => command.workingDirectory == projectRoot && command.executable == "sbt") &&
+              projectTaskPresentation.exists(_.contains("Running test task"))
+          ),
         () => ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test).map(ProjectTaskTerminal.started)
       ),
       Benchmark(
