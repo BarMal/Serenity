@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.*
-import cats.effect.std.Queue
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileDialog
@@ -192,7 +191,7 @@ object StateManager:
         .handleErrorWith(_ => IO.pure(Nil))
         .flatMap(Ref.of[IO, List[String]])
       quitSignal <- Deferred[IO, Unit]
-      lspQueue   <- Queue.bounded[IO, LspEffect](256)
+      lspQueue   <- LspEffectQueue.create
       runtime = StateManagerRuntime.create(
         stateRef = stateRef,
         undoRef = undoRef,

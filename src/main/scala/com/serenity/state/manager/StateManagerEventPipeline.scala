@@ -153,7 +153,25 @@ final private[manager] class StateManagerEventPipeline(
 
           logCommandRunnerEvent >>
             applyComponentResult(result, prevState).flatMap(newState => validateAndUpdateState(newState, prevState))
-      syncFocus >> handleEvent >> recordUndoableEdit(event, prevState) >> applyAnimationHooks(prevState)
+      syncFocus >> handleEvent >>
+        recordUndoableEdit(event, prevState) >>
+        enqueueChangedLspDocuments(prevState) >>
+        applyAnimationHooks(prevState)
+    }
+
+  private def enqueueChangedLspDocuments(previousState: AppState): cats.effect.IO[Unit] =
+    stateRef.get.flatMap { currentState =>
+      currentState.buffers.values.toList.traverse_ { buffer =>
+        val changedContent = previousState.buffers.get(buffer.id).exists(_.content != buffer.content)
+        (for
+          path       <- buffer.filePath
+          languageId <- buffer.language
+          if changedContent
+        yield AppEffect.LspQueue(
+          LspQueueEffect.DocumentChanged(path.toUri.toString, languageId, buffer.content.collect())
+        ))
+          .fold(cats.effect.IO.unit)(effects.interpretEffect)
+      }
     }
 
   private def recordUndoableEdit(event: Event, prevState: AppState): cats.effect.IO[Unit] =

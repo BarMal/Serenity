@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import com.serenity.command.Command
 import com.serenity.lsp.LspEffect
+import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.{AppState, BufferId, SurfaceId}
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.theme.config.ThemeConfig
@@ -43,6 +44,7 @@ enum WorkflowEffect:
 
 enum LspQueueEffect:
   case Enqueue(effect: LspEffect)
+  case DocumentChanged(uri: String, languageId: LanguageId, text: String)
 
 enum AppEffect:
   case Lifecycle(effect: LifecycleEffect)

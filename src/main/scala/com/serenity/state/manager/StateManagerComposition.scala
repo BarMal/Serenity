@@ -5,7 +5,7 @@ import java.nio.file.Path
 import scala.concurrent.duration.*
 
 import cats.effect.*
-import cats.effect.std.{Queue, Semaphore}
+import cats.effect.std.Semaphore
 import cats.syntax.foldable.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.PreferredWindowSize
@@ -44,7 +44,7 @@ private[manager] trait EffectRuntimePort:
   def quitSignal: Deferred[IO, Unit]
   def logger: Logger[IO]
   def themeManager: AppThemeManager
-  def lspQueue: Queue[IO, LspEffect]
+  def lspQueue: LspEffectQueue
   def onFontConfigChanged: FontConfig => IO[Unit]
   def deviceTextScaleProvider: IO[Double]
   def configPersistencePath: Option[Path]
@@ -188,7 +188,8 @@ final private[manager] class StateManagerFilePersistence(
     stateRef: Ref[IO, AppState],
     fileManager: FileManager,
     sessionPersistence: SessionPersistence,
-    logger: Logger[IO]
+    logger: Logger[IO],
+    lspQueue: LspEffectQueue
 ):
 
   def saveExistingBuffer(bufferId: BufferId): IO[Unit] =
@@ -212,7 +213,10 @@ final private[manager] class StateManagerFilePersistence(
       state.buffers.get(bufferId).fold(IO.unit) { buffer =>
         fileManager
           .saveBuffer(buffer, path)
-          .flatMap(saved => stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> saved))))
+          .flatMap { saved =>
+            stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> saved))) >>
+              refreshLspBindingAfterSaveAs(buffer, saved)
+          }
           .flatTap(_ =>
             stateRef.update(current => current.copy(recentFiles = trackRecentFile(current.recentFiles, path)))
           )
@@ -220,6 +224,27 @@ final private[manager] class StateManagerFilePersistence(
           .handleErrorWith(error => logger.error(error)(s"[FILE] Failed to save buffer $bufferId as $path"))
       }
     }
+
+  private def refreshLspBindingAfterSaveAs(before: Buffer, saved: Buffer): IO[Unit] =
+    val previous = for
+      path       <- before.filePath
+      languageId <- before.language
+    yield (path.toUri.toString, languageId)
+    val next = for
+      path       <- saved.filePath
+      languageId <- saved.language
+    yield (path.toUri.toString, languageId, saved.content.collect())
+    val nextIdentity = next.map { case (uri, languageId, _) => (uri, languageId) }
+    if previous == nextIdentity then IO.unit
+    else
+      previous.fold(IO.unit) {
+        case (uri, languageId) =>
+          lspQueue.enqueue(LspEffect.FileClosed(uri, languageId))
+      } >>
+        next.fold(IO.unit) {
+          case (uri, languageId, text) =>
+            lspQueue.enqueue(LspEffect.FileOpened(uri, languageId, text))
+        }
 
   private def persistAfterSave: IO[Unit] =
     stateRef.get
@@ -270,7 +295,7 @@ private[manager] trait EffectModalWorkflowPort:
 /** Operations used by editor façade methods. */
 private[manager] trait EditorCapabilityPort:
   def stateRef: Ref[IO, AppState]
-  def lspQueue: Queue[IO, LspEffect]
+  def lspQueue: LspEffectQueue
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
   def createNewEmptyBuffer(): IO[BufferId]
   def closeBuffer(bufferId: BufferId): IO[Unit]
@@ -343,7 +368,7 @@ private[manager] class StateManagerComposition(
     val logger: Logger[IO],
     val policy: SessionManager.SessionPolicy,
     val themeManager: AppThemeManager,
-    val lspQueue: Queue[IO, LspEffect],
+    val lspQueue: LspEffectQueue,
     val mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     val documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     val onFontConfigChanged: FontConfig => IO[Unit],
@@ -375,8 +400,15 @@ private[manager] class StateManagerComposition(
   private val runtimeFileDialog               = fileDialog
   private val runtimeFileManager              = fileManager
   private val runtimeSessionPersistence       = sessionPersistence
+
   private val filePersistence =
-    new StateManagerFilePersistence(runtimeStateRef, runtimeFileManager, runtimeSessionPersistence, runtimeLogger)
+    new StateManagerFilePersistence(
+      runtimeStateRef,
+      runtimeFileManager,
+      runtimeSessionPersistence,
+      runtimeLogger,
+      runtimeLspQueue
+    )
 
   private val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
     val stateRef                = runtimeStateRef
@@ -555,8 +587,7 @@ private[manager] class StateManagerComposition(
   export viewport.*
 
   def lspEffectStream: Stream[IO, LspEffect] =
-    Stream
-      .fromQueueUnterminated(lspQueue)
+    lspQueue.stream
       .interruptWhen(Stream.eval(quitSignal.get).as(true))
 
   def executeCommand(command: com.serenity.command.Command): IO[Unit] =
