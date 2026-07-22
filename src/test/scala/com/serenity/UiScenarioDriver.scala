@@ -310,12 +310,15 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
     delegate.fillRect(x, y, width, height, char)
+
   def enableStyle(style: TextStyle): Unit =
     styleCallsBuffer += ScenarioStyleCall("enable", style)
     delegate.enableStyle(style)
+
   def disableStyle(style: TextStyle): Unit =
     styleCallsBuffer += ScenarioStyleCall("disable", style)
     delegate.disableStyle(style)
+
   override def setAlpha(alpha: Float): Unit = delegate.setAlpha(alpha)
   override def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
     delegate.blurRegion(x, y, width, height, radius)

@@ -1,13 +1,12 @@
 package com.serenity
 
-import com.serenity.ui.theme.Theme
-import com.serenity.ui.theme.TextStyle
+import com.serenity.ui.theme.{TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class ThemeContrastSpec extends AnyFlatSpec with Matchers:
 
-  "Bundled themes" should "provide WCAG AA contrast for normal, control, placeholder, selected, and surface text" in {
+  "Bundled themes" should "provide WCAG AA contrast for normal, control, placeholder, selected, and surface text" in
     List(Theme.dark, Theme.light).foreach { theme =>
       theme.normalTextContrast should be >= 4.5
       theme.controlLabelContrast should be >= 4.5
@@ -15,9 +14,8 @@ class ThemeContrastSpec extends AnyFlatSpec with Matchers:
       theme.selectionTextContrast should be >= 4.5
       theme.surfaceTextContrast should be >= 4.5
     }
-  }
 
-  they should "keep accent, selection, focus, status, placeholder, surface, and active-pane roles distinct" in {
+  they should "keep accent, selection, focus, status, placeholder, surface, and active-pane roles distinct" in
     List(Theme.dark, Theme.light).foreach { theme =>
       theme.accent should not be theme.selection.background
       theme.focus should not be theme.selection.background
@@ -27,5 +25,4 @@ class ThemeContrastSpec extends AnyFlatSpec with Matchers:
       theme.placeholder should not be theme.foreground
       theme.surface shouldBe theme.panel
     }
-  }
 end ThemeContrastSpec

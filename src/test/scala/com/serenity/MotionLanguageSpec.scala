@@ -8,7 +8,8 @@ import org.scalatest.matchers.should.Matchers
 class MotionLanguageSpec extends AnyFlatSpec with Matchers:
 
   "Serenity motion scale" should "use a short shared progression for subtle, smooth, and expressive motion" in {
-    val durations = List(AnimationConfig.subtle, AnimationConfig.smooth, AnimationConfig.quick).flatten.map(_.durationMs)
+    val durations =
+      List(AnimationConfig.subtle, AnimationConfig.smooth, AnimationConfig.quick).flatten.map(_.durationMs)
 
     durations shouldBe List(80, 160, 240)
   }
