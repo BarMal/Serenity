@@ -1569,7 +1569,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     buffer.viewport.leftColumn shouldBe 0
   }
 
-  it should "refresh stored find-all results after text is inserted before matches" in {
+  it should "invalidate stored find results after text is inserted" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)
     val initialState = AppState.initial.copy(
@@ -1589,7 +1589,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.buffers(bufferId)
 
     buffer.content.collect() shouldBe "xneedle\nneedle"
-    buffer.findState shouldBe Some(FindState("needle", List(FindResult(0, 1), FindResult(1, 0)), 0))
+    buffer.findState shouldBe None
   }
 
   it should "clear stored find-all results when an edit removes the last match" in {

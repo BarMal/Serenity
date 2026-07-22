@@ -16,6 +16,8 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
+import scala.concurrent.duration.*
+
 class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
   given balance: Balance = Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
@@ -303,6 +305,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Type search term
     "SPECIAL_MARKER".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    IO.sleep(150.millis).unsafeRunSync()
 
     // Then: Live find should scroll to first occurrence (line 50)
     val afterFindState = stateManager.getCurrentState.unsafeRunSync()

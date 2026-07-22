@@ -34,6 +34,7 @@ private[manager] trait WorkflowEffectPort:
   def requestOpenFile: IO[Unit]
   def requestSaveAs: IO[Unit]
   def refresh(surfaceId: SurfaceId): IO[Unit]
+  def refreshFind(request: FindSearchRequest): IO[Unit]
   def submitFile(surfaceId: SurfaceId): IO[Unit]
   def submitReplace(surfaceId: SurfaceId): IO[Unit]
   def submitClose(surfaceId: SurfaceId): IO[Unit]
@@ -46,6 +47,7 @@ final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
       case WorkflowEffect.RequestOpenFile           => port.requestOpenFile
       case WorkflowEffect.RequestSaveAs             => port.requestSaveAs
       case WorkflowEffect.RefreshFileWorkflow(id)   => port.refresh(id)
+      case WorkflowEffect.RefreshFind(request)      => port.refreshFind(request)
       case WorkflowEffect.SubmitFileWorkflow(id)    => port.submitFile(id)
       case WorkflowEffect.SubmitReplaceWorkflow(id) => port.submitReplace(id)
       case WorkflowEffect.SubmitCloseWorkflow(id)   => port.submitClose(id)
@@ -83,6 +85,7 @@ final private[manager] class StateManagerEffectHandlers(
     def requestOpenFile: IO[Unit] = requestOpenFileDialog
     def requestSaveAs: IO[Unit]   = stateRef.get.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
     def refresh(surfaceId: SurfaceId): IO[Unit]       = refreshFileWorkflowEffect(surfaceId)
+    def refreshFind(request: FindSearchRequest): IO[Unit] = scheduleFindSearch(request)
     def submitFile(surfaceId: SurfaceId): IO[Unit]    = submitFileWorkflowEffect(surfaceId)
     def submitReplace(surfaceId: SurfaceId): IO[Unit] = submitReplaceWorkflowEffect(surfaceId)
     def submitClose(surfaceId: SurfaceId): IO[Unit]   = submitCloseWorkflowEffect(surfaceId))

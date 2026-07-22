@@ -83,7 +83,7 @@ object EditorEventReducer:
       else if buffer.cursors.size > 1 then reduceMultiCursorTextEvent(event, buffer, paneId, currentState)
       else reduceSingleCursorTextEvent(event, clearInFlightMultiCursorVerticalState(buffer), paneId, currentState)
 
-    if refreshesFindResults(event) then result.copy(state = refreshFindState(result.state, buffer.id))
+    if refreshesFindResults(event) then result.copy(state = invalidateFindState(result.state, buffer.id))
     else result
 
   private def refreshesFindResults(event: TextEntryEvent): Boolean =
@@ -99,17 +99,10 @@ object EditorEventReducer:
       case ExtendSelectionLeft | ExtendSelectionRight | ExtendSelectionUp | ExtendSelectionDown => true
       case _                                                                                    => false
 
-  private def refreshFindState(state: AppState, bufferId: BufferId): AppState =
+  private def invalidateFindState(state: AppState, bufferId: BufferId): AppState =
     state.buffers.get(bufferId) match
       case Some(buffer) =>
-        buffer.findState match
-          case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
-            val resultSet = FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult), currentIndex)
-            val updatedFindState =
-              Option.when(resultSet.results.nonEmpty)(FindState.fromResultSet(resultSet))
-            state.copy(buffers = state.buffers + (bufferId -> buffer.copy(findState = updatedFindState)))
-          case _ =>
-            state
+        state.copy(buffers = state.buffers + (bufferId -> buffer.copy(findState = None)))
       case _ =>
         state
 
@@ -550,8 +543,14 @@ object EditorEventReducer:
           case FindNext =>
             buffer.findState match
               case Some(FindState(query, storedResults, currentIndex)) if storedResults.nonEmpty =>
-                val resultSet =
-                  FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult), currentIndex + 1)
+                val validResults = storedResults.filter { result =>
+                  isWholeGraphemeMatch(
+                    buffer.content,
+                    lineColumnToOffset(buffer.content, result.line, result.column),
+                    query.length
+                  )
+                }
+                val resultSet = FindResultSet.normalized(query, validResults, currentIndex + 1)
                 if resultSet.results.isEmpty then
                   val updatedBuffer = buffer.copy(findState = None)
                   ReducerResult.noEffects(
@@ -1472,27 +1471,16 @@ object EditorEventReducer:
     override def charAt(index: Int): Char =
       content.index(index).getOrElse('\u0000')
 
-  private def findModalForBuffer(buffer: Buffer): Modal =
-    buffer.findState match
-      case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
-        val resultSet = FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult), currentIndex)
-        Modal.Find(resultSet.query, resultSet.results, resultSet.currentIndex)
-      case _ =>
-        Modal.Find("", Nil, 0)
-
-  private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
-    if query.isEmpty then Nil
-    else
-      buffer.content
-        .searchAll(query)
-        .filter(offset => isWholeGraphemeMatch(buffer.content, offset, query.length))
-        .map(offset => offsetToCursorPosition(buffer.content, offset))
-
   private def isWholeGraphemeMatch(content: Rope, offset: Int, length: Int): Boolean =
     TextEditing.isWholeGraphemeRange(RopeCharacterSource(content), offset, offset + length)
 
-  private def toFindResult(cursor: CursorPosition): FindResult =
-    FindResult(cursor.line, cursor.column)
+  private def findModalForBuffer(buffer: Buffer): Modal =
+    buffer.findState match
+      case Some(FindState(query, results, currentIndex)) if query.nonEmpty =>
+        val resultSet = FindResultSet.normalized(query, results, currentIndex)
+        Modal.Find(resultSet.query, resultSet.results, resultSet.currentIndex)
+      case _ =>
+        Modal.Find("", Nil, 0)
 
   private def moveCursorLeft(cursor: CursorPosition, content: Rope): CursorPosition =
     val offset = lineColumnToOffset(content, cursor.line, cursor.column)

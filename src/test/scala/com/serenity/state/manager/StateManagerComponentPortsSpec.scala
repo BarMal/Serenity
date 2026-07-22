@@ -52,6 +52,8 @@ class StateManagerComponentPortsSpec extends AnyFlatSpec with Matchers:
         def requestOpenFile: IO[Unit]                     = calls.update(_ :+ "open")
         def requestSaveAs: IO[Unit]                       = IO.raiseError(new IllegalStateException("save-as failed"))
         def refresh(surfaceId: SurfaceId): IO[Unit]       = calls.update(_ :+ s"refresh:$surfaceId")
+        def refreshFind(request: com.serenity.state.models.FindSearchRequest): IO[Unit] =
+          calls.update(_ :+ s"find:${request.query}")
         def submitFile(surfaceId: SurfaceId): IO[Unit]    = calls.update(_ :+ s"file:$surfaceId")
         def submitReplace(surfaceId: SurfaceId): IO[Unit] = calls.update(_ :+ s"replace:$surfaceId")
         def submitClose(surfaceId: SurfaceId): IO[Unit]   = calls.update(_ :+ s"close:$surfaceId"))

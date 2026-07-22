@@ -16,7 +16,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
-import com.serenity.state.reducers.CommandRunnerPanelSelections
+import com.serenity.state.reducers.{CommandRunnerPanelSelections, ModalEventReducer}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PeekContent}
@@ -61,6 +61,7 @@ private[manager] trait EffectEditorPort:
   def enqueueEvent(event: Event): IO[Unit]
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
   def scheduleDocumentAnalysis(): IO[Unit]
+  def scheduleFindSearch(request: FindSearchRequest): IO[Unit]
 
 /** Operations emitted by capabilities for ordered interpretation at the event boundary. */
 private[manager] enum StateManagerOperation:
@@ -72,6 +73,7 @@ final private[manager] class StateManagerOperationBoundary private (
     pendingOperations: Ref[IO, List[StateManagerOperation]],
     stateRef: Ref[IO, AppState],
     documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
+    findSearchFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     logger: Logger[IO],
     analysisLifecycleLock: Semaphore[IO],
     documentAnalysisShutdownRef: Ref[IO, Boolean],
@@ -79,6 +81,7 @@ final private[manager] class StateManagerOperationBoundary private (
     beforeDocumentAnalysisShutdown: IO[Unit]
 ):
   private val DocumentAnalysisDebounce = 150.millis
+  private val FindSearchDebounce       = 50.millis
 
   def enqueueEvent(event: Event): IO[Unit] =
     pendingOperations.update(_ :+ StateManagerOperation.Event(event))
@@ -145,6 +148,13 @@ final private[manager] class StateManagerOperationBoundary private (
         documentAnalysisFiberRef.getAndSet(None).flatMap(_.traverse_(_.cancel))
     }
 
+  def scheduleFindSearch(request: FindSearchRequest): IO[Unit] =
+    findSearchFiberRef.getAndSet(None).flatMap(_.traverse_(_.cancel)) >>
+      (IO.sleep(FindSearchDebounce) >>
+        IO.blocking(FindSearch.results(request.content, request.query)).flatMap { results =>
+          stateRef.update(ModalEventReducer.applyFindSearchResults(_, request, results))
+        }).start.flatMap(fiber => findSearchFiberRef.set(Some(fiber)))
+
   private def documentAnalysisJob: IO[Unit] =
     (IO.sleep(DocumentAnalysisDebounce) >>
       stateRef.get.flatMap { snapshot =>
@@ -174,10 +184,12 @@ private[manager] object StateManagerOperationBoundary:
       pendingOperations           <- Ref.of[IO, List[StateManagerOperation]](Nil)
       analysisLifecycleLock       <- Semaphore[IO](1)
       documentAnalysisShutdownRef <- Ref.of[IO, Boolean](false)
+      findSearchFiberRef          <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
     yield new StateManagerOperationBoundary(
       pendingOperations,
       stateRef,
       documentAnalysisFiberRef,
+      findSearchFiberRef,
       logger,
       analysisLifecycleLock,
       documentAnalysisShutdownRef,
@@ -437,6 +449,7 @@ private[manager] class StateManagerComposition(
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       operations.validateAndUpdateState(newState, fallbackState)
     def scheduleDocumentAnalysis(): IO[Unit] = operations.scheduleDocumentAnalysis()
+    def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = operations.scheduleFindSearch(request)
 
   private val effectSurfacePort: EffectSurfacePort = new EffectSurfacePort:
     def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = surfaces.showPeek(content, at)

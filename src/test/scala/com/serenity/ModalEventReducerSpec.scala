@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, ModalEventReducer}
+import com.serenity.state.reducers.{AppEffect, ModalEventReducer, WorkflowEffect}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -97,6 +97,19 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
         case _                                                        => None
     }
 
+  private def completeFind(state: AppState): AppState =
+    activeFindModal(state) match
+      case Some(Modal.Find(query, _, _)) =>
+        val bufferId = BufferId(0)
+        val content  = state.buffers(bufferId).content
+        ModalEventReducer.applyFindSearchResults(
+          state,
+          FindSearchRequest(SurfaceId("find"), bufferId, query, content),
+          FindSearch.results(content, query)
+        )
+      case _ =>
+        state
+
   "ModalEventReducer" should "append digits in goto line mode" in {
     val initialState = AppState.initial.copy(
       uiSurfaces = List(
@@ -139,11 +152,11 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(2, 0)
   }
 
-  it should "keep find open and move the cursor to the first hit when submitted" in {
+  it should "keep find open and move the cursor to the first completed hit" in {
     val bufferId     = BufferId(0)
     val initialState = stateWithFindModal("needle", "x\nneedle here\ny\nneedle again")
 
-    val updatedState = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
+    val updatedState = completeFind(initialState)
 
     activeFindModal(updatedState) shouldBe Some(Modal.Find("needle", List(matchAt(1, 0), matchAt(3, 0)), 0))
     updatedState.focus shouldBe Focus.Surface(SurfaceId("find"))
@@ -162,7 +175,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 5)
   }
 
-  it should "update find results live while typing and select the first occurrence column" in {
+  it should "update the live find query without searching in the reducer" in {
     val bufferId     = BufferId(0)
     val initialState = stateWithFindModal("", "alpha needle beta\nneedle again")
 
@@ -170,13 +183,62 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       ModalEventReducer.reduce(ModalType.Find, InsertChar(char), state).state
     }
 
-    activeFindModal(withNeedle) shouldBe Some(Modal.Find("needle", List(matchAt(0, 6), matchAt(1, 0)), 0))
-    withNeedle.buffers(bufferId).findState shouldBe Some(FindState("needle", List(matchAt(0, 6), matchAt(1, 0)), 0))
-    withNeedle.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 6)
+    activeFindModal(withNeedle) shouldBe Some(Modal.Find("needle", Nil, 0))
+    withNeedle.buffers(bufferId).findState shouldBe None
+    withNeedle.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 0)
     withNeedle.modalSurface shouldBe defined
   }
 
-  it should "update find results without materialising the whole buffer" in {
+  it should "defer changed find queries and clear results that belong to the previous query" in {
+    val bufferId = BufferId(0)
+    val initialState = stateWithFindModal("need", "needle needle")
+      .copy(
+        buffers = AppState.initial.buffers.updated(
+          bufferId,
+          AppState.initial.buffers(bufferId).copy(
+            content = Rope("needle needle"),
+            findState = Some(FindState("need", List(matchAt(0, 0)), 0))
+          )
+        )
+      )
+
+    val result = ModalEventReducer.reduce(ModalType.Find, InsertChar('l'), initialState)
+
+    activeFindModal(result.state) shouldBe Some(Modal.Find("needl", Nil, 0))
+    result.state.buffers(bufferId).findState shouldBe None
+    result.effects should matchPattern {
+      case List(AppEffect.Workflow(WorkflowEffect.RefreshFind(FindSearchRequest(_, `bufferId`, "needl", _)))) =>
+    }
+  }
+
+  it should "ignore completed find results when the live query has changed" in {
+    val initialState = stateWithFindModal("new", "new needle")
+    val request = FindSearchRequest(
+      SurfaceId("find"),
+      BufferId(0),
+      "old",
+      initialState.buffers(BufferId(0)).content
+    )
+
+    ModalEventReducer.applyFindSearchResults(initialState, request, List(matchAt(0, 4))) shouldBe initialState
+  }
+
+  it should "ignore completed find results when the buffer content has changed" in {
+    val initialState = stateWithFindModal("needle", "needle")
+    val request = FindSearchRequest(
+      SurfaceId("find"),
+      BufferId(0),
+      "needle",
+      initialState.buffers(BufferId(0)).content
+    )
+    val editedState = initialState.copy(
+      buffers = initialState.buffers.updated(BufferId(0), initialState.buffers(BufferId(0)).copy(content = Rope("other")))
+    )
+
+    ModalEventReducer.applyFindSearchResults(editedState, request, List(matchAt(0, 0))) shouldBe editedState
+  }
+
+  it should "update find queries without materialising the whole buffer" in {
     val bufferId = BufferId(0)
     val initialState = stateWithFindModal("", "alpha needle beta\nneedle again").copy(
       buffers = AppState.initial.buffers.updated(
@@ -191,9 +253,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       ModalEventReducer.reduce(ModalType.Find, InsertChar(char), state).state
     }
 
-    activeFindModal(withNeedle) shouldBe Some(Modal.Find("needle", List(matchAt(0, 6), matchAt(1, 0)), 0))
-    withNeedle.buffers(bufferId).findState shouldBe Some(FindState("needle", List(matchAt(0, 6), matchAt(1, 0)), 0))
-    withNeedle.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 6)
+    activeFindModal(withNeedle) shouldBe Some(Modal.Find("needle", Nil, 0))
+    withNeedle.buffers(bufferId).findState shouldBe None
+    withNeedle.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 0)
   }
 
   it should "ignore find queries that would split a grapheme cluster" in {
@@ -209,10 +271,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "navigate find results forward and backward while the overlay remains open" in {
     val bufferId     = BufferId(0)
-    val initialState = stateWithFindModal("needle", "needle one\nmiddle\nneedle two\nneedle three")
+    val initialState = completeFind(stateWithFindModal("needle", "needle one\nmiddle\nneedle two\nneedle three"))
 
-    val first  = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
-    val second = ModalEventReducer.reduce(ModalType.Find, Enter, first).state
+    val second = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
     val third  = ModalEventReducer.reduce(ModalType.Find, ModalNavigate(Direction.Down), second).state
     val secondAgain =
       ModalEventReducer.reduce(ModalType.Find, ModalNavigate(Direction.Up), third).state
@@ -230,9 +291,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "navigate multiple find occurrences on the same line by column" in {
     val bufferId     = BufferId(0)
-    val initialState = stateWithFindModal("needle", "needle and needle")
+    val initialState = completeFind(stateWithFindModal("needle", "needle and needle"))
 
-    val first  = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
+    val first  = initialState
     val second = ModalEventReducer.reduce(ModalType.Find, Enter, first).state
 
     activeFindModal(first) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(0, "needle and ".length)), 0))
@@ -245,9 +306,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "track non-overlapping find results as distinct navigable matches" in {
     val bufferId     = BufferId(0)
-    val initialState = stateWithFindModal("aa", "aaaa")
+    val initialState = completeFind(stateWithFindModal("aa", "aaaa"))
 
-    val first  = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
+    val first  = initialState
     val second = ModalEventReducer.reduce(ModalType.Find, Enter, first).state
 
     val expectedResults = List(matchAt(0, 0), matchAt(0, 2))
@@ -258,10 +319,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "advance find results when the explicit find-next event is submitted" in {
     val bufferId     = BufferId(0)
-    val initialState = stateWithFindModal("needle", "needle one\nneedle two\nneedle three")
+    val initialState = completeFind(stateWithFindModal("needle", "needle one\nneedle two\nneedle three"))
 
-    val first  = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
-    val second = ModalEventReducer.reduce(ModalType.Find, ModalFindNext, first).state
+    val second = ModalEventReducer.reduce(ModalType.Find, ModalFindNext, initialState).state
 
     activeFindModal(second) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(1, 0), matchAt(2, 0)), 1))
     second.buffers(bufferId).findState shouldBe Some(
@@ -275,10 +335,11 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(0)
     val prefix   = List.fill(80)("wrapped").mkString(" ")
     val content  = s"$prefix needle"
-    val initialState =
+    val initialState = completeFind(
       stateWithFindModal("needle", content, viewport = Viewport(0, 0, visibleLines = 3, visibleColumns = 12))
+    )
 
-    val updatedState = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
+    val updatedState = initialState
     val buffer       = updatedState.buffers(bufferId)
     val cursor       = buffer.cursors.head
     val font         = FontLoader.previewTextFont(updatedState.config.fontConfig)
@@ -339,14 +400,14 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("alpha ", Nil, 0)))
   }
 
-  it should "leave find query state stable when delete-next-word has no text after the query" in {
+  it should "leave an unchanged find query unsearched when delete-next-word has no text after it" in {
     val bufferId     = BufferId(0)
     val initialState = stateWithFindModal("alpha beta", "alpha beta\nalpha")
 
     val updatedState = ModalEventReducer.reduce(ModalType.Find, DeleteWordForward, initialState).state
 
-    activeFindModal(updatedState) shouldBe Some(Modal.Find("alpha beta", List(matchAt(0, 0)), 0))
-    updatedState.buffers(bufferId).findState shouldBe Some(FindState("alpha beta", List(matchAt(0, 0)), 0))
+    activeFindModal(updatedState) shouldBe Some(Modal.Find("alpha beta", Nil, 0))
+    updatedState.buffers(bufferId).findState shouldBe None
     updatedState.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 0)
   }
 
