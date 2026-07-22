@@ -38,6 +38,7 @@ enum WorkflowEffect:
   case RequestOpenFile
   case RequestSaveAs
   case RefreshFileWorkflow(surfaceId: SurfaceId)
+  case RefreshFind(request: com.serenity.state.models.FindSearchRequest)
   case SubmitFileWorkflow(surfaceId: SurfaceId)
   case SubmitReplaceWorkflow(surfaceId: SurfaceId)
   case SubmitCloseWorkflow(surfaceId: SurfaceId)
@@ -191,6 +192,15 @@ object AppEffect:
       effect match
         case AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surfaceId)) => Some(surfaceId)
         case _                                                                 => None
+
+  object RefreshFind:
+    def apply(request: com.serenity.state.models.FindSearchRequest): AppEffect =
+      AppEffect.Workflow(WorkflowEffect.RefreshFind(request))
+
+    def unapply(effect: AppEffect): Option[com.serenity.state.models.FindSearchRequest] =
+      effect match
+        case AppEffect.Workflow(WorkflowEffect.RefreshFind(request)) => Some(request)
+        case _                                                       => None
 
   object SubmitFileWorkflow:
     def apply(surfaceId: SurfaceId): AppEffect =

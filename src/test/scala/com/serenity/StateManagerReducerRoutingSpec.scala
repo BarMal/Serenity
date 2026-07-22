@@ -2,10 +2,12 @@ package com.serenity
 
 import java.nio.file.Files
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -146,6 +148,32 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     updatedState.modalSurface.flatMap(_.content match
       case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow.activeField)
       case _                                                          => None) shouldBe Some(FileWorkflowField.Path)
+  }
+
+  it should "apply only the latest deferred find query" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        state
+          .copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(content = Rope("needle need"))))
+      }
+      .unsafeRunSync()
+    stateManager.showModal(Modal.Find("", Nil, 0)).unsafeRunSync()
+
+    "need".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager
+      .updateState { state =>
+        state.copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(content = Rope("other"))))
+      }
+      .unsafeRunSync()
+
+    IO.sleep(150.millis).unsafeRunSync()
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("need", Nil, 0)))
+    updatedState.buffers(bufferId).findState shouldBe None
   }
 
   it should "route focused pinned panel events through the typed local handler path" in {

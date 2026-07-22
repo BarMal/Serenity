@@ -3,6 +3,8 @@ package com.serenity.state.models
 import com.serenity.animation.AnimationState
 import com.serenity.config.*
 import com.serenity.lsp.model.Diagnostic
+import com.serenity.rope.Rope
+import com.serenity.text.TextEditing
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.presets.UiPresetEditSession
 import com.serenity.ui.theme.Theme
@@ -21,6 +23,31 @@ case class SurfaceAnimationState(
 )
 
 case class FindResult(line: Int, column: Int)
+
+/** Immutable identity for a background find operation. */
+case class FindSearchRequest(
+    surfaceId: SurfaceId,
+    bufferId: BufferId,
+    query: String,
+    content: Rope
+)
+
+object FindSearch:
+
+  /** Finds whole-grapheme occurrences in deterministic document order. */
+  def results(content: Rope, query: String): List[FindResult] =
+    if query.isEmpty then Nil
+    else
+      content.searchAll(query).collect {
+        case offset if TextEditing.isWholeGraphemeRange(RopeCharacterSource(content), offset, offset + query.length) =>
+          val (line, column) = content.offsetToLineColumn(offset)
+          FindResult(line, column)
+      }
+
+  private case class RopeCharacterSource(content: Rope) extends TextEditing.CharacterSource:
+    override def length: Int = content.weight
+
+    override def charAt(index: Int): Char = content.index(index).getOrElse('\u0000')
 
 case class FindResultSet private (
     query: String,

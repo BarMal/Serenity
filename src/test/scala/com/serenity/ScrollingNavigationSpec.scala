@@ -1,5 +1,7 @@
 package com.serenity
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfig
@@ -303,6 +305,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Type search term
     "SPECIAL_MARKER".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    IO.sleep(150.millis).unsafeRunSync()
 
     // Then: Live find should scroll to first occurrence (line 50)
     val afterFindState = stateManager.getCurrentState.unsafeRunSync()

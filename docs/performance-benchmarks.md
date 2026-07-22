@@ -15,7 +15,7 @@ Scenarios cover:
 - large JSON rope search and cursor-offset lookup
 - visible multiline layout, normal editing, and deep plain/rich-text scrolling reducers
 - real Java2D full frames, cursor-overlay copying, diagnostics/comments, and HiDPI buffers
-- large find/replace result-set presentation
+- large find/replace result-set presentation and complete find-query updates, including grapheme filtering, offset-to-position conversion, and selected-result application
 - LSP frame decoding and project-task detection/terminal preparation
 - Markdown preview and inline-lens rendering
 - visible animation tick advancement
@@ -61,3 +61,12 @@ Captured on the same x86_64 Linux WSL2 host and Microsoft OpenJDK 21.0.8+9-LTS r
 | --- | ---: | ---: | ---: | ---: |
 | `rope.large_json.search` | 12.789 | 14.422 | 1.626 | 1.779 |
 | `layout.large_multiline.visible_viewport` | 4.292 | 6.355 | 3.355 | 5.303 |
+
+## After #828: 2026-07-22
+
+Captured on the same x86_64 Linux WSL2 host and Microsoft OpenJDK 21.0.8+9-LTS runtime. `find_replace.large_query_update` measures the complete work that previously ran synchronously during a find update: sequential rope search, grapheme filtering, offset-to-position conversion, and applying the selected result. `find_replace.large_query_keystroke` measures the reducer path after that work was moved behind the debounced, cancellable request boundary.
+
+| Scenario | p50 | p95 |
+| --- | ---: | ---: |
+| `find_replace.large_query_update` | 16.198 | 19.746 |
+| `find_replace.large_query_keystroke` | 0.026 | 0.039 |

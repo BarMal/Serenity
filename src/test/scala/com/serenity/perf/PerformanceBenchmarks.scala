@@ -15,7 +15,7 @@ import com.serenity.project.{ProjectTaskDetector, ProjectTaskKind, ProjectTaskTe
 import com.serenity.richtext.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.EditorEventReducer
+import com.serenity.state.reducers.{EditorEventReducer, ModalEventReducer}
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.renderer.{Java2DRenderSurface, Renderer}
 import com.serenity.ui.terminal.SwingWindow
@@ -140,6 +140,38 @@ object PerformanceBenchmarks:
       (0 until 12_000).toList.map(line => FindResult(line, 10)),
       requestedIndex = 6_000
     )
+    val findQuerySurfaceId = SurfaceId("benchmark-find")
+    val findQueryState = findState.copy(
+      uiSurfaces = List(
+        UiSurface(
+          findQuerySurfaceId,
+          SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(findQuerySurfaceId)
+    )
+    val findQueryRequest = FindSearchRequest(
+      findQuerySurfaceId,
+      BufferId(1),
+      "needle",
+      findQueryState.buffers(BufferId(1)).content
+    )
+    val completeFindQuery = ModalEventReducer.applyFindSearchResults(
+      findQueryState,
+      findQueryRequest,
+      FindSearch.results(findQueryRequest.content, findQueryRequest.query)
+    )
+    val findKeystrokeState = findQueryState.copy(
+      uiSurfaces = List(
+        UiSurface(
+          findQuerySurfaceId,
+          SurfaceContent.ModalWorkflow(Modal.Find("needl", Nil, 0)),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+    val findKeystrokeResult = ModalEventReducer.reduce(ModalType.Find, InsertChar('e'), findKeystrokeState)
     val lspMessages = (1 to 250).toList.map { id =>
       Json.obj("jsonrpc" -> Json.fromString("2.0"), "id" -> Json.fromInt(id), "method" -> Json.fromString("benchmark"))
     }
@@ -274,6 +306,25 @@ object PerformanceBenchmarks:
         20,
         () => assert(visibleFindResults.size == 80 && visibleFindResults.exists(_._1 == FindResult(6_000, 10))),
         () => findResultSet.visibleResults(maxResults = 80)
+      ),
+      Benchmark(
+        "find_replace.large_query_update",
+        3,
+        20,
+        () => assert(completeFindQuery.buffers(BufferId(1)).findState.exists(_.results.length == 12_000)),
+        () =>
+          ModalEventReducer.applyFindSearchResults(
+            findQueryState,
+            findQueryRequest,
+            FindSearch.results(findQueryRequest.content, findQueryRequest.query)
+          )
+      ),
+      Benchmark(
+        "find_replace.large_query_keystroke",
+        3,
+        20,
+        () => assert(findKeystrokeResult.effects.nonEmpty),
+        () => ModalEventReducer.reduce(ModalType.Find, InsertChar('e'), findKeystrokeState)
       ),
       Benchmark(
         "lsp.framer.large_batch",
