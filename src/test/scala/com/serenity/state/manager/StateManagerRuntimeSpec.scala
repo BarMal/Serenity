@@ -3,8 +3,8 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.*
-import cats.effect.unsafe.implicits.global
 import cats.effect.std.Semaphore
+import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileDialog
