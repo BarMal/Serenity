@@ -629,6 +629,7 @@ class RopeSpec extends AnyFlatSpec with Matchers:
       new IndexForbiddenLeaf("\uD83D\uDE42\uD83D\uDE42")
     )
 
+    rope.sliceString(3, 9) shouldBe "ha\nbet"
     rope.linesFrom(1, 2) shouldBe Vector("beta", "\uD83D\uDE42\uD83D\uDE42")
     rope.searchAll("a\nb") shouldBe List(4)
     rope.searchAll("\uD83D\uDE42") shouldBe List(11, 13)
