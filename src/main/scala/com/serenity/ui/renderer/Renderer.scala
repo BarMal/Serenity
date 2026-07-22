@@ -40,11 +40,18 @@ object Renderer:
   private case class EditorPaneRenderPlan(
       workspaceLayout: EditorWorkspaceLayout,
       layoutContract: EditorLayoutContract,
-      snapshots: Map[PaneId, TextLayoutSnapshot]
+      snapshots: Map[PaneId, TextLayoutSnapshot],
+      annotations: Map[BufferId, BufferRenderAnnotations]
   ):
     def paneLayouts: Map[PaneId, EditorPaneLayout] = workspaceLayout.paneLayouts
 
+  private case class BufferRenderAnnotations(
+      commentsByLine: Map[Int, List[DocumentComment]],
+      diagnosticsByLine: Map[Int, List[com.serenity.lsp.model.Diagnostic]]
+  )
+
   private case class MarkdownLensFrame(
+      firstSourceLine: Int,
       lines: Vector[String],
       previewWindow: MarkdownDocumentPreview.PreviewWindow,
       activeSourceRanges: List[Range.Inclusive],
@@ -321,7 +328,21 @@ object Renderer:
           yield paneId -> snapshotForBuffer(buffer, paneLayout.contentRect, state, context)
       }
 
-    EditorPaneRenderPlan(workspaceLayout, layoutContract, snapshots)
+    val annotations = state.layout.editorPanes.values.flatMap(_.bufferId).toList.distinct.flatMap { bufferId =>
+      state.buffers.get(bufferId).map { buffer =>
+        val commentsByLine = buffer.documentComments.foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
+          (comment.start.line to comment.end.line).foldLeft(byLine) { (updated, line) =>
+            updated.updated(line, comment :: updated.getOrElse(line, Nil))
+          }
+        }
+        val diagnosticsByLine = state.diagnostics
+          .getOrElse(SpellChecker.diagnosticsUri(buffer), Nil)
+          .groupMap(_.range.start.line)(identity)
+        bufferId -> BufferRenderAnnotations(commentsByLine, diagnosticsByLine)
+      }
+    }.toMap
+
+    EditorPaneRenderPlan(workspaceLayout, layoutContract, snapshots, annotations)
 
   private def snapshotForBuffer(
     buffer: Buffer,
@@ -409,7 +430,8 @@ object Renderer:
             state,
             context,
             renderPlan.snapshots.get(paneId),
-            renderPlan.layoutContract
+            renderPlan.layoutContract,
+            pane.bufferId.flatMap(renderPlan.annotations.get)
           )
         case None => ()
     }
@@ -436,7 +458,8 @@ object Renderer:
     state: AppState,
     context: RenderContext,
     preparedSnapshot: Option[TextLayoutSnapshot],
-    contract: EditorLayoutContract
+    contract: EditorLayoutContract,
+    annotations: Option[BufferRenderAnnotations]
   ): Unit =
     val buffer = pane.bufferId.flatMap(state.buffers.get)
 
@@ -457,7 +480,15 @@ object Renderer:
       case Some(buf) if buf.content.weight == 0 =>
         renderEmptyPane(contentRect, state.theme, context)
       case Some(buf) =>
-        renderBufferContent(buf, contentRect, state, context, bufferSnapshot.get, markdownLensFrame)
+        renderBufferContent(
+          buf,
+          contentRect,
+          state,
+          context,
+          bufferSnapshot.get,
+          markdownLensFrame,
+          annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty))
+        )
       case None =>
         renderEmptyPane(contentRect, state.theme, context)
 
@@ -563,21 +594,23 @@ object Renderer:
     state: AppState,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
-    markdownLensFrame: Option[MarkdownLensFrame]
+    markdownLensFrame: Option[MarkdownLensFrame],
+    annotations: BufferRenderAnnotations
   ): Unit =
     context.surface.setFont(context.fontForBuffer(buffer))
     if isInlineMarkdownLens(buffer, state) then
       val frame = markdownLensFrame.getOrElse(markdownLensFrameFor(buffer, snapshot))
       renderInlineMarkdownPreview(buffer, rect, state, context, frame)
       renderMarkdownRawLenses(buffer, rect, state, context, snapshot, frame)
-    else renderPlainBufferContent(buffer, rect, state, context, snapshot)
+    else renderPlainBufferContent(buffer, rect, state, context, snapshot, annotations)
 
   private def renderPlainBufferContent(
     buffer: Buffer,
     rect: LayoutRect,
     state: AppState,
     context: RenderContext,
-    snapshot: TextLayoutSnapshot
+    snapshot: TextLayoutSnapshot,
+    annotations: BufferRenderAnnotations
   ): Unit =
     val visualLines     = snapshot.visualLines
     val xOriginPx       = context.cellMetrics.toPixelX(rect.x).toFloat
@@ -633,7 +666,7 @@ object Renderer:
 
             renderDocumentCommentHighlights(
               context.surface,
-              buffer,
+              annotations.commentsByLine.getOrElse(visualLine.bufferLine, Nil),
               visualLine,
               rect,
               screenY,
@@ -741,24 +774,27 @@ object Renderer:
   private def focusedTextBodyLines(buffer: Buffer, state: AppState): Set[Int] =
     if !state.config.focusedTextBodyEnabled then Set.empty
     else
-      val lines      = buffer.content.linesFrom(0, buffer.content.lineCount)
       val activeLine = buffer.cursors.headOption.map(_.line)
-      if buffer.language.contains(LanguageId.Markdown) then MarkdownBlockLens.activeBlockLineSet(lines, activeLine)
-      else plainTextBodyLineSet(lines, activeLine)
+      if buffer.language.contains(LanguageId.Markdown) then
+        activeLine
+          .filter(line => line >= 0 && line < buffer.content.lineCount)
+          .map(line => MarkdownBlockLens.currentBlock(buffer.content.lineCount, buffer.content.getLine, line).toSet)
+          .getOrElse(Set.empty)
+      else plainTextBodyLineSet(buffer, activeLine)
 
-  private def plainTextBodyLineSet(lines: Vector[String], activeLine: Option[Int]): Set[Int] =
+  private def plainTextBodyLineSet(buffer: Buffer, activeLine: Option[Int]): Set[Int] =
     activeLine
-      .filter(line => line >= 0 && line < lines.length)
+      .filter(line => line >= 0 && line < buffer.content.lineCount)
       .map { line =>
-        if lines(line).trim.isEmpty then Set(line)
+        if buffer.content.getLine(line).exists(_.trim.isEmpty) then Set(line)
         else
           val start = Iterator
             .iterate(line)(_ - 1)
-            .takeWhile(index => index >= 0 && lines(index).trim.nonEmpty)
+            .takeWhile(index => index >= 0 && buffer.content.getLine(index).exists(_.trim.nonEmpty))
             .foldLeft(line)((_, index) => index)
           val end = Iterator
             .iterate(line)(_ + 1)
-            .takeWhile(index => index < lines.length && lines(index).trim.nonEmpty)
+            .takeWhile(index => index < buffer.content.lineCount && buffer.content.getLine(index).exists(_.trim.nonEmpty))
             .foldLeft(line)((_, index) => index)
           (start to end).toSet
       }
@@ -852,7 +888,7 @@ object Renderer:
 
   private def renderDocumentCommentHighlights(
     surface: RenderSurface,
-    buffer: Buffer,
+    comments: List[DocumentComment],
     visualLine: TextVisualLine,
     rect: LayoutRect,
     screenY: Int,
@@ -861,7 +897,7 @@ object Renderer:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): Unit =
-    buffer.documentComments.foreach { comment =>
+    comments.foreach { comment =>
       columnsForRange(comment.start, comment.end, visualLine, markPoint = true).foreach {
         case (commentStart, commentEnd) =>
           val foreground = theme.foreground
@@ -970,27 +1006,32 @@ object Renderer:
   private def isInlineMarkdownLens(buffer: Buffer, state: AppState): Boolean =
     buffer.language.contains(LanguageId.Markdown) && state.config.markdownViewMode == MarkdownViewMode.InlineLens
 
-  private def markdownSourceLines(buffer: Buffer): Vector[String] =
-    buffer.content.linesFrom(0, buffer.content.lineCount)
-
   private def markdownLensFrameFor(buffer: Buffer, snapshot: TextLayoutSnapshot): MarkdownLensFrame =
-    val lines         = markdownSourceLines(buffer)
-    val previewWindow = markdownPreviewWindow(buffer, lines, buffer.viewport.visibleLines)
-    val activeRanges  = activeMarkdownBlockRanges(lines, buffer)
-    val baseRows = MarkdownDocumentPreview.inlinePreviewRows(
-      lines,
+    val previewWindow = markdownPreviewWindow(buffer, buffer.viewport.visibleLines)
+    val lines = buffer.content.linesFrom(
       previewWindow.window.firstSourceLine,
       previewWindow.sourceLineCount
+    )
+    val activeRanges = activeMarkdownBlockRanges(buffer)
+      .filter(range => range.end >= previewWindow.window.firstSourceLine && range.start < previewWindow.window.firstSourceLine + lines.length)
+      .map(range => range.start.max(previewWindow.window.firstSourceLine) - previewWindow.window.firstSourceLine to
+        range.end.min(previewWindow.window.firstSourceLine + lines.length - 1) - previewWindow.window.firstSourceLine)
+    val baseRows = MarkdownDocumentPreview.inlinePreviewRows(
+      lines,
+      firstSourceLine = 0,
+      maxSourceLines = lines.length
     )
     val (previewRows, placements) = markdownLensRows(
       baseRows,
       lines,
       activeRanges,
-      buffer.cursors.map(_.line).toSet,
+      buffer.cursors.map(_.line - previewWindow.window.firstSourceLine).toSet,
       snapshot,
-      previewWindow.window
+      previewWindow.window,
+      previewWindow.window.firstSourceLine
     )
     MarkdownLensFrame(
+      previewWindow.window.firstSourceLine,
       lines,
       previewWindow.window,
       activeRanges,
@@ -1004,7 +1045,8 @@ object Renderer:
     activeRanges: List[Range.Inclusive],
     activeLines: Set[Int],
     snapshot: TextLayoutSnapshot,
-    previewWindow: MarkdownDocumentPreview.PreviewWindow
+    previewWindow: MarkdownDocumentPreview.PreviewWindow,
+    firstSourceLine: Int
   ): (Vector[MarkdownDocumentPreview.InlinePreviewLine], Map[Range.Inclusive, MarkdownLensPlacement]) =
     val (rows, placements, _) = activeRanges.foldLeft(
       (baseRows, Map.empty[Range.Inclusive, MarkdownLensPlacement], 0)
@@ -1014,9 +1056,9 @@ object Renderer:
           (range.start - previewWindow.firstPreviewRow + rowDelta) to
             (range.end - previewWindow.firstPreviewRow + rowDelta)
         }
-        val visibleActiveLine = snapshot.visualLines.exists(line => activeLines.contains(line.bufferLine))
+        val visibleActiveLine = snapshot.visualLines.exists(line => activeLines.contains(line.bufferLine - firstSourceLine))
         val rawHeight =
-          if visibleActiveLine then snapshot.visualLines.count(line => blockRange.contains(line.bufferLine)) else 0
+          if visibleActiveLine then snapshot.visualLines.count(line => blockRange.contains(line.bufferLine - firstSourceLine)) else 0
         previewRange match
           case Some(range) if rawHeight > 0 && range.end >= 0 && range.start < rows.length =>
             val start        = range.start.max(0).min(rows.length)
@@ -1033,28 +1075,26 @@ object Renderer:
     }
     rows -> placements
 
-  private def markdownPreviewWindow(
-    buffer: Buffer,
-    lines: Vector[String],
-    visibleRows: Int
-  ): MarkdownLensPreviewWindow =
-    if lines.isEmpty then MarkdownLensPreviewWindow(MarkdownDocumentPreview.PreviewWindow(0, 0, ""), 0)
+  private def markdownPreviewWindow(buffer: Buffer, visibleRows: Int): MarkdownLensPreviewWindow =
+    val lineCount = buffer.content.lineCount
+    if lineCount == 0 then MarkdownLensPreviewWindow(MarkdownDocumentPreview.PreviewWindow(0, 0, ""), 0)
     else
       val activeLine = buffer.cursors.headOption
         .map(_.line)
-        .filter(line => line >= 0 && line < lines.length)
-      val activeBlock     = activeLine.map(line => MarkdownBlockLens.currentBlock(lines, line))
-      val viewportTopLine = buffer.viewport.topLine.max(0).min(lines.length - 1)
+        .filter(line => line >= 0 && line < lineCount)
+      val activeBlock = activeLine.map(line => MarkdownBlockLens.currentBlock(lineCount, buffer.content.getLine, line))
+      val viewportTopLine = buffer.viewport.topLine.max(0).min(lineCount - 1)
       val windowTopLine = activeLine
-        .filter(line => line == viewportTopLine && line > 0 && lines(line).trim.isEmpty)
-        .filter(line => lines(line - 1).trim.matches("^#{1,6}\\s+.*"))
+        .filter(line => line == viewportTopLine && line > 0 && buffer.content.getLine(line).exists(_.trim.isEmpty))
+        .filter(line => buffer.content.getLine(line - 1).exists(_.trim.matches("^#{1,6}\\s+.*")))
         .map(_ - 1)
         .getOrElse(viewportTopLine)
+      val baseSourceLineLimit = markdownPreviewSourceLineLimit(visibleRows)
       val firstSourceLine = activeBlock
+        .filter(blockRange => blockRange.end - blockRange.start + 1 <= baseSourceLineLimit)
         .filter(blockRange => blockRange.start < windowTopLine && blockRange.end >= windowTopLine)
         .map(_.start)
         .getOrElse(windowTopLine)
-      val baseSourceLineLimit = markdownPreviewSourceLineLimit(visibleRows)
       val windowEndLine       = firstSourceLine + baseSourceLineLimit - 1
       val maxSourceLines = activeBlock
         .filter(_ => activeLine.exists(_ <= windowEndLine))
@@ -1064,27 +1104,30 @@ object Renderer:
       MarkdownLensPreviewWindow(
         window = MarkdownDocumentPreview.PreviewWindow(
           firstSourceLine = firstSourceLine,
-          firstPreviewRow =
-            MarkdownDocumentPreview.previewRowForSourceLine(lines, firstSourceLine).getOrElse(firstSourceLine),
+          firstPreviewRow = MarkdownDocumentPreview.previewRowForSourceLine(
+            buffer.content.linesFrom(firstSourceLine, math.min(maxSourceLines, lineCount - firstSourceLine)),
+            0
+          ).getOrElse(0),
           source = ""
         ),
-        sourceLineCount = math.min(maxSourceLines, lines.length - firstSourceLine)
+        sourceLineCount = math.min(maxSourceLines, lineCount - firstSourceLine)
       )
 
   private def markdownPreviewSourceLineLimit(visibleRows: Int): Int =
     math.max(MinMarkdownPreviewSourceLines, visibleRows.max(1) * MarkdownPreviewOverscanFactor)
 
-  private def activeMarkdownBlockRanges(lines: Vector[String], buffer: Buffer): List[Range.Inclusive] =
+  private def activeMarkdownBlockRanges(buffer: Buffer): List[Range.Inclusive] =
+    val lineCount = buffer.content.lineCount
     val cursorRanges = buffer.cursors
       .map(_.line)
-      .filter(line => line >= 0 && line < lines.length)
-      .map(line => MarkdownBlockLens.currentBlock(lines, line))
+      .filter(line => line >= 0 && line < lineCount)
+      .map(line => MarkdownBlockLens.currentBlock(lineCount, buffer.content.getLine, line))
     val selectionRanges = buffer.allSelections.flatMap { selection =>
-      if lines.isEmpty then Nil
+      if lineCount == 0 then Nil
       else
-        val startLine = selection.start.line.max(0).min(lines.length - 1)
-        val endLine   = selection.end.line.max(0).min(lines.length - 1)
-        (startLine to endLine).map(line => MarkdownBlockLens.currentBlock(lines, line)).toList
+        val startLine = selection.start.line.max(0).min(lineCount - 1)
+        val endLine   = selection.end.line.max(0).min(lineCount - 1)
+        (startLine to endLine).map(line => MarkdownBlockLens.currentBlock(lineCount, buffer.content.getLine, line)).toList
     }
     mergeOverlappingMarkdownRanges(cursorRanges ++ selectionRanges)
 
@@ -1112,7 +1155,8 @@ object Renderer:
     val lines         = frame.lines
     val previewWindow = frame.previewWindow
     frame.activeSourceRanges.foreach { blockRange =>
-      val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
+      val absoluteBlockRange = (blockRange.start + frame.firstSourceLine) to (blockRange.end + frame.firstSourceLine)
+      val blockVisualLines = snapshot.visualLines.filter(line => absoluteBlockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
         val placement = frame.placements.getOrElse(
           blockRange,
@@ -1181,7 +1225,8 @@ object Renderer:
     val lines         = frame.lines
     val previewWindow = frame.previewWindow
     frame.activeSourceRanges.foreach { blockRange =>
-      val blockVisualLines = snapshot.visualLines.filter(line => blockRange.contains(line.bufferLine))
+      val absoluteBlockRange = (blockRange.start + frame.firstSourceLine) to (blockRange.end + frame.firstSourceLine)
+      val blockVisualLines = snapshot.visualLines.filter(line => absoluteBlockRange.contains(line.bufferLine))
       if blockVisualLines.nonEmpty then
         val placement = frame.placements.getOrElse(
           blockRange,
@@ -1707,7 +1752,7 @@ object Renderer:
       scaledImagePixelDimension(contentHeightCells * context.cellMetrics.lineHeight, context.surface.devicePixelScaleY)
     val buffer = state.buffers.get(bufferId)
     val content = buffer
-      .map(buffer => markdownSplitPreviewWindow(buffer, markdownSourceLines(buffer), contentHeightCells).source)
+      .map(buffer => markdownSplitPreviewWindow(buffer, contentHeightCells).source)
       .getOrElse("")
     val baseUri =
       buffer.flatMap(_.filePath).flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
@@ -1741,17 +1786,25 @@ object Renderer:
       height = math.max(1, contentRect.height)
     )
 
-  private def markdownSplitPreviewWindow(
-    buffer: Buffer,
-    lines: Vector[String],
-    visibleRows: Int
-  ): MarkdownDocumentPreview.PreviewWindow =
-    MarkdownDocumentPreview.splitPreviewWindow(
-      lines,
-      activeLine = buffer.cursors.headOption.map(_.line),
-      fallbackTopLine = buffer.viewport.topLine,
-      maxSourceLines = markdownPreviewSourceLineLimit(visibleRows)
-    )
+  private def markdownSplitPreviewWindow(buffer: Buffer, visibleRows: Int): MarkdownDocumentPreview.PreviewWindow =
+    val lineCount = buffer.content.lineCount
+    if lineCount == 0 then MarkdownDocumentPreview.PreviewWindow(0, 0, "")
+    else
+      val maxSourceLines = markdownPreviewSourceLineLimit(visibleRows).max(1)
+      val maxStart       = (lineCount - maxSourceLines).max(0)
+      val fallbackStart  = buffer.viewport.topLine.max(0).min(maxStart)
+      val anchorLine = buffer.cursors.headOption.map(_.line)
+        .filter(line => line >= 0 && line < lineCount)
+        .getOrElse(buffer.viewport.topLine.max(0).min(lineCount - 1))
+      val firstSourceLine =
+        if anchorLine < fallbackStart then anchorLine.min(maxStart)
+        else if anchorLine >= fallbackStart + maxSourceLines then (anchorLine - maxSourceLines / 2).max(0).min(maxStart)
+        else fallbackStart
+      MarkdownDocumentPreview.PreviewWindow(
+        firstSourceLine,
+        firstPreviewRow = 0,
+        buffer.content.linesFrom(firstSourceLine, maxSourceLines).mkString("\n")
+      )
 
   private def renderLineNumbers(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
     if state.config.showLineNumbers then
@@ -1803,8 +1856,15 @@ object Renderer:
                       surface.setFont(context.uiFont)
                     else surface.putString(lineRect.x, rowY, lineNumberText)
                     if rendersLineNumber then
-                      buffer.foreach(
-                        renderDiagnosticIndicator(surface, lineRect, rowY, visualLine.bufferLine, _, state)
+                      for
+                        bufferId <- pane.bufferId
+                        annotation <- renderPlan.annotations.get(bufferId)
+                      do renderDiagnosticIndicator(
+                        surface,
+                        lineRect,
+                        rowY,
+                        annotation.diagnosticsByLine.getOrElse(visualLine.bufferLine, Nil),
+                        state
                       )
                   }
                 case _ => ()
@@ -1828,25 +1888,18 @@ object Renderer:
     surface: RenderSurface,
     lineRect: LayoutRect,
     screenY: Int,
-    bufferLineIndex: Int,
-    buffer: Buffer,
+    lineDiags: List[com.serenity.lsp.model.Diagnostic],
     state: AppState
   ): Unit =
-    val uri = SpellChecker.diagnosticsUri(buffer)
-    {
-      val lineDiags = state.diagnostics
-        .getOrElse(uri, Nil)
-        .filter(d => d.range.start.line == bufferLineIndex)
-      if lineDiags.nonEmpty then
-        val worstCode = lineDiags.flatMap(_.severity).map(_.code).minOption
-        val color = worstCode match
-          case Some(1) => state.theme.error.foreground
-          case Some(2) => state.theme.warning.foreground
-          case _       => state.theme.muted
-        surface.setForegroundColor(color)
-        surface.setBackgroundColor(state.theme.panel.background)
-        surface.putString(lineRect.x + lineRect.width - 1, screenY, "!")
-    }
+    if lineDiags.nonEmpty then
+      val worstCode = lineDiags.flatMap(_.severity).map(_.code).minOption
+      val color = worstCode match
+        case Some(1) => state.theme.error.foreground
+        case Some(2) => state.theme.warning.foreground
+        case _       => state.theme.muted
+      surface.setForegroundColor(color)
+      surface.setBackgroundColor(state.theme.panel.background)
+      surface.putString(lineRect.x + lineRect.width - 1, screenY, "!")
 
   private def renderGutter(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     contract.gutterRect.foreach { gutterRect =>

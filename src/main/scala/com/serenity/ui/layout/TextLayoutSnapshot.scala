@@ -343,7 +343,7 @@ object TextLayoutSnapshot:
     richDocument: Option[RichTextDocument]
   ): Vector[TextVisualLine] =
     val alignment = richDocument
-      .flatMap(_.paragraphs.lift(lineIndex))
+      .flatMap(_.paragraphAt(lineIndex))
       .map(_.alignment)
       .getOrElse(ParagraphAlignment.Left)
 

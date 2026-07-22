@@ -2,11 +2,24 @@ package com.serenity.markdown
 
 object MarkdownBlockLens:
 
+  private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
+    def at(index: Int): String =
+      lineAt(index).getOrElse("")
+
   def currentBlock(lines: Vector[String], activeLine: Int): Range.Inclusive =
-    if lines.isEmpty then 0 to 0
+    currentBlock(lines.length, lines.lift, activeLine)
+
+  /** Resolves a block using only the source lines inspected by the block parser. */
+  def currentBlock(
+    lineCount: Int,
+    lineAt: Int => Option[String],
+    activeLine: Int
+  ): Range.Inclusive =
+    val lines = LineSource(lineCount, lineAt)
+    if lines.lineCount <= 0 then 0 to 0
     else
-      val clampedLine = activeLine.max(0).min(lines.length - 1)
-      if lines(clampedLine).trim.isEmpty then clampedLine to clampedLine
+      val clampedLine = activeLine.max(0).min(lines.lineCount - 1)
+      if lines.at(clampedLine).trim.isEmpty then clampedLine to clampedLine
       else
         fencedBlock(lines, clampedLine)
           .orElse(tableBlock(lines, clampedLine))
@@ -23,66 +36,76 @@ object MarkdownBlockLens:
       .map(line => currentBlock(lines, line).toSet)
       .getOrElse(Set.empty)
 
-  private def fencedBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
-    val fenceIndices = lines.zipWithIndex.collect {
-      case (line, index) if isFenceLine(line) => index
-    }
-    fenceIndices.grouped(2).collectFirst {
-      case Vector(start, end) if activeLine >= start && activeLine <= end => start to end
-      case Vector(start) if activeLine >= start                           => start to (lines.length - 1)
-    }
+  private def fencedBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
+    def previousFence: Option[Int] =
+      Iterator.iterate(activeLine - 1)(_ - 1)
+        .takeWhile(index => index >= 0 && lines.at(index).trim.nonEmpty)
+        .find(index => isFenceLine(lines.at(index)))
 
-  private def tableBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
-    if !isTableLine(lines(activeLine)) then None
+    def nextFence: Option[Int] =
+      Iterator.iterate(activeLine + 1)(_ + 1)
+        .takeWhile(index => index < lines.lineCount && lines.at(index).trim.nonEmpty)
+        .find(index => isFenceLine(lines.at(index)))
+
+    if isFenceLine(lines.at(activeLine)) then
+      nextFence.map(activeLine to _).orElse(previousFence.map(_ to activeLine))
+    else
+      for
+        start <- previousFence
+        end   <- nextFence
+      yield start to end
+
+  private def tableBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
+    if !isTableLine(lines.at(activeLine)) then None
     else contiguousBlock(lines, activeLine, isTableLine)
 
-  private def headingBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
-    Option.when(isHeadingLine(lines(activeLine)))(activeLine to activeLine)
+  private def headingBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
+    Option.when(isHeadingLine(lines.at(activeLine)))(activeLine to activeLine)
 
-  private def setextHeadingBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
+  private def setextHeadingBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
     Option
-      .when(isSetextUnderline(lines(activeLine)) && activeLine > 0 && isParagraphLine(lines(activeLine - 1))) {
+      .when(isSetextUnderline(lines.at(activeLine)) && activeLine > 0 && isParagraphLine(lines.at(activeLine - 1))) {
         (activeLine - 1) to activeLine
       }
       .orElse {
-        Option.when(activeLine + 1 < lines.length && isSetextUnderline(lines(activeLine + 1))) {
+        Option.when(activeLine + 1 < lines.lineCount && isSetextUnderline(lines.at(activeLine + 1))) {
           activeLine to (activeLine + 1)
         }
       }
 
-  private def thematicBreakBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
-    Option.when(isThematicBreak(lines(activeLine)))(activeLine to activeLine)
+  private def thematicBreakBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
+    Option.when(isThematicBreak(lines.at(activeLine)))(activeLine to activeLine)
 
-  private def blockQuoteBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
-    Option.when(isBlockQuoteLine(lines(activeLine))) {
-      if isBlockQuoteSeparator(lines(activeLine)) then activeLine to activeLine
+  private def blockQuoteBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
+    Option.when(isBlockQuoteLine(lines.at(activeLine))) {
+      if isBlockQuoteSeparator(lines.at(activeLine)) then activeLine to activeLine
       else blockSpan(lines, activeLine, isBlockQuoteContentLine)
     }
 
-  private def listItemBlock(lines: Vector[String], activeLine: Int): Option[Range.Inclusive] =
+  private def listItemBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
     listItemStart(lines, activeLine).map { start =>
-      val itemIndent = leadingIndent(lines(start))
+      val itemIndent = leadingIndent(lines.at(start))
       val end = Iterator
         .iterate(start + 1)(_ + 1)
         .takeWhile(index =>
-          index < lines.length &&
-            lines(index).trim.nonEmpty &&
-            !isSiblingListItem(lines(index), itemIndent)
+          index < lines.lineCount &&
+            lines.at(index).trim.nonEmpty &&
+            !isSiblingListItem(lines.at(index), itemIndent)
         )
         .foldLeft(start)((_, index) => index)
       start to end
     }
 
-  private def listItemStart(lines: Vector[String], activeLine: Int): Option[Int] =
-    Option.when(isListItemLine(lines(activeLine)))(activeLine).orElse {
-      val activeIndent = leadingIndent(lines(activeLine))
+  private def listItemStart(lines: LineSource, activeLine: Int): Option[Int] =
+    Option.when(isListItemLine(lines.at(activeLine)))(activeLine).orElse {
+      val activeIndent = leadingIndent(lines.at(activeLine))
       Iterator
         .iterate(activeLine - 1)(_ - 1)
-        .takeWhile(index => index >= 0 && lines(index).trim.nonEmpty)
+        .takeWhile(index => index >= 0 && lines.at(index).trim.nonEmpty)
         .collectFirst {
           case index
-              if isListItemLine(lines(index)) &&
-                leadingIndent(lines(index)) < activeIndent =>
+              if isListItemLine(lines.at(index)) &&
+                leadingIndent(lines.at(index)) < activeIndent =>
             index
         }
     }
@@ -94,40 +117,40 @@ object MarkdownBlockLens:
     line.takeWhile(char => char == ' ' || char == '\t').length
 
   private def contiguousBlock(
-    lines: Vector[String],
+    lines: LineSource,
     activeLine: Int,
     belongs: String => Boolean
   ): Option[Range.Inclusive] =
-    Option.when(belongs(lines(activeLine)))(blockSpan(lines, activeLine, belongs))
+    Option.when(belongs(lines.at(activeLine)))(blockSpan(lines, activeLine, belongs))
 
-  private def paragraphBlock(lines: Vector[String], activeLine: Int): Range.Inclusive =
+  private def paragraphBlock(lines: LineSource, activeLine: Int): Range.Inclusive =
     blockSpan(lines, activeLine, isParagraphLine)
 
   private def blockSpan(
-    lines: Vector[String],
+    lines: LineSource,
     activeLine: Int,
     belongs: String => Boolean
   ): Range.Inclusive =
     blockStart(lines, activeLine, belongs) to blockEnd(lines, activeLine, belongs)
 
   private def blockStart(
-    lines: Vector[String],
+    lines: LineSource,
     activeLine: Int,
     belongs: String => Boolean
   ): Int =
     Iterator
       .iterate(activeLine)(_ - 1)
-      .takeWhile(index => index >= 0 && belongs(lines(index)))
+      .takeWhile(index => index >= 0 && belongs(lines.at(index)))
       .foldLeft(activeLine)((_, index) => index)
 
   private def blockEnd(
-    lines: Vector[String],
+    lines: LineSource,
     activeLine: Int,
     belongs: String => Boolean
   ): Int =
     Iterator
       .iterate(activeLine)(_ + 1)
-      .takeWhile(index => index < lines.length && belongs(lines(index)))
+      .takeWhile(index => index < lines.lineCount && belongs(lines.at(index)))
       .foldLeft(activeLine)((_, index) => index)
 
   private def isParagraphLine(line: String): Boolean =

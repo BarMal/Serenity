@@ -290,7 +290,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val paneId    = PaneId(0)
     val bufferId  = BufferId(1)
     val lineReads = AtomicInteger(0)
-    val markdown  = (1 to 12).map(i => s"# Heading $i").mkString("\n")
+    val markdown  = (1 to 2_000).map(i => s"# Heading $i").mkString("\n")
     val content   = CountingAccessRope(Rope(markdown), lineReads = lineReads)
     val buffer = Buffer(bufferId, content).copy(
       language = Some(LanguageId.Markdown),
@@ -318,5 +318,5 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
 
-    lineReads.get() shouldBe math.min(buffer.content.lineCount, paneContentHeight) + buffer.content.lineCount + 1
+    lineReads.get() should be < 200
   }

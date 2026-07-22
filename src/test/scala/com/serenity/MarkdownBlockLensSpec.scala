@@ -130,3 +130,20 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines, activeLine = -10) shouldBe (0 to 0)
     MarkdownBlockLens.currentBlock(lines, activeLine = 10) shouldBe (0 to 0)
   }
+
+  it should "resolve a block through indexed line access without materialising the document" in {
+    val lines = Vector.fill(200)("unrelated").updated(100, "").updated(101, "First paragraph").updated(102, "continued")
+      .updated(103, "")
+    var reads = 0
+
+    val block = MarkdownBlockLens.currentBlock(
+      lineCount = lines.length,
+      lineAt = index =>
+        reads += 1
+        lines.lift(index),
+      activeLine = 102
+    )
+
+    block shouldBe (101 to 102)
+    reads should be < 30
+  }

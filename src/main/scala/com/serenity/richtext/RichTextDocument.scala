@@ -214,6 +214,13 @@ object RichTextParagraph:
 
 /** Rich text document model for document-format adapters and future rich editing surfaces. */
 case class RichTextDocument(paragraphs: List[RichTextParagraph]):
+  private lazy val indexedParagraphs: Vector[RichTextParagraph] =
+    paragraphs.toVector
+
+  /** Returns a paragraph by line index without repeatedly traversing the document list. */
+  def paragraphAt(index: Int): Option[RichTextParagraph] =
+    indexedParagraphs.lift(index)
+
   def plainText: String =
     paragraphs.map(_.plainText).mkString("\n")
 
