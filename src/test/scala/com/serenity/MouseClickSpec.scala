@@ -160,7 +160,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.ModalWorkflow(
         Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
       ),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      SurfacePresentation.Modal
     )
     sm.updateState(state => state.copy(uiSurfaces = state.uiSurfaces :+ close, focus = Focus.Surface(close.id)))
       .unsafeRunSync()

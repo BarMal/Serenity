@@ -129,7 +129,7 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.ModalWorkflow(
         Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala"))
       ),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      SurfacePresentation.Modal
     )
     val state = AppState.initial.copy(uiSurfaces = List(close), focus = Focus.Surface(close.id))
 
@@ -140,6 +140,22 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     scene.modal.map(_.id) shouldBe List(SceneNodeId.Surface(close.id))
     scene.nodesInPaintOrder.takeRight(2).map(_.layer) shouldBe List(SceneLayer.ModalBackdrop, SceneLayer.Modal)
     scene.focusOrder.headOption shouldBe Some(SceneNodeId.Surface(close.id))
+  }
+
+  it should "keep a modal workflow floating until its presentation makes it modal" in {
+    val close = UiSurface(
+      SurfaceId("close-confirmation"),
+      SurfaceContent.ModalWorkflow(
+        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala"))
+      ),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+
+    val scene = UiSceneSnapshot.from(AppState.initial.copy(uiSurfaces = List(close)), viewport)
+
+    scene.modal shouldBe Nil
+    scene.modalBackdrop shouldBe None
+    scene.floating.map(_.id) shouldBe List(SceneNodeId.Surface(close.id))
   }
 
   it should "characterize multi-pane geometry and place the focused pane first in focus order" in {

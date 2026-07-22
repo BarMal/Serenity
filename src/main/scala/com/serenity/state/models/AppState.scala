@@ -342,29 +342,31 @@ case class AppState(
       case _                           => false
     }
 
-  def modalSurface: Option[UiSurface] =
-    uiSurfaces.reverse.find { surface =>
-      surface.content match
-        case SurfaceContent.ModalWorkflow(_) => true
-        case _                               => false
-    }
+  /** Modal surfaces ordered from their parent to the topmost child. */
+  def modalSurfaces: List[UiSurface] =
+    uiSurfaces.collect { case surface @ UiSurface(_, _, SurfacePresentation.Modal, _) => surface }
 
-  /** Blocking confirmations ordered from their parent to the topmost child. */
+  /** Compatibility alias for callers that still name modal ownership as blocking. */
   def blockingModalSurfaces: List[UiSurface] =
-    uiSurfaces.collect {
-      case surface @ UiSurface(_, SurfaceContent.ModalWorkflow(_: Modal.CloseWorkflow), _, _) => surface
-    }
+    modalSurfaces
 
   /** The only modal workflow permitted to receive input while a confirmation is open. */
   def topBlockingModalSurface: Option[UiSurface] =
     blockingModalSurfaces.lastOption
+
+  def topModalSurface: Option[UiSurface] =
+    modalSurfaces.lastOption
+
+  /** The active modal workflow, retaining modeless workflow lookup during migration. */
+  def modalSurface: Option[UiSurface] =
+    topModalSurface.orElse(uiSurfaces.reverse.find(isModalWorkflow))
 
   def hasBlockingModal: Boolean =
     topBlockingModalSurface.nonEmpty
 
   /** Remove the topmost modal workflow and restore the focus that opened it. */
   def dismissTopModal: AppState =
-    modalSurface match
+    topModalSurface.orElse(activeSurface.filter(isModalWorkflow)) match
       case Some(surface) => copy(uiSurfaces = uiSurfaces.filterNot(_.id == surface.id)).popFocus
       case None          => this
 
@@ -377,6 +379,11 @@ case class AppState(
 
   private def findSurface(matches: SurfaceContent => Boolean): Option[UiSurface] =
     uiSurfaces.find(surface => matches(surface.content))
+
+  private def isModalWorkflow(surface: UiSurface): Boolean =
+    surface.content match
+      case SurfaceContent.ModalWorkflow(_) => true
+      case _                               => false
 
   def allocateSurfaceId: (AppState, SurfaceId) =
     val surfaceId = SurfaceId(s"surface-$nextSurfaceId")

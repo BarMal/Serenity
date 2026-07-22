@@ -290,6 +290,12 @@ final private[manager] class StateManagerEventPipeline(
                 new PinnedPanelComponent(position)
               case SurfacePresentation.Expanded(position, _) =>
                 new PinnedPanelComponent(position)
+              case SurfacePresentation.Modal =>
+                surface.content match
+                  case SurfaceContent.ModalWorkflow(modal) =>
+                    new ModalComponent(modalType(modal))
+                  case _ =>
+                    new PeekOverlayComponent()
               case SurfacePresentation.Floating(_, _) =>
                 surface.content match
                   case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>

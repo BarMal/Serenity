@@ -528,7 +528,7 @@ object ModalEventReducer:
         state.dismissTopModal
 
   private def currentModal(state: AppState): Option[(UiSurface, Modal)] =
-    state.modalSurface.flatMap { surface =>
+    state.topModalSurface.orElse(state.activeSurface).flatMap { surface =>
       surface.content match
         case SurfaceContent.ModalWorkflow(modal) => Some((surface, modal))
         case _                                   => None

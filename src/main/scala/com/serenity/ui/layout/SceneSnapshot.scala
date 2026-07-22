@@ -168,7 +168,7 @@ object UiSceneSnapshot:
     calculatedLayout: CalculatedLayout,
     initialZIndex: Int
   ): List[SceneNode] =
-    state.blockingModalSurfaces.zipWithIndex.map { (surface, offset) =>
+    state.modalSurfaces.zipWithIndex.map { (surface, offset) =>
       surfaceNode(
         surface.id,
         SceneLayer.Modal,
