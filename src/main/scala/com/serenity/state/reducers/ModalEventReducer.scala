@@ -7,6 +7,15 @@ import com.serenity.text.TextEditing
 
 object ModalEventReducer:
 
+  def selectCloseWorkflowChoice(choice: CloseWorkflowChoice, currentState: AppState): ReducerResult =
+    currentModal(currentState) match
+      case Some((surface, Modal.CloseWorkflow(workflow))) =>
+        ReducerResult.noEffects(
+          updateModal(currentState, surface, Modal.CloseWorkflow(workflow.copy(selectedChoice = choice)))
+        )
+      case _ =>
+        ReducerResult.noEffects(currentState)
+
   def reducer(modalType: ModalType): Reducer[ModalInputEvent] =
     Reducer.instance((event, state) => reduce(modalType, event, state))
 
@@ -528,7 +537,7 @@ object ModalEventReducer:
         state.dismissTopModal
 
   private def currentModal(state: AppState): Option[(UiSurface, Modal)] =
-    state.modalSurface.flatMap { surface =>
+    state.topModalSurface.orElse(state.activeSurface).flatMap { surface =>
       surface.content match
         case SurfaceContent.ModalWorkflow(modal) => Some((surface, modal))
         case _                                   => None

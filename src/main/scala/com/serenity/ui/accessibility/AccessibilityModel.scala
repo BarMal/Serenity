@@ -44,7 +44,10 @@ object AccessibilitySnapshot:
     previous: Option[AccessibilitySnapshot] = None
   ): AccessibilitySnapshot =
     val scene = UiSceneSnapshot.from(state, viewport)
-    val nodes = scene.nodesInPaintOrder.flatMap(nodeFor(state, _)) ++ surfaceControls(state, scene)
+    val visibleNodes = state.topModalSurface match
+      case Some(surface) => scene.modal.filter(_.id == SceneNodeId.Surface(surface.id))
+      case None          => scene.nodesInPaintOrder
+    val nodes = visibleNodes.flatMap(nodeFor(state, _)) ++ surfaceControls(state, visibleNodes)
     AccessibilitySnapshot(nodes, announcements(previous, nodes))
 
   /** Comfortable and spacious surfaces reserve two text rows for pointer targets; compact remains keyboard complete. */
@@ -85,8 +88,8 @@ object AccessibilitySnapshot:
           )
         }
 
-  private def surfaceControls(state: AppState, scene: UiSceneSnapshot): List[AccessibleNode] =
-    scene.nodesInPaintOrder.flatMap {
+  private def surfaceControls(state: AppState, nodes: List[SceneNode]): List[AccessibleNode] =
+    nodes.flatMap {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) =>
         state.surfaceById(surfaceId).toList.flatMap { surface =>
           controlsFor(surface, node.frameRect, state) ++ statusFor(surface, node.frameRect)
@@ -244,67 +247,83 @@ object AccessibilitySnapshot:
     frameRect: LayoutRect,
     state: AppState
   ): List[AccessibleNode] =
-    val controls = modal match
-      case Modal.Find(query, _, _) => List(("find", AccessibilityRole.TextField, "Find", Some(query), true))
-      case Modal.ReplaceWorkflow(workflow) =>
-        List(
-          (
-            "find",
-            AccessibilityRole.TextField,
-            "Find",
-            Some(workflow.findText),
-            workflow.activeField == ReplaceWorkflowField.Find
-          ),
-          (
-            "replace",
-            AccessibilityRole.TextField,
-            "Replace",
-            Some(workflow.replacementText),
-            workflow.activeField == ReplaceWorkflowField.ReplaceWith
-          ),
-          (
-            "replace-next",
-            AccessibilityRole.Button,
-            "Replace Next",
-            None,
-            workflow.selectedAction == ReplaceWorkflowAction.ReplaceNext
-          ),
-          (
-            "replace-all",
-            AccessibilityRole.Button,
-            "Replace All",
-            None,
-            workflow.selectedAction == ReplaceWorkflowAction.ReplaceAll
-          ),
-          (
-            "current-buffer",
-            AccessibilityRole.Button,
-            "Current Buffer",
-            None,
-            workflow.selectedScope == ReplaceWorkflowScope.CurrentBuffer
-          ),
-          (
-            "selection",
-            AccessibilityRole.Button,
-            "Selection",
-            None,
-            workflow.selectedScope == ReplaceWorkflowScope.Selection
-          )
-        )
-      case _ => Nil
-    val frame = SurfaceFrameLayout.forContent(frameRect, SurfaceContent.ModalWorkflow(modal))
-    controls.zip(itemBounds(frame, controls.size, hasHeader = true, hasFooter = false, 0.0)).map {
-      case ((id, role, name, value, selected), bound) =>
-        AccessibleNode(
-          s"surface:${surfaceId.value}/control:$id",
-          role,
-          name,
-          value,
-          selected,
-          state.focus == Focus.Surface(surfaceId) && selected,
-          bound
-        )
-    }
+    modal match
+      case Modal.CloseWorkflow(workflow) =>
+        CloseWorkflowLayout.actionBounds(frameRect, workflow).map {
+          case (choice, name, bounds) =>
+            val selected = workflow.selectedChoice == choice
+            AccessibleNode(
+              s"surface:${surfaceId.value}/control:${choice.toString.toLowerCase}",
+              AccessibilityRole.Button,
+              name,
+              None,
+              selected,
+              state.focus == Focus.Surface(surfaceId) && selected,
+              bounds
+            )
+        }
+      case _ =>
+        val controls = modal match
+          case Modal.Find(query, _, _) => List(("find", AccessibilityRole.TextField, "Find", Some(query), true))
+          case Modal.ReplaceWorkflow(workflow) =>
+            List(
+              (
+                "find",
+                AccessibilityRole.TextField,
+                "Find",
+                Some(workflow.findText),
+                workflow.activeField == ReplaceWorkflowField.Find
+              ),
+              (
+                "replace",
+                AccessibilityRole.TextField,
+                "Replace",
+                Some(workflow.replacementText),
+                workflow.activeField == ReplaceWorkflowField.ReplaceWith
+              ),
+              (
+                "replace-next",
+                AccessibilityRole.Button,
+                "Replace Next",
+                None,
+                workflow.selectedAction == ReplaceWorkflowAction.ReplaceNext
+              ),
+              (
+                "replace-all",
+                AccessibilityRole.Button,
+                "Replace All",
+                None,
+                workflow.selectedAction == ReplaceWorkflowAction.ReplaceAll
+              ),
+              (
+                "current-buffer",
+                AccessibilityRole.Button,
+                "Current Buffer",
+                None,
+                workflow.selectedScope == ReplaceWorkflowScope.CurrentBuffer
+              ),
+              (
+                "selection",
+                AccessibilityRole.Button,
+                "Selection",
+                None,
+                workflow.selectedScope == ReplaceWorkflowScope.Selection
+              )
+            )
+          case _ => Nil
+        val frame = SurfaceFrameLayout.forContent(frameRect, SurfaceContent.ModalWorkflow(modal))
+        controls.zip(itemBounds(frame, controls.size, hasHeader = true, hasFooter = false, 0.0)).map {
+          case ((id, role, name, value, selected), bound) =>
+            AccessibleNode(
+              s"surface:${surfaceId.value}/control:$id",
+              role,
+              name,
+              value,
+              selected,
+              state.focus == Focus.Surface(surfaceId) && selected,
+              bound
+            )
+        }
 
   private def toolbarControls(
     surfaceId: SurfaceId,

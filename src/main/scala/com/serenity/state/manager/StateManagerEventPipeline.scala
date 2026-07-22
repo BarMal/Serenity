@@ -107,59 +107,69 @@ final private[manager] class StateManagerEventPipeline(
     stateRef.get.flatMap { rawState =>
       val prevState = normalizeCommandRunnerFocus(rawState)
       val syncFocus = if prevState == rawState then cats.effect.IO.unit else stateRef.set(prevState)
-      val handleEvent: cats.effect.IO[Unit] = event match
-        case Undo => applyUndo(prevState)
-        case Redo => applyRedo(prevState)
-        case resize: com.serenity.keystroke.events.ResizeEvent =>
-          resizeEvents.apply(resize, prevState)
-        case systemEvent: SystemEvent =>
-          applyReducerResult(SystemEventReducer.reduce(systemEvent, prevState), prevState)
-        case com.serenity.keystroke.events.CloseTab =>
-          beginCloseAction(CloseScope.Current, prevState)
-        case com.serenity.keystroke.events.Quit =>
-          beginCloseAction(CloseScope.Quit, prevState)
-        case appEvent: GlobalAppEvent =>
-          val registry = CommandRegistry.withToggleUI
-          applyReducerResult(AppEventReducer.reduce(appEvent, prevState, registry)(using balance), prevState) >>
-            (appEvent match
-              case ToggleCommandRunner => hydrateCommandRunnerUiPresets
-              case _                   => cats.effect.IO.unit) >>
-            (appEvent match
-              case NextTab     => applyPaneFlowAnimation(SweepDirection.Backward)
-              case PreviousTab => applyPaneFlowAnimation(SweepDirection.Forward)
-              case _           => cats.effect.IO.unit)
-        case themeEvent: ThemeEvent =>
-          applyReducerResult(ThemeEventReducer.reduce(themeEvent, prevState), prevState)
-        case fileEvent: FileEvent =>
-          applyReducerResult(FileEventReducer.reduce(fileEvent, prevState), prevState)
-        case (_: MouseClick | _: MousePress | _: MouseDrag | _: MouseMove) if prevState.hasBlockingModal =>
-          cats.effect.IO.unit
-        case click: MouseClick =>
-          handleMouseClick(click, prevState)
-        case press: MousePress =>
-          handleMousePress(press, prevState)
-        case drag: MouseDrag =>
-          handleMouseDrag(drag, prevState)
-        case move: MouseMove =>
-          handleMouseMove(move, prevState)
-        case _ =>
-          val logCommandRunnerEvent =
-            focusedCommandRunner(prevState) match
-              case Some(runner) =>
-                logger.info(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}")
-              case None =>
-                cats.effect.IO.unit
-
-          val result =
-            getLocalHandlerForFocus(prevState.focus, prevState).processEvent(event, prevState)
-
-          logCommandRunnerEvent >>
-            applyComponentResult(result, prevState).flatMap(newState => validateAndUpdateState(newState, prevState))
+      val handleEvent: cats.effect.IO[Unit] =
+        if prevState.hasBlockingModal && !allowedWhileBlockingModal(event) then cats.effect.IO.unit
+        else dispatchEvent(event, prevState)
       syncFocus >> handleEvent >>
         recordUndoableEdit(event, prevState) >>
         enqueueChangedLspDocuments(prevState) >>
         applyAnimationHooks(prevState)
     }
+
+  private def allowedWhileBlockingModal(event: Event): Boolean =
+    event match
+      case _: SystemEvent | _: MouseInputEvent => true
+      case _                                   => ModalInputEvent.fromEvent(event).nonEmpty
+
+  private def dispatchEvent(event: Event, prevState: AppState): cats.effect.IO[Unit] =
+    event match
+      case Undo => applyUndo(prevState)
+      case Redo => applyRedo(prevState)
+      case resize: com.serenity.keystroke.events.ResizeEvent =>
+        resizeEvents.apply(resize, prevState)
+      case systemEvent: SystemEvent =>
+        applyReducerResult(SystemEventReducer.reduce(systemEvent, prevState), prevState)
+      case com.serenity.keystroke.events.CloseTab =>
+        beginCloseAction(CloseScope.Current, prevState)
+      case com.serenity.keystroke.events.Quit =>
+        beginCloseAction(CloseScope.Quit, prevState)
+      case appEvent: GlobalAppEvent =>
+        val registry = CommandRegistry.withToggleUI
+        applyReducerResult(AppEventReducer.reduce(appEvent, prevState, registry)(using balance), prevState) >>
+          (appEvent match
+            case ToggleCommandRunner => hydrateCommandRunnerUiPresets
+            case _                   => cats.effect.IO.unit) >>
+          (appEvent match
+            case NextTab     => applyPaneFlowAnimation(SweepDirection.Backward)
+            case PreviousTab => applyPaneFlowAnimation(SweepDirection.Forward)
+            case _           => cats.effect.IO.unit)
+      case themeEvent: ThemeEvent =>
+        applyReducerResult(ThemeEventReducer.reduce(themeEvent, prevState), prevState)
+      case fileEvent: FileEvent =>
+        applyReducerResult(FileEventReducer.reduce(fileEvent, prevState), prevState)
+      case mouse: MouseInputEvent if prevState.hasBlockingModal =>
+        handleModalMouseInput(mouse, prevState)
+      case click: MouseClick =>
+        handleMouseClick(click, prevState)
+      case press: MousePress =>
+        handleMousePress(press, prevState)
+      case drag: MouseDrag =>
+        handleMouseDrag(drag, prevState)
+      case move: MouseMove =>
+        handleMouseMove(move, prevState)
+      case _ =>
+        val logCommandRunnerEvent =
+          focusedCommandRunner(prevState) match
+            case Some(runner) =>
+              logger.info(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}")
+            case None =>
+              cats.effect.IO.unit
+
+        val result =
+          getLocalHandlerForFocus(prevState.focus, prevState).processEvent(event, prevState)
+
+        logCommandRunnerEvent >>
+          applyComponentResult(result, prevState).flatMap(newState => validateAndUpdateState(newState, prevState))
 
   private def enqueueChangedLspDocuments(previousState: AppState): cats.effect.IO[Unit] =
     stateRef.get.flatMap { currentState =>
@@ -290,6 +300,12 @@ final private[manager] class StateManagerEventPipeline(
                 new PinnedPanelComponent(position)
               case SurfacePresentation.Expanded(position, _) =>
                 new PinnedPanelComponent(position)
+              case SurfacePresentation.Modal =>
+                surface.content match
+                  case SurfaceContent.ModalWorkflow(modal) =>
+                    new ModalComponent(modalType(modal))
+                  case _ =>
+                    new PeekOverlayComponent()
               case SurfacePresentation.Floating(_, _) =>
                 surface.content match
                   case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
@@ -912,6 +928,39 @@ final private[manager] class StateManagerEventPipeline(
         }
       case _ =>
         cats.effect.IO.unit
+
+  private def handleModalMouseInput(event: MouseInputEvent, state: AppState): cats.effect.IO[Unit] =
+    event match
+      case click: MouseClick if click.button == MouseButton.Primary =>
+        modalCloseWorkflowChoiceAt(click, state) match
+          case Some(choice) =>
+            val selected = ModalEventReducer.selectCloseWorkflowChoice(choice, state)
+            applyReducerResult(selected, state) >>
+              stateRef.get.flatMap { updatedState =>
+                applyReducerResult(
+                  ModalEventReducer.reduce(ModalType.CloseWorkflow, ModalSubmit, updatedState),
+                  updatedState
+                )
+              }
+          case None =>
+            cats.effect.IO.unit
+      case _ =>
+        cats.effect.IO.unit
+
+  private def modalCloseWorkflowChoiceAt(click: MouseClick, state: AppState): Option[CloseWorkflowChoice] =
+    for
+      viewportSize <- state.viewportSize
+      surface      <- state.topModalSurface
+      node <- UiSceneSnapshot
+        .from(state, viewportSize)
+        .modal
+        .find(_.id == SceneNodeId.Surface(surface.id))
+      _ <- Option.when(node.frameRect.contains(click.col, click.row))(())
+      workflow <- surface.content match
+        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
+        case _                                                           => None
+      choice <- CloseWorkflowLayout.choiceAt(node.frameRect, workflow, click.col, click.row)
+    yield choice
 
   private def handleStartupPageMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =
     val action = state.startPageSurface.flatMap { surface =>

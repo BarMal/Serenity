@@ -11,7 +11,9 @@ object ModalStateReducer:
       val surface = UiSurface(
         id = surfaceId,
         content = SurfaceContent.ModalWorkflow(modal),
-        presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+        presentation =
+          if isBlocking(modal) then SurfacePresentation.Modal
+          else SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
       )
       ReducerResult.noEffects(
         stateWithId
@@ -27,9 +29,9 @@ object ModalStateReducer:
     ReducerResult.noEffects(state.dismissTopModal)
 
   private def isModelessModalSurface(surface: UiSurface): Boolean =
-    surface.content match
-      case SurfaceContent.ModalWorkflow(modal) => !isBlocking(modal)
-      case _                                   => false
+    surface.presentation != SurfacePresentation.Modal && (surface.content match
+      case SurfaceContent.ModalWorkflow(_) => true
+      case _                               => false)
 
   private def isBlocking(modal: Modal): Boolean =
     modal match

@@ -133,7 +133,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.ModalWorkflow(
         Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala"))
       ),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      SurfacePresentation.Modal
     )
     val sm = makeStateManager()
     sm.updateState(_.copy(uiSurfaces = List(panel, close), focus = Focus.Surface(close.id))).unsafeRunSync()

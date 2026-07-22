@@ -116,12 +116,15 @@ object UiSceneSnapshot:
       floating = floating,
       modalBackdrop = modalBackdrop,
       modal = modal,
-      focusOrder = orderedForFocus(
-        state.focus,
-        nodes.filterNot(_.id match
-          case SceneNodeId.EditorPaneHeader(_) => true
-          case _                               => false)
-      )
+      focusOrder =
+        if modal.nonEmpty then modal.lastOption.toList.map(_.id)
+        else
+          orderedForFocus(
+            state.focus,
+            nodes.filterNot(_.id match
+              case SceneNodeId.EditorPaneHeader(_) => true
+              case _                               => false)
+          )
     )
 
   private def orderedForFocus(focus: Focus, nodes: List[SceneNode]): List[SceneNodeId] =
@@ -168,7 +171,7 @@ object UiSceneSnapshot:
     calculatedLayout: CalculatedLayout,
     initialZIndex: Int
   ): List[SceneNode] =
-    state.blockingModalSurfaces.zipWithIndex.map { (surface, offset) =>
+    state.modalSurfaces.zipWithIndex.map { (surface, offset) =>
       surfaceNode(
         surface.id,
         SceneLayer.Modal,

@@ -17,7 +17,7 @@ class ModalStateReducerSpec extends AnyFlatSpec with Matchers:
     val parent = UiSurface(
       SurfaceId("parent"),
       SurfaceContent.ModalWorkflow(closeWorkflow),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      SurfacePresentation.Modal
     )
     val parentState = AppState.initial.copy(
       uiSurfaces = List(parent),
@@ -29,6 +29,8 @@ class ModalStateReducerSpec extends AnyFlatSpec with Matchers:
     val dismissed = ModalStateReducer.dismiss(shown).state
 
     child.id should not be parent.id
+    child.presentation shouldBe SurfacePresentation.Modal
+    shown.modalSurfaces.map(_.id) shouldBe List(parent.id, child.id)
     shown.blockingModalSurfaces.map(_.id) shouldBe List(parent.id, child.id)
     shown.focus shouldBe Focus.Surface(child.id)
     dismissed.blockingModalSurfaces.map(_.id) shouldBe List(parent.id)

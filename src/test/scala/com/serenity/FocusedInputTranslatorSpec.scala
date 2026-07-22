@@ -145,7 +145,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
           SurfaceContent.ModalWorkflow(
             Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open))
           ),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          SurfacePresentation.Modal
         )
       )
     )
@@ -166,7 +166,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
           SurfaceContent.ModalWorkflow(
             Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
           ),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          SurfacePresentation.Modal
         )
       )
     )
