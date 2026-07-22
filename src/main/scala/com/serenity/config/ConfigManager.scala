@@ -376,6 +376,10 @@ object ConfigManager:
        |# Hotkey overrides
        |hotkey.command_palette = ${config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render}
        |hotkey.file_search = ${config.hotkeyConfig.bindingsFor(HotkeyAction.FileSearch).head.render}
+       |hotkey.find = ${config.hotkeyConfig.bindingsFor(HotkeyAction.Find).head.render}
+       |hotkey.replace = ${config.hotkeyConfig.bindingsFor(HotkeyAction.Replace).head.render}
+       |hotkey.go_to_line = ${config.hotkeyConfig.bindingsFor(HotkeyAction.GoToLine).head.render}
+       |hotkey.save_as = ${config.hotkeyConfig.bindingsFor(HotkeyAction.SaveAs).head.render}
        |
        |# Focused keymap overrides
        |keymap.editor.page_down = ${editorBinding(EditorKeyAction.PageDown)}

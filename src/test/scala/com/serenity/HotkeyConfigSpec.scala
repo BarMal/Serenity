@@ -1,6 +1,8 @@
 package com.serenity
 
-import com.serenity.config.{HotkeyAction, HotkeyConfig}
+import java.nio.file.Files
+
+import com.serenity.config.{AppConfig, ConfigManager, HotkeyAction, HotkeyConfig}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -48,4 +50,27 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     )
 
     HotkeyConfig.validate(bindings).isLeft shouldBe true
+  }
+
+  it should "preserve core editing overrides when configuration is saved and reloaded" in {
+    val overrides = List(
+      HotkeyAction.Find     -> "ctrl+alt+f",
+      HotkeyAction.Replace  -> "ctrl+alt+h",
+      HotkeyAction.GoToLine -> "ctrl+alt+g",
+      HotkeyAction.SaveAs   -> "ctrl+alt+shift+s"
+    )
+    val config = overrides.foldLeft(AppConfig.default) {
+      case (updated, (action, binding)) =>
+        updated.withHotkeyOverride(action, binding)
+    }
+    val configFile = Files.createTempFile("serenity-hotkeys", ".conf")
+
+    ConfigManager.saveConfig(config, configFile) shouldBe true
+
+    val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    overrides.foreach {
+      case (action, binding) =>
+        reloaded.hotkeyConfig.bindingsFor(action).headOption.map(_.render) shouldBe Some(binding)
+    }
   }
