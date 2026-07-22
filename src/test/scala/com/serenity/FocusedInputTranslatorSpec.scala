@@ -78,7 +78,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
     List(
       (InputKey.Character, Some('f'), Set(Modifier.Meta), OpenFind),
-      (InputKey.Character, Some('h'), Set(Modifier.Meta), OpenReplace),
+      (InputKey.Character, Some('f'), Set(Modifier.Meta, Modifier.Alt), OpenReplace),
       (InputKey.Character, Some('g'), Set(Modifier.Meta), OpenGotoLine),
       (InputKey.Character, Some('s'), Set(Modifier.Meta, Modifier.Shift), SaveAsFile)
     ).foreach {

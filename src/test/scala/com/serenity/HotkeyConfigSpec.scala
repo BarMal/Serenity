@@ -31,7 +31,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
 
     editingActions.map(action => bindings(action).head.render) shouldBe List(
       "meta+f",
-      "meta+h",
+      "alt+meta+f",
       "meta+g",
       "meta+shift+s"
     )

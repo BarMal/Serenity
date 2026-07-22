@@ -126,7 +126,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       List("Find", "ctrl+alt+f", "Find text in the current file.")
     )
     resolved.rows.find(_.plainText.startsWith("Replace")).map(_.segments.map(_.text)) shouldBe Some(
-      List("Replace", "meta+h", "Find and replace text in the current file.")
+      List("Replace", "alt+meta+f", "Find and replace text in the current file.")
     )
   }
 

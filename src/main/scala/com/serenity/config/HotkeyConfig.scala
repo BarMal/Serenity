@@ -207,10 +207,14 @@ object HotkeyConfig:
     validatedBindings(defaultBindingsFor(System.getProperty("os.name", "")))
 
   def defaultBindingsFor(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
-    val primaryModifier =
-      if osName.toLowerCase(java.util.Locale.ROOT).contains("mac") then Modifier.Meta else Modifier.Ctrl
-    def primary(key: Char, shift: Boolean = false): HotkeyTrigger =
-      HotkeyTrigger(InputKey.Character, Some(key), Set(primaryModifier) ++ Option.when(shift)(Modifier.Shift).toSet)
+    val isMac           = osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
+    val primaryModifier = if isMac then Modifier.Meta else Modifier.Ctrl
+    def primary(key: Char, shift: Boolean = false, alt: Boolean = false): HotkeyTrigger =
+      HotkeyTrigger(
+        InputKey.Character,
+        Some(key),
+        Set(primaryModifier) ++ Option.when(shift)(Modifier.Shift).toSet ++ Option.when(alt)(Modifier.Alt).toSet
+      )
     def primaryKey(key: InputKey, shift: Boolean = false): HotkeyTrigger =
       HotkeyTrigger(key, None, Set(primaryModifier) ++ Option.when(shift)(Modifier.Shift).toSet)
 
@@ -247,7 +251,7 @@ object HotkeyConfig:
         primaryKey(InputKey.ReverseTab)
       ),
       HotkeyAction.Find     -> List(primary('f')),
-      HotkeyAction.Replace  -> List(primary('h')),
+      HotkeyAction.Replace  -> List(if isMac then primary('f', alt = true) else primary('h')),
       HotkeyAction.GoToLine -> List(primary('g')),
       HotkeyAction.SaveAs   -> List(primary('s', shift = true))
     )
