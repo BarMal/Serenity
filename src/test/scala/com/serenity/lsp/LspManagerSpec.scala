@@ -7,7 +7,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, Fiber, IO, Ref, Resource}
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.LspConnection
-import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
 import com.serenity.state.models.CursorPosition
 import fs2.Stream
 import io.circe.Json
@@ -21,8 +21,19 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
 
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-  private val logger = LoggerFactory[IO].getLogger(using LoggerName("LspManagerSpec"))
-  private val uri    = "file:///workspace/Foo.scala"
+  private val logger      = LoggerFactory[IO].getLogger(using LoggerName("LspManagerSpec"))
+  private val uri         = "file:///workspace/Foo.scala"
+  private val scalaServer = LspServerConfig(LanguageId.Scala, LspServerBinary.Metals)
+
+  private def resolvedConnection(
+    rootUri: String,
+    connection: LspConnection,
+    release: IO[Unit] = IO.unit
+  ): LspManager.ResolvedConnection =
+    LspManager.ResolvedConnection(
+      LspManager.ConnectionIdentity(rootUri, scalaServer),
+      Resource.make(IO.pure(connection))(_ => release)
+    )
 
   private case class Harness(
       effects: Queue[IO, Option[LspEffect]],
@@ -43,12 +54,12 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       connection   <- LspConnection.create(LanguageId.Scala, logger)
       released     <- Deferred[IO, Unit]
       provider = new LspManager.ConnectionProvider:
-        def connect(
+        def resolve(
           languageId: LanguageId,
           fileUri: String,
           onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
-        ): IO[Option[Resource[IO, LspConnection]]] =
-          IO.pure(Some(Resource.make(IO.pure(connection))(_ => released.complete(()).void)))
+        ): IO[Option[LspManager.ResolvedConnection]] =
+          IO.pure(Some(resolvedConnection("file:///workspace", connection, released.complete(()).void)))
       managerFiber <- LspManager
         .runWithProvider(
           Stream.fromQueueNoneTerminated(effects),
@@ -61,6 +72,17 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
 
   private def takeMessage(connection: LspConnection): IO[Json] =
     connection.takeOutgoing.flatMap(IO.fromOption(_)(new RuntimeException("Missing LSP message")))
+
+  private def expectNotification(connection: LspConnection, method: String, uri: String): IO[Unit] =
+    takeMessage(connection).map { message =>
+      message.hcursor.downField("method").as[String].toOption shouldBe Some(method)
+      message.hcursor.downField("params").downField("textDocument").downField("uri").as[String].toOption shouldBe Some(
+        uri
+      )
+    }
+
+  private def noMessage(connection: LspConnection): IO[Unit] =
+    connection.takeOutgoing.timeoutTo(100.millis, IO.pure(None)).map(_ shouldBe None)
 
   private def requestId(message: Json): Long =
     message.hcursor.downField("id").as[Long].toOption.getOrElse(fail("Request was missing an id"))
@@ -156,3 +178,178 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       pending shouldBe 0
       released shouldBe Some(())
     ).timeout(3.seconds).unsafeRunSync()
+
+  it should "create separate connections for same-language documents in different workspaces" in {
+    val firstUri  = "file:///workspace-one/Foo.scala"
+    val secondUri = "file:///workspace-two/Bar.scala"
+    val program = for
+      effects          <- Queue.unbounded[IO, Option[LspEffect]]
+      firstConnection  <- LspConnection.create(LanguageId.Scala, logger)
+      secondConnection <- LspConnection.create(LanguageId.Scala, logger)
+      connected        <- Ref.of[IO, List[String]](Nil)
+      bothConnected    <- Deferred[IO, Unit]
+      provider = new LspManager.ConnectionProvider:
+        def resolve(
+          languageId: LanguageId,
+          fileUri: String,
+          onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+        ): IO[Option[LspManager.ResolvedConnection]] =
+          connected.update(_ :+ fileUri) >>
+            (if fileUri == secondUri then bothConnected.complete(()).void else IO.unit) >>
+            IO.pure(
+              Some(
+                resolvedConnection(
+                  if fileUri == firstUri then "file:///workspace-one" else "file:///workspace-two",
+                  if fileUri == firstUri then firstConnection else secondConnection
+                )
+              )
+            )
+      managerFiber <- LspManager
+        .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
+        .start
+      _                    <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
+      _                    <- takeMessage(firstConnection)
+      _                    <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
+      _                    <- bothConnected.get
+      _                    <- takeMessage(secondConnection)
+      _                    <- effects.offer(None)
+      _                    <- managerFiber.joinWithNever
+      attemptedConnections <- connected.get
+    yield attemptedConnections shouldBe List(firstUri, secondUri)
+
+    program.timeout(3.seconds).unsafeRunSync()
+  }
+
+  it should "route lifecycle notifications and releases to their workspace connection" in {
+    val firstUri  = "file:///workspace-one/Foo.scala"
+    val secondUri = "file:///workspace-two/Bar.scala"
+    val program = for
+      effects          <- Queue.unbounded[IO, Option[LspEffect]]
+      firstConnection  <- LspConnection.create(LanguageId.Scala, logger)
+      secondConnection <- LspConnection.create(LanguageId.Scala, logger)
+      firstReleased    <- Deferred[IO, Unit]
+      secondReleased   <- Deferred[IO, Unit]
+      provider = new LspManager.ConnectionProvider:
+        def resolve(
+          languageId: LanguageId,
+          fileUri: String,
+          onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+        ): IO[Option[LspManager.ResolvedConnection]] =
+          val (rootUri, connection, release) =
+            if fileUri == firstUri then ("file:///workspace-one", firstConnection, firstReleased.complete(()).void)
+            else ("file:///workspace-two", secondConnection, secondReleased.complete(()).void)
+          IO.pure(Some(resolvedConnection(rootUri, connection, release)))
+      managerFiber <- LspManager
+        .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
+        .start
+      _ <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
+      _ <- expectNotification(firstConnection, "textDocument/didOpen", firstUri)
+      _ <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
+      _ <- expectNotification(secondConnection, "textDocument/didOpen", secondUri)
+      _ <- effects.offer(Some(LspEffect.FileChanged(firstUri, LanguageId.Scala, "object Foo2", version = 2)))
+      _ <- expectNotification(firstConnection, "textDocument/didChange", firstUri)
+      _ <- noMessage(secondConnection)
+      _ <- effects.offer(Some(LspEffect.FileChanged(secondUri, LanguageId.Scala, "object Bar2", version = 2)))
+      _ <- expectNotification(secondConnection, "textDocument/didChange", secondUri)
+      _ <- noMessage(firstConnection)
+      _ <- effects.offer(Some(LspEffect.FileClosed(firstUri, LanguageId.Scala)))
+      _ <- expectNotification(firstConnection, "textDocument/didClose", firstUri)
+      _ <- firstReleased.get
+      _ <- secondReleased.tryGet.map(_ shouldBe None)
+      _ <- noMessage(secondConnection)
+      _ <- effects.offer(Some(LspEffect.FileClosed(secondUri, LanguageId.Scala)))
+      _ <- expectNotification(secondConnection, "textDocument/didClose", secondUri)
+      _ <- secondReleased.get
+      _ <- effects.offer(None)
+      _ <- managerFiber.joinWithNever
+    yield succeed
+
+    program.timeout(5.seconds).unsafeRunSync()
+  }
+
+  it should "reuse a workspace connection until its last document closes" in {
+    val firstUri  = "file:///workspace/Foo.scala"
+    val secondUri = "file:///workspace/Bar.scala"
+    val program = for
+      effects    <- Queue.unbounded[IO, Option[LspEffect]]
+      connection <- LspConnection.create(LanguageId.Scala, logger)
+      acquired   <- Ref.of[IO, Int](0)
+      released   <- Deferred[IO, Unit]
+      provider = new LspManager.ConnectionProvider:
+        def resolve(
+          languageId: LanguageId,
+          fileUri: String,
+          onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+        ): IO[Option[LspManager.ResolvedConnection]] =
+          IO.pure(
+            Some(
+              LspManager.ResolvedConnection(
+                LspManager.ConnectionIdentity("file:///workspace", scalaServer),
+                Resource.make(acquired.update(_ + 1).as(connection))(_ => released.complete(()).void)
+              )
+            )
+          )
+      managerFiber <- LspManager
+        .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
+        .start
+      _             <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
+      _             <- takeMessage(connection)
+      _             <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
+      _             <- takeMessage(connection)
+      _             <- effects.offer(Some(LspEffect.FileClosed(firstUri, LanguageId.Scala)))
+      _             <- takeMessage(connection)
+      firstRelease  <- released.tryGet
+      _             <- effects.offer(Some(LspEffect.FileClosed(secondUri, LanguageId.Scala)))
+      _             <- takeMessage(connection)
+      _             <- released.get
+      _             <- effects.offer(None)
+      _             <- managerFiber.joinWithNever
+      acquiredCount <- acquired.get
+    yield
+      firstRelease shouldBe None
+      acquiredCount shouldBe 1
+
+    program.timeout(3.seconds).unsafeRunSync()
+  }
+
+  it should "separate connections when a workspace resolves different server configurations" in {
+    val firstUri       = "file:///workspace/Foo.scala"
+    val secondUri      = "file:///workspace/Bar.scala"
+    val overrideConfig = scalaServer.copy(defaultArgs = List("--alternate"))
+    val program = for
+      effects          <- Queue.unbounded[IO, Option[LspEffect]]
+      firstConnection  <- LspConnection.create(LanguageId.Scala, logger)
+      secondConnection <- LspConnection.create(LanguageId.Scala, logger)
+      connected        <- Deferred[IO, Unit]
+      provider = new LspManager.ConnectionProvider:
+        def resolve(
+          languageId: LanguageId,
+          fileUri: String,
+          onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+        ): IO[Option[LspManager.ResolvedConnection]] =
+          val (connection, config) =
+            if fileUri == firstUri then firstConnection -> scalaServer
+            else secondConnection                       -> overrideConfig
+          (if fileUri == secondUri then connected.complete(()).void else IO.unit) >>
+            IO.pure(
+              Some(
+                LspManager.ResolvedConnection(
+                  LspManager.ConnectionIdentity("file:///workspace", config),
+                  Resource.pure(connection)
+                )
+              )
+            )
+      managerFiber <- LspManager
+        .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
+        .start
+      _ <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
+      _ <- takeMessage(firstConnection)
+      _ <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
+      _ <- connected.get
+      _ <- takeMessage(secondConnection)
+      _ <- effects.offer(None)
+      _ <- managerFiber.joinWithNever
+    yield succeed
+
+    program.timeout(3.seconds).unsafeRunSync()
+  }
