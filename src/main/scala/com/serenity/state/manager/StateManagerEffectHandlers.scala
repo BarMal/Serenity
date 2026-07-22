@@ -1480,7 +1480,7 @@ final private[manager] class StateManagerEffectHandlers(
         case None =>
           pinProjectTerminal(ProjectTaskTerminal.noTask(kind, start))
         case Some(command) =>
-          projectTaskSemaphore.permit.use {
+          projectTaskSemaphore.permit.use { _ =>
             projectTaskFiberRef.get.flatMap {
               case Some(_) =>
                 pinProjectTerminal(

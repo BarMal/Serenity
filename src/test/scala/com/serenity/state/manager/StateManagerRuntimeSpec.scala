@@ -187,8 +187,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       projectTaskAfterShutdown  <- projectTaskFiberRef.get
       analysisWasCancelled      <- analysisCancelled.tryGet
       pendingAnalysisFiber      <- documentAnalysisFiberRef.get
-      _                         <- projectTaskAfterCommand.fold(IO.unit)(_.cancel)
-      _                         <- projectTaskAfterShutdown.fold(IO.unit)(_.cancel)
+      _                         <- projectTaskAfterCommand.fold(IO.unit)(_.fiber.cancel)
+      _                         <- projectTaskAfterShutdown.fold(IO.unit)(_.fiber.cancel)
       _                         <- pendingAnalysisFiber.fold(IO.unit)(_.cancel)
     yield
       commandChildWasDestroyed shouldBe Some(())

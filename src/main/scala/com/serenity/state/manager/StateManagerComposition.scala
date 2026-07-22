@@ -6,7 +6,6 @@ import scala.concurrent.duration.*
 
 import cats.effect.*
 import cats.effect.std.Semaphore
-import cats.effect.std.Semaphore
 import cats.syntax.foldable.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.PreferredWindowSize

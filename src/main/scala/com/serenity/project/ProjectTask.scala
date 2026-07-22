@@ -4,8 +4,8 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 
 import cats.effect.{IO, Ref, Resource}
-import fs2.{Stream, text}
 import fs2.io.readInputStream
+import fs2.{Stream, text}
 
 /** Project-level workflow supported by Serenity's command runner. */
 enum ProjectTaskKind(val label: String, val lowerLabel: String):

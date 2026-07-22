@@ -98,12 +98,12 @@ private[manager] object ProjectTaskOwnership:
     projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
     projectTaskSemaphore: Semaphore[IO]
   ): IO[Boolean] =
-    projectTaskSemaphore.permit.use(
+    projectTaskSemaphore.permit.use { _ =>
       projectTaskFiberRef.getAndSet(None).flatMap {
         case Some(task) => task.fiber.cancel.as(true)
         case None       => IO.pure(false)
       }
-    )
+    }
 
 private[manager] case class StateManagerRuntime(
     stateRef: Ref[IO, AppState],
