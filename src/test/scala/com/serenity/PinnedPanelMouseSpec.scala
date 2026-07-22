@@ -123,7 +123,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(test)))
   }
 
-  it should "not route a click to a pinned panel while a close confirmation is active" in {
+  it should "not route clicks or hover to a pinned panel while a close confirmation is active" in {
     val root  = Paths.get("/repo")
     val src   = root.resolve("src")
     val tree  = DirectoryTreeData(root, entries = Map(root -> List(DirEntry(src, "src", isDirectory = true))))
@@ -141,6 +141,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
     val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), panel.id, displayedItemRow = 1)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
+    sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.focus shouldBe Focus.Surface(close.id)
