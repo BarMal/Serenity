@@ -4,7 +4,7 @@ import java.awt.Color
 
 import cats.syntax.foldable.*
 import com.serenity.animation.*
-import com.serenity.command.*
+import com.serenity.command.{CommandCategory, CommandRegistry, CommandRunner, CommandSurfaceItem}
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.*
 import com.serenity.state.models.*
