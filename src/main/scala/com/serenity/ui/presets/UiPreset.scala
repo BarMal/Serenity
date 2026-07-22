@@ -12,6 +12,7 @@ import java.util.concurrent.locks.ReentrantLock
 import cats.effect.IO
 import com.serenity.animation.TransitionKind
 import com.serenity.config.*
+import com.serenity.io.AtomicFileWriter
 import com.serenity.session.given
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -771,15 +772,7 @@ class UiPresetStore private (path: Path):
 
   private def saveUnlocked(index: UiPresetIndex): IO[Unit] =
     IO.fromEither(validateIndex(index)).flatMap { validIndex =>
-      IO.blocking {
-        Option(path.getParent).foreach(Files.createDirectories(_))
-        val directory = Option(path.getParent).getOrElse(Paths.get("."))
-        val temporary = Files.createTempFile(directory, s".${path.getFileName.toString}.", ".tmp")
-        try
-          Files.writeString(temporary, validIndex.asJson.spaces2, StandardCharsets.UTF_8)
-          Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        finally Files.deleteIfExists(temporary): Unit
-      }.void
+      AtomicFileWriter.writeString(path, validIndex.asJson.spaces2)
     }
 
   def save(index: UiPresetIndex): IO[Unit] =

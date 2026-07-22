@@ -1,10 +1,10 @@
 package com.serenity.ui.theme.config
 
 import java.awt.Color
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import cats.effect.IO
+import com.serenity.io.AtomicFileWriter
 import com.serenity.ui.theme.{SyntaxElement, Theme, ThemeColor}
 
 object ThemeConfigWriter:
@@ -43,11 +43,7 @@ object ThemeConfigWriter:
     )
 
   def write(config: ThemeConfig, path: Path): IO[Unit] =
-    IO.blocking {
-      Option(path.getParent).foreach(Files.createDirectories(_))
-      Files.writeString(path, render(config), StandardCharsets.UTF_8)
-      ()
-    }
+    AtomicFileWriter.writeString(path, render(config))
 
   def writeUserTheme(config: ThemeConfig, loader: ThemeConfigLoader = ThemeConfigLoader()): IO[Path] =
     for

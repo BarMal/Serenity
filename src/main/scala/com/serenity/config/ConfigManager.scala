@@ -8,6 +8,7 @@ import scala.util.Using
 
 import cats.effect.IO
 import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
+import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
@@ -406,8 +407,7 @@ object ConfigManager:
 
   def saveConfig(config: AppConfig, configPath: Path): Boolean =
     try
-      Option(configPath.getParent).foreach(parent => Files.createDirectories(parent))
-      Files.write(configPath, configToString(config).getBytes(StandardCharsets.UTF_8))
+      AtomicFileWriter.writeBytesBlocking(configPath, configToString(config).getBytes(StandardCharsets.UTF_8))
       true
     catch case _: Exception => false
 
@@ -672,6 +672,6 @@ object ConfigManager:
                           |keymap.modal.dismiss = escape
                           |""".stripMargin
 
-      Files.write(Paths.get(path), sampleConfig.getBytes(StandardCharsets.UTF_8))
+      AtomicFileWriter.writeBytesBlocking(Paths.get(path), sampleConfig.getBytes(StandardCharsets.UTF_8))
       true
     catch case _: Exception => false
