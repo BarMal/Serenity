@@ -1,6 +1,7 @@
 package com.serenity
 
 import java.nio.file.Files
+
 import scala.concurrent.duration.*
 
 import cats.effect.IO
@@ -155,15 +156,18 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        state.copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(content = Rope("needle need"))))
+        state
+          .copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(content = Rope("needle need"))))
       }
       .unsafeRunSync()
     stateManager.showModal(Modal.Find("", Nil, 0)).unsafeRunSync()
 
     "need".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.updateState { state =>
-      state.copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(content = Rope("other"))))
-    }.unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        state.copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(content = Rope("other"))))
+      }
+      .unsafeRunSync()
 
     IO.sleep(150.millis).unsafeRunSync()
 

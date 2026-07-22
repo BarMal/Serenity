@@ -195,10 +195,12 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       .copy(
         buffers = AppState.initial.buffers.updated(
           bufferId,
-          AppState.initial.buffers(bufferId).copy(
-            content = Rope("needle needle"),
-            findState = Some(FindState("need", List(matchAt(0, 0)), 0))
-          )
+          AppState.initial
+            .buffers(bufferId)
+            .copy(
+              content = Rope("needle needle"),
+              findState = Some(FindState("need", List(matchAt(0, 0)), 0))
+            )
         )
       )
 
@@ -232,7 +234,8 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       initialState.buffers(BufferId(0)).content
     )
     val editedState = initialState.copy(
-      buffers = initialState.buffers.updated(BufferId(0), initialState.buffers(BufferId(0)).copy(content = Rope("other")))
+      buffers =
+        initialState.buffers.updated(BufferId(0), initialState.buffers(BufferId(0)).copy(content = Rope("other")))
     )
 
     ModalEventReducer.applyFindSearchResults(editedState, request, List(matchAt(0, 0))) shouldBe editedState

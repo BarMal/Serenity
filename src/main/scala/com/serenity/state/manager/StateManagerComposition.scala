@@ -448,7 +448,7 @@ private[manager] class StateManagerComposition(
     def enqueueEvent(event: Event): IO[Unit]                = operations.enqueueEvent(event)
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       operations.validateAndUpdateState(newState, fallbackState)
-    def scheduleDocumentAnalysis(): IO[Unit] = operations.scheduleDocumentAnalysis()
+    def scheduleDocumentAnalysis(): IO[Unit]                     = operations.scheduleDocumentAnalysis()
     def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = operations.scheduleFindSearch(request)
 
   private val effectSurfacePort: EffectSurfacePort = new EffectSurfacePort:

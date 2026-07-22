@@ -84,11 +84,11 @@ final private[manager] class StateManagerEffectHandlers(
   private val workflowEffects = new WorkflowEffectHandler(new WorkflowEffectPort:
     def requestOpenFile: IO[Unit] = requestOpenFileDialog
     def requestSaveAs: IO[Unit]   = stateRef.get.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
-    def refresh(surfaceId: SurfaceId): IO[Unit]       = refreshFileWorkflowEffect(surfaceId)
+    def refresh(surfaceId: SurfaceId): IO[Unit]           = refreshFileWorkflowEffect(surfaceId)
     def refreshFind(request: FindSearchRequest): IO[Unit] = scheduleFindSearch(request)
-    def submitFile(surfaceId: SurfaceId): IO[Unit]    = submitFileWorkflowEffect(surfaceId)
-    def submitReplace(surfaceId: SurfaceId): IO[Unit] = submitReplaceWorkflowEffect(surfaceId)
-    def submitClose(surfaceId: SurfaceId): IO[Unit]   = submitCloseWorkflowEffect(surfaceId))
+    def submitFile(surfaceId: SurfaceId): IO[Unit]        = submitFileWorkflowEffect(surfaceId)
+    def submitReplace(surfaceId: SurfaceId): IO[Unit]     = submitReplaceWorkflowEffect(surfaceId)
+    def submitClose(surfaceId: SurfaceId): IO[Unit]       = submitCloseWorkflowEffect(surfaceId))
 
   private val lifecycleEffects = new LifecycleEffectHandler(
     new LifecycleEffectPort:
