@@ -194,7 +194,9 @@ case class HotkeyConfig(
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
   def resetBinding(action: HotkeyAction): HotkeyConfig =
-    copy(bindings = bindings + (action -> HotkeyConfig.defaultBindings.getOrElse(action, Nil)))
+    HotkeyConfig
+      .fromBindings(bindings + (action -> HotkeyConfig.defaultBindings.getOrElse(action, Nil)))
+      .fold(_ => this, identity)
 
 object HotkeyConfig:
 
