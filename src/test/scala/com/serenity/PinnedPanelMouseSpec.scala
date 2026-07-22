@@ -123,6 +123,30 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(test)))
   }
 
+  it should "not route a click to a pinned panel while a close confirmation is active" in {
+    val root  = Paths.get("/repo")
+    val src   = root.resolve("src")
+    val tree  = DirectoryTreeData(root, entries = Map(root -> List(DirEntry(src, "src", isDirectory = true))))
+    val panel = explorerSurface(tree, selectedPath = Some(root))
+    val close = UiSurface(
+      SurfaceId("close-confirmation"),
+      SurfaceContent.ModalWorkflow(
+        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala"))
+      ),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val sm = makeStateManager()
+    sm.updateState(_.copy(uiSurfaces = List(panel, close), focus = Focus.Surface(close.id))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), panel.id, displayedItemRow = 1)
+    sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
+
+    val after = sm.getCurrentState.unsafeRunSync()
+    after.focus shouldBe Focus.Surface(close.id)
+    after.surfaceById(panel.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(root)))
+  }
+
   it should "select and focus an expanded directory tree row on primary click" in {
     val root = Paths.get("/repo")
     val src  = root.resolve("src")
