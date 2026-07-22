@@ -485,60 +485,61 @@ object Renderer:
     context: RenderContext,
     contract: EditorLayoutContract
   ): Unit =
-    context.surface.setFont(context.uiFont)
     val surface    = context.surface
-    val isActive   = state.layout.activeEditorPaneId.contains(pane.id)
     val headerRect = contract.paneHeaderRect(pane.id).getOrElse(paneLayout.headerRect)
-    val titleRect  = contract.paneTitleRect(pane.id).getOrElse(paneLayout.titleRect)
+    if headerRect.height > 0 then
+      context.surface.setFont(context.uiFont)
+      val isActive  = state.layout.activeEditorPaneId.contains(pane.id)
+      val titleRect = contract.paneTitleRect(pane.id).getOrElse(paneLayout.titleRect)
 
-    if isActive then
-      surface.setBackgroundColor(state.theme.highlighted.background)
-      surface.setForegroundColor(state.theme.highlighted.foreground)
-    else
-      surface.setBackgroundColor(state.theme.panel.background)
-      surface.setForegroundColor(state.theme.panel.foreground)
+      if isActive then
+        surface.setBackgroundColor(state.theme.highlighted.background)
+        surface.setForegroundColor(state.theme.highlighted.foreground)
+      else
+        surface.setBackgroundColor(state.theme.panel.background)
+        surface.setForegroundColor(state.theme.panel.foreground)
 
-    val bufferTitle = buffer match
-      case Some(buf) =>
-        buf.filePath match
-          case Some(path) =>
-            val filename = path.getFileName.toString
-            if buf.isDirty then s"$filename - unsaved" else filename
-          case None =>
-            if buf.isDirty then s"Buffer ${buf.id.value} - unsaved" else s"Buffer ${buf.id.value}"
-      case None =>
-        "No Buffer"
+      val bufferTitle = buffer match
+        case Some(buf) =>
+          buf.filePath match
+            case Some(path) =>
+              val filename = path.getFileName.toString
+              if buf.isDirty then s"$filename - unsaved" else filename
+            case None =>
+              if buf.isDirty then s"Buffer ${buf.id.value} - unsaved" else s"Buffer ${buf.id.value}"
+        case None =>
+          "No Buffer"
 
-    val maxTitleWidth = math.max(1, titleRect.width - 2)
-    val displayTitle =
-      if bufferTitle.length > maxTitleWidth then bufferTitle.take(maxTitleWidth - 3) + "..."
-      else bufferTitle
+      val maxTitleWidth = math.max(1, titleRect.width - 2)
+      val displayTitle =
+        if bufferTitle.length > maxTitleWidth then bufferTitle.take(maxTitleWidth - 3) + "..."
+        else bufferTitle
 
-    surface.putString(headerRect.x, headerRect.y, " " * headerRect.width)
+      surface.putString(headerRect.x, headerRect.y, " " * headerRect.width)
 
-    val titlePlacement = TextAlignment.placeLine(
-      displayTitle,
-      TextAreaPx(
-        xPx = context.cellMetrics.toPixelX(titleRect.x).toFloat,
-        yPx = context.cellMetrics.toPixelY(titleRect.y),
-        widthPx = titleRect.width * context.cellMetrics.charWidth.toFloat,
-        heightPx = context.cellMetrics.lineHeight
-      ),
-      context.uiFont,
-      context.cellMetrics.lineHeight,
-      context.cellMetrics.ascent,
-      TextHorizontalAlignment.Center,
-      TextVerticalAlignment.Top,
-      surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
-    )
-    surface.drawRunPx(
-      titlePlacement.xPx,
-      titlePlacement.yPx,
-      titlePlacement.widthPx,
-      titlePlacement.lineHeightPx,
-      titlePlacement.ascentPx,
-      displayTitle
-    )
+      val titlePlacement = TextAlignment.placeLine(
+        displayTitle,
+        TextAreaPx(
+          xPx = context.cellMetrics.toPixelX(titleRect.x).toFloat,
+          yPx = context.cellMetrics.toPixelY(titleRect.y),
+          widthPx = titleRect.width * context.cellMetrics.charWidth.toFloat,
+          heightPx = context.cellMetrics.lineHeight
+        ),
+        context.uiFont,
+        context.cellMetrics.lineHeight,
+        context.cellMetrics.ascent,
+        TextHorizontalAlignment.Center,
+        TextVerticalAlignment.Top,
+        surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+      )
+      surface.drawRunPx(
+        titlePlacement.xPx,
+        titlePlacement.yPx,
+        titlePlacement.widthPx,
+        titlePlacement.lineHeightPx,
+        titlePlacement.ascentPx,
+        displayTitle
+      )
 
     surface.setBackgroundColor(state.theme.background)
     surface.setForegroundColor(state.theme.foreground)

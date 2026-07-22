@@ -9,7 +9,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.keystroke.events.ToggleCommandRunner
-import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -191,8 +191,53 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     state.layout.activeEditorPaneId shouldBe Some(PaneId(1))
     state.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(BufferId(1))
     state.buffers(BufferId(1)).richTextDocument should not be empty
-    state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Left, 28))
-    state.pinnedSurfaces.headOption.map(_.content) shouldBe Some(SurfaceContent.Outline(Nil))
+    state.config.showPaneHeaders shouldBe false
+    state.pinnedSurfaces shouldBe Nil
+  }
+
+  it should "preserve unrelated persisted configuration when applying a built-in workflow" in {
+    val path  = Files.createTempDirectory("state-manager-built-in-workflow-config").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+    val lspConfig = LspUserConfig(
+      Some(Map(LanguageId.Scala.id -> LspServerOverride(Some("scala-cli"), Some(List("lsp")), Some(false))))
+    )
+    val spellCheck = SpellCheckConfig(enabled = true, languages = List("en", "fr"))
+    val windowConfig = WindowConfig(
+      chromeMode = WindowChromeMode.NativeThemed,
+      preferredSize = Some(PreferredWindowSize(1366, 768))
+    )
+
+    sm.updateState { state =>
+      state.copy(
+        config = state.config
+          .withHotkeyOverride(HotkeyAction.ToggleCommandRunner, "alt+p")
+          .withEditorKeyOverride(EditorKeyAction.MoveLeft, "alt+h")
+          .withLanguageToolsConfig(
+            state.config.languageToolsConfig.copy(lspUserConfig = lspConfig, spellCheck = spellCheck)
+          )
+          .withWindowConfig(windowConfig)
+      )
+    }.unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "apply-writing-preset",
+        "Apply writing preset",
+        CommandIntent.ApplyUiPreset("Writing"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val config = sm.getCurrentState.unsafeRunSync().config
+
+    config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).map(_.render) shouldBe List("alt+p")
+    config.focusedKeymapConfig.editor.bindingsFor(EditorKeyAction.MoveLeft).map(_.render) shouldBe List("alt+h")
+    config.lspUserConfig shouldBe lspConfig
+    config.spellCheck shouldBe spellCheck
+    config.windowConfig shouldBe windowConfig
+    config.showLineNumbers shouldBe false
+    config.showPaneHeaders shouldBe false
   }
 
   it should "apply the built-in documentation preset to the active empty buffer" in {
@@ -251,9 +296,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     state.config.defaultDocumentMode shouldBe com.serenity.config.DefaultDocumentMode.Markdown
-    state.pinnedSurfaces.map(_.content) should contain(
-      SurfaceContent.Outline(List(Symbol("Notes", SymbolKind.Heading, Location(0, 0))), Some(Location(0, 0)))
-    )
+    state.pinnedSurfaces.collect { case UiSurface(_, SurfaceContent.Outline(_, _), _, _) => () } shouldBe Nil
     state.pinnedSurfaces.collectFirst {
       case UiSurface(
             _,
@@ -265,7 +308,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     } shouldBe Some(true)
   }
 
-  it should "hydrate the documentation preset outline from the active markdown buffer" in {
+  it should "leave the documentation outline optional for the active markdown buffer" in {
     val path  = Files.createTempDirectory("state-manager-documentation-outline-ui-preset").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
@@ -291,18 +334,9 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
-    val outlineSymbols = sm.getCurrentState.unsafeRunSync().pinnedSurfaces.collectFirst {
-      case UiSurface(_, SurfaceContent.Outline(symbols, _), SurfacePresentation.Pinned(PanelPosition.Left, 30), _) =>
-        symbols
-    }
-
-    outlineSymbols shouldBe Some(
-      List(
-        Symbol("Chapter One", SymbolKind.Heading, Location(0, 0)),
-        Symbol("Bookmark 3:5", SymbolKind.Bookmark, Location(2, 4)),
-        Symbol("Scene Two", SymbolKind.Heading, Location(4, 0))
-      )
-    )
+    sm.getCurrentState.unsafeRunSync().pinnedSurfaces.collect {
+      case UiSurface(_, SurfaceContent.Outline(_, _), _, _) => ()
+    } shouldBe Nil
   }
 
   it should "hydrate the review preset outline from active bookmarks and headings" in {
@@ -1563,7 +1597,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     store.find("Writing").unsafeRunSync() shouldBe None
     state.config.fontConfig.textFontFamily shouldBe Font.SERIF
-    state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Left, 28))
+    state.pinnedSurfaces shouldBe Nil
   }
 
   it should "not reset a preset while another preset draft has unsaved changes" in {

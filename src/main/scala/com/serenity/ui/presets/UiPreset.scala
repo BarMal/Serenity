@@ -56,7 +56,7 @@ object UiPreset:
     normalizedName(name).toLowerCase(Locale.ROOT)
 
   val builtIns: List[UiPreset] =
-    List(writingPreset, documentationPreset, codePreset, reviewPreset)
+    List(writingPreset, documentationPreset, codePreset, compactPreset, reviewPreset)
 
   def builtInNames: List[String] =
     builtIns.map(_.name)
@@ -142,6 +142,66 @@ object UiPreset:
 
   private def patchTypographyConfig(base: AppConfig, source: AppConfig): AppConfig =
     base.withEditorConfig(base.editorConfig.copy(fontConfig = source.editorConfig.fontConfig))
+
+  private def patchWorkflowChrome(
+    base: AppConfig,
+    source: AppConfig,
+    includeWordWrap: Boolean = false,
+    includeContextualToolbar: Boolean = false,
+    includeTextAreaInsets: Boolean = false
+  ): AppConfig =
+    base.withSurfaceConfig(
+      base.surfaceConfig.copy(
+        showLineNumbers = source.showLineNumbers,
+        showGutter = source.showGutter,
+        showPaneHeaders = source.showPaneHeaders,
+        wordWrapEnabled = if includeWordWrap then source.wordWrapEnabled else base.wordWrapEnabled,
+        contextualToolbarEnabled =
+          if includeContextualToolbar then source.contextualToolbarEnabled else base.contextualToolbarEnabled,
+        textAreaInsets = if includeTextAreaInsets then source.textAreaInsets else base.textAreaInsets
+      )
+    )
+
+  private def mergeBuiltInWorkflowConfig(base: AppConfig, preset: UiPreset): AppConfig =
+    val source         = preset.config
+    val withMotion     = patchMotionConfig(base, source)
+    val withTypography = patchTypographyConfig(withMotion, source)
+
+    nameKey(preset.name) match
+      case "writing" =>
+        val withChrome = patchWorkflowChrome(withTypography, source, includeTextAreaInsets = true)
+        withChrome
+          .withSurfaceConfig(
+            withChrome.surfaceConfig.copy(
+              blurRadius = source.blurRadius,
+              backgroundStyle = source.backgroundStyle,
+              materialPreset = source.materialPreset
+            )
+          )
+          .withDocumentConfig(source.documentConfig)
+          .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
+          .withCursorConfig(base.cursorConfig.copy(infoBarMode = source.cursorInfoBarMode))
+      case "documentation" =>
+        patchWorkflowChrome(withTypography, source)
+          .withDocumentConfig(source.documentConfig)
+      case "code" =>
+        patchWorkflowChrome(withTypography, source)
+          .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
+          .withSyntaxHighlighting(source.syntaxHighlightingEnabled)
+      case "compact" =>
+        patchWorkflowChrome(
+          withTypography,
+          source,
+          includeWordWrap = true,
+          includeContextualToolbar = true
+        )
+          .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
+          .withSyntaxHighlighting(source.syntaxHighlightingEnabled)
+      case "review" =>
+        patchWorkflowChrome(withTypography, source)
+          .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
+          .withCursorConfig(base.cursorConfig.copy(infoBarMode = source.cursorInfoBarMode))
+      case _ => base
 
   private def unknownJsonFields(raw: JsonObject, known: JsonObject): JsonObject =
     JsonObject.fromIterable(
@@ -241,6 +301,7 @@ object UiPreset:
       config = AppConfig.default
         .withLineNumbers(false)
         .withGutter(false)
+        .withPaneHeaders(false)
         .withMotionPreset(MotionPreset.Subtle)
         .withEditorInsertionTransitionKind(TransitionKind.TypedText)
         .withMaterialPreset(MaterialPreset.Frosted)
@@ -256,7 +317,7 @@ object UiPreset:
         )
         .withCursorInfoBarMode(CursorInfoBarMode.Position),
       themeName = Theme.dark.name,
-      pinnedPanels = List(PinnedPanel(PanelPosition.Left, 28, PanelContentSnapshot.Outline(Nil))),
+      pinnedPanels = Nil,
       targetEditorPaneCount = Some(1)
     )
 
@@ -266,6 +327,7 @@ object UiPreset:
       config = AppConfig.default
         .withLineNumbers(true)
         .withGutter(false)
+        .withPaneHeaders(false)
         .withMotionPreset(MotionPreset.Subtle)
         .withEditorInsertionTransitionKind(TransitionKind.LineAndCharacterTandem)
         .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
@@ -278,7 +340,7 @@ object UiPreset:
           )
         ),
       themeName = Theme.dark.name,
-      pinnedPanels = List(PinnedPanel(PanelPosition.Left, 30, PanelContentSnapshot.Outline(Nil))),
+      pinnedPanels = Nil,
       targetEditorPaneCount = Some(1)
     )
 
@@ -301,6 +363,25 @@ object UiPreset:
           PanelContentSnapshot.DirectoryTree(".", selectedPath = None, expandedPaths = Nil)
         )
       )
+    )
+
+  private def compactPreset: UiPreset =
+    UiPreset(
+      name = "Compact",
+      config = AppConfig.default
+        .withLineNumbers(true)
+        .withGutter(true)
+        .withPaneHeaders(true)
+        .withWordWrap(false)
+        .withContextualToolbarEnabled(false)
+        .withMotionPreset(MotionPreset.Reduced)
+        .withEditorInsertionTransitionKind(TransitionKind.Disabled)
+        .withInterfaceDensity(InterfaceDensity.Compact)
+        .withSyntaxHighlighting(true)
+        .copy(fontConfig = FontConfig()),
+      themeName = Theme.dark.name,
+      pinnedPanels = Nil,
+      targetEditorPaneCount = Some(1)
     )
 
   private def reviewPreset: UiPreset =
@@ -424,6 +505,13 @@ object UiPreset:
     )
 
   def applyToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
+    applyToState(preset, state, theme, preset.config)
+
+  /** Apply a built-in workflow without replacing unrelated persisted configuration. */
+  def applyBuiltInWorkflowToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
+    applyToState(preset, state, theme, mergeBuiltInWorkflowConfig(state.config, preset))
+
+  private def applyToState(preset: UiPreset, state: AppState, theme: Theme, config: AppConfig): AppState =
     val unpinnedSurfaces = state.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Pinned(_, _) => false
@@ -446,7 +534,7 @@ object UiPreset:
       }
 
     val restoredState = stateWithPanels.copy(
-      config = preset.config,
+      config = config,
       theme = theme,
       uiSurfaces = unpinnedSurfaces ++ restoredPanels,
       focus = withoutPinnedFocus,

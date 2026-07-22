@@ -135,7 +135,8 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
       optionSelections = Map("ui-preset-custom" -> 1)
     )
 
-    picker.options.map(_.label) shouldBe List("Writing", "Documentation", "Code", "Review", "Drafting", "Review")
+    picker.options
+      .map(_.label) shouldBe List("Writing", "Documentation", "Code", "Compact", "Review", "Drafting", "Review")
     picker.selectedOption shouldBe "Review"
     picker.options.takeRight(2).map(_.hint) shouldBe List(Some("Saved workspace setup"), Some("Saved workspace setup"))
   }

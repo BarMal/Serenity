@@ -338,6 +338,7 @@ object ConfigManager:
        |command_runner.cursor_gap_rows = ${config.commandRunnerCursorGapRows.map(_.toString).getOrElse("auto")}
        |render.fps = ${config.renderFpsTarget.configKey}
        |display.word_wrap = ${config.wordWrapEnabled}
+       |display.pane_headers = ${config.showPaneHeaders}
        |display.focused_text_body = ${config.focusedTextBodyEnabled}
        |display.contextual_toolbar = ${config.contextualToolbarEnabled}
        |display.contextual_toolbar_mode = ${config.contextualToolbarDisplayMode.configKey}
