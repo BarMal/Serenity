@@ -4,7 +4,6 @@ import java.nio.file.Path
 
 import cats.effect.*
 import cats.effect.std.Queue
-import cats.syntax.all.*
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.lsp.LspEffect
@@ -19,7 +18,7 @@ import fs2.Stream
 import org.typelevel.log4cats.Logger
 
 /** Non-blocking, coalescing hand-off from editor state changes to the LSP runtime. */
-private[manager] final class LspEffectQueue private (
+final private[manager] class LspEffectQueue private (
     queue: Queue[IO, LspEffectQueue.Entry],
     pendingChanges: Ref[IO, Map[String, LspEffectQueue.PendingChange]],
     documentVersions: Ref[IO, Map[String, Int]]

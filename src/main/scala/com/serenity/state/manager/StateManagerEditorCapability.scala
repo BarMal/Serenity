@@ -85,25 +85,29 @@ final private[manager] class StateManagerEditorCapability(
     stateRef.modify(state => EditorState.createNewEmptyBuffer(state)(using balance))
 
   def updateBuffer(bufferId: BufferId, content: String): IO[Unit] =
-    stateRef.modify { state =>
-      state.buffers.get(bufferId) match
-        case Some(buffer) =>
-          val updatedBuffer = buffer.copy(
-            content = Rope(content)(using balance),
-            isDirty = true,
-            isNewEmpty = false
-          )
-          val lspTarget =
-            if buffer.content.collect() == content then None
-            else for
-              path       <- updatedBuffer.filePath
-              languageId <- updatedBuffer.language
-            yield (path.toUri.toString, languageId, content)
-          (state.copy(buffers = state.buffers + (bufferId -> updatedBuffer)), lspTarget)
-        case None => (state, None)
-    }.flatMap(_.fold(IO.unit) { case (uri, languageId, text) =>
-      lspQueue.enqueueDocumentChange(uri, languageId, text)
-    })
+    stateRef
+      .modify { state =>
+        state.buffers.get(bufferId) match
+          case Some(buffer) =>
+            val updatedBuffer = buffer.copy(
+              content = Rope(content)(using balance),
+              isDirty = true,
+              isNewEmpty = false
+            )
+            val lspTarget =
+              if buffer.content.collect() == content then None
+              else
+                for
+                  path       <- updatedBuffer.filePath
+                  languageId <- updatedBuffer.language
+                yield (path.toUri.toString, languageId, content)
+            (state.copy(buffers = state.buffers + (bufferId -> updatedBuffer)), lspTarget)
+          case None => (state, None)
+      }
+      .flatMap(_.fold(IO.unit) {
+        case (uri, languageId, text) =>
+          lspQueue.enqueueDocumentChange(uri, languageId, text)
+      })
 
   def closeBuffer(bufferId: BufferId): IO[Unit] =
     stateRef

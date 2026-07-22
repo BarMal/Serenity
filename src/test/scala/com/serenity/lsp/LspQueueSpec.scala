@@ -155,7 +155,8 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
       sm.applyEvent(InsertChar('c')).unsafeRunSync()
 
       val effects = sm.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
-      val currentText = sm.getCurrentState.unsafeRunSync().buffers.values.find(_.filePath.contains(tempFile)).map(_.content.collect())
+      val currentText =
+        sm.getCurrentState.unsafeRunSync().buffers.values.find(_.filePath.contains(tempFile)).map(_.content.collect())
 
       currentText shouldBe defined
       effects.head shouldBe LspEffect.FileOpened(tempFile.toUri.toString, LanguageId.Scala, "object Change")
@@ -191,7 +192,8 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
       (1 to 600).foreach(_ => sm.applyEvent(InsertChar('x')).unsafeRunSync())
 
       val effects = sm.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
-      val currentText = sm.getCurrentState.unsafeRunSync().buffers.values.find(_.filePath.contains(tempFile)).map(_.content.collect())
+      val currentText =
+        sm.getCurrentState.unsafeRunSync().buffers.values.find(_.filePath.contains(tempFile)).map(_.content.collect())
 
       effects should have size 2
       currentText shouldBe defined
@@ -202,9 +204,9 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "open the saved location after save as changes the LSP document URI" in {
-    val sm        = makeStateManager()
-    val source    = Files.createTempFile("test-lsp-save-as-source", ".scala")
-    val target    = Files.createTempFile("test-lsp-save-as-target", ".md")
+    val sm     = makeStateManager()
+    val source = Files.createTempFile("test-lsp-save-as-source", ".scala")
+    val target = Files.createTempFile("test-lsp-save-as-target", ".md")
     Files.writeString(source, "object Saved")
     try
       sm.applyEvent(LoadFile(source)).unsafeRunSync()

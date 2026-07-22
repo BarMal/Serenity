@@ -235,14 +235,15 @@ final private[manager] class StateManagerFilePersistence(
       languageId <- saved.language
     yield (path.toUri.toString, languageId, saved.content.collect())
     val nextIdentity = next.map { case (uri, languageId, _) => (uri, languageId) }
-    if previous == nextIdentity then
-      IO.unit
+    if previous == nextIdentity then IO.unit
     else
-      previous.fold(IO.unit) { case (uri, languageId) =>
-        lspQueue.enqueue(LspEffect.FileClosed(uri, languageId))
+      previous.fold(IO.unit) {
+        case (uri, languageId) =>
+          lspQueue.enqueue(LspEffect.FileClosed(uri, languageId))
       } >>
-        next.fold(IO.unit) { case (uri, languageId, text) =>
-          lspQueue.enqueue(LspEffect.FileOpened(uri, languageId, text))
+        next.fold(IO.unit) {
+          case (uri, languageId, text) =>
+            lspQueue.enqueue(LspEffect.FileOpened(uri, languageId, text))
         }
 
   private def persistAfterSave: IO[Unit] =
@@ -399,8 +400,15 @@ private[manager] class StateManagerComposition(
   private val runtimeFileDialog               = fileDialog
   private val runtimeFileManager              = fileManager
   private val runtimeSessionPersistence       = sessionPersistence
+
   private val filePersistence =
-    new StateManagerFilePersistence(runtimeStateRef, runtimeFileManager, runtimeSessionPersistence, runtimeLogger, runtimeLspQueue)
+    new StateManagerFilePersistence(
+      runtimeStateRef,
+      runtimeFileManager,
+      runtimeSessionPersistence,
+      runtimeLogger,
+      runtimeLspQueue
+    )
 
   private val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
     val stateRef                = runtimeStateRef

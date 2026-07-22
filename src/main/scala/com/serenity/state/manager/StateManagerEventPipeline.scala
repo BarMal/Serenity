@@ -167,7 +167,9 @@ final private[manager] class StateManagerEventPipeline(
           path       <- buffer.filePath
           languageId <- buffer.language
           if changedContent
-        yield AppEffect.LspQueue(LspQueueEffect.DocumentChanged(path.toUri.toString, languageId, buffer.content.collect())))
+        yield AppEffect.LspQueue(
+          LspQueueEffect.DocumentChanged(path.toUri.toString, languageId, buffer.content.collect())
+        ))
           .fold(cats.effect.IO.unit)(effects.interpretEffect)
       }
     }
