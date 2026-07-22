@@ -19,8 +19,12 @@ import fs2.Stream
 class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
     component: java.awt.Component,
     inputRouter: InputRouter[F, E],
-    metrics: () => CellMetrics
+    metrics: () => CellMetrics,
+    uiMetrics: () => CellMetrics
 ) extends InputHandler[F]:
+
+  def this(component: java.awt.Component, inputRouter: InputRouter[F, E], metrics: () => CellMetrics) =
+    this(component, inputRouter, metrics, metrics)
 
   private val infoQueue    = new LinkedBlockingQueue[Option[KeyStrokeInfo]]()
   private val mouseQueue   = new LinkedBlockingQueue[Option[Event]]()
@@ -63,7 +67,8 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
             pixelY = Some(e.getY),
             clickCount = e.getClickCount,
             shiftDown = e.isShiftDown,
-            button = mouseButton(e)
+            button = mouseButton(e),
+            renderMetrics = Some(MouseRenderMetrics(currentMetrics, uiMetrics()))
           )
         )
   )

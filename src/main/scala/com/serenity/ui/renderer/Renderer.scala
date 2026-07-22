@@ -1351,6 +1351,7 @@ object Renderer:
     val titleLines       = 3
     val optionStartIndex = titleLines
     val optionEndIndex   = titleLines + page.launchActions.size - 1
+    val actionBounds     = page.actionBounds(viewportSize, cellMetrics, uiMetrics).map(bounds => bounds.index -> bounds).toMap
 
     lines.zipWithIndex.foreach {
       case (line, lineIndex) =>
@@ -1364,17 +1365,15 @@ object Renderer:
           if isSelected then
             surface.setForegroundColor(theme.highlighted.foreground)
             surface.setBackgroundColor(theme.highlighted.background)
-            val compactWidthPx = math.min(
-              viewportSize.width * cellMetrics.charWidth,
-              (line.length + 4) * cellMetrics.charWidth
-            )
-            surface.fillPixelRect(
-              xPx = math.max(0, ((viewportSize.width * cellMetrics.charWidth) - compactWidthPx) / 2),
-              yPx = yPx,
-              widthPx = compactWidthPx,
-              heightPx = lineHeightPx,
-              color = theme.highlighted.background
-            )
+            actionBounds.get(optionIndex).foreach { bounds =>
+              surface.fillPixelRect(
+                xPx = bounds.xPx,
+                yPx = bounds.yPx,
+                widthPx = bounds.widthPx,
+                heightPx = bounds.heightPx,
+                color = theme.highlighted.background
+              )
+            }
             renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
           else
             val foreground =

@@ -886,7 +886,14 @@ final private[manager] class StateManagerEventPipeline(
     val action = state.startPageSurface.flatMap { surface =>
       surface.content match
         case SurfaceContent.StartPage(page) =>
-          state.viewportSize.flatMap(size => page.actionIndexAtRow(click.row, size.height).flatMap(page.launchActions.lift))
+          for
+            viewportSize <- state.viewportSize
+            pixelX       <- click.pixelX
+            pixelY       <- click.pixelY
+            metrics      <- click.renderMetrics
+            actionIndex  <- page.actionIndexAtPixel(pixelX, pixelY, viewportSize, metrics.code, metrics.ui)
+            action       <- page.launchActions.lift(actionIndex)
+          yield action
         case _ =>
           None
     }

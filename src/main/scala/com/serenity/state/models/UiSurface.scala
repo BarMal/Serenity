@@ -22,6 +22,11 @@ case class StartupAction(
     val suffix = detail.fold("")(value => s"  $value")
     s"$prefix$label$suffix"
 
+/** Pixel-space click target for an action rendered on the startup page. */
+case class StartupActionBounds(index: Int, xPx: Int, yPx: Int, widthPx: Int, heightPx: Int):
+  def contains(pixelX: Int, pixelY: Int): Boolean =
+    pixelX >= xPx && pixelX < xPx + widthPx && pixelY >= yPx && pixelY < yPx + heightPx
+
 case class StartupPage(
     title: String,
     options: List[String] = Nil,
@@ -46,10 +51,38 @@ case class StartupPage(
   def selectedAction: Option[StartupAction] =
     launchActions.lift(selectedIndex)
 
-  def actionIndexAtRow(row: Int, viewportHeight: Int): Option[Int] =
-    val firstLine = math.max(0, (viewportHeight - renderLines.size) / 2)
-    val actionIndex = row - firstLine - 3
-    Option.when(actionIndex >= 0 && actionIndex < launchActions.size)(actionIndex)
+  def actionBounds(
+      viewportSize: ViewportSize,
+      codeMetrics: CellMetrics,
+      uiMetrics: CellMetrics
+  ): List[StartupActionBounds] =
+    val lineHeightPx     = math.max(codeMetrics.lineHeight, uiMetrics.lineHeight)
+    val viewportWidthPx  = viewportSize.width * codeMetrics.charWidth
+    val viewportHeightPx = viewportSize.height * codeMetrics.lineHeight
+    val startYPx         = math.max(0, (viewportHeightPx - (renderLines.size * lineHeightPx)) / 2)
+
+    launchActions.zipWithIndex.flatMap { case (action, index) =>
+      val widthPx = math.min(viewportWidthPx, (action.renderedLabel.length + 4) * codeMetrics.charWidth)
+      val yPx     = startYPx + ((index + 3) * lineHeightPx)
+      Option.when(yPx + lineHeightPx > 0 && yPx < viewportHeightPx)(
+        StartupActionBounds(
+          index = index,
+          xPx = math.max(0, (viewportWidthPx - widthPx) / 2),
+          yPx = yPx,
+          widthPx = widthPx,
+          heightPx = lineHeightPx
+        )
+      )
+    }
+
+  def actionIndexAtPixel(
+      pixelX: Int,
+      pixelY: Int,
+      viewportSize: ViewportSize,
+      codeMetrics: CellMetrics,
+      uiMetrics: CellMetrics
+  ): Option[Int] =
+    actionBounds(viewportSize, codeMetrics, uiMetrics).find(_.contains(pixelX, pixelY)).map(_.index)
 
   def renderLines: List[String] =
     val baseLines = List(title, "Choose a starting point", "") ++ launchActions.map(_.renderedLabel)

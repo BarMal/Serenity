@@ -8,7 +8,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.{ComponentResult, StartupPageComponent}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -70,9 +70,11 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
     recents.map(_.label) should not contain missing.toAbsolutePath.toString
   }
 
-  it should "activate the launch action under a primary mouse click" in {
+  it should "activate only the rendered launch action bounds with taller UI metrics" in {
     val stateManager = createStateManager("StartupLaunchSurfaceSpec-mouse")
     val viewport     = ViewportSize(80, 24)
+    val codeMetrics  = CellMetrics(charWidth = 8, lineHeight = 12, ascent = 9)
+    val uiMetrics    = CellMetrics(charWidth = 11, lineHeight = 24, ascent = 18)
 
     AppStartup.initializeState(stateManager, Theme.default, viewport).unsafeRunSync()
     val page = stateManager.getCurrentState.unsafeRunSync().startPageSurface.flatMap {
@@ -80,12 +82,49 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
         case SurfaceContent.StartPage(value) => Some(value)
         case _                               => None
     }.getOrElse(fail("expected startup page"))
-    val row = (0 until viewport.height).collectFirst {
-      case candidate if page.actionIndexAtRow(candidate, viewport.height).contains(0) => candidate
-    }.getOrElse(fail("expected New document row"))
+    val bounds = page.actionBounds(viewport, codeMetrics, uiMetrics).headOption.getOrElse(fail("expected New document bounds"))
 
-    stateManager.applyEvent(MouseClick(40, row)).unsafeRunSync()
+    stateManager
+      .applyEvent(
+        MouseClick(
+          col = codeMetrics.toCol(bounds.xPx + 1),
+          row = codeMetrics.toRow(bounds.yPx + 1),
+          pixelX = Some(bounds.xPx + 1),
+          pixelY = Some(bounds.yPx + 1),
+          renderMetrics = Some(MouseRenderMetrics(codeMetrics, uiMetrics))
+        )
+      )
+      .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().startPageSurface shouldBe None
+  }
+
+  it should "ignore clicks outside a compact launch action width" in {
+    val stateManager = createStateManager("StartupLaunchSurfaceSpec-mouse-miss")
+    val viewport     = ViewportSize(80, 24)
+    val codeMetrics  = CellMetrics(charWidth = 8, lineHeight = 12, ascent = 9)
+    val uiMetrics    = CellMetrics(charWidth = 11, lineHeight = 24, ascent = 18)
+
+    AppStartup.initializeState(stateManager, Theme.default, viewport).unsafeRunSync()
+    val page = stateManager.getCurrentState.unsafeRunSync().startPageSurface.flatMap {
+      _.content match
+        case SurfaceContent.StartPage(value) => Some(value)
+        case _                               => None
+    }.getOrElse(fail("expected startup page"))
+    val bounds = page.actionBounds(viewport, codeMetrics, uiMetrics).headOption.getOrElse(fail("expected New document bounds"))
+
+    stateManager
+      .applyEvent(
+        MouseClick(
+          col = 0,
+          row = codeMetrics.toRow(bounds.yPx + 1),
+          pixelX = Some(bounds.xPx - 1),
+          pixelY = Some(bounds.yPx + 1),
+          renderMetrics = Some(MouseRenderMetrics(codeMetrics, uiMetrics))
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().startPageSurface should not be None
   }
 end StartupLaunchSurfaceSpec
