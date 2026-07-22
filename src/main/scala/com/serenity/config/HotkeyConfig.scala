@@ -206,49 +206,50 @@ object HotkeyConfig:
     defaultBindingsFor(System.getProperty("os.name", ""))
 
   def defaultBindingsFor(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
-    val primaryModifier = if osName.toLowerCase(java.util.Locale.ROOT).contains("mac") then Modifier.Meta else Modifier.Ctrl
+    val primaryModifier =
+      if osName.toLowerCase(java.util.Locale.ROOT).contains("mac") then Modifier.Meta else Modifier.Ctrl
     def primary(key: Char, shift: Boolean = false): HotkeyTrigger =
       HotkeyTrigger(InputKey.Character, Some(key), Set(primaryModifier) ++ Option.when(shift)(Modifier.Shift).toSet)
     def primaryKey(key: InputKey, shift: Boolean = false): HotkeyTrigger =
       HotkeyTrigger(key, None, Set(primaryModifier) ++ Option.when(shift)(Modifier.Shift).toSet)
 
     Map(
-    HotkeyAction.Save -> List(primary('s')),
-    HotkeyAction.Quit -> List(
-      primary('q'),
-      HotkeyTrigger(InputKey.EOF, None, Set.empty)
-    ),
-    HotkeyAction.Undo      -> List(primary('z')),
-    HotkeyAction.Redo      -> List(primary('y')),
-    HotkeyAction.Copy      -> List(primary('c')),
-    HotkeyAction.Paste     -> List(primary('v')),
-    HotkeyAction.Cut       -> List(primary('x')),
-    HotkeyAction.SelectAll -> List(primary('a')),
-    HotkeyAction.ToggleSyntaxHighlighting -> List(
-      primary('h', shift = true)
-    ),
-    HotkeyAction.OpenFile -> List(primary('o')),
-    HotkeyAction.ToggleCommandRunner -> List(
-      primary('p')
-    ),
-    HotkeyAction.ToggleContextualToolbar -> List(
-      primary('t', shift = true)
-    ),
-    HotkeyAction.NewTab   -> List(primary('t')),
-    HotkeyAction.CloseTab -> List(primary('w')),
-    HotkeyAction.FileSearch -> List(
-      primary('f', shift = true)
-    ),
-    HotkeyAction.NextTab -> List(primaryKey(InputKey.Tab)),
-    HotkeyAction.PreviousTab -> List(
-      primaryKey(InputKey.Tab, shift = true),
-      primaryKey(InputKey.ReverseTab)
-    ),
-    HotkeyAction.Find     -> List(primary('f')),
-    HotkeyAction.Replace  -> List(primary('h')),
-    HotkeyAction.GoToLine -> List(primary('g')),
-    HotkeyAction.SaveAs   -> List(primary('s', shift = true))
-  )
+      HotkeyAction.Save -> List(primary('s')),
+      HotkeyAction.Quit -> List(
+        primary('q'),
+        HotkeyTrigger(InputKey.EOF, None, Set.empty)
+      ),
+      HotkeyAction.Undo      -> List(primary('z')),
+      HotkeyAction.Redo      -> List(primary('y')),
+      HotkeyAction.Copy      -> List(primary('c')),
+      HotkeyAction.Paste     -> List(primary('v')),
+      HotkeyAction.Cut       -> List(primary('x')),
+      HotkeyAction.SelectAll -> List(primary('a')),
+      HotkeyAction.ToggleSyntaxHighlighting -> List(
+        primary('h', shift = true)
+      ),
+      HotkeyAction.OpenFile -> List(primary('o')),
+      HotkeyAction.ToggleCommandRunner -> List(
+        primary('p')
+      ),
+      HotkeyAction.ToggleContextualToolbar -> List(
+        primary('t', shift = true)
+      ),
+      HotkeyAction.NewTab   -> List(primary('t')),
+      HotkeyAction.CloseTab -> List(primary('w')),
+      HotkeyAction.FileSearch -> List(
+        primary('f', shift = true)
+      ),
+      HotkeyAction.NextTab -> List(primaryKey(InputKey.Tab)),
+      HotkeyAction.PreviousTab -> List(
+        primaryKey(InputKey.Tab, shift = true),
+        primaryKey(InputKey.ReverseTab)
+      ),
+      HotkeyAction.Find     -> List(primary('f')),
+      HotkeyAction.Replace  -> List(primary('h')),
+      HotkeyAction.GoToLine -> List(primary('g')),
+      HotkeyAction.SaveAs   -> List(primary('s', shift = true))
+    )
 
   def validate(bindings: Map[HotkeyAction, List[HotkeyTrigger]]): Either[String, Unit] =
     bindings.toList
@@ -257,8 +258,9 @@ object HotkeyConfig:
       .collectFirst { case (trigger, actions) if actions.distinct.size > 1 => trigger -> actions.distinct }
       .toLeft(())
       .left
-      .map { case (trigger, actions) =>
-        "Conflicting hotkey binding '" + trigger.render + "' for " + actions.map(_.configKey).mkString(", ")
+      .map {
+        case (trigger, actions) =>
+          "Conflicting hotkey binding '" + trigger.render + "' for " + actions.map(_.configKey).mkString(", ")
       }
 
   given Encoder[HotkeyAction] = Encoder.encodeString.contramap(_.configKey)

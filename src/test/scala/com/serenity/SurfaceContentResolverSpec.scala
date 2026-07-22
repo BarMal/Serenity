@@ -3,7 +3,7 @@ package com.serenity
 import java.nio.file.Paths
 
 import com.serenity.command.*
-import com.serenity.config.{AppConfig, HotkeyAction, HotkeyConfig, ToolbarDisplayMode}
+import com.serenity.config.*
 import com.serenity.document.RenderedComment
 import com.serenity.richtext.*
 import com.serenity.rope.Balance

@@ -43,7 +43,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
 
   it should "report conflicting bindings during validation" in {
     val bindings = Map(
-      HotkeyAction.Find -> HotkeyConfig.defaultBindingsFor("Linux")(HotkeyAction.Find),
+      HotkeyAction.Find    -> HotkeyConfig.defaultBindingsFor("Linux")(HotkeyAction.Find),
       HotkeyAction.Replace -> HotkeyConfig.defaultBindingsFor("Linux")(HotkeyAction.Find)
     )
 
