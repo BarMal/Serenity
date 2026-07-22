@@ -24,8 +24,8 @@ class ModalStateReducerSpec extends AnyFlatSpec with Matchers:
       focus = Focus.Surface(parent.id)
     )
 
-    val shown = ModalStateReducer.show(closeWorkflow, parentState).state
-    val child = shown.topBlockingModalSurface.getOrElse(fail("expected child confirmation"))
+    val shown     = ModalStateReducer.show(closeWorkflow, parentState).state
+    val child     = shown.topBlockingModalSurface.getOrElse(fail("expected child confirmation"))
     val dismissed = ModalStateReducer.dismiss(shown).state
 
     child.id should not be parent.id
