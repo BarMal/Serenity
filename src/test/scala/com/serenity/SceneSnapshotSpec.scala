@@ -142,6 +142,26 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     scene.focusOrder.headOption shouldBe Some(SceneNodeId.Surface(close.id))
   }
 
+  it should "restrict focus traversal to the top modal" in {
+    val floating = UiSurface(
+      SurfaceId("quick-info"),
+      SurfaceContent.QuickInfo("map"),
+      SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.AboveCursor)
+    )
+    val close = UiSurface(
+      SurfaceId("close-confirmation"),
+      SurfaceContent.ModalWorkflow(
+        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala"))
+      ),
+      SurfacePresentation.Modal
+    )
+    val state = AppState.initial.copy(uiSurfaces = List(floating, close), focus = Focus.Surface(close.id))
+
+    val scene = UiSceneSnapshot.from(state, viewport)
+
+    scene.focusOrder shouldBe List(SceneNodeId.Surface(close.id))
+  }
+
   it should "keep a modal workflow floating until its presentation makes it modal" in {
     val close = UiSurface(
       SurfaceId("close-confirmation"),

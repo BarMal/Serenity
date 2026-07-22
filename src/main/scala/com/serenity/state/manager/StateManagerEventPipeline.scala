@@ -132,8 +132,8 @@ final private[manager] class StateManagerEventPipeline(
           applyReducerResult(ThemeEventReducer.reduce(themeEvent, prevState), prevState)
         case fileEvent: FileEvent =>
           applyReducerResult(FileEventReducer.reduce(fileEvent, prevState), prevState)
-        case (_: MouseClick | _: MousePress | _: MouseDrag | _: MouseMove) if prevState.hasBlockingModal =>
-          cats.effect.IO.unit
+        case mouse: MouseInputEvent if prevState.hasBlockingModal =>
+          handleModalMouseInput(mouse, prevState)
         case click: MouseClick =>
           handleMouseClick(click, prevState)
         case press: MousePress =>
@@ -918,6 +918,46 @@ final private[manager] class StateManagerEventPipeline(
         }
       case _ =>
         cats.effect.IO.unit
+
+  private def handleModalMouseInput(event: MouseInputEvent, state: AppState): cats.effect.IO[Unit] =
+    event match
+      case click: MouseClick if click.button == MouseButton.Primary =>
+        modalCloseWorkflowChoiceAt(click, state) match
+          case Some(choice) =>
+            val selected = ModalEventReducer.selectCloseWorkflowChoice(choice, state)
+            applyReducerResult(selected, state) >>
+              stateRef.get.flatMap { updatedState =>
+                applyReducerResult(
+                  ModalEventReducer.reduce(ModalType.CloseWorkflow, ModalSubmit, updatedState),
+                  updatedState
+                )
+              }
+          case None =>
+            cats.effect.IO.unit
+      case _ =>
+        cats.effect.IO.unit
+
+  private def modalCloseWorkflowChoiceAt(click: MouseClick, state: AppState): Option[CloseWorkflowChoice] =
+    for
+      viewportSize <- state.viewportSize
+      surface      <- state.topModalSurface
+      node <- UiSceneSnapshot
+        .from(state, viewportSize)
+        .modal
+        .find(_.id == SceneNodeId.Surface(surface.id))
+      _ <- Option.when(node.frameRect.contains(click.col, click.row))(())
+      _ <- surface.content match
+        case SurfaceContent.ModalWorkflow(_: Modal.CloseWorkflow) => Some(())
+        case _                                                    => None
+      actionRow <- SurfaceFrameLayout
+        .contentRowSlotsFor(node.contentRect, itemCount = 2, hasHeader = true, hasFooter = false)
+        .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(1), y) => y }
+      _ <- Option.when(click.row == actionRow)(())
+      index <- Option.when(click.col >= node.contentRect.x && click.col < node.contentRect.right)(
+        ((click.col - node.contentRect.x) * 3) / node.contentRect.width.max(1)
+      )
+      choice <- List(CloseWorkflowChoice.Save, CloseWorkflowChoice.Discard, CloseWorkflowChoice.Cancel).lift(index)
+    yield choice
 
   private def handleStartupPageMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =
     val action = state.startPageSurface.flatMap { surface =>

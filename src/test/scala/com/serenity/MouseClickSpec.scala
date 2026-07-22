@@ -181,6 +181,37 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     after.topBlockingModalSurface.map(_.id) shouldBe Some(close.id)
   }
 
+  it should "route a click inside a close confirmation to its cancel action" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("alpha").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+    val close = UiSurface(
+      SurfaceId("close-confirmation"),
+      SurfaceContent.ModalWorkflow(
+        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
+      ),
+      SurfacePresentation.Modal
+    )
+    sm.updateState(state => state.copy(uiSurfaces = state.uiSurfaces :+ close, focus = Focus.Surface(close.id)))
+      .unsafeRunSync()
+
+    val before = sm.getCurrentState.unsafeRunSync()
+    val modal = UiSceneSnapshot
+      .from(before, ViewportSize(80, 24))
+      .modal
+      .lastOption
+      .getOrElse(fail("Expected close confirmation modal"))
+    val cancelX  = modal.contentRect.x + ((modal.contentRect.width * 5) / 6)
+    val choicesY = modal.contentRect.y + 2
+
+    sm.applyEvent(MouseClick(cancelX, choicesY)).unsafeRunSync()
+
+    val after = sm.getCurrentState.unsafeRunSync()
+    after.topModalSurface shouldBe None
+    after.focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
   it should "open an editor context menu on secondary click without moving the cursor" in {
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
