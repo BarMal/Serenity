@@ -52,3 +52,12 @@ Captured on x86_64 Linux 5.15.153.1-microsoft-standard-WSL2, AMD Ryzen 5 5600X 6
 | `markdown.preview.html_fragment` | 0.523 | 0.550 |
 | `render.markdown.inline_lens` | 10.894 | 13.942 |
 | `animation.large_visible_tick` | 1.354 | 1.783 |
+
+## After #827: 2026-07-22
+
+Captured on the same x86_64 Linux WSL2 host and Microsoft OpenJDK 21.0.8+9-LTS runtime as the baseline. The changed rope paths were measured with the same harness invocation after warmup; times are milliseconds.
+
+| Scenario | Before p50 | Before p95 | After p50 | After p95 |
+| --- | ---: | ---: | ---: | ---: |
+| `rope.large_json.search` | 12.789 | 14.422 | 1.626 | 1.779 |
+| `layout.large_multiline.visible_viewport` | 4.292 | 6.355 | 3.355 | 5.303 |
