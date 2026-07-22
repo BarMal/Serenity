@@ -2,9 +2,9 @@ package com.serenity.perf
 
 import java.awt.Font
 import java.awt.image.BufferedImage
-import java.nio.file.Paths
+import java.nio.file.{Files, Path}
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import com.serenity.animation.*
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.keystroke.events.{InsertChar, ScrollDown}
@@ -43,15 +43,16 @@ object PerformanceBenchmarks:
 
     SwingWindow
       .resource(metrics = cellMetrics, chromeMetrics = uiMetrics)
-      .use(window =>
+      .flatMap(window => projectTaskFixtureResource.map(projectRoot => window -> projectRoot))
+      .use { case (window, projectRoot) =>
         IO {
-          val results = benchmarks(window).map(runBenchmark)
+          val results = benchmarks(window, projectRoot).map(runBenchmark)
           printResults(results)
         }
-      )
+      }
       .unsafeRunSync()
 
-  private def benchmarks(cursorWindow: SwingWindow): List[Benchmark] =
+  private def benchmarks(cursorWindow: SwingWindow, projectRoot: Path): List[Benchmark] =
     val jsonText       = largeSingleLineJson(entries = 20_000)
     val multilineText  = largeMultilineDocument(lines = 15_000)
     val findText       = largeFindDocument(matches = 12_000)
@@ -115,6 +116,16 @@ object PerformanceBenchmarks:
       .get(BufferId(1))
       .flatMap(_.content.getLine(6_000))
       .map(_.patch(12, "x", 0))
+    val jsonSearchResults = Rope(jsonText).searchAll("\"k19999\"")
+    val jsonCursorOffset  = Rope(jsonText).lineColumnToOffset(0, jsonText.length - 5)
+    val layoutSnapshot = plainScrollState.buffers.get(BufferId(1)).map(buffer =>
+      com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
+        buffer,
+        panelWidthPx = frameWidthPx,
+        monoFont,
+        wordWrapEnabled = false
+      )
+    )
     val findResultSet = FindResultSet.normalized(
       "needle",
       (0 until 12_000).toList.map(line => FindResult(line, 10)),
@@ -124,7 +135,7 @@ object PerformanceBenchmarks:
       Json.obj("jsonrpc" -> Json.fromString("2.0"), "id" -> Json.fromInt(id), "method" -> Json.fromString("benchmark"))
     }
     val framedLspMessages = lspMessages.flatMap(LspFramer.encode).toArray
-    val projectTask = ProjectTaskDetector.detect(Paths.get("."), ProjectTaskKind.Test)
+    val projectTask = ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test)
     prepareCursorBaseFrame(plainScrollState, cursorWindow)
     val animationCells = multilineState.buffers.get(BufferId(1)).map(buffer =>
         com.serenity.state.manager.VisibleBufferAnimationCells.fromBuffer(
@@ -137,27 +148,38 @@ object PerformanceBenchmarks:
     val animationState = AnimationState(
       FlowAnimationBuilder.build(animationCells, FlowDirection.ByColumn, SweepDirection.Forward, 12)
     )
+    val fullFrame                = renderedFrame(richState, deviceScale = 1.0)
+    val diagnosticsAndComments   = renderedFrame(diagnosticsState, deviceScale = 1.0)
+    val hidpiFrame               = renderedFrame(commentsState, deviceScale = 2.0)
+    val visibleFindResults       = findResultSet.visibleResults(maxResults = 80)
+    val decodedLspMessages       = decodeLspMessages(framedLspMessages)
+    val projectTaskPresentation  = projectTask.map(ProjectTaskTerminal.started)
+    val markdownPreviewWindow =
+      MarkdownDocumentPreview.previewWindow(markdownLines, activeLine = Some(1_200), fallbackTopLine = 1_000, maxSourceLines = 80)
+    val markdownHtmlFragment = MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark")
+    val markdownLensFrame    = renderedFrame(markdownState, deviceScale = 1.0)
+    val advancedAnimationState = animationState.advanceAllAnimations()
 
     List(
       Benchmark(
         "rope.large_json.search",
         3,
         12,
-        () => assert(Rope(jsonText).searchAll("\"k19999\"").nonEmpty),
+        () => assert(jsonSearchResults.nonEmpty),
         () => Rope(jsonText).searchAll("\"k19999\"")
       ),
       Benchmark(
         "rope.large_json.cursor_offset",
         3,
         20,
-        () => assert(Rope(jsonText).lineColumnToOffset(0, jsonText.length - 5) == jsonText.length - 5),
+        () => assert(jsonCursorOffset == jsonText.length - 5),
         () => Rope(jsonText).lineColumnToOffset(0, jsonText.length - 5)
       ),
       Benchmark(
         "layout.large_multiline.visible_viewport",
         3,
         20,
-        () => assert(plainScrollState.buffers.get(BufferId(1)).exists(_.content.lineCount == 15_000)),
+        () => assert(layoutSnapshot.exists(_.visualLines.size == viewportSize.height)),
         () => plainScrollState.buffers.get(BufferId(1)).foreach { buffer =>
           val _ = com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
             buffer,
@@ -171,7 +193,7 @@ object PerformanceBenchmarks:
         "render.full_frame.java2d",
         2,
         8,
-        () => assert(richState.buffers.get(BufferId(1)).exists(_.richTextDocument.nonEmpty)),
+        () => assert(renderedFrameHasPixels(fullFrame)),
         () => renderedFrame(richState, deviceScale = 1.0)
       ),
       Benchmark(
@@ -187,14 +209,18 @@ object PerformanceBenchmarks:
         "render.diagnostics_and_comments.java2d",
         2,
         8,
-        () => assert(diagnosticsState.diagnostics.values.flatten.size == 2_000),
+        () => assert(renderedFrameHasPixels(diagnosticsAndComments)),
         () => renderedFrame(diagnosticsState, deviceScale = 1.0)
       ),
       Benchmark(
         "render.hidpi_frame.java2d",
         2,
         8,
-        () => assert(frameWidthPx > 0 && frameHeightPx > 0),
+        () => assert(
+          hidpiFrame.getWidth == frameWidthPx * 2 &&
+            hidpiFrame.getHeight == frameHeightPx * 2 &&
+            renderedFrameHasPixels(hidpiFrame)
+        ),
         () => renderedFrame(commentsState, deviceScale = 2.0)
       ),
       Benchmark(
@@ -227,28 +253,31 @@ object PerformanceBenchmarks:
         "find_replace.large_result_set",
         3,
         20,
-        () => assert(findResultSet.results.size == 12_000),
+        () => assert(visibleFindResults.size == 80 && visibleFindResults.exists(_._1 == FindResult(6_000, 10))),
         () => findResultSet.visibleResults(maxResults = 80)
       ),
       Benchmark(
         "lsp.framer.large_batch",
         3,
         12,
-        () => assert(decodeLspMessages(framedLspMessages).size == lspMessages.size),
+        () => assert(decodedLspMessages == lspMessages),
         () => decodeLspMessages(framedLspMessages)
       ),
       Benchmark(
         "project_task.responsiveness",
         3,
         20,
-        () => assert(projectTask.exists(_.executable == "sbt")),
-        () => ProjectTaskDetector.detect(Paths.get("."), ProjectTaskKind.Test).map(ProjectTaskTerminal.started)
+        () => assert(
+          projectTask.exists(command => command.workingDirectory == projectRoot && command.executable == "sbt") &&
+            projectTaskPresentation.exists(_.contains("Running test task"))
+        ),
+        () => ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test).map(ProjectTaskTerminal.started)
       ),
       Benchmark(
         "markdown.preview.window_mapping",
         3,
         20,
-        () => assert(markdownLines.size == 6_400),
+        () => assert(markdownPreviewWindow.firstSourceLine >= 0 && markdownPreviewWindow.source.nonEmpty),
         () =>
           MarkdownDocumentPreview
             .previewWindow(markdownLines, activeLine = Some(1_200), fallbackTopLine = 1_000, maxSourceLines = 80)
@@ -257,21 +286,21 @@ object PerformanceBenchmarks:
         "markdown.preview.html_fragment",
         2,
         8,
-        () => assert(markdownSource.nonEmpty),
+        () => assert(markdownHtmlFragment.contains("<h2>")),
         () => MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark")
       ),
       Benchmark(
         "render.markdown.inline_lens",
         2,
         8,
-        () => assert(markdownState.buffers.get(BufferId(1)).exists(_.language.contains(LanguageId.Markdown))),
+        () => assert(renderedFrameHasPixels(markdownLensFrame)),
         () => renderedFrame(markdownState, deviceScale = 1.0)
       ),
       Benchmark(
         "animation.large_visible_tick",
         3,
         30,
-        () => assert(animationCells.nonEmpty),
+        () => assert(animationCells.nonEmpty && advancedAnimationState != animationState),
         () => animationState.advanceAllAnimations()
       )
     )
@@ -331,6 +360,9 @@ object PerformanceBenchmarks:
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, textFont, cellMetrics, None)
     image
 
+  private def renderedFrameHasPixels(image: BufferedImage): Boolean =
+    image.getWidth > 0 && image.getHeight > 0 && ((image.getRGB(0, 0) >>> 24) & 0xff) > 0
+
   private def prepareCursorBaseFrame(state: AppState, window: SwingWindow): Unit =
     Renderer.render(
       state,
@@ -359,6 +391,21 @@ object PerformanceBenchmarks:
       .compile
       .toList
       .unsafeRunSync()
+
+  private def projectTaskFixtureResource: Resource[IO, Path] =
+    Resource.make(
+      IO.blocking {
+        val root = Files.createTempDirectory("serenity-performance-project-")
+        val _    = Files.writeString(root.resolve("build.sbt"), "// deterministic benchmark fixture\n")
+        root
+      }
+    )(root =>
+      IO.blocking {
+        val _ = Files.deleteIfExists(root.resolve("build.sbt"))
+        val _ = Files.deleteIfExists(root)
+        ()
+      }
+    )
 
   private def editorState(content: String, language: Option[LanguageId]): AppState =
     val paneId   = PaneId(0)
