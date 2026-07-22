@@ -9,8 +9,9 @@ import com.serenity.ui.layout.CellMetrics
 
 /** Publishes canvas semantics as non-intercepting native Swing accessibility children. */
 final class SwingAccessibilityBridge(canvas: JComponent):
-  private val previous = AtomicReference[Option[AccessibilitySnapshot]](None)
-  private val proxies  = AtomicReference[List[JComponent]](Nil)
+  private val previous     = AtomicReference[Option[AccessibilitySnapshot]](None)
+  private val materialized = AtomicReference[Option[(List[AccessibleNode], CellMetrics)]](None)
+  private val proxies      = AtomicReference[List[JComponent]](Nil)
 
   canvas.setLayout(null)
 
@@ -22,7 +23,9 @@ final class SwingAccessibilityBridge(canvas: JComponent):
     val priorDescription = previous.get.map(describe).orNull
     context.setAccessibleName(name)
     context.setAccessibleDescription(description)
-    replaceChildren(snapshot.nodes, metrics)
+    if !materialized.get.contains((snapshot.nodes, metrics)) then
+      replaceChildren(snapshot.nodes, metrics)
+      materialized.set(Some((snapshot.nodes, metrics)))
     announcements(previous.get, snapshot).foreach { announcement =>
       context.firePropertyChange(
         AccessibleContext.ACCESSIBLE_DESCRIPTION_PROPERTY,

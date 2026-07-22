@@ -43,3 +43,29 @@ class SwingWindowAccessibilitySpec extends AnyFlatSpec with Matchers:
     child.getAccessibleContext.getAccessibleDescription should include("selected=true")
     child.getAccessibleContext.getAccessibleStateSet.contains(AccessibleState.FOCUSED) shouldBe true
   }
+
+  it should "preserve native accessibility children across cursor-only publications" in {
+    val canvas = new JPanel
+    val bridge = new SwingAccessibilityBridge(canvas)
+    val snapshot = AccessibilitySnapshot(
+      List(
+        AccessibleNode(
+          "pane:0",
+          AccessibilityRole.Document,
+          "Untitled document",
+          Some("content"),
+          selected = false,
+          focused = true,
+          LayoutRect(0, 0, 80, 24)
+        )
+      ),
+      Nil
+    )
+
+    bridge.publish(snapshot)
+    val childBeforeCursorRender = canvas.getAccessibleContext.getAccessibleChild(0)
+
+    bridge.publish(snapshot)
+
+    canvas.getAccessibleContext.getAccessibleChild(0) should be theSameInstanceAs childBeforeCursorRender
+  }
