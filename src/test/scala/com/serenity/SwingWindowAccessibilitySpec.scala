@@ -1,6 +1,8 @@
 package com.serenity
 
 import java.awt.Rectangle
+import java.beans.PropertyChangeListener
+import scala.collection.mutable.ListBuffer
 import javax.accessibility.{AccessibleRole, AccessibleState}
 import javax.swing.JPanel
 
@@ -69,4 +71,25 @@ class SwingWindowAccessibilitySpec extends AnyFlatSpec with Matchers:
     bridge.publish(snapshot)
 
     canvas.getAccessibleContext.getAccessibleChild(0) should be theSameInstanceAs childBeforeCursorRender
+  }
+
+  it should "emit one description event for each validation status change" in {
+    val canvas = new JPanel
+    val bridge = new SwingAccessibilityBridge(canvas)
+    val events = ListBuffer.empty[String]
+    canvas.getAccessibleContext.addPropertyChangeListener(new PropertyChangeListener:
+      override def propertyChange(event: java.beans.PropertyChangeEvent): Unit =
+        if event.getPropertyName == javax.accessibility.AccessibleContext.ACCESSIBLE_DESCRIPTION_PROPERTY then
+          events += Option(event.getNewValue).fold("")(_.toString)
+    )
+    val status = (message: String) => AccessibilitySnapshot(
+      List(AccessibleNode("surface:runner/status", AccessibilityRole.Status, "Status", Some(message), false, false, LayoutRect(0, 0, 20, 1))),
+      Nil
+    )
+
+    bridge.publish(status("Invalid command"))
+    events.clear()
+    bridge.publish(status("Unknown command"))
+
+    events.toList shouldBe List("Unknown command")
   }

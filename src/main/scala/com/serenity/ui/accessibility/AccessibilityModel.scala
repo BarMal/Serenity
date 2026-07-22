@@ -341,9 +341,6 @@ object AccessibilitySnapshot:
     content match
       case SurfaceContent.StartPage(page)     => page.statusMessage
       case SurfaceContent.CursorInfoBar(text) => Some(text)
-      case SurfaceContent.CommandPalette(runner) => runner.statusMessage
-      case SurfaceContent.CommandPaletteSubmenu(runner, _, _) => runner.statusMessage
-      case SurfaceContent.ModalWorkflow(modal) => modalStatusMessage(modal)
       case _                                  => None
 
   private def statusMessage(content: SurfaceContent): Option[String] =
