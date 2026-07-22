@@ -143,3 +143,83 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
       Files.deleteIfExists(tempFile)
       sm.applyEvent(Quit).unsafeRunSync()
   }
+
+  it should "emit the latest full-text change with the next document version" in {
+    val sm       = makeStateManager()
+    val tempFile = Files.createTempFile("test-lsp-change", ".scala")
+    Files.writeString(tempFile, "object Change")
+    try
+      sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
+      sm.applyEvent(InsertChar('a')).unsafeRunSync()
+      sm.applyEvent(InsertChar('b')).unsafeRunSync()
+      sm.applyEvent(InsertChar('c')).unsafeRunSync()
+
+      val effects = sm.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
+      val currentText = sm.getCurrentState.unsafeRunSync().buffers.values.find(_.filePath.contains(tempFile)).map(_.content.collect())
+
+      currentText shouldBe defined
+      effects.head shouldBe LspEffect.FileOpened(tempFile.toUri.toString, LanguageId.Scala, "object Change")
+      effects(1) shouldBe LspEffect.FileChanged(tempFile.toUri.toString, LanguageId.Scala, currentText.get, 2)
+    finally
+      Files.deleteIfExists(tempFile)
+      sm.applyEvent(Quit).unsafeRunSync()
+  }
+
+  it should "not emit document changes for cursor-only events" in {
+    val sm       = makeStateManager()
+    val tempFile = Files.createTempFile("test-lsp-no-change", ".scala")
+    Files.writeString(tempFile, "object Still")
+    try
+      sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
+      sm.lspEffectStream.take(1).timeout(2.seconds).compile.drain.unsafeRunSync()
+
+      sm.applyEvent(MoveRight).unsafeRunSync()
+
+      sm.lspEffectStream.interruptAfter(300.millis).compile.toList.unsafeRunSync() shouldBe empty
+    finally
+      Files.deleteIfExists(tempFile)
+      sm.applyEvent(Quit).unsafeRunSync()
+  }
+
+  it should "coalesce rapid changes without blocking editor input when no consumer is running" in {
+    val sm       = makeStateManager()
+    val tempFile = Files.createTempFile("test-lsp-stalled", ".scala")
+    Files.writeString(tempFile, "object Stalled")
+    try
+      sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
+
+      (1 to 600).foreach(_ => sm.applyEvent(InsertChar('x')).unsafeRunSync())
+
+      val effects = sm.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
+      val currentText = sm.getCurrentState.unsafeRunSync().buffers.values.find(_.filePath.contains(tempFile)).map(_.content.collect())
+
+      effects should have size 2
+      currentText shouldBe defined
+      effects(1) shouldBe LspEffect.FileChanged(tempFile.toUri.toString, LanguageId.Scala, currentText.get, 2)
+    finally
+      Files.deleteIfExists(tempFile)
+      sm.applyEvent(Quit).unsafeRunSync()
+  }
+
+  it should "open the saved location after save as changes the LSP document URI" in {
+    val sm        = makeStateManager()
+    val source    = Files.createTempFile("test-lsp-save-as-source", ".scala")
+    val target    = Files.createTempFile("test-lsp-save-as-target", ".md")
+    Files.writeString(source, "object Saved")
+    try
+      sm.applyEvent(LoadFile(source)).unsafeRunSync()
+      sm.lspEffectStream.take(1).timeout(2.seconds).compile.drain.unsafeRunSync()
+      val bufferId = sm.getCurrentState.unsafeRunSync().buffers.values.find(_.filePath.contains(source)).map(_.id)
+
+      bufferId shouldBe defined
+      sm.saveBufferAs(bufferId.get, target.toString).unsafeRunSync()
+
+      sm.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync() shouldBe List(
+        LspEffect.FileClosed(source.toUri.toString, LanguageId.Scala),
+        LspEffect.FileOpened(target.toUri.toString, LanguageId.Markdown, "object Saved")
+      )
+    finally
+      Files.deleteIfExists(source)
+      Files.deleteIfExists(target)
+      sm.applyEvent(Quit).unsafeRunSync()
+  }

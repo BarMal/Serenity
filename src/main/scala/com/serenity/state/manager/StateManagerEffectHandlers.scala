@@ -153,7 +153,9 @@ final private[manager] class StateManagerEffectHandlers(
   private def interpretLspQueueEffect(effect: LspQueueEffect): IO[Unit] =
     effect match
       case LspQueueEffect.Enqueue(effect) =>
-        lspQueue.offer(effect)
+        lspQueue.enqueue(effect)
+      case LspQueueEffect.DocumentChanged(uri, languageId, text) =>
+        lspQueue.enqueueDocumentChange(uri, languageId, text)
 
   protected def withUpdatedRunnerConfig(state: AppState, config: com.serenity.config.AppConfig): AppState =
     val commandRunnerSurfaceId = state.commandRunnerSurface.map(_.id)
@@ -800,9 +802,9 @@ final private[manager] class StateManagerEffectHandlers(
                       val uri  = path.toUri.toString
                       val text = buffer.content.collect()
                       val closeOld =
-                        buffer.language.fold(IO.unit)(previous => lspQueue.offer(LspEffect.FileClosed(uri, previous)))
+                        buffer.language.fold(IO.unit)(previous => lspQueue.enqueue(LspEffect.FileClosed(uri, previous)))
                       val openNew =
-                        language.fold(IO.unit)(next => lspQueue.offer(LspEffect.FileOpened(uri, next, text)))
+                        language.fold(IO.unit)(next => lspQueue.enqueue(LspEffect.FileOpened(uri, next, text)))
                       closeOld >> openNew
                     case _ =>
                       IO.unit
@@ -1497,21 +1499,21 @@ final private[manager] class StateManagerEffectHandlers(
   private def requestLspHover(state: AppState): IO[Unit] =
     activeLspRequestTarget(state) match
       case Some((uri, languageId, cursor, _)) =>
-        lspQueue.offer(LspEffect.HoverRequested(uri, languageId, cursor.line, cursor.column, cursor))
+        lspQueue.enqueue(LspEffect.HoverRequested(uri, languageId, cursor.line, cursor.column, cursor))
       case None =>
         showLspUnavailablePeek(state)
 
   private def requestLspCompletion(state: AppState): IO[Unit] =
     activeLspRequestTarget(state) match
       case Some((uri, languageId, cursor, _)) =>
-        lspQueue.offer(LspEffect.CompletionRequested(uri, languageId, cursor.line, cursor.column, cursor))
+        lspQueue.enqueue(LspEffect.CompletionRequested(uri, languageId, cursor.line, cursor.column, cursor))
       case None =>
         showLspUnavailablePeek(state)
 
   private def requestLspDefinition(state: AppState): IO[Unit] =
     activeLspRequestTarget(state) match
       case Some((uri, languageId, cursor, buffer)) =>
-        lspQueue.offer(
+        lspQueue.enqueue(
           LspEffect.DefinitionRequested(
             uri,
             languageId,
@@ -2206,7 +2208,7 @@ final private[manager] class StateManagerEffectHandlers(
               case Some(languageId) =>
                 val uri  = path.toUri.toString
                 val text = loadedBuffer.content.collect()
-                lspQueue.offer(LspEffect.FileOpened(uri, languageId, text))
+                lspQueue.enqueue(LspEffect.FileOpened(uri, languageId, text))
               case None => IO.unit
           }
           .flatTap(_ => stateRef.update(s => s.copy(recentFiles = trackRecentFile(s.recentFiles, path))))

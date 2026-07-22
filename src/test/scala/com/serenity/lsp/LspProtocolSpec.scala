@@ -145,6 +145,16 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     td.downField("text").as[String].toOption shouldBe Some("object Bar")
   }
 
+  it should "build full-text didChange params with the document version" in {
+    val params = LspProtocol.didChangeParams("file:///foo/Bar.scala", 2, "object Updated")
+    val td     = params.hcursor.downField("textDocument")
+
+    td.downField("uri").as[String].toOption shouldBe Some("file:///foo/Bar.scala")
+    td.downField("version").as[Int].toOption shouldBe Some(2)
+    params.hcursor.downField("contentChanges").downArray.downField("text").as[String].toOption shouldBe
+      Some("object Updated")
+  }
+
   it should "build hover, definition, and completion params from document positions" in {
     val hover      = LspProtocol.hoverParams("file:///foo/Bar.scala", line = 7, character = 4)
     val definition = LspProtocol.definitionParams("file:///foo/Bar.scala", line = 8, character = 2)

@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.*
-import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileDialog
@@ -33,7 +32,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       undoRef                  <- Ref.of[IO, UndoState](UndoState())
       themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
       quitSignal               <- Deferred[IO, Unit]
-      lspQueue                 <- Queue.bounded[IO, LspEffect](8)
+      lspQueue                 <- LspEffectQueue.create
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
@@ -80,7 +79,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       undoRef                  <- Ref.of[IO, UndoState](UndoState())
       themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
       quitSignal               <- Deferred[IO, Unit]
-      lspQueue                 <- Queue.bounded[IO, LspEffect](8)
+      lspQueue                 <- LspEffectQueue.create
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       analysisCancelled        <- Deferred[IO, Unit]
@@ -195,6 +194,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
           workflow = _ => IO.unit,
           lspQueue =
             case LspQueueEffect.Enqueue(value) => observed.update(_ :+ value)
+            case LspQueueEffect.DocumentChanged(uri, languageId, text) =>
+              observed.update(_ :+ LspEffect.FileChanged(uri, languageId, text, version = 0))
         )
       )
       _       <- behavior.interpret(AppEffect.LspQueue(LspQueueEffect.Enqueue(effect)))
