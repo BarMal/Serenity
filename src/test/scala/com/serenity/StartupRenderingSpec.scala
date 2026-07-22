@@ -58,7 +58,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       renderedLines.map(_._2) should contain allElementsOf expectedLines
 
       titleRun.yPx shouldBe expectedStartYPx
-      firstOptionRun.yPx shouldBe expectedStartYPx + (2 * lineHeightPx)
+      firstOptionRun.yPx shouldBe expectedStartYPx + (3 * lineHeightPx)
 
     program.unsafeRunSync()
   }
@@ -175,7 +175,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
         .getOrElse(fail("expected measured option draw call"))
 
       titleRun.yPx shouldBe expectedTopPx
-      firstOptionRun.yPx shouldBe expectedTopPx + (2 * lineHeightPx)
+      firstOptionRun.yPx shouldBe expectedTopPx + (3 * lineHeightPx)
 
     program.unsafeRunSync()
   }
@@ -221,7 +221,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       )(paneId)
     val contentRect = paneRect.copy(y = paneRect.y + 1, height = math.max(1, paneRect.height - 1))
     val expected = TextAlignment.placeLine(
-      "~ Empty ~",
+      "Empty document — start typing",
       com.serenity.ui.layout.TextAreaPx(
         codeMetrics.toPixelX(contentRect.x).toFloat,
         codeMetrics.toPixelY(contentRect.y + contentRect.height / 2),
@@ -236,7 +236,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       surface.fontRenderContext.get
     )
 
-    val call = surface.drawRunPxCalls.find(_.s == "~ Empty ~").getOrElse(fail("expected empty text draw call"))
+    val call = surface.drawRunPxCalls
+      .find(_.s == "Empty document — start typing")
+      .getOrElse(fail("expected empty text draw call"))
     call.xPx shouldBe expected.xPx +- 0.001f
   }
 
@@ -274,7 +276,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       cursorColor = None
     )
 
-    val call = surface.drawRunPxCalls.find(_.s == "~ Empty ~").getOrElse(fail("expected empty text draw call"))
+    val call = surface.drawRunPxCalls
+      .find(_.s == "Empty document — start typing")
+      .getOrElse(fail("expected empty text draw call"))
     call.lineHeightPx shouldBe textMetrics.lineHeight
     call.ascentPx shouldBe textMetrics.ascent
   }
@@ -321,7 +325,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       codeMetrics
         .toPixelY(contentRect.y) + math.max(0, (contentRect.height * codeMetrics.lineHeight - lineHeightPx) / 2)
 
-    val call = surface.drawRunPxCalls.find(_.s == "~ Empty ~").getOrElse(fail("expected empty text draw call"))
+    val call = surface.drawRunPxCalls
+      .find(_.s == "Empty document — start typing")
+      .getOrElse(fail("expected empty text draw call"))
 
     call.yPx shouldBe expectedYPx
   }

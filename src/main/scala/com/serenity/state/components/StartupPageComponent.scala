@@ -1,6 +1,5 @@
 package com.serenity.state.components
 
-import com.serenity.command.{Command, CommandIntent}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.{AppState, SurfaceContent}
 
@@ -22,7 +21,11 @@ class StartupPageComponent extends TypedFocusedComponent[StartupPageEvent]:
                 val updatedPage = startPage.moveSelectionDown
                 ComponentResult.updateState(updateStartPage(surface.id, updatedPage))
               case StartupPageSubmit =>
-                createCommandForSelection(startPage.selectedIndex)
+                executeSelectedAction(startPage)
+              case StartupPageSelect(index) =>
+                startPage.launchActions
+                  .lift(index)
+                  .fold(ComponentResult.noChange)(action => ComponentResult.executeCommand(action.command))
               case StartupPageDismiss =>
                 ComponentResult.dismiss
           case _ => ComponentResult.noChange
@@ -38,17 +41,5 @@ class StartupPageComponent extends TypedFocusedComponent[StartupPageEvent]:
     }
     state.copy(uiSurfaces = updatedSurfaces)
 
-  private def createCommandForSelection(selectedIndex: Int): ComponentResult =
-    val intent = selectedIndex match
-      case 0 => CommandIntent.StartupNewSession
-      case 1 => CommandIntent.StartupRestoreSession
-      case 2 => CommandIntent.StartupOpenFile
-      case _ => CommandIntent.StartupNewSession // Default fallback
-
-    val command = selectedIndex match
-      case 0 => Command.typed("startup.new-session", "Start a new session", intent)
-      case 1 => Command.typed("startup.restore-session", "Restore an existing session", intent)
-      case 2 => Command.typed("startup.open-file", "Open an existing file or directory", intent)
-      case _ => Command.typed("startup.new-session", "Start a new session", intent)
-
-    ComponentResult.executeCommand(command)
+  private def executeSelectedAction(startPage: com.serenity.state.models.StartupPage): ComponentResult =
+    startPage.selectedAction.fold(ComponentResult.noChange)(action => ComponentResult.executeCommand(action.command))

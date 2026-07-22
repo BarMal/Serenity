@@ -60,7 +60,8 @@ object Main extends IOApp:
               new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
                 swingWin.canvas,
                 router,
-                () => swingWin.metrics
+                () => swingWin.metrics,
+                () => displayState.uiMetrics
               ),
             checkResize = IO(swingWin.doResizeIfNecessary()),
             renderFull = (state, vis, cc) =>

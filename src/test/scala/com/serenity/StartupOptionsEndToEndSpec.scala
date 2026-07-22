@@ -27,7 +27,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
     ): IO[Option[java.nio.file.Path]] =
       IO.pure(None)
 
-  it should "handle all three startup options correctly" in {
+  it should "handle available startup actions correctly" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val selectedFile = java.nio.file.Files.createTempFile("serenity-startup-options-open", ".txt")
@@ -49,27 +49,13 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
         newSessionState.buffers should not be empty
         newSessionState.focus should matchPattern { case Focus.EditorPane(_) => }
 
-      // Test Option 2: Restore Session
-      stateManager2       <- createStateManagerIO("StartupOptionsEndToEndSpec")
-      _                   <- AppStartup.initializeState(stateManager2, theme, viewportSize)
-      _                   <- stateManager2.applyEvent(MoveDown) // Move to option 2
-      _                   <- stateManager2.applyEvent(Enter)
-      restoreSessionState <- stateManager2.getCurrentState
-
-      _ =
-        restoreSessionState.startPageSurface shouldBe None
-        restoreSessionState.layout.editorPanes should not be empty
-        restoreSessionState.buffers should not be empty
-        restoreSessionState.focus should matchPattern { case Focus.EditorPane(_) => }
-
-      // Test Option 3: Open File
+      // Test Option 2: Open File
       stateManager3 <- createStateManagerIO(
         "StartupOptionsEndToEndSpec",
         fileDialog = TestFileDialog(Some(selectedFile))
       )
       _             <- AppStartup.initializeState(stateManager3, theme, viewportSize)
       _             <- stateManager3.applyEvent(MoveDown) // Move to option 2
-      _             <- stateManager3.applyEvent(MoveDown) // Move to option 3
       _             <- stateManager3.applyEvent(Enter)
       openFileState <- stateManager3.getCurrentState
 
@@ -114,17 +100,24 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
       startPage2 = state2.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       _          = startPage2.selectedIndex shouldBe 2
 
+      // Move through the workflow choices.
+      _         <- stateManager.applyEvent(MoveDown)
+      _         <- stateManager.applyEvent(MoveDown)
+      stateLast <- stateManager.getCurrentState
+      lastPage = stateLast.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+      _        = lastPage.selectedIndex shouldBe 4
+
       // Move down again (should wrap to option 0)
       _      <- stateManager.applyEvent(MoveDown)
       state3 <- stateManager.getCurrentState
       startPage3 = state3.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       _          = startPage3.selectedIndex shouldBe 0
 
-      // Move up (should wrap to option 2)
+      // Move up (should wrap to the final action)
       _      <- stateManager.applyEvent(MoveUp)
       state4 <- stateManager.getCurrentState
       startPage4 = state4.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage4.selectedIndex shouldBe 2
+      _          = startPage4.selectedIndex shouldBe 4
     yield succeed
 
     program.unsafeRunSync()

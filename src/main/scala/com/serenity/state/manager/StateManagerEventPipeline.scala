@@ -830,64 +830,85 @@ final private[manager] class StateManagerEventPipeline(
         if isInsideFloatingSurface(click, state) then cats.effect.IO.unit
         else openEditorContextMenu(click, state)
       case MouseButton.Primary =>
-        handleContextMenuMouseClick(click, state).flatMap {
+        handleStartupPageMouseClick(click, state).flatMap {
           case true => cats.effect.IO.unit
           case false =>
-            handleContextualToolbarMouseClick(click, state).flatMap {
+            handleContextMenuMouseClick(click, state).flatMap {
               case true => cats.effect.IO.unit
               case false =>
-                handleCommandRunnerMouseClick(click, state).flatMap {
+                handleContextualToolbarMouseClick(click, state).flatMap {
                   case true => cats.effect.IO.unit
                   case false =>
-                    if isInsideFloatingSurface(click, state) then cats.effect.IO.unit
-                    else
-                      handlePinnedPanelMouseClick(click, state).flatMap {
-                        case true => cats.effect.IO.unit
-                        case false =>
-                          handlePinnedPanelLocationClick(click, state).flatMap {
+                    handleCommandRunnerMouseClick(click, state).flatMap {
+                      case true => cats.effect.IO.unit
+                      case false =>
+                        if isInsideFloatingSurface(click, state) then cats.effect.IO.unit
+                        else
+                          handlePinnedPanelMouseClick(click, state).flatMap {
                             case true => cats.effect.IO.unit
                             case false =>
-                              resolveMouseTarget(click, state).flatMap {
-                                _.fold(dismissContextMenuIfOpen(state)) { (paneId, buffer, clickedCursor) =>
-                                  stateRef.update { s =>
-                                    s.buffers.get(buffer.id) match
-                                      case Some(current) =>
-                                        val selection =
-                                          if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
-                                          else if click.clickCount >= 3 then
-                                            lineSelectionAtCursor(current, clickedCursor)
-                                          else if click.clickCount >= 2 then
-                                            wordSelectionAtCursor(current, clickedCursor)
-                                          else None
-                                        val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
-                                        dismissContextMenu(
-                                          s.copy(
-                                            buffers = s.buffers.updated(
-                                              buffer.id,
-                                              current.copy(
-                                                cursors = List(focusCursor),
-                                                selection = selection,
-                                                selections = Nil,
-                                                preferredColumn = Some(focusCursor.column),
-                                                preferredXPx = None,
-                                                multiCursorVerticalStates = Nil
+                              handlePinnedPanelLocationClick(click, state).flatMap {
+                                case true => cats.effect.IO.unit
+                                case false =>
+                                  resolveMouseTarget(click, state).flatMap {
+                                    _.fold(dismissContextMenuIfOpen(state)) { (paneId, buffer, clickedCursor) =>
+                                      stateRef.update { s =>
+                                        s.buffers.get(buffer.id) match
+                                          case Some(current) =>
+                                            val selection =
+                                              if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
+                                              else if click.clickCount >= 3 then
+                                                lineSelectionAtCursor(current, clickedCursor)
+                                              else if click.clickCount >= 2 then
+                                                wordSelectionAtCursor(current, clickedCursor)
+                                              else None
+                                            val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
+                                            dismissContextMenu(
+                                              s.copy(
+                                                buffers = s.buffers.updated(
+                                                  buffer.id,
+                                                  current.copy(
+                                                    cursors = List(focusCursor),
+                                                    selection = selection,
+                                                    selections = Nil,
+                                                    preferredColumn = Some(focusCursor.column),
+                                                    preferredXPx = None,
+                                                    multiCursorVerticalStates = Nil
+                                                  )
+                                                ),
+                                                focus = Focus.EditorPane(paneId),
+                                                layout = s.layout.copy(activeEditorPaneId = Some(paneId))
                                               )
-                                            ),
-                                            focus = Focus.EditorPane(paneId),
-                                            layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-                                          )
-                                        )
-                                      case None => dismissContextMenu(s)
+                                            )
+                                          case None => dismissContextMenu(s)
+                                      }
+                                    }
                                   }
-                                }
                               }
                           }
-                      }
+                    }
                 }
             }
         }
       case _ =>
         cats.effect.IO.unit
+
+  private def handleStartupPageMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =
+    val action = state.startPageSurface.flatMap { surface =>
+      surface.content match
+        case SurfaceContent.StartPage(page) =>
+          for
+            viewportSize <- state.viewportSize
+            pixelX       <- click.pixelX
+            pixelY       <- click.pixelY
+            metrics      <- click.renderMetrics
+            actionIndex  <- page.actionIndexAtPixel(pixelX, pixelY, viewportSize, metrics.code, metrics.ui)
+            action       <- page.launchActions.lift(actionIndex)
+          yield action
+        case _ =>
+          None
+    }
+    action.fold(cats.effect.IO.pure(false))(selected => executeCommand(selected.command).as(true))
 
   private def handleMousePress(press: MousePress, state: AppState): cats.effect.IO[Unit] =
     if press.button != MouseButton.Primary then cats.effect.IO.unit

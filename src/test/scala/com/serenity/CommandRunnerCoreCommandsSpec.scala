@@ -1366,6 +1366,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     AppStartup.initializeState(restoredManager, Theme.default, startupViewport).unsafeRunSync()
     restoredManager.applyEvent(MoveDown).unsafeRunSync()
+    restoredManager.applyEvent(MoveDown).unsafeRunSync()
     restoredManager.applyEvent(Enter).unsafeRunSync()
 
     val restoredState = restoredManager.getCurrentState.unsafeRunSync()

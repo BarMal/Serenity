@@ -1,5 +1,7 @@
 package com.serenity.command
 
+import java.nio.file.Path
+
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
@@ -41,6 +43,7 @@ enum CommandIntent:
   case RestoreSession
   case ClearSession
   case OpenFile
+  case OpenRecentFile(path: Path)
   case OpenFileSearch
   case QuitApp
   case CloseAll

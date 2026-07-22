@@ -1,5 +1,7 @@
 package com.serenity.keystroke.events
 
+import com.serenity.ui.layout.CellMetrics
+
 sealed trait MouseInputEvent extends Event:
   def col: Int
   def row: Int
@@ -11,6 +13,9 @@ sealed trait MouseInputEvent extends Event:
 enum MouseButton:
   case Primary, Secondary, Middle, Other
 
+/** Metrics used by the renderer when this mouse input was captured. */
+case class MouseRenderMetrics(code: CellMetrics, ui: CellMetrics)
+
 case class MouseClick(
     col: Int,
     row: Int,
@@ -18,7 +23,8 @@ case class MouseClick(
     pixelY: Option[Int] = None,
     clickCount: Int = 1,
     shiftDown: Boolean = false,
-    button: MouseButton = MouseButton.Primary
+    button: MouseButton = MouseButton.Primary,
+    renderMetrics: Option[MouseRenderMetrics] = None
 ) extends MouseInputEvent
 
 case class MousePress(
