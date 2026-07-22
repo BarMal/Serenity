@@ -9,6 +9,7 @@ import javax.swing.text as SwingText
 import javax.swing.text.rtf.RTFEditorKit
 
 import cats.effect.IO
+import com.serenity.io.AtomicFileWriter
 
 /** Reads and writes RTF documents through Serenity's native rich text model. */
 object RtfDocumentCodec:
@@ -23,7 +24,7 @@ object RtfDocumentCodec:
 
   /** Write Serenity's native rich text model to an RTF file. */
   def write(document: RichTextDocument, path: Path): IO[Unit] =
-    IO.blocking(Files.write(path, writeBytes(document))).void
+    AtomicFileWriter.writeBytes(path, writeBytes(document))
 
   /** Decode RTF bytes into Serenity's native rich text model. */
   def readBytes(bytes: Array[Byte]): RichTextDocument =

@@ -29,11 +29,7 @@ object FileUtils:
 
   /** Write content to file */
   def writeFileContent(path: Path, content: String): IO[Unit] =
-    IO.blocking {
-      // Create parent directories if they don't exist
-      Option(path.getParent).foreach(Files.createDirectories(_))
-      Files.writeString(path, content)
-    }
+    AtomicFileWriter.writeString(path, content)
 
   /** Get file size in bytes */
   def getFileSize(path: Path): IO[Long] =

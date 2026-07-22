@@ -158,10 +158,13 @@ final class LocalDocumentStorageProvider extends DocumentStorageProvider:
         if Files.exists(path) && Files.isRegularFile(path) then Some(revision(Files.readString(path))) else None
       if expectedRevision.exists(expected => !currentRevision.contains(expected)) then
         Left(DocumentStorageError.Conflict(location))
-      else
-        Option(path.getParent).foreach(Files.createDirectories(_))
-        Files.writeString(path, content)
-        Right(StoredDocument(content, metadata(path, Some(content))))
+      else Right(())
+    }.flatMap {
+      case Left(conflict) => IO.pure(Left(conflict))
+      case Right(_) =>
+        AtomicFileWriter
+          .writeString(path, content)
+          .flatMap(_ => IO.blocking(Right(StoredDocument(content, metadata(path, Some(content))))))
     }.handleError(error => Left(storageError(location, error)))
 
   private def metadata(path: Path, content: Option[String]): DocumentMetadata =

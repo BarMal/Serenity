@@ -6,6 +6,7 @@ import java.util.UUID
 
 import cats.effect.IO
 import cats.syntax.all.*
+import com.serenity.io.AtomicFileWriter
 import com.serenity.state.models.AppState
 import com.serenity.ui.theme.config.AppThemeManager
 import org.typelevel.log4cats.Logger
@@ -268,15 +269,7 @@ class SessionManager(
     }.handleErrorWith(error => logger.error(error)(s"[SESSION] Failed to delete session file $sessionFile"))
 
   private def writeUtf8(path: Path, value: String): IO[Unit] =
-    IO.blocking {
-      Option(path.getParent).foreach(Files.createDirectories(_))
-      val _ = Files.write(
-        path,
-        value.getBytes(StandardCharsets.UTF_8),
-        StandardOpenOption.CREATE,
-        StandardOpenOption.TRUNCATE_EXISTING
-      )
-    }
+    AtomicFileWriter.writeString(path, value)
 
   private def readUtf8(path: Path): IO[String] =
     IO.blocking(new String(Files.readAllBytes(path), StandardCharsets.UTF_8))

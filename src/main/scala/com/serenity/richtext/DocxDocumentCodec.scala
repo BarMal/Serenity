@@ -2,13 +2,14 @@ package com.serenity.richtext
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 import java.util.zip.{ZipEntry, ZipOutputStream}
 import javax.xml.parsers.DocumentBuilderFactory
 
 import scala.util.control.NonFatal
 
 import cats.effect.IO
+import com.serenity.io.AtomicFileWriter
 import org.w3c.dom.{Document as XmlDocument, Element, Node}
 
 /** Reads and writes Word Open XML documents through Serenity's native rich text model. */
@@ -21,7 +22,7 @@ object DocxDocumentCodec:
 
   /** Write Serenity's native rich text model to a DOCX file. */
   def write(document: RichTextDocument, path: Path): IO[Unit] =
-    IO.blocking(Files.write(path, writeBytes(document))).void
+    AtomicFileWriter.writeBytes(path, writeBytes(document))
 
   /** Decode DOCX bytes into Serenity's native rich text model. */
   def readBytes(bytes: Array[Byte]): RichTextDocument =
