@@ -101,6 +101,31 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
     resolved.footer.map(_.plainText) should contain("Back")
   }
 
+  it should "describe the selected group, option, and input action in its footer" in {
+    val root = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val option = root.copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance")))
+    val input = option.copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance", selectedIndex = 4)))
+    val editing = input.copy(
+      activeSubmenu = input.activeSubmenu.map(_.copy(editingItemId = Some("blur-radius"), editingText = "1"))
+    )
+
+    footerText(root) should include("Enter open")
+    footerText(option) should include("Enter apply")
+    footerText(input) should include("Type edit")
+    footerText(editing) should include("Enter save")
+  }
+
+  private def footerText(runner: CommandRunner): String =
+    SurfaceContentResolver
+      .resolve(
+        SurfaceContent.CommandPalette(runner),
+        LayoutRect(0, 0, 90, 16),
+        SurfaceRenderMode.Floating
+      )
+      .footer
+      .map(_.plainText)
+      .getOrElse(fail("Expected settings footer"))
+
   private def runnerFrom(state: AppState): CommandRunner =
     state.commandRunnerSurface.flatMap {
       _.content match

@@ -117,17 +117,15 @@ case class CommandRunner(
       "settings-editor-view" -> "Code & IDE",
       "settings-appearance-motion" -> "Appearance & Motion"
     )
+    val motionAccessibilityItems = settingsGroups
+      .find(_.id == "settings-appearance-motion")
+      .toList
+      .flatMap(_.children.collect { case group: CommandSurfaceItem.GroupItem if group.id == "settings-animation" => group })
+      .flatMap(_.children.collect { case item if item.id == "motion-accessibility" => item })
     val accessibility = CommandSurfaceItem.GroupItem(
       id = "settings-accessibility",
       label = "Accessibility",
-      children = settingsGroups
-        .find(_.id == "settings-appearance-motion")
-        .toList
-        .flatMap(_.children)
-        .find(_.id == "settings-animation")
-        .toList
-        .flatMap(_.children)
-        .collect { case item if item.id == "motion-accessibility" => item },
+      children = motionAccessibilityItems,
       category = CommandCategory.Settings,
       hint = Some("Motion accessibility and reading comfort")
     )
