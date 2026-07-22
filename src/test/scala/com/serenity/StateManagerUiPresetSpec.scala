@@ -9,7 +9,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.keystroke.events.ToggleCommandRunner
-import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -193,6 +193,51 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     state.buffers(BufferId(1)).richTextDocument should not be empty
     state.config.showPaneHeaders shouldBe false
     state.pinnedSurfaces shouldBe Nil
+  }
+
+  it should "preserve unrelated persisted configuration when applying a built-in workflow" in {
+    val path  = Files.createTempDirectory("state-manager-built-in-workflow-config").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+    val lspConfig = LspUserConfig(
+      Some(Map(LanguageId.Scala.id -> LspServerOverride(Some("scala-cli"), Some(List("lsp")), Some(false))))
+    )
+    val spellCheck = SpellCheckConfig(enabled = true, languages = List("en", "fr"))
+    val windowConfig = WindowConfig(
+      chromeMode = WindowChromeMode.NativeThemed,
+      preferredSize = Some(PreferredWindowSize(1366, 768))
+    )
+
+    sm.updateState { state =>
+      state.copy(
+        config = state.config
+          .withHotkeyOverride(HotkeyAction.ToggleCommandRunner, "alt+p")
+          .withEditorKeyOverride(EditorKeyAction.MoveLeft, "alt+h")
+          .withLanguageToolsConfig(
+            state.config.languageToolsConfig.copy(lspUserConfig = lspConfig, spellCheck = spellCheck)
+          )
+          .withWindowConfig(windowConfig)
+      )
+    }.unsafeRunSync()
+
+    sm.executeCommand(
+      Command.typed(
+        "apply-writing-preset",
+        "Apply writing preset",
+        CommandIntent.ApplyUiPreset("Writing"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+
+    val config = sm.getCurrentState.unsafeRunSync().config
+
+    config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).map(_.render) shouldBe List("alt+p")
+    config.focusedKeymapConfig.editor.bindingsFor(EditorKeyAction.MoveLeft).map(_.render) shouldBe List("alt+h")
+    config.lspUserConfig shouldBe lspConfig
+    config.spellCheck shouldBe spellCheck
+    config.windowConfig shouldBe windowConfig
+    config.showLineNumbers shouldBe false
+    config.showPaneHeaders shouldBe false
   }
 
   it should "apply the built-in documentation preset to the active empty buffer" in {

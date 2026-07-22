@@ -1123,29 +1123,35 @@ final private[manager] class StateManagerEffectHandlers(
       case Some(presetName) =>
         uiPresetStore
           .find(presetName)
-          .map(_.orElse(UiPreset.builtIn(presetName)))
+          .map { customPreset =>
+            customPreset
+              .map(_ -> false)
+              .orElse(UiPreset.builtIn(presetName).map(_ -> true))
+          }
           .flatMap {
             case None =>
               logger.warn(s"[PRESET] UI preset not found: $presetName")
-            case Some(preset) =>
+            case Some((preset, isBuiltInWorkflow)) =>
               loadUiPresetResources(preset).flatMap {
                 case Left(reason) =>
                   rejectUiPresetPreview(presetName, reason)
                 case Right(theme) =>
                   for
-                    _ <- stateRef.modify { state =>
-                      val restoredPresetState = UiPreset.applyToState(preset, state, theme)
+                    appliedConfig <- stateRef.modify { state =>
+                      val restoredPresetState =
+                        if isBuiltInWorkflow then UiPreset.applyBuiltInWorkflowToState(preset, state, theme)
+                        else UiPreset.applyToState(preset, state, theme)
                       val restoredDocumentState =
                         applyPresetDocumentModeToActiveEmptyBuffer(
                           restoredPresetState,
                           preset.config.defaultDocumentMode
                         )
                       val restoredOutlineState = hydratePresetOutlinePanels(restoredDocumentState)
-                      val restored             = withUpdatedRunnerConfig(restoredOutlineState, preset.config)
-                      (restored, ())
+                      val restored = withUpdatedRunnerConfig(restoredOutlineState, restoredOutlineState.config)
+                      (restored, restored.config)
                     }
-                    _ <- persistConfigFile(preset.config)
-                    _ <- onFontConfigChanged(preset.config.fontConfig)
+                    _ <- persistConfigFile(appliedConfig)
+                    _ <- onFontConfigChanged(appliedConfig.fontConfig)
                       .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset font config"))
                     _ <- reloadPresetDirectories(preset)
                     _ <- openPresetMarkdownPreviewIfNeeded(preset)

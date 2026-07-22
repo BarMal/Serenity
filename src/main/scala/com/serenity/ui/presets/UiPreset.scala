@@ -143,6 +143,66 @@ object UiPreset:
   private def patchTypographyConfig(base: AppConfig, source: AppConfig): AppConfig =
     base.withEditorConfig(base.editorConfig.copy(fontConfig = source.editorConfig.fontConfig))
 
+  private def patchWorkflowChrome(
+    base: AppConfig,
+    source: AppConfig,
+    includeWordWrap: Boolean = false,
+    includeContextualToolbar: Boolean = false,
+    includeTextAreaInsets: Boolean = false
+  ): AppConfig =
+    base.withSurfaceConfig(
+      base.surfaceConfig.copy(
+        showLineNumbers = source.showLineNumbers,
+        showGutter = source.showGutter,
+        showPaneHeaders = source.showPaneHeaders,
+        wordWrapEnabled = if includeWordWrap then source.wordWrapEnabled else base.wordWrapEnabled,
+        contextualToolbarEnabled =
+          if includeContextualToolbar then source.contextualToolbarEnabled else base.contextualToolbarEnabled,
+        textAreaInsets = if includeTextAreaInsets then source.textAreaInsets else base.textAreaInsets
+      )
+    )
+
+  private def mergeBuiltInWorkflowConfig(base: AppConfig, preset: UiPreset): AppConfig =
+    val source         = preset.config
+    val withMotion     = patchMotionConfig(base, source)
+    val withTypography = patchTypographyConfig(withMotion, source)
+
+    nameKey(preset.name) match
+      case "writing" =>
+        val withChrome = patchWorkflowChrome(withTypography, source, includeTextAreaInsets = true)
+        withChrome
+          .withSurfaceConfig(
+            withChrome.surfaceConfig.copy(
+              blurRadius = source.blurRadius,
+              backgroundStyle = source.backgroundStyle,
+              materialPreset = source.materialPreset
+            )
+          )
+          .withDocumentConfig(source.documentConfig)
+          .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
+          .withCursorConfig(base.cursorConfig.copy(infoBarMode = source.cursorInfoBarMode))
+      case "documentation" =>
+        patchWorkflowChrome(withTypography, source)
+          .withDocumentConfig(source.documentConfig)
+      case "code" =>
+        patchWorkflowChrome(withTypography, source)
+          .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
+          .withSyntaxHighlighting(source.syntaxHighlightingEnabled)
+      case "compact" =>
+        patchWorkflowChrome(
+          withTypography,
+          source,
+          includeWordWrap = true,
+          includeContextualToolbar = true
+        )
+          .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
+          .withSyntaxHighlighting(source.syntaxHighlightingEnabled)
+      case "review" =>
+        patchWorkflowChrome(withTypography, source)
+          .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
+          .withCursorConfig(base.cursorConfig.copy(infoBarMode = source.cursorInfoBarMode))
+      case _ => base
+
   private def unknownJsonFields(raw: JsonObject, known: JsonObject): JsonObject =
     JsonObject.fromIterable(
       raw.toIterable.flatMap {
@@ -445,6 +505,13 @@ object UiPreset:
     )
 
   def applyToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
+    applyToState(preset, state, theme, preset.config)
+
+  /** Apply a built-in workflow without replacing unrelated persisted configuration. */
+  def applyBuiltInWorkflowToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
+    applyToState(preset, state, theme, mergeBuiltInWorkflowConfig(state.config, preset))
+
+  private def applyToState(preset: UiPreset, state: AppState, theme: Theme, config: AppConfig): AppState =
     val unpinnedSurfaces = state.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Pinned(_, _) => false
@@ -467,7 +534,7 @@ object UiPreset:
       }
 
     val restoredState = stateWithPanels.copy(
-      config = preset.config,
+      config = config,
       theme = theme,
       uiSurfaces = unpinnedSurfaces ++ restoredPanels,
       focus = withoutPinnedFocus,
