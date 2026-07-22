@@ -13,6 +13,7 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
+import com.serenity.ui.accessibility.{AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.theme.Theme
@@ -79,6 +80,14 @@ class SwingWindow(
       g.setColor(Color.BLACK)
       g.fillRect(0, 0, getWidth, getHeight)
       renderedImageRef.get().foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
+
+  private val accessibilityBridge = new SwingAccessibilityBridge(canvas)
+
+  /** Publish the semantic projection of the custom-painted canvas to Swing accessibility clients. */
+  def updateAccessibility(snapshot: AccessibilitySnapshot): Unit =
+    val publish: Runnable = () => accessibilityBridge.publish(snapshot)
+    if SwingUtilities.isEventDispatchThread then publish.run()
+    else SwingUtilities.invokeLater(publish)
 
   def onImageReady(image: BufferedImage): Unit =
     baseImageRef.set(Some(image))

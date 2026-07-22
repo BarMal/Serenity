@@ -4,6 +4,7 @@ import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
+import com.serenity.ui.accessibility.AccessibilitySnapshot
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.terminal.SwingWindow
@@ -54,6 +55,9 @@ object Main extends IOApp:
           def syncChromeTheme(state: com.serenity.state.models.AppState): IO[Unit] =
             IO.blocking(swingWin.updateChromeTheme(state.theme))
 
+          def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
+            IO.blocking(swingWin.updateAccessibility(AccessibilitySnapshot.from(state, swingWin.viewportSize)))
+
           initialScaleSync >> AppRuntime.run(
             initialViewportSize = swingWin.viewportSize,
             makeInputHandler = router =>
@@ -65,7 +69,7 @@ object Main extends IOApp:
               ),
             checkResize = IO(swingWin.doResizeIfNecessary()),
             renderFull = (state, vis, cc) =>
-              syncDisplayMetrics() >> syncChromeTheme(state) >> IO.blocking {
+              syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> IO.blocking {
                 if vis then
                   val _ = Renderer.renderWithCursorOverlay(
                     state,
@@ -91,7 +95,7 @@ object Main extends IOApp:
                   )
               },
             renderCursorOnly = (state, vis, cc) =>
-              syncDisplayMetrics() >> syncChromeTheme(state) >> IO.blocking {
+              syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> IO.blocking {
                 val rendered = Renderer.renderCursorOnly(
                   state,
                   vis,
