@@ -259,16 +259,16 @@ object InterfaceDensityMetrics:
         InterfaceDensityMetrics(
           gutterHeight = 1,
           overlayGapRows = 1,
-          commandSurfaceMaxHeight = 8,
-          commandSurfaceMinHeight = 4,
+          commandSurfaceMaxHeight = 10,
+          commandSurfaceMinHeight = 6,
           commandSurfaceVerticalPadding = 3
         )
       case InterfaceDensity.Spacious =>
         InterfaceDensityMetrics(
           gutterHeight = 2,
           overlayGapRows = 2,
-          commandSurfaceMaxHeight = 10,
-          commandSurfaceMinHeight = 5,
+          commandSurfaceMaxHeight = 12,
+          commandSurfaceMinHeight = 8,
           commandSurfaceVerticalPadding = 4
         )
 

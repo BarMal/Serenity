@@ -432,7 +432,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val cursorY = contentRect.y + 8
     val rect    = toolbarRect(state)
 
-    rect.bottom should be <= cursorY
+    rect.y should be >= cursorY
     rect.y should be >= contentRect.y
   }
 

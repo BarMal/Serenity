@@ -119,7 +119,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), y) => y }
       .sliding(2)
       .foreach {
-        case List(first, second) => second - first shouldBe 2
+        case List(first, second) => second - first shouldBe 3
         case _                   => ()
       }
   }

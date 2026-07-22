@@ -687,22 +687,28 @@ object LayoutEngine:
           val anchorFrameOpt     = calculateFloatingAnchorFrame(main, state, paneLayouts)
           (mainRectOpt, submenuBaseRectOpt, anchorFrameOpt) match
             case (Some(mainRect), Some(submenuRect), Some(anchorFrame)) =>
-              val collapsedHeight = 3
-              val gapRows         = wholeRowOrigin(floatingCursorGapRows(state, main.content))
-              val stackGapRows    = wholeRowOrigin(floatingStackGapRows(state))
-              val availableBottom = anchorFrame.contentRect.bottom
-              val totalHeight     = mainRect.height + stackGapRows + submenuRect.height
-              val preferredBelowY = anchorFrame.screenPosition.y + 1 + gapRows
-              val preferredAboveY = anchorFrame.screenPosition.y - gapRows - totalHeight
+              val collapsedHeight         = 3
+              val gapRows                 = wholeRowOrigin(floatingCursorGapRows(state, main.content))
+              val stackGapRows            = wholeRowOrigin(floatingStackGapRows(state))
+              val availableBottom         = anchorFrame.contentRect.bottom
+              val totalHeight             = mainRect.height + stackGapRows + submenuRect.height
+              val preferredBelowY         = anchorFrame.screenPosition.y + 1 + gapRows
+              val preferredAboveY         = anchorFrame.screenPosition.y - gapRows - totalHeight
+              val collapsedTotalHeight    = collapsedHeight + stackGapRows + submenuRect.height
+              val collapsedAboveY         = anchorFrame.screenPosition.y - gapRows - collapsedTotalHeight
+              val fullStackFitsBelow      = preferredBelowY + totalHeight <= availableBottom
+              val fullStackFitsAbove      = preferredAboveY >= anchorFrame.contentRect.y
+              val collapsedStackFitsAbove = collapsedAboveY >= anchorFrame.contentRect.y
+              val shouldCollapse          = !fullStackFitsBelow && !fullStackFitsAbove
               val stackY =
-                if preferredBelowY + totalHeight <= availableBottom then preferredBelowY
-                else if preferredAboveY >= anchorFrame.contentRect.y then preferredAboveY
+                if fullStackFitsBelow then preferredBelowY
+                else if fullStackFitsAbove then preferredAboveY
+                else if collapsedStackFitsAbove then collapsedAboveY
                 else
                   math.max(
                     anchorFrame.contentRect.y,
                     math.min(preferredBelowY, availableBottom - math.min(totalHeight, anchorFrame.contentRect.height))
                   )
-              val shouldCollapse    = stackY + totalHeight > availableBottom
               val stackHeightBudget = math.max(0, availableBottom - stackY)
               val adjustedMainHeight =
                 if shouldCollapse then math.min(collapsedHeight, stackHeightBudget) else mainRect.height
@@ -809,7 +815,8 @@ object LayoutEngine:
             hasHeader = true,
             hasFooter = true,
             borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-            itemGapRows = state.config.commandRunnerItemGapRows
+            itemGapRows = state.config.commandRunnerItemGapRows,
+            itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
           )
         )
         .getOrElse(densityMetrics.commandSurfaceMaxHeight)
@@ -843,7 +850,8 @@ object LayoutEngine:
           hasHeader = false,
           hasFooter = false,
           borderCells = borderCells,
-          itemGapRows = state.config.uiElementGap
+          itemGapRows = state.config.uiElementGap,
+          itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity)
         )
       case SurfaceContent.ContextMenu(menu) =>
         SurfaceFrameLayout.frameHeightForItemRows(
@@ -851,7 +859,8 @@ object LayoutEngine:
           hasHeader = true,
           hasFooter = menu.items.nonEmpty,
           borderCells = SurfaceFrameLayout.borderCellsFor(content),
-          itemGapRows = state.config.commandRunnerItemGapRows
+          itemGapRows = state.config.commandRunnerItemGapRows,
+          itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity)
         )
       case SurfaceContent.CommentLens(lens) =>
         math.max(4, math.min(8, lens.draft.split("\n", -1).length + 3))
@@ -870,7 +879,8 @@ object LayoutEngine:
               hasHeader = true,
               hasFooter = true,
               borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-              itemGapRows = state.config.commandRunnerItemGapRows
+              itemGapRows = state.config.commandRunnerItemGapRows,
+              itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
             )
           )
         )

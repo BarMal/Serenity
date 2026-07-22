@@ -168,7 +168,11 @@ final class UiScenarioDriver private (
       } ++ contract.overlayRowSlots(surfaceId).collect {
         case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), y) =>
           val content = contract.overlayContentRect(surfaceId).getOrElse(LayoutRect(0, y, 0, 1))
-          LayoutRect(content.x, y, content.width, 1)
+          val itemTargetRows = state
+            .surfaceById(surfaceId)
+            .map(surface => SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.config.interfaceDensity))
+            .getOrElse(1)
+          LayoutRect(content.x, y, content.width, itemTargetRows)
       }
       surfaceId -> rects
     }.toMap

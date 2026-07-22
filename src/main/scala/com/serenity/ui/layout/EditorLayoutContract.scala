@@ -467,7 +467,7 @@ object EditorLayoutContract:
         SurfaceContentResolver.resolve(resolvedOutline, frameRect, SurfaceRenderMode.Pinned)
       case content =>
         SurfaceContentResolver.resolve(content, frameRect, SurfaceRenderMode.Pinned)
-    surfaceGeometry(surface.content, frameRect, resolved, itemGapRows = 0.0)
+    surfaceGeometry(surface.content, frameRect, resolved, itemGapRows = 0.0, itemTargetRows = 1)
 
   private def floatingGeometry(
     surface: UiSurface,
@@ -495,24 +495,33 @@ object EditorLayoutContract:
               originalContent,
               geometryFrame,
               SurfaceRenderMode.Floating,
-              itemGapRowsFor(originalContent, state)
+              itemGapRowsFor(originalContent, state),
+              itemTargetRowsFor(originalContent, state)
             )
           case content =>
             SurfaceContentResolver.resolve(
               content,
               geometryFrame,
               SurfaceRenderMode.Floating,
-              itemGapRowsFor(content, state)
+              itemGapRowsFor(content, state),
+              itemTargetRowsFor(content, state)
             )
     Option.when(resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty)(
-      surfaceGeometry(surface.content, geometryFrame, resolved, itemGapRowsFor(surface.content, state))
+      surfaceGeometry(
+        surface.content,
+        geometryFrame,
+        resolved,
+        itemGapRowsFor(surface.content, state),
+        itemTargetRowsFor(surface.content, state)
+      )
     )
 
   private def surfaceGeometry(
     content: SurfaceContent,
     frameRect: LayoutRect,
     resolved: ResolvedSurfaceContent,
-    itemGapRows: Double
+    itemGapRows: Double,
+    itemTargetRows: Int
   ): SurfaceGeometry =
     val contentRect = SurfaceFrameLayout.forContent(frameRect, content).contentRect
     SurfaceGeometry(
@@ -523,7 +532,8 @@ object EditorLayoutContract:
         resolved.rows.length,
         resolved.header.nonEmpty,
         resolved.footer.nonEmpty,
-        itemGapRows
+        itemGapRows,
+        itemTargetRows
       ),
       headerRect = Option.when(resolved.header.nonEmpty && contentRect.height > 0)(
         LayoutRect(contentRect.x, contentRect.y, contentRect.width, 1)
@@ -551,3 +561,8 @@ object EditorLayoutContract:
       case SurfaceContent.GhostOverlay(originalContent, _) =>
         itemGapRowsFor(originalContent, state)
       case _ => 0.0
+
+  private def itemTargetRowsFor(content: SurfaceContent, state: AppState): Int =
+    content match
+      case SurfaceContent.GhostOverlay(originalContent, _) => itemTargetRowsFor(originalContent, state)
+      case other => SurfaceFrameLayout.itemTargetRowsFor(other, state.config.interfaceDensity)

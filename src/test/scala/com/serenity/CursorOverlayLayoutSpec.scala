@@ -346,7 +346,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
-    layout.belowCursorOverlayRect.map(_.height) shouldBe Some(11)
+    layout.belowCursorOverlayRect.map(_.height) shouldBe Some(18)
   }
 
   it should "apply configured gaps below the cursor and between stacked overlays" in {
@@ -407,8 +407,8 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
 
-    layout.floatingOverlayOffsetRows(SurfaceId("contextual-toolbar")) shouldBe 0.25
-    layout.floatingOverlayOffsetRows(SurfaceId("command-runner")) shouldBe 0.5
+    layout.floatingOverlayOffsetRows(SurfaceId("contextual-toolbar")) shouldBe -0.25
+    layout.floatingOverlayOffsetRows(SurfaceId("command-runner")) shouldBe -0.5
   }
 
   it should "keep command runner cursor and submenu stack gaps independent" in {
@@ -481,7 +481,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     runnerRect.y should be >= contentRect.y
     runnerRect.bottom should be <= submenuRect.y
     submenuRect.bottom should be <= cursorY
-    layout.collapsedFloatingSurfaceIds shouldBe empty
+    layout.collapsedFloatingSurfaceIds should contain(SurfaceId("command-runner"))
   }
 
   it should "size a find overlay to fit its header, query row, and result footer" in {

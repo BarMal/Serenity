@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandCategory, CommandRunner}
+import com.serenity.config.InterfaceDensity
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
@@ -31,7 +32,13 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
     stateManager
-      .updateState(state => state.copy(config = state.config.withCommandRunnerItemGapRows(1)))
+      .updateState(state =>
+        state.copy(
+          config = state.config
+            .withInterfaceDensity(InterfaceDensity.Compact)
+            .withCommandRunnerItemGapRows(1)
+        )
+      )
       .unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
@@ -311,7 +318,8 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
         itemCount = runner.visibleItems.length,
         hasHeader = true,
         hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
-        itemGapRows = state.config.commandRunnerItemGapRows
+        itemGapRows = state.config.commandRunnerItemGapRows,
+        itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
       )
       .translated(
         0.0,

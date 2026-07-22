@@ -16,6 +16,7 @@ case class TextOverlayView(
     rows: List[OverlayRow] = Nil,
     footer: Option[OverlayRow] = None,
     itemGapRows: Double = 0.0,
+    itemTargetRows: Int = 1,
     verticalOffsetRows: Double = 0.0,
     surfaceId: Option[SurfaceId] = None
 ):
@@ -29,7 +30,8 @@ case class TextOverlayView(
       rows.length,
       header.nonEmpty,
       footer.nonEmpty,
-      itemGapRows
+      itemGapRows,
+      itemTargetRows
     )
 
 case class OverlayViews(
@@ -104,6 +106,7 @@ object OverlayViewModel:
             rows = content.rows,
             footer = content.footer,
             itemGapRows = itemGapRowsFor(originalContent, state),
+            itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(originalContent, state.config.interfaceDensity),
             verticalOffsetRows = verticalOffsetRows,
             surfaceId = Some(surface.id)
           )
@@ -122,6 +125,7 @@ object OverlayViewModel:
               rows = resolved.rows,
               footer = resolved.footer,
               itemGapRows = itemGapRowsFor(content, state),
+              itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity),
               verticalOffsetRows = verticalOffsetRows,
               surfaceId = Some(surface.id)
             )
@@ -188,7 +192,13 @@ object OverlayViewModel:
           case SurfaceContent.ContextualToolbar(toolbarState) =>
             SurfaceContentResolver.resolveContextualToolbar(toolbarState, state, rect, SurfaceRenderMode.Floating)
           case _ =>
-            SurfaceContentResolver.resolve(content, rect, SurfaceRenderMode.Floating, itemGapRowsFor(content, state))
+            SurfaceContentResolver.resolve(
+              content,
+              rect,
+              SurfaceRenderMode.Floating,
+              itemGapRowsFor(content, state),
+              SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity)
+            )
     Option.when(resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty)(resolved)
 
   private def collapsedContentView(content: com.serenity.state.models.SurfaceContent): ResolvedSurfaceContent =

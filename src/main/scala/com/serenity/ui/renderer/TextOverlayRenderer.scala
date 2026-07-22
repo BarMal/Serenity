@@ -102,7 +102,8 @@ object TextOverlayRenderer:
       overlay.rows.length,
       overlay.header.nonEmpty,
       overlay.footer.nonEmpty,
-      overlay.itemGapRows
+      overlay.itemGapRows,
+      overlay.itemTargetRows
     )
 
     overlay.contentRowSlots
@@ -129,7 +130,8 @@ object TextOverlayRenderer:
                   defaultBackground = Some(animBg),
                   font = font,
                   cellMetrics = cellMetrics,
-                  pixelY = Some(math.round(pixelRect.y).toInt)
+                  pixelY = Some(math.round(pixelRect.y).toInt),
+                  pixelHeight = Some(math.round(pixelRect.height).toInt)
                 )
               }
             case _ =>
@@ -161,7 +163,8 @@ object TextOverlayRenderer:
     defaultBackground: Option[Color],
     font: java.awt.Font,
     cellMetrics: CellMetrics,
-    pixelY: Option[Int] = None
+    pixelY: Option[Int] = None,
+    pixelHeight: Option[Int] = None
   ): Unit =
     surface.withLogicalPixelRow(y, pixelY.getOrElse(cellMetrics.toPixelY(y))) {
       renderRowAt(
@@ -176,7 +179,8 @@ object TextOverlayRenderer:
         defaultBackground,
         font,
         cellMetrics,
-        pixelY
+        pixelY,
+        pixelHeight
       )
     }
 
@@ -192,7 +196,8 @@ object TextOverlayRenderer:
     defaultBackground: Option[Color],
     font: java.awt.Font,
     cellMetrics: CellMetrics,
-    pixelY: Option[Int]
+    pixelY: Option[Int],
+    pixelHeight: Option[Int]
   ): Unit =
     val rowView = scrolledRowView(row, width)
     val baseFg  = defaultForeground.getOrElse(theme.panel.foreground)
@@ -210,6 +215,16 @@ object TextOverlayRenderer:
 
     surface.setForegroundColor(rowForeground)
     surface.setBackgroundColor(rowBackground)
+    if rowView.row.selected then
+      pixelHeight.foreach { height =>
+        surface.fillPixelRect(
+          xPx = rowLeftXPx,
+          yPx = pixelY.getOrElse(cellMetrics.toPixelY(y)),
+          widthPx = rowRightXPx - rowLeftXPx,
+          heightPx = height,
+          color = rowBackground
+        )
+      }
     if rowView.row.selected then surface.enableStyle(theme.focusStyle)
     CharacterRenderer.renderStringPlain(surface, x, y, " " * width)
 
