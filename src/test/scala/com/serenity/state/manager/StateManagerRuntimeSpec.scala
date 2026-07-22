@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.*
 import cats.effect.unsafe.implicits.global
+import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileDialog
 import com.serenity.lsp.LspEffect
@@ -76,7 +77,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
-  it should "cancel pending document analysis when force quitting" in {
+  it should "cancel active project tasks from the cancel command and force quit" in {
     val program = for
       stateRef                 <- Ref.of[IO, AppState](AppState.initial)
       undoRef                  <- Ref.of[IO, UndoState](UndoState())
@@ -143,15 +144,50 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         runtime.sessionPersistence,
         operations
       )
-      _         <- analysisStarted.get
-      _         <- documentAnalysisFiberRef.set(Some(pendingAnalysis))
-      _         <- composition.forceQuit()
-      cancelled <- analysisCancelled.tryGet
-      pending   <- documentAnalysisFiberRef.get
-      _         <- pending.fold(IO.unit)(_.cancel)
+      commandChildDestroyed <- Deferred[IO, Unit]
+      commandTaskStarted    <- Deferred[IO, Unit]
+      commandTask <- IO
+        .defer(commandTaskStarted.complete(()).void >> IO.never[Unit])
+        .onCancel(commandChildDestroyed.complete(()).void)
+        .start
+      _ <- commandTaskStarted.get
+      _ <- projectTaskFiberRef.set(Some(commandTask))
+      _ <- composition.interpretCommand(
+        Command.typed(
+          "project-cancel",
+          "Cancel the running project task.",
+          CommandIntent.CancelProjectTask,
+          CommandCategory.Project
+        ),
+        AppState.initial
+      )
+      commandChildWasDestroyed <- commandChildDestroyed.tryGet
+      projectTaskAfterCommand  <- projectTaskFiberRef.get
+      shutdownChildDestroyed   <- Deferred[IO, Unit]
+      shutdownTaskStarted      <- Deferred[IO, Unit]
+      shutdownTask <- IO
+        .defer(shutdownTaskStarted.complete(()).void >> IO.never[Unit])
+        .onCancel(shutdownChildDestroyed.complete(()).void)
+        .start
+      _                         <- shutdownTaskStarted.get
+      _                         <- projectTaskFiberRef.set(Some(shutdownTask))
+      _                         <- analysisStarted.get
+      _                         <- documentAnalysisFiberRef.set(Some(pendingAnalysis))
+      _                         <- composition.forceQuit()
+      shutdownChildWasDestroyed <- shutdownChildDestroyed.tryGet
+      projectTaskAfterShutdown  <- projectTaskFiberRef.get
+      analysisWasCancelled      <- analysisCancelled.tryGet
+      pendingAnalysisFiber      <- documentAnalysisFiberRef.get
+      _                         <- projectTaskAfterCommand.fold(IO.unit)(_.cancel)
+      _                         <- projectTaskAfterShutdown.fold(IO.unit)(_.cancel)
+      _                         <- pendingAnalysisFiber.fold(IO.unit)(_.cancel)
     yield
-      cancelled shouldBe Some(())
-      pending shouldBe None
+      commandChildWasDestroyed shouldBe Some(())
+      projectTaskAfterCommand shouldBe None
+      shutdownChildWasDestroyed shouldBe Some(())
+      projectTaskAfterShutdown shouldBe None
+      analysisWasCancelled shouldBe Some(())
+      pendingAnalysisFiber shouldBe None
 
     program.unsafeRunSync()
   }
