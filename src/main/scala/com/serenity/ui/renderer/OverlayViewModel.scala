@@ -37,7 +37,8 @@ case class TextOverlayView(
 case class OverlayViews(
     aboveCursor: Option[TextOverlayView] = None,
     belowCursor: Option[TextOverlayView] = None,
-    belowCursorStack: List[TextOverlayView] = Nil
+    belowCursorStack: List[TextOverlayView] = Nil,
+    modal: List[TextOverlayView] = Nil
 )
 
 object OverlayViewModel:
@@ -69,11 +70,17 @@ object OverlayViewModel:
 
     val belowCursorStack = preferredBelowCursorSurfaces(state, layout, scene)
     val belowCursor      = belowCursorStack.headOption
+    val modal = scene.toList.flatMap(_.modal).flatMap {
+      case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) =>
+        state.surfaceById(surfaceId).flatMap(surface => buildView(surface, state, Some(node.frameRect), false, 0.0))
+      case _ => None
+    }
 
     OverlayViews(
       aboveCursor = aboveCursor,
       belowCursor = belowCursor,
-      belowCursorStack = belowCursorStack
+      belowCursorStack = belowCursorStack,
+      modal = modal
     )
 
   private def overlayRect(

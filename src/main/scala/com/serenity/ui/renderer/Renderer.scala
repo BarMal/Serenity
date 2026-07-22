@@ -289,6 +289,7 @@ object Renderer:
         renderPinnedPanels(state, context)
         renderEditorPanes(state, context, editorRenderPlan)
         renderFloatingPanels(state, context, scene)
+        renderModalLayer(state, context, scene)
         Some(editorRenderPlan)
 
     surface.applyPostProcessing(state.config.postProcessingEffect)
@@ -1568,6 +1569,29 @@ object Renderer:
           blurRadius
         )
       }
+    }
+
+  private def renderModalLayer(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
+    scene.modalBackdrop.foreach { backdrop =>
+      context.surface.setBackgroundColor(state.theme.margin)
+      context.surface.fillRect(
+        backdrop.frameRect.x,
+        backdrop.frameRect.y,
+        backdrop.frameRect.width,
+        backdrop.frameRect.height,
+        ' '
+      )
+    }
+    OverlayViewModel.fromState(state, scene).modal.foreach { overlay =>
+      TextOverlayRenderer.render(
+        context.surface,
+        overlay,
+        state.theme,
+        state.config,
+        context.cursorVisible,
+        context.uiFont,
+        context.cellMetrics
+      )
     }
 
   private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =

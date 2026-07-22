@@ -14,6 +14,7 @@ enum SceneNodeId:
   case EditorPane(paneId: PaneId)
   case EditorPaneHeader(paneId: PaneId)
   case Surface(surfaceId: SurfaceId)
+  case ModalBackdrop
 
 /** The interactive role of a rectangle owned by a scene node. */
 enum SceneHitKind:
@@ -96,14 +97,24 @@ object UiSceneSnapshot:
     }
     val workspaceSurfaces = workspaceSurfaceNodes(state, calculatedLayout, workspacePanes.size)
     val floating          = floatingSurfaceNodes(state, calculatedLayout, workspacePanes.size + workspaceSurfaces.size)
-    val modal             = List.empty[SceneNode]
-    val nodes             = workspacePanes ++ workspaceSurfaces ++ floating ++ modal
+    val modal = modalSurfaceNodes(state, calculatedLayout, workspacePanes.size + workspaceSurfaces.size + floating.size)
+    val modalBackdrop = Option.when(modal.nonEmpty)(
+      SceneNode(
+        id = SceneNodeId.ModalBackdrop,
+        layer = SceneLayer.ModalBackdrop,
+        frameRect = calculatedLayout.editorPanelRect,
+        contentRect = calculatedLayout.editorPanelRect,
+        hitRegions = List(SceneHitRegion(SceneHitKind.Frame, calculatedLayout.editorPanelRect)),
+        zIndex = workspacePanes.size + workspaceSurfaces.size + floating.size
+      )
+    )
+    val nodes = workspacePanes ++ workspaceSurfaces ++ floating ++ modal
     UiSceneSnapshot(
       calculatedLayout = calculatedLayout,
       paneLayouts = paneLayouts,
       workspace = workspacePanes ++ workspaceSurfaces,
       floating = floating,
-      modalBackdrop = None,
+      modalBackdrop = modalBackdrop,
       modal = modal,
       focusOrder = orderedForFocus(
         state.focus,
@@ -148,8 +159,23 @@ object UiSceneSnapshot:
         case ((surfaceId, frame), offset) =>
           state
             .surfaceById(surfaceId)
+            .filterNot(surface => state.blockingModalSurfaces.exists(_.id == surface.id))
             .map(_ => surfaceNode(surfaceId, SceneLayer.Floating, frame, initialZIndex + offset))
       }
+
+  private def modalSurfaceNodes(
+    state: AppState,
+    calculatedLayout: CalculatedLayout,
+    initialZIndex: Int
+  ): List[SceneNode] =
+    state.blockingModalSurfaces.zipWithIndex.map { (surface, offset) =>
+      surfaceNode(
+        surface.id,
+        SceneLayer.Modal,
+        LayoutEngine.calculateModalRect(surface, state, calculatedLayout),
+        initialZIndex + offset
+      )
+    }
 
   private def panelRect(surface: UiSurface, calculatedLayout: CalculatedLayout): Option[LayoutRect] =
     surface.presentation match

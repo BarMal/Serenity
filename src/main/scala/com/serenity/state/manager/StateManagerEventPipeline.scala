@@ -132,6 +132,8 @@ final private[manager] class StateManagerEventPipeline(
           applyReducerResult(ThemeEventReducer.reduce(themeEvent, prevState), prevState)
         case fileEvent: FileEvent =>
           applyReducerResult(FileEventReducer.reduce(fileEvent, prevState), prevState)
+        case (_: MouseClick | _: MousePress | _: MouseDrag | _: MouseMove) if prevState.hasBlockingModal =>
+          cats.effect.IO.unit
         case click: MouseClick =>
           handleMouseClick(click, prevState)
         case press: MousePress =>

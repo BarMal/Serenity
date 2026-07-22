@@ -150,6 +150,37 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     buffer.cursors shouldBe List(CursorPosition(0, 1))
   }
 
+  it should "consume workspace clicks, presses, and drags while a close confirmation is active" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("alpha\nbeta\ngamma").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+    val close = UiSurface(
+      SurfaceId("close-confirmation"),
+      SurfaceContent.ModalWorkflow(
+        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
+      ),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    sm.updateState(state => state.copy(uiSurfaces = state.uiSurfaces :+ close, focus = Focus.Surface(close.id)))
+      .unsafeRunSync()
+
+    val before = sm.getCurrentState.unsafeRunSync()
+    val paneRect = LayoutEngine
+      .calculatePaneLayouts(before, LayoutEngine.calculateLayout(before, ViewportSize(80, 24)))
+      .getOrElse(PaneId(0), fail("Expected editor pane"))
+
+    sm.applyEvent(MouseClick(paneRect.x + 4, paneRect.y + 2)).unsafeRunSync()
+    sm.applyEvent(MousePress(paneRect.x + 5, paneRect.y + 2)).unsafeRunSync()
+    sm.applyEvent(MouseDrag(paneRect.x + 8, paneRect.y + 3)).unsafeRunSync()
+
+    val after = sm.getCurrentState.unsafeRunSync()
+    after.buffers(bufferId).cursors shouldBe before.buffers(bufferId).cursors
+    after.buffers(bufferId).primarySelection shouldBe before.buffers(bufferId).primarySelection
+    after.focus shouldBe Focus.Surface(close.id)
+    after.topBlockingModalSurface.map(_.id) shouldBe Some(close.id)
+  }
+
   it should "open an editor context menu on secondary click without moving the cursor" in {
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
