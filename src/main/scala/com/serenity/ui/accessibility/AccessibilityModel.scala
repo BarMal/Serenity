@@ -218,11 +218,21 @@ object AccessibilitySnapshot:
     val items = ContextualToolbar.itemsFor(state)
     val normalized = toolbarState.normalized(items)
     val rows = ContextualToolbar.rowGroups(items, frame.contentRect.width.max(1), normalized.displayMode)
+    val rowSlots = frame
+      .contentRowSlots(
+        itemCount = rows.size,
+        hasHeader = false,
+        hasFooter = false,
+        itemGapRows = state.config.uiElementGap,
+        itemTargetRows = targetRows
+      )
+      .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) => index -> y }
+      .toMap
     rows.zipWithIndex.flatMap { case (row, rowIndex) =>
       val widths = ContextualToolbar.itemCellWidths(row, frame.contentRect.width.max(1), normalized.displayMode)
       val start = frame.contentRect.x + ContextualToolbar.rowLeadingPadding(row, frame.contentRect.width.max(1), normalized.displayMode)
       val positions = widths.scanLeft(start)(_ + _ + 1).dropRight(1)
-      row.zip(widths).zip(positions).zipWithIndex.map { case (((item, width), x), index) =>
+      rowSlots.get(rowIndex).toList.flatMap { y => row.zip(widths).zip(positions).zipWithIndex.map { case (((item, width), x), index) =>
         val absoluteIndex = rows.take(rowIndex).map(_.size).sum + index
         val (role, value) = item match
           case ContextualToolbarItem.Input(_, _, _, input) => AccessibilityRole.TextField -> Some(input.currentValue)
@@ -231,8 +241,8 @@ object AccessibilitySnapshot:
         AccessibleNode(s"surface:${surfaceId.value}/item:${item.id}", role, item.label, value,
           absoluteIndex == normalized.focusedIndex,
           state.focus == Focus.Surface(surfaceId) && absoluteIndex == normalized.focusedIndex,
-          LayoutRect(x, frame.contentRect.y + (rowIndex * targetRows), width, targetRows))
-      }
+          LayoutRect(x, y, width, targetRows))
+      }}
     }
 
   private def pinnedControls(surfaceId: SurfaceId, content: SurfaceContent, frameRect: LayoutRect, state: AppState): List[AccessibleNode] =

@@ -1,10 +1,10 @@
 package com.serenity
 
-import com.serenity.config.InterfaceDensity
+import com.serenity.config.{AppConfig, InterfaceDensity}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.accessibility.{AccessibilityRole, AccessibilitySnapshot}
-import com.serenity.ui.layout.{PanelPosition, ViewportSize}
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -117,4 +117,31 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
       "Replace Next" -> AccessibilityRole.Button,
       "Replace All" -> AccessibilityRole.Button
     )
+  }
+
+  it should "align wrapped toolbar accessibility bounds with rendered row slots" in {
+    val surfaceId = SurfaceId("toolbar")
+    val bufferId = BufferId(42)
+    val paneId = PaneId(0)
+    val buffer = Buffer.fromString(bufferId, "toolbar").copy(cursors = List(CursorPosition(0, 0)))
+    val toolbarState = ContextualToolbarState()
+    val state = AppState.initial.copy(
+      config = AppConfig.default.withUiElementGap(1),
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)), activeEditorPaneId = Some(paneId)),
+      uiSurfaces = List(UiSurface(surfaceId, SurfaceContent.ContextualToolbar(toolbarState), SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)))
+    )
+
+    val snapshot = AccessibilitySnapshot.from(state, ViewportSize(20, 28))
+    val frame = snapshot.nodes.find(_.id == s"surface:${surfaceId.value}").map(_.bounds).getOrElse(fail("Expected toolbar surface"))
+    val rows = ContextualToolbar.rowGroups(ContextualToolbar.itemsFor(state), frame.width - 2, toolbarState.displayMode)
+    val expectedRows = SurfaceFrameLayout
+      .forContent(frame, SurfaceContent.ContextualToolbar(toolbarState))
+      .contentRowSlots(rows.size, hasHeader = false, hasFooter = false, itemGapRows = 1, itemTargetRows = 2)
+      .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), y) => y }
+    val controls = snapshot.nodes.filter(_.id.startsWith(s"surface:${surfaceId.value}/item:"))
+
+    controls.map(_.bounds.y).distinct shouldBe expectedRows
+    controls.map(_.bounds.height).distinct shouldBe List(2)
   }
