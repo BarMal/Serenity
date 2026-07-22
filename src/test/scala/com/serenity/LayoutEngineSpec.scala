@@ -306,6 +306,79 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     paneLayouts(PaneId(1)) shouldBe LayoutRect(editorRect.x, editorRect.y + 15, editorRect.width, 14)
   }
 
+  it should "calculate contained non-overlapping rectangles for nested mixed-axis workspace trees" in {
+    val first  = PaneId(0)
+    val second = PaneId(1)
+    val third  = PaneId(2)
+    val tree = WorkspaceTree(
+      WorkspaceNode.Split(
+        WorkspaceNodeId("outer"),
+        SplitAxis.Horizontal,
+        0.4,
+        WorkspaceNode.Leaf(WorkspaceNodeId("first"), first),
+        WorkspaceNode.Split(
+          WorkspaceNodeId("inner"),
+          SplitAxis.Vertical,
+          0.5,
+          WorkspaceNode.Leaf(WorkspaceNodeId("second"), second),
+          WorkspaceNode.Leaf(WorkspaceNodeId("third"), third)
+        )
+      )
+    )
+    val state = AppState(
+      layout = Layout(
+        editorPanes = Map(
+          first  -> EditorPane.empty(first),
+          second -> EditorPane.empty(second),
+          third  -> EditorPane.empty(third)
+        ),
+        activeEditorPaneId = Some(first),
+        workspaceTree = Some(tree)
+      ),
+      buffers = Map.empty,
+      focus = Focus.EditorPane(first)
+    )
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val panes  = LayoutEngine.calculatePaneLayouts(state, layout)
+
+    panes(first) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y, 38, 29)
+    panes(second) shouldBe LayoutRect(layout.editorPanelRect.x + 38, layout.editorPanelRect.y, 59, 14)
+    panes(third) shouldBe LayoutRect(layout.editorPanelRect.x + 38, layout.editorPanelRect.y + 14, 59, 15)
+    panes.values.foreach(layout.editorPanelRect.containsRect(_) shouldBe true)
+    panes(first).right shouldBe panes(second).x
+    panes(second).bottom shouldBe panes(third).y
+  }
+
+  it should "clamp nested workspace splits in tiny viewports while retaining a usable leaf" in {
+    val first  = PaneId(0)
+    val second = PaneId(1)
+    val state = AppState(
+      layout = Layout(
+        editorPanes = Map(first -> EditorPane.empty(first), second -> EditorPane.empty(second)),
+        activeEditorPaneId = Some(first),
+        workspaceTree = Some(
+          WorkspaceTree(
+            WorkspaceNode.Split(
+              WorkspaceNodeId("root"),
+              SplitAxis.Horizontal,
+              1.5,
+              WorkspaceNode.Leaf(WorkspaceNodeId("first"), first),
+              WorkspaceNode.Leaf(WorkspaceNodeId("second"), second)
+            )
+          )
+        )
+      ),
+      buffers = Map.empty,
+      focus = Focus.EditorPane(first)
+    )
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(4, 2))
+    val panes  = LayoutEngine.calculatePaneLayouts(state, layout)
+
+    panes.values.foreach(layout.editorPanelRect.containsRect(_) shouldBe true)
+    panes.values.exists(rect => rect.width > 0 && rect.height > 0) shouldBe true
+    panes.values.map(_.width).sum shouldBe layout.editorPanelRect.width
+  }
+
   it should "handle three panes with equal width distribution" in {
     // Given: State with three panes
     val panes = Map(

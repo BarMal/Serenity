@@ -17,10 +17,21 @@ case class Layout(
     editorPanes: Map[PaneId, EditorPane],
     activeEditorPaneId: Option[PaneId],
     paneOrder: List[PaneId] = Nil,
-    splitDirection: PaneSplitDirection = PaneSplitDirection.Horizontal
+    splitDirection: PaneSplitDirection = PaneSplitDirection.Horizontal,
+    workspaceTree: Option[WorkspaceTree] = None
 ):
 
   def orderedPaneIds: List[PaneId] =
+    workspaceTree.map(_.paneIds).getOrElse {
+      if paneOrder.nonEmpty then paneOrder
+      else editorPanes.keys.toList.sortBy(_.value)
+    }
+
+  /** Uses the explicit workspace tree when present, otherwise adapts the legacy flat pane model in memory. */
+  def effectiveWorkspaceTree: Option[WorkspaceTree] =
+    workspaceTree.orElse(WorkspaceTree.fromLegacy(paneOrderOrSorted, splitDirection))
+
+  private def paneOrderOrSorted: List[PaneId] =
     if paneOrder.nonEmpty then paneOrder
     else editorPanes.keys.toList.sortBy(_.value)
 

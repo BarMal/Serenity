@@ -1090,21 +1090,69 @@ object LayoutEngine:
     calculatedLayout: CalculatedLayout,
     minWidth: Int
   ): Map[PaneId, LayoutRect] =
-    val editorRect = calculatedLayout.editorPanelRect
-    val paneIds    = state.layout.orderedPaneIds
-    val paneCount  = paneIds.size
+    state.layout.workspaceTree match
+      case Some(tree) =>
+        calculateWorkspaceTreePaneRects(tree, calculatedLayout.editorPanelRect, minWidth)
+          .filter { case (paneId, _) => state.layout.editorPanes.contains(paneId) }
+      case None =>
+        val editorRect = calculatedLayout.editorPanelRect
+        val paneIds    = state.layout.orderedPaneIds
+        val paneCount  = paneIds.size
 
-    if paneCount == 0 then Map.empty
-    else if paneCount == 1 then
-      // Single pane uses full editor area
-      val paneId = paneIds.head
-      Map(paneId -> editorRect)
-    else
-      state.layout.splitDirection match
-        case PaneSplitDirection.Horizontal =>
-          calculateHorizontalPaneLayouts(state, editorRect, paneIds, minWidth)
-        case PaneSplitDirection.Vertical =>
-          calculateVerticalPaneLayouts(state, editorRect, paneIds)
+        if paneCount == 0 then Map.empty
+        else if paneCount == 1 then
+          // Single pane uses full editor area
+          val paneId = paneIds.head
+          Map(paneId -> editorRect)
+        else
+          state.layout.splitDirection match
+            case PaneSplitDirection.Horizontal =>
+              calculateHorizontalPaneLayouts(state, editorRect, paneIds, minWidth)
+            case PaneSplitDirection.Vertical =>
+              calculateVerticalPaneLayouts(state, editorRect, paneIds)
+
+  private def calculateWorkspaceTreePaneRects(
+    tree: WorkspaceTree,
+    editorRect: LayoutRect,
+    minWidth: Int
+  ): Map[PaneId, LayoutRect] =
+    def minimumWidth(node: WorkspaceNode): Int =
+      node match
+        case WorkspaceNode.Leaf(_, _) => minWidth.max(1)
+        case WorkspaceNode.Split(_, SplitAxis.Horizontal, _, first, second) =>
+          minimumWidth(first) + minimumWidth(second)
+        case WorkspaceNode.Split(_, SplitAxis.Vertical, _, first, second) =>
+          minimumWidth(first).max(minimumWidth(second))
+
+    def minimumHeight(node: WorkspaceNode): Int =
+      node match
+        case WorkspaceNode.Leaf(_, _) => MinimumVerticalPaneHeight
+        case WorkspaceNode.Split(_, SplitAxis.Horizontal, _, first, second) =>
+          minimumHeight(first).max(minimumHeight(second))
+        case WorkspaceNode.Split(_, SplitAxis.Vertical, _, first, second) =>
+          minimumHeight(first) + minimumHeight(second)
+
+    def splitExtent(total: Int, ratio: Double, minimumFirst: Int, minimumSecond: Int): Int =
+      if total <= 1 then total
+      else
+        val canRespectMinimums = minimumFirst + minimumSecond <= total
+        val lower              = if canRespectMinimums then minimumFirst else 1
+        val upper              = if canRespectMinimums then total - minimumSecond else total - 1
+        math.max(lower, math.min(upper, (total * ratio.max(0.0).min(1.0)).toInt))
+
+    def recurse(node: WorkspaceNode, rect: LayoutRect): Map[PaneId, LayoutRect] =
+      node match
+        case WorkspaceNode.Leaf(_, paneId) => Map(paneId -> rect)
+        case WorkspaceNode.Split(_, SplitAxis.Horizontal, ratio, first, second) =>
+          val firstWidth = splitExtent(rect.width, ratio, minimumWidth(first), minimumWidth(second))
+          recurse(first, rect.copy(width = firstWidth)) ++
+            recurse(second, LayoutRect(rect.x + firstWidth, rect.y, rect.width - firstWidth, rect.height))
+        case WorkspaceNode.Split(_, SplitAxis.Vertical, ratio, first, second) =>
+          val firstHeight = splitExtent(rect.height, ratio, minimumHeight(first), minimumHeight(second))
+          recurse(first, rect.copy(height = firstHeight)) ++
+            recurse(second, LayoutRect(rect.x, rect.y + firstHeight, rect.width, rect.height - firstHeight))
+
+    recurse(tree.root, editorRect)
 
   private def editorPaneLayoutFor(
     paneId: PaneId,
