@@ -1490,7 +1490,9 @@ final private[manager] class StateManagerEffectHandlers(
                 startTask <- Deferred[IO, Unit]
                 renderer <- Stream
                   .awakeEvery[IO](100.millis)
-                  .evalMap(_ => outputRef.get.flatMap(output => pinProjectTerminal(ProjectTaskTerminal.running(command, output))))
+                  .evalMap(_ =>
+                    outputRef.get.flatMap(output => pinProjectTerminal(ProjectTaskTerminal.running(command, output)))
+                  )
                   .interruptWhen(Stream.eval(finished.get).as(true))
                   .compile
                   .drain
@@ -1504,7 +1506,9 @@ final private[manager] class StateManagerEffectHandlers(
                     case Right(result) => pinProjectTerminal(ProjectTaskTerminal.completed(result))
                     case Left(error)   => pinProjectTerminal(ProjectTaskTerminal.failedToStart(command, error))
                   }
-                  .guarantee(finished.complete(()).attempt.void >> renderer.joinWithNever >> projectTaskFiberRef.set(None))
+                  .guarantee(
+                    finished.complete(()).attempt.void >> renderer.joinWithNever >> projectTaskFiberRef.set(None)
+                  )
                 fiber <- (pinProjectTerminal(ProjectTaskTerminal.started(command)) >> task).start
                 _     <- projectTaskFiberRef.set(Some(fiber))
                 _     <- startTask.complete(())

@@ -4,7 +4,6 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 
 import cats.effect.{IO, Ref, Resource}
-import cats.syntax.all.*
 import fs2.{Stream, text}
 import fs2.io.readInputStream
 

@@ -13,6 +13,7 @@ final private case class FakeProcessHandle(
     outputRelease: Deferred[IO, Unit],
     destroyed: Ref[IO, Boolean]
 ) extends ProjectTaskRunner.ProcessHandle:
+
   override def output: Stream[IO, String] =
     Stream.eval(outputStarted.complete(())).drain ++
       Stream.emit("live\n") ++
@@ -53,6 +54,7 @@ class ProjectTaskRunnerSpec extends AnyFlatSpec with Matchers:
       yield wasDestroyed).unsafeRunSync()
 
     result shouldBe true
+  }
 
   it should "stream output before completion and retain only a bounded tail" in {
     val result =
