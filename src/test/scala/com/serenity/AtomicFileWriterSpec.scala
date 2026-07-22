@@ -1,8 +1,11 @@
 package com.serenity
 
 import java.io.IOException
+import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.{AtomicMoveNotSupportedException, Files, Path, StandardCopyOption}
 import java.util.concurrent.atomic.AtomicBoolean
+
+import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.io.{AtomicFileSystem, AtomicFileWriteException, AtomicFileWriter}
@@ -23,6 +26,11 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
 
     override def createTempFile(directory: Path, prefix: String, suffix: String): Path =
       Files.createTempFile(directory, prefix, suffix)
+
+    override def exists(path: Path): Boolean = Files.exists(path)
+
+    override def copyAttributes(source: Path, target: Path): Path =
+      Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
 
     override def write(path: Path, bytes: Array[Byte]): Path =
       if failWrite then throw IOException("disk full")
@@ -61,6 +69,27 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
 
       fileSystem.usedReplacementMove shouldBe true
       Files.readString(target) shouldBe "after"
+    finally Files.walk(directory).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists)
+  }
+
+  it should "preserve existing POSIX permissions when replacing a target" in {
+    val directory = Files.createTempDirectory("serenity-atomic-permissions")
+    val target    = directory.resolve("executable.sh")
+    val permissions = Set(
+      PosixFilePermission.OWNER_READ,
+      PosixFilePermission.OWNER_WRITE,
+      PosixFilePermission.OWNER_EXECUTE,
+      PosixFilePermission.GROUP_READ,
+      PosixFilePermission.GROUP_EXECUTE
+    )
+    Files.writeString(target, "before")
+    Files.setPosixFilePermissions(target, permissions.asJava)
+
+    try
+      AtomicFileWriter.writeString(target, "after").unsafeRunSync()
+
+      Files.readString(target) shouldBe "after"
+      Files.getPosixFilePermissions(target).asScala.toSet shouldBe permissions
     finally Files.walk(directory).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists)
   }
 

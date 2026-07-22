@@ -15,6 +15,8 @@ final class AtomicFileWriteException(val path: Path, cause: Throwable)
 private[serenity] trait AtomicFileSystem:
   def createDirectories(path: Path): Path
   def createTempFile(directory: Path, prefix: String, suffix: String): Path
+  def exists(path: Path): Boolean
+  def copyAttributes(source: Path, target: Path): Path
   def write(path: Path, bytes: Array[Byte]): Path
   def moveAtomically(source: Path, target: Path): Path
   def moveReplacing(source: Path, target: Path): Path
@@ -28,6 +30,11 @@ object AtomicFileWriter:
 
     def createTempFile(directory: Path, prefix: String, suffix: String): Path =
       Files.createTempFile(directory, prefix, suffix)
+
+    def exists(path: Path): Boolean = Files.exists(path)
+
+    def copyAttributes(source: Path, target: Path): Path =
+      Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
 
     def write(path: Path, bytes: Array[Byte]): Path = Files.write(path, bytes)
 
@@ -66,6 +73,8 @@ object AtomicFileWriter:
       val prefix    = s".${target.getFileName.toString}."
       val temporary = fileSystem.createTempFile(directory, prefix, ".tmp")
       try
+        if fileSystem.exists(target) then
+          val _ = fileSystem.copyAttributes(target, temporary)
         val _ = fileSystem.write(temporary, bytes)
         try
           val _ = fileSystem.moveAtomically(temporary, target)
