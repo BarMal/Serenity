@@ -343,10 +343,30 @@ case class AppState(
     }
 
   def modalSurface: Option[UiSurface] =
-    findSurface {
-      case SurfaceContent.ModalWorkflow(_) => true
-      case _                               => false
+    uiSurfaces.reverse.find { surface =>
+      surface.content match
+        case SurfaceContent.ModalWorkflow(_) => true
+        case _                               => false
     }
+
+  /** Blocking confirmations ordered from their parent to the topmost child. */
+  def blockingModalSurfaces: List[UiSurface] =
+    uiSurfaces.collect {
+      case surface @ UiSurface(_, SurfaceContent.ModalWorkflow(_: Modal.CloseWorkflow), _, _) => surface
+    }
+
+  /** The only modal workflow permitted to receive input while a confirmation is open. */
+  def topBlockingModalSurface: Option[UiSurface] =
+    blockingModalSurfaces.lastOption
+
+  def hasBlockingModal: Boolean =
+    topBlockingModalSurface.nonEmpty
+
+  /** Remove the topmost modal workflow and restore the focus that opened it. */
+  def dismissTopModal: AppState =
+    modalSurface match
+      case Some(surface) => copy(uiSurfaces = uiSurfaces.filterNot(_.id == surface.id)).popFocus
+      case None          => this
 
   def peekSurface: Option[UiSurface] =
     uiSurfaces.find {

@@ -37,4 +37,5 @@ object FocusedInputTranslator:
           case None =>
             editorTranslator
 
-    CompositeTranslator(new GlobalHotkeyTranslator(state.config), localTranslator)
+    if state.hasBlockingModal then formTranslator
+    else CompositeTranslator(new GlobalHotkeyTranslator(state.config), localTranslator)

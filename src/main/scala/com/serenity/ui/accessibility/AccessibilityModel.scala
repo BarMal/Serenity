@@ -71,6 +71,7 @@ object AccessibilitySnapshot:
           )
         )
       case SceneNodeId.EditorPaneHeader(_) => None
+      case SceneNodeId.ModalBackdrop       => None
       case SceneNodeId.Surface(surfaceId) =>
         state.surfaceById(surfaceId).map { surface =>
           AccessibleNode(

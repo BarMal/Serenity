@@ -157,6 +157,27 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     translator.translate(KeyStrokeInfo(InputKey.Delete, None, Set(Modifier.Ctrl))) shouldBe ModalDeleteWordForward
   }
 
+  it should "prevent global commands from reaching the editor through a blocking close confirmation" in {
+    val closeState = editorState.copy(
+      focus = Focus.Surface(SurfaceId("close-confirmation")),
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("close-confirmation"),
+          SurfaceContent.ModalWorkflow(
+            Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
+          ),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
+    )
+
+    val event = FocusedInputTranslator
+      .forState(closeState)
+      .translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl)))
+
+    event should not be ToggleCommandRunner
+  }
+
   it should "treat focused contextual toolbar input as modal-style submit, dismiss, and directional navigation" in {
     val toolbarState = editorState.copy(
       focus = Focus.Surface(SurfaceId("contextual-toolbar")),

@@ -237,6 +237,18 @@ object LayoutEngine:
       floatingOverlayOffsetRows = floatingOffsets
     )
 
+  /** Center a blocking dialog in the editor workspace without changing workspace allocation. */
+  def calculateModalRect(surface: UiSurface, state: AppState, layout: CalculatedLayout): LayoutRect =
+    val bounds = layout.editorPanelRect
+    val width  = math.max(3, math.min(72, bounds.width))
+    val height = calculateFloatingSurfaceHeight(surface.content, width, bounds.height, state)
+    LayoutRect(
+      x = bounds.x + math.max(0, (bounds.width - width) / 2),
+      y = bounds.y + math.max(0, (bounds.height - height) / 2),
+      width = width,
+      height = height
+    )
+
   private def usesBottomGutter(state: AppState): Boolean =
     state.config.showGutter ||
       (state.config.cursorInfoBarMode != com.serenity.config.CursorInfoBarMode.Off &&

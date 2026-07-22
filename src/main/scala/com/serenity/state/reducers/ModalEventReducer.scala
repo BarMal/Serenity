@@ -499,15 +499,7 @@ object ModalEventReducer:
     content.lineColumnToOffset(cursor.line, cursor.column)
 
   private def dismissToPane(state: AppState): AppState =
-    state.layout.activeEditorPaneId match
-      case Some(paneId) =>
-        state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface), focus = Focus.EditorPane(paneId))
-      case None =>
-        state.startPageSurface match
-          case Some(startPage) =>
-            state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface), focus = Focus.Surface(startPage.id))
-          case None =>
-            state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface))
+    state.dismissTopModal
 
   private def cancelCloseWorkflow(state: AppState): AppState =
     dismissToPane(
@@ -527,17 +519,13 @@ object ModalEventReducer:
                   cursors = List(CursorPosition(targetLine, 0)),
                   viewport = buffer.viewport.copy(topLine = newTopLine)
                 )
-                state.copy(
-                  uiSurfaces = state.uiSurfaces.filterNot(isModalSurface),
-                  focus = Focus.EditorPane(paneId),
-                  buffers = state.buffers + (buffer.id -> updatedBuffer)
-                )
+                state.dismissTopModal.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
               case None =>
-                state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface), focus = Focus.EditorPane(paneId))
+                state.dismissTopModal
           case None =>
-            state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface), focus = Focus.EditorPane(PaneId(0)))
+            state.dismissTopModal
       case None =>
-        state.copy(uiSurfaces = state.uiSurfaces.filterNot(isModalSurface), focus = Focus.EditorPane(PaneId(0)))
+        state.dismissTopModal
 
   private def currentModal(state: AppState): Option[(UiSurface, Modal)] =
     state.modalSurface.flatMap { surface =>
@@ -549,8 +537,3 @@ object ModalEventReducer:
   private def updateModal(state: AppState, surface: UiSurface, modal: Modal): AppState =
     val updatedSurface = surface.copy(content = SurfaceContent.ModalWorkflow(modal))
     state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
-
-  private def isModalSurface(surface: UiSurface): Boolean =
-    surface.content match
-      case SurfaceContent.ModalWorkflow(_) => true
-      case _                               => false
