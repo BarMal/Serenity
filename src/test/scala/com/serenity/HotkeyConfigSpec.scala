@@ -2,7 +2,7 @@ package com.serenity
 
 import java.nio.file.Files
 
-import com.serenity.config.{AppConfig, ConfigManager, HotkeyAction, HotkeyConfig}
+import com.serenity.config.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
