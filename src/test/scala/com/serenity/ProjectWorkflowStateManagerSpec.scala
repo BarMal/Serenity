@@ -32,7 +32,8 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       "project-test",
       "project-run",
       "project-debug",
-      "project-dependencies"
+      "project-dependencies",
+      "project-cancel"
     )
   }
 

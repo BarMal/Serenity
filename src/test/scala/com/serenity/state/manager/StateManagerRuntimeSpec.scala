@@ -33,6 +33,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
       quitSignal               <- Deferred[IO, Unit]
       lspQueue                 <- LspEffectQueue.create
+      projectTaskFiberRef      <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
@@ -47,6 +48,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         sessionRootOverride = Some(sessionRoot),
         themeManager = AppThemeManager.create,
         lspQueue = lspQueue,
+        projectTaskFiberRef = projectTaskFiberRef,
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
@@ -63,6 +65,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.themeNamesRef shouldBe themeNamesRef
       runtime.quitSignal shouldBe quitSignal
       runtime.lspQueue shouldBe lspQueue
+      runtime.projectTaskFiberRef shouldBe projectTaskFiberRef
       runtime.mouseTargetCacheRef shouldBe mouseTargetCacheRef
       runtime.documentAnalysisFiberRef shouldBe documentAnalysisFiberRef
       runtime.sessionManager.sessionExists.unsafeRunSync() shouldBe false
@@ -80,6 +83,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
       quitSignal               <- Deferred[IO, Unit]
       lspQueue                 <- LspEffectQueue.create
+      projectTaskFiberRef      <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       analysisCancelled        <- Deferred[IO, Unit]
@@ -100,6 +104,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         sessionRootOverride = Some(sessionRoot),
         themeManager = AppThemeManager.create,
         lspQueue = lspQueue,
+        projectTaskFiberRef = projectTaskFiberRef,
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
@@ -124,6 +129,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         runtime.policy,
         runtime.themeManager,
         runtime.lspQueue,
+        runtime.projectTaskFiberRef,
         runtime.mouseTargetCacheRef,
         runtime.documentAnalysisFiberRef,
         runtime.onFontConfigChanged,

@@ -192,6 +192,7 @@ object StateManager:
         .flatMap(Ref.of[IO, List[String]])
       quitSignal <- Deferred[IO, Unit]
       lspQueue   <- LspEffectQueue.create
+      projectTaskFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       runtime = StateManagerRuntime.create(
         stateRef = stateRef,
         undoRef = undoRef,
@@ -202,6 +203,7 @@ object StateManager:
         sessionRootOverride = resolvedSessionRootOverride,
         themeManager = themeManager,
         lspQueue = lspQueue,
+        projectTaskFiberRef = projectTaskFiberRef,
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = onFontConfigChanged,
@@ -249,6 +251,7 @@ object StateManager:
       runtime.policy,
       runtime.themeManager,
       runtime.lspQueue,
+      runtime.projectTaskFiberRef,
       runtime.mouseTargetCacheRef,
       runtime.documentAnalysisFiberRef,
       runtime.onFontConfigChanged,

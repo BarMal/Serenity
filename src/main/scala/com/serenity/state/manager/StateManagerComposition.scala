@@ -45,6 +45,7 @@ private[manager] trait EffectRuntimePort:
   def logger: Logger[IO]
   def themeManager: AppThemeManager
   def lspQueue: LspEffectQueue
+  def projectTaskFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]]
   def onFontConfigChanged: FontConfig => IO[Unit]
   def deviceTextScaleProvider: IO[Double]
   def configPersistencePath: Option[Path]
@@ -369,6 +370,7 @@ private[manager] class StateManagerComposition(
     val policy: SessionManager.SessionPolicy,
     val themeManager: AppThemeManager,
     val lspQueue: LspEffectQueue,
+    val projectTaskFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     val mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     val documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     val onFontConfigChanged: FontConfig => IO[Unit],
@@ -390,6 +392,7 @@ private[manager] class StateManagerComposition(
   private val runtimeLogger                   = logger
   private val runtimeThemeManager             = themeManager
   private val runtimeLspQueue                 = lspQueue
+  private val runtimeProjectTaskFiberRef      = projectTaskFiberRef
   private val runtimeMouseTargetCacheRef      = mouseTargetCacheRef
   private val runtimeDocumentAnalysisFiberRef = documentAnalysisFiberRef
   private val runtimeOnFontConfigChanged      = onFontConfigChanged
@@ -417,6 +420,7 @@ private[manager] class StateManagerComposition(
     val logger                  = runtimeLogger
     val themeManager            = runtimeThemeManager
     val lspQueue                = runtimeLspQueue
+    val projectTaskFiberRef     = runtimeProjectTaskFiberRef
     val onFontConfigChanged     = runtimeOnFontConfigChanged
     val deviceTextScaleProvider = runtimeDeviceTextScaleProvider
     val configPersistencePath   = runtimeConfigPersistencePath
@@ -689,12 +693,15 @@ private[manager] class StateManagerComposition(
   def awaitQuit: IO[Unit] = quitSignal.get
 
   def forceQuit(): IO[Unit] =
-    operations.cancelDocumentAnalysis() >> stateRef.get.flatMap { state =>
+    cancelProjectTask() >> operations.cancelDocumentAnalysis() >> stateRef.get.flatMap { state =>
       sessionPersistence
         .onAppClose(clearCloseActions(state))
         .handleErrorWith(error => logger.error(error)("[SESSION] Failed to save session during forced quit")) >>
         quitSignal.complete(()).attempt.void
     }
+
+  private def cancelProjectTask(): IO[Unit] =
+    projectTaskFiberRef.getAndSet(None).flatMap(_.traverse_(_.cancel))
 
   def intervalSaveStream: Stream[IO, Unit] =
     policy.saveInterval match
