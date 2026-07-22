@@ -1480,39 +1480,44 @@ final private[manager] class StateManagerEffectHandlers(
         case None =>
           pinProjectTerminal(ProjectTaskTerminal.noTask(kind, start))
         case Some(command) =>
-          projectTaskFiberRef.get.flatMap {
-            case Some(_) =>
-              pinProjectTerminal("A project task is already running. Use Cancel Project Task before starting another.")
-            case None =>
-              for
-                outputRef <- Ref.of[IO, String]("")
-                finished  <- Deferred[IO, Unit]
-                startTask <- Deferred[IO, Unit]
-                renderer <- Stream
-                  .awakeEvery[IO](100.millis)
-                  .evalMap(_ =>
-                    outputRef.get.flatMap(output => pinProjectTerminal(ProjectTaskTerminal.running(command, output)))
-                  )
-                  .interruptWhen(Stream.eval(finished.get).as(true))
-                  .compile
-                  .drain
-                  .start
-                task = startTask.get >> ProjectTaskRunner
-                  .runStreaming(command)(chunk =>
-                    outputRef.update(output => ProjectTaskRunner.appendOutputTail(output, chunk))
-                  )
-                  .attempt
-                  .flatMap {
-                    case Right(result) => pinProjectTerminal(ProjectTaskTerminal.completed(result))
-                    case Left(error)   => pinProjectTerminal(ProjectTaskTerminal.failedToStart(command, error))
-                  }
-                  .guarantee(
-                    finished.complete(()).attempt.void >> renderer.joinWithNever >> projectTaskFiberRef.set(None)
-                  )
-                fiber <- (pinProjectTerminal(ProjectTaskTerminal.started(command)) >> task).start
-                _     <- projectTaskFiberRef.set(Some(fiber))
-                _     <- startTask.complete(())
-              yield ()
+          projectTaskSemaphore.permit.use {
+            projectTaskFiberRef.get.flatMap {
+              case Some(_) =>
+                pinProjectTerminal(
+                  "A project task is already running. Use Cancel Project Task before starting another."
+                )
+              case None =>
+                for
+                  outputRef <- Ref.of[IO, String]("")
+                  finished  <- Deferred[IO, Unit]
+                  startTask <- Deferred[IO, Unit]
+                  renderer <- Stream
+                    .awakeEvery[IO](100.millis)
+                    .evalMap(_ =>
+                      outputRef.get.flatMap(output => pinProjectTerminal(ProjectTaskTerminal.running(command, output)))
+                    )
+                    .interruptWhen(Stream.eval(finished.get).as(true))
+                    .compile
+                    .drain
+                    .start
+                  task = startTask.get >> ProjectTaskRunner
+                    .runStreaming(command)(chunk =>
+                      outputRef.update(output => ProjectTaskRunner.appendOutputTail(output, chunk))
+                    )
+                    .attempt
+                    .flatMap {
+                      case Right(result) => pinProjectTerminal(ProjectTaskTerminal.completed(result))
+                      case Left(error)   => pinProjectTerminal(ProjectTaskTerminal.failedToStart(command, error))
+                    }
+                    .guarantee(
+                      finished.complete(()).attempt.void >> renderer.joinWithNever >> ProjectTaskOwnership
+                        .clear(projectTaskFiberRef, finished)
+                    )
+                  fiber <- (pinProjectTerminal(ProjectTaskTerminal.started(command)) >> task).start
+                  _     <- projectTaskFiberRef.set(Some(ManagedProjectTask(finished, fiber)))
+                  _     <- startTask.complete(())
+                yield ()
+            }
           }
     }
 
@@ -1526,9 +1531,9 @@ final private[manager] class StateManagerEffectHandlers(
     pinPanel(PanelContent.Terminal(text, text.length), PanelPosition.Bottom, 14)
 
   private def cancelProjectTask: IO[Unit] =
-    projectTaskFiberRef.getAndSet(None).flatMap {
-      case Some(fiber) => fiber.cancel >> pinProjectTerminal("Project task cancelled.")
-      case None        => pinProjectTerminal("No project task is running.")
+    ProjectTaskOwnership.cancel(projectTaskFiberRef, projectTaskSemaphore).flatMap {
+      case true  => pinProjectTerminal("Project task cancelled.")
+      case false => pinProjectTerminal("No project task is running.")
     }
 
   private def requestLspHover(state: AppState): IO[Unit] =
