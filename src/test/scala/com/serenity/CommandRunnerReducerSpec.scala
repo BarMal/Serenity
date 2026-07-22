@@ -955,7 +955,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     runner.activeSubmenu.flatMap(_.editingItemId) shouldBe None
     runner.activeSubmenu.map(_.editingText) shouldBe Some("")
-    restoredValue shouldBe Some("12")
+    restoredValue shouldBe Some("0")
   }
 
   it should "edit keymap binding text and emit a focused keymap update intent" in {

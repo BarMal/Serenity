@@ -3,7 +3,10 @@ package com.serenity
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.app.AppStartup
+import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.{MarkdownViewMode, MotionPreset}
+import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -51,4 +54,35 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     config.motionPreset shouldBe MotionPreset.Reduced
     config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
     config.commandRunnerItemGapRows shouldBe 0
+  }
+
+  it should "capture startup, command runner, and settings references in both bundled themes" in {
+    val artifacts = Files.createTempDirectory("semantic-ui-references")
+
+    List("dark", "light").foreach { themeName =>
+      val environment = UiScenarioEnvironment(themeName = themeName)
+      val driver      = UiScenarioDriver.create(s"semantic-$themeName", environment, Some(artifacts)).unsafeRunSync()
+      val theme       = if themeName == "light" then Theme.light else Theme.dark
+
+      AppStartup.initializeState(driver.stateManager, theme, environment.viewport).unsafeRunSync()
+      val startup = driver.renderFrame(s"$themeName-startup").unsafeRunSync()
+      startup.evidence.drawnText.map(_.text).mkString(" ") should include("Welcome to Serenity")
+
+      val runnerDriver = UiScenarioDriver.create(s"semantic-$themeName-runner", environment, Some(artifacts)).unsafeRunSync()
+      runnerDriver.dispatch(ToggleCommandRunner).unsafeRunSync()
+      val runner = runnerDriver.renderFrame(s"$themeName-command-runner").unsafeRunSync()
+      runner.evidence.surfaceRects should not be empty
+
+      val settingsDriver = UiScenarioDriver.create(s"semantic-$themeName-settings", environment, Some(artifacts)).unsafeRunSync()
+      settingsDriver.stateManager
+        .executeCommand(Command.typed("scenario-settings", "Scenario settings", CommandIntent.OpenSettings, CommandCategory.Settings))
+        .unsafeRunSync()
+      val settings = settingsDriver.renderFrame(s"$themeName-settings").unsafeRunSync()
+      settings.evidence.surfaceRects should not be empty
+      settings.evidence.drawnText.map(_.text).mkString(" ") should include("Settings")
+
+      Files.exists(artifacts.resolve(s"$themeName-startup.png")) shouldBe true
+      Files.exists(artifacts.resolve(s"$themeName-command-runner.png")) shouldBe true
+      Files.exists(artifacts.resolve(s"$themeName-settings.png")) shouldBe true
+    }
   }

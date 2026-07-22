@@ -1275,7 +1275,7 @@ object Renderer:
     val startYPx     = centeredBlockTopPx(rect, context.cellMetrics, lines.length, lineHeightPx)
 
     context.surface.setFont(context.textFont)
-    context.surface.setForegroundColor(theme.placeholder)
+    context.surface.setForegroundColor(theme.muted)
     context.surface.setBackgroundColor(theme.background)
 
     lines.zipWithIndex.foreach {

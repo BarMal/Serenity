@@ -888,7 +888,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     config.materialPreset shouldBe MaterialPreset.Crystal
     config.backgroundStyle shouldBe BackgroundStyle.GlassLike
-    config.blurRadius shouldBe 0.65f
+    config.blurRadius shouldBe 0.42f
     config.motionPreset shouldBe MotionPreset.Reduced
     config.elementTransitionSpeedScale shouldBe 1.75
     config.editorTextTransitionSpeedScale shouldBe Some(0.5)

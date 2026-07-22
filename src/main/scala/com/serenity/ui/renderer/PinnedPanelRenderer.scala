@@ -138,7 +138,7 @@ object PinnedPanelRenderer:
     SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
       val contentRect = panel.resolvedContentRect
       val sheenWidth  = contentRect.width
-      val sheenHeight = math.min(2, contentRect.height)
+      val sheenHeight = math.min(1, contentRect.height)
       if sheenWidth > 0 && sheenHeight > 0 then
         surface.setBackgroundColor(sheenColor)
         (0 until sheenHeight).foreach { rowOffset =>

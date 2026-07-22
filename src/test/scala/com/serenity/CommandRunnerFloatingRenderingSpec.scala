@@ -718,7 +718,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     surface.blurRegionCalls should contain(
-      surface.BlurRegionCall(overlay.x, overlay.y, overlay.width, overlay.height, 0.6f)
+      surface.BlurRegionCall(overlay.x, overlay.y, overlay.width, overlay.height, 0.42f)
     )
   }
 

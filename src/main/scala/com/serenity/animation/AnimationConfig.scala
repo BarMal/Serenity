@@ -34,27 +34,27 @@ object AnimationConfig:
   /** No animation - characters appear immediately with final color */
   val none: Option[AnimationConfig] = None
 
-  /** Quick fade-in with very visible duration for debugging */
+  /** Expressive surface transition on Serenity's shared 80/160/240 ms timing scale. */
   val quick: Option[AnimationConfig] = Some(
     AnimationConfig(
-      steps = 20,
-      totalDuration = scala.concurrent.duration.Duration.fromNanos(1_000_000_000) // 1000ms → 50ms per step
+      steps = 15,
+      totalDuration = scala.concurrent.duration.Duration.fromNanos(240_000_000)
     )
   )
 
-  /** Smooth fade-in with 12 steps over 200ms (for slower, more visible transitions) */
+  /** Smooth surface transition. */
   val smooth: Option[AnimationConfig] = Some(
     AnimationConfig(
       steps = 12,
-      totalDuration = scala.concurrent.duration.Duration.fromNanos(200_000_000) // 200ms → ~16ms per step
+      totalDuration = scala.concurrent.duration.Duration.fromNanos(160_000_000)
     )
   )
 
-  /** Subtle fade-in with 3 steps over 50ms (minimal animation) */
+  /** Subtle transition for low-distraction surface changes. */
   val subtle: Option[AnimationConfig] = Some(
     AnimationConfig(
-      steps = 3,
-      totalDuration = scala.concurrent.duration.Duration.fromNanos(50_000_000) // 50ms → ~16ms per step
+      steps = 5,
+      totalDuration = scala.concurrent.duration.Duration.fromNanos(80_000_000)
     )
   )
 
