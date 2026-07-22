@@ -1,7 +1,7 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.CommandRunner
+import com.serenity.command.{CommandCategory, CommandRunner}
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
@@ -115,6 +115,25 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     after.commandRunnerSurface shouldBe None
   }
 
+  it should "switch categories when a category tab is clicked without submitting a command" in {
+    val stateManager = createStateManager("CommandRunnerMouseSpec")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+
+    val before = stateManager.getCurrentState.unsafeRunSync()
+    val point  = commandRunnerCategoryPoint(before, categoryIndex = 1)
+
+    stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
+    runnerFrom(stateManager.getCurrentState.unsafeRunSync()).activeCategory shouldBe CommandCategory.File
+
+    stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.commandRunnerSurface shouldBe defined
+    runnerFrom(after).activeCategory shouldBe CommandCategory.File
+  }
+
   it should "highlight the focused submenu row under the pointer" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 
@@ -225,6 +244,19 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
   private def commandRunnerSubmenuItemPoint(state: AppState, displayedItemRow: Int): Point =
     val surface = state.commandRunnerSubmenuSurface.getOrElse(fail("Expected command runner submenu surface"))
     overlayItemPoint(state, surface.id, displayedItemRow)
+
+  private def commandRunnerCategoryPoint(state: AppState, categoryIndex: Int): Point =
+    val surface  = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
+    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val contract = EditorLayoutContract.from(state, viewport, layout)
+    val contentRect = contract
+      .overlayContentRect(surface.id)
+      .getOrElse(fail("Expected command runner content rect"))
+    val header = contract
+      .overlayHeaderRect(surface.id)
+      .getOrElse(fail("Expected command runner header rect"))
+    Point(contentRect.x + (contentRect.width * categoryIndex) / CommandCategory.values.length + 1, header.y)
 
   private def overlayItemPoint(state: AppState, surfaceId: SurfaceId, displayedItemRow: Int): Point =
     val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))

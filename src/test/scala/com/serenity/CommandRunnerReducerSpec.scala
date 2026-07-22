@@ -96,6 +96,19 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     closed.state.focus shouldBe Focus.EditorPane(PaneId(2))
   }
 
+  it should "select a category directly from palette interaction" in {
+    val registry = CommandRegistry.default
+    val state    = activeState(registry)
+
+    val selected = CommandRunnerReducer.reduce(RunnerSelectCategory(CommandCategory.File), state, registry)
+    val runner = selected.state.commandRunnerSurface
+      .collect { case UiSurface(_, SurfaceContent.CommandPalette(value), _, _) => value }
+      .getOrElse(fail("missing command runner"))
+
+    runner.activeCategory shouldBe CommandCategory.File
+    runner.filteredCommands.map(_.category).distinct shouldBe List(CommandCategory.File)
+  }
+
   it should "delete the previous word from the search term" in {
     val registry = CommandRegistry.default
     val state    = activeState(registry)

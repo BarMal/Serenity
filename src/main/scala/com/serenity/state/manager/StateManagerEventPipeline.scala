@@ -4,7 +4,7 @@ import java.awt.Color
 
 import cats.syntax.foldable.*
 import com.serenity.animation.*
-import com.serenity.command.{CommandRegistry, CommandRunner, CommandSurfaceItem}
+import com.serenity.command.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.*
 import com.serenity.state.models.*
@@ -1560,12 +1560,14 @@ final private[manager] class StateManagerEventPipeline(
         val registry = CommandRegistry.withToggleUI
         val selected = CommandRunnerReducer.reduce(selectEvent, state, registry)
         applyReducerResult(selected, state) >>
-          stateRef.get
-            .flatMap { selectedState =>
-              val submitted = CommandRunnerReducer.reduce(RunnerSubmit, selectedState, registry)
-              applyReducerResult(submitted, selectedState)
-            }
-            .map(_ => true)
+          (selectEvent match
+            case _: RunnerSelectCategory => cats.effect.IO.unit
+            case _ =>
+              stateRef.get.flatMap { selectedState =>
+                val submitted = CommandRunnerReducer.reduce(RunnerSubmit, selectedState, registry)
+                applyReducerResult(submitted, selectedState)
+              }
+          ).map(_ => true)
       case None =>
         cats.effect.IO.pure(false)
 
@@ -1656,19 +1658,22 @@ final private[manager] class StateManagerEventPipeline(
       val rowSlots = contract.overlayRowSlots(surface.id)
       surface.content match
         case SurfaceContent.CommandPalette(runner) =>
-          overlayItemIndex(
-            event,
-            state,
-            layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
-            contentRect,
-            rowSlots,
-            runner.visibleItems.length,
-            runner.selectedIndex,
-            hasHeader = true,
-            hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
-            itemGapRows = state.config.commandRunnerItemGapRows
-          )
-            .map(RunnerSelectVisibleItem(_))
+          commandPaletteCategoryAt(event, contentRect, contract.overlayHeaderRect(surface.id), runner.searchTerm)
+            .map(RunnerSelectCategory(_))
+            .orElse(
+              overlayItemIndex(
+                event,
+                state,
+                layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
+                contentRect,
+                rowSlots,
+                runner.visibleItems.length,
+                runner.selectedIndex,
+                hasHeader = true,
+                hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
+                itemGapRows = state.config.commandRunnerItemGapRows
+              ).map(RunnerSelectVisibleItem(_))
+            )
         case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
           val submenuState = runner.activeSubmenu.filter(_.groupId == groupId)
           val items = submenuState
@@ -1696,6 +1701,19 @@ final private[manager] class StateManagerEventPipeline(
         case _ =>
           None
     }
+
+  private def commandPaletteCategoryAt(
+    event: MouseInputEvent,
+    contentRect: LayoutRect,
+    headerRect: Option[LayoutRect],
+    searchTerm: String
+  ): Option[CommandCategory] =
+    val categories = CommandCategory.values.toList
+    val categoryIndex =
+      Option.when(searchTerm.isEmpty && headerRect.exists(_.contains(event.col, event.row))) {
+        ((event.col - contentRect.x) * categories.length) / contentRect.width.max(1)
+      }
+    categoryIndex.flatMap(categories.lift)
 
   private def overlayItemIndex(
     event: MouseInputEvent,

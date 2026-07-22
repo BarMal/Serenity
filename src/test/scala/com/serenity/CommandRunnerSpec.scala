@@ -113,6 +113,18 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     results.head.name shouldBe "save"
   }
 
+  it should "rank commands deterministically when every search token matches" in {
+    val commands = List(
+      Command.typed("open-file", "Open a file from disk", CommandIntent.OpenFile),
+      Command.typed("open-recent", "Open a recent workspace file", CommandIntent.OpenFileSearch),
+      Command.typed("close-file", "Close the current file", CommandIntent.CloseCurrentFile)
+    )
+
+    val results = new CommandSearcher(commands).search("open file")
+
+    results.map(_.name) shouldBe List("open-file", "open-recent")
+  }
+
   it should "limit results to specified count" in {
     val commands = (1 to 10).map(i => Command.typed(s"cmd$i", s"Command $i", CommandIntent.ToggleTheme)).toList
     val searcher = new CommandSearcher(commands)
