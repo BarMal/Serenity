@@ -330,10 +330,10 @@ class CommandSearcher(commands: List[Command]):
     else
       val tokens = CommandSearcher.tokens(term)
 
-      commands
-        .zipWithIndex
-        .flatMap { case (command, index) =>
-          calculateRelevance(command, tokens).map(relevance => (command, relevance, index))
+      commands.zipWithIndex
+        .flatMap {
+          case (command, index) =>
+            calculateRelevance(command, tokens).map(relevance => (command, relevance, index))
         }
         .sortBy { case (_, relevance, index) => (-relevance, index) }
         .take(maxResults)
@@ -363,7 +363,7 @@ object CommandSearcher:
   ): Option[Double] =
     val fields = List(nameTokens -> 100.0, labelTokens -> 95.0, descriptionTokens -> 40.0)
     fields.collectFirst {
-      case (fieldTokens, exactScore) if fieldTokens.contains(token) => exactScore
+      case (fieldTokens, exactScore) if fieldTokens.contains(token)              => exactScore
       case (fieldTokens, prefixScore) if fieldTokens.exists(_.startsWith(token)) => prefixScore - 20.0
       case (fieldTokens, containsScore) if fieldTokens.exists(_.contains(token)) => containsScore - 40.0
     }

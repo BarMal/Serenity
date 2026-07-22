@@ -440,7 +440,10 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> Buffer.fromString(bufferId, "palette")),
       bufferOrder = List(bufferId),
-      layout = Layout(editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)), activeEditorPaneId = Some(PaneId(0))),
+      layout = Layout(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)),
+        activeEditorPaneId = Some(PaneId(0))
+      ),
       uiSurfaces = List(surface)
     )
 
@@ -458,7 +461,10 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> Buffer.fromString(bufferId, "search")),
       bufferOrder = List(bufferId),
-      layout = Layout(editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)), activeEditorPaneId = Some(PaneId(0))),
+      layout = Layout(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)),
+        activeEditorPaneId = Some(PaneId(0))
+      ),
       uiSurfaces = List(surface)
     )
 

@@ -748,10 +748,10 @@ object TextOverlayRenderer:
     (labelWidth, math.max(0, safeWidth - labelWidth - valueWidth - 2), valueWidth)
 
   private def fourColumnWidths(width: Int): (Int, Int, Int, Int) =
-    val safeWidth = math.max(0, width)
-    val labelWidth = math.min(28, math.max(8, (safeWidth * 2) / 5))
-    val valueWidth = math.min(12, math.max(0, safeWidth / 5))
-    val scopeWidth = math.min(10, math.max(0, safeWidth / 8))
+    val safeWidth       = math.max(0, width)
+    val labelWidth      = math.min(28, math.max(8, (safeWidth * 2) / 5))
+    val valueWidth      = math.min(12, math.max(0, safeWidth / 5))
+    val scopeWidth      = math.min(10, math.max(0, safeWidth / 8))
     val breadcrumbWidth = math.max(0, safeWidth - labelWidth - valueWidth - scopeWidth - 3)
     (labelWidth, valueWidth, scopeWidth, breadcrumbWidth)
 

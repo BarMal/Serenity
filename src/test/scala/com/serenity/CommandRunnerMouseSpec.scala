@@ -246,7 +246,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     overlayItemPoint(state, surface.id, displayedItemRow)
 
   private def commandRunnerCategoryPoint(state: AppState, categoryIndex: Int): Point =
-    val surface = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
+    val surface  = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
     val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val contract = EditorLayoutContract.from(state, viewport, layout)

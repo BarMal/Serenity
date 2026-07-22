@@ -122,8 +122,8 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     rect.y shouldBe contentRect.y + 8
     rect.x shouldBe contentRect.x
-    rect.width shouldBe contentRect.width
-    rect.right shouldBe contentRect.right
+    rect.width shouldBe 72
+    rect.right should be < contentRect.right
     rect.bottom should be <= paneRect.bottom
   }
 

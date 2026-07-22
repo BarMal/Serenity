@@ -101,9 +101,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val state    = activeState(registry)
 
     val selected = CommandRunnerReducer.reduce(RunnerSelectCategory(CommandCategory.File), state, registry)
-    val runner = selected.state.commandRunnerSurface.collect {
-      case UiSurface(_, SurfaceContent.CommandPalette(value), _, _) => value
-    }.getOrElse(fail("missing command runner"))
+    val runner = selected.state.commandRunnerSurface
+      .collect { case UiSurface(_, SurfaceContent.CommandPalette(value), _, _) => value }
+      .getOrElse(fail("missing command runner"))
 
     runner.activeCategory shouldBe CommandCategory.File
     runner.filteredCommands.map(_.category).distinct shouldBe List(CommandCategory.File)
