@@ -1163,3 +1163,41 @@ object SurfaceContentResolver:
       title = titleFor(mode, s"Preview: $title"),
       rows = rows
     )
+
+/** Shared geometry for rendered, pointer, and semantic close-workflow actions. */
+private[serenity] object CloseWorkflowLayout:
+
+  val actions: List[(CloseWorkflowChoice, String)] = List(
+    CloseWorkflowChoice.Save    -> "Save",
+    CloseWorkflowChoice.Discard -> "Close Anyway",
+    CloseWorkflowChoice.Cancel  -> "Cancel"
+  )
+
+  def actionBounds(
+    frameRect: LayoutRect,
+    workflow: CloseWorkflowState
+  ): List[(CloseWorkflowChoice, String, LayoutRect)] =
+    val frame = SurfaceFrameLayout.forContent(
+      frameRect,
+      SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow))
+    )
+    frame
+      .contentRowSlots(itemCount = 2, hasHeader = true, hasFooter = false)
+      .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(1), y) => y }
+      .toList
+      .flatMap { y =>
+        actions.zipWithIndex.map {
+          case ((choice, label), index) =>
+            val left  = frame.contentRect.x + index * frame.contentRect.width / actions.size
+            val right = frame.contentRect.x + (index + 1) * frame.contentRect.width / actions.size
+            (choice, label, LayoutRect(left, y, right - left, 1))
+        }
+      }
+
+  def choiceAt(
+    frameRect: LayoutRect,
+    workflow: CloseWorkflowState,
+    col: Int,
+    row: Int
+  ): Option[CloseWorkflowChoice] =
+    actionBounds(frameRect, workflow).collectFirst { case (choice, _, bounds) if bounds.contains(col, row) => choice }

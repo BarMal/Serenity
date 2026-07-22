@@ -161,6 +161,54 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     nodes.exists(_.id.startsWith(s"surface:${floatingId.value}")) shouldBe false
   }
 
+  it should "expose close workflow actions with rendered bounds and selection" in {
+    val surfaceId = SurfaceId("close")
+    val workflow = CloseWorkflowState(
+      CloseScope.Current,
+      BufferId(0),
+      "notes.scala",
+      selectedChoice = CloseWorkflowChoice.Discard
+    )
+    val state = AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(
+          surfaceId,
+          SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)),
+          SurfacePresentation.Modal
+        )
+      ),
+      focus = Focus.Surface(surfaceId),
+      viewportSize = Some(viewport)
+    )
+
+    val snapshot      = AccessibilitySnapshot.from(state, viewport)
+    val controls      = snapshot.nodes.filter(_.id.startsWith(s"surface:${surfaceId.value}/control:"))
+    val surfaceBounds = snapshot.nodes.find(_.id == s"surface:${surfaceId.value}").map(_.bounds).get
+    val frame = SurfaceFrameLayout.forContent(
+      surfaceBounds,
+      SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow))
+    )
+    val actionRow = frame
+      .contentRowSlots(itemCount = 2, hasHeader = true, hasFooter = false)
+      .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(1), y) => y }
+      .get
+
+    controls.map(node => node.name -> node.role) shouldBe List(
+      "Save"         -> AccessibilityRole.Button,
+      "Close Anyway" -> AccessibilityRole.Button,
+      "Cancel"       -> AccessibilityRole.Button
+    )
+    controls.map(_.selected) shouldBe List(false, true, false)
+    controls.map(_.focused) shouldBe List(false, true, false)
+    controls.map(_.bounds.y).distinct shouldBe List(actionRow)
+    controls.map(_.bounds.height).distinct shouldBe List(1)
+    controls.map(_.bounds.x) shouldBe List.tabulate(3)(index =>
+      frame.contentRect.x + index * frame.contentRect.width / 3
+    )
+    controls.map(_.bounds.right) shouldBe
+      List.tabulate(3)(index => frame.contentRect.x + (index + 1) * frame.contentRect.width / 3)
+  }
+
   it should "align wrapped toolbar accessibility bounds with rendered row slots" in {
     val surfaceId    = SurfaceId("toolbar")
     val bufferId     = BufferId(42)

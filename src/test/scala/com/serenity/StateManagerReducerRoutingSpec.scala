@@ -56,39 +56,68 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     succeed
   }
 
-  it should "ignore global and close events while a blocking modal is active" in {
+  it should "reject background mutations before dispatch while a blocking modal is active" in {
+    val tempFile = Files.createTempFile("state-manager-modal-gate", ".scala")
+
+    try
+      val stateManager = createStateManager()
+      val bufferId     = stateManager.createBuffer("unsaved").unsafeRunSync()
+
+      stateManager
+        .updateState { state =>
+          state.copy(
+            buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(filePath = Some(tempFile))),
+            layout = state.layout.copy(
+              editorPanes = state.layout.editorPanes.updated(
+                PaneId(0),
+                state.layout.editorPanes(PaneId(0)).copy(bufferId = Some(bufferId))
+              )
+            ),
+            focus = Focus.EditorPane(PaneId(0))
+          )
+        }
+        .unsafeRunSync()
+      stateManager.applyEvent(InsertChar('!')).unsafeRunSync()
+      stateManager.applyEvent(DeleteBackward).unsafeRunSync()
+      stateManager.applyEvent(Undo).unsafeRunSync()
+
+      val modal = UiSurface(
+        SurfaceId("close-confirmation"),
+        SurfaceContent.ModalWorkflow(
+          Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
+        ),
+        SurfacePresentation.Modal
+      )
+      stateManager
+        .updateState(state => state.copy(uiSurfaces = state.uiSurfaces :+ modal, focus = Focus.Surface(modal.id)))
+        .unsafeRunSync()
+      val before = stateManager.getCurrentState.unsafeRunSync()
+
+      List[Event](Undo, Redo, SaveFile, SwitchTheme("light"), ToggleCommandRunner, CloseTab, Quit).foreach { event =>
+        stateManager.applyEvent(event).unsafeRunSync()
+        stateManager.getCurrentState.unsafeRunSync() shouldBe before
+      }
+
+      Files.readString(tempFile) shouldBe ""
+    finally Files.deleteIfExists(tempFile)
+  }
+
+  it should "allow modal and system input through the blocking modal gate" in {
     val stateManager = createStateManager()
-    val bufferId     = stateManager.createBuffer("unsaved").unsafeRunSync()
-    val modal = UiSurface(
-      SurfaceId("close-confirmation"),
-      SurfaceContent.ModalWorkflow(
-        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
-      ),
-      SurfacePresentation.Modal
-    )
+    val initialState = stateManager.getCurrentState.unsafeRunSync()
+    val bufferId     = initialState.focusedBufferId.get
 
     stateManager
-      .updateState { state =>
-        state.copy(
-          buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(isDirty = true)),
-          layout = state.layout.copy(
-            editorPanes = state.layout.editorPanes.updated(
-              PaneId(0),
-              state.layout.editorPanes(PaneId(0)).copy(bufferId = Some(bufferId))
-            )
-          ),
-          uiSurfaces = state.uiSurfaces :+ modal,
-          focus = Focus.Surface(modal.id)
-        )
-      }
+      .showModal(Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")))
       .unsafeRunSync()
-    val before = stateManager.getCurrentState.unsafeRunSync()
+    stateManager.applyEvent(ModalNavigate(Direction.Right)).unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 40))).unsafeRunSync()
 
-    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    stateManager.applyEvent(CloseTab).unsafeRunSync()
-    stateManager.applyEvent(Quit).unsafeRunSync()
-
-    stateManager.getCurrentState.unsafeRunSync() shouldBe before
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.modalSurface.flatMap(_.content match
+      case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow.selectedChoice)
+      case _ => None) shouldBe Some(CloseWorkflowChoice.Discard)
+    updatedState.viewportSize shouldBe Some(ViewportSize(120, 40))
   }
 
   it should "save the focused buffer through the file event path" in {
