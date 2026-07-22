@@ -9,7 +9,7 @@ import com.serenity.config.AppConfig
 import com.serenity.input.{InputRouter, SystemClipboard}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.state.undo.UndoState
@@ -274,6 +274,55 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     yield
       started shouldBe 0
       pending shouldBe None
+
+    program.unsafeRunSync()
+  }
+
+  it should "schedule document analysis only when spell-check inputs change" in {
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      config = AppConfig.default.withSpellCheck(AppConfig.default.spellCheck.copy(enabled = true)),
+      buffers =
+        AppState.initial.buffers.updated(bufferId, AppState.initial.buffers(bufferId).copy(content = Rope("hello")))
+    )
+    val movedCursorState = initialState.copy(
+      buffers = initialState.buffers.updated(
+        bufferId,
+        initialState.buffers(bufferId).copy(cursors = List(CursorPosition(0, 1)))
+      )
+    )
+    val editedState = movedCursorState.copy(
+      buffers = movedCursorState.buffers.updated(
+        bufferId,
+        movedCursorState.buffers(bufferId).copy(content = Rope("wurld"))
+      )
+    )
+    val configuredState = editedState.copy(
+      config = editedState.config.withSpellCheck(editedState.config.spellCheck.copy(additionalWords = List("wurld")))
+    )
+
+    val program = for
+      stateRef <- Ref.of[IO, AppState](initialState)
+      fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
+      starts   <- Ref.of[IO, Int](0)
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        fiberRef,
+        org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
+        beforeDocumentAnalysisStart = starts.update(_ + 1)
+      )
+      _                        <- operations.validateAndUpdateState(initialState, initialState)
+      _                        <- operations.validateAndUpdateState(movedCursorState, initialState)
+      afterCursorMove          <- starts.get
+      _                        <- operations.validateAndUpdateState(editedState, movedCursorState)
+      afterEdit                <- starts.get
+      _                        <- operations.validateAndUpdateState(configuredState, editedState)
+      afterConfigurationChange <- starts.get
+      _                        <- operations.cancelDocumentAnalysis()
+    yield
+      afterCursorMove shouldBe 1
+      afterEdit shouldBe 2
+      afterConfigurationChange shouldBe 3
 
     program.unsafeRunSync()
   }

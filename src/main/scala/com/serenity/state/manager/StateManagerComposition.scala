@@ -73,6 +73,7 @@ final private[manager] class StateManagerOperationBoundary private (
     pendingOperations: Ref[IO, List[StateManagerOperation]],
     stateRef: Ref[IO, AppState],
     documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
+    documentAnalysisInputsRef: Ref[IO, Option[Map[String, SpellCheckFingerprint]]],
     findSearchFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     logger: Logger[IO],
     analysisLifecycleLock: Semaphore[IO],
@@ -126,20 +127,25 @@ final private[manager] class StateManagerOperationBoundary private (
 
   def scheduleDocumentAnalysis(): IO[Unit] =
     stateRef.get.flatMap { state =>
-      if !requiresDocumentAnalysis(state) then IO.unit
-      else
-        analysisLifecycleLock.permit.use { _ =>
-          documentAnalysisShutdownRef.get.ifM(
-            IO.unit,
-            for
-              previous <- documentAnalysisFiberRef.getAndSet(None)
-              _        <- previous.traverse_(_.cancel)
-              _        <- beforeDocumentAnalysisStart
-              fiber    <- documentAnalysisJob.start
-              _        <- documentAnalysisFiberRef.set(Some(fiber))
-            yield ()
-          )
+      IO.blocking(SpellChecker.analysisFingerprints(state)).flatMap { inputs =>
+        documentAnalysisInputsRef.modify(previous => Some(inputs) -> previous.forall(_ != inputs)).flatMap {
+          inputsChanged =>
+            if !inputsChanged || !requiresDocumentAnalysis(state) then IO.unit
+            else
+              analysisLifecycleLock.permit.use { _ =>
+                documentAnalysisShutdownRef.get.ifM(
+                  IO.unit,
+                  for
+                    previous <- documentAnalysisFiberRef.getAndSet(None)
+                    _        <- previous.traverse_(_.cancel)
+                    _        <- beforeDocumentAnalysisStart
+                    fiber    <- documentAnalysisJob.start
+                    _        <- documentAnalysisFiberRef.set(Some(fiber))
+                  yield ()
+                )
+              }
         }
+      }
     }
 
   def cancelDocumentAnalysis(): IO[Unit] =
@@ -161,7 +167,9 @@ final private[manager] class StateManagerOperationBoundary private (
         val expected = SpellChecker.analysisFingerprints(snapshot)
         IO.blocking(SpellChecker.refreshDiagnostics(snapshot))
           .flatMap(analyzed => stateRef.update(current => SpellChecker.applyIfCurrent(current, analyzed, expected)))
-      }).handleErrorWith(error => logger.error(error)("[ANALYSIS] Document analysis refresh failed"))
+      }).handleErrorWith(error =>
+      documentAnalysisInputsRef.set(None) >> logger.error(error)("[ANALYSIS] Document analysis refresh failed")
+    )
 
   private def requiresDocumentAnalysis(state: AppState): Boolean =
     state.config.spellCheck.enabled || state.spellCheckCache.nonEmpty
@@ -184,11 +192,13 @@ private[manager] object StateManagerOperationBoundary:
       pendingOperations           <- Ref.of[IO, List[StateManagerOperation]](Nil)
       analysisLifecycleLock       <- Semaphore[IO](1)
       documentAnalysisShutdownRef <- Ref.of[IO, Boolean](false)
+      documentAnalysisInputsRef   <- Ref.of[IO, Option[Map[String, SpellCheckFingerprint]]](None)
       findSearchFiberRef          <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
     yield new StateManagerOperationBoundary(
       pendingOperations,
       stateRef,
       documentAnalysisFiberRef,
+      documentAnalysisInputsRef,
       findSearchFiberRef,
       logger,
       analysisLifecycleLock,
