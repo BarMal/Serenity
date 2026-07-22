@@ -87,7 +87,9 @@ object AccessibilitySnapshot:
   private def surfaceControls(state: AppState, scene: UiSceneSnapshot): List[AccessibleNode] =
     scene.nodesInPaintOrder.flatMap {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) =>
-          state.surfaceById(surfaceId).toList.flatMap(surface => controlsFor(surface, node.frameRect, state))
+          state.surfaceById(surfaceId).toList.flatMap { surface =>
+            controlsFor(surface, node.frameRect, state) ++ statusFor(surface, node.frameRect)
+          }
       case _ => Nil
     }
 
@@ -114,6 +116,19 @@ object AccessibilitySnapshot:
       case SurfaceContent.ModalWorkflow(modal) => modalControls(surface.id, modal, frameRect, state)
       case content if isPinned(surface.presentation) => pinnedControls(surface.id, content, frameRect, state)
       case _ => Nil
+
+  private def statusFor(surface: UiSurface, frameRect: LayoutRect): List[AccessibleNode] =
+    statusMessage(surface.content).toList.map { message =>
+      AccessibleNode(
+        s"surface:${surface.id.value}/status",
+        AccessibilityRole.Status,
+        "Status",
+        Some(message),
+        selected = false,
+        focused = false,
+        LayoutRect(frameRect.x, frameRect.bottom - 1, frameRect.width, 1)
+      )
+    }
 
   private def commandControls(
     surfaceId: SurfaceId,
@@ -326,7 +341,23 @@ object AccessibilitySnapshot:
     content match
       case SurfaceContent.StartPage(page)     => page.statusMessage
       case SurfaceContent.CursorInfoBar(text) => Some(text)
+      case SurfaceContent.CommandPalette(runner) => runner.statusMessage
+      case SurfaceContent.CommandPaletteSubmenu(runner, _, _) => runner.statusMessage
+      case SurfaceContent.ModalWorkflow(modal) => modalStatusMessage(modal)
       case _                                  => None
+
+  private def statusMessage(content: SurfaceContent): Option[String] =
+    content match
+      case SurfaceContent.CommandPalette(runner) => runner.statusMessage
+      case SurfaceContent.CommandPaletteSubmenu(runner, _, _) => runner.statusMessage
+      case SurfaceContent.ModalWorkflow(modal) => modalStatusMessage(modal)
+      case _ => None
+
+  private def modalStatusMessage(modal: Modal): Option[String] =
+    modal match
+      case Modal.FileWorkflow(workflow) => workflow.statusMessage
+      case Modal.ReplaceWorkflow(workflow) => workflow.statusMessage
+      case _ => None
 
   private def announcements(
     previous: Option[AccessibilitySnapshot],

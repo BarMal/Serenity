@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.config.{AppConfig, InterfaceDensity}
+import com.serenity.command.CommandRunner
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.accessibility.{AccessibilityRole, AccessibilitySnapshot}
@@ -144,4 +145,34 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
 
     controls.map(_.bounds.y).distinct shouldBe expectedRows
     controls.map(_.bounds.height).distinct shouldBe List(2)
+  }
+
+  it should "announce changed command and modal validation status once" in {
+    val runnerId = SurfaceId("runner")
+    val modalId = SurfaceId("replace-status")
+    val baseline = AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(runnerId, SurfaceContent.CommandPalette(CommandRunner.empty.copy(statusMessage = Some("Invalid command"))), SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor))
+      )
+    )
+    val first = AccessibilitySnapshot.from(baseline, viewport)
+    val repeated = AccessibilitySnapshot.from(baseline, viewport, Some(first))
+    val changed = AccessibilitySnapshot.from(
+      baseline.copy(uiSurfaces = baseline.uiSurfaces.map {
+        case surface if surface.id == runnerId => surface.copy(content = SurfaceContent.CommandPalette(CommandRunner.empty.copy(statusMessage = Some("Unknown command"))))
+        case surface => surface
+      }),
+      viewport,
+      Some(first)
+    )
+
+    val modalSnapshot = AccessibilitySnapshot.from(
+      baseline.copy(uiSurfaces = List(UiSurface(modalId, SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(ReplaceWorkflowState(statusMessage = Some("Nothing to replace")))), SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)))),
+      viewport
+    )
+
+    first.nodes.filter(_.role == AccessibilityRole.Status).map(_.id) should contain(s"surface:${runnerId.value}/status")
+    modalSnapshot.nodes.filter(_.role == AccessibilityRole.Status).map(_.id) should contain(s"surface:${modalId.value}/status")
+    repeated.announcements shouldBe Nil
+    changed.announcements.map(_.message) shouldBe List("Unknown command")
   }
