@@ -446,7 +446,11 @@ object SurfaceContentResolver:
       val footer =
         runner.statusMessage
           .map(OverlayRow(_))
-          .orElse(Option.when(allItems.nonEmpty)(OverlayRow(s"${runner.selectedIndex + 1}/${allItems.length}")))
+          .orElse(
+            Option.when(allItems.nonEmpty)(
+              OverlayRow(s"↑↓ navigate • Enter run • Esc dismiss • ${runner.selectedIndex + 1}/${allItems.length}")
+            )
+          )
 
       ResolvedSurfaceContent(
         title = titleFor(mode, "commands"),
@@ -616,8 +620,8 @@ object SurfaceContentResolver:
       plainText = (List(label) ++ binding.toList :+ command.description).mkString(" - "),
       selected = selected,
       segments = OverlaySegment(label, fontFamily = fontFamilyForCommand(command)) ::
-        binding.map(value => OverlaySegment(value, tone = OverlayTone.Muted)).toList :::
-        List(OverlaySegment(command.description, tone = OverlayTone.Normal)),
+        OverlaySegment(command.description, tone = OverlayTone.Muted) ::
+        binding.map(value => OverlaySegment(value, tone = OverlayTone.Normal)).toList,
       layout = OverlayRowLayout.Columns
     )
 

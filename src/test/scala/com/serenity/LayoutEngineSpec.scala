@@ -425,3 +425,25 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     compact.belowCursorOverlayRect.map(_.height) should be < comfortable.belowCursorOverlayRect.map(_.height)
     spacious.belowCursorOverlayRect.map(_.height) should be > comfortable.belowCursorOverlayRect.map(_.height)
   }
+
+  it should "keep the command palette compact while clamping it to a narrow viewport" in {
+    val runner = com.serenity.command.CommandRunner.empty.activate(
+      com.serenity.command.CommandRegistry.default,
+      com.serenity.config.AppConfig.default
+    )
+    val surface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.BelowCursor)
+    )
+    val bufferId = BufferId(1)
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> Buffer.fromString(bufferId, "palette")),
+      bufferOrder = List(bufferId),
+      layout = Layout(editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)), activeEditorPaneId = Some(PaneId(0))),
+      uiSurfaces = List(surface)
+    )
+
+    LayoutEngine.calculateLayout(state, ViewportSize(100, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(72)
+    LayoutEngine.calculateLayout(state, ViewportSize(40, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(37)
+  }

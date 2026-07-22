@@ -341,6 +341,16 @@ object CommandRunnerReducer:
           )
         )
 
+      case RunnerSelectCategory(category) =>
+        given CommandRegistry = registry
+        currentRunner(state) match
+          case Some(runner) if runner.searchTerm.isEmpty && !submenuHasFocus(state) =>
+            ReducerResult.noEffects(
+              replaceRunner(state, current => updatePreviewForSelection(current.withActiveCategory(category)))
+            )
+          case _ =>
+            ReducerResult.noEffects(state)
+
       case RunnerNavigate(Direction.Left) =>
         if submenuHasFocus(state) then
           currentRunner(state) match

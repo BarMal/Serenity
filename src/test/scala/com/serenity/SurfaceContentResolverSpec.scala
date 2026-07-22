@@ -107,7 +107,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.rows should have size 2
     floating.rows.head.plainText should include("Open")
     floating.rows.head.plainText should include("Open file")
-    floating.footer.map(_.plainText) shouldBe Some("1/2")
+    floating.footer.map(_.plainText) shouldBe Some("↑↓ navigate • Enter run • Esc dismiss • 1/2")
   }
 
   it should "render active platform and user shortcut bindings beside core command rows" in {
@@ -123,10 +123,10 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     resolved.rows.find(_.plainText.startsWith("Find")).map(_.segments.map(_.text)) shouldBe Some(
-      List("Find", "ctrl+alt+f", "Find text in the current file.")
+      List("Find", "Find text in the current file.", "ctrl+alt+f")
     )
     resolved.rows.find(_.plainText.startsWith("Replace")).map(_.segments.map(_.text)) shouldBe Some(
-      List("Replace", "alt+meta+f", "Find and replace text in the current file.")
+      List("Replace", "Find and replace text in the current file.", "alt+meta+f")
     )
   }
 

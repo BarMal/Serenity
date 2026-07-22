@@ -641,8 +641,8 @@ object TextOverlayRenderer:
 
   private def threeColumnWidths(width: Int): (Int, Int, Int) =
     val safeWidth      = math.max(0, width)
-    val preferredLabel = math.min(22, math.max(8, safeWidth / 3))
-    val preferredValue = math.min(18, math.max(8, safeWidth / 4))
+    val preferredLabel = math.min(36, math.max(8, (safeWidth * 3) / 5))
+    val preferredValue = math.min(18, math.max(8, safeWidth / 5))
     val (labelWidth, valueWidth) =
       if preferredLabel + preferredValue + 2 <= safeWidth then (preferredLabel, preferredValue)
       else (math.min(22, safeWidth / 3), math.min(18, safeWidth / 4))

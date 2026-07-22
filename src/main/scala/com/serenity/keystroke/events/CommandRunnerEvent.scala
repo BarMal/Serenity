@@ -1,5 +1,7 @@
 package com.serenity.keystroke.events
 
+import com.serenity.command.CommandCategory
+
 trait CommandRunnerEvent extends Event
 
 case class RunnerInsertChar(char: Char)                                extends CommandRunnerEvent
@@ -12,6 +14,7 @@ case class RunnerNavigate(direction: Direction)                        extends C
 case class RunnerSelectVisibleItem(index: Int)                         extends CommandRunnerEvent
 case class RunnerSelectSubmenuItem(index: Int)                         extends CommandRunnerEvent
 case class RunnerSelectPreviewSubmenuItem(groupId: String, index: Int) extends CommandRunnerEvent
+case class RunnerSelectCategory(category: CommandCategory)              extends CommandRunnerEvent
 case object RunnerNextCategory                                         extends CommandRunnerEvent
 case object RunnerPreviousCategory                                     extends CommandRunnerEvent
 case object RunnerSubmit                                               extends CommandRunnerEvent

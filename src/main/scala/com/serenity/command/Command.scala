@@ -326,28 +326,44 @@ class CommandSearcher(commands: List[Command]):
 
   /** Search commands by name and description, returning top results */
   def search(term: String, maxResults: Int = 5): List[Command] =
-    if term.isEmpty then commands.take(maxResults)
+    if term.trim.isEmpty then commands.take(maxResults)
     else
-      val lowercaseTerm = term.toLowerCase
+      val tokens = CommandSearcher.tokens(term)
 
       commands
-        .map(cmd => CommandSearchResult(cmd, calculateRelevance(cmd, lowercaseTerm)))
-        .filter(_.relevance > 0)
-        .sortBy(-_.relevance)
+        .zipWithIndex
+        .flatMap { case (command, index) =>
+          calculateRelevance(command, tokens).map(relevance => (command, relevance, index))
+        }
+        .sortBy { case (_, relevance, index) => (-relevance, index) }
         .take(maxResults)
-        .map(_.command)
+        .map(_._1)
 
-  /** Calculate relevance score for a command based on search term */
-  private def calculateRelevance(command: Command, term: String): Double =
-    val nameLower  = command.name.toLowerCase
-    val labelLower = command.label.toLowerCase
-    val descLower  = command.description.toLowerCase
+  /** Calculate relevance only when every token has a metadata match. */
+  private def calculateRelevance(command: Command, tokens: List[String]): Option[Double] =
+    val nameTokens        = CommandSearcher.tokens(command.name)
+    val labelTokens       = CommandSearcher.tokens(command.label)
+    val descriptionTokens = CommandSearcher.tokens(command.description)
 
-    if nameLower == term then 100.0
-    else if labelLower == term then 95.0
-    else if nameLower.startsWith(term) then 80.0
-    else if labelLower.startsWith(term) then 75.0
-    else if nameLower.contains(term) then 60.0
-    else if labelLower.contains(term) then 55.0
-    else if descLower.contains(term) then 40.0
-    else 0.0
+    tokens.foldLeft(Option(0.0)) { (score, token) =>
+      score.flatMap { total =>
+        CommandSearcher.tokenRelevance(token, nameTokens, labelTokens, descriptionTokens).map(total + _)
+      }
+    }
+
+object CommandSearcher:
+  private def tokens(value: String): List[String] =
+    Option(value).toList.flatMap(_.toLowerCase.split("[^\\p{Alnum}]+")).filter(_.nonEmpty)
+
+  private def tokenRelevance(
+    token: String,
+    nameTokens: List[String],
+    labelTokens: List[String],
+    descriptionTokens: List[String]
+  ): Option[Double] =
+    val fields = List(nameTokens -> 100.0, labelTokens -> 95.0, descriptionTokens -> 40.0)
+    fields.collectFirst {
+      case (fieldTokens, exactScore) if fieldTokens.contains(token) => exactScore
+      case (fieldTokens, prefixScore) if fieldTokens.exists(_.startsWith(token)) => prefixScore - 20.0
+      case (fieldTokens, containsScore) if fieldTokens.exists(_.contains(token)) => containsScore - 40.0
+    }

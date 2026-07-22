@@ -721,7 +721,7 @@ object LayoutEngine:
           stackBelowCursorSurfaces(surfaces, state, paneLayouts)
 
   private def calculateFloatingSurfaceWidth(maxWidth: Int): Int =
-    maxWidth
+    math.min(math.max(0, maxWidth), 72)
 
   private def floatingCursorGapRows(state: AppState, content: SurfaceContent): Double =
     content match
