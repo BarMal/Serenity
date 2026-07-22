@@ -13,6 +13,25 @@ import org.scalatest.matchers.should.Matchers
 
 class LspProtocolSpec extends AnyFlatSpec with Matchers:
 
+  private def decode(bytes: Array[Byte]): List[Json] =
+    fs2.Stream
+      .chunk(fs2.Chunk.array(bytes))
+      .through(LspFramer.decode)
+      .compile
+      .toList
+      .unsafeRunSync()
+
+  private def decodeFailure(bytes: Array[Byte]): Throwable =
+    fs2.Stream
+      .chunk(fs2.Chunk.array(bytes))
+      .through(LspFramer.decode)
+      .compile
+      .toList
+      .attempt
+      .unsafeRunSync()
+      .left
+      .getOrElse(fail("Expected frame decoding to fail"))
+
   "LspFramer.encode" should "produce a valid Content-Length framed message" in {
     val json  = Json.obj("method" -> "ping".asJson)
     val bytes = LspFramer.encode(json)
@@ -68,6 +87,52 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     result shouldBe List(msg1, msg2)
+  }
+
+  it should "decode a frame when its header and body split at every byte boundary" in {
+    val message = Json.obj("id" -> 1.asJson, "result" -> "héllo".asJson)
+    val bytes   = LspFramer.encode(message)
+
+    (0 to bytes.length).foreach { splitAt =>
+      val result = (fs2.Stream.chunk(fs2.Chunk.array(bytes.take(splitAt))) ++
+        fs2.Stream.chunk(fs2.Chunk.array(bytes.drop(splitAt))))
+        .through(LspFramer.decode)
+        .compile
+        .toList
+        .unsafeRunSync()
+
+      result shouldBe List(message)
+    }
+  }
+
+  it should "reject missing, negative, invalid, and oversized Content-Length values" in {
+    val invalidFrames = List(
+      "Content-Type: application/vscode-jsonrpc\r\n\r\n{}"     -> "missing Content-Length",
+      "Content-Length 1\r\n\r\n{}"                             -> "Malformed LSP header",
+      "Content-Length: -1\r\n\r\n{}"                           -> "Invalid Content-Length",
+      "Content-Length: nope\r\n\r\n{}"                         -> "Invalid Content-Length",
+      s"Content-Length: ${LspFramer.MaxBodyBytes + 1}\r\n\r\n" -> "body exceeds"
+    )
+
+    invalidFrames.foreach {
+      case (frame, expectedMessage) =>
+        val failure = decodeFailure(frame.getBytes(StandardCharsets.UTF_8))
+        failure.getMessage should include(expectedMessage)
+    }
+  }
+
+  it should "reject headers that exceed the configured bound" in {
+    val failure = decodeFailure(Array.fill(LspFramer.MaxHeaderBytes + 4)('x'.toByte))
+
+    failure.getMessage should include("header exceeds")
+  }
+
+  it should "report EOF during an incomplete header or body" in {
+    val incompleteHeader = decodeFailure("Content-Len".getBytes(StandardCharsets.UTF_8))
+    val incompleteBody   = decodeFailure("Content-Length: 10\r\n\r\n{}".getBytes(StandardCharsets.UTF_8))
+
+    incompleteHeader.getMessage should include("incomplete header")
+    incompleteBody.getMessage should include("truncated body")
   }
 
   "LspProtocol" should "identify responses and notifications correctly" in {
