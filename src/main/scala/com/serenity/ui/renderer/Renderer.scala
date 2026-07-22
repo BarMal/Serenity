@@ -1366,6 +1366,7 @@ object Renderer:
           if isSelected then
             surface.setForegroundColor(theme.highlighted.foreground)
             surface.setBackgroundColor(theme.highlighted.background)
+            surface.enableStyle(theme.focusStyle)
             actionBounds.get(optionIndex).foreach { bounds =>
               surface.fillPixelRect(
                 xPx = bounds.xPx,
@@ -1376,6 +1377,7 @@ object Renderer:
               )
             }
             renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
+            surface.disableStyle(theme.focusStyle)
           else
             val foreground =
               if lineIndex == 0 || isOption then theme.foreground

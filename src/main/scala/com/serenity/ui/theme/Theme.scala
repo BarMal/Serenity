@@ -29,6 +29,9 @@ case class Theme(
   /** Focus outline colour. Focused controls also retain their border/outline treatment. */
   def focus: Color = border
 
+  /** Non-colour focus cue used for selected actions and controls. */
+  def focusStyle: TextStyle = TextStyle.bold
+
   /** Active-pane indication, separate from the general focus outline and row selection. */
   def activePane: Color = panelBorder
 

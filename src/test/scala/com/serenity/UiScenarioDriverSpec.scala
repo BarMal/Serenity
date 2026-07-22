@@ -71,6 +71,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
       val startup = startupDriver.renderFrame("startup").unsafeRunSync()
       startup.evidence.drawnText.map(_.text).mkString(" ") should include("Welcome to Serenity")
       startup.evidence.layoutViolations shouldBe empty
+      startup.evidence.styleCalls should contain(ScenarioStyleCall("enable", theme.focusStyle))
       references += s"$themeName-narrow-startup" -> startup
 
       val runnerDriver = UiScenarioDriver.create(s"semantic-$themeName-runner", environment).unsafeRunSync()
@@ -79,6 +80,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
       runner.evidence.surfaceRects should not be empty
       runner.evidence.drawnText.map(_.text).mkString(" ") should include("Open Settings")
       runner.evidence.layoutViolations shouldBe empty
+      runner.evidence.styleCalls should contain(ScenarioStyleCall("enable", theme.focusStyle))
       references += s"$themeName-command-runner" -> runner
 
       val settingsDriver = UiScenarioDriver.create(s"semantic-$themeName-settings", environment).unsafeRunSync()
@@ -107,14 +109,14 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     }
 
     references.map { case (name, frame) => name -> imageFingerprint(frame) }.toList shouldBe List(
-      "dark-narrow-startup" -> "8fae1b3f70396aabbd9c89781d6213787f2cf9cfe6931e4c3cb70a04784b7fb9",
+      "dark-narrow-startup" -> "30aaac3585dd338c4afa1c2035d0fb1c581bd9d829a7dfae50244c20de58fd4e",
       "dark-command-runner" -> "8deeb4f89512b090b6ca14ac04b2156f49bc890f14881605ea07fcea899efc05",
-      "dark-settings" -> "835fc293e40f62d21c6624b35a9f5318384c78ac4e7270a7bd2aa19d8d6a4e8b",
+      "dark-settings" -> "1558add743329961bed6b4544bce3fd1dd955f83ba5885723b38f103e1b43dba",
       "dark-prose" -> "6477b62668cf547e27e27b1ab71005bef91322c88b40d2defecb41ec8caaa8d3",
       "dark-code" -> "acd8cffe248beaf62b7c345162ae9c188a1184bd8dccec02ea470884a05766dc",
-      "light-narrow-startup" -> "7ad39057c8790c0fc9ed598d6e004a59496fe9a04f85e08a0899ac307f269ab2",
+      "light-narrow-startup" -> "61238c78eb2b902196ec94486a8b3ba2f1f6508ab1a90cc7ee81204273eda0c6",
       "light-command-runner" -> "c8b04468b51db51e0b1988b383d73b19e725d01808da77c7895eeb8aad758673",
-      "light-settings" -> "2753529369db706d34467e6542c143d1f2d6e3a006da6bf715005919969c541e",
+      "light-settings" -> "30ebf5c35e2b548ff11a14e80c96c4e43274bcf7dc216ff513b232cadb86c679",
       "light-prose" -> "2f06aba7daa6b199897f86adb719cadcc51f5c8f8f1d2c25471a7634e411c1ee",
       "light-code" -> "a283db1fca24befef6d2f778ba339f592725192f4b3816ce85e045c329c65dcd"
     )

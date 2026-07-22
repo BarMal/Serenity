@@ -95,6 +95,7 @@ object PinnedPanelRenderer:
           if row.selected then
             surface.setForegroundColor(theme.highlighted.foreground)
             surface.setBackgroundColor(theme.highlighted.background)
+            surface.enableStyle(theme.focusStyle)
           else
             surface.setForegroundColor(theme.panel.foreground)
             surface.setBackgroundColor(theme.panel.background)
@@ -109,6 +110,7 @@ object PinnedPanelRenderer:
             baseForeground,
             animationState
           )
+          if row.selected then surface.disableStyle(theme.focusStyle)
         }
       }
 

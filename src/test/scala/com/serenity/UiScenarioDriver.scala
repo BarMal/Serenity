@@ -37,6 +37,7 @@ case class ScenarioFrameEvidence(
     visiblePreviewSourceLines: Map[BufferId, Set[Int]],
     visibleText: List[String],
     drawnText: List[ScenarioDrawnText],
+    styleCalls: List[ScenarioStyleCall],
     drawnItems: Map[SurfaceId, List[ScenarioDrawnItem]],
     drawnImageRects: List[LayoutRect],
     renderedContentRows: Set[Int],
@@ -46,6 +47,9 @@ case class ScenarioFrameEvidence(
 
 /** Text and its cell bounds as actually submitted to the render surface. */
 case class ScenarioDrawnText(text: String, bounds: LayoutRect)
+
+/** A text-style transition submitted while rendering a scenario frame. */
+case class ScenarioStyleCall(action: String, style: TextStyle)
 
 /** A layout hit target paired with the text bounds actually drawn into it. */
 case class ScenarioDrawnItem(hitTarget: LayoutRect, textBounds: List[ScenarioDrawnText])
@@ -210,6 +214,7 @@ final class UiScenarioDriver private (
       visiblePreviewSourceLines,
       visibleText,
       recordingSurface.drawnText,
+      recordingSurface.styleCalls,
       drawnItems,
       recordingSurface.drawnImages.map(_.bounds),
       renderedContentRows,
@@ -285,10 +290,13 @@ final class UiScenarioDriver private (
 final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: CellMetrics) extends RenderSurface:
   private val drawnTextBuffer  = scala.collection.mutable.ListBuffer.empty[ScenarioDrawnText]
   private val drawnImageBuffer = scala.collection.mutable.ListBuffer.empty[ScenarioDrawnImage]
+  private val styleCallsBuffer = scala.collection.mutable.ListBuffer.empty[ScenarioStyleCall]
 
   def drawnText: List[ScenarioDrawnText] = drawnTextBuffer.toList
 
   def drawnImages: List[ScenarioDrawnImage] = drawnImageBuffer.toList
+
+  def styleCalls: List[ScenarioStyleCall] = styleCallsBuffer.toList
 
   override def setFont(font: Font): Unit                    = delegate.setFont(font)
   override def fontRenderContext: Option[FontRenderContext] = delegate.fontRenderContext
@@ -302,8 +310,12 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
     delegate.fillRect(x, y, width, height, char)
-  def enableStyle(style: TextStyle): Unit   = delegate.enableStyle(style)
-  def disableStyle(style: TextStyle): Unit  = delegate.disableStyle(style)
+  def enableStyle(style: TextStyle): Unit =
+    styleCallsBuffer += ScenarioStyleCall("enable", style)
+    delegate.enableStyle(style)
+  def disableStyle(style: TextStyle): Unit =
+    styleCallsBuffer += ScenarioStyleCall("disable", style)
+    delegate.disableStyle(style)
   override def setAlpha(alpha: Float): Unit = delegate.setAlpha(alpha)
   override def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
     delegate.blurRegion(x, y, width, height, radius)

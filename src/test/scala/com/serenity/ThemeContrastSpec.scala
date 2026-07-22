@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.ui.theme.Theme
+import com.serenity.ui.theme.TextStyle
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -21,6 +22,7 @@ class ThemeContrastSpec extends AnyFlatSpec with Matchers:
       theme.accent should not be theme.selection.background
       theme.focus should not be theme.selection.background
       theme.activePane should not be theme.selection.background
+      theme.focusStyle shouldBe TextStyle.bold
       theme.status.error should not be theme.status.warning
       theme.placeholder should not be theme.foreground
       theme.surface shouldBe theme.panel
