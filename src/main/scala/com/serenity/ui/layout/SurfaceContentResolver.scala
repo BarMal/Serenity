@@ -23,6 +23,7 @@ enum OverlayRowLayout:
   case Distributed
   case Split
   case Columns
+  case PriorityColumns
 
 case class OverlaySegment(
     text: String,
@@ -577,7 +578,7 @@ object SurfaceContentResolver:
         OverlaySegment(name, selected = true),
         OverlaySegment(hint, tone = OverlayTone.Normal)
       ).filterNot(_.text.isEmpty),
-      layout = OverlayRowLayout.Columns
+      layout = OverlayRowLayout.PriorityColumns
     )
 
   private def categoryTabs(activeCategory: CommandCategory): OverlayRow =

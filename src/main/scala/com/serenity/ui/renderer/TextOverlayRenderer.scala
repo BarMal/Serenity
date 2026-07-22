@@ -234,6 +234,8 @@ object TextOverlayRenderer:
         renderSplitRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
       case OverlayRowLayout.Columns =>
         renderColumnRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+      case OverlayRowLayout.PriorityColumns =>
+        renderPriorityColumnRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
 
     if cursorVisible then
       rowView.row.cursorColumn
@@ -275,7 +277,7 @@ object TextOverlayRenderer:
         Some(CursorPlacement(x, row.plainText.take(cursorColumn.max(0).min(row.plainText.length)), useMeasuredCursor))
       case OverlayRowLayout.Split =>
         splitCursorPlacement(row, x, width, cursorColumn)
-      case OverlayRowLayout.Columns =>
+      case OverlayRowLayout.Columns | OverlayRowLayout.PriorityColumns =>
         columnCursorPlacement(row, x, width)
       case OverlayRowLayout.Distributed =>
         None
@@ -326,7 +328,7 @@ object TextOverlayRenderer:
               math.max(0, math.min(cursorColumn - width + 1, row.plainText.length - width))
             case _ =>
               0
-        case OverlayRowLayout.Columns | OverlayRowLayout.Distributed =>
+        case OverlayRowLayout.Columns | OverlayRowLayout.PriorityColumns | OverlayRowLayout.Distributed =>
           0
 
     if scrollOffset == 0 then OverlayRowView(row, useMeasuredCursor)
@@ -612,6 +614,53 @@ object TextOverlayRenderer:
           font,
           alignRight = true
         )
+      case label :: value :: scope :: breadcrumb :: Nil =>
+        val (labelWidth, valueWidth, scopeWidth, breadcrumbWidth) = fourColumnWidths(width)
+        renderColumnCell(
+          surface,
+          x,
+          y,
+          labelWidth,
+          label,
+          theme,
+          defaultForeground,
+          defaultBackground,
+          font
+        )
+        renderColumnCell(
+          surface,
+          x + labelWidth + 1,
+          y,
+          valueWidth,
+          value,
+          theme,
+          defaultForeground,
+          defaultBackground,
+          font
+        )
+        renderColumnCell(
+          surface,
+          x + labelWidth + valueWidth + 2,
+          y,
+          scopeWidth,
+          scope,
+          theme,
+          defaultForeground,
+          defaultBackground,
+          font
+        )
+        renderColumnCell(
+          surface,
+          x + labelWidth + valueWidth + scopeWidth + 3,
+          y,
+          breadcrumbWidth,
+          breadcrumb,
+          theme,
+          defaultForeground,
+          defaultBackground,
+          font,
+          alignRight = true
+        )
       case label :: hint :: Nil =>
         val (labelWidth, hintWidth) = twoColumnWidths(width)
         renderColumnCell(
@@ -639,7 +688,57 @@ object TextOverlayRenderer:
       case _ =>
         CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
 
+  private def renderPriorityColumnRow(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    width: Int,
+    row: OverlayRow,
+    theme: Theme,
+    defaultForeground: Color,
+    defaultBackground: Color,
+    font: Font
+  ): Unit =
+    row.segments match
+      case label :: description :: shortcut :: Nil =>
+        val (labelWidth, descriptionWidth, shortcutWidth) = priorityThreeColumnWidths(width)
+        renderColumnCell(surface, x, y, labelWidth, label, theme, defaultForeground, defaultBackground, font)
+        renderColumnCell(
+          surface,
+          x + labelWidth + 1,
+          y,
+          descriptionWidth,
+          description,
+          theme,
+          defaultForeground,
+          defaultBackground,
+          font
+        )
+        renderColumnCell(
+          surface,
+          x + labelWidth + descriptionWidth + 2,
+          y,
+          shortcutWidth,
+          shortcut,
+          theme,
+          defaultForeground,
+          defaultBackground,
+          font,
+          alignRight = true
+        )
+      case _ =>
+        renderColumnRow(surface, x, y, width, row, theme, defaultForeground, defaultBackground, font)
+
   private def threeColumnWidths(width: Int): (Int, Int, Int) =
+    val safeWidth      = math.max(0, width)
+    val preferredLabel = math.min(22, math.max(8, safeWidth / 3))
+    val preferredValue = math.min(18, math.max(8, safeWidth / 4))
+    val (labelWidth, valueWidth) =
+      if preferredLabel + preferredValue + 2 <= safeWidth then (preferredLabel, preferredValue)
+      else (math.min(22, safeWidth / 3), math.min(18, safeWidth / 4))
+    (labelWidth, math.max(0, safeWidth - labelWidth - valueWidth - 2), valueWidth)
+
+  private def priorityThreeColumnWidths(width: Int): (Int, Int, Int) =
     val safeWidth      = math.max(0, width)
     val preferredLabel = math.min(36, math.max(8, (safeWidth * 3) / 5))
     val preferredValue = math.min(18, math.max(8, safeWidth / 5))
@@ -647,6 +746,14 @@ object TextOverlayRenderer:
       if preferredLabel + preferredValue + 2 <= safeWidth then (preferredLabel, preferredValue)
       else (math.min(22, safeWidth / 3), math.min(18, safeWidth / 4))
     (labelWidth, math.max(0, safeWidth - labelWidth - valueWidth - 2), valueWidth)
+
+  private def fourColumnWidths(width: Int): (Int, Int, Int, Int) =
+    val safeWidth = math.max(0, width)
+    val labelWidth = math.min(28, math.max(8, (safeWidth * 2) / 5))
+    val valueWidth = math.min(12, math.max(0, safeWidth / 5))
+    val scopeWidth = math.min(10, math.max(0, safeWidth / 8))
+    val breadcrumbWidth = math.max(0, safeWidth - labelWidth - valueWidth - scopeWidth - 3)
+    (labelWidth, valueWidth, scopeWidth, breadcrumbWidth)
 
   private def twoColumnWidths(width: Int): (Int, Int) =
     val safeWidth      = math.max(0, width)

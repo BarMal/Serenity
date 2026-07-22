@@ -104,7 +104,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
     commandLine should include("Open")
     commandLine should include("Open file")
-    overlay.width shouldBe paneContentRect.width
+    overlay.width shouldBe 72
     overlay.x shouldBe paneContentRect.x
 
     surface.getBg(0, 0) shouldBe state.theme.highlighted.background
@@ -247,6 +247,26 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
         .distinct
     settingsBackgrounds.size should be > 1
     surface.fillPixelRectCalls.filter(_.color == state.theme.cursor) should have size 1
+  }
+
+  it should "retain nested settings breadcrumbs in a compact command palette row" in {
+    val state   = stateWithRunner(Theme.light, "default document", Nil)
+    val surface = new MockRenderSurface(55, 30)
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(55, 30))
+    val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+    val contentRect = SurfaceFrameLayout
+      .forContent(overlay, state.uiSurfaces.head.content)
+      .contentRect
+
+    Renderer.render(state, cursorVisible = false, surface, ViewportSize(55, 30))
+
+    val resultLine =
+      (contentRect.x until contentRect.right)
+        .map(x => surface.getChar(x, contentRect.y + 1))
+        .mkString
+
+    resultLine should include("Default Document")
+    resultLine should include("Settings")
   }
 
   it should "keep every editor cursor visible but steady while browsing a focused submenu" in {
