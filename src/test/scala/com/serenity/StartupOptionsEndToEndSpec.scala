@@ -101,8 +101,8 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
       _          = startPage2.selectedIndex shouldBe 2
 
       // Move through the workflow choices.
-      _      <- stateManager.applyEvent(MoveDown)
-      _      <- stateManager.applyEvent(MoveDown)
+      _         <- stateManager.applyEvent(MoveDown)
+      _         <- stateManager.applyEvent(MoveDown)
       stateLast <- stateManager.getCurrentState
       lastPage = stateLast.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       _        = lastPage.selectedIndex shouldBe 4

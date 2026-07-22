@@ -857,18 +857,29 @@ final private[manager] class StateManagerEventPipeline(
                                           case Some(current) =>
                                             val selection =
                                               if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
-                                              else if click.clickCount >= 3 then lineSelectionAtCursor(current, clickedCursor)
-                                              else if click.clickCount >= 2 then wordSelectionAtCursor(current, clickedCursor)
+                                              else if click.clickCount >= 3 then
+                                                lineSelectionAtCursor(current, clickedCursor)
+                                              else if click.clickCount >= 2 then
+                                                wordSelectionAtCursor(current, clickedCursor)
                                               else None
                                             val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
-                                            dismissContextMenu(s.copy(
-                                              buffers = s.buffers.updated(buffer.id, current.copy(
-                                                cursors = List(focusCursor), selection = selection, selections = Nil,
-                                                preferredColumn = Some(focusCursor.column), preferredXPx = None,
-                                                multiCursorVerticalStates = Nil
-                                              )),
-                                              focus = Focus.EditorPane(paneId), layout = s.layout.copy(activeEditorPaneId = Some(paneId))
-                                            ))
+                                            dismissContextMenu(
+                                              s.copy(
+                                                buffers = s.buffers.updated(
+                                                  buffer.id,
+                                                  current.copy(
+                                                    cursors = List(focusCursor),
+                                                    selection = selection,
+                                                    selections = Nil,
+                                                    preferredColumn = Some(focusCursor.column),
+                                                    preferredXPx = None,
+                                                    multiCursorVerticalStates = Nil
+                                                  )
+                                                ),
+                                                focus = Focus.EditorPane(paneId),
+                                                layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                                              )
+                                            )
                                           case None => dismissContextMenu(s)
                                       }
                                     }

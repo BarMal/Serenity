@@ -2,9 +2,9 @@ package com.serenity
 
 import java.nio.file.Files
 
+import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
 import com.serenity.command.CommandIntent
-import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.{ComponentResult, StartupPageComponent}
 import com.serenity.state.models.*
@@ -31,7 +31,8 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
   "Startup launch surface" should "omit Restore when no session is available and keep its visible shortcuts executable" in {
     val page = AppStartup.createStartPage(sessionExists = false, recentFiles = Nil)
 
-    page.actions.map(_.id) shouldBe List("new-session", "open-file", "workflow-writing", "workflow-code", "workflow-compact")
+    page.actions
+      .map(_.id) shouldBe List("new-session", "open-file", "workflow-writing", "workflow-code", "workflow-compact")
     page.actions.flatMap(_.shortcut) shouldBe List('1', '2')
 
     val result = StartupPageComponent().processEvent(InsertChar('2'), stateFor(page))
@@ -77,12 +78,17 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
     val uiMetrics    = CellMetrics(charWidth = 11, lineHeight = 24, ascent = 18)
 
     AppStartup.initializeState(stateManager, Theme.default, viewport).unsafeRunSync()
-    val page = stateManager.getCurrentState.unsafeRunSync().startPageSurface.flatMap {
-      _.content match
-        case SurfaceContent.StartPage(value) => Some(value)
-        case _                               => None
-    }.getOrElse(fail("expected startup page"))
-    val bounds = page.actionBounds(viewport, codeMetrics, uiMetrics).headOption.getOrElse(fail("expected New document bounds"))
+    val page = stateManager.getCurrentState
+      .unsafeRunSync()
+      .startPageSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.StartPage(value) => Some(value)
+          case _                               => None
+      }
+      .getOrElse(fail("expected startup page"))
+    val bounds =
+      page.actionBounds(viewport, codeMetrics, uiMetrics).headOption.getOrElse(fail("expected New document bounds"))
 
     stateManager
       .applyEvent(
@@ -106,12 +112,17 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
     val uiMetrics    = CellMetrics(charWidth = 11, lineHeight = 24, ascent = 18)
 
     AppStartup.initializeState(stateManager, Theme.default, viewport).unsafeRunSync()
-    val page = stateManager.getCurrentState.unsafeRunSync().startPageSurface.flatMap {
-      _.content match
-        case SurfaceContent.StartPage(value) => Some(value)
-        case _                               => None
-    }.getOrElse(fail("expected startup page"))
-    val bounds = page.actionBounds(viewport, codeMetrics, uiMetrics).headOption.getOrElse(fail("expected New document bounds"))
+    val page = stateManager.getCurrentState
+      .unsafeRunSync()
+      .startPageSurface
+      .flatMap {
+        _.content match
+          case SurfaceContent.StartPage(value) => Some(value)
+          case _                               => None
+      }
+      .getOrElse(fail("expected startup page"))
+    val bounds =
+      page.actionBounds(viewport, codeMetrics, uiMetrics).headOption.getOrElse(fail("expected New document bounds"))
 
     stateManager
       .applyEvent(

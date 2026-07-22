@@ -19,11 +19,28 @@ object AppStartup:
       else Some("No previous session found")
 
     val primaryActions = List(
-      StartupAction("new-session", "New document", Command.typed("startup.new-session", "Start a new session", CommandIntent.StartupNewSession), Some('1'), Some("Enter")),
-      StartupAction("open-file", "Open file or folder", Command.typed("startup.open-file", "Open an existing file or directory", CommandIntent.StartupOpenFile), Some('2'), Some("Enter"))
+      StartupAction(
+        "new-session",
+        "New document",
+        Command.typed("startup.new-session", "Start a new session", CommandIntent.StartupNewSession),
+        Some('1'),
+        Some("Enter")
+      ),
+      StartupAction(
+        "open-file",
+        "Open file or folder",
+        Command.typed("startup.open-file", "Open an existing file or directory", CommandIntent.StartupOpenFile),
+        Some('2'),
+        Some("Enter")
+      )
     )
     val restoreAction = Option.when(sessionExists)(
-      StartupAction("restore-session", "Restore previous session", Command.typed("startup.restore-session", "Restore an existing session", CommandIntent.StartupRestoreSession), detail = Some("Enter"))
+      StartupAction(
+        "restore-session",
+        "Restore previous session",
+        Command.typed("startup.restore-session", "Restore an existing session", CommandIntent.StartupRestoreSession),
+        detail = Some("Enter")
+      )
     )
     val recentActions = recentFiles
       .filter(path => Files.isRegularFile(path) && Files.isReadable(path))
@@ -34,7 +51,11 @@ object AppStartup:
         StartupAction(
           s"recent:${path.toString}",
           path.toString,
-          Command.typed(s"startup.open-recent.${path.getFileName}", s"Open recent file $path", CommandIntent.OpenRecentFile(path)),
+          Command.typed(
+            s"startup.open-recent.${path.getFileName}",
+            s"Open recent file $path",
+            CommandIntent.OpenRecentFile(path)
+          ),
           detail = Some("Recent")
         )
       }
@@ -42,12 +63,18 @@ object AppStartup:
       StartupAction(
         s"workflow-${name.toLowerCase}",
         s"Use $name workflow",
-        Command.typed(s"startup.workflow.${name.toLowerCase}", s"Use the $name workflow", CommandIntent.ApplyUiPreset(name)),
+        Command
+          .typed(s"startup.workflow.${name.toLowerCase}", s"Use the $name workflow", CommandIntent.ApplyUiPreset(name)),
         detail = Some("Enter")
       )
     }
     val actions = primaryActions ++ restoreAction.toList ++ recentActions ++ workflowActions
-    StartupPage("Welcome to Serenity", options = actions.map(_.renderedLabel), statusMessage = statusMessage, actions = actions)
+    StartupPage(
+      "Welcome to Serenity",
+      options = actions.map(_.renderedLabel),
+      statusMessage = statusMessage,
+      actions = actions
+    )
 
   def startPageState(
     stateManager: SessionStartupInfo & SessionService,

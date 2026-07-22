@@ -89,7 +89,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
-      _ <- AppStartup.initializeState(stateManager, theme, viewportSize)
+      _          <- AppStartup.initializeState(stateManager, theme, viewportSize)
       _          <- stateManager.applyEvent(InsertChar('3'))
       finalState <- stateManager.getCurrentState
     yield

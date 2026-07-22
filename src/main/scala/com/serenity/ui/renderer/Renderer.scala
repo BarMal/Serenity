@@ -1351,7 +1351,8 @@ object Renderer:
     val titleLines       = 3
     val optionStartIndex = titleLines
     val optionEndIndex   = titleLines + page.launchActions.size - 1
-    val actionBounds     = page.actionBounds(viewportSize, cellMetrics, uiMetrics).map(bounds => bounds.index -> bounds).toMap
+    val actionBounds =
+      page.actionBounds(viewportSize, cellMetrics, uiMetrics).map(bounds => bounds.index -> bounds).toMap
 
     lines.zipWithIndex.foreach {
       case (line, lineIndex) =>

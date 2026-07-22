@@ -17,6 +17,7 @@ case class StartupAction(
     shortcut: Option[Char] = None,
     detail: Option[String] = None
 ):
+
   def renderedLabel: String =
     val prefix = shortcut.fold("")(key => s"[$key] ")
     val suffix = detail.fold("")(value => s"  $value")
@@ -36,13 +37,34 @@ case class StartupPage(
 ):
 
   private def legacyActions: List[StartupAction] =
-    options.zipWithIndex.map { case (label, index) =>
-      val (id, command) = index match
-        case 0 => "new-session" -> Command.typed("startup.new-session", "Start a new session", com.serenity.command.CommandIntent.StartupNewSession)
-        case 1 => "restore-session" -> Command.typed("startup.restore-session", "Restore an existing session", com.serenity.command.CommandIntent.StartupRestoreSession)
-        case 2 => "open-file" -> Command.typed("startup.open-file", "Open an existing file or directory", com.serenity.command.CommandIntent.StartupOpenFile)
-        case _ => s"option-$index" -> Command.typed("startup.new-session", "Start a new session", com.serenity.command.CommandIntent.StartupNewSession)
-      StartupAction(id, label, command)
+    options.zipWithIndex.map {
+      case (label, index) =>
+        val (id, command) = index match
+          case 0 =>
+            "new-session" -> Command.typed(
+              "startup.new-session",
+              "Start a new session",
+              com.serenity.command.CommandIntent.StartupNewSession
+            )
+          case 1 =>
+            "restore-session" -> Command.typed(
+              "startup.restore-session",
+              "Restore an existing session",
+              com.serenity.command.CommandIntent.StartupRestoreSession
+            )
+          case 2 =>
+            "open-file" -> Command.typed(
+              "startup.open-file",
+              "Open an existing file or directory",
+              com.serenity.command.CommandIntent.StartupOpenFile
+            )
+          case _ =>
+            s"option-$index" -> Command.typed(
+              "startup.new-session",
+              "Start a new session",
+              com.serenity.command.CommandIntent.StartupNewSession
+            )
+        StartupAction(id, label, command)
     }
 
   def launchActions: List[StartupAction] =
@@ -52,35 +74,36 @@ case class StartupPage(
     launchActions.lift(selectedIndex)
 
   def actionBounds(
-      viewportSize: ViewportSize,
-      codeMetrics: CellMetrics,
-      uiMetrics: CellMetrics
+    viewportSize: ViewportSize,
+    codeMetrics: CellMetrics,
+    uiMetrics: CellMetrics
   ): List[StartupActionBounds] =
     val lineHeightPx     = math.max(codeMetrics.lineHeight, uiMetrics.lineHeight)
     val viewportWidthPx  = viewportSize.width * codeMetrics.charWidth
     val viewportHeightPx = viewportSize.height * codeMetrics.lineHeight
     val startYPx         = math.max(0, (viewportHeightPx - (renderLines.size * lineHeightPx)) / 2)
 
-    launchActions.zipWithIndex.flatMap { case (action, index) =>
-      val widthPx = math.min(viewportWidthPx, (action.renderedLabel.length + 4) * codeMetrics.charWidth)
-      val yPx     = startYPx + ((index + 3) * lineHeightPx)
-      Option.when(yPx + lineHeightPx > 0 && yPx < viewportHeightPx)(
-        StartupActionBounds(
-          index = index,
-          xPx = math.max(0, (viewportWidthPx - widthPx) / 2),
-          yPx = yPx,
-          widthPx = widthPx,
-          heightPx = lineHeightPx
+    launchActions.zipWithIndex.flatMap {
+      case (action, index) =>
+        val widthPx = math.min(viewportWidthPx, (action.renderedLabel.length + 4) * codeMetrics.charWidth)
+        val yPx     = startYPx + ((index + 3) * lineHeightPx)
+        Option.when(yPx + lineHeightPx > 0 && yPx < viewportHeightPx)(
+          StartupActionBounds(
+            index = index,
+            xPx = math.max(0, (viewportWidthPx - widthPx) / 2),
+            yPx = yPx,
+            widthPx = widthPx,
+            heightPx = lineHeightPx
+          )
         )
-      )
     }
 
   def actionIndexAtPixel(
-      pixelX: Int,
-      pixelY: Int,
-      viewportSize: ViewportSize,
-      codeMetrics: CellMetrics,
-      uiMetrics: CellMetrics
+    pixelX: Int,
+    pixelY: Int,
+    viewportSize: ViewportSize,
+    codeMetrics: CellMetrics,
+    uiMetrics: CellMetrics
   ): Option[Int] =
     actionBounds(viewportSize, codeMetrics, uiMetrics).find(_.contains(pixelX, pixelY)).map(_.index)
 
@@ -91,7 +114,8 @@ case class StartupPage(
       case None          => baseLines ++ List("", "↑↓ Navigate  •  Enter Select  •  Esc Close")
 
   def withSelectedIndex(index: Int): StartupPage =
-    val clampedIndex = if launchActions.isEmpty then 0 else ((index % launchActions.size) + launchActions.size) % launchActions.size
+    val clampedIndex =
+      if launchActions.isEmpty then 0 else ((index % launchActions.size) + launchActions.size) % launchActions.size
     copy(selectedIndex = clampedIndex)
 
   def moveSelectionUp: StartupPage =
