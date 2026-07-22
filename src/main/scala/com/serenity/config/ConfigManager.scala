@@ -59,7 +59,7 @@ object ConfigManager:
     // Simple key=value parser for configuration
     val lines = content.split("\n").map(_.trim).filter(_.nonEmpty).filter(!_.startsWith("#"))
 
-    lines.foldLeft(AppConfig.default) { (config, line) =>
+    val parsed = lines.foldLeft(AppConfig.default) { (config, line) =>
       line.split("=", 2) match
         case Array(key, value) =>
           key.trim.toLowerCase match
@@ -200,7 +200,11 @@ object ConfigManager:
                 .flatMap(action =>
                   HotkeyTrigger
                     .parse(value.trim)
-                    .map(trigger => config.withHotkeyConfig(config.hotkeyConfig.withBinding(action, trigger)))
+                    .map(trigger =>
+                      config.withHotkeyConfig(
+                        HotkeyConfig(config.hotkeyConfig.bindings + (action -> List(trigger)))
+                      )
+                    )
                 )
                 .getOrElse(config)
             case keymapKey if keymapKey.startsWith("keymap.editor.") =>
@@ -235,6 +239,10 @@ object ConfigManager:
         case _ =>
           config // Invalid line format, ignore
     }
+
+    HotkeyConfig
+      .fromBindings(parsed.hotkeyConfig.bindings)
+      .fold(_ => parsed.withHotkeyConfig(HotkeyConfig()), parsed.withHotkeyConfig)
 
   /** Generate configuration file content from AppConfig */
   def configToString(config: AppConfig): String =
@@ -376,6 +384,10 @@ object ConfigManager:
        |# Hotkey overrides
        |hotkey.command_palette = ${config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render}
        |hotkey.file_search = ${config.hotkeyConfig.bindingsFor(HotkeyAction.FileSearch).head.render}
+       |hotkey.find = ${config.hotkeyConfig.bindingsFor(HotkeyAction.Find).head.render}
+       |hotkey.replace = ${config.hotkeyConfig.bindingsFor(HotkeyAction.Replace).head.render}
+       |hotkey.go_to_line = ${config.hotkeyConfig.bindingsFor(HotkeyAction.GoToLine).head.render}
+       |hotkey.save_as = ${config.hotkeyConfig.bindingsFor(HotkeyAction.SaveAs).head.render}
        |
        |# Focused keymap overrides
        |keymap.editor.page_down = ${editorBinding(EditorKeyAction.PageDown)}

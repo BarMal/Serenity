@@ -544,6 +544,9 @@ object EditorEventReducer:
           case OpenFind =>
             ModalStateReducer.show(findModalForBuffer(buffer), currentState)
 
+          case OpenReplace =>
+            ModalStateReducer.show(Modal.ReplaceWorkflow(ReplaceWorkflowState()), currentState)
+
           case FindNext =>
             buffer.findState match
               case Some(FindState(query, storedResults, currentIndex)) if storedResults.nonEmpty =>
@@ -718,7 +721,7 @@ object EditorEventReducer:
       case MoveLeft | MoveRight | MoveUp | MoveDown | MoveToStart | MoveToEnd | PageUp | PageDown | MoveToStartOfFile |
           MoveToEndOfFile =>
         reduceMultiCursorTextEvent(event, collapseSelectionsToFocus(buffer, currentState), paneId, currentState)
-      case SelectAll | OpenGotoLine | OpenFind | FindNext | Escape =>
+      case SelectAll | OpenGotoLine | OpenFind | OpenReplace | FindNext | Escape =>
         reduceGlobalTextEvent(event, buffer, paneId, currentState)
       case _ =>
         reduceGlobalTextEvent(event, buffer, paneId, currentState)
@@ -843,7 +846,7 @@ object EditorEventReducer:
             clipboard = Some(clipboardText)
           )
         )
-      case SelectAll | OpenGotoLine | OpenFind | FindNext | Escape =>
+      case SelectAll | OpenGotoLine | OpenFind | OpenReplace | FindNext | Escape =>
         reduceGlobalTextEvent(event, buffer, paneId, currentState)
       case _ =>
         reduceSingleCursorTextEvent(event, buffer, paneId, currentState)

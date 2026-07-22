@@ -41,8 +41,12 @@ case class CommandRunner(
     activeSubmenu: Option[CommandRunnerSubmenuState] = None,
     statusMessage: Option[String] = None,
     uiPresetPreviews: List[UiPreset.Preview] = Nil,
-    editingPresetName: Option[String] = None
+    editingPresetName: Option[String] = None,
+    commandBindings: Map[String, String] = Map.empty
 ):
+
+  def bindingFor(command: Command): Option[String] =
+    commandBindings.get(command.name)
 
   lazy val visibleItems: List[CommandSurfaceItem] =
     val commandItems = filteredCommands.map(CommandSurfaceItem.CommandItem(_))
@@ -358,14 +362,16 @@ case class CommandRunner(
       selectedIndex = 0,
       filteredCommands = registry.commandsForCategory(activeCategory),
       optionSelections = CommandRunner.defaultOptionSelections(config),
-      inputItems = CommandRunner.buildInputItems(config)
+      inputItems = CommandRunner.buildInputItems(config),
+      commandBindings = CommandRunner.commandBindings(config)
     ).syncEditMode
 
   /** Rebuild input items from a new config (called after a setting is applied) */
   def updateInputItems(config: AppConfig): CommandRunner =
     copy(
       inputItems = CommandRunner.buildInputItems(config),
-      optionSelections = CommandRunner.defaultOptionSelections(config)
+      optionSelections = CommandRunner.defaultOptionSelections(config),
+      commandBindings = CommandRunner.commandBindings(config)
     ).syncEditMode.normalizeSubmenuEditMode
 
   def withUiPresetNames(names: List[String]): CommandRunner =
@@ -665,6 +671,31 @@ object CommandRunner:
 
   private[command] def buildInputItems(config: AppConfig): List[CommandSurfaceItem.InputItem] =
     CommandRunnerSettingsInputItems.build(config)
+
+  private def commandBindings(config: AppConfig): Map[String, String] =
+    Map(
+      "save"         -> HotkeyAction.Save,
+      "save-as"      -> HotkeyAction.SaveAs,
+      "open"         -> HotkeyAction.OpenFile,
+      "file-search"  -> HotkeyAction.FileSearch,
+      "quit"         -> HotkeyAction.Quit,
+      "new"          -> HotkeyAction.NewTab,
+      "next-tab"     -> HotkeyAction.NextTab,
+      "previous-tab" -> HotkeyAction.PreviousTab,
+      "close"        -> HotkeyAction.CloseTab,
+      "find"         -> HotkeyAction.Find,
+      "replace"      -> HotkeyAction.Replace,
+      "copy"         -> HotkeyAction.Copy,
+      "cut"          -> HotkeyAction.Cut,
+      "paste"        -> HotkeyAction.Paste,
+      "select-all"   -> HotkeyAction.SelectAll,
+      "undo"         -> HotkeyAction.Undo,
+      "redo"         -> HotkeyAction.Redo,
+      "goto-line"    -> HotkeyAction.GoToLine
+    ).flatMap {
+      case (commandName, action) =>
+        config.hotkeyConfig.bindingsFor(action).headOption.map(trigger => commandName -> trigger.render)
+    }
 
   /** Empty/inactive command runner */
   def empty: CommandRunner = CommandRunner(

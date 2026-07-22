@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.nio.file.Files
+
 import com.serenity.command.CommandRunner
 import com.serenity.config.*
 import com.serenity.document.RenderedComment
@@ -55,6 +57,63 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
     translator.translate(KeyStrokeInfo(InputKey.Backspace, None, Set(Modifier.Ctrl))) shouldBe DeleteWordBackward
     translator.translate(KeyStrokeInfo(InputKey.Delete, None, Set(Modifier.Ctrl))) shouldBe DeleteWordForward
+  }
+
+  it should "dispatch conventional core editing shortcuts from platform-resolved hotkeys" in {
+    val linuxState = editorState.copy(config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux")))
+    val macState   = editorState.copy(config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X")))
+
+    val linux = FocusedInputTranslator.forState(linuxState)
+    val mac   = FocusedInputTranslator.forState(macState)
+
+    List(
+      (InputKey.Character, Some('f'), Set(Modifier.Ctrl), OpenFind),
+      (InputKey.Character, Some('h'), Set(Modifier.Ctrl), OpenReplace),
+      (InputKey.Character, Some('g'), Set(Modifier.Ctrl), OpenGotoLine),
+      (InputKey.Character, Some('s'), Set(Modifier.Ctrl, Modifier.Shift), SaveAsFile)
+    ).foreach {
+      case (key, character, modifiers, expected) =>
+        linux.translate(KeyStrokeInfo(key, character, modifiers)) shouldBe expected
+    }
+
+    List(
+      (InputKey.Character, Some('f'), Set(Modifier.Meta), OpenFind),
+      (InputKey.Character, Some('f'), Set(Modifier.Meta, Modifier.Alt), OpenReplace),
+      (InputKey.Character, Some('g'), Set(Modifier.Meta), OpenGotoLine),
+      (InputKey.Character, Some('s'), Set(Modifier.Meta, Modifier.Shift), SaveAsFile)
+    ).foreach {
+      case (key, character, modifiers, expected) =>
+        mac.translate(KeyStrokeInfo(key, character, modifiers)) shouldBe expected
+    }
+  }
+
+  it should "reject conflicting loaded hotkeys instead of dispatching the first matching action" in {
+    val configFile = Files.createTempFile("serenity-conflicting-hotkeys", ".conf")
+    Files.writeString(
+      configFile,
+      """hotkey.command_palette = ctrl+k
+        |hotkey.find = ctrl+k
+        |""".stripMargin
+    )
+    val loadedState = editorState.copy(config = ConfigManager.loadConfig(Some(configFile.toString)))
+    val duplicate   = HotkeyTrigger(InputKey.Character, Some('k'), Set(Modifier.Ctrl))
+    val invalidConfig = AppConfig.default.withHotkeyConfig(
+      HotkeyConfig(
+        AppConfig.default.hotkeyConfig.bindings ++ Map(
+          HotkeyAction.ToggleCommandRunner -> List(duplicate),
+          HotkeyAction.Find                -> List(duplicate)
+        )
+      )
+    )
+
+    FocusedInputTranslator
+      .forState(loadedState)
+      .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
+      .isInstanceOf[UnhandledEvent[?]] shouldBe true
+    FocusedInputTranslator
+      .forState(editorState.copy(config = invalidConfig))
+      .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
+      .isInstanceOf[UnhandledEvent[?]] shouldBe true
   }
 
   it should "treat PageUp, PageDown, Ctrl+Home, and Ctrl+End as file navigation in editor focus" in {
