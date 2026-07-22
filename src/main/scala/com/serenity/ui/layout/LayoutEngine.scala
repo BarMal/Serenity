@@ -687,19 +687,19 @@ object LayoutEngine:
           val anchorFrameOpt     = calculateFloatingAnchorFrame(main, state, paneLayouts)
           (mainRectOpt, submenuBaseRectOpt, anchorFrameOpt) match
             case (Some(mainRect), Some(submenuRect), Some(anchorFrame)) =>
-              val collapsedHeight = 3
-              val gapRows         = wholeRowOrigin(floatingCursorGapRows(state, main.content))
-              val stackGapRows    = wholeRowOrigin(floatingStackGapRows(state))
-              val availableBottom = anchorFrame.contentRect.bottom
-              val totalHeight     = mainRect.height + stackGapRows + submenuRect.height
-              val preferredBelowY = anchorFrame.screenPosition.y + 1 + gapRows
-              val preferredAboveY = anchorFrame.screenPosition.y - gapRows - totalHeight
-              val collapsedTotalHeight = collapsedHeight + stackGapRows + submenuRect.height
-              val collapsedAboveY = anchorFrame.screenPosition.y - gapRows - collapsedTotalHeight
-              val fullStackFitsBelow = preferredBelowY + totalHeight <= availableBottom
-              val fullStackFitsAbove = preferredAboveY >= anchorFrame.contentRect.y
+              val collapsedHeight         = 3
+              val gapRows                 = wholeRowOrigin(floatingCursorGapRows(state, main.content))
+              val stackGapRows            = wholeRowOrigin(floatingStackGapRows(state))
+              val availableBottom         = anchorFrame.contentRect.bottom
+              val totalHeight             = mainRect.height + stackGapRows + submenuRect.height
+              val preferredBelowY         = anchorFrame.screenPosition.y + 1 + gapRows
+              val preferredAboveY         = anchorFrame.screenPosition.y - gapRows - totalHeight
+              val collapsedTotalHeight    = collapsedHeight + stackGapRows + submenuRect.height
+              val collapsedAboveY         = anchorFrame.screenPosition.y - gapRows - collapsedTotalHeight
+              val fullStackFitsBelow      = preferredBelowY + totalHeight <= availableBottom
+              val fullStackFitsAbove      = preferredAboveY >= anchorFrame.contentRect.y
               val collapsedStackFitsAbove = collapsedAboveY >= anchorFrame.contentRect.y
-              val shouldCollapse = !fullStackFitsBelow && !fullStackFitsAbove
+              val shouldCollapse          = !fullStackFitsBelow && !fullStackFitsAbove
               val stackY =
                 if fullStackFitsBelow then preferredBelowY
                 else if fullStackFitsAbove then preferredAboveY

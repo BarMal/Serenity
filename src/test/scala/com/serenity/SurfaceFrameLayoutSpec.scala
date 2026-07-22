@@ -38,7 +38,9 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
       com.serenity.command.CommandIntent.NewFile,
       com.serenity.command.CommandCategory.File
     )
-    val menu = SurfaceContent.ContextMenu(ContextMenu("editor", Focus.EditorPane(PaneId(0)), List(ContextMenuItem("new-file", "New file", command))))
+    val menu = SurfaceContent.ContextMenu(
+      ContextMenu("editor", Focus.EditorPane(PaneId(0)), List(ContextMenuItem("new-file", "New file", command)))
+    )
     val toolbar = SurfaceContent.ContextualToolbar(ContextualToolbarState())
 
     List(menu, toolbar).foreach { content =>

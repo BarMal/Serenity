@@ -1,7 +1,7 @@
 package com.serenity
 
-import com.serenity.config.{AppConfig, InterfaceDensity}
 import com.serenity.command.CommandRunner
+import com.serenity.config.{AppConfig, InterfaceDensity}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.accessibility.{AccessibilityRole, AccessibilitySnapshot}
@@ -79,17 +79,29 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
       com.serenity.command.CommandIntent.SaveCurrentFile,
       com.serenity.command.CommandCategory.File
     )
-    val menu = ContextMenu("Editor", Focus.EditorPane(PaneId(0)), List(
-      ContextMenuItem("save", "Save", command),
-      ContextMenuItem("save-as", "Save As", command),
-      ContextMenuItem("close", "Close", command)
-    ), selectedIndex = 1)
+    val menu = ContextMenu(
+      "Editor",
+      Focus.EditorPane(PaneId(0)),
+      List(
+        ContextMenuItem("save", "Save", command),
+        ContextMenuItem("save-as", "Save As", command),
+        ContextMenuItem("close", "Close", command)
+      ),
+      selectedIndex = 1
+    )
     val state = AppState.initial.copy(
-      uiSurfaces = List(UiSurface(surfaceId, SurfaceContent.ContextMenu(menu), SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor))),
+      uiSurfaces = List(
+        UiSurface(
+          surfaceId,
+          SurfaceContent.ContextMenu(menu),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
       focus = Focus.Surface(surfaceId)
     )
 
-    val controls = AccessibilitySnapshot.from(state, ViewportSize(40, 10)).nodes.filter(_.id.startsWith("surface:menu/item:"))
+    val controls =
+      AccessibilitySnapshot.from(state, ViewportSize(40, 10)).nodes.filter(_.id.startsWith("surface:menu/item:"))
 
     controls.map(_.name) shouldBe List("Save", "Save As")
     controls.map(_.bounds.y).distinct.size shouldBe controls.size
@@ -103,7 +115,9 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
       uiSurfaces = List(
         UiSurface(
           surfaceId,
-          SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(ReplaceWorkflowState(findText = "before", replacementText = "after"))),
+          SurfaceContent.ModalWorkflow(
+            Modal.ReplaceWorkflow(ReplaceWorkflowState(findText = "before", replacementText = "after"))
+          ),
           SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
         )
       ),
@@ -113,29 +127,39 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val controls = AccessibilitySnapshot.from(state, viewport).nodes.filter(_.id.startsWith("surface:replace/control:"))
 
     controls.map(node => node.name -> node.role) should contain allOf (
-      "Find" -> AccessibilityRole.TextField,
-      "Replace" -> AccessibilityRole.TextField,
+      "Find"         -> AccessibilityRole.TextField,
+      "Replace"      -> AccessibilityRole.TextField,
       "Replace Next" -> AccessibilityRole.Button,
-      "Replace All" -> AccessibilityRole.Button
+      "Replace All"  -> AccessibilityRole.Button
     )
   }
 
   it should "align wrapped toolbar accessibility bounds with rendered row slots" in {
-    val surfaceId = SurfaceId("toolbar")
-    val bufferId = BufferId(42)
-    val paneId = PaneId(0)
-    val buffer = Buffer.fromString(bufferId, "toolbar").copy(cursors = List(CursorPosition(0, 0)))
+    val surfaceId    = SurfaceId("toolbar")
+    val bufferId     = BufferId(42)
+    val paneId       = PaneId(0)
+    val buffer       = Buffer.fromString(bufferId, "toolbar").copy(cursors = List(CursorPosition(0, 0)))
     val toolbarState = ContextualToolbarState()
     val state = AppState.initial.copy(
       config = AppConfig.default.withUiElementGap(1),
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
-      layout = Layout(editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)), activeEditorPaneId = Some(paneId)),
-      uiSurfaces = List(UiSurface(surfaceId, SurfaceContent.ContextualToolbar(toolbarState), SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)))
+      layout =
+        Layout(editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)), activeEditorPaneId = Some(paneId)),
+      uiSurfaces = List(
+        UiSurface(
+          surfaceId,
+          SurfaceContent.ContextualToolbar(toolbarState),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      )
     )
 
     val snapshot = AccessibilitySnapshot.from(state, ViewportSize(20, 28))
-    val frame = snapshot.nodes.find(_.id == s"surface:${surfaceId.value}").map(_.bounds).getOrElse(fail("Expected toolbar surface"))
+    val frame = snapshot.nodes
+      .find(_.id == s"surface:${surfaceId.value}")
+      .map(_.bounds)
+      .getOrElse(fail("Expected toolbar surface"))
     val rows = ContextualToolbar.rowGroups(ContextualToolbar.itemsFor(state), frame.width - 2, toolbarState.displayMode)
     val expectedRows = SurfaceFrameLayout
       .forContent(frame, SurfaceContent.ContextualToolbar(toolbarState))
@@ -149,17 +173,24 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
 
   it should "announce changed command and modal validation status once" in {
     val runnerId = SurfaceId("runner")
-    val modalId = SurfaceId("replace-status")
+    val modalId  = SurfaceId("replace-status")
     val baseline = AppState.initial.copy(
       uiSurfaces = List(
-        UiSurface(runnerId, SurfaceContent.CommandPalette(CommandRunner.empty.copy(statusMessage = Some("Invalid command"))), SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor))
+        UiSurface(
+          runnerId,
+          SurfaceContent.CommandPalette(CommandRunner.empty.copy(statusMessage = Some("Invalid command"))),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
       )
     )
-    val first = AccessibilitySnapshot.from(baseline, viewport)
+    val first    = AccessibilitySnapshot.from(baseline, viewport)
     val repeated = AccessibilitySnapshot.from(baseline, viewport, Some(first))
     val changed = AccessibilitySnapshot.from(
       baseline.copy(uiSurfaces = baseline.uiSurfaces.map {
-        case surface if surface.id == runnerId => surface.copy(content = SurfaceContent.CommandPalette(CommandRunner.empty.copy(statusMessage = Some("Unknown command"))))
+        case surface if surface.id == runnerId =>
+          surface.copy(content =
+            SurfaceContent.CommandPalette(CommandRunner.empty.copy(statusMessage = Some("Unknown command")))
+          )
         case surface => surface
       }),
       viewport,
@@ -167,12 +198,24 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     )
 
     val modalSnapshot = AccessibilitySnapshot.from(
-      baseline.copy(uiSurfaces = List(UiSurface(modalId, SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(ReplaceWorkflowState(statusMessage = Some("Nothing to replace")))), SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)))),
+      baseline.copy(uiSurfaces =
+        List(
+          UiSurface(
+            modalId,
+            SurfaceContent.ModalWorkflow(
+              Modal.ReplaceWorkflow(ReplaceWorkflowState(statusMessage = Some("Nothing to replace")))
+            ),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        )
+      ),
       viewport
     )
 
     first.nodes.filter(_.role == AccessibilityRole.Status).map(_.id) should contain(s"surface:${runnerId.value}/status")
-    modalSnapshot.nodes.filter(_.role == AccessibilityRole.Status).map(_.id) should contain(s"surface:${modalId.value}/status")
+    modalSnapshot.nodes.filter(_.role == AccessibilityRole.Status).map(_.id) should contain(
+      s"surface:${modalId.value}/status"
+    )
     repeated.announcements shouldBe Nil
     changed.announcements.map(_.message) shouldBe List("Unknown command")
   }

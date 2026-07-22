@@ -87,9 +87,9 @@ object AccessibilitySnapshot:
   private def surfaceControls(state: AppState, scene: UiSceneSnapshot): List[AccessibleNode] =
     scene.nodesInPaintOrder.flatMap {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) =>
-          state.surfaceById(surfaceId).toList.flatMap { surface =>
-            controlsFor(surface, node.frameRect, state) ++ statusFor(surface, node.frameRect)
-          }
+        state.surfaceById(surfaceId).toList.flatMap { surface =>
+          controlsFor(surface, node.frameRect, state) ++ statusFor(surface, node.frameRect)
+        }
       case _ => Nil
     }
 
@@ -110,12 +110,19 @@ object AccessibilitySnapshot:
         }
       case SurfaceContent.CommandPalette(runner) => commandControls(surface.id, runner, frameRect, state)
       case SurfaceContent.CommandPaletteSubmenu(runner, groupId, _) =>
-        commandControls(surface.id, runner, runner.submenuItems(groupId), SurfaceContent.CommandPaletteSubmenu(runner, groupId, false), frameRect, state)
-      case SurfaceContent.ContextMenu(menu) => menuControls(surface.id, menu, frameRect, state)
+        commandControls(
+          surface.id,
+          runner,
+          runner.submenuItems(groupId),
+          SurfaceContent.CommandPaletteSubmenu(runner, groupId, false),
+          frameRect,
+          state
+        )
+      case SurfaceContent.ContextMenu(menu)               => menuControls(surface.id, menu, frameRect, state)
       case SurfaceContent.ContextualToolbar(toolbarState) => toolbarControls(surface.id, toolbarState, frameRect, state)
-      case SurfaceContent.ModalWorkflow(modal) => modalControls(surface.id, modal, frameRect, state)
-      case content if isPinned(surface.presentation) => pinnedControls(surface.id, content, frameRect, state)
-      case _ => Nil
+      case SurfaceContent.ModalWorkflow(modal)            => modalControls(surface.id, modal, frameRect, state)
+      case content if isPinned(surface.presentation)      => pinnedControls(surface.id, content, frameRect, state)
+      case _                                              => Nil
 
   private def statusFor(surface: UiSurface, frameRect: LayoutRect): List[AccessibleNode] =
     statusMessage(surface.content).toList.map { message =>
@@ -146,7 +153,7 @@ object AccessibilitySnapshot:
     frameRect: LayoutRect,
     state: AppState
   ): List[AccessibleNode] =
-    val frame = SurfaceFrameLayout.forContent(frameRect, content)
+    val frame      = SurfaceFrameLayout.forContent(frameRect, content)
     val targetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity)
     val itemWindow = frame.itemWindow(
       itemCount = items.size,
@@ -191,35 +198,111 @@ object AccessibilitySnapshot:
         }
     }
 
-  private def menuControls(surfaceId: SurfaceId, menu: ContextMenu, frameRect: LayoutRect, state: AppState): List[AccessibleNode] =
+  private def menuControls(
+    surfaceId: SurfaceId,
+    menu: ContextMenu,
+    frameRect: LayoutRect,
+    state: AppState
+  ): List[AccessibleNode] =
     val frame = SurfaceFrameLayout.forContent(frameRect, SurfaceContent.ContextMenu(menu))
-    val targetRows = SurfaceFrameLayout.itemTargetRowsFor(SurfaceContent.ContextMenu(menu), state.config.interfaceDensity)
-    val window = frame.itemWindow(menu.items.size, menu.selectedIndex, hasHeader = true, hasFooter = menu.items.nonEmpty,
-      itemGapRows = state.config.commandRunnerItemGapRows, itemTargetRows = targetRows)
-    val bounds = itemBounds(frame, window.rowCount, hasHeader = true, hasFooter = menu.items.nonEmpty,
-      state.config.commandRunnerItemGapRows, targetRows)
-    window.slice(menu.items).zip(bounds).zipWithIndex.map { case ((item, bound), index) =>
-      val selected = window.offset + index == menu.selectedIndex
-      AccessibleNode(s"surface:${surfaceId.value}/item:${item.id}", AccessibilityRole.Button, item.label, None, selected,
-        state.focus == Focus.Surface(surfaceId) && selected, bound)
+    val targetRows =
+      SurfaceFrameLayout.itemTargetRowsFor(SurfaceContent.ContextMenu(menu), state.config.interfaceDensity)
+    val window = frame.itemWindow(
+      menu.items.size,
+      menu.selectedIndex,
+      hasHeader = true,
+      hasFooter = menu.items.nonEmpty,
+      itemGapRows = state.config.commandRunnerItemGapRows,
+      itemTargetRows = targetRows
+    )
+    val bounds = itemBounds(
+      frame,
+      window.rowCount,
+      hasHeader = true,
+      hasFooter = menu.items.nonEmpty,
+      state.config.commandRunnerItemGapRows,
+      targetRows
+    )
+    window.slice(menu.items).zip(bounds).zipWithIndex.map {
+      case ((item, bound), index) =>
+        val selected = window.offset + index == menu.selectedIndex
+        AccessibleNode(
+          s"surface:${surfaceId.value}/item:${item.id}",
+          AccessibilityRole.Button,
+          item.label,
+          None,
+          selected,
+          state.focus == Focus.Surface(surfaceId) && selected,
+          bound
+        )
     }
 
-  private def modalControls(surfaceId: SurfaceId, modal: Modal, frameRect: LayoutRect, state: AppState): List[AccessibleNode] =
+  private def modalControls(
+    surfaceId: SurfaceId,
+    modal: Modal,
+    frameRect: LayoutRect,
+    state: AppState
+  ): List[AccessibleNode] =
     val controls = modal match
       case Modal.Find(query, _, _) => List(("find", AccessibilityRole.TextField, "Find", Some(query), true))
-      case Modal.ReplaceWorkflow(workflow) => List(
-        ("find", AccessibilityRole.TextField, "Find", Some(workflow.findText), workflow.activeField == ReplaceWorkflowField.Find),
-        ("replace", AccessibilityRole.TextField, "Replace", Some(workflow.replacementText), workflow.activeField == ReplaceWorkflowField.ReplaceWith),
-        ("replace-next", AccessibilityRole.Button, "Replace Next", None, workflow.selectedAction == ReplaceWorkflowAction.ReplaceNext),
-        ("replace-all", AccessibilityRole.Button, "Replace All", None, workflow.selectedAction == ReplaceWorkflowAction.ReplaceAll),
-        ("current-buffer", AccessibilityRole.Button, "Current Buffer", None, workflow.selectedScope == ReplaceWorkflowScope.CurrentBuffer),
-        ("selection", AccessibilityRole.Button, "Selection", None, workflow.selectedScope == ReplaceWorkflowScope.Selection)
-      )
+      case Modal.ReplaceWorkflow(workflow) =>
+        List(
+          (
+            "find",
+            AccessibilityRole.TextField,
+            "Find",
+            Some(workflow.findText),
+            workflow.activeField == ReplaceWorkflowField.Find
+          ),
+          (
+            "replace",
+            AccessibilityRole.TextField,
+            "Replace",
+            Some(workflow.replacementText),
+            workflow.activeField == ReplaceWorkflowField.ReplaceWith
+          ),
+          (
+            "replace-next",
+            AccessibilityRole.Button,
+            "Replace Next",
+            None,
+            workflow.selectedAction == ReplaceWorkflowAction.ReplaceNext
+          ),
+          (
+            "replace-all",
+            AccessibilityRole.Button,
+            "Replace All",
+            None,
+            workflow.selectedAction == ReplaceWorkflowAction.ReplaceAll
+          ),
+          (
+            "current-buffer",
+            AccessibilityRole.Button,
+            "Current Buffer",
+            None,
+            workflow.selectedScope == ReplaceWorkflowScope.CurrentBuffer
+          ),
+          (
+            "selection",
+            AccessibilityRole.Button,
+            "Selection",
+            None,
+            workflow.selectedScope == ReplaceWorkflowScope.Selection
+          )
+        )
       case _ => Nil
     val frame = SurfaceFrameLayout.forContent(frameRect, SurfaceContent.ModalWorkflow(modal))
-    controls.zip(itemBounds(frame, controls.size, hasHeader = true, hasFooter = false, 0.0)).map { case ((id, role, name, value, selected), bound) =>
-      AccessibleNode(s"surface:${surfaceId.value}/control:$id", role, name, value, selected,
-        state.focus == Focus.Surface(surfaceId) && selected, bound)
+    controls.zip(itemBounds(frame, controls.size, hasHeader = true, hasFooter = false, 0.0)).map {
+      case ((id, role, name, value, selected), bound) =>
+        AccessibleNode(
+          s"surface:${surfaceId.value}/control:$id",
+          role,
+          name,
+          value,
+          selected,
+          state.focus == Focus.Surface(surfaceId) && selected,
+          bound
+        )
     }
 
   private def toolbarControls(
@@ -229,10 +312,13 @@ object AccessibilitySnapshot:
     state: AppState
   ): List[AccessibleNode] =
     val frame = SurfaceFrameLayout.forContent(frameRect, SurfaceContent.ContextualToolbar(toolbarState))
-    val targetRows = SurfaceFrameLayout.itemTargetRowsFor(SurfaceContent.ContextualToolbar(toolbarState), state.config.interfaceDensity)
-    val items = ContextualToolbar.itemsFor(state)
+    val targetRows = SurfaceFrameLayout.itemTargetRowsFor(
+      SurfaceContent.ContextualToolbar(toolbarState),
+      state.config.interfaceDensity
+    )
+    val items      = ContextualToolbar.itemsFor(state)
     val normalized = toolbarState.normalized(items)
-    val rows = ContextualToolbar.rowGroups(items, frame.contentRect.width.max(1), normalized.displayMode)
+    val rows       = ContextualToolbar.rowGroups(items, frame.contentRect.width.max(1), normalized.displayMode)
     val rowSlots = frame
       .contentRowSlots(
         itemCount = rows.size,
@@ -243,41 +329,79 @@ object AccessibilitySnapshot:
       )
       .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) => index -> y }
       .toMap
-    rows.zipWithIndex.flatMap { case (row, rowIndex) =>
-      val widths = ContextualToolbar.itemCellWidths(row, frame.contentRect.width.max(1), normalized.displayMode)
-      val start = frame.contentRect.x + ContextualToolbar.rowLeadingPadding(row, frame.contentRect.width.max(1), normalized.displayMode)
-      val positions = widths.scanLeft(start)(_ + _ + 1).dropRight(1)
-      rowSlots.get(rowIndex).toList.flatMap { y => row.zip(widths).zip(positions).zipWithIndex.map { case (((item, width), x), index) =>
-        val absoluteIndex = rows.take(rowIndex).map(_.size).sum + index
-        val (role, value) = item match
-          case ContextualToolbarItem.Input(_, _, _, input) => AccessibilityRole.TextField -> Some(input.currentValue)
-          case ContextualToolbarItem.Dropdown(_, _, _, option) => AccessibilityRole.Button -> Some(option.selectedOption)
-          case _ => AccessibilityRole.Button -> None
-        AccessibleNode(s"surface:${surfaceId.value}/item:${item.id}", role, item.label, value,
-          absoluteIndex == normalized.focusedIndex,
-          state.focus == Focus.Surface(surfaceId) && absoluteIndex == normalized.focusedIndex,
-          LayoutRect(x, y, width, targetRows))
-      }}
+    rows.zipWithIndex.flatMap {
+      case (row, rowIndex) =>
+        val widths = ContextualToolbar.itemCellWidths(row, frame.contentRect.width.max(1), normalized.displayMode)
+        val start = frame.contentRect.x + ContextualToolbar.rowLeadingPadding(
+          row,
+          frame.contentRect.width.max(1),
+          normalized.displayMode
+        )
+        val positions = widths.scanLeft(start)(_ + _ + 1).dropRight(1)
+        rowSlots.get(rowIndex).toList.flatMap { y =>
+          row.zip(widths).zip(positions).zipWithIndex.map {
+            case (((item, width), x), index) =>
+              val absoluteIndex = rows.take(rowIndex).map(_.size).sum + index
+              val (role, value) = item match
+                case ContextualToolbarItem.Input(_, _, _, input) =>
+                  AccessibilityRole.TextField -> Some(input.currentValue)
+                case ContextualToolbarItem.Dropdown(_, _, _, option) =>
+                  AccessibilityRole.Button -> Some(option.selectedOption)
+                case _ => AccessibilityRole.Button -> None
+              AccessibleNode(
+                s"surface:${surfaceId.value}/item:${item.id}",
+                role,
+                item.label,
+                value,
+                absoluteIndex == normalized.focusedIndex,
+                state.focus == Focus.Surface(surfaceId) && absoluteIndex == normalized.focusedIndex,
+                LayoutRect(x, y, width, targetRows)
+              )
+          }
+        }
     }
 
-  private def pinnedControls(surfaceId: SurfaceId, content: SurfaceContent, frameRect: LayoutRect, state: AppState): List[AccessibleNode] =
-    val frame = SurfaceFrameLayout.forContent(frameRect, content)
+  private def pinnedControls(
+    surfaceId: SurfaceId,
+    content: SurfaceContent,
+    frameRect: LayoutRect,
+    state: AppState
+  ): List[AccessibleNode] =
+    val frame    = SurfaceFrameLayout.forContent(frameRect, content)
     val resolved = SurfaceContentResolver.resolve(content, frameRect, SurfaceRenderMode.Pinned)
-    resolved.rows.zip(itemBounds(frame, resolved.rows.size, resolved.header.nonEmpty, resolved.footer.nonEmpty, 0.0)).zipWithIndex.map {
-      case ((row, bound), index) =>
-        AccessibleNode(s"surface:${surfaceId.value}/item:$index", AccessibilityRole.Button, row.plainText, None, row.selected,
-          state.focus == Focus.Surface(surfaceId) && row.selected, bound)
-    }
+    resolved.rows
+      .zip(itemBounds(frame, resolved.rows.size, resolved.header.nonEmpty, resolved.footer.nonEmpty, 0.0))
+      .zipWithIndex
+      .map {
+        case ((row, bound), index) =>
+          AccessibleNode(
+            s"surface:${surfaceId.value}/item:$index",
+            AccessibilityRole.Button,
+            row.plainText,
+            None,
+            row.selected,
+            state.focus == Focus.Surface(surfaceId) && row.selected,
+            bound
+          )
+      }
 
-  private def itemBounds(frame: SurfaceFrameLayout, itemCount: Int, hasHeader: Boolean, hasFooter: Boolean, itemGapRows: Double, itemTargetRows: Int = 1): List[LayoutRect] =
+  private def itemBounds(
+    frame: SurfaceFrameLayout,
+    itemCount: Int,
+    hasHeader: Boolean,
+    hasFooter: Boolean,
+    itemGapRows: Double,
+    itemTargetRows: Int = 1
+  ): List[LayoutRect] =
     frame.contentRowSlots(itemCount, hasHeader, hasFooter, itemGapRows, itemTargetRows).collect {
-      case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), y) => LayoutRect(frame.contentRect.x, y, frame.contentRect.width, itemTargetRows)
+      case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), y) =>
+        LayoutRect(frame.contentRect.x, y, frame.contentRect.width, itemTargetRows)
     }
 
   private def isPinned(presentation: SurfacePresentation): Boolean =
     presentation match
       case SurfacePresentation.Pinned(_, _) | SurfacePresentation.Expanded(_, _) => true
-      case _ => false
+      case _                                                                     => false
 
   private def itemLabel(item: CommandSurfaceItem): String =
     item match
@@ -345,16 +469,16 @@ object AccessibilitySnapshot:
 
   private def statusMessage(content: SurfaceContent): Option[String] =
     content match
-      case SurfaceContent.CommandPalette(runner) => runner.statusMessage
+      case SurfaceContent.CommandPalette(runner)              => runner.statusMessage
       case SurfaceContent.CommandPaletteSubmenu(runner, _, _) => runner.statusMessage
-      case SurfaceContent.ModalWorkflow(modal) => modalStatusMessage(modal)
-      case _ => None
+      case SurfaceContent.ModalWorkflow(modal)                => modalStatusMessage(modal)
+      case _                                                  => None
 
   private def modalStatusMessage(modal: Modal): Option[String] =
     modal match
-      case Modal.FileWorkflow(workflow) => workflow.statusMessage
+      case Modal.FileWorkflow(workflow)    => workflow.statusMessage
       case Modal.ReplaceWorkflow(workflow) => workflow.statusMessage
-      case _ => None
+      case _                               => None
 
   private def announcements(
     previous: Option[AccessibilitySnapshot],
